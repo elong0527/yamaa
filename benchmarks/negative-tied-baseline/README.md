@@ -56,9 +56,7 @@ the first:
 - name: ABLFL
   type: str
   derivation:
-    case:
-      - when: "ABLRANK = 1"
-        then: {literal: Y}
+    flag: "ABLRANK = 1"
 ```
 
 Keep `ABLRANK` internal by omitting it from `output.columns`.
