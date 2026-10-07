@@ -73,7 +73,7 @@ fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Ve
                 WindowFinding::Order {path,operation,..} => (path,json!({"operation":operation})),
             };
             let definition = finding.definition();
-            vec![diagnostic(definition.phase,definition.condition,Some(definition.requirement),vec![path.clone()],context)]
+            vec![diagnostic(definition.phase,definition.condition,definition.requirement,vec![path.clone()],context)]
         },
         BindFinding::Lookup(finding) => {
             let context = finding.context.iter().map(|(name, value)| {
@@ -85,7 +85,7 @@ fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Ve
                 Some((name.clone(), value))
             }).collect::<Option<serde_json::Map<_, _>>>()?;
             let definition = finding.definition;
-            vec![diagnostic(definition.phase, definition.condition, Some(definition.requirement), vec![finding.path.clone()], context.into())]
+            vec![diagnostic(definition.phase, definition.condition, definition.requirement, vec![finding.path.clone()], context.into())]
         },
         BindFinding::QualifiedReference {path,name,row,finding} => {
             use yamaa_core::reference_scope::Finding as F;
@@ -147,99 +147,45 @@ fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Ve
         }).collect(),
     })
 }
+/// Represent the core-owned finding without assigning semantic vocabulary here.
 fn preparing(error: &PreflightFinding) -> Option<Value> {
-    Some(match error {
-        PreflightFinding::UndeclaredRowColumn { index, column } => validation(
-            "undeclared_column",
-            None,
-            format!("rows[{index}].derivations.{column}"),
-            json!({"column":column}),
-        ),
-        PreflightFinding::DuplicateRowDefault { column, rows } => validation(
-            "duplicate_derivation",
-            Some("REQ-1260"),
-            format!("columns.{column}.derivation"),
-            json!({"column":column,"rows":rows}),
-        ),
-        PreflightFinding::MissingRowDerivation { column, rows } => validation(
-            "missing_derivation",
-            Some("REQ-0200"),
-            format!("columns.{column}.derivation"),
-            json!({"column":column,"rows":rows}),
-        ),
-        PreflightFinding::ConflictingRowConstruction => diagnostic(
-            "validation",
-            "conflicting_row_construction",
-            Some("REQ-1171"),
-            vec!["filter".into(), "rows".into()],
-            json!({}),
-        ),
-        PreflightFinding::InvalidGroup { index, row, groups } => validation(
-            "invalid_field_type",
-            Some("REQ-0065"),
-            format!("rows[{index}].group_by"),
-            json!({"row":row,"group_by":groups}),
-        ),
-        PreflightFinding::GroupReference {
-            index,
-            row,
-            name,
-            dataset,
-        } => validation(
-            "unknown_field",
-            Some("REQ-0066"),
-            format!("rows[{index}].group_by"),
-            json!({"row":row,"identifier":name,"dataset":dataset}),
-        ),
-        PreflightFinding::RowDriverUnavailable {
-            index,
-            row,
-            dataset,
-        } => validation(
-            "driver_unavailable",
-            None,
-            format!("rows[{index}].dataset"),
-            json!({"row":row,"dataset":dataset}),
-        ),
-        PreflightFinding::MissingDerivation { column } => validation(
-            "missing_derivation",
-            Some("REQ-0198"),
-            format!("columns.{column}.derivation"),
-            json!({"column":column}),
-        ),
-        PreflightFinding::UndeclaredKey { position, column } => validation(
-            "undeclared_column",
-            Some("REQ-0220"),
-            format!("keys[{position}]"),
-            json!({"column":column}),
-        ),
-        PreflightFinding::DriverUnavailable { dataset } => validation(
-            "driver_unavailable",
-            None,
-            "base".into(),
-            match dataset {
-                Some(name) => json!({"dataset":name}),
-                None => json!({"row":null}),
+    portable_diagnostic(error.diagnostic())
+}
+
+/// The original-document report shape retains ordinary JSON context values.
+/// Geometry is retained by the core diagnostic and projected by the report contract.
+pub(crate) fn portable_diagnostic(finding: yamaa_core::diagnostic::Diagnostic) -> Option<Value> {
+    fn value(cell: yamaa_core::diagnostic::ContextValue) -> Option<Value> {
+        use yamaa_core::{diagnostic::ContextValue as C, value::Value as S};
+        Some(match cell {
+            C::Sequence(values) => {
+                Value::Array(values.into_iter().map(value).collect::<Option<_>>()?)
+            }
+            C::Integer(integer) => Value::Number(integer.parse().ok()?),
+            C::Scalar(scalar) => match scalar {
+                S::Missing => Value::Null,
+                S::Str(v) => json!(v),
+                S::Int(v) => json!(v),
+                S::Float(v) => json!(v.get()),
+                S::Bool(v) => json!(v),
+                S::Date(v) => json!(v.to_string()),
+                S::DateTime(v) => json!(v.to_string()),
             },
-        ),
-        PreflightFinding::DomainInputCollision { domain } => diagnostic(
-            "validation",
-            "duplicate_identifier",
-            Some("REQ-0080"),
-            vec![format!("input.{domain}"), "domain".into()],
-            json!({"identifier":domain}),
-        ),
-        PreflightFinding::RedundantSourceType {
-            dataset,
-            field,
-            kind,
-        } => validation(
-            "redundant_field_type",
-            Some("REQ-0533"),
-            format!("input.{dataset}.types.{field}"),
-            json!({"dataset":dataset,"field":field,"type":type_name(*kind)}),
-        ),
-    })
+        })
+    }
+    let definition = finding.definition();
+    let context = finding
+        .context
+        .into_iter()
+        .map(|(name, v)| Some((name, value(v)?)))
+        .collect::<Option<serde_json::Map<_, _>>>()?;
+    Some(diagnostic(
+        definition.phase,
+        definition.condition,
+        definition.requirement,
+        finding.spec_paths,
+        context.into(),
+    ))
 }
 /// Return semantic findings only. Policy/transport/internal errors deliberately
 /// have no fabricated language condition and must remain host boundary failures.

@@ -82,6 +82,19 @@ class OriginalSpecifications(unittest.TestCase):
         guard.start()
         self.addCleanup(guard.stop)
 
+    def test_core_preflight_preserves_independent_findings_before_ports(self):
+        def no_port(*_):
+            self.fail("preflight failure reached a host port")
+        with (ROOT / "preflight.tsv").open(encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), 5)
+        self.assertEqual(sum(len(json.loads(r["expected"])["outcome"]["diagnostics"]) for r in records), 16)
+        for record in records:
+            with self.subTest(case=record["case"]):
+                with self.assertRaises(ValueError) as caught:
+                    yamaa_native._prepare_document("spec.yaml", record["source"].encode("ascii"), no_port, no_port, no_port)
+                self.assertEqual(json.loads(str(caught.exception)), json.loads(record["expected"]))
+
     def test_shipped_schema_ignores_ambient_files_and_rejects_versions_before_ports(self):
         path = ROOT / "cases/adam-adlb-ordered-sum/spec.yaml"
         raw = path.read_bytes()
@@ -255,6 +268,33 @@ class OriginalSpecifications(unittest.TestCase):
         }])
         with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
             result.save(lambda *_: self.fail("rejected output reached publication"))
+
+    def test_core_output_findings_preserve_independent_complete_failed_reports(self):
+        def no_parent(*_):
+            self.fail("standalone output declaration reached an inheritance port")
+        with (ROOT / "output-declarations.tsv").open(encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), 5)
+        self.assertEqual(sum(len(json.loads(r["expected"])["diagnostics"]) for r in records), 8)
+        for record in records:
+            with self.subTest(case=record["case"]):
+                reads = []
+                def capture(dataset, path, maximum):
+                    self.assertEqual((dataset, path), ("SRC", "source.csv"))
+                    self.assertGreaterEqual(maximum, 5)
+                    reads.append(path)
+                    return b"ID\n1\n", True
+                spec = yamaa_native._prepare_document("spec.yaml", record["source"].encode("ascii"), no_parent, no_parent, no_parent)
+                result = spec.build(capture, ("fixture-runtime", "fixture-engine", "output-" + record["case"], "spec.yaml", "."))
+                del spec
+                gc.collect()
+                self.assertEqual(json.loads(result.observations()), json.loads(record["expected"]))
+                self.assertIsNone(result.output())
+                for _ in range(2):
+                    with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                        result.save(lambda *_: self.fail("output failure reached publication"))
+                    self.assertEqual(json.loads(result.observations()), json.loads(record["expected"]))
+                self.assertEqual(reads, ["source.csv"])
 
     def test_inherited_raw_loader_replays_existing_complete_failure_contracts(self):
         with (ROOT / "inheritance-replay.tsv").open(newline="", encoding="ascii") as stream:

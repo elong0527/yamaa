@@ -2,8 +2,9 @@
 //!
 //! Registry keys identify causes, not public condition strings: the language uses
 //! `conversion_failed` for several requirements. Migrated causes cover numeric
-//! evaluation, completed-result conversion and classified resource failures; other families retain their
-//! existing error types until their semantics and provenance migrate here.
+//! evaluation, completed-result conversion, classified resource failures and
+//! original-document preflight and output declarations. Other families retain their existing error types
+//! until their semantics and provenance migrate here.
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
@@ -17,11 +18,13 @@ mod numeric;
 pub struct Definition {
     pub phase: &'static str,
     pub condition: &'static str,
-    pub requirement: &'static str,
+    /// Some existing language findings have no individually assigned requirement.
+    /// Preserve that absence rather than inventing an identifier at the boundary.
+    pub requirement: Option<&'static str>,
 }
 
 macro_rules! conditions {
-    ($($code:ident => ($phase:literal, $condition:literal, $requirement:literal),)*) => {
+    ($($code:ident => ($phase:literal, $condition:literal, $requirement:expr),)*) => {
         /// Stable internal cause identity; no wire spelling or numeric discriminant.
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
         pub enum ConditionCode { $($code,)* }
@@ -43,27 +46,45 @@ macro_rules! conditions {
 }
 
 conditions! {
-    NumericUnknownField => ("validation", "unknown_field", "REQ-0443"),
-    NumericInputType => ("validation", "incompatible_input_type", "REQ-0444"),
-    RoundingDigitsType => ("validation", "incompatible_input_type", "REQ-0418"),
-    IntegerOverflow => ("derivation", "integer_overflow", "REQ-0434"),
-    DivisionByZero => ("derivation", "division_by_zero", "REQ-0430"),
-    SqrtOfNegative => ("derivation", "sqrt_of_negative", "REQ-0431"),
-    LnOfNonpositive => ("derivation", "ln_of_nonpositive", "REQ-0432"),
-    InvalidPower => ("derivation", "invalid_power", "REQ-0433"),
-    ConversionInput => ("convert", "conversion_failed", "REQ-0013"),
-    ConversionInteger => ("convert", "conversion_failed", "REQ-0021"),
-    ConversionTemporal => ("convert", "conversion_failed", "REQ-0601"),
-    ResourceMissing => ("validation", "resource_path_missing", "REQ-0785"),
-    ResourceNotRegularFile => ("validation", "resource_path_not_regular_file", "REQ-0785"),
+    NumericUnknownField => ("validation", "unknown_field", Some("REQ-0443")),
+    NumericInputType => ("validation", "incompatible_input_type", Some("REQ-0444")),
+    RoundingDigitsType => ("validation", "incompatible_input_type", Some("REQ-0418")),
+    IntegerOverflow => ("derivation", "integer_overflow", Some("REQ-0434")),
+    DivisionByZero => ("derivation", "division_by_zero", Some("REQ-0430")),
+    SqrtOfNegative => ("derivation", "sqrt_of_negative", Some("REQ-0431")),
+    LnOfNonpositive => ("derivation", "ln_of_nonpositive", Some("REQ-0432")),
+    InvalidPower => ("derivation", "invalid_power", Some("REQ-0433")),
+    ConversionInput => ("convert", "conversion_failed", Some("REQ-0013")),
+    ConversionInteger => ("convert", "conversion_failed", Some("REQ-0021")),
+    ConversionTemporal => ("convert", "conversion_failed", Some("REQ-0601")),
+    ResourceMissing => ("validation", "resource_path_missing", Some("REQ-0785")),
+    ResourceNotRegularFile => ("validation", "resource_path_not_regular_file", Some("REQ-0785")),
+    PreflightUndeclaredRowColumn => ("validation", "undeclared_column", None),
+    PreflightDuplicateRowDefault => ("validation", "duplicate_derivation", Some("REQ-1260")),
+    PreflightMissingRowDerivation => ("validation", "missing_derivation", Some("REQ-0200")),
+    PreflightConflictingRowConstruction => ("validation", "conflicting_row_construction", Some("REQ-1171")),
+    PreflightInvalidGroup => ("validation", "invalid_field_type", Some("REQ-0065")),
+    PreflightGroupReference => ("validation", "unknown_field", Some("REQ-0066")),
+    PreflightRowDriverUnavailable => ("validation", "driver_unavailable", None),
+    PreflightMissingDerivation => ("validation", "missing_derivation", Some("REQ-0198")),
+    PreflightUndeclaredKey => ("validation", "undeclared_column", Some("REQ-0220")),
+    PreflightDriverUnavailable => ("validation", "driver_unavailable", None),
+    PreflightDomainInputCollision => ("validation", "duplicate_identifier", Some("REQ-0080")),
+    PreflightRedundantSourceType => ("validation", "redundant_field_type", Some("REQ-0533")),
+    OutputUnknownProfile => ("validation", "unknown_artifact_profile", Some("REQ-0760")),
+    OutputDuplicateColumn => ("validation", "duplicate_identifier", Some("REQ-0234")),
+    OutputUndeclaredColumn => ("validation", "undeclared_column", Some("REQ-0234")),
+    OutputInternalKey => ("validation", "internal_column_in_keys", Some("REQ-0220")),
 }
 
-/// Diagnostic integers can exceed runtime i64; their canonical decimal text must
-/// not be narrowed by a host or mistaken for a successful scalar result.
+/// Owned context retains scalar kinds and ordered sequences. Diagnostic integers
+/// can exceed runtime i64; their canonical decimal text must not be narrowed by a
+/// host or mistaken for a successful scalar result.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextValue {
     Scalar(Value),
     Integer(String),
+    Sequence(Vec<ContextValue>),
 }
 
 pub type Context = BTreeMap<String, ContextValue>;

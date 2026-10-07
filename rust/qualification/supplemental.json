@@ -526,6 +526,28 @@
         "rust/tests/installed_original_specifications.py",
         "R/yamaanative/tests/original_specifications.R"
       ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R"
+      ]
     }
   ],
   "suites": [
@@ -1183,6 +1205,14 @@
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/mixed-struct.parquet",
       "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/preflight.md",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/output_declarations.md",
+      "role": "documentation"
     }
   ]
 }

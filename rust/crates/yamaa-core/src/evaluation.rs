@@ -116,7 +116,10 @@ impl NumericCondition {
 
     /// Identify the requirement owning the failure, without applying a handler.
     pub fn requirement(&self) -> &'static str {
-        self.diagnostic_code().definition().requirement
+        self.diagnostic_code()
+            .definition()
+            .requirement
+            .expect("numeric and conversion causes have a normative requirement")
     }
 }
 

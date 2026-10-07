@@ -2,9 +2,9 @@
 
 This is the finite blocker register for [#1742](https://github.com/elong0527/yamaa/issues/1742).
 It records evidence and decisions still needed, not approval to release or switch
-backends. The support matrix below records #1771 at
-`e6b6f5bc1672c37021e3d4fe8309af4f15272016`; the implementation order also records
-subsequent merged diagnostics through #1773. Pending PRs and local prototypes do not
+backends. The support matrix below records #1785 at
+`6611d3814a02a37f2ad7321569aa9dac23935813`, including merged diagnostics, strict
+R packaging and held Parquet input/output foundations. Pending PRs and local prototypes do not
 satisfy installed public-API gates. Follow [the delivery order](migration-order.md).
 
 ## Declared API inventory
@@ -48,8 +48,8 @@ inventory acceptance box merely because the declared-name check passes.
 
 ## Installed evidence and support decisions
 
-[Run 37605109894](https://github.com/elong0527/yamaa/actions/runs/37605109894)
-and [its source-byte audit](https://github.com/elong0527/yamaa/pull/1771#issuecomment-6036128052)
+[Run 37674330173](https://github.com/elong0527/yamaa/actions/runs/37674330173)
+and [its source-byte audit](https://github.com/elong0527/yamaa/pull/1785#issuecomment-6045876706)
 qualify the following prototype package combinations at that exact revision:
 
 | Host | Observed system | Package forms exercised | Evidence limit |
@@ -71,31 +71,24 @@ The native R CI job now runs `R CMD check --no-manual` on Linux and macOS in
 addition to build/install and the separately recorded supplemental scripts. It
 requires `Status: OK` and retains check/install/test logs plus the source revision.
 This checks the prototype package and does not establish the final API or a PDF
-manual qualification. Final-revision hosted evidence remains required.
-A local follow-up checked the downloaded macOS source archive from
-[run 37609435827](https://github.com/elong0527/yamaa/actions/runs/37609435827),
-the final #1772 qualification run. `R CMD check --no-manual` on R 4.6.1, macOS
-26.6.2 arm64 completed with zero errors, zero warnings and all 17 scripts passing.
-It reported one portability NOTE: the packaged Rust fixture paths ending in
-`specifications/negative-integer-overflow.json` and
-`specifications/schema-window-functions.json` exceed 100 archive-path bytes.
-This local result does not qualify other systems, a PDF manual or the final API,
-and the note was not waived: the Rust fixture directory was shortened to
-`specs/`, preserving all nine fixture files byte-for-byte. A local check of the
-updated source archive passes with `Status: OK`, including all 17 scripts. B15
-remains open for hosted evidence across the chosen matrix and final-package
-qualification.
-The first hosted package-check run also reported `abort` from the generated Rust
-static archive on both platforms, with all 17 scripts passing. Package-local
-Rust build intermediates now receive post-link cleanup, following
+manual qualification. Both hosted R checks in the audited #1785 run pass with
+`Status: OK` and all 17 scripts passing; their check/install logs and source
+revision are retained. Long Rust fixture paths were shortened to `specs/`
+without changing the fixture bytes. Package-local Rust build intermediates
+receive post-link cleanup, following
 [rextendr's packaging fix](https://github.com/extendr/rextendr/pull/419).
 The check remains enabled and still requires `Status: OK`. This scopes R's
 object-symbol inspection consistently with upstream Rust/R packaging; it does
 not remove Rust's standard-library abort path or prove recovery from allocation
 failure, double panic or every native fault. B16 remains open. Earlier local
 checks used an external Cargo target directory, so they did not reproduce the
-archive-symbol finding; final qualification must also exercise the default
-package-local target layout.
+archive-symbol finding; the audited hosted checks exercise the default
+package-local target layout. B15 remains open for a chosen release matrix and
+qualification of the final combined public package.
+The macOS Rust archive build defaults its deployment target to 11.0 while
+preserving an explicitly supplied target. This covers Rust and its C codec
+objects; R's own compilation/link settings remain supplied by R. The audited
+macOS check has no archive deployment-target warning.
 Release scope must either add the appropriate checks or record an explicit
 approved exclusion. Package versions in the audited evidence are Python host
 0.2.0, native Python/R 0.1.0 and core 0.1.0; none constitutes the final combined
@@ -119,8 +112,8 @@ numbers identify the implementation/test or decision owner.
 | B07 | Complete producer workflow. | #1741 | Producer-once execution, function activation before any study data, exact serialized/rounded consumer input, failure ledgers, reuse and explicit publication gates in both installed hosts. |
 | B08 | Terminology and submission. | #1757, #1758 | Cross-source uniqueness and bound list verification; new define API and all three submission cases preserve independently expected fixed-time XML/JSON bytes before retiring old formats. |
 | B09 | Remaining language/compiler families. Component support is not full-language compilation. | #1585, #1752, #1754 | Qualify handlers, row-output dependencies, predicates/flags/first-available, correlated/keyed aggregates and lookups, full verification scopes, strings/regex/temporal/ODM and submission/value metadata from the executable inventory. |
-| B10 | Source/output codecs and filesystem publication. Original-document prototype reads CSV and writes bounded CSV/Parquet through callbacks; Parquet input and actual filesystem publication remain unqualified. | #1755, #1585 | Exact CSV, logical Parquet/ordinal/type contracts, producer re-ingestion, non-regular/missing/changed resources, atomic publication and publication-failure behavior through actual file ports. |
-| B11 | Complete diagnostics and failure timing. #1772/#1773 merged captured schema and classified source findings; production file-port integration and five assisted-route mismatches remain open. | #1753, #1739 | Preserve normative phase, order, requirement, authored path/context and full source/check/handler ledgers; resolve all five known gaps against independent truth without masking them. |
+| B10 | Source/output codecs and filesystem publication. The private original-document route reads CSV/Parquet and writes bounded CSV/Parquet through callbacks; #1785's installed codec audit passed. Actual filesystem publication and producer workflows remain unqualified. | #1755, #1585 | Exact CSV, logical Parquet/ordinal/type contracts, producer re-ingestion, non-regular/missing/changed resources, atomic publication and publication-failure behavior through actual file ports. |
+| B11 | Complete diagnostics and failure timing. Core owns preflight and output-declaration findings; #1772/#1773 merged captured schema and classified source observations. Remaining diagnostic families, production file-port integration and five assisted-route mismatches remain open. | #1753, #1739 | Preserve normative phase, order, requirement, authored path/context and full source/check/handler ledgers; resolve all five known gaps against independent truth without masking them. |
 | B12 | Numerical policy and downstream bytes. #1740 now proposes one behavior per locked release, with no public policy/backend selector; the choice and production policy remain unratified. | #1740 | Ratified one-policy-per-release behavior, implementation in every affected scope, and reviewed disposition for every observable numerical/artifact difference. |
 | B13 | Transitive dependency reproducibility. Cargo.lock is ignored and omitted from the staged R source package. | #1742 | Approved no-content-hashing-compatible build process, clean independent resolution/build evidence and retained exact versions/features. Exact direct dependency pins alone do not settle this. |
 | B14 | Packaging checksum exceptions. Current AGENTS.md permits only python/uv.lock. | #1757, #1742 | Explicit approval before any additional lock/checksum exception; preserve held-byte resource comparison and prohibit runtime provenance digests. Study locks and Cargo reproducibility are distinct decisions. |

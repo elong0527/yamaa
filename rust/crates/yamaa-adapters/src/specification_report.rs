@@ -157,13 +157,13 @@ pub fn failure<E>(
                 .document()
                 .written_source_path(&source.read.source.name)
                 .ok_or(Error::InvalidObservation)?;
-            let diagnostic: crate::numeric_transport::Diagnostic = source
+            let diagnostic = source
                 .read
                 .failure
                 .ok_or(Error::InvalidObservation)?
-                .diagnostic(&source.read.source.name, written)
-                .into();
-            vec![condition(run, &json!({"diagnostic":diagnostic}))?]
+                .diagnostic(&source.read.source.name, written);
+            vec![specification_diagnostics::portable_diagnostic(diagnostic)
+                .ok_or(Error::InvalidObservation)?]
         }
         _ => return Err(Error::UnsupportedOutcome),
     };
@@ -466,17 +466,16 @@ fn check_observations(
     }
     Ok((observations, diagnostics))
 }
-fn output_diagnostics(findings: &[yamaa_core::specification::OutputFinding]) -> Vec<Value> {
-    use yamaa_engine::specification::OutputFinding as F;
-    findings.iter().map(|finding| {
-        let (condition,requirement,path,context)=match finding {
-            F::UnknownProfile {path} => ("unknown_artifact_profile","REQ-0760","output.path".into(),json!({"path":path,"permitted":[".csv",".parquet"]})),
-            F::DuplicateColumn {position,name} => ("duplicate_identifier","REQ-0234",format!("output.columns[{position}]"),json!({"column":name})),
-            F::UndeclaredColumn {position,name} => ("undeclared_column","REQ-0234",format!("output.columns[{position}]"),json!({"column":name})),
-            F::InternalKey {position,name} => ("internal_column_in_keys","REQ-0220",format!("keys[{position}]"),json!({"column":name})),
-        };
-        json!({"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":[path],"context":context})
-    }).collect()
+fn output_diagnostics(
+    findings: &[yamaa_core::specification::OutputFinding],
+) -> Result<Vec<Value>, Error> {
+    findings
+        .iter()
+        .map(|finding| {
+            crate::specification_diagnostics::portable_diagnostic(finding.diagnostic())
+                .ok_or(Error::InvalidObservation)
+        })
+        .collect()
 }
 /// Render all portable observations and enforce report/output budgets before
 /// publication. A host publication failure is retained, never a success report.
@@ -585,7 +584,7 @@ impl<E> yamaa_engine::specification_output::OutputReport for Report<'_, '_, E> {
         findings: &[yamaa_core::specification::OutputFinding],
     ) -> Result<Value, Error> {
         let mut report = self.value.take().ok_or(Error::InvalidObservation)?;
-        set_diagnostics(&mut report, output_diagnostics(findings));
+        set_diagnostics(&mut report, output_diagnostics(findings)?);
         bounded(report)
     }
     fn success(
