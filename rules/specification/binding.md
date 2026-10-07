@@ -84,9 +84,9 @@ driver record. A qualified reference to the driver of the row
 template is scalar only when the exact variable appears in the enclosing
 `row.group_by`. That reference then returns the key value of that group.
 A column-level derivation reads each constructed row, so the same holds
-there: a qualified reference to a row template's driver is scalar
-only when the exact variable appears in the `group_by` of every grouped
-row template driven by that dataset.
+there. There, a qualified reference to a row template's driver is scalar
+only when every grouped row template driven by that dataset has the exact
+variable in its `group_by`.
 
 <a id="req-0087"></a>
 
@@ -236,12 +236,15 @@ dataset would read, has no scope.
 
 <a id="req-1271"></a>
 
-**REQ-1271.** The read identifies the records of the row's scope whose
-`ItemOID` is the named item, whose `StudyEventOID`, `FormOID`, and
-`ItemGroupOID` are among the OIDs that `event`, `form`, and `item_group`
-list, when they list any, and for which `filter` is `TRUE` under
-[Predicates](../operations/predicates.md). `filter` names only schema
-fields, qualified with the ODM input.
+**REQ-1271.** The read identifies the records of the row's scope that
+meet all of these conditions:
+
+- `ItemOID` is the named item;
+- `StudyEventOID`, `FormOID`, and `ItemGroupOID` are among the OIDs that
+  `event`, `form`, and `item_group` list, when they list any;
+- `filter` is `TRUE` under [Predicates](../operations/predicates.md).
+
+`filter` names only schema fields, qualified with the ODM input.
 
 <a id="req-1272"></a>
 
@@ -316,11 +319,16 @@ driven by its dataset.
 
 <a id="req-1275"></a>
 
-**REQ-1275.** An ODM input that lacks a schema field
-(`odm_schema_field_missing`), binds two stored fields to one schema field
-(`odm_schema_field_ambiguous`), stores a schema field as anything but text,
-or declares `types` or `schema` (`odm_schema_field_type`): fail at
-validation, naming the input and the fields.
+**REQ-1275.** An ODM input that does one of the following fails at
+validation with the condition shown in parentheses:
+
+- lacks a schema field (`odm_schema_field_missing`);
+- binds two stored fields to one schema field
+  (`odm_schema_field_ambiguous`);
+- stores a schema field as anything but text, or declares `types` or
+  `schema` (`odm_schema_field_type`).
+
+The failure names the input and the fields.
 
 <a id="req-1276"></a>
 
@@ -337,6 +345,10 @@ validation with `invalid_odm_context`.
 <a id="req-1278"></a>
 
 **REQ-1278.** An `odm` read that identifies two or more records: fail with
-`odm_not_unique`, reporting the row, the item, the number of records, and
-each identifying field whose values differ among them, or reporting that
-no identifying field tells them apart.
+`odm_not_unique`, reporting:
+
+- the row;
+- the item;
+- the number of records;
+- each identifying field whose values differ among them, or that no
+  identifying field tells them apart.

@@ -143,9 +143,9 @@ Otherwise fail as `unknown_field`.
 **REQ-0117.** Every match value must read a known current-row value: a
 variable must name one, and every identifier an expression reads must be
 one. Otherwise fail as `unknown_field`. `SELF` names donor rows and is
-never a current-row scope, so a match value written `SELF.field` names no
-current-row value and fails the same way; when the current row carries
-`field`, the diagnostic suggests that bare name.
+never a current-row scope. A match value written `SELF.field` therefore
+names no current-row value and fails the same way. When the current row
+carries `field`, the diagnostic suggests that bare name.
 
 <a id="req-0118"></a>
 
@@ -317,9 +317,9 @@ reads the named column of the selected record in any field typed as
 <a id="req-0126"></a>
 
 **REQ-0126.** During grouped row construction, every variable a lookup
-matches on must be derived by the row template that reads the lookup --
-except the template's group keys
-(and, for an ungrouped template, the driver record's own fields).
+matches on must be derived by the row template that reads the lookup.
+The exceptions are the template's group keys and, for an ungrouped
+template, the driver record's own fields.
 [Execution lifecycle](../execution/lifecycle.md) orders row derivations before column derivation; a match value
 available only in a later phase fails as `phase_boundary`.
 
@@ -446,9 +446,9 @@ appear as a target-side `key`, as a dataset-qualified field in `filter` or
 `order_by`, in `columns`, or in `verification.unique`, and behaves like a
 stored field there. A correlated filter sees the augmented donor record and
 the current driver record together. A derivation that fails on a record fails
-the run with the expression's condition at the derivation's path; a derivation
-that yields missing contributes an ordinary missing value, which cannot match
-a key and may be excluded by a predicate.
+the run with the expression's condition at the derivation's path. A derivation
+that yields missing contributes an ordinary missing value. That value cannot
+match a key and may be excluded by a predicate.
 
 ```yaml
 intermediates:
@@ -488,12 +488,13 @@ intermediate through that intermediate's id. The read runs the other
 intermediate's match for the donor record being augmented, not for an
 output row. Every match value, `between` value, and correlated `filter`
 field that the match reads comes from that donor record under
-[REQ-1185](lookup.md#req-1185): a bare name, or a name qualified by the
-reading intermediate's dataset, that names a stored field or a derivation
-declared before the reading one. A name the donor record cannot supply
-fails as `unknown_field`. The read column must exist in the other
-intermediate's dataset or derivations and, when that intermediate declares
-`columns`, be one of them ([REQ-0125](lookup.md#req-0125)).
+[REQ-1185](lookup.md#req-1185). Each is written as a bare name, or as a
+name qualified by the reading intermediate's dataset. Either form names a
+stored field or a derivation declared before the reading one. A name the
+donor record cannot supply fails as `unknown_field`. The read column must
+exist in the other intermediate's dataset or derivations and, when that
+intermediate declares `columns`, be one of them
+([REQ-0125](lookup.md#req-0125)).
 
 Filtering, matching, range narrowing, ordered selection, and the absence
 policy apply exactly as for any other read of that intermediate. It is

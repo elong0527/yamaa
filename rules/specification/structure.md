@@ -66,19 +66,28 @@ Write `literal: null` rather than omitting the derivation.
 **REQ-1260.** A column-level derivation is row-local unless it uses a
 lookup, an aggregate, or a window, reads a named intermediate, or reads a
 column whose column-level derivation is not row-local. A row-local
-column-level derivation is that column's default derivation when at least
-one `rows` entry names the column, or when a row-phase context reads the
-column: a `rows` derivation (windows included), a grouped `rows` filter, a
-donor field of a `SELF` intermediate, or a match variable or `between`
-value of a named intermediate that a `rows` derivation reads
-([REQ-0126](../operations/lookup.md#req-0126)). A default's own reads of
-column-level columns make those derivations defaults too. A qualified field
-or a literal that only spells a column's name does not read that column. An
-inherited default is evaluated in the inheriting `rows` entry's scope,
-exactly as if the derivation were written in that entry. An entry's own
-derivation overrides the default for that entry's rows only. Every other
-column-level derivation keeps its column-phase meaning, and a `rows` entry
-naming its column fails as `duplicate_derivation`.
+column-level derivation is that column's default derivation in either of
+these cases:
+
+- at least one `rows` entry names the column;
+- a row-phase context reads the column.
+
+A row-phase context is one of these:
+
+- a `rows` derivation (windows included);
+- a grouped `rows` filter;
+- a donor field of a `SELF` intermediate;
+- a match variable or `between` value of a named intermediate that a
+  `rows` derivation reads ([REQ-0126](../operations/lookup.md#req-0126)).
+
+A default's own reads of column-level columns make those derivations
+defaults too. A qualified field or a literal that only spells a column's
+name does not read that column. An inherited default is evaluated in the
+inheriting `rows` entry's scope, exactly as if the derivation were written
+in that entry. An entry's own derivation overrides the default for that
+entry's rows only. Every other column-level derivation keeps its
+column-phase meaning, and a `rows` entry naming its column fails as
+`duplicate_derivation`.
 
 ### Output and internal columns
 
