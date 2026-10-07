@@ -253,3 +253,10 @@ pub fn convert(value: &Value, target: ColumnType) -> Result<Value, ConversionErr
         _ => Err(failed(value, target, R::IncompatibleOrInvalidText)),
     }
 }
+
+/// A declared literal replacement; Value::Missing represents an explicit null handler.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LiteralHandler {
+    pub spec_path: String,
+    pub value: Value,
+}

@@ -81,9 +81,9 @@ impl Verifications {
         if !extra.is_empty() {
             return Err(PrepareError::Unsupported(extra));
         }
-        let mut quote_budget = yamaa_core::schema::ValidationBudget::new(Default::default());
+        let mut quote_budget = crate::schema::ValidationBudget::new(Default::default());
         let mut quote = |value: &str| {
-            yamaa_core::schema::quoted_diagnostic_text(value, &mut quote_budget)
+            crate::schema::quoted_diagnostic_text(value, &mut quote_budget)
                 .map_err(|_| PrepareError::Limit("verification_diagnostic"))
         };
         let mut ids = BTreeMap::<String, String>::new();

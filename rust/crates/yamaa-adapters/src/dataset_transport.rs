@@ -18,6 +18,7 @@ use yamaa_core::{
     table::{Column, TableAccess, TableSchema},
     value::ColumnType,
 };
+use yamaa_engine::dataset::DatasetExecution;
 use yamaa_engine::{
     dataset::{self, CheckRecord, DatasetPlan, ExecutionError, Limits, Resource, RowIdentity},
     table_grouping::GroupingError,

@@ -2,93 +2,6 @@
 use super::*;
 use core::cmp::Ordering;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WindowKind {
-    RowNumber,
-    Competition,
-    Dense,
-    RowValue { column: usize, offset: i64 },
-    PreviousNonMissing { column: usize },
-    Locf { column: usize },
-    BaselineFlag { date: usize, reference_date: usize },
-}
-
-/// Null placement is independent of direction; construction order breaks remaining ties.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct OrderTerm {
-    pub column: usize,
-    pub descending: bool,
-    pub nulls_first: bool,
-}
-
-/// Window dependencies bind only completed output columns, never qualified source reads.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Window {
-    pub kind: WindowKind,
-    pub group_by: Vec<usize>,
-    pub order_by: Vec<OrderTerm>,
-    pub filter: Option<BoundPredicate>,
-}
-impl Window {
-    /// Reject incomplete dependencies and enforce operation-specific ordering before source access.
-    pub(super) fn validate(
-        &self,
-        available: &[bool],
-        output: &TableSchema,
-    ) -> Result<(), PlanError> {
-        let baseline = matches!(self.kind, WindowKind::BaselineFlag { .. });
-        if self.order_by.is_empty() != baseline
-            || self.group_by.iter().enumerate().any(|(i, column)| {
-                !available.get(*column).copied().unwrap_or(false)
-                    || self.group_by[..i].contains(column)
-            })
-            || self
-                .order_by
-                .iter()
-                .any(|term| !available.get(term.column).copied().unwrap_or(false))
-        {
-            return Err(PlanError::InvalidWindow);
-        }
-        if let WindowKind::RowValue { offset: 0, .. } = self.kind {
-            return Err(PlanError::InvalidWindow);
-        }
-        let source = match self.kind {
-            WindowKind::RowValue { column, .. }
-            | WindowKind::PreviousNonMissing { column }
-            | WindowKind::Locf { column } => Some(column),
-            _ => None,
-        };
-        if source.is_some_and(|column| !available.get(column).copied().unwrap_or(false)) {
-            return Err(PlanError::InvalidWindow);
-        }
-        if let WindowKind::BaselineFlag {
-            date,
-            reference_date,
-        } = self.kind
-        {
-            if !available.get(date).copied().unwrap_or(false)
-                || !available.get(reference_date).copied().unwrap_or(false)
-            {
-                return Err(PlanError::InvalidWindow);
-            }
-            let kind = output.columns()[date].kind;
-            if !matches!(
-                kind,
-                yamaa_core::value::ColumnType::Date | yamaa_core::value::ColumnType::DateTime
-            ) || output.columns()[reference_date].kind != kind
-            {
-                return Err(PlanError::InvalidWindow);
-            }
-        }
-        if let Some(filter) = &self.filter {
-            filter
-                .validate(0, available, true)
-                .map_err(PlanError::Filter)?;
-        }
-        Ok(())
-    }
-}
-
 struct Rows<'a> {
     candidates: &'a [Candidate],
     schema: &'a TableSchema,
@@ -225,7 +138,7 @@ impl Run {
             partition(
                 &Rows {
                     candidates,
-                    schema: &plan.output,
+                    schema: plan.output(),
                 },
                 &window.group_by,
                 limits.output_rows,
@@ -279,19 +192,19 @@ impl Run {
                     .map_err(|_| Box::new(ExecutionError::Allocation))?;
                 for &member in &members {
                     let source_row = candidates[member].members[0];
-                    let truth = filter
-                        .evaluate(
-                            table,
-                            source_row,
-                            &candidates[member].values,
-                            budget.predicate(),
-                        )
-                        .map_err(|error| match error.kind {
-                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                Box::new(predicate_limit(limit))
-                            }
-                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                        })?;
+                    let truth = crate::dataset_predicate::evaluate(
+                        filter,
+                        table,
+                        source_row,
+                        &candidates[member].values,
+                        budget.predicate(),
+                    )
+                    .map_err(|error| match error.kind {
+                        yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                            Box::new(predicate_limit(limit))
+                        }
+                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                    })?;
                     if truth == yamaa_core::predicate::Truth::True {
                         eligible.push(member);
                     }
@@ -406,7 +319,7 @@ impl Run {
                 )?;
                 return Err(Box::new(ExecutionError::BaselineAmbiguity {
                     path: context.assignment.path.clone(),
-                    column: context.plan.output.columns()[context.assignment.column]
+                    column: context.plan.output().columns()[context.assignment.column]
                         .name
                         .clone(),
                     date: candidates[donor].values[date].clone(),
@@ -416,7 +329,7 @@ impl Run {
                         .iter()
                         .map(|&column| {
                             (
-                                context.plan.output.columns()[column].name.clone(),
+                                context.plan.output().columns()[column].name.clone(),
                                 candidates[row].values[column].clone(),
                             )
                         })

@@ -98,12 +98,7 @@ impl HandlerCounter {
     }
 }
 
-/// A declared literal replacement; Value::Missing represents an explicit null handler.
-#[derive(Clone, Debug, PartialEq)]
-pub struct LiteralHandler {
-    pub spec_path: String,
-    pub value: Value,
-}
+pub use yamaa_core::conversion::LiteralHandler;
 
 /// Failures retain original expression provenance or completed-result conversion data.
 /// Accounting overflow is a resource failure, not a normative conversion condition.

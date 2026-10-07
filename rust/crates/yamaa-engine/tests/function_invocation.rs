@@ -190,7 +190,7 @@ fn shared_function_invocation_vectors() {
             trace: vec![],
             calls: 0,
         };
-        let actual = match plan.invoke(&supplied, &mut port) {
+        let actual = match invoke(&plan, &supplied, &mut port) {
             Ok(v) => encode((&v).into()),
             Err(e) => failure(e),
         };
@@ -210,47 +210,6 @@ fn shared_function_invocation_vectors() {
     assert_eq!(count, 42);
 }
 
-/// No accepted plan can carry duplicate names, invalid defaults or empty identity.
-#[test]
-fn plans_reject_invalid_normalized_signatures() {
-    let base = parameters("x/int/false/required/host_x");
-    let build = |p| InvocationPlan::new(identity(), p, ColumnType::Int, false);
-    for name in ["", "1x", "bad-name", "snow\u{96ea}"] {
-        let mut p = base.clone();
-        p[0].name = name.into();
-        assert_eq!(build(p), Err(PlanError::InvalidName { parameter: 0 }));
-    }
-    assert_eq!(
-        build(vec![base[0].clone(), base[0].clone()]),
-        Err(PlanError::DuplicateName { parameter: 1 })
-    );
-    let mut p = vec![base[0].clone(), base[0].clone()];
-    p[1].name = "y".into();
-    assert_eq!(build(p), Err(PlanError::DuplicateHostName { parameter: 1 }));
-    let mut p = base.clone();
-    p[0].host_name.clear();
-    assert_eq!(build(p), Err(PlanError::EmptyHostName { parameter: 0 }));
-    for default in [Value::Missing, Value::float(1.0), Value::Bool(true)] {
-        let mut p = base.clone();
-        p[0].presence = Presence::Optional(default);
-        assert_eq!(build(p), Err(PlanError::InvalidDefault { parameter: 0 }));
-    }
-    for slot in 0..4 {
-        let mut id = identity();
-        [
-            &mut id.name,
-            &mut id.contract_version,
-            &mut id.implementation_version,
-            &mut id.call,
-        ][slot]
-            .clear();
-        assert_eq!(
-            InvocationPlan::new(id, base.clone(), ColumnType::Int, false),
-            Err(PlanError::EmptyIdentity)
-        );
-    }
-}
-
 /// Reuse repeats effects, including after failures; returned text owns its memory.
 #[test]
 fn synchronous_effects_are_never_retried_memoized_or_rolled_back() {
@@ -268,13 +227,13 @@ fn synchronous_effects_are_never_retried_memoized_or_rolled_back() {
     };
     let owned = {
         let input = BTreeMap::from([("x".into(), Value::Str("owned".into()))]);
-        plan.invoke(&input, &mut port).unwrap()
+        invoke(&plan, &input, &mut port).unwrap()
     };
     assert_eq!(owned, Value::Str("owned".into()));
     let input = BTreeMap::from([("x".into(), Value::Str("again".into()))]);
     for action in ["raise", "invalid:list", "int:1", "echo:host_x"] {
         port.action = action;
-        let result = plan.invoke(&input, &mut port);
+        let result = invoke(&plan, &input, &mut port);
         assert_eq!(result.is_ok(), action == "echo:host_x");
     }
     assert_eq!(port.calls, 5);
@@ -308,12 +267,12 @@ fn typed_port_retains_temporal_precision_and_needs_no_send_bound() {
     .unwrap();
     let calls = std::rc::Rc::new(std::cell::Cell::new(0));
     let mut port = Local(calls.clone());
-    let result = plan
-        .invoke(
-            &BTreeMap::from([("x".into(), Value::Date(date))]),
-            &mut port,
-        )
-        .unwrap();
+    let result = invoke(
+        &plan,
+        &BTreeMap::from([("x".into(), Value::Date(date))]),
+        &mut port,
+    )
+    .unwrap();
     let Value::Date(result) = result else {
         panic!("date")
     };

@@ -7,25 +7,21 @@
 mod conversion;
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
-pub use conversion::ConversionHandler;
+pub use yamaa_core::dataset::*;
 #[path = "dataset_functions.rs"]
 mod functions;
-pub use functions::{BoundFunction, FunctionArgument, FunctionBindings, FunctionInput};
+pub use functions::FunctionBindings;
 #[path = "dataset_keys.rs"]
 mod key_grain;
 #[path = "dataset_lookup.rs"]
 mod lookup;
-pub use intermediates::{Intermediate, SourceSchemas};
 #[path = "dataset_numeric.rs"]
 mod numeric;
-pub use numeric::BoundNumeric;
 #[path = "dataset_windows.rs"]
 mod windows;
-pub use windows::{OrderTerm, Window, WindowKind};
 
 use crate::{
     dataset_budget::Budget,
-    dataset_predicate::{BindingError, BoundPredicate},
     numeric_lifecycle::{HandlerCount, HandlerCountOverflow, HandlerCounter, HandlerKind},
     table_grouping::{partition, GroupingError},
     table_reduction::{count_selected, reduce_column, TableReductionError},
@@ -33,6 +29,7 @@ use crate::{
 use alloc::{boxed::Box, collections::BTreeMap, string::String, vec, vec::Vec};
 use core::convert::Infallible;
 use yamaa_core::{
+    bound_expression::BoundPredicate,
     conversion::{convert, ConversionError},
     reduction::NumericReducer,
     table::{CellError, TableAccess, TableSchema, ValueRef},
@@ -48,160 +45,6 @@ pub enum ExecutionPhase {
     OutputKeys,
     Verification,
     Finished,
-}
-
-/// Already bound expressions; no host joins or lookup fallback are implicit.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Expression {
-    Literal(Value),
-    /// Compiled scalar arithmetic over statically bound source/completed output reads.
-    Compute(BoundNumeric),
-    /// Explicit prebound host invocation; never discovered or activated during execution.
-    Function(BoundFunction),
-    /// Column-phase windows over completed key-grain output rows.
-    Window(Window),
-    Source(usize),
-    /// Read one record from a secondary source on completed output match values.
-    Lookup(Lookup),
-    /// Equality against raw driver fields, never unfinished outputs.
-    /// Runs in its owning assignment's phase; see [`RowLookup`].
-    RowLookup(RowLookup),
-    /// Read a field from the run-local cached named record selection.
-    Intermediate {
-        index: usize,
-        column: usize,
-    },
-    /// Distinct present raw readings across a key combination, before conversion.
-    Collect {
-        column: usize,
-        identifier: String,
-        filter: Option<BoundPredicate>,
-        selection: Option<SourceSelection>,
-    },
-    Column(usize),
-    Reduce {
-        /// Authored operand identity when supplied by the specification compiler.
-        /// Typed plans without an authored name use the bound source field name.
-        identifier: Option<String>,
-        column: usize,
-        reducer: NumericReducer,
-        text: String,
-    },
-    /// Count grouped records (None) or present field values (Some), without coercion.
-    Count {
-        column: Option<usize>,
-        text: String,
-    },
-}
-
-/// Choose the first or last record in declared stable source order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Keep {
-    First,
-    Last,
-}
-
-/// Stable record order; each caller determines when its cardinality requires a choice.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SourceSelection {
-    pub order_by: Vec<OrderTerm>,
-    pub keep: Keep,
-}
-
-/// One named secondary relation with a stable schema and source-list position.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SecondarySource {
-    pub name: String,
-    pub schema: TableSchema,
-}
-
-/// Equality pairs compare a secondary source field to a completed output value.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MatchKey {
-    pub source_column: usize,
-    pub output_column: usize,
-}
-
-/// A many-to-one read; absence is missing and duplicate records remain an error.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Lookup {
-    pub source: usize,
-    pub column: usize,
-    pub keys: Vec<MatchKey>,
-}
-
-/// Equality pairs compare a secondary field with a raw driver field.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RowMatchKey {
-    pub source_column: usize,
-    pub driver_column: usize,
-}
-
-/// Secondary read on raw record fields or available grouping fields.
-///
-/// A template assignment runs before that template's filter, so a duplicate
-/// match fails even if the filter would discard the candidate. A whole-column
-/// assignment runs after filtering and only reads retained candidates. Both
-/// phases use the candidate's original driver membership, not its output keys.
-/// Key-grain plans reject this expression in either phase. The normalized Python
-/// frontend currently admits this expression only in template assignments.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RowLookup {
-    pub source: usize,
-    pub column: usize,
-    pub keys: Vec<RowMatchKey>,
-}
-
-/// One completed-value assignment, with original specification provenance.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Assignment {
-    pub column: usize,
-    pub expression: Expression,
-    pub path: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RowMode {
-    Records,
-    Groups(Vec<usize>),
-    Keys,
-}
-
-/// Assignments are supplied in resolved dependency order, not map iteration order.
-#[derive(Clone, Debug, PartialEq)]
-pub struct RowTemplate {
-    pub mode: RowMode,
-    pub assignments: Vec<Assignment>,
-    pub filter: Option<BoundPredicate>,
-}
-
-/// Error-severity dataset checks supported by this closed application slice.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Check {
-    /// A compiler finding evaluated in declaration order after output keys.
-    InvalidDeclaration {
-        condition: &'static str,
-        requirement: &'static str,
-        reason: String,
-    },
-    Assert(BoundPredicate),
-    /// Compiler checkpoint before a later deferred declaration error; emits no record.
-    PredicateDeclaration(BoundPredicate),
-    Implies {
-        when: BoundPredicate,
-        then: BoundPredicate,
-    },
-    Unique(Vec<usize>),
-    RowCount {
-        min: Option<i64>,
-        max: Option<i64>,
-    },
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Verification {
-    pub path: String,
-    pub check: Check,
 }
 
 /// Caller-selected capacity limits, not normative language limits.
@@ -233,402 +76,6 @@ pub enum Resource {
     PredicateRegexSubjectBytes,
     PredicateRegexWork,
     PredicateRegexStateCells,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum PlanError {
-    NoTemplates,
-    InvalidColumns,
-    EmptyPath,
-    InvalidSource,
-    UnavailableColumn,
-    DuplicateAssignment,
-    IncompleteRow,
-    InconsistentRowColumns,
-    NonGroupSource,
-    UngroupedReduction,
-    InvalidBounds,
-    DuplicateVerificationPath,
-    Filter(BindingError),
-    Predicate(BindingError),
-    InvalidKeyMode,
-    InvalidWindow,
-    InvalidSourceOrder,
-    InvalidLookup,
-    InvalidIntermediate,
-    InvalidConversionHandler,
-    InvalidFunction,
-}
-
-/// Admitted immutable plan: all references and phase dependencies are checked once.
-#[derive(Clone, Debug, PartialEq)]
-pub struct DatasetPlan {
-    source: TableSchema,
-    secondary: Vec<SecondarySource>,
-    intermediates: Vec<Intermediate>,
-    output: TableSchema,
-    templates: Vec<RowTemplate>,
-    columns: Vec<Assignment>,
-    keys: Vec<usize>,
-    verifications: Vec<Verification>,
-    conversion_handlers: Vec<ConversionHandler>,
-    conversion_sites: BTreeMap<String, usize>,
-}
-
-/// Validate nonempty, unique, bound column lists without reading table cells.
-fn validate_columns(columns: &[usize], width: usize) -> Result<(), PlanError> {
-    if columns.is_empty()
-        || columns
-            .iter()
-            .enumerate()
-            .any(|(position, column)| *column >= width || columns[..position].contains(column))
-    {
-        return Err(PlanError::InvalidColumns);
-    }
-    Ok(())
-}
-
-/// Enforce grouped source scope and already-completed output dependencies.
-fn validate_assignment(
-    assignment: &Assignment,
-    available: &mut [bool],
-    source: &TableSchema,
-    secondary: &[SecondarySource],
-    intermediates: &[Intermediate],
-    output: &TableSchema,
-    mode: &RowMode,
-) -> Result<(), PlanError> {
-    if assignment.path.is_empty() {
-        return Err(PlanError::EmptyPath);
-    }
-    if assignment.column >= available.len() {
-        return Err(PlanError::InvalidColumns);
-    }
-    if available[assignment.column] {
-        return Err(PlanError::DuplicateAssignment);
-    }
-    match &assignment.expression {
-        // REQ-0211/0213 convert one derived value at execution, including
-        // literals. Eager conversion would invent failures for empty templates
-        // and move runtime conversion conditions into the planning phase.
-        Expression::Literal(_) => {}
-        Expression::Compute(expression) => expression.validate(source, available, mode)?,
-        Expression::Function(function) => function.validate(source, available, mode)?,
-        Expression::Intermediate { index, column } => {
-            if !matches!(mode, RowMode::Keys) {
-                return Err(PlanError::InvalidIntermediate);
-            }
-            let item = intermediates
-                .get(*index)
-                .ok_or(PlanError::InvalidIntermediate)?;
-            lookup::validate(
-                &Lookup {
-                    source: item.source,
-                    column: *column,
-                    keys: item.keys.clone(),
-                },
-                secondary,
-                available,
-                output,
-            )?;
-        }
-        Expression::RowLookup(lookup) => lookup::validate_row(lookup, source, secondary, mode)?,
-        Expression::Lookup(lookup) => {
-            if !matches!(mode, RowMode::Keys) {
-                return Err(PlanError::InvalidLookup);
-            }
-            lookup::validate(lookup, secondary, available, output)?;
-        }
-        Expression::Window(window) => {
-            if !matches!(mode, RowMode::Keys) {
-                return Err(PlanError::InvalidWindow);
-            }
-            window.validate(available, output)?;
-        }
-        Expression::Column(column) => {
-            if !available.get(*column).copied().unwrap_or(false) {
-                return Err(PlanError::UnavailableColumn);
-            }
-        }
-        Expression::Source(column) => {
-            if *column >= source.columns().len() {
-                return Err(PlanError::InvalidSource);
-            }
-            if let RowMode::Groups(keys) = mode {
-                if !keys.contains(column) {
-                    return Err(PlanError::NonGroupSource);
-                }
-            }
-        }
-        Expression::Collect {
-            column,
-            identifier,
-            filter,
-            selection,
-        } => {
-            if *column >= source.columns().len() {
-                return Err(PlanError::InvalidSource);
-            }
-            if !matches!(mode, RowMode::Keys) || identifier.is_empty() {
-                return Err(PlanError::InvalidKeyMode);
-            }
-            if let Some(filter) = filter {
-                filter
-                    .validate(source.columns().len(), &[], false)
-                    .map_err(PlanError::Filter)?;
-            }
-            if let Some(selection) = selection {
-                if selection.order_by.is_empty()
-                    || selection
-                        .order_by
-                        .iter()
-                        .any(|term| term.column >= source.columns().len())
-                {
-                    return Err(PlanError::InvalidSourceOrder);
-                }
-            }
-        }
-        Expression::Count { column, text } => {
-            if column.is_some_and(|column| column >= source.columns().len()) {
-                return Err(PlanError::InvalidSource);
-            }
-            if !matches!(mode, RowMode::Groups(_)) {
-                return Err(PlanError::UngroupedReduction);
-            }
-            if text.is_empty() {
-                return Err(PlanError::EmptyPath);
-            }
-        }
-        Expression::Reduce {
-            column,
-            text,
-            identifier,
-            ..
-        } => {
-            if *column >= source.columns().len() {
-                return Err(PlanError::InvalidSource);
-            }
-            if !matches!(mode, RowMode::Groups(_)) {
-                return Err(PlanError::UngroupedReduction);
-            }
-            if text.is_empty() || identifier.as_ref().is_some_and(String::is_empty) {
-                return Err(PlanError::EmptyPath);
-            }
-        }
-    }
-    available[assignment.column] = true;
-    Ok(())
-}
-
-impl DatasetPlan {
-    /// Admit the complete single-source plan before any source data is accessed.
-    /// Every template completes the same row-phase columns. Remaining assignments
-    /// execute a whole column at a time, in supplied resolved declaration order.
-    pub fn new(
-        source: TableSchema,
-        output: TableSchema,
-        templates: Vec<RowTemplate>,
-        columns: Vec<Assignment>,
-        keys: Vec<usize>,
-        verifications: Vec<Verification>,
-    ) -> Result<Self, PlanError> {
-        Self::new_with_sources(
-            source,
-            Vec::new(),
-            output,
-            templates,
-            columns,
-            keys,
-            verifications,
-        )
-    }
-
-    /// Admit additional source schemas before accepting any snapshots or lookup reads.
-    pub fn new_with_sources(
-        source: TableSchema,
-        secondary: Vec<SecondarySource>,
-        output: TableSchema,
-        templates: Vec<RowTemplate>,
-        columns: Vec<Assignment>,
-        keys: Vec<usize>,
-        verifications: Vec<Verification>,
-    ) -> Result<Self, PlanError> {
-        Self::new_with_intermediates(
-            SourceSchemas {
-                primary: source,
-                secondary,
-            },
-            Vec::new(),
-            output,
-            templates,
-            columns,
-            keys,
-            verifications,
-        )
-    }
-
-    /// Bind named selections and all read dependencies before accessing snapshots.
-    pub fn new_with_intermediates(
-        sources: SourceSchemas,
-        intermediates: Vec<Intermediate>,
-        output: TableSchema,
-        templates: Vec<RowTemplate>,
-        columns: Vec<Assignment>,
-        keys: Vec<usize>,
-        verifications: Vec<Verification>,
-    ) -> Result<Self, PlanError> {
-        let SourceSchemas {
-            primary: source,
-            secondary,
-        } = sources;
-        intermediates::validate(&intermediates, &secondary, &output)?;
-        for (index, relation) in secondary.iter().enumerate() {
-            if relation.name.is_empty()
-                || secondary[..index]
-                    .iter()
-                    .any(|other| other.name == relation.name)
-            {
-                return Err(PlanError::InvalidLookup);
-            }
-        }
-        if templates.is_empty() {
-            return Err(PlanError::NoTemplates);
-        }
-        let width = output.columns().len();
-        validate_columns(&keys, width)?;
-        let mut row_columns = None;
-        for template in &templates {
-            let keyed = matches!(template.mode, RowMode::Keys);
-            if keyed && templates.len() != 1 {
-                return Err(PlanError::InvalidKeyMode);
-            }
-            if let RowMode::Groups(keys) = &template.mode {
-                validate_columns(keys, source.columns().len())?;
-            }
-            let mut available = vec![false; width];
-            for assignment in &template.assignments {
-                if keyed
-                    && (!keys.contains(&assignment.column)
-                        || matches!(
-                            assignment.expression,
-                            Expression::Collect { .. }
-                                | Expression::Window(_)
-                                | Expression::Lookup(_)
-                                | Expression::RowLookup(_)
-                                | Expression::Function(_)
-                                | Expression::Intermediate { .. }
-                        ))
-                {
-                    return Err(PlanError::InvalidKeyMode);
-                }
-                validate_assignment(
-                    assignment,
-                    &mut available,
-                    &source,
-                    &secondary,
-                    &intermediates,
-                    &output,
-                    &template.mode,
-                )?;
-            }
-            if keyed && keys.iter().any(|&column| !available[column]) {
-                return Err(PlanError::InvalidKeyMode);
-            }
-            if let Some(filter) = &template.filter {
-                filter
-                    .validate(
-                        source.columns().len(),
-                        if keyed { &[] } else { &available },
-                        matches!(template.mode, RowMode::Groups(_)),
-                    )
-                    .map_err(PlanError::Filter)?;
-            }
-            if row_columns
-                .as_ref()
-                .is_some_and(|previous| previous != &available)
-            {
-                return Err(PlanError::InconsistentRowColumns);
-            }
-            row_columns = Some(available.clone());
-            for assignment in &columns {
-                if keyed && matches!(assignment.expression, Expression::Source(_)) {
-                    // A key combination reads all its feeding records, never a chosen first row.
-                    return Err(PlanError::InvalidKeyMode);
-                }
-                if keyed
-                    && matches!(&assignment.expression, Expression::Compute(expression) if expression.reads_source())
-                {
-                    return Err(PlanError::InvalidKeyMode);
-                }
-                if keyed
-                    && matches!(&assignment.expression, Expression::Function(function) if function.reads_source())
-                {
-                    return Err(PlanError::InvalidKeyMode);
-                }
-                validate_assignment(
-                    assignment,
-                    &mut available,
-                    &source,
-                    &secondary,
-                    &intermediates,
-                    &output,
-                    &template.mode,
-                )?;
-            }
-            if available.contains(&false) {
-                return Err(PlanError::IncompleteRow);
-            }
-        }
-        for (position, verification) in verifications.iter().enumerate() {
-            if verification.path.is_empty() {
-                return Err(PlanError::EmptyPath);
-            }
-            if verifications[..position]
-                .iter()
-                .any(|previous| previous.path == verification.path)
-            {
-                return Err(PlanError::DuplicateVerificationPath);
-            }
-            match &verification.check {
-                Check::InvalidDeclaration { .. } => {}
-                Check::Assert(predicate) | Check::PredicateDeclaration(predicate) => predicate
-                    .validate(0, &vec![true; width], true)
-                    .map_err(PlanError::Predicate)?,
-                Check::Implies { when, then } => {
-                    for predicate in [when, then] {
-                        predicate
-                            .validate(0, &vec![true; width], true)
-                            .map_err(PlanError::Predicate)?;
-                    }
-                }
-                Check::Unique(columns) => {
-                    // Unlike row.group_by, unique.columns permits repeated names.
-                    if columns.is_empty() || columns.iter().any(|&column| column >= width) {
-                        return Err(PlanError::InvalidColumns);
-                    }
-                }
-                Check::RowCount { min, max } => {
-                    if (min.is_none() && max.is_none())
-                        || matches!((min, max), (Some(a), Some(b)) if a > b)
-                    {
-                        return Err(PlanError::InvalidBounds);
-                    }
-                }
-            }
-        }
-        Ok(Self {
-            source,
-            secondary,
-            intermediates,
-            output,
-            templates,
-            columns,
-            keys,
-            verifications,
-            conversion_handlers: Vec::new(),
-            conversion_sites: BTreeMap::new(),
-        })
-    }
 }
 
 /// Complete owned rows are exposed only after output identity and checks succeed.
@@ -999,7 +446,7 @@ fn evaluate<T: TableAccess + ?Sized>(
             Err(error) => {
                 let identity = if matches!(&error, TableReductionError::Reduction(yamaa_core::reduction::ReductionError::Arithmetic { error, .. }) if error.phase() == "derivation")
                 {
-                    failure_identity(candidate, &plan.keys, row, budget)?
+                    failure_identity(candidate, plan.keys(), row, budget)?
                 } else {
                     None
                 };
@@ -1024,7 +471,7 @@ fn finish<E>(
     budget: &mut Budget,
     handlers: &mut HandlerCounter,
 ) -> Result<Value, Box<ExecutionError<E>>> {
-    let converted = match convert(&value, plan.output.columns()[assignment.column].kind) {
+    let converted = match convert(&value, plan.output().columns()[assignment.column].kind) {
         Ok(value) => value,
         Err(error) => {
             conversion::recover(error, assignment, candidate, plan, row, budget, handlers)?
@@ -1034,7 +481,107 @@ fn finish<E>(
     Ok(converted)
 }
 
-impl DatasetPlan {
+/// Application execution for an immutable core plan. Each call owns fresh run state.
+/// The core model itself contains no ports, callbacks, counters or execution methods.
+pub trait DatasetExecution {
+    /// Execute only the admitted scope, returning no accepted table on any failure.
+    /// Source access errors remain errors. No undeclared handlers, callbacks, joins,
+    /// file publication or fallback are implicit.
+    fn execute<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        limits: Limits,
+    ) -> Result<Execution, Box<ExecutionError<T::Error>>>;
+    /// Retain ordered handler counts across successful values and every later failure.
+    fn execute_observed<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        limits: Limits,
+    ) -> ExecutionAttempt<T::Error>;
+    /// Execute immutable source snapshots in the same order as the admitted secondary schemas.
+    fn execute_observed_sources<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        limits: Limits,
+    ) -> ExecutionAttempt<T::Error>;
+    /// Execute with explicitly activated, signature-matched callbacks on the caller's thread.
+    /// All referenced signatures must be present before any table method is called,
+    /// even for empty input or filtered-out rows. No callback is retried or rolled back.
+    fn execute_observed_functions<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        limits: Limits,
+    ) -> ExecutionAttempt<T::Error>;
+    /// Observe stage transitions without repeating evaluation or exposing intermediate output.
+    /// The trusted observer owns its clock and must not mutate sources or callback state.
+    /// Finished follows every returned success/failure, but is not guaranteed after a panic.
+    fn execute_with_phase_observer<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionPhase),
+    ) -> ExecutionAttempt<T::Error>;
+}
+impl DatasetExecution for DatasetPlan {
+    fn execute<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        limits: Limits,
+    ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
+        Executor { plan: self }.execute(table, limits)
+    }
+    fn execute_observed<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        limits: Limits,
+    ) -> ExecutionAttempt<T::Error> {
+        Executor { plan: self }.execute_observed(table, limits)
+    }
+    fn execute_observed_sources<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        limits: Limits,
+    ) -> ExecutionAttempt<T::Error> {
+        Executor { plan: self }.execute_observed_sources(table, secondary, limits)
+    }
+    fn execute_observed_functions<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        limits: Limits,
+    ) -> ExecutionAttempt<T::Error> {
+        Executor { plan: self }.execute_observed_functions(table, secondary, functions, limits)
+    }
+    fn execute_with_phase_observer<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionPhase),
+    ) -> ExecutionAttempt<T::Error> {
+        Executor { plan: self }
+            .execute_with_phase_observer(table, secondary, functions, limits, observer)
+    }
+}
+// A service borrows the one admitted model; it owns no second plan representation.
+struct Executor<'a> {
+    plan: &'a DatasetPlan,
+}
+impl core::ops::Deref for Executor<'_> {
+    type Target = DatasetPlan;
+    fn deref(&self) -> &Self::Target {
+        self.plan
+    }
+}
+impl Executor<'_> {
     /// Execute only the admitted scope, returning no accepted table on any failure.
     /// Source access errors remain errors. No undeclared handlers, callbacks, joins,
     /// file publication or fallback are implicit.
@@ -1096,7 +643,7 @@ impl DatasetPlan {
     ) -> ExecutionAttempt<T::Error> {
         observer(ExecutionPhase::Admission);
         let mut handlers = HandlerCounter::default();
-        for declaration in &self.conversion_handlers {
+        for declaration in self.plan.conversion_handlers() {
             handlers.register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
         }
         let result =
@@ -1120,10 +667,11 @@ impl DatasetPlan {
         observer: &mut dyn FnMut(ExecutionPhase),
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
         for assignment in self
-            .templates
+            .plan
+            .templates()
             .iter()
             .flat_map(|template| &template.assignments)
-            .chain(&self.columns)
+            .chain(self.plan.columns())
         {
             if let Expression::Function(function) = &assignment.expression {
                 if functions.signature(function.slot()) != Some(function.signature()) {
@@ -1133,11 +681,11 @@ impl DatasetPlan {
                 }
             }
         }
-        if table.schema() != &self.source
-            || secondary.len() != self.secondary.len()
+        if table.schema() != self.plan.source()
+            || secondary.len() != self.plan.secondary().len()
             || secondary
                 .iter()
-                .zip(&self.secondary)
+                .zip(self.plan.secondary())
                 .any(|(table, expected)| table.schema() != &expected.schema)
         {
             return Err(Box::new(ExecutionError::SchemaMismatch));
@@ -1154,10 +702,10 @@ impl DatasetPlan {
         let mut budget = Budget::new(limits);
         let mut intermediate_run = intermediates::Run::default();
         let mut candidates: Vec<Candidate> = Vec::new();
-        if matches!(self.templates[0].mode, RowMode::Keys) {
+        if matches!(self.plan.templates()[0].mode, RowMode::Keys) {
             candidates = key_grain::construct(self, table, limits, &mut budget, handlers)?;
         } else {
-            for template in &self.templates {
+            for template in self.plan.templates() {
                 let groups = match &template.mode {
                     RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
                     RowMode::Records => {
@@ -1178,8 +726,8 @@ impl DatasetPlan {
                 for members in groups {
                     let mut candidate = Candidate {
                         members,
-                        values: vec![Value::Missing; self.output.columns().len()],
-                        completed: vec![false; self.output.columns().len()],
+                        values: vec![Value::Missing; self.plan.output().columns().len()],
+                        completed: vec![false; self.plan.output().columns().len()],
                     };
                     for assignment in &template.assignments {
                         candidate.values[assignment.column] = evaluate(
@@ -1201,14 +749,19 @@ impl DatasetPlan {
                     }
                     if let Some(filter) = &template.filter {
                         let source_row = candidate.members[0];
-                        let truth = filter
-                            .evaluate(table, source_row, &candidate.values, budget.predicate())
-                            .map_err(|error| match error.kind {
-                                yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                    Box::new(predicate_limit(limit))
-                                }
-                                _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                            })?;
+                        let truth = crate::dataset_predicate::evaluate(
+                            filter,
+                            table,
+                            source_row,
+                            &candidate.values,
+                            budget.predicate(),
+                        )
+                        .map_err(|error| match error.kind {
+                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                                Box::new(predicate_limit(limit))
+                            }
+                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                        })?;
                         if truth != yamaa_core::predicate::Truth::True {
                             budget.discard_candidate(&candidate.values);
                             continue;
@@ -1218,7 +771,7 @@ impl DatasetPlan {
                 }
             }
         }
-        for assignment in &self.columns {
+        for assignment in self.plan.columns() {
             let mut numbers = if let Expression::Window(window) = &assignment.expression {
                 Some(windows::Run::new(
                     window,
@@ -1281,12 +834,12 @@ impl DatasetPlan {
         }
         observer(ExecutionPhase::OutputKeys);
         let dataset = Dataset {
-            schema: self.output.clone(),
+            schema: self.plan.output().clone(),
             rows: candidates.into_iter().map(|row| row.values).collect(),
         };
         let mut failures = Vec::new();
-        budget.work(dataset.rows.len(), self.keys.len())?;
-        for (position, &column) in self.keys.iter().enumerate() {
+        budget.work(dataset.rows.len(), self.plan.keys().len())?;
+        for (position, &column) in self.plan.keys().iter().enumerate() {
             let missing: Vec<_> = dataset
                 .rows
                 .iter()
@@ -1301,13 +854,18 @@ impl DatasetPlan {
                     evaluated_count: dataset.rows.len(),
                     failed_count: missing.len(),
                     output_rows: dataset.rows.len(),
-                    offending_rows: identities(&dataset, &self.keys, missing, &mut budget)?,
+                    offending_rows: identities(&dataset, self.plan.keys(), missing, &mut budget)?,
                 });
             }
         }
-        budget.work(dataset.rows.len(), self.keys.len())?;
-        let groups = partition(&dataset, &self.keys, limits.output_rows, limits.key_cells)
-            .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+        budget.work(dataset.rows.len(), self.plan.keys().len())?;
+        let groups = partition(
+            &dataset,
+            self.plan.keys(),
+            limits.output_rows,
+            limits.key_cells,
+        )
+        .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
         let duplicates: Vec<_> = groups
             .iter()
             .filter(|members| members.len() > 1)
@@ -1321,7 +879,7 @@ impl DatasetPlan {
                 evaluated_count: groups.len(),
                 failed_count: duplicates.len(),
                 output_rows: dataset.rows.len(),
-                offending_rows: identities(&dataset, &self.keys, duplicates, &mut budget)?,
+                offending_rows: identities(&dataset, self.plan.keys(), duplicates, &mut budget)?,
             });
         }
         if !failures.is_empty() {
@@ -1329,7 +887,7 @@ impl DatasetPlan {
         }
         observer(ExecutionPhase::Verification);
         let mut records = Vec::new();
-        for verification in &self.verifications {
+        for verification in self.plan.verifications() {
             let record = match &verification.check {
                 Check::InvalidDeclaration {
                     condition,
@@ -1348,7 +906,7 @@ impl DatasetPlan {
                     let Some(record) = crate::dataset_verification::predicate_check(
                         verification,
                         &dataset,
-                        &self.keys,
+                        self.plan.keys(),
                         &mut budget,
                         &mut records,
                     )?
@@ -1381,7 +939,7 @@ impl DatasetPlan {
                         output_rows: dataset.rows.len(),
                         offending_rows: identities(
                             &dataset,
-                            &self.keys,
+                            self.plan.keys(),
                             repeated
                                 .into_iter()
                                 .flat_map(|members| members.iter().copied()),
@@ -1428,7 +986,7 @@ impl DatasetPlan {
             .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
         if required > limits.output_rows
             || required
-                .checked_mul(self.output.columns().len())
+                .checked_mul(self.plan.output().columns().len())
                 .is_none_or(|cells| cells > limits.output_cells)
         {
             return Err(Box::new(ExecutionError::Capacity));

@@ -2,7 +2,7 @@
 //! Row-output dependencies and broader expressions remain explicit follow-up work.
 use super::*;
 use crate::dataset::Verification;
-use yamaa_core::{
+use crate::{
     aggregate_parser::{parse_aggregate, ParsedKind, Reducer},
     reduction::NumericReducer,
     reference_scope::{self, Phase, Reach, Scope},
@@ -14,7 +14,7 @@ enum RowOperation {
     Source(String),
     InvalidAggregate {
         expression: String,
-        error: yamaa_core::aggregate_parser::GrammarFailure,
+        error: crate::aggregate_parser::GrammarFailure,
     },
     Literal(Value),
     Sum {
@@ -98,7 +98,7 @@ fn declaration(
             let expression = text(d, field(d, payload, "expr")?)?;
             let parsed = match parse_aggregate(expression, Default::default()) {
                 Ok(parsed) => parsed,
-                Err(yamaa_core::aggregate_parser::ParseError::Grammar { failure, .. }) => {
+                Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
                     return Ok(RowDeclaration {
                         column,
                         path,
@@ -108,7 +108,7 @@ fn declaration(
                         },
                     })
                 }
-                Err(yamaa_core::aggregate_parser::ParseError::Limit { .. }) => {
+                Err(crate::aggregate_parser::ParseError::Limit { .. }) => {
                     return Err(PrepareError::Limit("aggregate_parser"))
                 }
             };
