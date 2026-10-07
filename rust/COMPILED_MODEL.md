@@ -75,7 +75,9 @@ layer provenance, expansion history and the document addressed by final origins.
 A direct integration test prepares the unchanged `spec_study.yaml`, reads its
 shared parent once, prunes the unused input and column, and produces the exact
 committed CSV. The adapter retains raw parent bytes and locations and compares
-the complete report against independent reference-checked truth. Installed-host
-qualification remains pending.
+the complete report against independent reference-checked truth. Installed Python
+and R prototypes now exercise all six original documents, including exact parent
+callback errors/interruptions and cached source capture. The existing conformance
+frontend still needs routing through this owned lifecycle before inventory promotion.
 Non-governed descriptive metadata can reach compilation; reserved metadata keys
 remain explicitly unsupported pending submission validation integration.

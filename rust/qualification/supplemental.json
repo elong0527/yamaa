@@ -506,7 +506,9 @@
       "level": "compile",
       "consumers": [
         "python/tests/native/test_original_specification_truth.py",
-        "rust/crates/yamaa-adapters/tests/specification_run.rs"
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R"
       ]
     }
   ],

@@ -43,7 +43,7 @@ pub(crate) fn document(error: DocumentError) -> Result<Value, TransportError> {
         _ => Err(TransportError::InvalidDocument),
     }
 }
-pub(super) fn validation(error: ValidationError) -> Result<Value, TransportError> {
+pub(crate) fn validation(error: ValidationError) -> Result<Value, TransportError> {
     Ok(match error {
         ValidationError::Type(TypeError::Invalid { .. }) => {
             return Err(TransportError::InvalidQuery)
@@ -237,7 +237,7 @@ fn descriptor_issue(issue: DescriptorIssue) -> Value {
 }
 
 /// Dependency discovery never turns a resource refusal into a missing edge.
-pub(super) fn inheritance_dependencies(
+pub(crate) fn inheritance_dependencies(
     error: InheritanceDependencyError,
 ) -> Result<Value, TransportError> {
     use yamaa_core::{aggregate_parser as a, numeric_parser as n, predicate_parser as p};

@@ -64,6 +64,24 @@ pub fn _prepare_specification(
     identity: &str,
     source: &Bound<'_, PyBytes>,
 ) -> PyResult<Specification> {
+    let schema = captured_schema(modules, entry, identity, source)?;
+    let document = schema
+        .prepare_standalone(Source {
+            identity: identity.into(),
+            bytes: source.as_bytes().to_vec(),
+        })
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(capture_failure(&e)))?;
+    let inner = PreparedRun::prepare(document)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(failure(&e, None)))?;
+    Ok(Specification { inner })
+}
+
+pub(super) fn captured_schema(
+    modules: &Bound<'_, PyList>,
+    entry: usize,
+    identity: &str,
+    source: &Bound<'_, PyBytes>,
+) -> PyResult<std::sync::Arc<CapturedSchema>> {
     let limits = Limits::default();
     let invalid = || {
         pyo3::exceptions::PyValueError::new_err(
@@ -113,14 +131,13 @@ pub fn _prepare_specification(
             })
         })
         .collect::<PyResult<Vec<_>>>()?;
-    let schema = CapturedSchema::admit(sources, entry, limits)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(capture_failure(&e)))?;
-    let document = schema
-        .prepare_standalone(Source {
-            identity: identity.into(),
-            bytes: source.as_bytes().to_vec(),
-        })
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(capture_failure(&e)))?;
+    CapturedSchema::admit(sources, entry, limits)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(capture_failure(&e)))
+}
+
+pub(super) fn from_document(
+    document: yamaa_adapters::specification_source::PreparedDocument,
+) -> PyResult<Specification> {
     let inner = PreparedRun::prepare(document)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(failure(&e, None)))?;
     Ok(Specification { inner })

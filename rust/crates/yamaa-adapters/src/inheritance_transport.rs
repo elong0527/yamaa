@@ -202,10 +202,19 @@ fn invalid(condition: &str, path: &str, requirement: &str, context: Vec<Value>) 
     json!({"status":"invalid","diagnostics":[{"condition":condition,"path":path,"requirement":requirement,"context":context}]})
 }
 fn outcome<E>(error: graph::Error<PortError<E>>) -> Result<Value, Failure<E>> {
+    match traversal_outcome(error) {
+        Ok(value) => Ok(value),
+        Err(Failure::Transport(error)) => Err(Failure::Transport(error)),
+        Err(Failure::Host(PortError::Host(error))) => Err(Failure::Host(error)),
+        Err(Failure::Host(PortError::Transport(error))) => Err(Failure::Transport(error)),
+        Err(Failure::Host(PortError::Outcome(value))) => Ok(value),
+    }
+}
+
+/// Reuse typed traversal diagnostics independently of the JSON source transport.
+pub(crate) fn traversal_outcome<E>(error: graph::Error<E>) -> Result<Value, Failure<E>> {
     Ok(match error {
-        graph::Error::Host(PortError::Host(error)) => return Err(Failure::Host(error)),
-        graph::Error::Host(PortError::Transport(error)) => return Err(error.into()),
-        graph::Error::Host(PortError::Outcome(outcome)) => outcome,
+        graph::Error::Host(error) => return Err(Failure::Host(error)),
         graph::Error::Resource(error) => limit(
             match error.resource {
                 graph::Resource::Layers => "layers",

@@ -22,6 +22,14 @@
 #' @return An owned native specification handle.
 #' @export
 prepare_specification <- function(modules, entry, identity, source) {
+  args <- .specification_inputs(modules, entry, identity, source)
+  result <- .Call(wrap__prepare_specification, args$names, args$modules,
+                  args$entry, args$identity, args$source)
+  if (!is.null(result$error)) stop(result$error, call. = FALSE)
+  result$value
+}
+
+.specification_inputs <- function(modules, entry, identity, source) {
   if (!is.list(modules) || length(modules) > 128L || is.null(names(modules)) ||
       anyNA(names(modules)) || any(!nzchar(names(modules))) ||
       anyDuplicated(names(modules)) || any(!vapply(modules, is.raw, logical(1)))) {
@@ -35,10 +43,45 @@ prepare_specification <- function(modules, entry, identity, source) {
   position <- match(entry, names(modules))
   if (is.na(position)) stop("entry schema module is absent", call. = FALSE)
   if (!is.raw(source) || length(source) > 16777216) stop("source must be bounded raw YAML", call. = FALSE)
-  result <- .Call(wrap__prepare_specification,
-    lapply(names(modules), .specification_text_bytes, maximum=65536), unname(modules),
-    as.integer(position - 1L), .specification_text_bytes(identity, 65536), source)
-  if (!is.null(result$error)) stop(result$error, call. = FALSE)
+  list(names=lapply(names(modules), .specification_text_bytes, maximum=65536),
+       modules=unname(modules), entry=as.integer(position - 1L),
+       identity=.specification_text_bytes(identity,65536), source=source)
+}
+
+# Internal prototype. Only raw capture, canonical identity and path authority live in R.
+.prepare_inherited_specification <- function(modules, entry, identity, source,
+    canonicalize, capture, rebase) {
+  args <- .specification_inputs(modules, entry, identity, source)
+  if (!is.function(canonicalize) || !is.function(capture) || !is.function(rebase)) {
+    stop("inheritance ports must be functions", call.=FALSE)
+  }
+  force(canonicalize); force(capture); force(rebase)
+  failure <- NULL
+  dispatch <- function(operation, args, maximum) tryCatch({
+    strings <- lapply(args, rawToChar)
+    if (operation == "canonicalize") {
+      value <- canonicalize(strings[[1L]], strings[[2L]])
+      if (!is.null(value)) {
+        if (!is.character(value) || length(value)!=2L || anyNA(value) || !is.null(attributes(value))) {
+          stop("invalid inheritance identity",call.=FALSE)
+        }
+        value <- lapply(value,.specification_text_bytes,maximum=maximum)
+      }
+    } else if (operation == "capture") {
+      value <- capture(strings[[1L]], strings[[2L]], maximum)
+      if (!is.null(value) && (!is.raw(value) || length(value)>maximum)) {
+        stop("invalid or over-limit inheritance capture",call.=FALSE)
+      }
+    } else if (operation == "rebase") {
+      value <- .specification_text_bytes(rebase(strings[[1L]],strings[[2L]],strings[[3L]],maximum),maximum)
+    } else stop("invalid inheritance operation",call.=FALSE)
+    list(0L,value)
+  }, error=function(e) {failure <<- e;list(1L,NULL)},
+     interrupt=function(e) {failure <<- e;list(1L,NULL)})
+  result <- .Call(wrap__prepare_inherited_specification,args$names,args$modules,
+                 args$entry,args$identity,args$source,dispatch)
+  if (!is.null(failure)) stop(failure)
+  if (!is.null(result$error)) stop(result$error,call.=FALSE)
   result$value
 }
 

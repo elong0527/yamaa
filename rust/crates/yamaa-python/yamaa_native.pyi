@@ -79,3 +79,10 @@ class _Specification:
 def _prepare_specification(
     modules: list[tuple[str, bytes]], entry: int, identity: str, source: bytes
 ) -> _Specification: ...
+
+def _prepare_inherited_specification(
+    modules: list[tuple[str, bytes]], entry: int, identity: str, source: bytes,
+    canonicalize: Callable[[str, str], tuple[str, str] | None],
+    capture: Callable[[str, str, int], bytes | None],
+    rebase: Callable[[str, str, str, int], str],
+) -> _Specification: ...

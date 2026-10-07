@@ -26,8 +26,9 @@ declaration-order source observations, all four output rows, the five inherited
 handler-count records and the successful unique check. Source ordering uses
 stored text; the selected `DTHDY` value is converted to an integer afterward.
 
-These authored reports cover the six original fixtures. Installed native coverage
-is still five fixtures until the inherited-document host path is integrated.
+These authored reports cover the six original fixtures. Installed Python and R
+prototypes compare all six; the existing conformance frontend still needs routing
+through that path before benchmark inventory promotion.
 Original YAML/schema/CSV files are staged from the repository, not duplicated here.
 
 `lookup-failures.json` contains twelve authored diagnostic expectations for
@@ -55,4 +56,4 @@ explicit input types, and literal study metadata. It names `spec_study.yaml`,
 contains only the surviving LB source, and retains the successful unique check.
 The reference independently validates the entire authored report. A native adapter
 integration compares that report and the unchanged CSV, including a cached repeat;
-installed Python and R qualification is still pending.
+installed Python and R prototypes also compare the entire report and artifact.
