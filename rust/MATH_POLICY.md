@@ -1,28 +1,46 @@
 # Portable math policy for the shared engine
 
-Status: opt-in scalar prototype for [#1585](https://github.com/elong0527/yamaa/issues/1585).
-This is an explicit migration policy, not a claim of existing Python bit parity
-or completed Python/R dataset execution. The default compiler is unchanged.
+Status: experimental scalar candidate for [#1585](https://github.com/elong0527/yamaa/issues/1585).
+The [#1740 decision proposal](https://github.com/elong0527/yamaa/issues/1740) is
+unratified. This document describes the existing prototype and qualification
+evidence, not approval of production numerical behavior or Python bit parity.
+The default compiler is unchanged.
 
-## Decision and API
+## Current prototype and target release API
 
 `compile_numeric` keeps `MathPolicy::ReferenceSubset`: EXP, LN and POWER return
 `Unsupported` before any resolution. Callers can explicitly select
 `MathPolicy::PortableLibmV1` through `compile_numeric_with_policy` to enable those
 functions. A compiled plan retains its policy, exposes it through `math_policy`,
-and cannot change it during evaluation. Host adapters must eventually record the
-selected policy alongside their backend/version metadata.
+and cannot change it during evaluation. The bounded `numeric/1` host protocol
+also exposes this experimental selection. Those selectors serve qualification;
+they are not part of the target public API.
+
+Under #1751/#1757, each locked yamaa release supplies one numerical behavior in
+both hosts and every compute context. Public `domain`, `check` and `define`,
+specification YAML and environment YAML do not select a policy or backend. The
+host lock pins the package release; rollback pins a prior release before a fresh
+run. There is no mid-run policy change or semantic fallback. `PortableLibmV1` is
+an internal candidate label, not an additional public version argument or
+mandatory result field. Qualification reports retain exact release/build/artifact
+evidence. Selecting the release behavior still requires the decision in #1740,
+followed by implementation and installed qualification before transition.
 
 PortableLibmV1 uses libm 0.2.16 with default features disabled, Rust 1.90.0 and
 ordinary binary64 arithmetic without reassociation or fast-math. The default
 floating-point environment is assumed; changing rounding modes or enabling
 flush-to-zero is outside this prototype's qualified scope. A library, feature,
-algorithm or toolchain change requires requalification; any result-bit change
-requires a new policy version rather than quietly redefining PortableLibmV1.
+algorithm or toolchain change requires requalification. A production change to
+observable bits, missingness, zero sign, failure order, conversion or handler
+behavior requires an explicit compatibility decision, a new yamaa release and
+renewed qualification. Experimental candidate labels may distinguish comparisons;
+they must not become a public per-run selector.
 
 The shared core is the intended authority for both host bindings. Routing through
 one implementation avoids separately reproducing the host's math algorithms.
-Actual installed Python/R expression entry points remain a later FFI gate.
+Installed Python/R scalar probes already exercise the bounded protocol. Shared
+original-YAML execution of these functions in every compute context remains a
+separate gate; scalar probe evidence cannot close it.
 
 ## Semantics preserved
 
@@ -47,7 +65,7 @@ REQ-0435 acknowledges last-place differences; REQ-0436 requires shared R/Python
 results, and REQ-0438 preserves written association. These do not make differences
 from the current Python reference behavior-neutral. #1620 measured hundreds of
 one-ULP differences per function, with different counts on supported OS targets.
-PortableLibmV1 explicitly chooses the pinned shared implementation. It does not
+The PortableLibmV1 experiment uses the pinned shared implementation. It does not
 change Python production evaluation, regenerate goldens, enable a dataset backend
 or claim that old and new runs will have identical output.
 
