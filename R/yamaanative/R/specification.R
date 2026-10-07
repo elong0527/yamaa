@@ -77,7 +77,8 @@ specification_failure_report <- function(handle, capture, example,
 #' @param handle An owned prepared specification handle.
 #' @param capture A bounded source snapshot callback.
 #' @param publish Callback taking path and raw content. It owns authorization and
-#'   atomic replacement and returns only after all bytes have been published.
+#'   atomic replacement and must return TRUE only after all bytes have been
+#'   published. Any other return value rejects publication.
 #' @param example The report example identity.
 #' @param specification Relative specification identity.
 #' @param base_directory Relative source base identity.
@@ -115,8 +116,7 @@ specification_report <- function(handle, capture, publish, example,
   } else {
     force(publish)
     publish_dispatch <- function(path, content) tryCatch({
-      publish(path, content)
-      TRUE
+      identical(publish(path, content), TRUE)
     }, error = function(e) {
       failure <<- e
       FALSE

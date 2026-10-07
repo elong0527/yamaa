@@ -19,7 +19,7 @@ specification_failure_report(handle, capture, example,
 \item{source}{Raw original specification YAML.}
 \item{handle}{Owned prepared specification handle.}
 \item{capture}{Explicit callback taking name, path and maximum bytes, returning a list of raw bytes and a logical newly-created-snapshot flag.}
-\item{publish}{Callback taking the authored output path and raw rendered bytes. It owns path authorization and atomic replacement, and returns after publication completes.}
+\item{publish}{Callback taking the authored output path and raw rendered bytes. It owns path authorization and atomic replacement, and must return \code{TRUE} only after publication completes. Any other return value rejects publication.}
 \item{example}{Example identity in the report.}
 \item{specification}{Relative specification identity in observations.}
 \item{base_directory}{Relative source-base identity in observations.}

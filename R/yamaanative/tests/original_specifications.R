@@ -43,6 +43,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
     stopifnot(file.rename(pending,file.path(directory,path)))
     stopifnot(identical(rawfile(file.path(directory,path)),content))
     published <<- published+1L
+    TRUE
   }
   for(created in c(1L,0L)) {
     report <- specification_report(handle,capture,publish,case_name)
@@ -65,6 +66,15 @@ for(kind in c("error","interrupt")) {
   actual <- tryCatch(specification_failure_report(handle,capture,"failure"),error=identity,interrupt=identity)
   stopifnot(identical(actual,failure),calls==1L)
 }
+for(rejected in list(FALSE,NULL,NA,logical(),c(TRUE,FALSE),1L,"TRUE")) {
+  calls <- 0L
+  capture <- function(...) list(rawfile(file.path(case,"input/lb.csv")),TRUE)
+  publish <- function(...) {calls <<- calls+1L;rejected}
+  actual <- tryCatch(specification_report(handle,capture,publish,case_name),error=identity)
+  stopifnot(inherits(actual,"error"),calls==1L)
+  stopifnot(identical(conditionMessage(actual),"publication callback rejected output"))
+}
+cat("rejected and malformed publication results passed\n")
 # The last original case succeeds until the host publication boundary.
 for(kind in c("error","interrupt")) {
   failure <- structure(list(message="retained publication condition",call=NULL,payload=new.env()),class=c("publication_test_condition",kind,"condition"))
