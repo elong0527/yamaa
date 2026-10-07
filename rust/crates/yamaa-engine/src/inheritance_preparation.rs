@@ -1,6 +1,6 @@
 //! Inheritance application lifecycle over captured documents and explicit path authority.
 use crate::inheritance::{self, Layer, Source, SourcePort};
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use yamaa_core::schema::{
     Document, DocumentError, DocumentLimits, DocumentNode as N, InheritanceDependencyError,
     LayerCompositionError, LayerProvenance, NormalizationBudget, NormalizationError,
@@ -43,10 +43,46 @@ pub enum Error<E> {
     PathBytes,
     Document(DocumentError),
     Composition(LayerCompositionError),
-    Normalize(NormalizationError),
-    Dependencies(InheritanceDependencyError),
+    Normalize(Box<FailureContext<NormalizationError>>),
+    Dependencies(Box<FailureContext<InheritanceDependencyError>>),
     Validation(ValidationError),
     Model(Vec<SchemaDiagnostic>),
+}
+
+/// Failed passes retain the arena addressed by semantic context references.
+/// Policy/internal failures need no arena copy and never become language findings.
+#[derive(Debug)]
+pub struct FailureContext<E> {
+    pub error: E,
+    pub input: Option<Document>,
+}
+fn normalization_context(
+    error: NormalizationError,
+    input: &Document,
+) -> Box<FailureContext<NormalizationError>> {
+    let retained = matches!(&error, NormalizationError::Invalid(_)).then(|| input.clone());
+    Box::new(FailureContext {
+        error,
+        input: retained,
+    })
+}
+fn dependency_context(
+    error: InheritanceDependencyError,
+    input: &Document,
+) -> Box<FailureContext<InheritanceDependencyError>> {
+    use yamaa_core::schema::InheritanceReferenceError;
+    let retained = matches!(
+        &error,
+        InheritanceDependencyError::Normalization(NormalizationError::Invalid(_))
+            | InheritanceDependencyError::Reference(InheritanceReferenceError::Normalization(
+                NormalizationError::Invalid(_)
+            ))
+    )
+    .then(|| input.clone());
+    Box::new(FailureContext {
+        error,
+        input: retained,
+    })
 }
 
 /// Retain each contribution and the pre-normalization document addressed by final origins.
@@ -165,17 +201,17 @@ pub fn prepare<P: PathPort>(
         .map_err(Error::Composition)?;
     let expanded = schema
         .expand_named_windows(&composed.document, false, normalization)
-        .map_err(Error::Normalize)?;
+        .map_err(|error| Error::Normalize(normalization_context(error, &composed.document)))?;
     let expanded_before_pruning = expanded.references.clone();
     let pruned = schema
         .resolve_inheritance_dependencies(&expanded.document, normalization)
-        .map_err(Error::Dependencies)?;
+        .map_err(|error| Error::Dependencies(dependency_context(error, &expanded.document)))?;
     let normalized = schema
         .normalize_document(&pruned.document, normalization)
-        .map_err(Error::Normalize)?;
+        .map_err(|error| Error::Normalize(normalization_context(error, &pruned.document)))?;
     let expanded = schema
         .expand_named_windows(&normalized.document, true, normalization)
-        .map_err(Error::Normalize)?;
+        .map_err(|error| Error::Normalize(normalization_context(error, &normalized.document)))?;
     let origins = expanded
         .origins
         .iter()

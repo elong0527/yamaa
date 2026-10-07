@@ -131,3 +131,38 @@ activation, shared reusable test fakes, and consolidation of the two function
 interfaces remain open. The existing inheritance JSON callback bridge also
 remains to be replaced. No new unimplemented port is presented as a working
 capability, and no public default, golden fixture or qualification level changes.
+
+### Captured standalone schema findings
+
+Standalone schema validation and named-window expansion retain semantic findings
+with the exact captured entry, the admitted schema, and the input arena for the
+failed pass. The arena for window expansion is normalized; it must not be
+replaced by the raw document when resolving context occurrence IDs. Final model
+findings carry text context and do not need an arena copy. Successful preparation
+does not make these failure snapshots.
+
+The shared adapter resolves context references before either host receives them:
+version values, permitted values, patterns, minimum lengths and sizes become the
+same portable validation diagnostic records as runtime findings. Mathematical
+integer context is serialized exactly, including beyond signed i64. This uses
+serde_json's arbitrary-precision number representation only at the transport
+boundary; it does not widen runtime integers or change arithmetic policy.
+
+Context expansion charges a conservative escaped-JSON byte budget before copies.
+A resource refusal or invalid internal context remains a boundary rejection,
+not a fabricated specification condition. The existing shared YAML decoder formatter also feeds document preparation:
+duplicate keys, forbidden constructs, invalid Unicode and non-ASCII source
+positions retain their independent diagnostic truth. Non-ASCII diagnostics
+include the captured source identity. Complete encoded capture replies are
+bounded before returning to a host; a partial JSON prefix is never published.
+Inherited preparation retains the admitted schema with failures. Layer errors
+resolve against their original input; later normalization/dependency failures
+retain the exact failed pass arena only when semantic context needs it.
+Composition retains its own context document. The shared adapter resolves
+findings and source/entry/parent provenance into the same portable issue records
+as standalone preparation. Opaque host errors and interruptions retain their
+original payloads; resource/transport outcomes remain separate. Independent
+traversal truth and authored failed-pass vectors cover these paths in both hosts.
+Capture IO failures, whole-run report assembly, and the public issues-table
+frontend still have separate integration gates. This does not qualify a public frontend or promote
+any benchmark inventory row.

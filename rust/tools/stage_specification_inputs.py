@@ -58,6 +58,21 @@ def stage_inheritance_replay(destination: Path):
             request = json.loads(case["request"])
             expected = json.loads(case["expected"])
             expected["protocol"] = "specification/prototype"
+            outcome = expected["outcome"]
+            findings = []
+            for finding in outcome["diagnostics"]:
+                context = {}
+                for item in finding["context"]:
+                    reference = item["value"]
+                    if reference["kind"] == "null":
+                        context[item["name"]] = None
+                    elif reference["kind"] in ("text", "text_list", "count"):
+                        context[item["name"]] = reference["value"]
+                    else:
+                        raise ValueError("replay truth requires an explicit context value")
+                context.update({name: outcome[name] for name in ("source", "entry", "parent") if name in outcome})
+                findings.append(dict(phase="validation", condition=finding["condition"], requirement=finding["requirement"], spec_paths=[finding["path"]], context=context))
+            expected["outcome"] = dict(status="invalid", diagnostics=findings)
             events = [event for event in sources if event["case"] == case["case"]]
             for event in events or [None]:
                 record = dict.fromkeys(fields, "")
@@ -75,11 +90,33 @@ def stage_inheritance_replay(destination: Path):
                 writer.writerow(record)
 
 
+def stage_decode_replay(destination: Path):
+    """Add the run envelope to existing independent decoder failure truth."""
+    fixture = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.tsv"
+    with fixture.open(encoding="utf-8") as stream:
+        records = list(csv.DictReader(stream, delimiter="\t"))
+    with (destination / "decode-replay.tsv").open("w", newline="", encoding="ascii") as stream:
+        writer = csv.DictWriter(stream, fieldnames=["id", "source_hex", "expected"], delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE, quotechar=None)
+        writer.writeheader()
+        for record in records:
+            expected = json.loads(record["expected"])
+            if expected["outcome"]["status"] != "invalid":
+                continue
+            expected["protocol"] = "specification/prototype"
+            for finding in expected["outcome"]["diagnostics"]:
+                finding.update(phase="validation", requirement=None)
+                if finding["condition"] == "non_ascii_source":
+                    finding["context"]["path"] = "source.yaml"
+            writer.writerow(dict(record, expected=json.dumps(expected, sort_keys=True, separators=(",", ":"))))
+
+
 def stage(destination: Path):
     """Keep original files separate from independently authored expected reports."""
     destination.mkdir(parents=True, exist_ok=False)
     (destination / "schema").mkdir()
     stage_inheritance_replay(destination)
+    stage_decode_replay(destination)
+    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv", destination / "inheritance-preparation.tsv")
     for name in SCHEMA_MODULES:
         shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
     for name in CASES:

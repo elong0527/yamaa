@@ -12,6 +12,23 @@ root <- system.file("specification-original", package="yamaanative", mustWork=TR
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
 module_names <- c("schema.yaml",sort(setdiff(list.files(file.path(root,"schema"),pattern="[.]yaml$"),"schema.yaml")))
 modules <- setNames(lapply(file.path(root,"schema",module_names),rawfile),module_names)
+# Both hosts receive already-resolved context from the captured Rust schema.
+prepare_entry <- get(".prepare_document",envir=asNamespace("yamaanative"))
+no_port <- function(...) stop("invalid entry reached source authority")
+for(literal in c("true","123456789012345678901234567890","null")) {
+  failure <- tryCatch(prepare_entry("spec.yaml",charToRaw(paste0("schema_version: ",literal)),no_port,no_port,no_port),error=identity)
+  expected <- paste0('{"outcome":{"diagnostics":[{"condition":"schema_version_mismatch","context":{"actual":',literal,',"expected":"1.0"},"phase":"validation","requirement":null,"spec_paths":["schema_version"]}],"status":"invalid"},"protocol":"specification/prototype"}')
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),expected))
+}
+decode_truth <- read.delim(file.path(root,"decode-replay.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(decode_truth)==8L)
+for(i in seq_len(nrow(decode_truth))) {
+  hex <- decode_truth$source_hex[[i]]
+  starts <- seq.int(1L,nchar(hex),by=2L)
+  bytes <- as.raw(strtoi(substring(hex,starts,starts+1L),base=16L))
+  failure <- tryCatch(prepare_entry("source.yaml",bytes,no_port,no_port,no_port),error=identity)
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),decode_truth$expected[[i]]))
+}
 for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup")) {
   case <- file.path(root,"cases",case_name)
   specification <- if(case_name=="schema-inheritance") "spec_study.yaml" else "spec.yaml"
@@ -148,6 +165,30 @@ for(name in unique(replay$case)) {
   stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),rows$expected[[1L]]),calls==nrow(expected_calls))
 }
 cat("seven raw inherited-loader failure contracts and complete traces passed\n")
+preparation_truth <- read.delim(file.path(root,"inheritance-preparation.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(preparation_truth)==3L)
+for(i in seq_len(nrow(preparation_truth))) {
+  counts <- c(0L,0L,0L)
+  canonicalize <- function(declaring,written) {
+    stopifnot(identical(declaring,"entry.yaml"),identical(written,"parent.yaml"))
+    counts[[1L]] <<- counts[[1L]]+1L
+    c("parent.yaml","parent.yaml")
+  }
+  parent_capture <- function(identity,display_path,maximum) {
+    stopifnot(identical(identity,"parent.yaml"),identical(display_path,"parent.yaml"))
+    counts[[2L]] <<- counts[[2L]]+1L
+    bytes <- charToRaw(preparation_truth$parent_yaml[[i]])
+    stopifnot(length(bytes)<=maximum)
+    bytes
+  }
+  rebase <- function(layer,entry,written,maximum) {
+    counts[[3L]] <<- counts[[3L]]+1L
+    written
+  }
+  failure <- tryCatch(inherited_prepare("entry.yaml",charToRaw(preparation_truth$entry_yaml[[i]]),canonicalize,parent_capture,rebase),error=identity)
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),preparation_truth$expected[[i]]),identical(counts,c(1L,1L,as.integer(preparation_truth$rebases[[i]]))))
+}
+cat("inherited layer, composition and dependency issue records passed\n")
 # The inherited preparation callbacks retain exact R errors and interrupts.
 inherited_prepare <- get(".prepare_document",envir=asNamespace("yamaanative"))
 inherit_case <- file.path(root,"cases","schema-inheritance")

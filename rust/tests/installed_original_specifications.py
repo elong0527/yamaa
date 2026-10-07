@@ -99,10 +99,70 @@ class OriginalSpecifications(unittest.TestCase):
                 with self.assertRaises(ValueError) as caught:
                     yamaa_native._prepare_document("spec.yaml", wrong, no_parent, no_parent, no_parent)
                 self.assertEqual(json.loads(str(caught.exception))["outcome"], {
-                    "status": "rejected", "stage": "capture", "code": "normalization",
+                    "status": "invalid", "diagnostics": [{
+                        "phase": "validation", "condition": "schema_version_mismatch",
+                        "requirement": None, "spec_paths": ["schema_version"],
+                        "context": {"expected": "1.0", "actual": "99.0"},
+                    }],
                 })
             finally:
                 os.chdir(previous)
+
+    def test_inherited_pass_failures_resolve_shared_context_and_provenance(self):
+        with (ROOT / "inheritance-preparation.tsv").open(encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), 3)
+        for record in records:
+            with self.subTest(case=record["case"]):
+                counts = [0, 0, 0]
+                def canonicalize(declaring, written):
+                    self.assertEqual((declaring, written), ("entry.yaml", "parent.yaml"))
+                    counts[0] += 1
+                    return "parent.yaml", "parent.yaml"
+                def capture(identity, display, maximum):
+                    self.assertEqual((identity, display), ("parent.yaml", "parent.yaml"))
+                    counts[1] += 1
+                    raw = record["parent_yaml"].encode()
+                    self.assertLessEqual(len(raw), maximum)
+                    return raw
+                def rebase(layer, entry, written, maximum):
+                    counts[2] += 1
+                    return written
+                with self.assertRaises(ValueError) as caught:
+                    yamaa_native._prepare_document("entry.yaml", record["entry_yaml"].encode(), canonicalize, capture, rebase)
+                self.assertEqual(json.loads(str(caught.exception)), json.loads(record["expected"]))
+                self.assertEqual(counts, [1, 1, int(record["rebases"])])
+
+    def test_original_source_failures_match_independent_decoder_truth(self):
+        def no_port(*_):
+            self.fail("source decoding failure reached a host port")
+        with (ROOT / "decode-replay.tsv").open(encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), 8)
+        for record in records:
+            with self.subTest(case=record["id"]):
+                with self.assertRaises(ValueError) as caught:
+                    yamaa_native._prepare_document("source.yaml", bytes.fromhex(record["source_hex"]), no_port, no_port, no_port)
+                self.assertEqual(json.loads(str(caught.exception)), json.loads(record["expected"]))
+
+    def test_schema_context_preserves_exact_integers_and_constraint_values(self):
+        def no_port(*_):
+            self.fail("invalid entry reached parent or study authority")
+        for literal, expected in [("true", True), ("123456789012345678901234567890", 123456789012345678901234567890), ("null", None)]:
+            with self.subTest(literal=literal):
+                with self.assertRaises(ValueError) as caught:
+                    yamaa_native._prepare_document("spec.yaml", ("schema_version: " + literal).encode(), no_port, no_port, no_port)
+                self.assertEqual(json.loads(str(caught.exception))["outcome"], {
+                    "status": "invalid", "diagnostics": [{"phase": "validation", "condition": "schema_version_mismatch", "requirement": None, "spec_paths": ["schema_version"], "context": {"expected": "1.0", "actual": expected}}],
+                })
+        path = ROOT / "cases/adam-adlb-ordered-sum/spec.yaml"
+        text = path.read_bytes().replace(b"domain: ADLB", b"domain: bad-name", 1)
+        self.assertNotEqual(text, path.read_bytes())
+        with self.assertRaises(ValueError) as caught:
+            yamaa_native._prepare_document("spec.yaml", text, no_port, no_port, no_port)
+        self.assertEqual(json.loads(str(caught.exception))["outcome"], {
+            "status": "invalid", "diagnostics": [{"phase": "validation", "condition": "pattern_mismatch", "requirement": "REQ-0287", "spec_paths": ["domain"], "context": {"value": "bad-name", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}}],
+        })
 
     def test_owned_result_retains_projected_output_and_save_never_reexecutes(self):
         for name in CASES:

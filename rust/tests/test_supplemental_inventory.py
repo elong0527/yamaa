@@ -15,6 +15,12 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
+class RepositoryCatalog(unittest.TestCase):
+    def test_checkout_fixtures_and_suites_are_all_registered(self):
+        root = Path(__file__).resolve().parents[2]
+        module.load_catalog(root, root / "rust/qualification/supplemental.json")
+
+
 class SupplementalEvidence(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

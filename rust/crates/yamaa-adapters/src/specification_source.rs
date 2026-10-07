@@ -46,9 +46,33 @@ pub enum Error {
     Bundle(BundleError),
     Normalize(NormalizationError),
     Validation(ValidationError),
-    Model(Vec<SchemaDiagnostic>),
+    Findings(Box<CapturedFindings>),
     /// This entry point cannot silently treat an inherited layer as standalone.
     InheritanceRequired,
+}
+
+/// A failed semantic pass retains the exact source, schema and context arena.
+/// Node references belong to the pass input, which may differ from the raw entry.
+#[derive(Debug)]
+pub struct CapturedFindings {
+    schema: Arc<CapturedSchema>,
+    source: Source,
+    document: Option<yamaa_core::schema::Document>,
+    findings: Vec<SchemaDiagnostic>,
+}
+impl CapturedFindings {
+    pub fn schema(&self) -> &CapturedSchema {
+        &self.schema
+    }
+    pub fn source(&self) -> &Source {
+        &self.source
+    }
+    pub fn document(&self) -> Option<&yamaa_core::schema::Document> {
+        self.document.as_ref()
+    }
+    pub fn findings(&self) -> &[SchemaDiagnostic] {
+        &self.findings
+    }
 }
 
 /// One immutable admitted schema closure, reusable across separate specification runs.
@@ -144,11 +168,11 @@ impl CapturedSchema {
         let normalized = self
             .structure
             .normalize_document(&raw.document, &mut budget)
-            .map_err(Error::Normalize)?;
+            .map_err(|error| self.normalization_failure(&source, &raw.document, error))?;
         let expanded = self
             .structure
             .expand_named_windows(&normalized.document, true, &mut budget)
-            .map_err(Error::Normalize)?;
+            .map_err(|error| self.normalization_failure(&source, &normalized.document, error))?;
         let origins = expanded
             .origins
             .iter()
@@ -156,7 +180,14 @@ impl CapturedSchema {
             .collect();
         let model = SpecificationDocument::admit(expanded.document, budget.validation_scope())
             .map_err(Error::Validation)?
-            .map_err(Error::Model)?;
+            .map_err(|findings| {
+                Error::Findings(Box::new(CapturedFindings {
+                    schema: Arc::clone(self),
+                    source: source.clone(),
+                    document: None,
+                    findings,
+                }))
+            })?;
         Ok(PreparedDocument {
             schema: Arc::clone(self),
             source,
@@ -168,6 +199,23 @@ impl CapturedSchema {
             },
             parents: Vec::new(),
         })
+    }
+
+    fn normalization_failure(
+        self: &Arc<Self>,
+        source: &Source,
+        document: &yamaa_core::schema::Document,
+        error: NormalizationError,
+    ) -> Error {
+        match error {
+            NormalizationError::Invalid(findings) => Error::Findings(Box::new(CapturedFindings {
+                schema: Arc::clone(self),
+                source: source.clone(),
+                document: Some(document.clone()),
+                findings,
+            })),
+            error => Error::Normalize(error),
+        }
     }
 
     /// Select the shared preparation lifecycle from one decoded raw entry.

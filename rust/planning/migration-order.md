@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-07 against main `aa58b22251895d57eb675abe55dbf9fddaefa789`
+Reconciled 2026-10-07 against main `e6b6f5bc1672c37021e3d4fe8309af4f15272016`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -16,15 +16,42 @@ applicable final-revision CI, full base-to-head review and a fresh merge guard.
 The old plan's next step, structural admission, already shipped in #1747.
 #1750 added original division-by-zero and integer-overflow runs in both hosts.
 #1756 added the unchanged ordered-sum document, its 17 rows, verification and exact
-1,030-byte CSV. Its merge is the baseline above. These three original-document
+1,030-byte CSV. These three original-document
 integrations are supplemental evidence: the benchmark inventory still records
 the six-case cohort as reference-assisted, not `shared_run`.
 
 #1739 was closed by #1756's merge despite that PR explicitly retaining its
-unfinished acceptance gates. It must remain open: lookup, the complete window
-document and the inherited `spec_study.yaml` entrypoint are still missing, as are
-the production frontend and complete cohort inventory qualification. Counts of
-component tests, merged PRs or closed issues are not migration percentages.
+unfinished acceptance gates. It remains open: the production frontend and complete
+cohort inventory qualification have not passed. Counts of component tests,
+merged PRs or closed issues are not migration percentages.
+
+Subsequent reviewed and installed-package-qualified slices have merged:
+
+| PR | Delivered scope |
+| --- | --- |
+| #1761 | Portable diagnostic foundation. |
+| #1762 | Shared core compiled representation. |
+| #1763 | Engine capture/codec/build ports with retained failure observations. |
+| #1764 | Original lookup document integration. |
+| #1767 | Complete original window document integration. |
+| #1768 | Original inherited `spec_study.yaml` integration. |
+| #1769 | Shared preflight/build use case with rejection before study reads. |
+| #1770 | Package-owned shipped schema and automatic raw-document preparation. |
+| #1771 | Owned admitted build output and explicit save without recapture. |
+
+All six original cohort documents now pass the private installed entry points in
+both hosts, with exact complete reports and publication bytes. This does not yet
+qualify the public domain/check facade or replace reference preparation in the
+conformance runner. The existing inventory still records all six as
+`reference_assisted_run`.
+
+The current delivery frontier is complete captured schema/source findings,
+declaring-file path rules and
+production file ports, and the bounded public facade and conformance frontend.
+Schema findings include standalone and inherited preparation; source IO and
+complete failed-run reporting still require integration. The three public
+representation decisions below remain open. Do not substitute another round of
+component-only evidence for the remaining original-YAML frontend gates.
 
 ## Serial delivery order
 
@@ -32,7 +59,7 @@ component tests, merged PRs or closed issues are not migration percentages.
 | --- | --- | --- |
 | 1 | #1753, then #1752 | Establish portable diagnostics and a core-owned immutable compiled specification. Migrate one exercised family at a time, retaining exact independent outcomes; make the existing three original-document runs use the same representation as the temporary dataset protocol. |
 | 2 | #1755; #1754 alongside each moved service | Define the engine-owned resource, codec, publication, environment and function ports and shared fakes. Move semantic decisions out of adapters as those services migrate. Preserve failure/read/publication order; do not build new features on JSON host callbacks or adapter-owned planning. |
-| 3 | #1751 foundation, #1739 | Land the reviewed path/schema/API rules and a bounded `domain`/`check` facade over those services, then implement lookup, full windows and inherited entrypoint in that order. Qualify all six original documents through both installed hosts and promote only evidenced `shared_run` tuples. |
+| 3 | #1751 foundation, #1739 | Finish the reviewed path/API rules, file ports, failure reports and bounded `domain`/`check` facade over the landed shared schema/compiler services. Connect the original-YAML conformance frontend for the now-implemented lookup, full windows and inherited entrypoint. Qualify all six original documents through both installed hosts and promote only evidenced `shared_run` tuples. |
 | 4 | #1757 | Land environment/function/codelist rules and schema, shared static admission, lock verification and per-build function testing before study reads; migrate the five function benchmarks and equivalent R projects. Use the reviewed new format rather than extending the retired artifact/cache design. |
 | 5 | #1741 | Qualify the producer workflow on the compiled representation and ports, including activation-before-data, producer-once execution, rounded serialized consumer inputs, failure ledgers and explicit save gates. |
 | 6 | #1758 | Complete shared Define-XML and Dataset-JSON generation from environment sections, migrate the three submission benchmarks and only then retire `define.yaml` and its loaders/schema. Preserve the existing committed XML/JSON bytes for fixed creation time. |
