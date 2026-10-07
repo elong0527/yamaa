@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Literal
 
 def engine_info() -> dict[str, str | bool]: ...
 def analyze_aggregate(request: str) -> str: ...
@@ -63,20 +64,20 @@ def decode_yaml(source: bytes) -> str:
 # Internal bounded original-YAML compiler. Source capture remains explicit host IO.
 class _Specification:
     def build(
-        self, capture: Callable[[str, str, int], tuple[bytes, bool]],
+        self, capture: Callable[[str, str, int], tuple[bytes, bool] | tuple[Literal["missing", "not_regular_file"], BaseException]],
         metadata: tuple[str, str, str, str, str],
     ) -> _BuildResult: ...
     def source(self) -> tuple[str, str]: ...
     def execute_csv(self, source: bytes) -> tuple[bytes | None, str]: ...
     def report(
         self,
-        capture: Callable[[str, str, int], tuple[bytes, bool]],
+        capture: Callable[[str, str, int], tuple[bytes, bool] | tuple[Literal["missing", "not_regular_file"], BaseException]],
         publish: Callable[[str, bytes], None],
         metadata: tuple[str, str, str, str, str],
     ) -> str: ...
     def failure_report(
         self,
-        capture: Callable[[str, str, int], tuple[bytes, bool]],
+        capture: Callable[[str, str, int], tuple[bytes, bool] | tuple[Literal["missing", "not_regular_file"], BaseException]],
         metadata: tuple[str, str, str, str, str],
     ) -> str: ...
 

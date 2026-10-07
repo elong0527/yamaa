@@ -15,8 +15,6 @@ from typing import BinaryIO, Literal
 from pydantic import BaseModel, ConfigDict
 
 from yamaa.io import _descriptors
-from yamaa.specification._yaml import read_yaml_document
-from yamaa.specification.diagnostics import SpecificationError
 
 _URI_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _DRIVE_ROOT = re.compile(r"^[A-Za-z]:/")
@@ -231,6 +229,9 @@ def find_project_configuration(entry_file: str | Path) -> Path | None:
 
 def _declared_data_roots(configuration: Path, project_root: Path) -> tuple[Path, ...]:
     """Read the data roots one project configuration declares."""
+    from yamaa.specification._yaml import read_yaml_document
+    from yamaa.specification.diagnostics import SpecificationError
+
     try:
         document = read_yaml_document(configuration)
     except (SpecificationError, OSError) as error:

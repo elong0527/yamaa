@@ -115,7 +115,10 @@ specification_source <- function(handle) {
 #' The capture callback owns filesystem authorization, immutable byte capture,
 #' cache policy and source verification. It takes name, path and a maximum byte
 #' count, returning list(raw bytes, logical newly_created). It must bound reading
-#' before allocation. Original errors and interruptions are rethrown after Rust
+#' before allocation. An explicitly observed missing or non-regular resource may
+#' return list("missing" or "not_regular_file", original condition); core owns
+#' its finding and retained failed report. Thrown errors and interruptions are
+#' rethrown after Rust
 #' returns. The shared compiler owns parsing, binding, execution and observations.
 #' Successful publication, inherited inputs and complete language coverage are not
 #' implemented by this bounded failure-report entrypoint.
@@ -154,6 +157,14 @@ specification_report <- function(handle, capture, publish, example,
   failure <- NULL
   dispatch <- function(name, path, maximum) tryCatch({
     result <- capture(name, path, maximum)
+    # An explicit failure reply carries its original condition; Rust admits the
+    # closed cause. Thrown errors and interruptions remain opaque below.
+    if (is.list(result) && length(result) == 2L &&
+        is.character(result[[1L]]) && length(result[[1L]]) == 1L &&
+        !is.na(result[[1L]]) && inherits(result[[2L]], "condition")) {
+      if (inherits(result[[2L]], "interrupt")) stop(result[[2L]])
+      return(result)
+    }
     if (!is.list(result) || length(result) != 2L || !is.raw(result[[1L]]) ||
         !is.logical(result[[2L]]) || length(result[[2L]]) != 1L ||
         is.na(result[[2L]]) || length(result[[1L]]) > maximum) {

@@ -252,6 +252,61 @@ class OriginalSpecifications(unittest.TestCase):
             self.assertIs(caught.exception, failure)
             self.assertEqual(len(calls), 1)
 
+    def test_classified_capture_replies_retain_complete_failed_results(self):
+        with (ROOT / "source-capture.tsv").open(encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), 8)
+        for record in records:
+            with self.subTest(kind=record["kind"], at=record["fail_at"], cached=record["cached"]):
+                spec = prepare("schema-lookup")
+                metadata = ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", ".")
+                fail_at, cached = int(record["fail_at"]), bool(int(record["cached"]))
+                failure = OSError("opaque host details must not enter findings")
+                failure.payload = object()
+                requests = []
+                def capture(name, path, maximum):
+                    index = len(requests)
+                    requests.append((name, path))
+                    if index == fail_at:
+                        return record["kind"], failure
+                    content = (ROOT / "cases/schema-lookup" / path).read_bytes()
+                    self.assertLessEqual(len(content), maximum)
+                    return content, not cached
+                result = spec.build(capture, metadata)
+                expected = json.loads(record["expected"])
+                expected_requests = [("DM", "input/dm.csv"), ("AE", "input/ae.csv")][:fail_at + 1]
+                self.assertEqual(requests, expected_requests)
+                self.assertEqual(json.loads(result.observations()), expected)
+                self.assertIsNone(result.output())
+                requests.clear()
+                self.assertEqual(json.loads(spec.failure_report(capture, metadata)), expected)
+                self.assertEqual(requests, expected_requests)
+                requests.clear()
+                self.assertEqual(json.loads(spec.report(capture, lambda *_: self.fail("failed capture published"), metadata)), expected)
+                self.assertEqual(requests, expected_requests)
+                del spec, capture, failure
+                gc.collect()
+                for _ in range(2):
+                    with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                        result.save(lambda *_: self.fail("failed result reached publisher"))
+                self.assertEqual(json.loads(result.observations()), expected)
+
+    def test_capture_failure_reply_validates_transport_and_preserves_interrupts(self):
+        spec = prepare("schema-lookup")
+        metadata = ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", ".")
+        for reply in (("unknown", OSError("opaque")), ("missing", object()), ("not_regular_file", False), ("missing",)):
+            calls = []
+            def capture(*args):
+                calls.append(args)
+                return reply
+            with self.assertRaises((TypeError, ValueError)):
+                spec.build(capture, metadata)
+            self.assertEqual(len(calls), 1)
+        for failure in (KeyboardInterrupt("returned interrupt"), SystemExit("returned exit")):
+            with self.assertRaises(type(failure)) as caught:
+                spec.build(lambda *_: ("missing", failure), metadata)
+            self.assertIs(caught.exception, failure)
+
     def test_output_rejection_discards_table_and_blocks_save(self):
         name = "adam-adlb-ordered-sum"
         source = (ROOT / "cases" / name / "spec.yaml").read_bytes()
