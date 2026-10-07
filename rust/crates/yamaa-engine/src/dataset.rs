@@ -312,7 +312,21 @@ fn validate_assignment(
         // literals. Eager conversion would invent failures for empty templates
         // and move runtime conversion conditions into the planning phase.
         Expression::Literal(_) => {}
-        Expression::Compute(expression) => expression.validate(source, available, mode)?,
+        Expression::Compute(expression) => expression
+            .validate(
+                source.columns().len(),
+                available,
+                matches!(mode, RowMode::Groups(_)),
+            )
+            .map_err(|error| match error {
+                yamaa_core::bound_expression::ScopeError::GroupedSource => {
+                    PlanError::NonGroupSource
+                }
+                yamaa_core::bound_expression::ScopeError::InvalidSource => PlanError::InvalidSource,
+                yamaa_core::bound_expression::ScopeError::UnavailableColumn => {
+                    PlanError::UnavailableColumn
+                }
+            })?,
         Expression::Function(function) => function.validate(source, available, mode)?,
         Expression::Intermediate { index, column } => {
             if !matches!(mode, RowMode::Keys) {
@@ -1201,14 +1215,19 @@ impl DatasetPlan {
                     }
                     if let Some(filter) = &template.filter {
                         let source_row = candidate.members[0];
-                        let truth = filter
-                            .evaluate(table, source_row, &candidate.values, budget.predicate())
-                            .map_err(|error| match error.kind {
-                                yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                    Box::new(predicate_limit(limit))
-                                }
-                                _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                            })?;
+                        let truth = crate::dataset_predicate::evaluate(
+                            filter,
+                            table,
+                            source_row,
+                            &candidate.values,
+                            budget.predicate(),
+                        )
+                        .map_err(|error| match error.kind {
+                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                                Box::new(predicate_limit(limit))
+                            }
+                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                        })?;
                         if truth != yamaa_core::predicate::Truth::True {
                             budget.discard_candidate(&candidate.values);
                             continue;

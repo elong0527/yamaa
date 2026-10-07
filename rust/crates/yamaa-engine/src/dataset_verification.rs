@@ -56,8 +56,7 @@ pub(crate) fn predicate_check<E>(
         .map(|column| sample(column.kind))
         .collect();
     let mut evaluate = |predicate: &BoundPredicate, values: &[Value]| {
-        predicate
-            .evaluate(dataset, 0, values, budget.predicate())
+        crate::dataset_predicate::evaluate(predicate, dataset, 0, values, budget.predicate())
             .map_err(|error| {
                 Box::new(match error.kind {
                     ErrorKind::Limit(limit) => dataset::predicate_limit(limit),

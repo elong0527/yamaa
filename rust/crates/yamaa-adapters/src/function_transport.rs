@@ -140,7 +140,11 @@ impl PreparedInvocation {
         port: &mut P,
     ) -> Result<String, Error> {
         catch_unwind(AssertUnwindSafe(|| {
-            let outcome = match self.plan.invoke(&self.arguments, port) {
+            let outcome = match yamaa_engine::function_invocation::invoke(
+                &self.plan,
+                &self.arguments,
+                port,
+            ) {
                 Ok(value) => {
                     if let Value::Str(text) = &value {
                         if text.len() > MAX_RESULT_BYTES {

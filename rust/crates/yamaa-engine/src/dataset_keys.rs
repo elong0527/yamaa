@@ -30,17 +30,17 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
     budget.work(rows, 1)?;
     for row in 0..rows {
         if let Some(filter) = &plan.templates[0].filter {
-            let truth = filter
-                .evaluate(table, row, &[], budget.predicate())
-                .map_err(|error| match error.kind {
-                    yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                        Box::new(predicate_limit(limit))
-                    }
-                    _ => Box::new(ExecutionError::Predicate {
-                        source_row: row,
-                        error,
-                    }),
-                })?;
+            let truth =
+                crate::dataset_predicate::evaluate(filter, table, row, &[], budget.predicate())
+                    .map_err(|error| match error.kind {
+                        yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                            Box::new(predicate_limit(limit))
+                        }
+                        _ => Box::new(ExecutionError::Predicate {
+                            source_row: row,
+                            error,
+                        }),
+                    })?;
             if truth != yamaa_core::predicate::Truth::True {
                 continue;
             }
@@ -229,14 +229,17 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
             .map_err(|_| Box::new(ExecutionError::Allocation))?;
         budget.work(candidate.members.len(), 1)?;
         for &source_row in &candidate.members {
-            let truth = filter
-                .evaluate(table, source_row, &[], budget.predicate())
-                .map_err(|error| match error.kind {
-                    yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                        Box::new(predicate_limit(limit))
-                    }
-                    _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                })?;
+            let truth = crate::dataset_predicate::evaluate(
+                filter,
+                table,
+                source_row,
+                &[],
+                budget.predicate(),
+            )
+            .map_err(|error| match error.kind {
+                yamaa_core::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
+                _ => Box::new(ExecutionError::Predicate { source_row, error }),
+            })?;
             if truth == yamaa_core::predicate::Truth::True {
                 retained.push(source_row);
             }

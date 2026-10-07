@@ -279,19 +279,19 @@ impl Run {
                     .map_err(|_| Box::new(ExecutionError::Allocation))?;
                 for &member in &members {
                     let source_row = candidates[member].members[0];
-                    let truth = filter
-                        .evaluate(
-                            table,
-                            source_row,
-                            &candidates[member].values,
-                            budget.predicate(),
-                        )
-                        .map_err(|error| match error.kind {
-                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                Box::new(predicate_limit(limit))
-                            }
-                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                        })?;
+                    let truth = crate::dataset_predicate::evaluate(
+                        filter,
+                        table,
+                        source_row,
+                        &candidates[member].values,
+                        budget.predicate(),
+                    )
+                    .map_err(|error| match error.kind {
+                        yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                            Box::new(predicate_limit(limit))
+                        }
+                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                    })?;
                     if truth == yamaa_core::predicate::Truth::True {
                         eligible.push(member);
                     }

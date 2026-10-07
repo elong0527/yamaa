@@ -102,14 +102,19 @@ pub(super) fn read<E>(
                 .map_err(|_| Box::new(ExecutionError::Allocation))?;
             for source_row in 0..table.row_count() {
                 if let Some(filter) = &item.filter {
-                    let truth = filter
-                        .evaluate(table, source_row, &[], state.budget.predicate())
-                        .map_err(|error| match error.kind {
-                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                Box::new(predicate_limit(limit))
-                            }
-                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                        })?;
+                    let truth = crate::dataset_predicate::evaluate(
+                        filter,
+                        table,
+                        source_row,
+                        &[],
+                        state.budget.predicate(),
+                    )
+                    .map_err(|error| match error.kind {
+                        yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                            Box::new(predicate_limit(limit))
+                        }
+                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                    })?;
                     if truth != yamaa_core::predicate::Truth::True {
                         continue;
                     }

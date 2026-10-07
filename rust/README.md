@@ -13,6 +13,9 @@ component probes do not imply full benchmark qualification.
 The core-owned numeric/conversion diagnostic model, semantic-cause registry and
 remaining cross-family migration are described in [DIAGNOSTICS.md](DIAGNOSTICS.md).
 
+Core-owned bound expressions and function signatures, with the remaining
+compiled-specification migration, are described in [COMPILED_MODEL.md](COMPILED_MODEL.md).
+
 Decimal rounding characterization and the reference/rule discrepancies that
 precede its implementation are recorded in
 [ROUNDING_ASSESSMENT.md](ROUNDING_ASSESSMENT.md).

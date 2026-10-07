@@ -225,7 +225,8 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     }
     // This charges a potential call; missing-value short circuit never executes host code.
     budget.work(1, 1)?;
-    let result = function.signature.invoke(
+    let result = crate::function_invocation::invoke(
+        &function.signature,
         &supplied,
         &mut Selected {
             bindings,
