@@ -989,3 +989,94 @@ def test_fixed_schema_odm_input_rejects_ordinal_before_reading(tmp_path: Path) -
         "requirement": "REQ-1295",
         "context": {"dataset": "ODM", "declared": "ordinal"},
     }
+
+
+def _write_parquet_with_invalid_utf8(path: Path, table: pa.Table) -> None:
+    """Corrupt one authored string value while keeping valid Parquet framing."""
+    pq.write_table(
+        table,
+        path,
+        use_dictionary=False,
+        compression="NONE",
+        write_statistics=False,
+    )
+    content = path.read_bytes()
+    stored_value = b"\x02\x00\x00\x00ok"
+    assert content.count(stored_value) == 1
+    path.write_bytes(content.replace(stored_value, b"\x02\x00\x00\x00\xff\xff"))
+
+
+@pytest.mark.parametrize("string_type", [pa.string(), pa.large_string()])
+def test_parquet_invalid_utf8_is_an_ingest_diagnostic(
+    tmp_path: Path, string_type: pa.DataType
+) -> None:
+    _write_parquet_with_invalid_utf8(
+        tmp_path / "dm.parquet",
+        pa.table({"TEXT": pa.array(["ok"], type=string_type)}),
+    )
+
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "DM", DatasetSource(path="dm.parquet"), ProjectResources(tmp_path)
+        )
+
+    assert _diagnostic(raised.value) == {
+        "phase": "ingest",
+        "condition": "source_parquet_invalid",
+        "spec_paths": ("input.DM.path",),
+        "requirement": "REQ-1038",
+        "context": {"dataset": "DM", "path": "dm.parquet"},
+    }
+
+
+@pytest.mark.parametrize(
+    ("name", "values", "condition", "requirement", "context"),
+    [
+        (
+            "FLAG",
+            pa.array([True], type=pa.bool_()),
+            "source_field_type_unsupported",
+            "REQ-1040",
+            {"field": "FLAG", "stored_type": "bool"},
+        ),
+        (
+            "AT",
+            pa.array([1], type=pa.timestamp("us")),
+            "source_field_value_invalid",
+            "REQ-1041",
+            {"field": "AT", "row": 1, "value": 1},
+        ),
+        (
+            "",
+            pa.array([1], type=pa.int64()),
+            "source_field_name_empty",
+            "REQ-1039",
+            {"field": 1},
+        ),
+    ],
+)
+def test_parquet_field_and_temporal_findings_precede_utf8_validation(
+    tmp_path: Path,
+    name: str,
+    values: pa.Array,
+    condition: str,
+    requirement: str,
+    context: dict[str, object],
+) -> None:
+    _write_parquet_with_invalid_utf8(
+        tmp_path / "dm.parquet",
+        pa.Table.from_arrays([values, pa.array(["ok"])], names=[name, "TEXT"]),
+    )
+
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "DM", DatasetSource(path="dm.parquet"), ProjectResources(tmp_path)
+        )
+
+    assert _diagnostic(raised.value) == {
+        "phase": "ingest",
+        "condition": condition,
+        "spec_paths": ("input.DM.path",),
+        "requirement": requirement,
+        "context": {"dataset": "DM", "path": "dm.parquet", **context},
+    }
