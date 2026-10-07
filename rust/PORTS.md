@@ -1,7 +1,8 @@
 # Native application ports
 
-The first #1755 application slice moves the existing original-document
-capture/decode/bind/execute lifecycle into `yamaa-engine::specification_run`.
+The #1755 application foundation moves the original-document
+capture/decode/bind/execute lifecycle into `yamaa-engine::specification_run`
+and output gates into `yamaa-engine::specification_output`.
 Python and R use that service through the existing bounded facade. Its resource
 and codec interfaces are native traits; adapters translate values and errors.
 
@@ -9,6 +10,9 @@ and codec interfaces are native traits; adapters translate values and errors.
 | --- | --- | --- | --- |
 | `specification_run::SourcePort` | engine | Python and R capture bridges; engine and adapter test fakes | Original opaque capture error; regressing snapshot counter |
 | `specification_run::SourceDecoder` | engine | Adapter CSV/Arrow decoder; engine test fake | Original decoder error; byte/cell capacity limits |
+| `specification_output::ArtifactEncoder` | engine | Adapter CSV encoder; native test fake | Original codec error; checked output byte limit |
+| `specification_output::OutputReport` | engine | Portable JSON report formatter; native test fake | Observation or report-budget failure before publication |
+| `specification_output::ArtifactPort` | engine | Python/R atomic publication bridges; native test fake | Original opaque publication error, without retry |
 | `TableAccess` | core | Immutable Arrow snapshots and engine output tables; test fakes | Bounds or original opaque cell-access error |
 | `inheritance::SourcePort` | engine | Existing inheritance bridge | Source failure or traversal resource limit |
 | `function_invocation::FunctionPort` and `dataset::FunctionBindings` | engine | Python/R native callback bridges | Original host exception, rejected representation or typed invocation failure |
@@ -37,6 +41,25 @@ formatter; it no longer chooses capture, binding or execution order. Tests use
 native fake ports to pin order, cached counts, original non-Clone errors,
 capacity failures before cell reads, and observations surviving a panic.
 
+## Output lifecycle
+
+Successful response preparation retains the engine's accepted typed execution.
+Publication does not infer acceptance from serialized JSON or decode its own IPC
+output. An unsuccessful attempt reaches only the failure-report formatter.
+For an accepted execution the engine orders initial observations, core output
+findings, projection resolution, bounded encoding, complete bounded report
+preparation, and one publication request. An error at any step stops later
+requests. The engine independently rejects a codec result beyond the supplied
+byte limit, even if the codec violated its allocation contract.
+
+Report formatting and CSV representation remain adapter responsibilities. A
+report error, including its size budget, must be returned before publication.
+Opaque codec/report/publication failures are retained without cloning or retry.
+The current report still uses the existing portable transport for diagnostic
+observations; replacing that formatting transport is a later cleanup. Native
+fake ports pin declaration order, rejection, codec overruns, error identity,
+report-before-publication order and repeated explicit requests.
+
 ## Remaining migration
 
 This is an exercised source-read foundation, not completion of #1755. The
@@ -45,7 +68,7 @@ codelist resources, with resolved paths and declaring-file provenance. Current
 source bridges retain their existing path behavior; the #1751 target resolves
 each path relative to its declaring file without an approved-root boundary.
 
-Artifact encoding/publication orchestration, Parquet decoding, environment
+Parquet encoding/decoding, general publication/save policy, environment
 activation, shared reusable test fakes, and consolidation of the two function
 interfaces remain open. The existing inheritance JSON callback bridge also
 remains to be replaced. No new unimplemented port is presented as a working

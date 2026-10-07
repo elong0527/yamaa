@@ -181,12 +181,7 @@ fn set_diagnostics(report: &mut Value, diagnostics: Vec<Value>) {
     report["nodes"][0]["diagnostics"] = report["diagnostics"].clone();
 }
 
-/// Explicit host authority for atomic output replacement. Implementations return
-/// success only after all supplied bytes have been published at the authorized path.
-pub trait ArtifactPort {
-    type Error;
-    fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), Self::Error>;
-}
+pub use yamaa_engine::specification_output::ArtifactPort;
 #[derive(Debug)]
 pub enum CompleteError<E> {
     Report(Error),
@@ -298,9 +293,9 @@ fn check_observations(
     }
     Ok((observations, diagnostics))
 }
-fn output_diagnostics(run: &PreparedRun) -> Vec<Value> {
+fn output_diagnostics(findings: &[yamaa_core::specification::OutputFinding]) -> Vec<Value> {
     use yamaa_engine::specification::OutputFinding as F;
-    run.compiled().output_findings().into_iter().map(|finding| {
+    findings.iter().map(|finding| {
         let (condition,requirement,path,context)=match finding {
             F::UnknownProfile {path} => ("unknown_artifact_profile","REQ-0760","output.path".into(),json!({"path":path,"permitted":[".csv",".parquet"]})),
             F::DuplicateColumn {position,name} => ("duplicate_identifier","REQ-0234",format!("output.columns[{position}]"),json!({"column":name})),
@@ -318,59 +313,116 @@ pub fn complete<E, P: ArtifactPort>(
     id: Identity<'_>,
     publisher: &mut P,
 ) -> Result<Value, CompleteError<P::Error>> {
-    let Ok(response) = &attempt.result else {
-        return failure(run, attempt, id).map_err(CompleteError::Report);
-    };
-    let value: Value =
-        serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
-    if value["outcome"]["status"] != "success" {
-        return failure(run, attempt, id).map_err(CompleteError::Report);
-    }
-    let ipc = response.table.as_deref().ok_or(Error::InvalidObservation)?;
-    let table =
-        crate::table_transport::decode_snapshot(ipc).map_err(|_| Error::InvalidObservation)?;
-    let mut report = envelope(run, attempt, &id)?;
-    let (checks, unexpected) = check_observations(run, &value["outcome"], &id)?;
-    if !unexpected.is_empty() {
-        return Err(Error::InvalidObservation.into());
-    }
-    report["verifications"] = json!(checks);
-    let diagnostics = output_diagnostics(run);
-    if !diagnostics.is_empty() {
-        set_diagnostics(&mut report, diagnostics);
-        return bounded(report).map_err(CompleteError::Report);
-    }
-    let projection = run
-        .compiled()
-        .projection()
-        .iter()
-        .map(|name| {
-            table
-                .schema()
-                .columns()
-                .iter()
-                .position(|c| &c.name == name)
-                .ok_or(Error::InvalidObservation)
+    use yamaa_engine::specification_output::{self as output, CompleteError as E};
+    let execution = attempt
+        .result
+        .as_ref()
+        .ok()
+        .and_then(|response| response.execution.as_ref());
+    output::complete(
+        run.compiled(),
+        execution,
+        8 * 1024 * 1024,
+        &mut Report {
+            run,
+            attempt,
+            id,
+            value: None,
+        },
+        &mut CsvEncoder,
+        publisher,
+    )
+    .map_err(|error| match error {
+        E::Report(error) | E::Encode(error) => CompleteError::Report(error),
+        E::Projection => CompleteError::Report(Error::InvalidObservation),
+        E::OutputLimit => CompleteError::Report(Error::OutputLimit),
+        E::Publish(error) => CompleteError::Publish(error),
+    })
+}
+
+struct CsvEncoder;
+impl yamaa_engine::specification_output::ArtifactEncoder for CsvEncoder {
+    type Error = Error;
+    fn encode(
+        &mut self,
+        dataset: &yamaa_engine::dataset::Dataset,
+        projection: &[usize],
+        byte_limit: usize,
+    ) -> Result<Vec<u8>, Error> {
+        crate::csv_artifact::render(dataset, projection, byte_limit).map_err(|error| match error {
+            crate::csv_artifact::Error::Limit => Error::OutputLimit,
+            _ => Error::InvalidObservation,
         })
-        .collect::<Result<Vec<_>, _>>()?;
-    let bytes =
-        crate::csv_artifact::render(&table, &projection, 8 * 1024 * 1024).map_err(|error| {
-            match error {
-                crate::csv_artifact::Error::Limit => Error::OutputLimit,
-                _ => Error::InvalidObservation,
-            }
-        })?;
-    let content = std::str::from_utf8(&bytes).map_err(|_| Error::InvalidObservation)?;
-    report["artifacts"] = json!([{"name":run.compiled().output_name(),"profile":"csv","columns":run.compiled().projection(),"types":projection.iter().map(|&c|specification_diagnostics::type_name(table.schema().columns()[c].kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":content.strip_suffix('\n').ok_or(Error::InvalidObservation)?.split('\n').collect::<Vec<_>>(),"byte_length":bytes.len(),"content":content}]);
-    report["tables"]
-        .as_array_mut()
-        .ok_or(Error::InvalidObservation)?
-        .push(table_observation(&table, &id, "derived", "output")?);
-    report["outcome"] = json!("success");
-    report["nodes"][0]["outcome"] = json!("success");
-    let report = bounded(report)?;
-    publisher
-        .publish(run.compiled().output_path(), &bytes)
-        .map_err(CompleteError::Publish)?;
-    Ok(report)
+    }
+}
+
+struct Report<'a, 'i, E> {
+    run: &'a PreparedRun,
+    attempt: &'a CapturedAttempt<E>,
+    id: Identity<'i>,
+    value: Option<Value>,
+}
+impl<E> yamaa_engine::specification_output::OutputReport for Report<'_, '_, E> {
+    type Error = Error;
+    type Report = Value;
+    fn failure(&mut self) -> Result<Value, Error> {
+        failure(self.run, self.attempt, self.id.borrow())
+    }
+    fn begin(&mut self, _execution: &yamaa_engine::dataset::Execution) -> Result<(), Error> {
+        let response = self
+            .attempt
+            .result
+            .as_ref()
+            .map_err(|_| Error::InvalidObservation)?;
+        let value: Value =
+            serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
+        let mut report = envelope(self.run, self.attempt, &self.id)?;
+        let (checks, unexpected) = check_observations(self.run, &value["outcome"], &self.id)?;
+        if !unexpected.is_empty() {
+            return Err(Error::InvalidObservation);
+        }
+        report["verifications"] = json!(checks);
+        self.value = Some(report);
+        Ok(())
+    }
+    fn rejected(
+        &mut self,
+        findings: &[yamaa_core::specification::OutputFinding],
+    ) -> Result<Value, Error> {
+        let mut report = self.value.take().ok_or(Error::InvalidObservation)?;
+        set_diagnostics(&mut report, output_diagnostics(findings));
+        bounded(report)
+    }
+    fn success(
+        &mut self,
+        execution: &yamaa_engine::dataset::Execution,
+        projection: &[usize],
+        bytes: &[u8],
+    ) -> Result<Value, Error> {
+        let run = self.run;
+        let table = &execution.dataset;
+        let content = std::str::from_utf8(bytes).map_err(|_| Error::InvalidObservation)?;
+        let mut report = self.value.take().ok_or(Error::InvalidObservation)?;
+        report["artifacts"] = json!([{"name":run.compiled().output_name(),"profile":"csv","columns":run.compiled().projection(),"types":projection.iter().map(|&c|specification_diagnostics::type_name(table.schema().columns()[c].kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":content.strip_suffix('\n').ok_or(Error::InvalidObservation)?.split('\n').collect::<Vec<_>>(),"byte_length":bytes.len(),"content":content}]);
+        report["tables"]
+            .as_array_mut()
+            .ok_or(Error::InvalidObservation)?
+            .push(table_observation(table, &self.id, "derived", "output")?);
+        report["outcome"] = json!("success");
+        report["nodes"][0]["outcome"] = json!("success");
+        bounded(report)
+    }
+}
+
+impl Identity<'_> {
+    fn borrow(&self) -> Identity<'_> {
+        Identity {
+            runtime: self.runtime,
+            runtime_version: self.runtime_version,
+            engine_version: self.engine_version,
+            example: self.example,
+            specification: self.specification,
+            base_directory: self.base_directory,
+        }
+    }
 }

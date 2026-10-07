@@ -494,6 +494,9 @@ pub struct PreparedDataset {
 pub struct DatasetResponse {
     pub table: Option<Vec<u8>>,
     pub outcome: String,
+    // The application publishes from its accepted typed result, never by
+    // reconstructing execution success from JSON or decoding its own IPC output.
+    pub(crate) execution: Option<dataset::Execution>,
 }
 
 /// Validate plan bytes before any IPC decoding, then execute once with no fallback.
@@ -1238,14 +1241,15 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
 pub(crate) fn response(
     attempt: dataset::ExecutionAttempt<CallbackError>,
 ) -> Result<DatasetResponse, Error> {
-    let (table, outcome) = match attempt.result {
-        Ok(result) => (
-            Some(encode_dataset(&result.dataset).map_err(Error::Table)?),
-            Outcome::Success {
-                verifications: records(result.verifications),
-            },
-        ),
-        Err(error) => (None, failure(*error)?),
+    let (table, outcome, execution) = match attempt.result {
+        Ok(result) => {
+            let table = Some(encode_dataset(&result.dataset).map_err(Error::Table)?);
+            let outcome = Outcome::Success {
+                verifications: records(result.verifications.clone()),
+            };
+            (table, outcome, Some(result))
+        }
+        Err(error) => (None, failure(*error)?, None),
     };
     let outcome = bounded_json(
         &Envelope {
@@ -1270,5 +1274,9 @@ pub(crate) fn response(
             Error::Internal
         }
     })?;
-    Ok(DatasetResponse { table, outcome })
+    Ok(DatasetResponse {
+        table,
+        outcome,
+        execution,
+    })
 }

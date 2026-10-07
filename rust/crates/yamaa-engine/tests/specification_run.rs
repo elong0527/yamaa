@@ -41,6 +41,14 @@ impl Tree<'_> {
 }
 
 fn document(expression: &str, input_path: &str) -> SpecificationDocument {
+    document_output(expression, input_path, "result.csv", &["ID", "VALUE"])
+}
+fn document_output(
+    expression: &str,
+    input_path: &str,
+    output_path: &str,
+    projection: &[&str],
+) -> SpecificationDocument {
     use Tree::*;
     let column = |name, op, field, value| {
         Map(vec![
@@ -73,8 +81,11 @@ fn document(expression: &str, input_path: &str) -> SpecificationDocument {
         (
             "output",
             Map(vec![
-                ("path", Text("result.csv")),
-                ("columns", List(vec![Text("ID"), Text("VALUE")])),
+                ("path", Text(output_path)),
+                (
+                    "columns",
+                    List(projection.iter().map(|name| Text(name)).collect()),
+                ),
             ]),
         ),
     ]);
@@ -344,4 +355,218 @@ fn runtime_errors_and_panic_boundaries_keep_the_observed_source() {
     assert!(panic.is_err());
     assert!(attempt.read.captured && attempt.snapshot.is_some() && attempt.table.is_some());
     assert!(matches!(attempt.result, Err(PortError::Incomplete)));
+}
+
+mod publication {
+    use super::*;
+    use yamaa_core::specification::OutputFinding;
+    use yamaa_engine::{
+        dataset::{Dataset, Execution},
+        specification_output::{
+            self as output, ArtifactEncoder, ArtifactPort, CompleteError, OutputReport,
+        },
+    };
+
+    struct Host {
+        trace: Trace,
+        fail: Option<&'static str>,
+        payload: Rc<()>,
+        bytes: Vec<u8>,
+        findings: Vec<&'static str>,
+    }
+    impl Host {
+        fn event(&self, name: &'static str) -> Result<(), Payload> {
+            self.trace.borrow_mut().push(name);
+            if self.fail == Some(name) {
+                Err(Payload(Rc::clone(&self.payload)))
+            } else {
+                Ok(())
+            }
+        }
+    }
+    impl OutputReport for Host {
+        type Error = Payload;
+        type Report = &'static str;
+        fn failure(&mut self) -> Result<Self::Report, Payload> {
+            self.event("failure")?;
+            Ok("failure")
+        }
+        fn begin(&mut self, _: &Execution) -> Result<(), Payload> {
+            self.event("begin")
+        }
+        fn rejected(&mut self, findings: &[OutputFinding]) -> Result<Self::Report, Payload> {
+            self.event("rejected")?;
+            self.findings = findings
+                .iter()
+                .map(|f| match f {
+                    OutputFinding::UnknownProfile { .. } => "profile",
+                    OutputFinding::DuplicateColumn { .. } => "duplicate",
+                    OutputFinding::UndeclaredColumn { .. } => "undeclared",
+                    OutputFinding::InternalKey { .. } => "internal",
+                })
+                .collect();
+            Ok("rejected")
+        }
+        fn success(
+            &mut self,
+            execution: &Execution,
+            projection: &[usize],
+            bytes: &[u8],
+        ) -> Result<Self::Report, Payload> {
+            self.event("report")?;
+            assert_eq!(
+                execution.dataset.rows(),
+                [vec![Value::Int(7), Value::Int(8)]]
+            );
+            assert_eq!(projection, [1, 0]);
+            assert_eq!(bytes, b"VALUE,ID\n8,7\n");
+            Ok("success")
+        }
+    }
+    impl ArtifactEncoder for Host {
+        type Error = Payload;
+        fn encode(
+            &mut self,
+            dataset: &Dataset,
+            projection: &[usize],
+            limit: usize,
+        ) -> Result<Vec<u8>, Payload> {
+            self.event("encode")?;
+            assert_eq!(dataset.rows().len(), 1);
+            assert_eq!(projection, [1, 0]);
+            assert_eq!(limit, 16);
+            Ok(self.bytes.clone())
+        }
+    }
+    impl ArtifactPort for Host {
+        type Error = Payload;
+        fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), Payload> {
+            self.event("publish")?;
+            assert_eq!(path, "result.csv");
+            assert_eq!(bytes, self.bytes);
+            Ok(())
+        }
+    }
+    fn hosts() -> (Host, Host, Host) {
+        let trace = Trace::default();
+        let payload = Rc::new(());
+        let new = || Host {
+            trace: Rc::clone(&trace),
+            fail: None,
+            payload: Rc::clone(&payload),
+            bytes: b"VALUE,ID\n8,7\n".to_vec(),
+            findings: Vec::new(),
+        };
+        (new(), new(), new())
+    }
+    fn prepared(path: &str, projection: &[&str]) -> PreparedSpecification {
+        PreparedSpecification::prepare(&document_output("ID + 1", "input.csv", path, projection))
+            .unwrap()
+    }
+    fn execution(prepared: &PreparedSpecification) -> Execution {
+        let (_, mut decoder) = fixtures();
+        run::execute_bytes(prepared, b"held snapshot", &mut decoder, limits())
+            .result
+            .unwrap()
+            .result
+            .unwrap()
+    }
+    #[test]
+    fn publication_requires_native_success_and_repeats_only_explicit_requests() {
+        let prepared = prepared("result.csv", &["VALUE", "ID"]);
+        let execution = execution(&prepared);
+        let (mut report, mut codec, mut publisher) = hosts();
+        assert_eq!(
+            output::complete(&prepared, None, 16, &mut report, &mut codec, &mut publisher).unwrap(),
+            "failure"
+        );
+        assert_eq!(*report.trace.borrow(), ["failure"]);
+        for _ in 0..2 {
+            report.trace.borrow_mut().clear();
+            assert_eq!(
+                output::complete(
+                    &prepared,
+                    Some(&execution),
+                    16,
+                    &mut report,
+                    &mut codec,
+                    &mut publisher
+                )
+                .unwrap(),
+                "success"
+            );
+            assert_eq!(
+                *report.trace.borrow(),
+                ["begin", "encode", "report", "publish"]
+            );
+        }
+    }
+    #[test]
+    fn output_findings_and_report_failures_block_encoding_or_publication() {
+        let invalid = prepared("result.unknown", &["ID", "ID", "ABSENT"]);
+        let execution = execution(&invalid);
+        let (mut report, mut codec, mut publisher) = hosts();
+        assert_eq!(
+            output::complete(
+                &invalid,
+                Some(&execution),
+                16,
+                &mut report,
+                &mut codec,
+                &mut publisher
+            )
+            .unwrap(),
+            "rejected"
+        );
+        assert_eq!(*report.trace.borrow(), ["begin", "rejected"]);
+        assert_eq!(report.findings, ["profile", "duplicate", "undeclared"]);
+        let valid = prepared("result.csv", &["VALUE", "ID"]);
+        for stage in ["begin", "encode", "report", "publish"] {
+            let (mut report, mut codec, mut publisher) = hosts();
+            report.fail = Some(stage);
+            codec.fail = Some(stage);
+            publisher.fail = Some(stage);
+            let error = output::complete(
+                &valid,
+                Some(&execution),
+                16,
+                &mut report,
+                &mut codec,
+                &mut publisher,
+            )
+            .unwrap_err();
+            let payload = match error {
+                CompleteError::Report(p) | CompleteError::Encode(p) | CompleteError::Publish(p) => {
+                    p
+                }
+                _ => panic!("wrong failure"),
+            };
+            assert!(Rc::ptr_eq(&payload.0, &report.payload));
+            let trace = report.trace.borrow();
+            let end = ["begin", "encode", "report", "publish"]
+                .iter()
+                .position(|s| *s == stage)
+                .unwrap();
+            assert_eq!(*trace, ["begin", "encode", "report", "publish"][..=end]);
+        }
+    }
+    #[test]
+    fn encoder_overrun_never_reaches_report_or_publication() {
+        let prepared = prepared("result.csv", &["VALUE", "ID"]);
+        let execution = execution(&prepared);
+        let (mut report, mut codec, mut publisher) = hosts();
+        codec.bytes = vec![0; 17];
+        assert!(matches!(
+            output::complete(
+                &prepared,
+                Some(&execution),
+                16,
+                &mut report,
+                &mut codec,
+                &mut publisher
+            ),
+            Err(CompleteError::OutputLimit)
+        ));
+        assert_eq!(*report.trace.borrow(), ["begin", "encode"]);
+    }
 }
