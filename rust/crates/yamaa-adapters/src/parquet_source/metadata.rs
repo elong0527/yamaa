@@ -1,6 +1,6 @@
 //! Bound the embedded Arrow schema before the generic Parquet schema conversion.
 use super::compact::Error;
-use base64::{prelude::BASE64_STANDARD, Engine};
+use base64::{Engine, prelude::BASE64_STANDARD};
 use parquet::file::metadata::KeyValue;
 
 #[derive(Clone, Copy, Debug)]
@@ -10,7 +10,10 @@ pub(super) struct Limits {
     pub depth: usize,
 }
 
-pub(super) fn admit(metadata: Option<&Vec<KeyValue>>, limits: Limits) -> Result<(), Error> {
+pub(super) fn admit(
+    metadata: Option<&Vec<KeyValue>>,
+    limits: Limits,
+) -> Result<Option<arrow_schema::Schema>, Error> {
     // The general reader uses the last non-null value for each metadata key.
     let value = metadata.into_iter().flatten().rev().find_map(|item| {
         if item.key == "ARROW:schema" {
@@ -20,7 +23,7 @@ pub(super) fn admit(metadata: Option<&Vec<KeyValue>>, limits: Limits) -> Result<
         }
     });
     let Some(value) = value else {
-        return Ok(());
+        return Ok(None);
     };
     if value.len() > limits.bytes {
         return Err(Error::Limit);
@@ -46,8 +49,10 @@ pub(super) fn admit(metadata: Option<&Vec<KeyValue>>, limits: Limits) -> Result<
             | flatbuffers::InvalidFlatbuffer::DepthLimitReached => Error::Limit,
             _ => Error::Malformed,
         })?;
-    message.header_as_schema().ok_or(Error::Malformed)?;
-    Ok(())
+    let schema = message.header_as_schema().ok_or(Error::Malformed)?;
+    arrow_ipc::convert::try_fb_to_schema(schema)
+        .map(Some)
+        .map_err(|_| Error::Malformed)
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 //! Complete held-container read, followed by closed-profile admission.
 //! No filesystem reads, semantic fallback, publication or host date conversion.
-use super::{compact, compression, expansion, framing, metadata, physical, profile};
+use super::{compact, compression, expansion, framing, metadata, physical, profile, schema};
 use arrow_array::{
     ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, RecordBatch, StringArray,
     TimestampMicrosecondArray,
@@ -58,7 +58,7 @@ pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
     let metadata = Arc::new(
         ParquetMetaDataReader::decode_metadata(frame.metadata).map_err(|_| Error::Malformed)?,
     );
-    metadata::admit(
+    let hint = metadata::admit(
         metadata.file_metadata().key_value_metadata(),
         limits.metadata,
     )?;
@@ -86,7 +86,7 @@ pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
     {
         return Err(Error::Limit);
     }
-    let arrow_schema = arrow.schema();
+    let arrow_schema = schema::normalize(arrow.schema(), hint.as_ref());
     // Determine retention only. Profile errors remain deferred until every
     // physical chunk has been decoded, including fields outside the profile.
     let keep: Vec<_> = columns
@@ -101,7 +101,7 @@ pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
                 })
         })
         .collect();
-    let raw = physical::read(bytes, &keep, limits.retained_bytes)?;
+    let raw = physical::read(bytes, &keep, limits.retained_bytes, &arrow_schema)?;
     let group_rows = metadata
         .row_groups()
         .iter()
@@ -112,7 +112,7 @@ pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
     if group_rows != row_count {
         return Err(Error::Malformed);
     }
-    let schema = profile::columns(arrow_schema, metadata.file_metadata().schema_descr())
+    let schema = profile::columns(&arrow_schema, metadata.file_metadata().schema_descr())
         .map_err(Error::Profile)?;
     for (field, column) in schema.columns().iter().zip(&raw) {
         match (field.kind, column) {

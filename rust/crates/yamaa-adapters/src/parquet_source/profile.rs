@@ -22,7 +22,7 @@ pub(super) enum Error {
     },
     Unsupported {
         field: String,
-        stored_type: DataType,
+        stored_type: String,
     },
     Value {
         field: String,
@@ -64,7 +64,7 @@ pub(super) fn columns(arrow: &Schema, stored: &SchemaDescriptor) -> Result<Table
     }
     let unsupported = |field: &arrow_schema::Field| Error::Unsupported {
         field: field.name().clone(),
-        stored_type: field.data_type().clone(),
+        stored_type: super::type_name::field_type(field),
     };
     if stored.num_columns() != arrow.fields().len() {
         return Err(unsupported(&arrow.fields()[0]));

@@ -1,5 +1,5 @@
 //! Opaque physical values: read every chunk before profile/text validation.
-use super::reader::Error;
+use super::{reader::Error, shape};
 use parquet::{
     column::reader::{ColumnReader, ColumnReaderImpl},
     data_type::{ByteArray, DataType},
@@ -19,13 +19,14 @@ pub(super) enum Column {
 fn collect<T: DataType>(
     reader: &mut ColumnReaderImpl<T>,
     descriptor: &ColumnDescriptor,
-    (rows, levels): (usize, usize),
-    keep: bool,
+    (rows, levels, keep): (usize, usize, bool),
     budget: &mut usize,
+    shapes: &[shape::List],
     size: impl Fn(&T::T) -> usize,
 ) -> Result<Vec<Option<T::T>>, Error> {
     let mut result = Vec::new();
     let (mut seen_rows, mut seen_levels) = (0usize, 0usize);
+    let mut shapes = shapes.to_vec();
     loop {
         let (mut definitions, mut repetitions, mut values) = (Vec::new(), Vec::new(), Vec::new());
         let (records, non_null, count) = reader
@@ -52,6 +53,13 @@ fn collect<T: DataType>(
             || (descriptor.max_rep_level() > 0 && repetitions.len() != count)
         {
             return Err(Error::Malformed);
+        }
+        for index in 0..count {
+            let definition = definitions.get(index).copied().unwrap_or(0);
+            let repetition = repetitions.get(index).copied().unwrap_or(0);
+            for shape in &mut shapes {
+                shape.observe(definition, repetition)?;
+            }
         }
         if !keep {
             continue;
@@ -81,6 +89,9 @@ fn collect<T: DataType>(
     if seen_rows != rows || seen_levels != levels {
         return Err(Error::Malformed);
     }
+    for shape in &mut shapes {
+        shape.finish()?;
+    }
     Ok(result)
 }
 
@@ -88,10 +99,12 @@ pub(super) fn read(
     bytes: &[u8],
     keep: &[bool],
     retained_bytes: usize,
+    schema: &arrow_schema::Schema,
 ) -> Result<Vec<Column>, Error> {
     let reader = SerializedFileReader::new(bytes::Bytes::copy_from_slice(bytes))
         .map_err(|_| Error::Malformed)?;
     let descriptors = reader.metadata().file_metadata().schema_descr().columns();
+    let shapes = shape::constraints(schema, reader.metadata().file_metadata().schema_descr())?;
     if keep.len() != descriptors.len() {
         return Err(Error::Malformed);
     }
@@ -114,9 +127,9 @@ pub(super) fn read(
                     let mut next = collect(
                         $reader,
                         descriptor,
-                        (rows, levels),
-                        keep[index],
+                        (rows, levels, keep[index]),
                         &mut budget,
+                        &shapes[index],
                         $size,
                     )?;
                     if keep[index] {
@@ -139,9 +152,9 @@ pub(super) fn read(
                     collect(
                         reader,
                         descriptor,
-                        (rows, levels),
-                        false,
+                        (rows, levels, false),
                         &mut budget,
+                        &shapes[index],
                         |_| 0,
                     )?;
                 }
@@ -149,9 +162,9 @@ pub(super) fn read(
                     collect(
                         reader,
                         descriptor,
-                        (rows, levels),
-                        false,
+                        (rows, levels, false),
                         &mut budget,
+                        &shapes[index],
                         |_| 0,
                     )?;
                 }
@@ -159,9 +172,9 @@ pub(super) fn read(
                     collect(
                         reader,
                         descriptor,
-                        (rows, levels),
-                        false,
+                        (rows, levels, false),
                         &mut budget,
+                        &shapes[index],
                         |_| 0,
                     )?;
                 }
@@ -169,9 +182,9 @@ pub(super) fn read(
                     collect(
                         reader,
                         descriptor,
-                        (rows, levels),
-                        false,
+                        (rows, levels, false),
                         &mut budget,
+                        &shapes[index],
                         |_| 0,
                     )?;
                 }
