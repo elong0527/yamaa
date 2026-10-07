@@ -119,8 +119,9 @@ with the derivation below and the admiral function as grounding.
 
    > REVIEWED 2026-10-07 (benchmark-maintenance run) -- candidate
    > COMPLETED. `adam-advs-windows` already carries expected records:
-   > one per planned visit whose window no collected record's study
-   > day covers, driven from SDTM SV (6af7cbc9, 303efd5a; drift and
+   > one per planned visit in the screening, baseline, week 2, or week 4
+   > windows for which no collected record's study day covers its window,
+   > driven from SDTM SV (6af7cbc9, 303efd5a; drift and
    > the 19-row golden verified 2026-10-07). `adam-adqs-missed-visit-locf`
    > inspected per the "same question": missed visits already produce
    > exactly one record per efficacy subject per scheduled visit via
