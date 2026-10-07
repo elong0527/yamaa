@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-07 against main `8e92e368d8892959cec564febf6bf7e3a8762774`
+Reconciled 2026-10-07 against main `1c06fc5c8c0e2f72283d11a52db8426baa2db701`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -48,6 +48,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1788 | Core numeric/aggregate grammar diagnostics and independent original-document failure timing. |
 | #1789 | Portable schema kinds, core binding/dependency findings and pure core CSV profile admission. |
 | #1790 | Original scalar column literals and column/row conversion recovery wrappers. |
+| #1791 | Portable window/lookup/predicate findings and three unchanged negative corpus reports. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -77,18 +78,30 @@ schema methods each; both R source forms pass all 17 scripts with strict Status:
 OK. All native artifacts are from attempt 1. The 61-contract/39-suite catalog and
 unchanged 945-row assisted inventory retain private-route evidence.
 
-The next serial candidate moves eleven window, named-selection and predicate
-grammar causes into the common core diagnostic. Three independent window reports,
-one malformed predicate report and three additional unchanged negative corpus
-documents retain complete observations, actual ingestion timing and failed save
-gates. Local qualification passes 660 Rust tests, strict Clippy, 44 tooling tests,
-both Python forms (36 original-document and three schema methods), and strict R
-Status: OK with all 17 scripts. Twenty changed Rust/source/fixture and twenty-one
-R archive members match directly. The 66-contract/39-suite catalog awaits its
-main-based PR, final-head hosted qualification and full review. Three separately
-observed predicate requirement/context gaps remain unqualified and documented in
-`predicate_diagnostics.md`; existing locked truth and assisted inventory remain
-unchanged.
+#1791 merged as `1c06fc5c8c0e2f72283d11a52db8426baa2db701` after all 13
+checks, full final-head review and downloaded installed-artifact auditing. Six
+Python forms pass 22 supplemental suites, 36 original-document methods and four
+schema methods each; both R source forms pass all 17 scripts with strict Status:
+OK. All native artifacts are from attempt 1. Twenty changed Rust/source/fixture
+and twenty-one R archive members match directly. Its 66-contract/39-suite catalog
+now covers nine original corpus documents through the private route. Three
+separately observed predicate requirement/context gaps remain unqualified and
+documented in `predicate_diagnostics.md`; locked truth and assisted inventory
+remain unchanged.
+
+The next serial candidate moves declared CSV source typing and the closed Parquet
+source metadata profile into pure core services. Four complete independent CSV
+reports pin unknown-field and stored-cell conversion order, and all 52 independent
+Parquet containers retain their exact bytes and existing reports. Local
+qualification passes 664 Rust tests, strict Clippy, 44 tooling tests, direct and
+source-rebuilt installed Python forms (37 original-document and three schema
+methods), and strict R Status: OK with all 17 scripts. Seventeen changed
+Rust/source/fixture and eighteen R archive members, plus all 52 Parquet binaries
+in both source archives, match directly. The 67-contract/39-suite catalog and 75
+reached canonical diagnostic causes await final-head hosted qualification and
+full review. Physical decoding, resource limits and host/codec representation
+remain at their existing boundaries. Production file ports and all five assisted
+inventory timing gaps remain open.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance
