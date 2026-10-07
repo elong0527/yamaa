@@ -57,9 +57,13 @@ microsecond unit, and its microsecond part is always zero.
 <a id="req-0740"></a>
 
 **REQ-0740.** Two runtimes writing the same completed dataset must produce
-Parquet artifacts that read back identically: the same field names in the same
-order, the same logical types, the same rows in the same order, the same nulls,
-and the same values, with every `DOUBLE` bit-identical.
+Parquet artifacts that read back identically:
+
+- the same field names in the same order;
+- the same logical types;
+- the same rows in the same order;
+- the same nulls; and
+- the same values, with every `DOUBLE` bit-identical.
 
 <a id="req-0741"></a>
 
@@ -115,15 +119,15 @@ this closed mapping, which is the inverse of [REQ-0734](parquet.md#req-0734):
 | Parquet type | Column type |
 |---|---|
 | `BYTE_ARRAY` annotated `String` | `str` |
-
-The two Arrow string widths are the same physical/logical pair: a
-`BYTE_ARRAY` field annotated `String` reads as `str` whether the file's
-embedded Arrow schema names it `string` or `large_string` (the offset width
-differs; nothing else does).
 | `INT64` with no logical type | `int` |
 | `DOUBLE` with no logical type | `float` |
 | `INT32` annotated `Date` | `date` |
 | `INT64` annotated `Timestamp`, microseconds, no UTC adjustment | `datetime` |
+
+The two Arrow string widths are the same physical/logical pair. A
+`BYTE_ARRAY` field annotated `String` reads as `str` whether the file's
+embedded Arrow schema names it `string` or `large_string`. Only the offset
+width differs.
 
 <a id="req-1033"></a>
 

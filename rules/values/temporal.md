@@ -207,9 +207,11 @@ a `str` column until a rule fixes a representation both runtimes share.
 
 **REQ-0567.** Every field is zero-padded to its width, and a `datetime`
 always shows seconds. This is the text a temporal value converts to under
-[Types and conversion](types.md)'s `str` row and the text the artifact records for a temporal column, so a
-`str` column derived from a temporal value and the artifact's rendering of
-that value never disagree. [Types and conversion](types.md) fixes the same relationship for `float`.
+[Types and conversion](types.md)'s `str` row. It is also the text the
+artifact records for a temporal column. A `str` column derived from a
+temporal value and the artifact's rendering of that value therefore never
+disagree. [Types and conversion](types.md) fixes the same relationship for
+`float`.
 
 <a id="req-0568"></a>
 
@@ -229,13 +231,18 @@ fixes rendered precision at one day and one second.
 <a id="req-0570"></a>
 
 **REQ-0570.** Canonical text carries fields alone, so its collected precision is
-not observable outside the derivation. A temporal value converted to `str`
-under [Types and conversion](types.md)'s row, the artifact's record of a temporal column, and the typed
-value [Project functions](../operations/functions.md) encodes for a function argument all carry the day or the moment and
-nothing about how much of it was collected. A specification that must carry
-precision past any of those three boundaries derives a column from
-`date_precision` or `datetime_precision`, which is data the artifact records
-like any other.
+not observable outside the derivation. Each of the following carries the day
+or the moment and nothing about how much of it was collected:
+
+- a temporal value converted to `str` under
+  [Types and conversion](types.md)'s row;
+- the artifact's record of a temporal column;
+- the typed value [Project functions](../operations/functions.md) encodes
+  for a function argument.
+
+A specification that must carry precision past any of those three
+boundaries derives a column from `date_precision` or `datetime_precision`,
+which is data the artifact records like any other.
 
 ### Comparison and ordering
 
@@ -250,19 +257,24 @@ cannot be between a civil time and an instant. No datetime comparison fails.
 <a id="req-0572"></a>
 
 **REQ-0572.** Both are comparable types wherever a rule requires mutually
-comparable values. `greatest` and `least` reduce them across a row, an
-`order_by` term orders by one, and [Aggregation](../operations/aggregation.md)'s `MIN` and `MAX` reduce one; [Ordering](../execution/ordering.md)
-places missing values by the term's `nulls`, as it does for every other type.
+comparable values. `greatest` and `least` reduce them across a row. An
+`order_by` term orders by one. [Aggregation](../operations/aggregation.md)'s
+`MIN` and `MAX` reduce one. [Ordering](../execution/ordering.md) places
+missing values by the term's `nulls`, as it does for every other type.
 
 <a id="req-0573"></a>
 
 **REQ-0573.** Collected precision takes no part in a comparison. Two values
 compare by the fields above; precision is not one of them. A value completed
-from a year and a month therefore orders against a fully collected one on the
-day it names, wins a `greatest` it is the latest operand of, and satisfies a
-predicate the day satisfies. Every pair of non-missing values of one type stays
-ordered, which is what keeps an `order_by` term total and [Types and conversion](types.md)'s comparability
-argument intact.
+from a year and a month therefore:
+
+- orders against a fully collected one on the day it names;
+- wins a `greatest` it is the latest operand of;
+- satisfies a predicate the day satisfies.
+
+Every pair of non-missing values of one type stays ordered, which is what
+keeps an `order_by` term total and [Types and conversion](types.md)'s
+comparability argument intact.
 
 <a id="req-0574"></a>
 
@@ -304,11 +316,24 @@ offset` does.
 <a id="req-0601"></a>
 
 **REQ-0601.** Text that is not the lexical form above: not a temporal value. For
-a `date` this includes a truncated date, a date carrying a time of day, and the
-basic format; for a `datetime` it additionally includes a zone designator, an
-offset, a fractional second, hour 24, and a leap second. Reaching a temporal
-column, it is the conversion failure [Types and conversion](types.md) defines, handled by
-`unconvertible` under [Local handlers](../execution/handlers.md) and otherwise fatal under [Execution lifecycle](../execution/lifecycle.md).
+a `date` this includes:
+
+- a truncated date;
+- a date carrying a time of day;
+- the basic format.
+
+For a `datetime` it additionally includes:
+
+- a zone designator;
+- an offset;
+- a fractional second;
+- hour 24;
+- a leap second.
+
+Reaching a temporal column, it is the conversion failure
+[Types and conversion](types.md) defines, handled by `unconvertible` under
+[Local handlers](../execution/handlers.md) and otherwise fatal under
+[Execution lifecycle](../execution/lifecycle.md).
 
 <a id="req-0602"></a>
 

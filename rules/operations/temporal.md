@@ -93,11 +93,13 @@ then a source below the minimum precision, then completion from `month` and
 
 <a id="req-0588"></a>
 
-**REQ-0588.** Where both operations read the same source text they answer the
-same two conditions about it, so one handler stage in [Local handlers](../execution/handlers.md) serves both: a
-missing source, and a non-missing source that is neither a complete date nor a
-date prefix. Text that is not a date is a different defect from an uncollected
-value, and a specification may answer them differently. A `date_precision`
+**REQ-0588.** Where both operations read the same source text, they answer the
+same two conditions about it. One handler stage in
+[Local handlers](../execution/handlers.md) therefore serves both operations.
+The two conditions are a missing source, and a non-missing source that is
+neither a complete date nor a date prefix. Text that is not a date is a
+different defect from an uncollected value, and a specification may answer
+them differently. A `date_precision`
 reading a value has only the first of the two to answer. A value that
 exists is already a value of its type.
 
@@ -156,11 +158,11 @@ within its registered calendar ranges, and the completed value
 must be a real calendar date. `month` is required when
 `minimum_source_precision` is `year` and must be absent when it is `month`:
 a specification carries no value the precision policy leaves unreachable.
-A `day` naming a position in its month is not a literal to range-check,
-and the calendar-date requirement cannot fail for one: it names whichever day
-the target month begins or ends with rather than a number that month might not
-have. Any other `day` token is neither a number nor a position, and is rejected
-where the specification is read.
+A `day` that names a position in its month is not a literal to range-check.
+The calendar-date requirement cannot fail for such a `day`. It names
+whichever day the target month begins or ends with rather than a number that
+month might not have. Any other `day` token is neither a number nor a
+position, and is rejected where the specification is read.
 
 <a id="req-0593"></a>
 
@@ -211,9 +213,10 @@ negative infinity.
 only with `unit: day`. `exclusive` counts from `start` to `end`
 excluding `start`; `inclusive` counts both endpoints and is one greater;
 `between` counts neither and is one smaller. With `unit: week`,
-`unit: month`, or `unit: year`, `bounds` must be absent or `exclusive`;
-any other value has no meaning -- an age of 35 does not become 36 --
-and is rejected where the specification is read, before any data is seen.
+`unit: month`, or `unit: year`, `bounds` must be absent or `exclusive`.
+Any other value has no meaning. For example, an age of 35 does not
+become 36. Such a value is rejected where the specification is read,
+before any data is seen.
 
 ### Interface behavior
 

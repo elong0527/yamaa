@@ -140,11 +140,20 @@ and `NULL` are case-insensitive; identifiers are not.
 
 **REQ-0416.** `GREATEST` and `LEAST` require at least two arguments;
 `COALESCE` requires at least one; `ROUND_HALF_AWAY_FROM_ZERO` requires
-exactly two. Any other function name, any operator
-outside the grammar, any string literal, any comparison or Boolean operator,
-any `CASE`, any aggregate function, any window function or `OVER`, any
-subquery, and any host-language call are validation errors. Widening the
-vocabulary requires amending the table in [REQ-0415](computation.md#req-0415).
+exactly two. Each of the following is a validation error:
+
+- any other function name;
+- any operator outside the grammar;
+- any string literal;
+- any comparison or Boolean operator;
+- any `CASE`;
+- any aggregate function;
+- any window function or `OVER`;
+- any subquery;
+- any host-language call.
+
+Widening the vocabulary requires amending the table in
+[REQ-0415](computation.md#req-0415).
 
 <a id="req-0417"></a>
 
@@ -161,15 +170,19 @@ half away from zero. No other
 rounding exists: the `compute` grammar gains no `ROUND`, and a derivation
 must not round by any other spelling. The `compute` function
 `ROUND_HALF_AWAY_FROM_ZERO(x, digits)` shares this tie behavior and the
-standalone operation's missing-value semantics: a missing value or missing
-digits yields missing; `digits` must be an integer, where negative rounds
-left of the decimal point; a non-integer `digits` is an
-`incompatible_input_type` validation error. The source must be numeric; a
-non-numeric source is an `incompatible_input_type` validation error. Missing
-stays missing. A value that rounds to zero returns positive zero, never
-negative zero. The function form returns a float, matching the standalone
-operation. Analysis datasets otherwise carry computed values at full
-precision; reporting decides the displayed places. [Types and
+standalone operation's missing-value semantics:
+
+- A missing value or missing digits yields missing.
+- `digits` must be an integer, where negative rounds left of the decimal
+  point.
+- A non-integer `digits` is an `incompatible_input_type` validation error.
+
+The source must be numeric; a non-numeric source is an
+`incompatible_input_type` validation error. Missing stays missing. A value
+that rounds to zero returns positive zero, never negative zero. The function
+form returns a float, matching the standalone operation. Analysis datasets
+otherwise carry computed values at full precision; reporting decides the
+displayed places. [Types and
 conversion](../values/types.md) has the same rule at conversion, where a
 non-integral value fails rather than being truncated.
 

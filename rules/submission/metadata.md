@@ -217,11 +217,12 @@ names no designation its standard publishes.
 <a id="req-0881"></a>
 
 **REQ-0881.** `mandatory` states whether the completed column must carry a
-value. `mandatory` is not a second spelling of `core`, and the mapping
-between them is standard-specific: for `sdtm` and `send` [REQ-0882](metadata.md#req-0882) derives one;
-for `adam` the two are independently declared and no value of one derives
-the other. The ADaM guides state `Core` assists preparation, is not
-submitted in define.xml, and allows nulls unless otherwise specified:
+value. `mandatory` is not a second spelling of `core`. The mapping between
+them is standard-specific. For `sdtm` and `send`,
+[REQ-0882](metadata.md#req-0882) derives one. For `adam`, the two are
+independently declared and no value of one derives the other. The ADaM
+guides state `Core` assists preparation, is not submitted in define.xml,
+and allows nulls unless otherwise specified:
 
 <a id="req-0882"></a>
 
@@ -265,11 +266,12 @@ owns that object, the values a binding enforces, and its agreement with an
 
 **REQ-1162.** A `rows` entry may carry a `submission` map keyed by column name.
 Each entry declares the submission metadata for one value of the row's
-discriminator (see [REQ-1163](metadata.md#req-1163)): the column-level `submission` stays the shared
-declaration for the column, and the row-level entry supplies per-value
-overrides, so a findings domain can give each `--TESTCD` its own codelist,
-origin, or length without repeating the shared metadata. Fields the
-row-level entry leaves absent inherit from the column-level declaration.
+discriminator (see [REQ-1163](metadata.md#req-1163)). The column-level
+`submission` stays the shared declaration for the column. The row-level
+entry supplies per-value overrides. Thus, a findings domain can give each
+`--TESTCD` its own codelist, origin, or length without repeating the shared
+metadata. Fields the row-level entry leaves absent inherit from the
+column-level declaration.
 
 <a id="req-1163"></a>
 
@@ -308,10 +310,11 @@ not a last-wins merge.
 
 <a id="req-1168"></a>
 
-**REQ-1168.** [REQ-0897](metadata.md#req-0897) through [REQ-0899](metadata.md#req-0899) apply to each value-level
-entry against the derivation that produces the column's value in that row
-template (the row template's derivation, or the column-level derivation
-when the row template inherits a uniform one): the refutation follows the
+**REQ-1168.** [REQ-0897](metadata.md#req-0897) through
+[REQ-0899](metadata.md#req-0899) apply to each value-level entry against the
+derivation that produces the column's value in that row template. That
+derivation is the row template's derivation, or the column-level derivation
+when the row template inherits a uniform one. The refutation follows the
 entry. The origin claim is per value.
 
 ### Origin
@@ -493,11 +496,16 @@ destinations and carries the `refs` as a space-separated list.
 <a id="req-0907"></a>
 
 **REQ-0907.** Every requirement above that does not depend on a family is
-checked when the specification is validated on its own: the vocabularies, the
-required and prohibited field combinations, the length binding in [REQ-0874](metadata.md#req-0874), the
-graph refutations in [REQ-0896](metadata.md#req-0896) through [REQ-0900](metadata.md#req-0900), the value-level
-declaration rules in [REQ-1162](metadata.md#req-1162) through [REQ-1168](metadata.md#req-1168), and the presence of `method` for
-a declared `Derived` origin.
+checked when the specification is validated on its own:
+
+- the vocabularies;
+- the required and prohibited field combinations;
+- the length binding in [REQ-0874](metadata.md#req-0874);
+- the graph refutations in [REQ-0896](metadata.md#req-0896) through
+  [REQ-0900](metadata.md#req-0900);
+- the value-level declaration rules in [REQ-1162](metadata.md#req-1162)
+  through [REQ-1168](metadata.md#req-1168);
+- the presence of `method` for a declared `Derived` origin.
 
 <a id="req-0908"></a>
 
@@ -729,10 +737,14 @@ the declared type, and the submission type.
 
 <a id="req-0915"></a>
 
-**REQ-0915.** A `core` absent for any family, an `Exp` for `adam`, a `Cond`
-for `sdtm` or `send`, a `mandatory: false` on a `Req` column for `sdtm` or
-`send`, or a `mandatory` absent for `adam`: fail with
-`core_mandatory_conflict`, reporting the column.
+**REQ-0915.** Each of these fails with `core_mandatory_conflict`, reporting
+the column:
+
+- a `core` absent for any family;
+- an `Exp` for `adam`;
+- a `Cond` for `sdtm` or `send`;
+- a `mandatory: false` on a `Req` column for `sdtm` or `send`;
+- a `mandatory` absent for `adam`.
 
 <a id="req-0916"></a>
 

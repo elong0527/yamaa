@@ -104,13 +104,14 @@ separator. An empty path has one empty segment and is invalid.
   approved project root names one file by one spelling. The canonical
   resolved path below is the snapshot identity. A traversal that climbs
   above the anchor keeps resolving textually against the anchor's canonical
-  segments and is re-anchored at the approved root the resolved location sits
-  under ([REQ-0781](resources.md#req-0781)), so an explicitly approved data
-  root is reachable by a relative spelling. A traversal that resolves inside
-  no approved root fails as `resource_path_outside_project`. An escape fails
-  identically on every platform whether or not anything exists where it
-  points. A rooted path writes neither. It already names its location;
-  a dot segment there would only obscure which approved root it names.
+  segments. It is re-anchored at the approved root the resolved location
+  sits under ([REQ-0781](resources.md#req-0781)). An explicitly approved
+  data root is therefore reachable by a relative spelling. A traversal that
+  resolves inside no approved root fails as `resource_path_outside_project`.
+  An escape fails identically on every platform whether or not anything
+  exists where it points. A rooted path writes neither. It already names its
+  location; a dot segment there would only obscure which approved root it
+  names.
 
 <a id="req-0779"></a>
 
@@ -126,9 +127,10 @@ the layer that writes it, as [Name binding](../specification/binding.md) and [So
 specification it is relative to the entry file. [Specification composition](../specification/composition.md) has already
 rebased it, and the rebased form names that same location. When that
 resolution reaches no entry, the run retries the path exactly as its layer
-wrote it: first against the approved project root, then against each approved
-data root in run order, the first success winning. The retry needs the layer's
-own spelling, which the rebased form no longer shows, so it is taken from the
+wrote it. It retries first against the approved project root, then
+against each approved data root in run order. The first success wins.
+The retry needs the layer's own spelling, which the rebased form no
+longer shows, so it is taken from the
 provenance [Specification composition](../specification/composition.md) keeps. A rooted `project_path` resolves against the approved root it
 names and is unaffected by rebasing, which leaves it exactly as written.
 This contract reads that written form.
@@ -149,24 +151,26 @@ that leaves every approved root, a rejected written form -- is terminal. The
 writing layer's directory therefore wins when the entry exists under both it
 and another anchor, the project root wins over every data root, and the first
 declared data root wins among data roots. A traversal that climbs above an
-anchor's root is re-anchored at the approved root whose canonical leading segments the
-resolved location repeats, the longest match winning when one approved root
-lies inside another, exactly as for a rooted path. A traversal that resolves
-inside no approved root fails as `resource_path_outside_project`
-([REQ-0778](resources.md#req-0778)). A rooted path is anchored at the approved root
-whose leading segments it repeats -- either the spelling the runner used or
-that root's canonical spelling, compared segment by segment before the
-filesystem is consulted, the longest match winning when one approved root lies
-inside another. A rooted path that repeats no approved root's leading segments
-names no location this run approved and fails as `resource_path_not_relative`:
-it is relative to nothing the runner allowed.
+anchor's root is re-anchored at the approved root whose canonical leading
+segments the resolved location repeats. When one approved root lies inside
+another, the longest match wins. This re-anchoring is exactly as for a
+rooted path. A traversal that resolves inside no approved root fails as
+`resource_path_outside_project` ([REQ-0778](resources.md#req-0778)). A
+rooted path is anchored at the approved root whose leading segments it
+repeats. Those segments are in either the spelling the runner used or that
+root's canonical spelling. They are compared segment by segment before the
+filesystem is consulted. When one approved root lies inside another, the
+longest match wins. A rooted path that repeats no approved root's leading
+segments names no location this run approved and fails as
+`resource_path_not_relative`: it is relative to nothing the runner allowed.
 
 <a id="req-1246"></a>
 
 **REQ-1246.** The approved project root is the anchor after the writing
-layer's directory, so a layer shared by several studies can declare an input
-dataset once -- its identifier, field types, and empty-string convention --
-while each study keeps the stored file under its own project root. A study
+layer's directory. A layer shared by several studies can therefore declare
+an input dataset once, while each study keeps the stored file under its
+own project root. That one declaration holds the dataset's identifier,
+field types, and empty-string convention. A study
 whose project configuration sits in its own directory makes that directory its
 project root. A shared layer's `input/dm.csv` that is absent beside the shared
 layer then reads that study's `input/dm.csv`. No specification field chooses
@@ -197,14 +201,14 @@ one whose target is inside an approved root. A link is a second name for a
 file. A boundary that admits a link must re-derive containment every time
 the link changes. The link a validator followed is not necessarily the
 link a reader follows. The anchor itself is exempt. It is not a name the
-specification chose: the runner selected it, the run canonicalized and opened
-it before reading any specification, and every walk begins at that open
-directory, so no name above the anchor can be swapped between validation and
-ingestion. This is the boundary the approved project root has always drawn --
-its own canonical form is taken once and the no-link rejection begins below
-it -- so a rooted path moves the anchor without moving the boundary. A run
-therefore treats a location spelled through a linked system directory
-like any other approved root.
+specification chose. The runner selected it, and the run canonicalized and
+opened it before reading any specification. Every walk begins at that open
+directory. No name above the anchor can therefore be swapped between
+validation and ingestion. This is the boundary the approved project root has
+always drawn. The approved project root's own canonical form is taken once,
+and the no-link rejection begins below it. As a result, a rooted path moves
+the anchor without moving the boundary. A run therefore treats a location
+spelled through a linked system directory like any other approved root.
 
 <a id="req-0784"></a>
 
@@ -309,8 +313,14 @@ which reports under `ingest`.
 
 <a id="req-0795"></a>
 
-**REQ-0795.** A project configuration that is not a mapping, carries an
-  unknown field, declares a `data_roots` that is not a list of existing local
-  directories, or declares one outside a ceiling the runner named: fail before
-  any specification is read. A malformed configuration is a run that was never
-  configured, not a run with fewer roots.
+**REQ-0795.** Fail before any specification is read when a project
+configuration:
+
+- is not a mapping;
+- carries an unknown field;
+- declares a `data_roots` that is not a list of existing local
+  directories; or
+- declares one outside a ceiling the runner named.
+
+A malformed configuration is a run that was never configured, not a run
+with fewer roots.

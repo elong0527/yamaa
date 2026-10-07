@@ -186,11 +186,15 @@ remaining lists are ordered arguments, such as `str_concat.sources`,
 `order_by`, `first_available.sources`, and the `cut` breaks and labels.
 A schema default is materialized on the composed value rather than on each
 contribution, so a later layer that never mentions a field cannot replace what
-an earlier layer wrote there with this bundle's default. Thus a child may
-change only `AVAL.label`, add one key to an inherited `AVAL.metadata`, or add
-`unconvertible` to an inherited `AVAL.derivation` without restating the expression,
-while a child derivation naming a different expression keyword replaces the
-whole derivation.
+an earlier layer wrote there with this bundle's default. Thus a child may:
+
+- change only `AVAL.label`;
+- add one key to an inherited `AVAL.metadata`; or
+- add `unconvertible` to an inherited `AVAL.derivation` without restating
+  the expression.
+
+A child derivation that names a different expression keyword instead
+replaces the whole derivation.
 
 <a id="req-0631"></a>
 

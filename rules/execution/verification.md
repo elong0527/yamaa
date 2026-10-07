@@ -23,9 +23,10 @@ coarser keys or from an upstream specification.
   the immediately preceding assessment, so it rejects a partial response next
   to a complete one and passes the same fault with an assessment in between.
 - **A partition, or its history up to the current row.** A qualified aggregate
-  under [Aggregation](../operations/aggregation.md) reduces a source relation, and its `between` narrowing keeps only
-  the records at or before a current-row value, so a cumulative property of
-  collected values reaches the row it must be asserted about.
+  under [Aggregation](../operations/aggregation.md) reduces a source
+  relation. Its `between` narrowing keeps only the records at or before a
+  current-row value. Thus, a cumulative property of collected values reaches
+  the row it must be asserted about.
 - **A derived property at coarser keys or upstream.** The specification that
   derives it publishes it, and [Source ingestion](../storage/ingestion.md)'s producing-specification link makes it an
   ordinary source field of the specification that asserts over it. This is the
@@ -223,11 +224,12 @@ its rows evaluates `when` to `TRUE`; the bounds then apply to that group as
 no row of which evaluates `when` to `TRUE` is exempt: the bounds do not apply
 to it. Without `group_by`, the whole output is one group, bound when any row
 satisfies `when`. `FALSE` and `UNKNOWN` do not bind, as `filter` admits only
-`TRUE` rows everywhere else. A conditional existence -- at least one baseline
-record for each subject and parameter that carries a baseline value -- is a
-`min` of one over the rows whose baseline flag is set, grouped by subject and
-parameter, with `when` selecting the rows that carry a baseline value; a group
-whose rows never carry one is not required to have one.
+`TRUE` rows everywhere else. One conditional existence is at least one
+baseline record for each subject and parameter that carries a baseline
+value. That check is a `min` of one over the rows whose baseline flag is
+set, grouped by subject and parameter. Its `when` selects the rows that
+carry a baseline value. A group whose rows never carry one is not required
+to have one.
 
 ### Functional dependency
 
@@ -318,20 +320,32 @@ observed counts aligned with those groups.
 
 <a id="req-0394"></a>
 
-**REQ-0394.** The two JSON fields are compact ASCII JSON: no insignificant
-whitespace; object names ordered by [Text values](../values/text.md); `null`, `true`, and `false` in lower
-case; numbers in [Types and conversion](../values/types.md)'s `str` form; and strings escaped to ASCII by JSON's
-short escapes where one exists and lower-case `\\u` hexadecimal escapes
-otherwise. A scalar above `U+FFFF` is its JSON surrogate-pair escape. The
-empty key sequence is `[]` and empty remaining context is `{}`.
+**REQ-0394.** The two JSON fields are compact ASCII JSON:
+
+- no insignificant whitespace;
+- object names ordered by [Text values](../values/text.md);
+- `null`, `true`, and `false` in lower case;
+- numbers in [Types and conversion](../values/types.md)'s `str` form;
+- strings escaped to ASCII by JSON's short escapes where one exists and
+  lower-case `\\u` hexadecimal escapes otherwise.
+
+A scalar above `U+FFFF` is its JSON surrogate-pair escape. The empty key
+sequence is `[]` and empty remaining context is `{}`.
 
 <a id="req-0395"></a>
 
-**REQ-0395.** The log is verified before it becomes an artifact: its columns,
-types, order, non-missing and unique `SPEC_PATH`, fixed version and severity,
-positive count, complete key sequence, and one-to-one correspondence with the
-executor's warning findings must hold. A malformed log is an execution defect,
-not a warning that can be logged inside itself.
+**REQ-0395.** The log is verified before it becomes an artifact. These
+properties of the log must hold:
+
+- its columns, types, and order;
+- non-missing and unique `SPEC_PATH`;
+- fixed version and severity;
+- positive count;
+- complete key sequence;
+- one-to-one correspondence with the executor's warning findings.
+
+A malformed log is an execution defect, not a warning that can be logged
+inside itself.
 
 <a id="req-0396"></a>
 
@@ -394,11 +408,15 @@ dataset verification.
 <a id="req-1176"></a>
 
 **REQ-1176.** `EVALUATED_COUNT` and `FAILURE_COUNT` count the unit the check
-itself counts: output rows for a row-wise check, distinct combinations for
-`unique`, and groups for a check that partitions the artifact, where an
-ungrouped `row_count` is the one group [REQ-0385](verification.md#req-0385)
-bounds. `FAILURE_COUNT` is therefore never greater than `EVALUATED_COUNT`,
-and is `0` exactly when `OUTCOME` is `held`. A held check leaves `CONDITION`
+itself counts:
+
+- output rows for a row-wise check;
+- distinct combinations for `unique`;
+- groups for a check that partitions the artifact, where an ungrouped
+  `row_count` is the one group [REQ-0385](verification.md#req-0385) bounds.
+
+`FAILURE_COUNT` is therefore never greater than `EVALUATED_COUNT`, and is
+`0` exactly when `OUTCOME` is `held`. A held check leaves `CONDITION`
 missing and `DETAILS` `{}`. A violated one carries the stable condition its
 failure reports and that failure's remaining context, encoded by
 [REQ-0394](verification.md#req-0394) unchanged rather than by a second
@@ -407,10 +425,11 @@ encoding.
 <a id="req-1177"></a>
 
 **REQ-1177.** The log is written for a failed run as well as a successful
-one. It is diagnostic output rather than one of [Artifact publication](../storage/publication.md)'s artifacts, so a
-failed `error` verification still produces no accepted artifact and
-[REQ-0390](verification.md#req-0390) is unchanged: the log records the
-failure, it does not make the run publishable. Its rows are the checks the
+one. It is diagnostic output rather than one of
+[Artifact publication](../storage/publication.md)'s artifacts. Therefore, a
+failed `error` verification still produces no accepted artifact, and
+[REQ-0390](verification.md#req-0390) is unchanged. The log records the
+failure but does not make the run publishable. Its rows are the checks the
 run evaluated, in execution order. The stage that failed contributes the
 checks it evaluated, at least one of them `violated` at `error` severity,
 and a check a stopped run never reached has no row. The log
@@ -418,13 +437,19 @@ states what was checked and nothing more.
 
 <a id="req-1178"></a>
 
-**REQ-1178.** The log is verified before it is written: its columns,
-types, and order; its fixed version; non-missing and unique `SPEC_PATH`;
-`OUTCOME` exactly `held` or `violated`; the count relationship
-[REQ-1176](verification.md#req-1176) fixes; and one-to-one correspondence
-with the checks the executor evaluated, including agreement with the
-warning log about every warning that log carries. A malformed log is an
-execution defect, not a finding that can be recorded inside itself.
+**REQ-1178.** The log is verified before it is written:
+
+- its columns, types, and order;
+- its fixed version;
+- non-missing and unique `SPEC_PATH`;
+- `OUTCOME` exactly `held` or `violated`;
+- the count relationship [REQ-1176](verification.md#req-1176) fixes;
+- one-to-one correspondence with the checks the executor evaluated,
+  including agreement with the warning log about every warning that log
+  carries.
+
+A malformed log is an execution defect, not a finding that can be recorded
+inside itself.
 
 ### Interface behavior
 

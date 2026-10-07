@@ -42,12 +42,18 @@ it.
 declares them for its class. This applies to the root of the
 specification and to each input dataset, the output, each named
 intermediate, each column, and each row template. The root declares its
-fields in reading order: what the specification is (`schema_version`,
-`parents`, `domain`, `keys`), what it reads (`input`, `base`, `filter`),
-what it writes (`output`), how it derives the rows (`windows`,
-`intermediates`, `columns`, `rows`), and what it checks and publishes
-(`verifications`, `submission`, `metadata`). A field written after one the
-schema declares later is reported as `field_order`.
+fields in reading order:
+
+- what the specification is (`schema_version`, `parents`, `domain`,
+  `keys`);
+- what it reads (`input`, `base`, `filter`);
+- what it writes (`output`);
+- how it derives the rows (`windows`, `intermediates`, `columns`, `rows`);
+- what it checks and publishes (`verifications`, `submission`,
+  `metadata`).
+
+A field written after one the schema declares later is reported as
+`field_order`.
 
 ```yaml
 schema_version: "1.0"
@@ -144,11 +150,16 @@ and filtered sources written `{source: {variable: ..., ...}}`.
 <a id="req-1288"></a>
 
 **REQ-1288.** A derivation identical in every row template belongs at
-column level. When two or more row templates derive the same column with
-the same derivation, the column has no column-level derivation, and the
-derivation is row-local, the check reports `repeated_row_derivation` at
-the first template's entry and suggests moving it to
-`columns[].derivation`. A derivation is row-local unless it uses a
+column level. The check reports `repeated_row_derivation` at the first
+template's entry when all of these hold:
+
+- two or more row templates derive the same column with the same
+  derivation;
+- the column has no column-level derivation;
+- the derivation is row-local.
+
+It suggests moving the derivation to `columns[].derivation`.
+A derivation is row-local unless it uses a
 dataset-level operation (`aggregate` or a window operation), reads a named
 intermediate, or reads a column whose column-level derivation is not
 row-local ([REQ-1260](../specification/structure.md#req-1260)). Such
@@ -198,8 +209,8 @@ intermediate's `id` and suggests reading the input dataset directly.
 An omitted `key` with `no_match: null` fails validation as
 `rename_only_intermediate`
 ([REQ-1248](../operations/lookup.md#req-1248)) instead and is never a
-style finding; an intermediate without `no_match` requires a match the
-implicit join cannot state; a non-null `no_match` literal, a custom key,
+style finding. An intermediate without `no_match` requires a match the
+implicit join cannot state. A non-null `no_match` literal, a custom key,
 and a `SELF` intermediate all change behavior and are never reported. An
 unread intermediate is unused, not redundant, and is never reported.
 
@@ -242,18 +253,27 @@ columns:
 <a id="req-1286"></a>
 
 **REQ-1286.** A style fix changes how the lines of a file are laid out and
-never the written text of a value. It may move a field, with the comments
-written directly above it, into the order of
-[REQ-1281](#req-1281); insert or remove blank lines; continue a flow list,
-a quoted scalar, or a plain scalar on following lines; and write a
-one-line flow mapping other than `{literal: X}` or `{source: X}` as a block
-mapping, keeping each member's written text. A fix is kept only when the
-fixed file parses under the YAML 1.2 core schema to the same value, with
-the same types, as the file before it, carries the same comment lines, and
-does not change when it is fixed again. Otherwise the file stays as written
-and the finding stays reported. A `literal_form` or `source_form` finding
-changes the spelling of a value, and its author corrects it. A
-`repeated_row_derivation`, `redundant_intermediate`, or `missing_label`
+never the written text of a value. It may:
+
+- move a field, with the comments written directly above it, into the
+  order of [REQ-1281](#req-1281);
+- insert or remove blank lines;
+- continue a flow list, a quoted scalar, or a plain scalar on following
+  lines;
+- write a one-line flow mapping other than `{literal: X}` or
+  `{source: X}` as a block mapping, keeping each member's written text.
+
+A fix is kept only when all of these hold for the fixed file:
+
+- it parses under the YAML 1.2 core schema to the same value, with the
+  same types, as the file before it;
+- it carries the same comment lines;
+- it does not change when it is fixed again.
+
+Otherwise the file stays as written and the finding stays reported. A
+`literal_form` or `source_form` finding changes the spelling of a value,
+and its author corrects it.
+A `repeated_row_derivation`, `redundant_intermediate`, or `missing_label`
 finding rewrites the specification value to preserve derivation behavior,
 and its author corrects it; no fix is offered.
 

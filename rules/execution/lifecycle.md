@@ -30,10 +30,10 @@ before a dependent reads it. Derivation has two phases:
 
 <a id="req-0044"></a>
 
-**REQ-0044.** A column derivation must yield exactly one value per row, and
-the derivation counts values rather than the records carrying them:
-repeated readings of one value are that one value, and two input records
-of one key combination carrying different present values are two values; that
+**REQ-0044.** A column derivation must yield exactly one value per row. The
+derivation counts values rather than the records that carry them. Repeated
+readings of one value are that one value. Two input records of one key
+combination that carry different present values are two values. That
 outcome fails under [REQ-0075](lifecycle.md#req-0075). A source `filter` decides which of those
 records the derivation reads before that count, which [REQ-0131](../operations/lookup.md#req-0131) defines. A
 missing result is still the row's one value but never creates a second
@@ -175,11 +175,12 @@ consuming a row-derived column must rely on the column's declared type.
 <a id="req-0218"></a>
 
 **REQ-0218.** A row template's `filter` evaluates after stages 1 to 3
-complete for every value the filter may read on the candidate row: for a
-grouped template every row derivation; for an ungrouped template every
-derivation that does not read a window result, evaluated before the window
-pass. A discarded candidate never enters the completed dataset, so stage 4
-column verifications do not include it. An error reached while deriving the
+complete for every value the filter may read on the candidate row. For a
+grouped template, those are the values of every row derivation. For an
+ungrouped template, those are the values of every derivation that does not
+read a window result, evaluated before the window pass. A discarded
+candidate never enters the completed dataset, so stage 4 column
+verifications do not include it. An error reached while deriving the
 candidate still fails the run; the filter does not retroactively hide a
 failed derivation.
 

@@ -61,11 +61,17 @@ contract fixes one.
 <a id="req-1199"></a>
 
 **REQ-1199.** The file's rows are the rows of the artifact the entry's
-specification published at its `output.path`, read exactly as a consuming
-specification reads a producer's artifact: under the profile [REQ-0751](../storage/ingestion.md#req-0751) says the
-producer wrote it with, with the field agreement [REQ-0522](../storage/ingestion.md#req-0522) requires and the
-typed values [REQ-0524](../storage/ingestion.md#req-0524) delivers. The producer completes before the document is
-generated.
+specification published at its `output.path`. They are read exactly as a
+consuming specification reads a producer's artifact:
+
+- under the profile [REQ-0751](../storage/ingestion.md#req-0751) says the
+  producer wrote it with;
+- with the field agreement [REQ-0522](../storage/ingestion.md#req-0522)
+  requires; and
+- with the typed values [REQ-0524](../storage/ingestion.md#req-0524)
+  delivers.
+
+The producer completes before the document is generated.
 
 <a id="req-1200"></a>
 
@@ -170,9 +176,12 @@ carrying these members, in this order:
 | `keySequence` | one-based position in `keys`; omitted when not a key |
 
 Every member is the one the Define-XML document carries for the same column:
-`itemOID` is the `ItemDef` identifier [REQ-0992](define-xml.md#req-0992) generates, `length` and
-`displayFormat` are its `Length` and `def:DisplayFormat`, and `keySequence` is
-the `ItemRef` `KeySequence` [REQ-0990](define-xml.md#req-0990) writes.
+
+- `itemOID` is the `ItemDef` identifier
+  [REQ-0992](define-xml.md#req-0992) generates;
+- `length` and `displayFormat` are its `Length` and `def:DisplayFormat`; and
+- `keySequence` is the `ItemRef` `KeySequence`
+  [REQ-0990](define-xml.md#req-0990) writes.
 
 <a id="req-1210"></a>
 
@@ -196,8 +205,8 @@ through this closed table:
 
 **REQ-1211.** The table is not a second type system. Dataset-JSON's set is
 smaller than Define-XML's, so the eight collapsed types are carried as text
-here and keep their submission type in the `ItemDef` the column's `itemOID`
-points at; a reader that needs the finer type reads the document. `float` is
+here. They keep their submission type in the `ItemDef` the column's `itemOID`
+points at. A reader that needs the finer type reads the document. `float` is
 written for a `float` column even though [Types and conversion](../values/types.md)'s value is binary64,
 This member must equal the `DataType` that `ItemDef` carries. The
 storage width of a number is not what it names. `boolean`, `decimal`, and
@@ -231,9 +240,9 @@ property of that container and are not a second spelling here.
 
 **REQ-1214.** A missing value is `null` and a collected empty string is `""`.
 Which of them reaches this file is decided by the artifact's own container
-and by nothing else: a `parquet` artifact's zero-length string arrives as a
-present empty string, and a `csv` artifact's empty field arrives as missing
-under [REQ-0529](../storage/ingestion.md#req-0529).
+and by nothing else. A `parquet` artifact's zero-length string arrives as a
+present empty string. A `csv` artifact's empty field arrives as missing under
+[REQ-0529](../storage/ingestion.md#req-0529).
 [REQ-1158](../storage/ingestion.md#req-1158)'s empty-string convention does not apply here.
 
 ### Serialization
@@ -261,15 +270,16 @@ outside a string escape.
   as its name in quotes, a colon, one space, and its value, with a comma
   after every member but the last;
 - `sourceSystem` and each entry of `columns` is one object written on one
-  line, opening `{`, its members separated by a comma and one space, each
-  written as its name in quotes, a colon, one space, and its value, then `}`;
+  line. The object opens with `{`, writes its members separated by a comma
+  and one space, and closes with `}`. Each member is written as its name in
+  quotes, a colon, one space, and its value;
 - each entry of `rows` is one array written on one line, opening `[`, its
   elements separated by a comma and one space, then `]`;
-- `columns` and `rows` open with `[` at the end of their member's line, write
-  one entry per line indented four spaces with a comma after every entry but
-  the last, and close with `]` on its own line indented two spaces; an empty
-  array is written `[]` on the member's line, and the comma separating such a
-  member from the next follows its closing bracket; and
+- `columns` and `rows` open with `[` at the end of their member's line. They
+  write one entry per line indented four spaces, with a comma after every
+  entry but the last. They close with `]` on its own line indented two
+  spaces. An empty array is written `[]` on the member's line. The comma that
+  separates such a member from the next follows its closing bracket; and
 - no other whitespace is written: no trailing space, no blank line, and
   nothing between two tokens the rules above do not place there.
 
@@ -356,8 +366,9 @@ document that declares any `dataset_json`: fail validation with
 
 **REQ-1229.** A `dataset_json` path, or a `metaDataRef` computed from it, that
 cannot be expressed relative to its directory without a parent traversal:
-fail with `artifact_outside_document`, reporting the dataset and both paths,
-as [REQ-1021](define-xml.md#req-1021) does for the artifact a leaf names.
+fail with `artifact_outside_document`. The failure reports the dataset and
+both paths, as [REQ-1021](define-xml.md#req-1021) does for the artifact a
+leaf names.
 
 <a id="req-1230"></a>
 
