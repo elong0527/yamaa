@@ -29,4 +29,16 @@ event that started earlier on the day of first exposure and one
 that started later that same day fall on opposite sides, and a
 start date alone cannot tell them apart.
 
+**Note:** a collected datetime without seconds is coerced to the
+second (seconds zero-filled) and compared at second precision.
+HEADACHE is collected as `2025-03-04T11:45` and VOMITING as
+`2025-03-04T11:45:00`; both land on the same second, so the
+`AOCCFL` tie-break ("the lower sequence number settles ties at
+the same second") is what picks the earliest treatment-emergent
+event. No time-imputation flag is derived for the coerced value:
+the coercion happens inside the engine's datetime type, and the
+language's collected-precision model reports only day/second
+tiers, so a minute-precision source is not distinguishable from
+a second-precision one in spec language.
+
 **Standard:** ADaM | **Domain:** ADAE
