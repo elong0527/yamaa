@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-07 against main `4a240ae8e43102633445e25770afe91beda02d7b`
+Reconciled 2026-10-07 against main `8e92e368d8892959cec564febf6bf7e3a8762774`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -46,6 +46,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1785 | Held Parquet ingestion through shared source ports, qualified on all prototype package forms. |
 | #1786 | Core original-document preflight and output-declaration diagnostics, with complete retained failed reports. |
 | #1788 | Core numeric/aggregate grammar diagnostics and independent original-document failure timing. |
+| #1789 | Portable schema kinds, core binding/dependency findings and pure core CSV profile admission. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -63,10 +64,20 @@ need conversion. Their common projection preserves the existing complete truth.
 #1788 passed all 13 checks and its final installed-artifact audit, including six
 Python forms with 29 original-document methods and both strict R source checks.
 The Ubuntu R job passed an isolated retry after dependency-mirror delays.
-The next candidate combines typed schema kinds, core binding/dependency findings
-and pure core CSV profile admission. Its 58-contract/39-suite catalog and local
-31-method original-document replay are candidate evidence until final-revision
-hosted packages and full review pass; the benchmark inventory stays unchanged.
+#1789 passed all 13 checks and final-head installed-artifact auditing: six Python
+forms with 31 original-document and four schema methods, plus both strict R source
+packages with all 17 scripts. The reference R check passed an isolated retry after
+setup timed out before tests. Its 58-contract/39-suite catalog and unchanged
+945-row assisted inventory are qualified private-route evidence.
+The next serial candidate compiles ordinary scalar columns and column/row
+conversion wrappers through the existing core expression and recovery service.
+Four literal, five column-handler and eight row-handler complete independent
+reports pin exact successful CSV, failed reports, authored paths, effective-default
+counter ordering, retained ownership and repeated save gates. Local qualification
+passes 658 Rust tests, strict Clippy, 44 tooling tests, both Python forms with
+34 original-document methods and strict R Status: OK with all 17 scripts. The
+61-contract/39-suite catalog remains candidate evidence pending final-head hosted
+qualification and full review; the benchmark inventory stays unchanged.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance
