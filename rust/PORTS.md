@@ -166,3 +166,19 @@ traversal truth and authored failed-pass vectors cover these paths in both hosts
 Capture IO failures, whole-run report assembly, and the public issues-table
 frontend still have separate integration gates. This does not qualify a public frontend or promote
 any benchmark inventory row.
+
+## Classified resource failures
+
+A source port can explicitly classify a failed capture as a missing resource or
+a non-regular file. The engine retains that typed cause alongside the original
+error payload and actual capture counters. Shared core diagnostics supply the
+condition, validation phase, REQ-0785 and authored dataset/path context; the
+report adapter preserves prior requests and refuses publication for the failed
+build. It never obtains a classification from an exception message.
+
+Ports default to no classification, so existing Python/R callback exceptions and
+interruptions remain opaque. Resource limits, malformed accounting and internal
+failures are not language findings. This mapping changes neither filesystem
+authority nor resolution order. Production filesystem adapters, preflight file
+checks before study reads, additional IO causes, and public host integration
+remain required; the callback prototypes do not gain file authority here.

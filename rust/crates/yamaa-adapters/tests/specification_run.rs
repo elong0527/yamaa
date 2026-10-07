@@ -2627,3 +2627,268 @@ fn inherited_original_preparation_prunes_before_source_binding() {
         }
     }
 }
+
+#[test]
+fn classified_capture_failures_retain_complete_reports_without_publication() {
+    use serde_json::json;
+    use yamaa_adapters::{
+        specification_report::{self, Identity},
+        specification_run::{PortError, PreparedRun, SourcePort},
+    };
+    use yamaa_core::resource::ResourceFailure;
+    use yamaa_engine::specification::SourceDeclaration;
+    struct Payload {
+        cause: Option<ResourceFailure>,
+        identity: Arc<()>,
+    }
+    struct Port {
+        bytes: Arc<[u8]>,
+        calls: Vec<String>,
+        fail_at: usize,
+        reads: usize,
+        cached: bool,
+        cause: Option<ResourceFailure>,
+        identity: Arc<()>,
+    }
+    impl SourcePort for Port {
+        type Error = Payload;
+        fn resource_failure(&self, error: &Payload) -> Option<ResourceFailure> {
+            error.cause
+        }
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            limit: usize,
+        ) -> Result<Arc<[u8]>, Payload> {
+            let index = self.calls.len();
+            self.calls.push(source.name.clone());
+            if index == self.fail_at {
+                return Err(Payload {
+                    cause: self.cause,
+                    identity: Arc::clone(&self.identity),
+                });
+            }
+            assert_eq!(source.name, "DM");
+            assert!(self.bytes.len() <= limit);
+            self.reads += usize::from(!self.cached);
+            Ok(Arc::clone(&self.bytes))
+        }
+    }
+    struct NoPublication;
+    impl specification_report::ArtifactPort for NoPublication {
+        type Error = ();
+        fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
+            panic!("failed build published")
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let case = root.join("benchmarks/schema-lookup");
+    let schema = schema(&root.join("yaml"));
+    let run = PreparedRun::prepare(prepare(
+        &schema,
+        &std::fs::read(case.join("spec.yaml")).unwrap(),
+    ))
+    .unwrap();
+    let bytes: Arc<[u8]> = std::fs::read(case.join("input/dm.csv")).unwrap().into();
+    let metadata = || Identity {
+        runtime: "python",
+        runtime_version: "test",
+        engine_version: "test",
+        example: "schema-lookup",
+        specification: "spec.yaml",
+        base_directory: ".",
+    };
+    for (cause, condition) in [
+        (ResourceFailure::Missing, "resource_path_missing"),
+        (
+            ResourceFailure::NotRegularFile,
+            "resource_path_not_regular_file",
+        ),
+    ] {
+        for fail_at in [0, 1] {
+            for cached in [false, true] {
+                let identity = Arc::new(());
+                let mut port = Port {
+                    bytes: Arc::clone(&bytes),
+                    calls: vec![],
+                    fail_at,
+                    reads: 0,
+                    cached,
+                    cause: Some(cause),
+                    identity: Arc::clone(&identity),
+                };
+                let mut attempt = run.execute_with_port(&mut port);
+                assert_eq!(
+                    port.calls,
+                    if fail_at == 0 {
+                        vec!["DM"]
+                    } else {
+                        vec!["DM", "AE"]
+                    }
+                );
+                let Err(PortError::Capture(error)) = &attempt.result else {
+                    panic!("capture failure missing")
+                };
+                assert!(Arc::ptr_eq(&identity, &error.identity));
+                if fail_at == 1 {
+                    assert!(attempt.sources[0].table.is_some());
+                }
+                let (dataset, path) = if fail_at == 0 {
+                    ("DM", "input/dm.csv")
+                } else {
+                    ("AE", "input/ae.csv")
+                };
+                let diagnostics = json!([{"phase":"validation","condition":condition,"requirement":"REQ-0785","spec_paths":[format!("input.{dataset}.path")],"context":{"dataset":dataset,"path":path}}]);
+                let mut reads = vec![];
+                if fail_at == 1 {
+                    reads.push(json!({"base_directory":".","path":"input/dm.csv","outcome":"captured","condition":null,"snapshots_created":usize::from(!cached)}));
+                }
+                reads.push(json!({"base_directory":".","path":path,"outcome":"failure","condition":condition,"snapshots_created":0}));
+                let expected = json!({"report_version":"0.3.0-draft","runtime":"python","backend":"rust","runtime_version":"test","engine_version":"test","example":"schema-lookup","outcome":"failure","artifacts":[],"diagnostics":diagnostics,"unsupported":[],"handler_counts":[],"nodes":[{"specification":"spec.yaml","outcome":"failure","diagnostics":diagnostics,"unsupported":[],"handler_counts":[]}],"tables":[],"verifications":[],"callbacks":[],"source_reads":reads,"error":null});
+                let result =
+                    specification_report::build_result(&run, &attempt, metadata()).unwrap();
+                assert_eq!(result.observations(), expected);
+                assert!(result.output().is_none());
+                assert!(matches!(
+                    result.save(&mut NoPublication),
+                    Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                ));
+                // Failed accounting and opaque host errors cannot borrow a known
+                // finding left in the source ledger to become semantic failures.
+                attempt.sources.last_mut().unwrap().read.snapshots_created = None;
+                assert!(specification_report::failure(&run, &attempt, metadata()).is_err());
+                attempt.sources.last_mut().unwrap().read.snapshots_created = Some(0);
+                attempt.sources.last_mut().unwrap().read.failure = None;
+                assert!(specification_report::failure(&run, &attempt, metadata()).is_err());
+            }
+        }
+    }
+    let identity = Arc::new(());
+    let mut port = Port {
+        bytes,
+        calls: vec![],
+        fail_at: 0,
+        reads: 0,
+        cached: false,
+        cause: None,
+        identity: Arc::clone(&identity),
+    };
+    let attempt = run.execute_with_port(&mut port);
+    let Err(PortError::Capture(error)) = &attempt.result else {
+        panic!("opaque failure missing")
+    };
+    assert!(Arc::ptr_eq(&identity, &error.identity));
+    assert_eq!(attempt.sources[0].read.failure, None);
+    assert!(specification_report::build_result(&run, &attempt, metadata()).is_err());
+}
+
+#[test]
+fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
+    use yamaa_adapters::{
+        specification_report::{self, Identity},
+        specification_run::{PreparedRun, SourcePort},
+        specification_source::{InheritancePort, Source},
+    };
+    use yamaa_core::resource::ResourceFailure;
+    use yamaa_engine::{
+        inheritance::{Source as FileIdentity, SourceError},
+        specification::SourceDeclaration,
+    };
+    struct Files {
+        parent: Vec<u8>,
+    }
+    impl InheritancePort for Files {
+        type Error = ();
+        fn canonicalize(
+            &mut self,
+            _: &str,
+            written: &str,
+        ) -> Result<FileIdentity, SourceError<()>> {
+            assert_eq!(written, "parent.yaml");
+            Ok(FileIdentity {
+                identity: written.into(),
+                display_path: written.into(),
+            })
+        }
+        fn capture(&mut self, _: &FileIdentity, _: usize) -> Result<Vec<u8>, SourceError<()>> {
+            Ok(self.parent.clone())
+        }
+        fn rebase(
+            &mut self,
+            layer: &FileIdentity,
+            _: &FileIdentity,
+            written: &str,
+            _: usize,
+        ) -> Result<String, ()> {
+            Ok(if layer.identity == "parent.yaml" {
+                format!("internal-location/{written}")
+            } else {
+                written.into()
+            })
+        }
+    }
+    struct Missing;
+    impl SourcePort for Missing {
+        type Error = ();
+        fn resource_failure(&self, _: &()) -> Option<ResourceFailure> {
+            Some(ResourceFailure::Missing)
+        }
+        fn capture_reads(&self) -> usize {
+            0
+        }
+        fn capture(&mut self, _: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+            Err(())
+        }
+    }
+    for declaration in [
+        "SRC: nested/data.csv",
+        "SRC: {path: nested/data.csv, types: {ID: int}}",
+    ] {
+        for child_path in [None, Some("child.csv")] {
+            let mut entry = String::from("schema_version: '1.0'\nparents: parent.yaml\ndomain: TEST\nkeys: [ID]\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: {source: SRC.ID}}]\n");
+            if let Some(path) = child_path {
+                entry.push_str(&format!("input: {{SRC: {{path: {path}}}}}\n"));
+            }
+            let parent = format!("schema_version: '1.0'\ninput: {{{declaration}}}\n");
+            let document = yamaa_adapters::shipped_schema::prepare(
+                Source {
+                    identity: "entry.yaml".into(),
+                    bytes: entry.into_bytes(),
+                },
+                "entry.yaml".into(),
+                &mut Files {
+                    parent: parent.into_bytes(),
+                },
+            )
+            .unwrap();
+            let written = child_path.unwrap_or("nested/data.csv");
+            assert_eq!(document.written_source_path("SRC"), Some(written));
+            assert_eq!(document.written_source_path("ABSENT"), None);
+            let run = PreparedRun::prepare(document).unwrap();
+            if child_path.is_none() {
+                assert_eq!(run.source().path, "internal-location/nested/data.csv");
+            }
+            let attempt = run.execute_with_port(&mut Missing);
+            let report = specification_report::failure(
+                &run,
+                &attempt,
+                Identity {
+                    runtime: "r",
+                    runtime_version: "test",
+                    engine_version: "test",
+                    example: "inheritance",
+                    specification: "entry.yaml",
+                    base_directory: ".",
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                report["diagnostics"],
+                serde_json::json!([{"phase":"validation","condition":"resource_path_missing","requirement":"REQ-0785","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":written}}])
+            );
+        }
+    }
+}

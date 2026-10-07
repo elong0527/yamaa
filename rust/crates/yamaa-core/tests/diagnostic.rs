@@ -20,7 +20,7 @@ impl NumericResolver for Bindings {
     }
 }
 
-/// Every registry entry must be reached by the real evaluator/converter. Expected
+/// Every registry entry must be reached by its evaluator, converter or resource cause. Expected
 /// vocabulary is independent literal truth, not copied from the registry at runtime.
 #[test]
 fn every_registered_cause_is_reached_with_its_normative_mapping() {
@@ -96,6 +96,38 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         assert_eq!(diagnostic.spec_paths, ["columns.X"]);
         assert_eq!(diagnostic.source_span, None);
         assert_eq!(diagnostic.operand_route, None);
+        reached.insert(diagnostic.code);
+    }
+    for (cause, condition) in [
+        (
+            yamaa_core::resource::ResourceFailure::Missing,
+            "resource_path_missing",
+        ),
+        (
+            yamaa_core::resource::ResourceFailure::NotRegularFile,
+            "resource_path_not_regular_file",
+        ),
+    ] {
+        let diagnostic = cause.diagnostic("SRC", "input/data.csv");
+        let definition = diagnostic.definition();
+        assert_eq!(
+            (
+                definition.phase,
+                definition.condition,
+                definition.requirement
+            ),
+            ("validation", condition, "REQ-0785")
+        );
+        assert_eq!(diagnostic.spec_paths, ["input.SRC.path"]);
+        assert_eq!(
+            diagnostic.context["dataset"],
+            ContextValue::Scalar(Value::Str("SRC".into()))
+        );
+        assert_eq!(
+            diagnostic.context["path"],
+            ContextValue::Scalar(Value::Str("input/data.csv".into()))
+        );
+        assert_eq!(diagnostic.context.len(), 2);
         reached.insert(diagnostic.code);
     }
     assert_eq!(reached, CONDITIONS.iter().copied().collect());

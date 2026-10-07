@@ -1,5 +1,5 @@
 //! Format observed bounded standalone runs and publish through explicit host authority.
-//! Capture-error mapping and full language coverage remain separate integration work.
+//! Classified resource findings retain observations; opaque host failures stay opaque.
 use crate::{
     scalar_transport::ScalarValue,
     specification_diagnostics,
@@ -90,14 +90,38 @@ fn condition(run: &PreparedRun, value: &Value) -> Result<Value, Error> {
         json!({"phase":diagnostic["phase"],"condition":diagnostic["condition"],"requirement":diagnostic["requirement"],"spec_paths":diagnostic["spec_paths"],"context":context}),
     )
 }
-/// The admitted subset has no expression callbacks, handlers or parent nodes.
+/// A classified capture failure terminates the request sequence. Reject malformed
+/// observations rather than attaching a resource finding to an unrelated failure.
+fn captured_failure<E>(
+    attempt: &CapturedAttempt<E>,
+) -> Result<&crate::specification_run::CapturedSource, Error> {
+    if !matches!(attempt.result, Err(PortError::Capture(_))) {
+        return Err(Error::UnsupportedOutcome);
+    }
+    let (last, prefix) = attempt
+        .sources
+        .split_last()
+        .ok_or(Error::InvalidObservation)?;
+    if last.read.captured
+        || last.read.failure.is_none()
+        || last.snapshot.is_some()
+        || last.table.is_some()
+        || prefix
+            .iter()
+            .any(|s| !s.read.captured || s.read.failure.is_some())
+    {
+        return Err(Error::UnsupportedOutcome);
+    }
+    Ok(last)
+}
+
 /// Refuse outcomes outside this formatter instead of inventing observations.
 pub fn failure<E>(
     run: &PreparedRun,
     attempt: &CapturedAttempt<E>,
     id: Identity<'_>,
 ) -> Result<Value, Error> {
-    if attempt.sources.is_empty() || attempt.sources.iter().any(|source| !source.read.captured) {
+    if attempt.sources.is_empty() {
         return Err(Error::UnsupportedOutcome);
     }
     let mut verifications = Vec::new();
@@ -126,6 +150,20 @@ pub fn failure<E>(
         Err(PortError::Run(error)) => {
             specification_diagnostics::findings(error, Some(run.source()))
                 .ok_or(Error::UnsupportedOutcome)?
+        }
+        Err(PortError::Capture(_)) => {
+            let source = captured_failure(attempt)?;
+            let written = run
+                .document()
+                .written_source_path(&source.read.source.name)
+                .ok_or(Error::InvalidObservation)?;
+            let diagnostic: crate::numeric_transport::Diagnostic = source
+                .read
+                .failure
+                .ok_or(Error::InvalidObservation)?
+                .diagnostic(&source.read.source.name, written)
+                .into();
+            vec![condition(run, &json!({"diagnostic":diagnostic}))?]
         }
         _ => return Err(Error::UnsupportedOutcome),
     };
@@ -180,8 +218,17 @@ fn envelope<E>(
     attempt: &CapturedAttempt<E>,
     id: &Identity<'_>,
 ) -> Result<Value, Error> {
-    if attempt.sources.is_empty() || attempt.sources.iter().any(|source| !source.read.captured) {
+    if attempt.sources.is_empty() {
         return Err(Error::UnsupportedOutcome);
+    }
+    if attempt.sources.iter().any(|source| !source.read.captured) {
+        captured_failure(attempt)?;
+    } else if attempt
+        .sources
+        .iter()
+        .any(|source| source.read.failure.is_some())
+    {
+        return Err(Error::InvalidObservation);
     }
     let mut tables = Vec::new();
     if attempt.sources.iter().all(|source| source.table.is_some()) {
@@ -194,7 +241,7 @@ fn envelope<E>(
             )?);
         }
     }
-    let reads = attempt.sources.iter().map(|source| Ok(json!({"base_directory":id.base_directory,"path":source.read.source.path,"outcome":"captured","condition":null,"snapshots_created":source.read.snapshots_created.ok_or(Error::InvalidObservation)?}))).collect::<Result<Vec<_>,Error>>()?;
+    let reads = attempt.sources.iter().map(|source| Ok(json!({"base_directory":id.base_directory,"path":source.read.source.path,"outcome":if source.read.captured {"captured"} else {"failure"},"condition":source.read.failure.map(|failure| failure.code().definition().condition),"snapshots_created":source.read.snapshots_created.ok_or(Error::InvalidObservation)?}))).collect::<Result<Vec<_>,Error>>()?;
     Ok(
         json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,
         "outcome":"failure","artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],
