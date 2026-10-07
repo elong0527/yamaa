@@ -126,8 +126,8 @@ typed table: optional UTF-8 strings, signed INT64, DOUBLE, date INT32 and
 timezone-free microsecond timestamps. It preserves column projection, record
 order, missing values, empty strings, full-range integers and finite float bits.
 Files are uncompressed and have no key/value metadata. The private build/save
-path selects the encoder from the declared output extension; input Parquet is
-still explicitly Unsupported before study-data capture.
+path selects the encoder from the declared output extension; Parquet input uses
+the held decoder described in [PARQUET_SOURCE.md](PARQUET_SOURCE.md).
 
 Resource policy limits projected columns/cells, schema construction, per-column
 staging in groups of at most 1,024 rows, and encoded output bytes. Charges precede
@@ -154,7 +154,7 @@ codelist resources, with resolved paths and declaring-file provenance. Current
 source bridges retain their existing path behavior; the #1751 target resolves
 each path relative to its declaring file without an approved-root boundary.
 
-Parquet decoding, general publication/save policy, environment
+Production Parquet file ports, general publication/save policy, environment
 activation, shared reusable test fakes, and consolidation of the two function
 interfaces remain open. The existing inheritance JSON callback bridge also
 remains to be replaced. No new unimplemented port is presented as a working
