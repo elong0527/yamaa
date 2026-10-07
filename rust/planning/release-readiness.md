@@ -67,7 +67,11 @@ API test. Windows R, macOS x86_64, Linux arm64, musl, other Python implementatio
 R binary distributions and untested versions have no release promise yet. They
 are **undecided/unqualified**, not silently approved exclusions.
 
-The current native R CI job runs build/install and scripts, not `R CMD check`.
+The native R CI job now runs `R CMD check --no-manual` on Linux and macOS in
+addition to build/install and the separately recorded supplemental scripts. It
+requires `Status: OK` and retains check/install/test logs plus the source revision.
+This checks the prototype package and does not establish the final API or a PDF
+manual qualification. Final-revision hosted evidence remains required.
 A local follow-up checked the downloaded macOS source archive from
 [run 37609435827](https://github.com/elong0527/yamaa/actions/runs/37609435827),
 the final #1772 qualification run. `R CMD check --no-manual` on R 4.6.1, macOS
@@ -76,8 +80,22 @@ It reported one portability NOTE: the packaged Rust fixture paths ending in
 `specifications/negative-integer-overflow.json` and
 `specifications/schema-window-functions.json` exceed 100 archive-path bytes.
 This local result does not qualify other systems, a PDF manual or the final API,
-and the path note has no approved waiver. B15 remains open for CI checks across
-the chosen matrix and an explicit disposition of packaging findings.
+and the note was not waived: the Rust fixture directory was shortened to
+`specs/`, preserving all nine fixture files byte-for-byte. A local check of the
+updated source archive passes with `Status: OK`, including all 17 scripts. B15
+remains open for hosted evidence across the chosen matrix and final-package
+qualification.
+The first hosted package-check run also reported `abort` from the generated Rust
+static archive on both platforms, with all 17 scripts passing. Package-local
+Rust build intermediates now receive post-link cleanup, following
+[rextendr's packaging fix](https://github.com/extendr/rextendr/pull/419).
+The check remains enabled and still requires `Status: OK`. This scopes R's
+object-symbol inspection consistently with upstream Rust/R packaging; it does
+not remove Rust's standard-library abort path or prove recovery from allocation
+failure, double panic or every native fault. B16 remains open. Earlier local
+checks used an external Cargo target directory, so they did not reproduce the
+archive-symbol finding; final qualification must also exercise the default
+package-local target layout.
 Release scope must either add the appropriate checks or record an explicit
 approved exclusion. Package versions in the audited evidence are Python host
 0.2.0, native Python/R 0.1.0 and core 0.1.0; none constitutes the final combined

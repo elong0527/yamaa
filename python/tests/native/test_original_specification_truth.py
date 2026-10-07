@@ -33,9 +33,7 @@ def test_authored_reports_match_reference_without_native_execution(name, tmp_pat
     )
     expected = json.loads(
         (
-            ROOT
-            / "rust/crates/yamaa-adapters/tests/fixtures/specifications"
-            / (name + ".json")
+            ROOT / "rust/crates/yamaa-adapters/tests/fixtures/specs" / (name + ".json")
         ).read_text()
     )
     for field in ("runtime", "backend", "runtime_version", "engine_version"):
@@ -70,9 +68,7 @@ def test_reference_observer_retains_checks_before_late_declaration_failure(
     )
     expected = json.loads(
         (
-            ROOT
-            / "rust/crates/yamaa-adapters/tests/fixtures/specifications"
-            / (name + ".json")
+            ROOT / "rust/crates/yamaa-adapters/tests/fixtures/specs" / (name + ".json")
         ).read_text()
     )
     for field in ("runtime", "backend", "runtime_version", "engine_version"):
@@ -150,9 +146,7 @@ def test_reference_sum_checks_values_after_missing_exclusion(all_missing, tmp_pa
     )
     expected = json.loads(
         (
-            ROOT
-            / "rust/crates/yamaa-adapters/tests/fixtures/specifications"
-            / (name + ".json")
+            ROOT / "rust/crates/yamaa-adapters/tests/fixtures/specs" / (name + ".json")
         ).read_text()
     )
     for field in ("runtime", "backend", "runtime_version", "engine_version"):
@@ -323,7 +317,7 @@ def test_reference_row_default_scope_and_preflight_order(variant, tmp_path):
         truth = json.loads(
             (
                 ROOT
-                / "rust/crates/yamaa-adapters/tests/fixtures/specifications"
+                / "rust/crates/yamaa-adapters/tests/fixtures/specs"
                 / (name + ".json")
             ).read_text()
         )
@@ -443,8 +437,7 @@ def test_lookup_collects_ingestion_findings_in_source_order(tmp_path):
 
 LOOKUP_FAILURES = json.loads(
     (
-        ROOT
-        / "rust/crates/yamaa-adapters/tests/fixtures/specifications/lookup-failures.json"
+        ROOT / "rust/crates/yamaa-adapters/tests/fixtures/specs/lookup-failures.json"
     ).read_text()
 )
 
@@ -463,8 +456,7 @@ def test_authored_lookup_failures_match_independent_reference(variant, tmp_path)
     ).model_dump(mode="json")
     expected = json.loads(
         (
-            ROOT
-            / "rust/crates/yamaa-adapters/tests/fixtures/specifications/schema-lookup.json"
+            ROOT / "rust/crates/yamaa-adapters/tests/fixtures/specs/schema-lookup.json"
         ).read_text()
     )
     for field in ("runtime", "backend", "runtime_version", "engine_version"):
@@ -481,8 +473,7 @@ def test_authored_lookup_failures_match_independent_reference(variant, tmp_path)
 
 WINDOW_FAILURES = json.loads(
     (
-        ROOT
-        / "rust/crates/yamaa-adapters/tests/fixtures/specifications/window-failures.json"
+        ROOT / "rust/crates/yamaa-adapters/tests/fixtures/specs/window-failures.json"
     ).read_text()
 )
 
@@ -507,7 +498,7 @@ def test_authored_window_failures_match_independent_reference(variant, tmp_path)
     expected = json.loads(
         (
             ROOT
-            / "rust/crates/yamaa-adapters/tests/fixtures/specifications/schema-window-functions.json"
+            / "rust/crates/yamaa-adapters/tests/fixtures/specs/schema-window-functions.json"
         ).read_text()
     )
     for field in ("runtime", "backend", "runtime_version", "engine_version"):

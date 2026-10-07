@@ -7,12 +7,14 @@ on:
     paths:
       - 'python/**'
       - 'benchmarks/**'
+      - 'rust/crates/yamaa-adapters/tests/fixtures/**'
       - 'yaml/**'
       - '.github/workflows/python.yml'
   pull_request:
     paths:
       - 'python/**'
       - 'benchmarks/**'
+      - 'rust/crates/yamaa-adapters/tests/fixtures/**'
       - 'yaml/**'
       - '.github/workflows/python.yml'
 

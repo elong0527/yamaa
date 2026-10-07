@@ -2,15 +2,20 @@ CARGO_TARGET_DIR = $(CURDIR)/rust/target
 RUST_LIB = $(CARGO_TARGET_DIR)/release/libyamaa_r.a
 PKG_LIBS = $(RUST_LIB)
 
-all: $(SHLIB)
+all: $(SHLIB) rust_clean
 
 $(SHLIB): $(RUST_LIB)
 
 $(RUST_LIB): FORCE
 	cd rust && CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" cargo build --release -p yamaa-r
 
-.PHONY: clean FORCE
+.PHONY: clean rust_clean FORCE
 FORCE:
+
+# Release build intermediates are not package objects. Match rextendr's
+# post-link cleanup; keep external developer target caches outside this tree.
+rust_clean: $(SHLIB)
+	rm -rf rust/target
 
 clean:
 	rm -rf rust/target
