@@ -1,14 +1,13 @@
 //! Complete held-container read, followed by closed-profile admission.
 //! No filesystem reads, semantic fallback, publication or host date conversion.
-//! WIP: the Arrow read below validates UTF-8 too early for multi-fault inputs.
-//! Replace that stage with opaque physical values before exposing this reader.
-use super::{compact, compression, expansion, framing, metadata, profile};
-use arrow_array::{Array, Date32Array, RecordBatch, TimestampMicrosecondArray};
+use super::{compact, compression, expansion, framing, metadata, physical, profile};
+use arrow_array::{
+    ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, RecordBatch, StringArray,
+    TimestampMicrosecondArray,
+};
 use arrow_schema::DataType;
 use parquet::{
-    arrow::arrow_reader::{
-        ArrowReaderMetadata, ArrowReaderOptions, ParquetRecordBatchReaderBuilder,
-    },
+    arrow::arrow_reader::{ArrowReaderMetadata, ArrowReaderOptions},
     file::metadata::ParquetMetaDataReader,
 };
 use std::sync::Arc;
@@ -54,48 +53,6 @@ pub(super) struct Decoded {
     pub batches: Vec<RecordBatch>,
 }
 
-// An embedded Arrow hint can request fixed-size padding even where the physical
-// file stores a single null level. Bound its conservative shape before decoding.
-fn multiplier(kind: &DataType, limit: usize) -> Result<usize, Error> {
-    let value = match kind {
-        DataType::FixedSizeList(field, length) => {
-            let count = usize::try_from(*length).map_err(|_| Error::Malformed)?;
-            multiplier(field.data_type(), limit)?
-                .checked_mul(count.max(1))
-                .ok_or(Error::Limit)?
-        }
-        DataType::List(field)
-        | DataType::LargeList(field)
-        | DataType::ListView(field)
-        | DataType::LargeListView(field)
-        | DataType::Map(field, _) => multiplier(field.data_type(), limit)?,
-        DataType::Struct(fields) => fields
-            .iter()
-            .try_fold(0usize, |total, field| {
-                total
-                    .checked_add(multiplier(field.data_type(), limit)?)
-                    .ok_or(Error::Limit)
-            })?
-            .max(1),
-        DataType::Union(fields, _) => fields
-            .iter()
-            .try_fold(0usize, |total, (_, field)| {
-                total
-                    .checked_add(multiplier(field.data_type(), limit)?)
-                    .ok_or(Error::Limit)
-            })?
-            .max(1),
-        DataType::Dictionary(_, value) => multiplier(value, limit)?,
-        DataType::RunEndEncoded(_, value) => multiplier(value.data_type(), limit)?,
-        _ => 1,
-    };
-    if value > limit {
-        Err(Error::Limit)
-    } else {
-        Ok(value)
-    }
-}
-
 pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
     let frame = framing::admit(bytes, limits.framing)?;
     let metadata = Arc::new(
@@ -122,105 +79,119 @@ pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
         usize::try_from(metadata.file_metadata().num_rows()).map_err(|_| Error::Malformed)?;
     let arrow = ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
         .map_err(|_| Error::Malformed)?;
-    // This is deliberately conservative admission, separate from data/profile
-    // validity. It includes padding multipliers before any hinted array exists.
-    let base = row_count.max(actual_values);
-    for field in arrow.schema().fields() {
-        let multiplier = multiplier(field.data_type(), limits.array_elements)?;
-        if base
-            .checked_mul(multiplier)
-            .is_none_or(|v| v > limits.array_elements)
-        {
-            return Err(Error::Limit);
-        }
+    if actual_values > limits.array_elements
+        || row_count
+            .checked_mul(columns.len())
+            .is_none_or(|n| n > limits.array_elements)
+    {
+        return Err(Error::Limit);
     }
-    let schema = arrow.schema().clone();
-    let input = bytes::Bytes::copy_from_slice(bytes);
-    let reader = ParquetRecordBatchReaderBuilder::new_with_metadata(input, arrow)
-        .with_batch_size(256)
-        .build()
-        .map_err(|_| Error::Malformed)?;
-    let mut batches = Vec::new();
-    let mut retained = 0usize;
-    let mut rows = 0usize;
-    for batch in reader {
-        let batch = batch.map_err(|_| Error::Malformed)?;
-        rows = rows
-            .checked_add(batch.num_rows())
-            .filter(|v| *v <= limits.framing.rows)
-            .ok_or(Error::Limit)?;
-        retained = retained
-            .checked_add(batch.get_array_memory_size())
-            .filter(|v| *v <= limits.retained_bytes)
-            .ok_or(Error::Limit)?;
-        if batches.len() >= limits.batches {
-            return Err(Error::Limit);
-        }
-        batches.push(batch);
-    }
-    if rows != row_count {
+    let arrow_schema = arrow.schema();
+    // Determine retention only. Profile errors remain deferred until every
+    // physical chunk has been decoded, including fields outside the profile.
+    let keep: Vec<_> = columns
+        .iter()
+        .enumerate()
+        .map(|(index, column)| {
+            arrow_schema.fields().len() == columns.len()
+                && arrow_schema.fields().get(index).is_some_and(|field| {
+                    column.max_rep_level() == 0
+                        && column.path().string() == *field.name()
+                        && profile::column_type(column, field.data_type()).is_some()
+                })
+        })
+        .collect();
+    let raw = physical::read(bytes, &keep, limits.retained_bytes)?;
+    let group_rows = metadata
+        .row_groups()
+        .iter()
+        .try_fold(0usize, |sum, group| {
+            sum.checked_add(usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?)
+                .ok_or(Error::Limit)
+        })?;
+    if group_rows != row_count {
         return Err(Error::Malformed);
     }
-    // All container data is read before any authored field/type finding.
-    let schema = profile::columns(&schema, metadata.file_metadata().schema_descr())
+    let schema = profile::columns(arrow_schema, metadata.file_metadata().schema_descr())
         .map_err(Error::Profile)?;
-    for (column, field) in schema.columns().iter().enumerate() {
-        if !matches!(field.kind, ColumnType::Date | ColumnType::DateTime) {
-            continue;
-        }
-        let mut start = 0;
-        for batch in &batches {
-            let array = batch.column(column);
-            for row in 0..array.len() {
-                if array.is_null(row) {
-                    continue;
+    for (field, column) in schema.columns().iter().zip(&raw) {
+        match (field.kind, column) {
+            (ColumnType::Date, physical::Column::Int32(values)) => {
+                for (row, value) in values.iter().enumerate() {
+                    if let Some(value) = value {
+                        profile::temporal(field.kind, i64::from(*value), &field.name, row + 1)
+                            .map_err(Error::Profile)?;
+                    }
                 }
-                let value = match field.kind {
-                    ColumnType::Date => i64::from(
-                        array
-                            .as_any()
-                            .downcast_ref::<Date32Array>()
-                            .ok_or(Error::Malformed)?
-                            .value(row),
-                    ),
-                    ColumnType::DateTime => array
-                        .as_any()
-                        .downcast_ref::<TimestampMicrosecondArray>()
-                        .ok_or(Error::Malformed)?
-                        .value(row),
-                    _ => unreachable!(),
-                };
-                profile::temporal(field.kind, value, &field.name, start + row + 1)
-                    .map_err(Error::Profile)?;
             }
-            start += batch.num_rows();
+            (ColumnType::DateTime, physical::Column::Int64(values)) => {
+                for (row, value) in values.iter().enumerate() {
+                    if let Some(value) = value {
+                        profile::temporal(field.kind, *value, &field.name, row + 1)
+                            .map_err(Error::Profile)?;
+                    }
+                }
+            }
+            _ => {}
         }
     }
-    Ok(Decoded { schema, batches })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn hinted_fixed_size_padding_is_bounded_before_array_allocation() {
-        use arrow_schema::Field;
-        let child = Arc::new(Field::new("item", DataType::Utf8, true));
-        let array = DataType::FixedSizeList(child.clone(), i32::MAX);
-        assert_eq!(multiplier(&array, 1024), Err(Error::Limit));
-        assert_eq!(
-            multiplier(&DataType::FixedSizeList(child, -1), 1024),
-            Err(Error::Malformed)
-        );
-        let array = DataType::FixedSizeList(
-            Arc::new(Field::new(
-                "item",
-                DataType::FixedSizeList(Arc::new(Field::new("inner", DataType::Int64, true)), 32),
-                true,
-            )),
-            32,
-        );
-        assert_eq!(multiplier(&array, 1024), Ok(1024));
-        assert_eq!(multiplier(&array, 1023), Err(Error::Limit));
+    // The reference validates text when constructing its typed table, after
+    // field and temporal findings. Never construct unchecked Arrow strings.
+    let mut arrays: Vec<ArrayRef> = Vec::new();
+    for (index, (field, column)) in schema.columns().iter().zip(raw).enumerate() {
+        let array: ArrayRef = match (field.kind, column) {
+            (ColumnType::Str, physical::Column::Bytes(values)) => {
+                let strings = values
+                    .iter()
+                    .map(|v| {
+                        v.as_ref()
+                            .map(|b| std::str::from_utf8(b.data()).map_err(|_| Error::Malformed))
+                            .transpose()
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                if matches!(arrow_schema.field(index).data_type(), DataType::LargeUtf8) {
+                    Arc::new(LargeStringArray::from(strings))
+                } else {
+                    Arc::new(StringArray::from(strings))
+                }
+            }
+            (ColumnType::Int, physical::Column::Int64(values)) => {
+                Arc::new(Int64Array::from(values))
+            }
+            (ColumnType::Float, physical::Column::Double(values)) => Arc::new(
+                Float64Array::from_iter(values.into_iter().map(|v| v.filter(|v| v.is_finite()))),
+            ),
+            (ColumnType::Date, physical::Column::Int32(values)) => {
+                Arc::new(Date32Array::from(values))
+            }
+            (ColumnType::DateTime, physical::Column::Int64(values)) => {
+                Arc::new(TimestampMicrosecondArray::from(values))
+            }
+            _ => return Err(Error::Malformed),
+        };
+        if array.len() != row_count {
+            return Err(Error::Malformed);
+        }
+        arrays.push(array);
     }
+    if limits.batches == 0 {
+        return Err(Error::Limit);
+    }
+    // Normalization can make a required stored float missing. The language's
+    // typed table admits missing values for every column, regardless of storage.
+    let output_schema = Arc::new(arrow_schema::Schema::new(
+        arrow_schema
+            .fields()
+            .iter()
+            .map(|field| arrow_schema::Field::new(field.name(), field.data_type().clone(), true))
+            .collect::<Vec<_>>(),
+    ));
+    let batch = RecordBatch::try_new(output_schema, arrays).map_err(|_| Error::Malformed)?;
+    if batch.get_array_memory_size() > limits.retained_bytes {
+        return Err(Error::Limit);
+    }
+    Ok(Decoded {
+        schema,
+        batches: vec![batch],
+    })
 }
