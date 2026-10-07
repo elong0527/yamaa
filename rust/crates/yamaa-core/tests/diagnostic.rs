@@ -133,6 +133,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         reached.insert(diagnostic.code);
     }
     reached.extend(preflight::reached());
+    reached.extend(preflight::output_reached());
     assert_eq!(reached, CONDITIONS.iter().copied().collect());
     assert_eq!(
         CONDITIONS.len(),
