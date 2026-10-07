@@ -219,6 +219,7 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    Literal(crate::value::Value),
     Window(alloc::boxed::Box<windows::Declaration>),
     Source(String),
     Compute(CompiledNumeric),
@@ -246,6 +247,29 @@ pub struct PreparedSpecification {
     declarations: Vec<Declaration>,
     rows: Option<rows::Rows>,
     verifications: verifications::Verifications,
+}
+
+/// Read an admitted scalar leaf once; rows and columns share the same boundary.
+fn literal(d: &Document, id: usize, path: &str) -> Result<crate::value::Value, PrepareError> {
+    use crate::value::Value;
+    Ok(match &d.nodes()[id] {
+        N::Null => Value::Missing,
+        N::Text(value) => Value::Str(value.clone()),
+        N::Boolean(value) => Value::Bool(*value),
+        N::Float(value) => Value::float(*value),
+        N::Integer(value) => Value::Int(value.parse().map_err(|_| {
+            PrepareError::Unsupported(vec![UnsupportedFeature {
+                operation: "wide_integer_literal".into(),
+                path: path.into(),
+            }])
+        })?),
+        _ => {
+            return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
+                operation: "literal".into(),
+                path: path.into(),
+            }]))
+        }
+    })
 }
 
 fn text(d: &Document, id: usize) -> Result<&str, PrepareError> {
@@ -835,6 +859,7 @@ impl PreparedSpecification {
             let op = text(d, op)?;
             let path = format!("{prefix}.derivation.{op}");
             let operation = match op {
+                "literal" => Some(Operation::Literal(literal(d, payload, &path)?)),
                 "source" => {
                     // The expression payload is admitted by captured schema, not the model.
                     for &(name, _) in mapping(d, payload)? {
@@ -1081,6 +1106,7 @@ impl PreparedSpecification {
                 Ok(binding)
             };
             let expression = match &declaration.operation {
+                Operation::Literal(value) => Some(Expression::Literal(value.clone())),
                 Operation::Window(window) => window
                     .bind(&catalog, &mut edges, &mut findings)?
                     .map(Expression::Window),

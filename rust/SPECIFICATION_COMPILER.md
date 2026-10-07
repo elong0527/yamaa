@@ -6,15 +6,24 @@ normalizes and validates them in Rust, and retains schema snapshots, source byte
 and occurrence origins. Installed Python and R use the same owned representation.
 Neither host supplies a semantic model, normalized document or typed dataset plan.
 
-The admitted execution subset is one CSV driver with optional declared source
-types, implicit key grain with checked numeric computations, or a closed set of
-record/group templates with source/literal derivations and ordered SUM. The
-original `adam-adlb-ordered-sum` document keeps its column and row phases and
-executes all 17 rows. Non-output helper columns remain in the internal dataset.
-Source ordinals, row-output dependencies, metadata, handlers, lookups, windows and
-inheritance still require later slices and are explicitly rejected before study
-reads. Transcendental math remains unsupported; this slice makes no #1740
-numerical-policy choice.
+The admitted subset includes CSV/Parquet source profiles, optional declared CSV
+types, input-backed named selections, implicit key grain with source/scalar-literal
+columns, checked numeric computations and output windows, and closed record/group
+templates with source/literal derivations and ordered SUM. The six original
+cohort documents pass private installed entry points in both hosts, including
+lookup, full output windows and inherited preparation. Non-output helper columns
+remain in the internal dataset. Source ordinals, row-output dependencies,
+governed submission metadata, handlers and broader expressions remain explicit
+Unsupported outcomes before study reads. Transcendental math remains unsupported;
+this slice makes no #1740 numerical-policy choice.
+
+Original column literals use the same admitted scalar leaf reader as row literals
+and lower to the existing core `Expression::Literal`. Conversion runs at the
+existing column boundary, preserving bool/type errors, full i64 values, temporal
+conversion, missing and present empty text. Four independent complete reports pin
+successful exact CSV and three conversion failures through retained build/save
+results. Arbitrary-width integers remain Unsupported before source effects;
+recursive expressions and conversion handlers are not added here.
 
 Preparation scans unsupported vocabulary before study capture. Typed CSV admission
 then precedes formula diagnostics and source-schema binding. Numeric execution
@@ -29,7 +38,8 @@ Output declaration findings occur after successful checks. Shared projection and
 bounded R020 CSV rendering preserve exact integers, shortest positional floats,
 quoted empty text versus missing, UTF-8, quoting and LF record endings. Complete
 CSV bytes and the bounded report are prepared before the host publication call.
-Parquet publication and decimal formatting remain unsupported at this entry point.
+Bounded Parquet publication uses the existing closed profile; decimal formatting
+remains unsupported at this entry point.
 Row-local source/literal column defaults are inherited per template, with overrides
 retaining their own paths. Coverage errors, conflicting root filters and aggregate
 default conflicts fail before source capture. Grouping fields and scalar group
@@ -48,7 +58,8 @@ A source port owns filesystem authorization, immutable capture, cache policy and
 verification. Rust supplies the declared name/path and byte ceiling; ports must
 bound reads before allocating a reply. The compiler defensively checks bytes and
 table shape again, creates an owned lossless Arrow snapshot and binds its schema.
-The CSV profile preserves undeclared text/missing values without host inference.
+Core CSV profile admission preserves undeclared text/missing values without host
+inference; the adapter owns physical Arrow representation.
 Declared types use shared scalar conversion in stored row/field order, retaining
 full-range integers, float bits and temporal precision.
 
