@@ -27,5 +27,9 @@ any data is read and no artifact is accepted.
 Use the declared analysis start date in the condition:
 
 ```yaml
-when: "ASTDT >= DATE '2025-01-01'"
+derivation:
+  flag:
+    condition: "ASTDT >= DATE '2025-01-01'"
+    false_value: "N"
+    missing: "N"
 ```

@@ -26,5 +26,9 @@ rejected before any data is read and no artifact is accepted.
 Declare the constant as a date so both operands carry the same temporal type:
 
 ```yaml
-when: "ASTDT >= DATE '2025-01-01'"
+derivation:
+  flag:
+    condition: "ASTDT >= DATE '2025-01-01'"
+    false_value: "N"
+    missing: "N"
 ```
