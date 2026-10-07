@@ -101,7 +101,7 @@ mod tests {
     use super::*;
     #[test]
     fn v1_level_lengths_are_checked_before_slicing_encoded_values() {
-        assert_eq!(levels(&[], 0, -1, usize::MAX).unwrap(), []);
+        assert!(levels(&[], 0, -1, usize::MAX).unwrap().is_empty());
         assert_eq!(levels(&[1, 0, 0, 0, 7, 42], 1, 3, 2).unwrap(), [42]);
         assert!(matches!(
             levels(&[255, 255, 255, 255], 1, 3, 1),
