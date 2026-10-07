@@ -2,8 +2,9 @@
 
 This is the finite blocker register for [#1742](https://github.com/elong0527/yamaa/issues/1742).
 It records evidence and decisions still needed, not approval to release or switch
-backends. The merged evidence baseline is #1771, main
-`e6b6f5bc1672c37021e3d4fe8309af4f15272016`. Pending PRs and local prototypes do not
+backends. The support matrix below records #1771 at
+`e6b6f5bc1672c37021e3d4fe8309af4f15272016`; the implementation order also records
+subsequent merged diagnostics through #1773. Pending PRs and local prototypes do not
 satisfy installed public-API gates. Follow [the delivery order](migration-order.md).
 
 ## Declared API inventory
@@ -101,7 +102,7 @@ numbers identify the implementation/test or decision owner.
 | B08 | Terminology and submission. | #1757, #1758 | Cross-source uniqueness and bound list verification; new define API and all three submission cases preserve independently expected fixed-time XML/JSON bytes before retiring old formats. |
 | B09 | Remaining language/compiler families. Component support is not full-language compilation. | #1585, #1752, #1754 | Qualify handlers, row-output dependencies, predicates/flags/first-available, correlated/keyed aggregates and lookups, full verification scopes, strings/regex/temporal/ODM and submission/value metadata from the executable inventory. |
 | B10 | Source/output codecs and filesystem publication. Original-document prototype is CSV-bounded; Parquet output is explicitly Unsupported. | #1755, #1585 | Exact CSV, logical Parquet/ordinal/type contracts, producer re-ingestion, non-regular/missing/changed resources, atomic publication and publication-failure behavior through actual file ports. |
-| B11 | Complete diagnostics and failure timing. Capture/source findings are progressing; five assisted-route mismatches remain explicit. | #1753, #1739 | Preserve normative phase, order, requirement, authored path/context and full source/check/handler ledgers; resolve all five known gaps against independent truth without masking them. |
+| B11 | Complete diagnostics and failure timing. #1772/#1773 merged captured schema and classified source findings; production file-port integration and five assisted-route mismatches remain open. | #1753, #1739 | Preserve normative phase, order, requirement, authored path/context and full source/check/handler ledgers; resolve all five known gaps against independent truth without masking them. |
 | B12 | Numerical policy and downstream bytes. #1740 now proposes one behavior per locked release, with no public policy/backend selector; the choice and production policy remain unratified. | #1740 | Ratified one-policy-per-release behavior, implementation in every affected scope, and reviewed disposition for every observable numerical/artifact difference. |
 | B13 | Transitive dependency reproducibility. Cargo.lock is ignored and omitted from the staged R source package. | #1742 | Approved no-content-hashing-compatible build process, clean independent resolution/build evidence and retained exact versions/features. Exact direct dependency pins alone do not settle this. |
 | B14 | Packaging checksum exceptions. Current AGENTS.md permits only python/uv.lock. | #1757, #1742 | Explicit approval before any additional lock/checksum exception; preserve held-byte resource comparison and prohibit runtime provenance digests. Study locks and Cargo reproducibility are distinct decisions. |

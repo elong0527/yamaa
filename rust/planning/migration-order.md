@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-07 against main `fd129d5ff14f0a9d74dffcdfad139fb9d192b804`
+Reconciled 2026-10-07 against main `2bfbc01ae414e0fc8fb6660c48e91947c6231e72`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -39,6 +39,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1770 | Package-owned shipped schema and automatic raw-document preparation. |
 | #1771 | Owned admitted build output and explicit save without recapture. |
 | #1772 | Portable captured schema, decode and inherited preparation findings. |
+| #1773 | Classified source-capture findings and owned failed-build reports. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -46,11 +47,11 @@ qualify the public domain/check facade or replace reference preparation in the
 conformance runner. The existing inventory still records all six as
 `reference_assisted_run`.
 
-The current delivery frontier is complete source-capture failure reports,
-declaring-file path rules, production file ports, and the bounded public facade
-and conformance frontend. Schema findings now retain standalone and inherited
-preparation context; source IO and complete failed-run reporting still require
-integration. The three public
+The current delivery frontier is reviewed declaring-file path rules, production
+file ports and resource preflight, and the bounded public facade and conformance
+frontend. Schema findings retain standalone and inherited preparation context;
+classified capture failures retain owned failed-build reports. Actual file-port
+integration and complete failure-family coverage remain required. The three public
 representation decisions below remain open. Do not substitute another round of
 component-only evidence for the remaining original-YAML frontend gates.
 
@@ -87,7 +88,7 @@ These tasks can be prepared between serial implementation PRs without holding up
 the non-transcendental cohort:
 
 - **#1740:** retain the existing numerical evidence and compatibility witnesses,
-  but reconcile the proposal with #1751's one numerical behavior per locked yamaa
+  and use the reconciled #1751 proposal: one numerical behavior per locked yamaa
   release. The old per-run selectable policy proposal is not the target public
   API. Record the maintainer's numerical choice before changing production
   behavior, then qualify it in both hosts and every affected compute context.
