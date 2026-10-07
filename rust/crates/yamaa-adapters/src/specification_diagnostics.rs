@@ -66,6 +66,31 @@ fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> 
 }
 fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Vec<Value>> {
     Some(match error {
+        BindFinding::QualifiedReference {path,name,row,finding} => {
+            use yamaa_core::reference_scope::Finding as F;
+            let (condition,requirement,context)=match finding {
+                F::RowGroup => ("ungrouped_driver_field",Some("REQ-0067"),json!({"identifier":name,"row":row,"dataset":source.name})),
+                F::ColumnGroup => ("ungrouped_driver_field",Some("REQ-0107"),json!({"identifier":name,"dataset":source.name})),
+                _ => return None,
+            };
+            vec![validation(condition,requirement,path.clone(),context)]
+        },
+        BindFinding::Aggregate{path,expression,error}=> {
+            use yamaa_core::aggregate_parser::GrammarFailure as A;
+            let mut context=json!({"expr":expression});
+            match error {
+                A::InvalidExpression => {},
+                A::ProhibitedConstruct {construct} => context["construct"]=json!(construct),
+                A::ProhibitedFunction {name,argument_count} => {
+                    context["function"]=json!(&expression[name.start..name.end]);
+                    if let Some(count)=argument_count {context["argument_count"]=json!(count);}
+                },
+                A::NestedReduction {outer,inner} => {
+                    context["outer"]=json!(outer.name());context["inner"]=json!(inner.name());
+                },
+            }
+            vec![validation(error.condition(),Some(error.requirement()),path.clone(),context)]
+        },
         BindFinding::Numeric{path,expression,error}=>vec![numeric(path,expression,error)?],
         BindFinding::QualifiedNumericReference{path,expression,identifier}=>vec![validation("qualified_identifier",Some("REQ-0442"),path.clone(),json!({"expr":expression,"identifier":identifier}))],
         BindFinding::UnknownReference{path,name}=>vec![validation("unknown_field",Some("REQ-0103"),path.clone(),json!({"identifier":name}))],
@@ -91,6 +116,58 @@ fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Ve
 }
 fn preparing(error: &PreflightFinding) -> Option<Value> {
     Some(match error {
+        PreflightFinding::UndeclaredRowColumn { index, column } => validation(
+            "undeclared_column",
+            None,
+            format!("rows[{index}].derivations.{column}"),
+            json!({"column":column}),
+        ),
+        PreflightFinding::DuplicateRowDefault { column, rows } => validation(
+            "duplicate_derivation",
+            Some("REQ-1260"),
+            format!("columns.{column}.derivation"),
+            json!({"column":column,"rows":rows}),
+        ),
+        PreflightFinding::MissingRowDerivation { column, rows } => validation(
+            "missing_derivation",
+            Some("REQ-0200"),
+            format!("columns.{column}.derivation"),
+            json!({"column":column,"rows":rows}),
+        ),
+        PreflightFinding::ConflictingRowConstruction => diagnostic(
+            "validation",
+            "conflicting_row_construction",
+            Some("REQ-1171"),
+            vec!["filter".into(), "rows".into()],
+            json!({}),
+        ),
+        PreflightFinding::InvalidGroup { index, row, groups } => validation(
+            "invalid_field_type",
+            Some("REQ-0065"),
+            format!("rows[{index}].group_by"),
+            json!({"row":row,"group_by":groups}),
+        ),
+        PreflightFinding::GroupReference {
+            index,
+            row,
+            name,
+            dataset,
+        } => validation(
+            "unknown_field",
+            Some("REQ-0066"),
+            format!("rows[{index}].group_by"),
+            json!({"row":row,"identifier":name,"dataset":dataset}),
+        ),
+        PreflightFinding::RowDriverUnavailable {
+            index,
+            row,
+            dataset,
+        } => validation(
+            "driver_unavailable",
+            None,
+            format!("rows[{index}].dataset"),
+            json!({"row":row,"dataset":dataset}),
+        ),
         PreflightFinding::MissingDerivation { column } => validation(
             "missing_derivation",
             Some("REQ-0198"),
@@ -127,6 +204,30 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
     match error {
         Error::Prepare(PrepareError::Invalid(errors)) => errors.iter().map(preparing).collect(),
         Error::Bind(error) => binding(error, source?),
+        Error::TypedSource(crate::typed_csv::Error::UnknownField { field }) => {
+            let source = source?;
+            Some(vec![validation(
+                "unknown_field",
+                Some("REQ-0532"),
+                format!("input.{}.types.{field}", source.name),
+                json!({"dataset":source.name,"field":field}),
+            )])
+        }
+        Error::TypedSource(crate::typed_csv::Error::FieldParse {
+            field,
+            target,
+            value,
+        }) => {
+            let source = source?;
+            Some(vec![diagnostic(
+                "ingest",
+                "field_parse_failed",
+                Some("REQ-0536"),
+                vec![format!("input.{}.types.{field}", source.name)],
+                json!({"dataset":source.name,"field":field,"type":type_name(*target),"value":value}),
+            )])
+        }
+
         Error::Source(TextTableError::Csv(
             error @ csv_source::Error::Profile {
                 condition,
@@ -172,6 +273,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
                 ..
             })) => ("ingest", "table_limit"),
             Error::Source(_) => ("ingest", "internal"),
+            Error::TypedSource(_) => ("ingest", "source_boundary"),
             Error::Bind(BindError::Catalog(_)) => ("bind", "reference_catalog"),
             Error::Bind(BindError::DependencyPolicy(_)) => ("bind", "dependency_policy"),
             Error::Bind(_) => ("bind", "internal"),
@@ -197,4 +299,15 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> String {
         Error::InheritanceRequired => "inheritance_required",
     };
     json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":code}}).to_string()
+}
+
+pub(crate) fn type_name(kind: yamaa_core::value::ColumnType) -> &'static str {
+    use yamaa_core::value::ColumnType::*;
+    match kind {
+        Str => "str",
+        Int => "int",
+        Float => "float",
+        Date => "date",
+        DateTime => "datetime",
+    }
 }

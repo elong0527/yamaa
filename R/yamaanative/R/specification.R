@@ -12,9 +12,9 @@
 #' Prepare a bounded original specification through shared Rust
 #'
 #' Raw schema modules and entry YAML are captured by value. The current compiler
-#' supports one untyped CSV driver with source/compute columns. Other semantics
-#' are explicitly rejected. This does not enable the default runtime or publish
-#' output artifacts. No R semantic model or Python process is used.
+#' supports one typed CSV driver, source/compute columns and a closed row/SUM
+#' slice. Other semantics are explicitly rejected. Preparation does not perform IO
+#' or change the default runtime. No R semantic model or Python process is used.
 #' @param modules Named list of raw YAML schema module snapshots.
 #' @param entry Name of the entry schema module.
 #' @param identity Identity of the original specification source.
@@ -70,6 +70,26 @@ specification_source <- function(handle) {
 #' @export
 specification_failure_report <- function(handle, capture, example,
     specification = "spec.yaml", base_directory = ".") {
+  .specification_observed_report(handle, capture, NULL, example, specification, base_directory)
+}
+
+#' Execute and publish a bounded original specification through shared Rust
+#' @param handle An owned prepared specification handle.
+#' @param capture A bounded source snapshot callback.
+#' @param publish Callback taking path and raw content. It owns authorization and
+#'   atomic replacement and returns only after all bytes have been published.
+#' @param example The report example identity.
+#' @param specification Relative specification identity.
+#' @param base_directory Relative source base identity.
+#' @return Portable report JSON; publication errors and interrupts are rethrown.
+#' @export
+specification_report <- function(handle, capture, publish, example,
+    specification = "spec.yaml", base_directory = ".") {
+  if (!is.function(publish)) stop("publish must be a function", call. = FALSE)
+  .specification_observed_report(handle, capture, publish, example, specification, base_directory)
+}
+
+.specification_observed_report <- function(handle, capture, publish, example, specification, base_directory) {
   if (!is.function(capture)) stop("capture must be a function", call. = FALSE)
   force(capture)
   failure <- NULL
@@ -90,7 +110,22 @@ specification_failure_report <- function(handle, capture, example,
   })
   metadata <- lapply(list(as.character(getRversion()), engine_info()$core_version,
                           example, specification, base_directory), .specification_text_bytes, maximum=4096)
-  result <- .Call(wrap__specification_failure_report, handle, dispatch, metadata)
+  if (is.null(publish)) {
+    result <- .Call(wrap__specification_failure_report, handle, dispatch, metadata)
+  } else {
+    force(publish)
+    publish_dispatch <- function(path, content) tryCatch({
+      publish(path, content)
+      TRUE
+    }, error = function(e) {
+      failure <<- e
+      FALSE
+    }, interrupt = function(e) {
+      failure <<- e
+      FALSE
+    })
+    result <- .Call(wrap__specification_report, handle, dispatch, publish_dispatch, metadata)
+  }
   if (!is.null(failure)) stop(failure)
   if (!is.null(result$error)) stop(result$error, call. = FALSE)
   result$value

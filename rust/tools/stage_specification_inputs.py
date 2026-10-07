@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-CASES = ("negative-zero-division", "negative-integer-overflow")
+CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum")
 # The current specification schema closure, not other standalone schema roots.
 # Missing/new includes fail shared bundle admission; no runtime parser is used here.
 SCHEMA_MODULES = (

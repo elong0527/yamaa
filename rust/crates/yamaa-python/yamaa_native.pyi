@@ -64,6 +64,12 @@ def decode_yaml(source: bytes) -> str:
 class _Specification:
     def source(self) -> tuple[str, str]: ...
     def execute_csv(self, source: bytes) -> tuple[bytes | None, str]: ...
+    def report(
+        self,
+        capture: Callable[[str, str, int], tuple[bytes, bool]],
+        publish: Callable[[str, bytes], None],
+        metadata: tuple[str, str, str, str, str],
+    ) -> str: ...
     def failure_report(
         self,
         capture: Callable[[str, str, int], tuple[bytes, bool]],

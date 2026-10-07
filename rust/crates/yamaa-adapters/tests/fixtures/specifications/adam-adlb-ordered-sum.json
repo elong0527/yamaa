@@ -1,0 +1,1025 @@
+{
+  "artifacts": [
+    {
+      "byte_length": 1030,
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "PARAMCD",
+        "PARAM",
+        "AVISIT",
+        "AVAL",
+        "DTYPE"
+      ],
+      "content": "STUDYID,USUBJID,PARAMCD,PARAM,AVISIT,AVAL,DTYPE\nYAMAA-01,YAMAA-01-101,COMP1,Component 1,WEEK 1,0.1,\nYAMAA-01,YAMAA-01-101,COMP2,Component 2,WEEK 1,0.2,\nYAMAA-01,YAMAA-01-101,COMP3,Component 3,WEEK 1,0.3,\nYAMAA-01,YAMAA-01-102,COMP3,Component 3,WEEK 1,0.3,\nYAMAA-01,YAMAA-01-102,COMP2,Component 2,WEEK 1,0.2,\nYAMAA-01,YAMAA-01-102,COMP1,Component 1,WEEK 1,0.1,\nYAMAA-01,YAMAA-01-103,COMP1,Component 1,WEEK 1,0.1,\nYAMAA-01,YAMAA-01-104,COMP1,Component 1,WEEK 1,0.1,\nYAMAA-01,YAMAA-01-104,COMP2,Component 2,WEEK 1,,\nYAMAA-01,YAMAA-01-104,COMP3,Component 3,WEEK 1,0.3,\nYAMAA-01,YAMAA-01-105,COMP1,Component 1,WEEK 1,,\nYAMAA-01,YAMAA-01-105,COMP2,Component 2,WEEK 1,,\nYAMAA-01,YAMAA-01-101,TOTAL,Total of Components,WEEK 1,0.6000000000000001,CALCULATION\nYAMAA-01,YAMAA-01-102,TOTAL,Total of Components,WEEK 1,0.6,CALCULATION\nYAMAA-01,YAMAA-01-103,TOTAL,Total of Components,WEEK 1,0.1,CALCULATION\nYAMAA-01,YAMAA-01-104,TOTAL,Total of Components,WEEK 1,0.4,CALCULATION\nYAMAA-01,YAMAA-01-105,TOTAL,Total of Components,WEEK 1,,CALCULATION\n",
+      "name": "adlb",
+      "profile": "csv",
+      "records": [
+        "STUDYID,USUBJID,PARAMCD,PARAM,AVISIT,AVAL,DTYPE",
+        "YAMAA-01,YAMAA-01-101,COMP1,Component 1,WEEK 1,0.1,",
+        "YAMAA-01,YAMAA-01-101,COMP2,Component 2,WEEK 1,0.2,",
+        "YAMAA-01,YAMAA-01-101,COMP3,Component 3,WEEK 1,0.3,",
+        "YAMAA-01,YAMAA-01-102,COMP3,Component 3,WEEK 1,0.3,",
+        "YAMAA-01,YAMAA-01-102,COMP2,Component 2,WEEK 1,0.2,",
+        "YAMAA-01,YAMAA-01-102,COMP1,Component 1,WEEK 1,0.1,",
+        "YAMAA-01,YAMAA-01-103,COMP1,Component 1,WEEK 1,0.1,",
+        "YAMAA-01,YAMAA-01-104,COMP1,Component 1,WEEK 1,0.1,",
+        "YAMAA-01,YAMAA-01-104,COMP2,Component 2,WEEK 1,,",
+        "YAMAA-01,YAMAA-01-104,COMP3,Component 3,WEEK 1,0.3,",
+        "YAMAA-01,YAMAA-01-105,COMP1,Component 1,WEEK 1,,",
+        "YAMAA-01,YAMAA-01-105,COMP2,Component 2,WEEK 1,,",
+        "YAMAA-01,YAMAA-01-101,TOTAL,Total of Components,WEEK 1,0.6000000000000001,CALCULATION",
+        "YAMAA-01,YAMAA-01-102,TOTAL,Total of Components,WEEK 1,0.6,CALCULATION",
+        "YAMAA-01,YAMAA-01-103,TOTAL,Total of Components,WEEK 1,0.1,CALCULATION",
+        "YAMAA-01,YAMAA-01-104,TOTAL,Total of Components,WEEK 1,0.4,CALCULATION",
+        "YAMAA-01,YAMAA-01-105,TOTAL,Total of Components,WEEK 1,,CALCULATION"
+      ],
+      "row_count": 17,
+      "types": [
+        "str",
+        "str",
+        "str",
+        "str",
+        "str",
+        "float",
+        "str"
+      ]
+    }
+  ],
+  "backend": "rust",
+  "callbacks": [],
+  "diagnostics": [],
+  "engine_version": "fixture-engine",
+  "error": null,
+  "example": "adam-adlb-ordered-sum",
+  "handler_counts": [],
+  "nodes": [
+    {
+      "diagnostics": [],
+      "handler_counts": [],
+      "outcome": "success",
+      "specification": "spec.yaml",
+      "unsupported": []
+    }
+  ],
+  "outcome": "success",
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "runtime_version": "fixture-runtime",
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "condition": null,
+      "outcome": "captured",
+      "path": "input/lb.csv",
+      "snapshots_created": 1
+    }
+  ],
+  "tables": [
+    {
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "LBSEQ",
+        "LBTESTCD",
+        "LBTEST",
+        "VISIT",
+        "LBSTRESN"
+      ],
+      "name": "LB",
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-101"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "COMP1"
+          },
+          {
+            "type": "str",
+            "value": "Component 1"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "float",
+            "value": "3fb999999999999a"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-101"
+          },
+          {
+            "type": "str",
+            "value": "2"
+          },
+          {
+            "type": "str",
+            "value": "COMP2"
+          },
+          {
+            "type": "str",
+            "value": "Component 2"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "float",
+            "value": "3fc999999999999a"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-101"
+          },
+          {
+            "type": "str",
+            "value": "3"
+          },
+          {
+            "type": "str",
+            "value": "COMP3"
+          },
+          {
+            "type": "str",
+            "value": "Component 3"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "float",
+            "value": "3fd3333333333333"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-102"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "COMP3"
+          },
+          {
+            "type": "str",
+            "value": "Component 3"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "float",
+            "value": "3fd3333333333333"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-102"
+          },
+          {
+            "type": "str",
+            "value": "2"
+          },
+          {
+            "type": "str",
+            "value": "COMP2"
+          },
+          {
+            "type": "str",
+            "value": "Component 2"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "float",
+            "value": "3fc999999999999a"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-102"
+          },
+          {
+            "type": "str",
+            "value": "3"
+          },
+          {
+            "type": "str",
+            "value": "COMP1"
+          },
+          {
+            "type": "str",
+            "value": "Component 1"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "float",
+            "value": "3fb999999999999a"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-103"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "COMP1"
+          },
+          {
+            "type": "str",
+            "value": "Component 1"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "float",
+            "value": "3fb999999999999a"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-104"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "COMP1"
+          },
+          {
+            "type": "str",
+            "value": "Component 1"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "float",
+            "value": "3fb999999999999a"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-104"
+          },
+          {
+            "type": "str",
+            "value": "2"
+          },
+          {
+            "type": "str",
+            "value": "COMP2"
+          },
+          {
+            "type": "str",
+            "value": "Component 2"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-104"
+          },
+          {
+            "type": "str",
+            "value": "3"
+          },
+          {
+            "type": "str",
+            "value": "COMP3"
+          },
+          {
+            "type": "str",
+            "value": "Component 3"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "float",
+            "value": "3fd3333333333333"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-105"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "COMP1"
+          },
+          {
+            "type": "str",
+            "value": "Component 1"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-105"
+          },
+          {
+            "type": "str",
+            "value": "2"
+          },
+          {
+            "type": "str",
+            "value": "COMP2"
+          },
+          {
+            "type": "str",
+            "value": "Component 2"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ]
+      ],
+      "specification": "spec.yaml",
+      "stage": "source",
+      "types": [
+        "str",
+        "str",
+        "str",
+        "str",
+        "str",
+        "str",
+        "float"
+      ]
+    },
+    {
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "AVISIT",
+        "PARAMCD",
+        "PARAM",
+        "AVAL",
+        "DTYPE"
+      ],
+      "name": "output",
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-101"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "COMP1"
+          },
+          {
+            "type": "str",
+            "value": "Component 1"
+          },
+          {
+            "type": "float",
+            "value": "3fb999999999999a"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-101"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "COMP2"
+          },
+          {
+            "type": "str",
+            "value": "Component 2"
+          },
+          {
+            "type": "float",
+            "value": "3fc999999999999a"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-101"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "COMP3"
+          },
+          {
+            "type": "str",
+            "value": "Component 3"
+          },
+          {
+            "type": "float",
+            "value": "3fd3333333333333"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-102"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "COMP3"
+          },
+          {
+            "type": "str",
+            "value": "Component 3"
+          },
+          {
+            "type": "float",
+            "value": "3fd3333333333333"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-102"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "COMP2"
+          },
+          {
+            "type": "str",
+            "value": "Component 2"
+          },
+          {
+            "type": "float",
+            "value": "3fc999999999999a"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-102"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "COMP1"
+          },
+          {
+            "type": "str",
+            "value": "Component 1"
+          },
+          {
+            "type": "float",
+            "value": "3fb999999999999a"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-103"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "COMP1"
+          },
+          {
+            "type": "str",
+            "value": "Component 1"
+          },
+          {
+            "type": "float",
+            "value": "3fb999999999999a"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-104"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "COMP1"
+          },
+          {
+            "type": "str",
+            "value": "Component 1"
+          },
+          {
+            "type": "float",
+            "value": "3fb999999999999a"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-104"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "COMP2"
+          },
+          {
+            "type": "str",
+            "value": "Component 2"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-104"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "COMP3"
+          },
+          {
+            "type": "str",
+            "value": "Component 3"
+          },
+          {
+            "type": "float",
+            "value": "3fd3333333333333"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-105"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "COMP1"
+          },
+          {
+            "type": "str",
+            "value": "Component 1"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-105"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "COMP2"
+          },
+          {
+            "type": "str",
+            "value": "Component 2"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-101"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "TOTAL"
+          },
+          {
+            "type": "str",
+            "value": "Total of Components"
+          },
+          {
+            "type": "float",
+            "value": "3fe3333333333334"
+          },
+          {
+            "type": "str",
+            "value": "CALCULATION"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-102"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "TOTAL"
+          },
+          {
+            "type": "str",
+            "value": "Total of Components"
+          },
+          {
+            "type": "float",
+            "value": "3fe3333333333333"
+          },
+          {
+            "type": "str",
+            "value": "CALCULATION"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-103"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "TOTAL"
+          },
+          {
+            "type": "str",
+            "value": "Total of Components"
+          },
+          {
+            "type": "float",
+            "value": "3fb999999999999a"
+          },
+          {
+            "type": "str",
+            "value": "CALCULATION"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-104"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "TOTAL"
+          },
+          {
+            "type": "str",
+            "value": "Total of Components"
+          },
+          {
+            "type": "float",
+            "value": "3fd999999999999a"
+          },
+          {
+            "type": "str",
+            "value": "CALCULATION"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-105"
+          },
+          {
+            "type": "str",
+            "value": "WEEK 1"
+          },
+          {
+            "type": "str",
+            "value": "TOTAL"
+          },
+          {
+            "type": "str",
+            "value": "Total of Components"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "str",
+            "value": "CALCULATION"
+          }
+        ]
+      ],
+      "specification": "spec.yaml",
+      "stage": "derived",
+      "types": [
+        "str",
+        "str",
+        "str",
+        "str",
+        "str",
+        "float",
+        "str"
+      ]
+    }
+  ],
+  "unsupported": [],
+  "verifications": [
+    {
+      "check": "unique",
+      "evaluated_count": 17,
+      "failure": null,
+      "requirement": "REQ-0381",
+      "severity": "error",
+      "spec_path": "verifications[0].unique",
+      "specification": "spec.yaml",
+      "target": null,
+      "verification_id": null
+    },
+    {
+      "check": "row_count",
+      "evaluated_count": 1,
+      "failure": null,
+      "requirement": "REQ-0385",
+      "severity": "error",
+      "spec_path": "verifications[1].row_count",
+      "specification": "spec.yaml",
+      "target": null,
+      "verification_id": null
+    }
+  ]
+}

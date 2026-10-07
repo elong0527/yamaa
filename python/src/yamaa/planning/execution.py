@@ -5297,6 +5297,24 @@ def plan_execution(
                 driver = next(iter(specification.input))
             if driver is None or driver not in bindings.datasets:
                 continue
+            # Group keys are source references too. Resolve them after ingestion
+            # so an unknown stored field is a planning diagnostic, not a later
+            # driver_groups KeyError (REQ-0103).
+            for position, variable in enumerate(row.group_by or ()):
+                _validate_qualified_reference(
+                    _Reference(
+                        variable,
+                        f"rows[{index}].group_by[{position}]",
+                        reach="declared",
+                    ),
+                    {driver},
+                    bindings,
+                    column_types,
+                    diagnostics,
+                    intermediates=intermediates,
+                    row=row,
+                    reference_compiler=reference_compiler,
+                )
             row_scope = _row_scope(specification, row, driver)
             grouped = row.group_by is not None
             filter_path = f"rows[{index}].filter" if row.filter is not None else None

@@ -1,5 +1,5 @@
-//! Format observed failed standalone runs without reading resources or executing
-//! semantics. Successful artifact publication and capture-error mapping are pending.
+//! Format observed bounded standalone runs and publish through explicit host authority.
+//! Capture-error mapping and full language coverage remain separate integration work.
 use crate::{
     scalar_transport::ScalarValue,
     specification_diagnostics,
@@ -69,8 +69,8 @@ fn condition(run: &PreparedRun, value: &Value) -> Result<Value, Error> {
         json!({"phase":diagnostic["phase"],"condition":diagnostic["condition"],"requirement":diagnostic["requirement"],"spec_paths":diagnostic["spec_paths"],"context":context}),
     )
 }
-/// The admitted subset contains no callbacks, handlers, verifications or parent
-/// nodes. Refuse outcomes outside this formatter instead of inventing observations.
+/// The admitted subset has no expression callbacks, handlers or parent nodes.
+/// Refuse outcomes outside this formatter instead of inventing observations.
 pub fn failure<E>(
     run: &PreparedRun,
     attempt: &CapturedAttempt<E>,
@@ -79,6 +79,7 @@ pub fn failure<E>(
     if !attempt.read.captured {
         return Err(Error::UnsupportedOutcome);
     }
+    let mut verifications = Vec::new();
     let diagnostics = match &attempt.result {
         Ok(response) => {
             if response.table.is_some() {
@@ -86,10 +87,20 @@ pub fn failure<E>(
             }
             let value: Value =
                 serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
-            if value["outcome"]["status"] != "condition" {
-                return Err(Error::UnsupportedOutcome);
+            match value["outcome"]["status"].as_str() {
+                Some("condition") => {
+                    if value["outcome"]["verifications"].is_array() {
+                        verifications = check_observations(run, &value["outcome"], &id)?.0;
+                    }
+                    vec![condition(run, &value["outcome"])?]
+                }
+                Some("failure") => {
+                    let (records, diagnostics) = check_observations(run, &value["outcome"], &id)?;
+                    verifications = records;
+                    diagnostics
+                }
+                _ => return Err(Error::UnsupportedOutcome),
             }
-            vec![condition(run, &value["outcome"])?]
         }
         Err(PortError::Run(error)) => {
             specification_diagnostics::findings(error, Some(run.source()))
@@ -97,38 +108,269 @@ pub fn failure<E>(
         }
         _ => return Err(Error::UnsupportedOutcome),
     };
+    let mut report = envelope(run, attempt, &id)?;
+    set_diagnostics(&mut report, diagnostics);
+    report["verifications"] = json!(verifications);
+    bounded(report)
+}
+fn table_observation<T: TableAccess>(
+    table: &T,
+    id: &Identity<'_>,
+    stage: &str,
+    name: &str,
+) -> Result<Value, Error> {
+    let columns = table.schema().columns();
+    let mut rows = Vec::new();
+    for row in 0..table.row_count() {
+        let mut cells = Vec::new();
+        for column in 0..columns.len() {
+            cells.push(
+                match table
+                    .cell(row, column)
+                    .map_err(|_| Error::InvalidObservation)?
+                {
+                    ValueRef::Str(value) => json!({"type":"str","value":value}),
+                    ValueRef::Missing => json!({"type":"missing","value":null}),
+                    ValueRef::Int(value) => json!({"type":"int","value":value.to_string()}),
+                    ValueRef::Float(value) => {
+                        json!({"type":"float","value":format!("{:016x}",value.get().to_bits())})
+                    }
+                    ValueRef::Bool(value) => json!({"type":"bool","value":value}),
+                    ValueRef::Date(value) => json!({"type":"date","value":value.to_string()}),
+                    ValueRef::DateTime(value) => {
+                        json!({"type":"datetime","value":value.to_string()})
+                    }
+                },
+            );
+        }
+        rows.push(cells);
+    }
+    Ok(
+        json!({"specification":id.specification,"stage":stage,"name":name,"columns":columns.iter().map(|c|&c.name).collect::<Vec<_>>(),"types":columns.iter().map(|c|specification_diagnostics::type_name(c.kind)).collect::<Vec<_>>(),"rows":rows}),
+    )
+}
+fn envelope<E>(
+    run: &PreparedRun,
+    attempt: &CapturedAttempt<E>,
+    id: &Identity<'_>,
+) -> Result<Value, Error> {
+    if !attempt.read.captured {
+        return Err(Error::UnsupportedOutcome);
+    }
     let mut tables = Vec::new();
     if let Some(table) = &attempt.table {
-        let columns = table.schema().columns();
-        let mut rows = Vec::new();
-        for row in 0..table.row_count() {
-            let mut cells = Vec::new();
-            for column in 0..columns.len() {
-                cells.push(
-                    match table
-                        .cell(row, column)
-                        .map_err(|_| Error::InvalidObservation)?
-                    {
-                        ValueRef::Str(value) => json!({"type":"str","value":value}),
-                        ValueRef::Missing => json!({"type":"missing","value":null}),
-                        _ => return Err(Error::InvalidObservation),
-                    },
-                );
-            }
-            rows.push(cells);
-        }
-        tables.push(json!({"specification":id.specification,"stage":"source","name":run.source().name,
-            "columns":columns.iter().map(|c| &c.name).collect::<Vec<_>>(),"types":vec!["str";columns.len()],"rows":rows}));
+        tables.push(table_observation(table, id, "source", &run.source().name)?);
     }
-    let report = json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,
-        "outcome":"failure","artifacts":[],"diagnostics":diagnostics,"unsupported":[],"handler_counts":[],
-        "nodes":[{"specification":id.specification,"outcome":"failure","diagnostics":diagnostics,"unsupported":[],"handler_counts":[]}],
+    Ok(
+        json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,
+        "outcome":"failure","artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],
+        "nodes":[{"specification":id.specification,"outcome":"failure","diagnostics":[],"unsupported":[],"handler_counts":[]}],
         "tables":tables,"verifications":[],"callbacks":[],
-        "source_reads":[{"base_directory":id.base_directory,"path":attempt.read.source.path,"outcome":"captured","condition":null,"snapshots_created":attempt.read.snapshots_created.ok_or(Error::InvalidObservation)?}],"error":null});
-    // Source rows/text already have fixed admission budgets; additionally refuse
-    // reports exceeding the host response budget rather than returning truncation.
+        "source_reads":[{"base_directory":id.base_directory,"path":attempt.read.source.path,"outcome":"captured","condition":null,"snapshots_created":attempt.read.snapshots_created.ok_or(Error::InvalidObservation)?}],"error":null}),
+    )
+}
+fn bounded(report: Value) -> Result<Value, Error> {
     if report.to_string().len() > 16_777_216 {
-        return Err(Error::OutputLimit);
+        Err(Error::OutputLimit)
+    } else {
+        Ok(report)
     }
+}
+fn set_diagnostics(report: &mut Value, diagnostics: Vec<Value>) {
+    report["diagnostics"] = json!(diagnostics);
+    report["nodes"][0]["diagnostics"] = report["diagnostics"].clone();
+}
+
+/// Explicit host authority for atomic output replacement. Implementations return
+/// success only after all supplied bytes have been published at the authorized path.
+pub trait ArtifactPort {
+    type Error;
+    fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), Self::Error>;
+}
+#[derive(Debug)]
+pub enum CompleteError<E> {
+    Report(Error),
+    Publish(E),
+}
+impl<E> From<Error> for CompleteError<E> {
+    fn from(error: Error) -> Self {
+        Self::Report(error)
+    }
+}
+fn count(record: &Value, name: &str) -> Result<usize, Error> {
+    record[name]
+        .as_str()
+        .and_then(|s| s.parse::<usize>().ok())
+        .ok_or(Error::InvalidObservation)
+}
+fn check_observations(
+    run: &PreparedRun,
+    outcome: &Value,
+    id: &Identity<'_>,
+) -> Result<(Vec<Value>, Vec<Value>), Error> {
+    let records = outcome["verifications"]
+        .as_array()
+        .ok_or(Error::InvalidObservation)?;
+    let mut observations = Vec::new();
+    let mut diagnostics = Vec::new();
+    let output_phase = outcome["phase"] == "output";
+    for record in records {
+        let condition = record["condition"]
+            .as_str()
+            .ok_or(Error::InvalidObservation)?;
+        let path = record["spec_path"]
+            .as_str()
+            .ok_or(Error::InvalidObservation)?;
+        let failed = count(record, "failed_count")?;
+        let mut detail = Value::Null;
+        if failed > 0 {
+            let mut keys = Vec::new();
+            for identity in record["offending_rows"]
+                .as_array()
+                .ok_or(Error::InvalidObservation)?
+            {
+                let values = identity["keys"]
+                    .as_array()
+                    .ok_or(Error::InvalidObservation)?;
+                let names = run.key_names().collect::<Vec<_>>();
+                if names.len() != values.len() {
+                    return Err(Error::InvalidObservation);
+                }
+                keys.push(Value::Object(
+                    names
+                        .into_iter()
+                        .zip(values)
+                        .map(|(name, value)| Ok((name.into(), plain(value)?)))
+                        .collect::<Result<Map<_, _>, Error>>()?,
+                ));
+            }
+            if condition == "row_count_failed" {
+                keys = vec![json!({})];
+            }
+            let mut context = match condition {
+                "row_count_failed" => {
+                    json!({"count":count(record,"output_rows")?,"failure_count":failed})
+                }
+                "unique_failed" => {
+                    let check = run
+                        .compiled()
+                        .verifications()
+                        .iter()
+                        .find(|check| check.path == path)
+                        .ok_or(Error::InvalidObservation)?;
+                    let yamaa_engine::dataset::Check::Unique(columns) = &check.check else {
+                        return Err(Error::InvalidObservation);
+                    };
+                    json!({"columns":columns.iter().map(|&c|&run.compiled().output().columns()[c].name).collect::<Vec<_>>(),"failure_count":failed})
+                }
+                "missing_key" => {
+                    let position = path
+                        .strip_prefix("keys[")
+                        .and_then(|s| s.strip_suffix(']'))
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .ok_or(Error::InvalidObservation)?;
+                    json!({"column":run.key_names().nth(position).ok_or(Error::InvalidObservation)?,"missing_count":failed})
+                }
+                "duplicate_key" => json!({"duplicate_count":failed}),
+                _ => return Err(Error::UnsupportedOutcome),
+            };
+            if !output_phase {
+                if let Some(identity) = run.compiled().verification_identity(path) {
+                    context["verification_id"] = json!(identity);
+                }
+            }
+            let mut log_context = context.clone();
+            log_context["keys"] = json!(keys);
+            context["keys"] = json!(&keys[..keys.len().min(5)]);
+            let diagnostic = json!({"phase":if output_phase {"output"} else {"verification"},"condition":condition,"spec_paths":[path],"requirement":record["requirement"],"context":context});
+            diagnostics.push(diagnostic.clone());
+            detail = diagnostic;
+            detail["severity"] = json!("error");
+            detail["offending_keys"] = json!(keys);
+            detail["log_context"] = log_context;
+        }
+        if !output_phase {
+            let check = condition
+                .strip_suffix("_failed")
+                .ok_or(Error::InvalidObservation)?;
+            observations.push(json!({"specification":id.specification,"spec_path":path,"check":check,"target":null,"requirement":record["requirement"],"verification_id":run.compiled().verification_identity(path),"severity":"error","evaluated_count":count(record,"evaluated_count")?,"failure":detail}));
+        }
+    }
+    Ok((observations, diagnostics))
+}
+fn output_diagnostics(run: &PreparedRun) -> Vec<Value> {
+    use yamaa_engine::specification::OutputFinding as F;
+    run.compiled().output_findings().into_iter().map(|finding| {
+        let (condition,requirement,path,context)=match finding {
+            F::UnknownProfile {path} => ("unknown_artifact_profile","REQ-0760","output.path".into(),json!({"path":path,"permitted":[".csv",".parquet"]})),
+            F::DuplicateColumn {position,name} => ("duplicate_identifier","REQ-0234",format!("output.columns[{position}]"),json!({"column":name})),
+            F::UndeclaredColumn {position,name} => ("undeclared_column","REQ-0234",format!("output.columns[{position}]"),json!({"column":name})),
+            F::InternalKey {position,name} => ("internal_column_in_keys","REQ-0220",format!("keys[{position}]"),json!({"column":name})),
+        };
+        json!({"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":[path],"context":context})
+    }).collect()
+}
+/// Render all portable observations and enforce report/output budgets before
+/// publication. A host publication failure is retained, never a success report.
+pub fn complete<E, P: ArtifactPort>(
+    run: &PreparedRun,
+    attempt: &CapturedAttempt<E>,
+    id: Identity<'_>,
+    publisher: &mut P,
+) -> Result<Value, CompleteError<P::Error>> {
+    let Ok(response) = &attempt.result else {
+        return failure(run, attempt, id).map_err(CompleteError::Report);
+    };
+    let value: Value =
+        serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
+    if value["outcome"]["status"] != "success" {
+        return failure(run, attempt, id).map_err(CompleteError::Report);
+    }
+    let ipc = response.table.as_deref().ok_or(Error::InvalidObservation)?;
+    let table =
+        crate::table_transport::decode_snapshot(ipc).map_err(|_| Error::InvalidObservation)?;
+    let mut report = envelope(run, attempt, &id)?;
+    let (checks, unexpected) = check_observations(run, &value["outcome"], &id)?;
+    if !unexpected.is_empty() {
+        return Err(Error::InvalidObservation.into());
+    }
+    report["verifications"] = json!(checks);
+    let diagnostics = output_diagnostics(run);
+    if !diagnostics.is_empty() {
+        set_diagnostics(&mut report, diagnostics);
+        return bounded(report).map_err(CompleteError::Report);
+    }
+    let projection = run
+        .compiled()
+        .projection()
+        .iter()
+        .map(|name| {
+            table
+                .schema()
+                .columns()
+                .iter()
+                .position(|c| &c.name == name)
+                .ok_or(Error::InvalidObservation)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let bytes =
+        crate::csv_artifact::render(&table, &projection, 8 * 1024 * 1024).map_err(|error| {
+            match error {
+                crate::csv_artifact::Error::Limit => Error::OutputLimit,
+                _ => Error::InvalidObservation,
+            }
+        })?;
+    let content = std::str::from_utf8(&bytes).map_err(|_| Error::InvalidObservation)?;
+    report["artifacts"] = json!([{"name":run.compiled().output_name(),"profile":"csv","columns":run.compiled().projection(),"types":projection.iter().map(|&c|specification_diagnostics::type_name(table.schema().columns()[c].kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":content.strip_suffix('\n').ok_or(Error::InvalidObservation)?.split('\n').collect::<Vec<_>>(),"byte_length":bytes.len(),"content":content}]);
+    report["tables"]
+        .as_array_mut()
+        .ok_or(Error::InvalidObservation)?
+        .push(table_observation(&table, &id, "derived", "output")?);
+    report["outcome"] = json!("success");
+    report["nodes"][0]["outcome"] = json!("success");
+    let report = bounded(report)?;
+    publisher
+        .publish(run.compiled().output_path(), &bytes)
+        .map_err(CompleteError::Publish)?;
     Ok(report)
 }

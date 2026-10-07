@@ -18,6 +18,19 @@ pub fn scalar_diagnostic_label(node: &N) -> Option<String> {
     })
 }
 
+/// Quote text in the shared diagnostic vocabulary under caller-owned limits.
+pub fn quoted_diagnostic_text(
+    text: &str,
+    budget: &mut ValidationBudget,
+) -> Result<String, ValidationError> {
+    let mut renderer = Renderer {
+        output: String::new(),
+        budget,
+    };
+    renderer.quoted(text)?;
+    Ok(renderer.output)
+}
+
 fn printable(c: char) -> bool {
     let value = c as u32;
     super::printable_data::PRINTABLE

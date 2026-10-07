@@ -660,6 +660,7 @@ fn plan_admission_checks_every_template_and_dependency() {
         Err(PlanError::NonGroupSource)
     );
     let reduce = Expression::Reduce {
+        identifier: None,
         column: 1,
         reducer: NumericReducer::Sum,
         text: "SUM(x.other)".into(),
@@ -949,6 +950,7 @@ fn adlb_ordered_sum_matches_committed_expected_artifact() {
                     assign(
                         5,
                         Expression::Reduce {
+                            identifier: None,
                             column: 6,
                             reducer: NumericReducer::Sum,
                             text: "SUM(LB.LBSTRESN)".into(),
@@ -1035,6 +1037,7 @@ fn grouped_reduction_preserves_error_order_and_paths() {
                 Assignment {
                     column: 1,
                     expression: Expression::Reduce {
+                        identifier: None,
                         column: 1,
                         reducer: NumericReducer::Sum,
                         text: "SUM(T.x)".into(),
@@ -1099,6 +1102,7 @@ fn grouped_mean_preserves_temporal_metadata_and_missing_values() {
                 assign(
                     1,
                     Expression::Reduce {
+                        identifier: None,
                         column: 1,
                         reducer: NumericReducer::Mean,
                         text: "MEAN(T.x)".into(),
@@ -1120,33 +1124,10 @@ fn grouped_mean_preserves_temporal_metadata_and_missing_values() {
     assert_eq!(result.dataset.rows()[0][1], Value::float(1.5));
 }
 
-/// Reduction input types and verification declarations are static checks, even on empty input.
+/// Invalid typed verification declarations remain static plan errors.
 #[test]
-fn nonnumeric_reductions_and_invalid_verifications_are_rejected() {
+fn invalid_verifications_are_rejected() {
     let source = schema(&[("id", ColumnType::Str)]);
-    let grouped = vec![RowTemplate {
-        filter: None,
-        mode: RowMode::Groups(vec![0]),
-        assignments: vec![assign(
-            0,
-            Expression::Reduce {
-                column: 0,
-                reducer: NumericReducer::Sum,
-                text: "SUM(T.id)".into(),
-            },
-        )],
-    }];
-    assert_eq!(
-        DatasetPlan::new(
-            source.clone(),
-            source.clone(),
-            grouped,
-            vec![],
-            vec![0],
-            vec![]
-        ),
-        Err(PlanError::NonNumericReduction)
-    );
     let template = || {
         vec![RowTemplate {
             filter: None,
@@ -1627,6 +1608,7 @@ fn work_limits_fail_before_the_next_source_operation() {
                 assign(
                     1,
                     Expression::Reduce {
+                        identifier: None,
                         column: 1,
                         reducer: NumericReducer::Sum,
                         text: "SUM(T.x)".into(),
@@ -1811,6 +1793,7 @@ fn grouped_filters_follow_complete_reductions() {
             assignments: vec![assign(
                 1,
                 Expression::Reduce {
+                    identifier: None,
                     column: 1,
                     reducer: NumericReducer::Sum,
                     text: "SUM(T.x)".into(),
@@ -6405,4 +6388,86 @@ fn contains_declaration_checks_do_not_reset_match_budgets() {
         plan.execute(&source, limits()).unwrap().verifications.len(),
         2
     );
+}
+
+#[test]
+fn numeric_reductions_check_present_values_after_collecting_source_arguments() {
+    use yamaa_core::value::ValueType;
+    use yamaa_engine::table_reduction::TableReductionError;
+    for reducer in [NumericReducer::Sum, NumericReducer::Mean] {
+        let mut source = table(
+            &[("id", ColumnType::Str), ("x", ColumnType::Str)],
+            vec![
+                vec![Value::Str("A".into()), Value::Missing],
+                vec![Value::Str("A".into()), Value::Missing],
+            ],
+        );
+        let make = |identifier| {
+            DatasetPlan::new(
+                source.schema.clone(),
+                schema(&[("id", ColumnType::Str), ("total", ColumnType::Float)]),
+                vec![RowTemplate {
+                    mode: RowMode::Groups(vec![0]),
+                    filter: None,
+                    assignments: vec![
+                        assign(0, Expression::Source(0)),
+                        assign(
+                            1,
+                            Expression::Reduce {
+                                identifier,
+                                column: 1,
+                                reducer,
+                                text: format!("{}(T.x)", reducer.name()),
+                            },
+                        ),
+                    ],
+                }],
+                vec![],
+                vec![0],
+                vec![],
+            )
+            .unwrap()
+        };
+        let plan = make(Some("T.x".into()));
+        let fallback = make(None);
+        assert_eq!(
+            plan.execute(&source, limits()).unwrap().dataset.rows(),
+            &[vec![Value::Str("A".into()), Value::Missing]]
+        );
+        source.rows[1][1] = Value::Str("2".into());
+        // Numeric-looking text is not coerced. The authored expression/operand
+        // remain attached to the runtime type finding, with no output identity.
+        for (plan, name) in [(&plan, "T.x"), (&fallback, "x")] {
+            assert_eq!(
+                *plan.execute(&source, limits()).unwrap_err(),
+                ExecutionError::ReductionType {
+                    path: "columns.C1.derivation".into(),
+                    expression: format!("{}(T.x)", reducer.name()),
+                    reducer,
+                    source: name.into(),
+                    actual: ValueType::Str,
+                }
+            );
+        }
+        source.rows[0][1] = Value::Str("first bad value".into());
+        source.fail = Some((1, 1));
+        assert!(matches!(
+            *plan.execute(&source, limits()).unwrap_err(),
+            ExecutionError::Reduction {
+                error: TableReductionError::Cell {
+                    position: 1,
+                    error: CellError::Access("source failure")
+                },
+                ..
+            }
+        ));
+        source.fail = None;
+        source.rows.clear();
+        assert!(plan
+            .execute(&source, limits())
+            .unwrap()
+            .dataset
+            .rows()
+            .is_empty());
+    }
 }

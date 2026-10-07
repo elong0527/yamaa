@@ -1165,3 +1165,27 @@ fn compound_path_allocation_is_charged_before_large_invalid_labels_are_built() {
         "invalid_field_type"
     );
 }
+
+#[test]
+fn quoted_diagnostic_text_reuses_unicode_spelling_and_cumulative_budget() {
+    use yamaa_core::schema::quoted_diagnostic_text;
+    let mut limits = budget();
+    assert_eq!(
+        quoted_diagnostic_text("a'b", &mut limits).unwrap(),
+        "\"a'b\""
+    );
+    assert_eq!(
+        quoted_diagnostic_text("\u{a0}\n\u{1f600}", &mut limits).unwrap(),
+        "'\\xa0\\n😀'"
+    );
+    let mut limits = ValidationBudget::new(ValidationLimits {
+        diagnostic_text_bytes: 7,
+        ..Default::default()
+    });
+    assert_eq!(quoted_diagnostic_text("a", &mut limits).unwrap(), "'a'");
+    assert_eq!(quoted_diagnostic_text("b", &mut limits).unwrap(), "'b'");
+    assert_eq!(
+        quoted_diagnostic_text("c", &mut limits),
+        Err(ValidationError::DiagnosticText { limit: 7 })
+    );
+}

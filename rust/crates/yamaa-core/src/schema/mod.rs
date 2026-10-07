@@ -43,7 +43,9 @@ pub use normalization::{
     NormalizationBudget, NormalizationError, NormalizationLimits, NormalizationResource,
     NormalizedDocument, SchemaOrigin, SchemaSource,
 };
-pub use path_render::{scalar_diagnostic_label, DIAGNOSTIC_UNICODE_VERSION};
+pub use path_render::{
+    quoted_diagnostic_text, scalar_diagnostic_label, DIAGNOSTIC_UNICODE_VERSION,
+};
 pub use type_expression::{TypeError, TypeExpression, TypeLimits, TypeNode, TypeResource};
 pub use validation::{
     DefaultDiagnostics, SchemaContext, SchemaDiagnostic, ValidationBudget, ValidationError,

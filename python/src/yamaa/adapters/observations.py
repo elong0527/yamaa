@@ -172,11 +172,14 @@ class RunObservations:
 
     def _check(self, check, args, records):
         observed = []
-        failures = check(*args, records=observed)
-        if records is not None:
-            records.extend(observed)
-        self.record_verifications(observed)
-        return failures
+        try:
+            return check(*args, records=observed)
+        finally:
+            # REQ-1177 retains evaluated checks even when a later declaration
+            # stops the stage. Recording a prefix does not accept an artifact.
+            if records is not None:
+                records.extend(observed)
+            self.record_verifications(observed)
 
     def record_verifications(self, records):
         """Retain complete check evidence supplied by either execution backend."""
