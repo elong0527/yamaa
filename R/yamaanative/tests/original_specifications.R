@@ -36,7 +36,7 @@ for(i in seq_len(nrow(decode_truth))) {
   failure <- tryCatch(prepare_entry("source.yaml",bytes,no_port,no_port,no_port),error=identity)
   stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),decode_truth$expected[[i]]))
 }
-for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup")) {
+for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup","negative-formula-flag","negative-row-aggregate","negative-row-no-prior")) {
   case <- file.path(root,"cases",case_name)
   specification <- if(case_name=="schema-inheritance") "spec_study.yaml" else "spec.yaml"
   if(case_name=="schema-inheritance") {
@@ -66,7 +66,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
       specification,rawfile(file.path(case,specification)),no_parent,no_parent,no_parent)
   }
   gc()
-  inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else if(case_name=="schema-window-functions") c(VS="input/vs.csv") else c(LB="input/lb.csv")
+  inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else if(case_name %in% c("schema-window-functions","negative-row-no-prior")) c(VS="input/vs.csv") else c(LB="input/lb.csv")
   stopifnot(identical(specification_source(handle),list(name=names(inputs)[[1L]],path=unname(inputs[[1L]]))))
   state <- new.env(parent=emptyenv()); state$reads <- 0L; state$requests <- character(); state$content <- list()
   capture <- function(name,path,maximum) {
@@ -113,7 +113,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   requests_after_build <- state$requests
   unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',expected)
   stopifnot(identical(build_observations(result),unsaved),published==before)
-  if(case_name %in% c("negative-zero-division","negative-integer-overflow")) {
+  if(startsWith(case_name,"negative-")) {
     stopifnot(is.null(build_output(result)))
     failed_save <- tryCatch(build_save(result,function(...) stop("failed result reached publisher")),error=identity)
     stopifnot(inherits(failed_save,"error"),identical(conditionMessage(failed_save),"cannot save a failed build"))

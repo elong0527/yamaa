@@ -1030,7 +1030,13 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
-    for name in ["negative-zero-division", "negative-integer-overflow"] {
+    for name in [
+        "negative-zero-division",
+        "negative-integer-overflow",
+        "negative-formula-flag",
+        "negative-row-aggregate",
+        "negative-row-no-prior",
+    ] {
         let case = root.join("benchmarks").join(name);
         let run = PreparedRun::prepare(prepare(
             &schema,

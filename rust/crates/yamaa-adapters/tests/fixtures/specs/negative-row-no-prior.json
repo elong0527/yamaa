@@ -1,0 +1,125 @@
+{
+  "artifacts": [],
+  "backend": "rust",
+  "callbacks": [],
+  "diagnostics": [
+    {
+      "condition": "zero_offset",
+      "context": {
+        "offset": 0
+      },
+      "phase": "validation",
+      "requirement": "REQ-0328",
+      "spec_paths": [
+        "columns.PREVAL.derivation.row_value.offset"
+      ]
+    }
+  ],
+  "engine_version": "fixture-engine",
+  "error": null,
+  "example": "negative-row-no-prior",
+  "handler_counts": [],
+  "nodes": [
+    {
+      "diagnostics": [
+        {
+          "condition": "zero_offset",
+          "context": {
+            "offset": 0
+          },
+          "phase": "validation",
+          "requirement": "REQ-0328",
+          "spec_paths": [
+            "columns.PREVAL.derivation.row_value.offset"
+          ]
+        }
+      ],
+      "handler_counts": [],
+      "outcome": "failure",
+      "specification": "spec.yaml",
+      "unsupported": []
+    }
+  ],
+  "outcome": "failure",
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "runtime_version": "fixture-runtime",
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "condition": null,
+      "outcome": "captured",
+      "path": "input/vs.csv",
+      "snapshots_created": 1
+    }
+  ],
+  "tables": [
+    {
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "VSSEQ",
+        "VSDTC",
+        "VSSTRESN"
+      ],
+      "name": "VS",
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "PILOT7"
+          },
+          {
+            "type": "str",
+            "value": "P7-871"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "date",
+            "value": "2023-03-01"
+          },
+          {
+            "type": "str",
+            "value": "72.4"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "PILOT7"
+          },
+          {
+            "type": "str",
+            "value": "P7-871"
+          },
+          {
+            "type": "str",
+            "value": "2"
+          },
+          {
+            "type": "date",
+            "value": "2023-04-01"
+          },
+          {
+            "type": "str",
+            "value": "71.8"
+          }
+        ]
+      ],
+      "specification": "spec.yaml",
+      "stage": "source",
+      "types": [
+        "str",
+        "str",
+        "str",
+        "date",
+        "str"
+      ]
+    }
+  ],
+  "unsupported": [],
+  "verifications": []
+}
