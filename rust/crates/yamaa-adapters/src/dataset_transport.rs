@@ -27,6 +27,7 @@ use yamaa_engine::{
 
 #[path = "dataset_functions.rs"]
 mod functions;
+pub(crate) use functions::Snapshot;
 
 const PROTOCOL: &str = "dataset/1";
 /// Discover additive typed-plan features before callers acquire source data.
@@ -36,14 +37,14 @@ pub fn capabilities() -> &'static str {
 
 /// Bound host argument collections before copying any source buffers.
 pub const MAX_SOURCES: usize = 8;
-const MAX_SOURCE_CELLS: usize = 262_144;
+pub(crate) const MAX_SOURCE_CELLS: usize = 262_144;
 const MAX_COLUMNS: usize = 64;
 const MAX_TEMPLATES: usize = 16;
 const MAX_CHECKS: usize = 16;
 const MAX_NAME: usize = 256;
 const MAX_PATH: usize = 1024;
 const MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
-const LIMITS: Limits = Limits {
+pub(crate) const LIMITS: Limits = Limits {
     source_rows: 65_536,
     output_rows: 65_536,
     output_cells: 262_144,
@@ -493,6 +494,9 @@ pub struct PreparedDataset {
 pub struct DatasetResponse {
     pub table: Option<Vec<u8>>,
     pub outcome: String,
+    // The application publishes from its accepted typed result, never by
+    // reconstructing execution success from JSON or decoding its own IPC output.
+    pub(crate) execution: Option<dataset::Execution>,
 }
 
 /// Validate plan bytes before any IPC decoding, then execute once with no fallback.
@@ -1234,15 +1238,18 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
 }
 
 /// Encode engine observations through one existing diagnostic vocabulary.
-fn response(attempt: dataset::ExecutionAttempt<CallbackError>) -> Result<DatasetResponse, Error> {
-    let (table, outcome) = match attempt.result {
-        Ok(result) => (
-            Some(encode_dataset(&result.dataset).map_err(Error::Table)?),
-            Outcome::Success {
-                verifications: records(result.verifications),
-            },
-        ),
-        Err(error) => (None, failure(*error)?),
+pub(crate) fn response(
+    attempt: dataset::ExecutionAttempt<CallbackError>,
+) -> Result<DatasetResponse, Error> {
+    let (table, outcome, execution) = match attempt.result {
+        Ok(result) => {
+            let table = Some(encode_dataset(&result.dataset).map_err(Error::Table)?);
+            let outcome = Outcome::Success {
+                verifications: records(result.verifications.clone()),
+            };
+            (table, outcome, Some(result))
+        }
+        Err(error) => (None, failure(*error)?, None),
     };
     let outcome = bounded_json(
         &Envelope {
@@ -1267,25 +1274,9 @@ fn response(attempt: dataset::ExecutionAttempt<CallbackError>) -> Result<Dataset
             Error::Internal
         }
     })?;
-    Ok(DatasetResponse { table, outcome })
-}
-
-/// Execute an already bound shared compiler plan over an owned source snapshot.
-/// Only the closed compiler calls this entry point; callbacks/secondary sources
-/// are not implicit, and the same response limits apply as the typed-plan bridge.
-pub(crate) fn execute_specification_plan(
-    plan: &DatasetPlan,
-    source: &crate::arrow_table::ArrowTable,
-) -> Result<DatasetResponse, Error> {
-    catch_unwind(AssertUnwindSafe(|| {
-        let cells = source
-            .row_count()
-            .checked_mul(source.schema().columns().len());
-        if cells.is_none_or(|cells| cells > MAX_SOURCE_CELLS) {
-            return Err(Error::Table(TableTransportError::ShapeLimit));
-        }
-        let source = functions::Snapshot(source);
-        response(plan.execute_observed(&source, LIMITS))
-    }))
-    .map_err(|_| Error::Internal)?
+    Ok(DatasetResponse {
+        table,
+        outcome,
+        execution,
+    })
 }

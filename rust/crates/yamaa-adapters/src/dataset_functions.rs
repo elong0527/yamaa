@@ -132,7 +132,7 @@ impl FunctionBindings for Unavailable {
 }
 
 /// Keep source access infallible while allowing an opaque callback failure in the same run.
-pub(super) struct Snapshot<T = crate::arrow_table::ArrowTable>(pub T);
+pub(crate) struct Snapshot<T = crate::arrow_table::ArrowTable>(pub T);
 impl<T: std::borrow::Borrow<crate::arrow_table::ArrowTable>> TableAccess for Snapshot<T> {
     type Error = CallbackError;
     /// Borrow the same admitted schema without copying or invoking host code.
