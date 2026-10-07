@@ -94,3 +94,10 @@ provenance, additional structured context and unified serialization across all
 protocols must migrate with those families. Existing per-protocol wire wrappers
 remain temporarily for unmigrated errors. No registry completeness, public API
 cutover, new numerical policy or benchmark inventory promotion is claimed.
+
+Original output-window validation now projects through the common core diagnostic.
+The canonical registry owns zero offset, required order and forbidden order;
+`WindowFinding::definition` and its typed context use that same mapping. Three
+independent complete failed reports retain authored paths, source reads, source
+tables and save rejection. Window predicate and named-selection findings remain
+separately represented until their next service migration.

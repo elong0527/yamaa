@@ -86,9 +86,10 @@ impl column_dependencies::Diagnostic {
 impl BindFinding {
     /// The retained source identifies the already-selected driver. No source schema
     /// is queried here, and resource/parser policy failures remain outside this type.
-    /// Window and named-selection findings retain their existing separate projection.
+    /// Named-selection findings retain their existing separate projection.
     pub fn diagnostics(&self, source: &SourceDeclaration) -> Option<Vec<Diagnostic>> {
         let (code, path, values) = match self {
+            Self::Window(finding) => return Some(vec![finding.diagnostic()]),
             Self::QualifiedReference {
                 path,
                 name,
@@ -193,7 +194,7 @@ impl BindFinding {
                     .map(|d| d.specification_diagnostic(columns, paths))
                     .collect()
             }
-            Self::Window(_) | Self::Lookup(_) | Self::Numeric { .. } => return None,
+            Self::Lookup(_) | Self::Numeric { .. } => return None,
         };
         Some(vec![finding(code, vec![path.clone()], values)])
     }
