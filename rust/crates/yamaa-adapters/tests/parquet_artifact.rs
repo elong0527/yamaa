@@ -356,3 +356,62 @@ fn invalid_projection_shape_staging_and_cell_types_produce_no_artifact() {
         Err(Error::ValueType)
     ));
 }
+
+#[test]
+fn artifacts_keep_complete_temporal_fields_and_drop_collected_precision() {
+    use yamaa_core::temporal::{Date, DatePrecision, DateTime, DateTimePrecision};
+    // REQ-0570: precision is internal provenance. Even imputed values carry
+    // complete calendar fields; artifacts deliberately retain only those fields.
+    let table = table(
+        &[("D", ColumnType::Date), ("T", ColumnType::DateTime)],
+        [
+            (DatePrecision::Year, DateTimePrecision::Day),
+            (DatePrecision::Month, DateTimePrecision::Day),
+            (DatePrecision::Day, DateTimePrecision::Second),
+        ]
+        .into_iter()
+        .map(|(date_precision, time_precision)| {
+            vec![
+                Value::Date(Date::new(1970, 2, 28, date_precision).unwrap()),
+                Value::DateTime(
+                    DateTime::new(
+                        Date::new(1970, 1, 1, DatePrecision::Day).unwrap(),
+                        23,
+                        59,
+                        59,
+                        time_precision,
+                    )
+                    .unwrap(),
+                ),
+            ]
+        })
+        .collect(),
+    );
+    let bytes = render(&table, &[0, 1], limits()).unwrap();
+    let source = Source::new(&bytes);
+    let reader = source.reader();
+    assert!(reader
+        .metadata()
+        .file_metadata()
+        .key_value_metadata()
+        .is_none());
+    let rows = reader
+        .get_row_iter(None)
+        .unwrap()
+        .map(Result::unwrap)
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 3);
+    for row in &rows {
+        assert_eq!(row.get_column_iter().next().unwrap().1, &Field::Date(58));
+        assert_eq!(row.get_timestamp_micros(1).unwrap(), 86_399_000_000);
+    }
+    assert_eq!(
+        yamaa_adapters::parquet_artifact::records(&table, &[0, 1], 1024).unwrap(),
+        [
+            r#"["D", "T"]"#,
+            r#"["1970-02-28", "1970-01-01T23:59:59"]"#,
+            r#"["1970-02-28", "1970-01-01T23:59:59"]"#,
+            r#"["1970-02-28", "1970-01-01T23:59:59"]"#,
+        ],
+    );
+}
