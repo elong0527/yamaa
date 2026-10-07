@@ -230,6 +230,7 @@ mod tests {
             uncompressed_prefix: 0,
             compressed: true,
             column: 0,
+            row_group: 0,
             payload: Default::default(),
         }
     }

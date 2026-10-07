@@ -4,6 +4,7 @@ use super::{
     compact::Error,
     delta,
     framing::{Page, Payload},
+    rle,
 };
 use parquet::{basic::Type, schema::types::ColumnDescriptor};
 
@@ -32,34 +33,116 @@ fn levels(bytes: &[u8], maximum: i16, encoding: i64, values: usize) -> Result<&[
     bytes.get(length..).ok_or(Error::Malformed)
 }
 
-/// Return the bytes potentially reconstructed by delta string decoding, so the
-/// caller can apply an aggregate budget across all pages before a general read.
-pub(super) fn admit(
+fn present(bytes: &[u8], maximum: i16, encoding: i64, values: usize) -> Result<usize, Error> {
+    if maximum == 0 {
+        return Ok(values);
+    }
+    if maximum < 0 {
+        return Err(Error::Malformed);
+    }
+    let width = 16 - (maximum as u16).leading_zeros();
+    let mut present = 0;
+    let mut visit = |value: u32, count: usize| {
+        if value > maximum as u32 {
+            return Err(Error::Malformed);
+        }
+        if value == maximum as u32 {
+            present += count;
+        }
+        Ok(())
+    };
+    match encoding {
+        3 => rle::hybrid(bytes, width, values, &mut visit)?,
+        4 => rle::packed(bytes, width, values, &mut visit)?,
+        _ => return Err(Error::Malformed),
+    }
+    Ok(present)
+}
+fn v1_levels(
+    bytes: &[u8],
+    maximum: i16,
+    encoding: i64,
+    values: usize,
+) -> Result<(&[u8], usize), Error> {
+    let tail = levels(bytes, maximum, encoding, values)?;
+    if maximum == 0 {
+        return Ok((tail, values));
+    }
+    let used = bytes.len() - tail.len();
+    let raw = &bytes[if encoding == 3 { 4 } else { 0 }..used];
+    Ok((tail, present(raw, maximum, encoding, values)?))
+}
+
+pub(super) struct Values<'a> {
+    pub encoding: i64,
+    pub count: usize,
+    pub body: &'a [u8],
+}
+
+/// Return encoding, actual non-null count and checked value bytes. Level
+/// validation precedes string-length/dictionary allocation admission.
+pub(super) fn values<'a>(
     page: &Page<'_>,
-    decoded: &[u8],
+    decoded: &'a [u8],
     column: &ColumnDescriptor,
-    reconstructed_bytes: usize,
-) -> Result<usize, Error> {
-    let (encoding, values, body) = match page.payload {
-        Payload::Index => return Ok(0),
+) -> Result<Option<Values<'a>>, Error> {
+    let result = match page.payload {
+        Payload::Index => return Ok(None),
         Payload::Dictionary { encoding, values } => (encoding, values, decoded),
-        Payload::DataV2 { encoding, values } => (
+        Payload::DataV2 {
             encoding,
             values,
-            decoded
-                .get(page.uncompressed_prefix..)
-                .ok_or(Error::Malformed)?,
-        ),
+            nulls,
+            definition_bytes,
+            repetition_bytes,
+        } => {
+            let rep = decoded.get(..repetition_bytes).ok_or(Error::Malformed)?;
+            let end = repetition_bytes
+                .checked_add(definition_bytes)
+                .ok_or(Error::Malformed)?;
+            let def = decoded.get(repetition_bytes..end).ok_or(Error::Malformed)?;
+            present(rep, column.max_rep_level(), 3, values)?;
+            let non_null = present(def, column.max_def_level(), 3, values)?;
+            if nulls != values - non_null {
+                return Err(Error::Malformed);
+            }
+            (encoding, non_null, &decoded[end..])
+        }
         Payload::DataV1 {
             encoding,
             values,
             definition_encoding,
             repetition_encoding,
         } => {
-            let body = levels(decoded, column.max_rep_level(), repetition_encoding, values)?;
-            let body = levels(body, column.max_def_level(), definition_encoding, values)?;
-            (encoding, values, body)
+            let (body, _) =
+                v1_levels(decoded, column.max_rep_level(), repetition_encoding, values)?;
+            let (body, non_null) =
+                v1_levels(body, column.max_def_level(), definition_encoding, values)?;
+            (encoding, non_null, body)
         }
+    };
+    let (encoding, count, body) = result;
+    Ok(Some(Values {
+        encoding,
+        count,
+        body,
+    }))
+}
+
+/// Return bytes reconstructed by delta string decoding for aggregate admission.
+pub(super) fn admit(
+    page: &Page<'_>,
+    decoded: &[u8],
+    column: &ColumnDescriptor,
+    reconstructed_bytes: usize,
+) -> Result<usize, Error> {
+    let Some(Values {
+        encoding,
+        count: values,
+        body,
+    }) = values(page, decoded, column)?
+    else {
+        return Ok(0);
     };
     let physical = column.physical_type();
     match encoding {

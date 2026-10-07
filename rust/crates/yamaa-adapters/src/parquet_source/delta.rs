@@ -150,15 +150,17 @@ pub(super) fn admit(
     let mut reconstruction = 0;
     match encoding {
         5 => {
-            scan(bytes, physical_bits, limits.values, |_| Ok(()))?;
+            if scan(bytes, physical_bits, limits.values, |_| Ok(()))?.1 != limits.values {
+                return Err(Error::Malformed);
+            }
         }
         6 => {
             let mut total = 0usize;
-            let (offset, _) = scan(bytes, 32, limits.values, |value| {
+            let (offset, count) = scan(bytes, 32, limits.values, |value| {
                 charge(&mut total, length(value)?, limits.reconstructed_bytes)
             })?;
             reconstruction = total;
-            if total > bytes.len() - offset {
+            if count != limits.values || total > bytes.len() - offset {
                 return Err(Error::Malformed);
             }
         }
@@ -186,7 +188,10 @@ pub(super) fn admit(
                     Ok(())
                 })?;
             reconstruction = reconstructed;
-            if count != suffix_count || stored > bytes.len() - offset - suffix_offset {
+            if count != limits.values
+                || count != suffix_count
+                || stored > bytes.len() - offset - suffix_offset
+            {
                 return Err(Error::Malformed);
             }
         }
@@ -200,7 +205,7 @@ mod tests {
     use super::*;
     fn limits() -> Limits {
         Limits {
-            values: 1024,
+            values: 3,
             reconstructed_bytes: 4096,
         }
     }
@@ -266,6 +271,14 @@ mod tests {
     }
     #[test]
     fn stream_counts_and_malformed_headers_fail_before_visit_or_allocation() {
+        // Page levels establish the actual non-null count. A shorter stream
+        // must not reach a decoder that assumes its first value exists.
+        for count in [0, 1, 2] {
+            assert_eq!(
+                admit(&progression(0, 0, count), 5, 64, limits()),
+                Err(Error::Malformed)
+            );
+        }
         let mut huge = vec![128, 1, 4];
         unsigned(u64::MAX, &mut huge);
         assert_eq!(
@@ -292,9 +305,29 @@ mod tests {
     fn byte_array_lengths_and_prefix_expansion_are_charged_before_general_decode() {
         let mut lengths = progression(3, 0, 2);
         lengths.extend(b"abcdef");
-        admit(&lengths, 6, 32, limits()).unwrap();
+        admit(
+            &lengths,
+            6,
+            32,
+            Limits {
+                values: 2,
+                ..limits()
+            },
+        )
+        .unwrap();
         lengths.pop();
-        assert_eq!(admit(&lengths, 6, 32, limits()), Err(Error::Malformed));
+        assert_eq!(
+            admit(
+                &lengths,
+                6,
+                32,
+                Limits {
+                    values: 2,
+                    ..limits()
+                }
+            ),
+            Err(Error::Malformed)
+        );
         assert_eq!(
             admit(&progression(-1, 0, 1), 6, 32, limits()),
             Err(Error::Malformed)

@@ -26,6 +26,7 @@ pub(super) struct Page<'a> {
     pub uncompressed_prefix: usize,
     pub compressed: bool,
     pub column: usize,
+    pub row_group: usize,
     pub payload: Payload,
 }
 
@@ -46,6 +47,9 @@ pub(super) enum Payload {
     DataV2 {
         encoding: i64,
         values: usize,
+        nulls: usize,
+        definition_bytes: usize,
+        repetition_bytes: usize,
     },
 }
 
@@ -166,7 +170,7 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
     let mut header_nodes = 0;
     let mut data_values = 0;
     let mut dictionary_values = 0;
-    for group in groups {
+    for (row_group, group) in groups.iter().enumerate() {
         let count_rows = count(group.field(3))?;
         charge(&mut rows, count_rows, limits.rows)?;
         let columns = sequence(group.field(1))?;
@@ -182,7 +186,9 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
             bound(count(meta.field(5))?, limits.cells)?;
             let data = count(meta.field(9))?;
             let mut offset = match meta.field(11) {
-                Some(value) => count(Some(value))?.min(data),
+                // Match the reader's exact chunk start. Empty columns may have
+                // data_page_offset=0 and a real, empty dictionary at offset 4.
+                Some(value) => count(Some(value))?,
                 None => data,
             };
             let length = count(meta.field(7))?;
@@ -190,7 +196,7 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
                 .checked_add(length)
                 .filter(|end| *end <= start)
                 .ok_or(Error::Malformed)?;
-            if offset < 4 {
+            if offset < 4 && length != 0 {
                 return Err(Error::Malformed);
             }
             while offset < end {
@@ -244,6 +250,9 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
                         Payload::DataV2 {
                             encoding: integer(detail.field(4))?,
                             values: count(detail.field(1))?,
+                            nulls: count(detail.field(2))?,
+                            definition_bytes: count(detail.field(5))?,
+                            repetition_bytes: count(detail.field(6))?,
                         }
                     }
                     _ => return Err(Error::Malformed),
@@ -291,6 +300,7 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
                     uncompressed_prefix: prefix,
                     compressed: should_decompress,
                     column,
+                    row_group,
                     payload,
                 });
             }
