@@ -85,6 +85,17 @@ and the note was not waived: the Rust fixture directory was shortened to
 updated source archive passes with `Status: OK`, including all 17 scripts. B15
 remains open for hosted evidence across the chosen matrix and final-package
 qualification.
+The first hosted package-check run also reported `abort` from the generated Rust
+static archive on both platforms, with all 17 scripts passing. Package-local
+Rust build intermediates now receive post-link cleanup, following
+[rextendr's packaging fix](https://github.com/extendr/rextendr/pull/419).
+The check remains enabled and still requires `Status: OK`. This scopes R's
+object-symbol inspection consistently with upstream Rust/R packaging; it does
+not remove Rust's standard-library abort path or prove recovery from allocation
+failure, double panic or every native fault. B16 remains open. Earlier local
+checks used an external Cargo target directory, so they did not reproduce the
+archive-symbol finding; final qualification must also exercise the default
+package-local target layout.
 Release scope must either add the appropriate checks or record an explicit
 approved exclusion. Package versions in the audited evidence are Python host
 0.2.0, native Python/R 0.1.0 and core 0.1.0; none constitutes the final combined
