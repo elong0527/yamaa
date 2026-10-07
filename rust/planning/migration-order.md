@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-07 against main `2bfbc01ae414e0fc8fb6660c48e91947c6231e72`
+Reconciled 2026-10-07 against main `c813b08d98f002e827c2e9fbe1832e965297d24a`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -40,12 +40,21 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1771 | Owned admitted build output and explicit save without recapture. |
 | #1772 | Portable captured schema, decode and inherited preparation findings. |
 | #1773 | Classified source-capture findings and owned failed-build reports. |
+| #1776 | Strict hosted R package checks with default package-local Rust build cleanup. |
+| #1777 | Bounded Parquet output and explicit retained save. |
+| #1783 | Reference Parquet invalid-UTF-8 ingestion classification. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
 qualify the public domain/check facade or replace reference preparation in the
 conformance runner. The existing inventory still records all six as
 `reference_assisted_run`.
+
+The held Parquet input implementation in #1785 is undergoing final-revision
+installed qualification and review. It does not yet qualify actual filesystem
+ports or promote any inventory tuple. Preflight and output-declaration diagnostic
+ownership are prepared as the next shared-core slice; local package evidence
+does not count as a merged or hosted-qualified result.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance
