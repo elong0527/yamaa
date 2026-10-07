@@ -108,6 +108,18 @@ class OriginalSpecifications(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
+    def test_original_source_failures_match_independent_decoder_truth(self):
+        def no_port(*_):
+            self.fail("source decoding failure reached a host port")
+        with (ROOT / "decode-replay.tsv").open(encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), 8)
+        for record in records:
+            with self.subTest(case=record["id"]):
+                with self.assertRaises(ValueError) as caught:
+                    yamaa_native._prepare_document("source.yaml", bytes.fromhex(record["source_hex"]), no_port, no_port, no_port)
+                self.assertEqual(json.loads(str(caught.exception)), json.loads(record["expected"]))
+
     def test_schema_context_preserves_exact_integers_and_constraint_values(self):
         def no_port(*_):
             self.fail("invalid entry reached parent or study authority")

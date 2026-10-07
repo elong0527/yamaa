@@ -20,6 +20,15 @@ for(literal in c("true","123456789012345678901234567890","null")) {
   expected <- paste0('{"outcome":{"diagnostics":[{"condition":"schema_version_mismatch","context":{"actual":',literal,',"expected":"1.0"},"phase":"validation","requirement":null,"spec_paths":["schema_version"]}],"status":"invalid"},"protocol":"specification/prototype"}')
   stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),expected))
 }
+decode_truth <- read.delim(file.path(root,"decode-replay.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(decode_truth)==8L)
+for(i in seq_len(nrow(decode_truth))) {
+  hex <- decode_truth$source_hex[[i]]
+  starts <- seq.int(1L,nchar(hex),by=2L)
+  bytes <- as.raw(strtoi(substring(hex,starts,starts+1L),base=16L))
+  failure <- tryCatch(prepare_entry("source.yaml",bytes,no_port,no_port,no_port),error=identity)
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),decode_truth$expected[[i]]))
+}
 for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup")) {
   case <- file.path(root,"cases",case_name)
   specification <- if(case_name=="schema-inheritance") "spec_study.yaml" else "spec.yaml"

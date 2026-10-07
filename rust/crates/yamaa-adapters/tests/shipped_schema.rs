@@ -192,3 +192,43 @@ fn diagnostic_expansion_limits_do_not_masquerade_as_language_findings() {
         json!({"status":"rejected","stage":"capture","code":"diagnostic_context_limit"})
     );
 }
+
+#[test]
+fn source_failures_preserve_independent_decoder_findings_before_any_host_effect() {
+    use serde_json::{json, Value};
+    use yamaa_adapters::specification_diagnostics::inheritance_failure;
+    let mut count = 0;
+    for line in include_str!("fixtures/yaml_transport.tsv").lines().skip(1) {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        let mut expected: Value = serde_json::from_str(fields[2]).unwrap();
+        if expected["outcome"]["status"] != "invalid" {
+            continue;
+        }
+        expected["protocol"] = json!("specification/prototype");
+        for finding in expected["outcome"]["diagnostics"].as_array_mut().unwrap() {
+            finding["phase"] = json!("validation");
+            finding["requirement"] = Value::Null;
+            if finding["condition"] == "non_ascii_source" {
+                finding["context"]["path"] = json!("source.yaml");
+            }
+        }
+        let bytes = fields[1]
+            .as_bytes()
+            .chunks_exact(2)
+            .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+            .collect();
+        let error = shipped_schema::prepare(
+            Source {
+                identity: "source.yaml".into(),
+                bytes,
+            },
+            "source.yaml".into(),
+            &mut NoParents,
+        )
+        .unwrap_err();
+        let actual: Value = serde_json::from_str(&inheritance_failure(error).unwrap()).unwrap();
+        assert_eq!(actual, expected, "{}", fields[0]);
+        count += 1;
+    }
+    assert_eq!(count, 8);
+}

@@ -150,7 +150,11 @@ boundary; it does not widen runtime integers or change arithmetic policy.
 
 Context expansion charges a conservative escaped-JSON byte budget before copies.
 A resource refusal or invalid internal context remains a boundary rejection,
-not a fabricated specification condition. YAML decoding and capture IO failures,
-inherited-loader diagnostics, and the public issues-table frontend still have
-separate integration gates. This does not qualify a public frontend or promote
+not a fabricated specification condition. The existing shared YAML decoder formatter also feeds document preparation:
+duplicate keys, forbidden constructs, invalid Unicode and non-ASCII source
+positions retain their independent diagnostic truth. Non-ASCII diagnostics
+include the captured source identity. Complete encoded capture replies are
+bounded before returning to a host; a partial JSON prefix is never published.
+Capture IO failures, inherited-loader report integration, and the public
+issues-table frontend still have separate integration gates. This does not qualify a public frontend or promote
 any benchmark inventory row.

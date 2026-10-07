@@ -327,17 +327,38 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
     json!({"protocol":"specification/prototype","outcome":outcome}).to_string()
 }
 
-/// Schema capture/preparation never echoes arbitrary source bytes in host errors.
-/// Semantic findings resolve against their retained schema and pass input.
+fn capture_response(outcome: Value) -> String {
+    crate::yaml_transport::encode_outcome("specification/prototype", outcome, 16_777_216)
+        .unwrap_or_else(|_| json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":"diagnostic_context_limit"}}).to_string())
+}
+/// Preparation exposes semantic context, never an arbitrary dump of source bytes.
+/// Findings resolve against the retained schema/pass input or the shared YAML decoder.
 pub fn capture_failure(error: &crate::specification_source::Error) -> String {
     use crate::specification_source::Error;
+    if let Error::Decode { identity, error } = error {
+        if let Some(mut diagnostics) = crate::yaml_transport::semantic_diagnostics(error) {
+            for finding in &mut diagnostics {
+                finding["phase"] = json!("validation");
+                finding["requirement"] = Value::Null;
+                if finding["condition"] == "non_ascii_source" {
+                    finding["context"]["path"] = json!(identity);
+                }
+            }
+            return capture_response(json!({"status":"invalid","diagnostics":diagnostics}));
+        }
+    }
     if let Error::Findings(captured) = error {
         return match captured_schema::findings(captured) {
-            Ok(diagnostics) => json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":diagnostics}}).to_string(),
+            Ok(diagnostics) => {
+                capture_response(json!({"status":"invalid","diagnostics":diagnostics}))
+            }
             Err(error) => {
-                let code = match error { captured_schema::Error::Limit => "diagnostic_context_limit", captured_schema::Error::InvalidContext => "diagnostic_context" };
-                json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":code}}).to_string()
-            },
+                let code = match error {
+                    captured_schema::Error::Limit => "diagnostic_context_limit",
+                    captured_schema::Error::InvalidContext => "diagnostic_context",
+                };
+                capture_response(json!({"status":"rejected","stage":"capture","code":code}))
+            }
         };
     }
     let code = match error {
@@ -349,7 +370,7 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> String {
         Error::Findings(_) => unreachable!("handled captured findings"),
         Error::InheritanceRequired => "inheritance_required",
     };
-    json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":code}}).to_string()
+    capture_response(json!({"status":"rejected","stage":"capture","code":code}))
 }
 
 pub(crate) fn type_name(kind: yamaa_core::value::ColumnType) -> &'static str {

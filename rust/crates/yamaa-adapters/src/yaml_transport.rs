@@ -47,13 +47,21 @@ impl io::Write for Response {
 }
 
 fn encode(outcome: Value, limit: usize) -> Result<String, TransportError> {
+    encode_outcome("yaml/1", outcome, limit)
+}
+/// Bound the complete encoded envelope without publishing a partial prefix.
+pub(crate) fn encode_outcome(
+    protocol: &str,
+    outcome: Value,
+    limit: usize,
+) -> Result<String, TransportError> {
     let mut response = Response {
         bytes: Vec::new(),
         limit,
     };
     serde_json::to_writer(
         &mut response,
-        &json!({"protocol":"yaml/1","outcome":outcome}),
+        &json!({"protocol":protocol,"outcome":outcome}),
     )
     .map_err(|error| {
         if error.is_io() {
@@ -65,6 +73,28 @@ fn encode(outcome: Value, limit: usize) -> Result<String, TransportError> {
     String::from_utf8(response.bytes).map_err(|_| TransportError::Internal)
 }
 
+/// Semantic source findings are shared by byte probes and document preparation.
+/// Resource refusals and internal defects are never fabricated language findings.
+pub(crate) fn semantic_diagnostics(error: &DecodeFailure) -> Option<Vec<Value>> {
+    Some(match error {
+        DecodeFailure::NonAscii(position) => vec![json!({
+            "condition":"non_ascii_source", "spec_paths":["$"],
+            "context":{"line":position.line,"column":position.column},
+        })],
+        DecodeFailure::InvalidYaml { position, reason } => vec![json!({
+            "condition":"invalid_yaml", "spec_paths":["$"],
+            "context":{"line":position.line,"column":position.column,"reason":reason},
+        })],
+        DecodeFailure::InvalidText(issues) => {
+            issues.iter().map(|issue| json!({
+                "condition":"invalid_text", "spec_paths":[issue.path],
+                "context":{"code_point":format!("U+{:04X}",issue.code_point),"offset":issue.offset},
+            })).collect::<Vec<_>>()
+        }
+        DecodeFailure::Limit(_) | DecodeFailure::Internal => return None,
+    })
+}
+
 fn outcome(source: &[u8]) -> Result<Value, TransportError> {
     let limits = DecodeLimits::default();
     debug_assert_eq!(limits.scan.source_bytes, MAX_SOURCE_BYTES);
@@ -73,41 +103,30 @@ fn outcome(source: &[u8]) -> Result<Value, TransportError> {
             "status":"decoded", "document":Tree::from_core(&decoded.document),
             "locations":decoded.locations,
         }),
-        Err(DecodeFailure::NonAscii(position)) => json!({
-            "status":"invalid", "diagnostics":[{
-                "condition":"non_ascii_source", "spec_paths":["$"],
-                "context":{"line":position.line,"column":position.column},
-            }],
-        }),
-        Err(DecodeFailure::InvalidYaml { position, reason }) => json!({
-            "status":"invalid", "diagnostics":[{
-                "condition":"invalid_yaml", "spec_paths":["$"],
-                "context":{"line":position.line,"column":position.column,"reason":reason},
-            }],
-        }),
-        Err(DecodeFailure::InvalidText(issues)) => json!({
-            "status":"invalid", "diagnostics":issues.into_iter().map(|issue| json!({
-                "condition":"invalid_text", "spec_paths":[issue.path],
-                "context":{"code_point":format!("U+{:04X}",issue.code_point),"offset":issue.offset},
-            })).collect::<Vec<_>>(),
-        }),
-        Err(DecodeFailure::Limit(resource)) => json!({
-            "status":"resource_limit", "phase":"yaml_source", "resource":resource,
-            "limit": match resource {
-                "source_bytes" => limits.scan.source_bytes,
-                "events" => limits.scan.events,
-                "depth" => limits.scan.depth.min(limits.document.depth).min(64),
-                "decoded_bytes" => limits.scan.decoded_bytes,
-                "parse_bytes" => limits.scan.parse_bytes,
-                "nodes" => limits.document.nodes,
-                "text_bytes" => limits.document.text_bytes,
-                "edges" => limits.document.edges,
-                "numeric_digits" => limits.numeric_digits,
-                "diagnostic_bytes" => limits.diagnostic_bytes,
+        Err(error) => {
+            if let Some(diagnostics) = semantic_diagnostics(&error) {
+                return Ok(json!({"status":"invalid","diagnostics":diagnostics}));
+            }
+            match error {
+                DecodeFailure::Limit(resource) => json!({
+                    "status":"resource_limit", "phase":"yaml_source", "resource":resource,
+                    "limit": match resource {
+                        "source_bytes" => limits.scan.source_bytes,
+                        "events" => limits.scan.events,
+                        "depth" => limits.scan.depth.min(limits.document.depth).min(64),
+                        "decoded_bytes" => limits.scan.decoded_bytes,
+                        "parse_bytes" => limits.scan.parse_bytes,
+                        "nodes" => limits.document.nodes,
+                        "text_bytes" => limits.document.text_bytes,
+                        "edges" => limits.document.edges,
+                        "numeric_digits" => limits.numeric_digits,
+                        "diagnostic_bytes" => limits.diagnostic_bytes,
+                        _ => return Err(TransportError::Internal),
+                    },
+                }),
                 _ => return Err(TransportError::Internal),
-            },
-        }),
-        Err(DecodeFailure::Internal) => return Err(TransportError::Internal),
+            }
+        }
     })
 }
 
