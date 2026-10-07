@@ -112,7 +112,11 @@ impl ArithmeticError {
 
     /// Return the normative arithmetic requirement, matching the Python reference.
     pub fn requirement(&self) -> &'static str {
-        self.kind.diagnostic_code().definition().requirement
+        self.kind
+            .diagnostic_code()
+            .definition()
+            .requirement
+            .expect("numeric and conversion causes have a normative requirement")
     }
 }
 

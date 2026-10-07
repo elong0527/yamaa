@@ -637,6 +637,25 @@ fn preflight_reports_all_findings_in_reference_order_before_source_access() {
 }
 
 #[test]
+fn core_preflight_matches_independent_complete_findings() {
+    use serde_json::Value;
+    use yamaa_adapters::{specification_diagnostics, specification_run::PreparedRun};
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let mut count = 0;
+    for row in include_str!("fixtures/preflight.tsv").lines().skip(1) {
+        let fields = row.split('\t').collect::<Vec<_>>();
+        assert_eq!(fields.len(), 3);
+        let error = PreparedRun::prepare(prepare(&schema, fields[1].as_bytes())).unwrap_err();
+        let actual: Value =
+            serde_json::from_str(&specification_diagnostics::failure(&error, None)).unwrap();
+        let expected: Value = serde_json::from_str(fields[2]).unwrap();
+        assert_eq!(actual, expected, "{}", fields[0]);
+        count += 1;
+    }
+    assert_eq!(count, 5);
+}
+
+#[test]
 fn binding_collects_ordered_findings_before_dependency_diagnostics() {
     use serde_json::json;
     use yamaa_adapters::{specification_diagnostics::findings, specification_run::PreparedRun};

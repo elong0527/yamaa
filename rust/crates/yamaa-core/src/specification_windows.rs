@@ -59,7 +59,7 @@ impl WindowFinding {
         crate::diagnostic::Definition {
             phase: "validation",
             condition,
-            requirement,
+            requirement: Some(requirement),
         }
     }
 }

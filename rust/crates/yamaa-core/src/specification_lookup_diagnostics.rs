@@ -15,7 +15,7 @@ impl LookupFinding {
             definition: Definition {
                 phase: "validation",
                 condition,
-                requirement,
+                requirement: Some(requirement),
             },
             path: path.into(),
             context: BTreeMap::new(),

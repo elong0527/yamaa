@@ -82,6 +82,19 @@ class OriginalSpecifications(unittest.TestCase):
         guard.start()
         self.addCleanup(guard.stop)
 
+    def test_core_preflight_preserves_independent_findings_before_ports(self):
+        def no_port(*_):
+            self.fail("preflight failure reached a host port")
+        with (ROOT / "preflight.tsv").open(encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), 5)
+        self.assertEqual(sum(len(json.loads(r["expected"])["outcome"]["diagnostics"]) for r in records), 16)
+        for record in records:
+            with self.subTest(case=record["case"]):
+                with self.assertRaises(ValueError) as caught:
+                    yamaa_native._prepare_document("spec.yaml", record["source"].encode("ascii"), no_port, no_port, no_port)
+                self.assertEqual(json.loads(str(caught.exception)), json.loads(record["expected"]))
+
     def test_shipped_schema_ignores_ambient_files_and_rejects_versions_before_ports(self):
         path = ROOT / "cases/adam-adlb-ordered-sum/spec.yaml"
         raw = path.read_bytes()

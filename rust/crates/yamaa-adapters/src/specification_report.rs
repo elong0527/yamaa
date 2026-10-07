@@ -157,13 +157,13 @@ pub fn failure<E>(
                 .document()
                 .written_source_path(&source.read.source.name)
                 .ok_or(Error::InvalidObservation)?;
-            let diagnostic: crate::numeric_transport::Diagnostic = source
+            let diagnostic = source
                 .read
                 .failure
                 .ok_or(Error::InvalidObservation)?
-                .diagnostic(&source.read.source.name, written)
-                .into();
-            vec![condition(run, &json!({"diagnostic":diagnostic}))?]
+                .diagnostic(&source.read.source.name, written);
+            vec![specification_diagnostics::portable_diagnostic(diagnostic)
+                .ok_or(Error::InvalidObservation)?]
         }
         _ => return Err(Error::UnsupportedOutcome),
     };

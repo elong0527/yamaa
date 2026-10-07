@@ -9,6 +9,8 @@ use yamaa_core::{
 };
 
 struct Bindings;
+#[path = "diagnostic/preflight.rs"]
+mod preflight;
 impl NumericResolver for Bindings {
     type Error = Infallible;
     fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
@@ -63,7 +65,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
                 definition.condition,
                 definition.requirement
             ),
-            (phase, condition, requirement)
+            (phase, condition, Some(requirement))
         );
         assert_eq!(diagnostic.spec_paths, ["columns.X.compute"]);
         assert_eq!(
@@ -90,7 +92,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
                 definition.condition,
                 definition.requirement
             ),
-            ("convert", "conversion_failed", requirement)
+            ("convert", "conversion_failed", Some(requirement))
         );
         assert_eq!(diagnostic.context["value"], ContextValue::Scalar(source));
         assert_eq!(diagnostic.spec_paths, ["columns.X"]);
@@ -116,7 +118,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
                 definition.condition,
                 definition.requirement
             ),
-            ("validation", condition, "REQ-0785")
+            ("validation", condition, Some("REQ-0785"))
         );
         assert_eq!(diagnostic.spec_paths, ["input.SRC.path"]);
         assert_eq!(
@@ -130,6 +132,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         assert_eq!(diagnostic.context.len(), 2);
         reached.insert(diagnostic.code);
     }
+    reached.extend(preflight::reached());
     assert_eq!(reached, CONDITIONS.iter().copied().collect());
     assert_eq!(
         CONDITIONS.len(),
@@ -185,7 +188,7 @@ fn conversion_retains_unbounded_diagnostic_integer_as_decimal_text() {
     let diagnostic = convert(&Value::Str(digits.clone()), ColumnType::Int)
         .unwrap_err()
         .into_diagnostic("columns.X.unconvertible".into());
-    assert_eq!(diagnostic.definition().requirement, "REQ-0021");
+    assert_eq!(diagnostic.definition().requirement, Some("REQ-0021"));
     assert_eq!(
         diagnostic.context["from"],
         ContextValue::Scalar(Value::Str("int".into()))
