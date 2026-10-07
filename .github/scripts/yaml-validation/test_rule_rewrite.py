@@ -2,6 +2,8 @@
 """Regression checks for lost contracts, aliases, and duplicate authorities."""
 
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +12,7 @@ from check_rule_rewrite import check, load_migration, resolve_requirement
 from generate_rule_reference import generated
 
 REPO = Path(__file__).resolve().parents[3]
+CHECKER = Path(__file__).resolve().with_name("check_rule_rewrite.py")
 
 
 class RuleRewriteTests(unittest.TestCase):
@@ -28,6 +31,19 @@ class RuleRewriteTests(unittest.TestCase):
         body = path.read_text(encoding="ascii")
         self.assertIn(before, body)
         path.write_text(body.replace(before, after), encoding="ascii")
+
+    def assert_rejected(self, error):
+        """Both the returned errors and the command-line contract report it."""
+        errors, _ = check(self.root)
+        self.assertIn(error, errors)
+        result = subprocess.run(
+            [sys.executable, str(CHECKER), "--root", str(self.root)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(f"ERROR: {error}", result.stdout.splitlines())
 
     def test_complete_cutover_and_legacy_aliases_resolve(self):
         errors, coverage = check(self.root)
@@ -57,11 +73,21 @@ class RuleRewriteTests(unittest.TestCase):
             "**REQ-0382.** `all_or_none` requires",
             "**REQ-0382.** `exactly_one` requires",
         )
-        errors, _ = check(self.root)
-        self.assertIn(
+        self.assert_rejected(
             "execution/verification.md: REQ-0382 defines `exactly_one`, "
-            "which no verification registry declares",
-            errors,
+            "which no verification registry declares"
+        )
+
+    def test_schema_descriptor_keys_are_not_verification_fields(self):
+        # `type` is how the schema describes a field, not a check or a field.
+        self.replace(
+            self.rules / "execution/verification.md",
+            "**REQ-0382.** `all_or_none` requires",
+            "**REQ-0382.** `type` requires",
+        )
+        self.assert_rejected(
+            "execution/verification.md: REQ-0382 defines `type`, "
+            "which no verification registry declares"
         )
 
     def test_registered_verification_without_a_defining_requirement_fails(self):
@@ -72,11 +98,9 @@ class RuleRewriteTests(unittest.TestCase):
             "        - id: {type: verification_id, required: false}\n"
             "    row_count: # See REQ-1152.\n",
         )
-        errors, _ = check(self.root)
-        self.assertIn(
+        self.assert_rejected(
             "schema_verification.yaml: `exactly_one` is registered but no "
-            "execution/verification.md requirement defines it",
-            errors,
+            "execution/verification.md requirement defines it"
         )
 
     def test_file_move_preserves_requirement_ids(self):

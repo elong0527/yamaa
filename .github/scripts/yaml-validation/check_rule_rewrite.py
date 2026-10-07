@@ -81,32 +81,38 @@ def verification_registry_errors(root):
     """Match the checks the verification contract defines with the registries.
 
     A requirement in the verification contract may open with a registered
-    check or with a field one declares (`filter`, `when`); any other opening
-    name defines a check the schema rejects. Every registered check must open
-    at least one requirement, so none is registered without its contract.
+    check or with a payload field one declares (`filter`, `when`); any other
+    opening name defines a check the schema rejects. Every registered check must
+    open at least one requirement, so none is registered without its contract.
     """
     schema_path = root / "yaml/schema_verification.yaml"
     contract_path = root / "rules" / VERIFICATION_CONTRACT
     if not schema_path.is_file() or not contract_path.is_file():
         return []  # A partial root carries no verification vocabulary to match.
     schema = yaml.load(schema_path.read_text(encoding="ascii"), Loader=UniqueLoader)
+    classes = {name: value for name, value in schema.items() if isinstance(value, list)}
+
+    def fields(definition):
+        """Yield the payload fields one check declares, through named classes."""
+        if isinstance(definition, list):
+            for item in definition:
+                if isinstance(item, dict):
+                    yield from (key for key in item if key != "fields_from")
+        elif isinstance(definition, dict):
+            types = definition.get("type", [])
+            for name in [types] if isinstance(types, str) else types:
+                if name in classes:
+                    yield from fields(classes[name])
+
     registered = set()
     declared = set()
-
-    def names(node):
-        if isinstance(node, dict):
-            for key, value in node.items():
-                declared.add(key)
-                names(value)
-        elif isinstance(node, list):
-            for value in node:
-                names(value)
-
     for registry in VERIFICATION_REGISTRIES:
         operations = schema.get(registry)
         if isinstance(operations, dict):
             registered.update(operations)
-    names(schema)
+            for definition in operations.values():
+                declared.update(fields(definition))
+    declared |= registered
     contract = contract_path.read_text(encoding="ascii")
     defined = {}
     for identifier, name in DEFINING_NAME.findall(contract):
