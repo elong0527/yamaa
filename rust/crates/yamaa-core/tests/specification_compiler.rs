@@ -143,6 +143,15 @@ fn compiler_retains_admission_binding_and_resource_boundaries() {
 }
 
 fn window_document(filter: &str) -> SpecificationDocument {
+    window_settings(filter, "row_number", None, None, None)
+}
+fn window_settings(
+    filter: &str,
+    operation: &str,
+    method: Option<&str>,
+    direction: Option<&str>,
+    nulls: Option<&str>,
+) -> SpecificationDocument {
     let original = document("0", "input.csv");
     let input = original.document();
     let N::Sequence(columns) = &input.nodes()[input.field(input.root(), "columns").unwrap()] else {
@@ -152,14 +161,28 @@ fn window_document(filter: &str) -> SpecificationDocument {
     let value = input.field(derivation, "value").unwrap();
     let payload = input.field(value, "compute").unwrap();
     let mut nodes = input.nodes().to_vec();
+    let mut order = vec![("variable", Tree::Text("ID"))];
+    if let Some(value) = direction {
+        order.push(("direction", Tree::Text(value)));
+    }
+    if let Some(value) = nulls {
+        order.push(("nulls", Tree::Text(value)));
+    }
     let window = Tree::Map(vec![
-        ("order_by", Tree::List(vec![Tree::Text("ID")])),
+        ("order_by", Tree::List(vec![Tree::Map(order)])),
         ("filter", Tree::Text(filter)),
     ])
     .append(&mut nodes);
     let window_name = Tree::Text("window").append(&mut nodes);
-    let operation = Tree::Text("row_number").append(&mut nodes);
-    nodes[payload] = N::Mapping(vec![(window_name, window)]);
+    let operation = Tree::Text(operation).append(&mut nodes);
+    let mut options = vec![(window_name, window)];
+    if let Some(value) = method {
+        options.push((
+            Tree::Text("method").append(&mut nodes),
+            Tree::Text(value).append(&mut nodes),
+        ));
+    }
+    nodes[payload] = N::Mapping(options);
     nodes[value] = N::Mapping(vec![(operation, payload)]);
     fn copy_node(input: &[N], id: usize, output: &mut Vec<N>) -> usize {
         let node = match &input[id] {
@@ -218,4 +241,30 @@ fn window_compiler_binds_output_dependencies_without_engine_or_records() {
         PreparedSpecification::prepare(&window_document("SRC.ID > 0")),
         Err(PrepareError::Unsupported(_))
     ));
+}
+
+#[test]
+fn directly_admitted_windows_preserve_defaults_and_explicit_options() {
+    use yamaa_core::dataset::WindowKind;
+    for (method, kind) in [
+        (None, WindowKind::Competition),
+        (Some("competition"), WindowKind::Competition),
+        (Some("dense"), WindowKind::Dense),
+    ] {
+        for direction in [None, Some("asc"), Some("desc")] {
+            for nulls in [None, Some("last"), Some("first")] {
+                let document = window_settings("ID > 0", "rank", method, direction, nulls);
+                let plan = PreparedSpecification::prepare(&document)
+                    .unwrap()
+                    .bind(&source())
+                    .unwrap();
+                let Expression::Window(window) = &plan.columns()[0].expression else {
+                    panic!("compiled rank")
+                };
+                assert_eq!(window.kind, kind);
+                assert_eq!(window.order_by[0].descending, direction == Some("desc"));
+                assert_eq!(window.order_by[0].nulls_first, nulls == Some("first"));
+            }
+        }
+    }
 }

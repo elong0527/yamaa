@@ -75,7 +75,12 @@ impl Declaration {
         let name = |field_name| text(d, field(d, payload, field_name)?).map(String::from);
         let kind = match op {
             "row_number" => Kind::RowNumber,
-            "rank" => match text(d, field(d, payload, "method")?)? {
+            "rank" => match d
+                .field(payload, "method")
+                .map(|id| text(d, id))
+                .transpose()?
+                .unwrap_or("competition")
+            {
                 "competition" => Kind::Competition,
                 "dense" => Kind::Dense,
                 _ => return Err(PrepareError::Internal),
@@ -140,8 +145,16 @@ impl Declaration {
                         } else {
                             (
                                 text(d, field(d, term, "variable")?)?,
-                                text(d, field(d, term, "direction")?)? == "desc",
-                                text(d, field(d, term, "nulls")?)? == "first",
+                                d.field(term, "direction")
+                                    .map(|id| text(d, id))
+                                    .transpose()?
+                                    .unwrap_or("asc")
+                                    == "desc",
+                                d.field(term, "nulls")
+                                    .map(|id| text(d, id))
+                                    .transpose()?
+                                    .unwrap_or("last")
+                                    == "first",
                             )
                         };
                     order.push((variable.into(), descending, nulls_first));
