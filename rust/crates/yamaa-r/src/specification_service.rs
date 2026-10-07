@@ -147,6 +147,23 @@ fn execute_specification_csv(handle: Robj, source: Raw) -> List {
 /// filesystem authorization/cache policy; the shared compiler owns all semantics.
 #[extendr]
 fn specification_failure_report(handle: Robj, capture: Function, metadata: List) -> List {
+    observed_report(handle, capture, None, metadata)
+}
+#[extendr]
+fn specification_report(
+    handle: Robj,
+    capture: Function,
+    publish: Function,
+    metadata: List,
+) -> List {
+    observed_report(handle, capture, Some(publish), metadata)
+}
+fn observed_report(
+    handle: Robj,
+    capture: Function,
+    publisher: Option<Function>,
+    metadata: List,
+) -> List {
     boundary(|| {
         use yamaa_adapters::{
             specification_report::{self, Identity},
@@ -211,20 +228,46 @@ fn specification_failure_report(handle: Robj, capture: Function, metadata: List)
             .collect::<std::result::Result<Vec<String>, String>>()?;
         let run = resolve(&handle)?;
         let attempt = run.execute_with_port(&mut Port { capture, reads: 0 });
-        specification_report::failure(
-            &run,
-            &attempt,
-            Identity {
-                runtime: "r",
-                runtime_version: &fields[0],
-                engine_version: &fields[1],
-                example: &fields[2],
-                specification: &fields[3],
-                base_directory: &fields[4],
-            },
-        )
-        .map(|value| r!(value.to_string()))
-        .map_err(|_| "unsupported or invalid failure-report observation".into())
+        let identity = Identity {
+            runtime: "r",
+            runtime_version: &fields[0],
+            engine_version: &fields[1],
+            example: &fields[2],
+            specification: &fields[3],
+            base_directory: &fields[4],
+        };
+        if let Some(callback) = publisher {
+            struct Publisher(Function);
+            impl specification_report::ArtifactPort for Publisher {
+                type Error = String;
+                fn publish(
+                    &mut self,
+                    path: &str,
+                    content: &[u8],
+                ) -> std::result::Result<(), String> {
+                    let result = self
+                        .0
+                        .call(pairlist!(path = path, content = Raw::from_bytes(content)))
+                        .map_err(|_| "publication callback failed")?;
+                    if result.as_bool() != Some(true) {
+                        return Err("publication callback rejected output".into());
+                    }
+                    Ok(())
+                }
+            }
+            specification_report::complete(&run, &attempt, identity, &mut Publisher(callback))
+                .map(|value| r!(value.to_string()))
+                .map_err(|error| match error {
+                    specification_report::CompleteError::Publish(error) => error,
+                    specification_report::CompleteError::Report(_) => {
+                        "unsupported or invalid report observation".into()
+                    }
+                })
+        } else {
+            specification_report::failure(&run, &attempt, identity)
+                .map(|value| r!(value.to_string()))
+                .map_err(|_| "unsupported or invalid failure-report observation".into())
+        }
     })
 }
-extendr_module! {mod specification_service;fn prepare_specification;fn specification_source;fn execute_specification_csv;fn specification_failure_report;}
+extendr_module! {mod specification_service;fn prepare_specification;fn specification_source;fn execute_specification_csv;fn specification_failure_report;fn specification_report;}

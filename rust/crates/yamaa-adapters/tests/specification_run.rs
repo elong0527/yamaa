@@ -847,3 +847,889 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
         assert_eq!(actual, expected, "{name}");
     }
 }
+
+#[test]
+fn declared_source_types_preserve_ingestion_diagnostics_before_formula_errors() {
+    use serde_json::json;
+    use yamaa_adapters::{specification_diagnostics::findings, specification_run::PreparedRun};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let schema = schema(&root.join("yaml"));
+    let case = root.join("benchmarks/negative-zero-division");
+    let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+    let written = raw
+        .replace(
+            "LB: input/lb.csv",
+            "LB: {path: input/lb.csv, types: {LBSTRESN: int}}",
+        )
+        .replace("100 * (AVAL - BASE) / BASE", "AVAL +");
+    assert_ne!(written, raw);
+    let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
+    assert_eq!(run.source().types.len(), 1);
+    let error = run
+        .execute_csv(b"STUDYID,USUBJID,LBTESTCD,LBSTRESN,LBBLRESN\nS,P,ALT,42.5,0")
+        .err()
+        .unwrap();
+    assert_eq!(
+        findings(&error, Some(run.source())).unwrap(),
+        vec![
+            json!({"phase":"ingest","condition":"field_parse_failed","requirement":"REQ-0536","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","type":"int","value":"42.5"}})
+        ]
+    );
+    let written = written.replace("{LBSTRESN: int}", "{LBSTRESN: int, ZZ: float, AA: int}");
+    let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
+    let error = run
+        .execute_csv(b"STUDYID,USUBJID,LBTESTCD,LBSTRESN,LBBLRESN\nS,P,ALT,42.5,0")
+        .err()
+        .unwrap();
+    assert_eq!(
+        findings(&error, Some(run.source())).unwrap(),
+        vec![
+            json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0532","spec_paths":["input.LB.types.ZZ"],"context":{"dataset":"LB","field":"ZZ"}})
+        ]
+    );
+}
+
+#[test]
+fn original_ordered_sum_yaml_executes_all_seventeen_rows_with_exact_float_bits() {
+    use yamaa_adapters::typed_csv;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let schema = schema(&root.join("yaml"));
+    let case = root.join("benchmarks/adam-adlb-ordered-sum");
+    let document = prepare(&schema, &std::fs::read(case.join("spec.yaml")).unwrap());
+    let compiled =
+        yamaa_engine::specification::PreparedSpecification::prepare(document.model()).unwrap();
+    let table_limits = TableLimits {
+        max_rows: 100,
+        max_columns: 64,
+        max_batches: 1,
+        max_cells: 6400,
+    };
+    let source = typed_csv::parse(
+        &std::fs::read(case.join("input/lb.csv")).unwrap(),
+        &compiled.source().types,
+        Default::default(),
+        table_limits,
+    )
+    .unwrap();
+    let plan = compiled.bind(source.schema()).unwrap();
+    let result = plan.execute(&source, limits()).unwrap();
+    assert_eq!(result.dataset.rows().len(), 17);
+    let projection = compiled
+        .projection()
+        .iter()
+        .map(|name| {
+            result
+                .dataset
+                .schema()
+                .columns()
+                .iter()
+                .position(|c| &c.name == name)
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let bytes = yamaa_adapters::csv_artifact::render(&result.dataset, &projection, 4096).unwrap();
+    assert_eq!(
+        bytes,
+        std::fs::read(case.join("expected/adlb.csv")).unwrap()
+    );
+    let expected = typed_csv::parse(
+        &std::fs::read(case.join("expected/adlb.csv")).unwrap(),
+        &[("AVAL".into(), yamaa_core::value::ColumnType::Float)],
+        Default::default(),
+        table_limits,
+    )
+    .unwrap();
+    for (column, name) in compiled.projection().iter().enumerate() {
+        assert_eq!(&expected.schema().columns()[column].name, name);
+        let actual_column = result
+            .dataset
+            .schema()
+            .columns()
+            .iter()
+            .position(|c| &c.name == name)
+            .unwrap();
+        assert_eq!(
+            result.dataset.schema().columns()[actual_column].kind,
+            expected.schema().columns()[column].kind
+        );
+        for row in 0..17 {
+            assert_eq!(
+                result.dataset.cell(row, actual_column).unwrap(),
+                expected.cell(row, column).unwrap(),
+                "row {row} column {name}"
+            );
+        }
+    }
+    let values = result
+        .dataset
+        .schema()
+        .columns()
+        .iter()
+        .position(|c| c.name == "AVAL")
+        .unwrap();
+    let Value::Float(first) = result.dataset.rows()[12][values] else {
+        panic!()
+    };
+    let Value::Float(second) = result.dataset.rows()[13][values] else {
+        panic!()
+    };
+    assert_eq!(first.get().to_bits(), 0.6000000000000001f64.to_bits());
+    assert_eq!(second.get().to_bits(), 0.6f64.to_bits());
+    assert_eq!(result.dataset.rows()[16][values], Value::Missing);
+    assert_eq!(result.verifications.len(), 2);
+    assert!(result.verifications.iter().all(|v| v.failed_count == 0));
+}
+
+#[test]
+fn aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path() {
+    use serde_json::json;
+    use yamaa_adapters::{specification_diagnostics::findings, specification_run::PreparedRun};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let schema = schema(&root.join("yaml"));
+    let case = root.join("benchmarks/adam-adlb-ordered-sum");
+    let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+    let data = std::fs::read(case.join("input/lb.csv")).unwrap();
+    for (expr, condition, requirement, context) in [
+        (
+            "SUM(AVAL)",
+            "invalid_aggregate_context",
+            "REQ-0329",
+            json!({"expr":"SUM(AVAL)","reason":"a grouped row aggregate reads its row driver"}),
+        ),
+        (
+            "SUM(ABSENT)",
+            "invalid_aggregate_context",
+            "REQ-0329",
+            json!({"expr":"SUM(ABSENT)","reason":"a grouped row aggregate reads its row driver"}),
+        ),
+        (
+            "SUM(OTHER.X)",
+            "invalid_aggregate_context",
+            "REQ-0329",
+            json!({"expr":"SUM(OTHER.X)","reason":"a grouped row aggregate reads 'LB', not 'OTHER'"}),
+        ),
+        (
+            "SUM(LB.ABSENT)",
+            "unknown_field",
+            "REQ-0103",
+            json!({"identifier":"LB.ABSENT"}),
+        ),
+        (
+            "SUM(",
+            "invalid_aggregate_expression",
+            "REQ-0499",
+            json!({"expr":"SUM("}),
+        ),
+        (
+            "SUM(SUM(LB.LBSTRESN))",
+            "nested_reduction",
+            "REQ-0502",
+            json!({"expr":"SUM(SUM(LB.LBSTRESN))","outer":"SUM","inner":"SUM"}),
+        ),
+        (
+            "SUM(LB.LBSTRESN, LB.LBSTRESN)",
+            "invalid_aggregate_expression",
+            "REQ-0499",
+            json!({"expr":"SUM(LB.LBSTRESN, LB.LBSTRESN)"}),
+        ),
+    ] {
+        let run = PreparedRun::prepare(prepare(
+            &schema,
+            raw.replace("SUM(LB.LBSTRESN)", expr).as_bytes(),
+        ))
+        .unwrap();
+        let error = run.execute_csv(&data).err().unwrap();
+        assert_eq!(
+            findings(&error, Some(run.source())).unwrap(),
+            vec![
+                json!({"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":context})
+            ]
+        );
+        let invalid_data = String::from_utf8(data.clone())
+            .unwrap()
+            .replacen(",0.1", ",invalid", 1);
+        let error = run.execute_csv(invalid_data.as_bytes()).err().unwrap();
+        assert_eq!(
+            findings(&error, Some(run.source())).unwrap(),
+            vec![
+                json!({"phase":"ingest","condition":"field_parse_failed","requirement":"REQ-0536","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","type":"float","value":"invalid"}})
+            ]
+        );
+    }
+}
+
+#[test]
+fn declared_field_and_total_row_expression_budgets_precede_compiler_ownership() {
+    use yamaa_engine::specification::{CompilationLimits, PrepareError, PreparedSpecification};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let schema = schema(&root.join("yaml"));
+    let raw = std::fs::read(root.join("benchmarks/adam-adlb-ordered-sum/spec.yaml")).unwrap();
+    let document = prepare(&schema, &raw);
+    assert!(matches!(
+        PreparedSpecification::prepare_with_limits(
+            document.model(),
+            CompilationLimits {
+                source_fields: 0,
+                ..Default::default()
+            }
+        ),
+        Err(PrepareError::Limit("source_fields"))
+    ));
+    assert!(matches!(
+        PreparedSpecification::prepare_with_limits(
+            document.model(),
+            CompilationLimits {
+                numeric_bytes: 3,
+                ..Default::default()
+            }
+        ),
+        Err(PrepareError::Limit("numeric_bytes"))
+    ));
+}
+
+#[test]
+fn original_success_report_follows_actual_atomic_publication_and_output_failures_do_not_publish() {
+    use serde_json::{json, Value as Json};
+    use yamaa_adapters::{
+        specification_report::{self, ArtifactPort, CompleteError, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_engine::specification::SourceDeclaration;
+    struct Captured {
+        bytes: Arc<[u8]>,
+        reads: usize,
+    }
+    impl SourcePort for Captured {
+        type Error = std::convert::Infallible;
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            limit: usize,
+        ) -> Result<Arc<[u8]>, Self::Error> {
+            assert_eq!(source.path, "input/lb.csv");
+            assert!(self.bytes.len() <= limit);
+            self.reads = 1;
+            Ok(self.bytes.clone())
+        }
+    }
+    struct Publisher {
+        directory: std::path::PathBuf,
+        calls: usize,
+        fail: bool,
+    }
+    impl ArtifactPort for Publisher {
+        type Error = &'static str;
+        fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), Self::Error> {
+            self.calls += 1;
+            if self.fail {
+                return Err("original publication error");
+            }
+            assert_eq!(path, "adlb.csv");
+            use std::io::Write;
+            let temporary = self.directory.join("candidate.csv");
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)
+                .unwrap();
+            file.write_all(bytes).unwrap();
+            file.sync_all().unwrap();
+            drop(file);
+            std::fs::rename(temporary, self.directory.join(path)).unwrap();
+            Ok(())
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let schema = schema(&root.join("yaml"));
+    let case = root.join("benchmarks/adam-adlb-ordered-sum");
+    let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+    let directory = std::env::temp_dir().join(format!(
+        "yamaa-original-success-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&directory).unwrap();
+    let mut publisher = Publisher {
+        directory: directory.clone(),
+        calls: 0,
+        fail: false,
+    };
+    let mut port = Captured {
+        bytes: std::fs::read(case.join("input/lb.csv")).unwrap().into(),
+        reads: 0,
+    };
+    let id = || Identity {
+        runtime: "python",
+        runtime_version: "fixture-runtime",
+        engine_version: "fixture-engine",
+        example: "adam-adlb-ordered-sum",
+        specification: "spec.yaml",
+        base_directory: ".",
+    };
+    let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
+    let expected: Json = serde_json::from_str(include_str!(
+        "fixtures/specifications/adam-adlb-ordered-sum.json"
+    ))
+    .unwrap();
+    let attempt = run.execute_with_port(&mut port);
+    let report = specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
+    assert_eq!(report, expected);
+    assert_eq!(publisher.calls, 1);
+    assert_eq!(
+        std::fs::read(directory.join("adlb.csv")).unwrap(),
+        std::fs::read(case.join("expected/adlb.csv")).unwrap()
+    );
+    publisher.fail = true;
+    assert!(matches!(
+        specification_report::complete(&run, &attempt, id(), &mut publisher),
+        Err(CompleteError::Publish("original publication error"))
+    ));
+    assert_eq!(publisher.calls, 2);
+    publisher.fail = false;
+    let run = PreparedRun::prepare(prepare(
+        &schema,
+        raw.replace("path: adlb.csv", "path: adlb.bad").as_bytes(),
+    ))
+    .unwrap();
+    let attempt = run.execute_with_port(&mut port);
+    let report = specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
+    let mut expected = expected;
+    expected["outcome"] = json!("failure");
+    expected["artifacts"] = json!([]);
+    expected["tables"].as_array_mut().unwrap().pop();
+    expected["nodes"][0]["outcome"] = json!("failure");
+    expected["diagnostics"] = json!([{"phase":"validation","condition":"unknown_artifact_profile","requirement":"REQ-0760","spec_paths":["output.path"],"context":{"path":"adlb.bad","permitted":[".csv",".parquet"]}}]);
+    expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
+    expected["source_reads"][0]["snapshots_created"] = json!(0);
+    assert_eq!(report, expected);
+    assert_eq!(publisher.calls, 2);
+
+    let run = PreparedRun::prepare(prepare(
+        &schema,
+        raw.replace("min: 17\n      max: 17", "min: 18\n      max: 18")
+            .as_bytes(),
+    ))
+    .unwrap();
+    let attempt = run.execute_with_port(&mut port);
+    let actual = specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
+    let diagnostic = json!({"phase":"verification","condition":"row_count_failed","requirement":"REQ-0385","spec_paths":["verifications[1].row_count"],"context":{"count":17,"failure_count":1,"keys":[{}]}});
+    expected["diagnostics"] = json!([diagnostic.clone()]);
+    expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
+    let mut failure = diagnostic;
+    failure["severity"] = json!("error");
+    failure["offending_keys"] = json!([{}]);
+    failure["log_context"] = failure["context"].clone();
+    expected["verifications"][1]["failure"] = failure;
+    assert_eq!(actual, expected);
+    assert_eq!(publisher.calls, 2);
+    // All checks execute despite an earlier data failure; output diagnostics
+    // remain later than verification and no derived/accepted artifact is exposed.
+    let written = raw
+        .replace(
+            "columns: [STUDYID, USUBJID, PARAMCD, AVISIT]",
+            "columns: [USUBJID]",
+        )
+        .replace("path: adlb.csv", "path: adlb.bad");
+    let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
+    let actual = specification_report::complete(
+        &run,
+        &run.execute_with_port(&mut port),
+        id(),
+        &mut publisher,
+    )
+    .unwrap();
+    let original: Json = serde_json::from_str(include_str!(
+        "fixtures/specifications/adam-adlb-ordered-sum.json"
+    ))
+    .unwrap();
+    let rows = original["tables"][1]["rows"].as_array().unwrap();
+    let keys=[0,1,2,12,3,4,5,13,6,14,7,8,9,15,10,11,16].into_iter().map(|row|json!({"STUDYID":rows[row][0]["value"],"USUBJID":rows[row][1]["value"],"PARAMCD":rows[row][3]["value"],"AVISIT":rows[row][2]["value"]})).collect::<Vec<_>>();
+    let diagnostic = json!({"phase":"verification","condition":"unique_failed","requirement":"REQ-0381","spec_paths":["verifications[0].unique"],"context":{"columns":["USUBJID"],"failure_count":5,"keys":&keys[..5]}});
+    expected["diagnostics"] = json!([diagnostic.clone()]);
+    expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
+    let mut failure = diagnostic;
+    failure["severity"] = json!("error");
+    failure["offending_keys"] = json!(keys);
+    failure["log_context"] = failure["context"].clone();
+    failure["log_context"]["keys"] = failure["offending_keys"].clone();
+    expected["verifications"][0]["evaluated_count"] = json!(5);
+    expected["verifications"][0]["failure"] = failure;
+    expected["verifications"][1]["failure"] = Json::Null;
+    assert_eq!(actual, expected);
+    assert_eq!(publisher.calls, 2);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
+    use serde_json::{json, Value as Json};
+    use yamaa_adapters::{
+        specification_report::{self, ArtifactPort, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_engine::specification::SourceDeclaration;
+    struct Host {
+        bytes: Arc<[u8]>,
+        reads: usize,
+    }
+    impl SourcePort for Host {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(&mut self, _: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+            self.reads += 1;
+            Ok(self.bytes.clone())
+        }
+    }
+    impl ArtifactPort for Host {
+        type Error = ();
+        fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
+            panic!("invalid verification must never publish")
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let schema = schema(&root.join("yaml"));
+    let case = root.join("benchmarks/adam-adlb-ordered-sum");
+    let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+    let prefix = raw.split("verifications:").next().unwrap();
+    let bytes = std::fs::read(case.join("input/lb.csv")).unwrap();
+    let id = || Identity {
+        runtime: "python",
+        runtime_version: "fixture-runtime",
+        engine_version: "fixture-engine",
+        example: "adam-adlb-ordered-sum",
+        specification: "spec.yaml",
+        base_directory: ".",
+    };
+    // Each valid first check records its identity and failure before the later
+    // declaration aborts. Earlier data failures are kept in the ledger, while
+    // the later declaration is the execution diagnostic (REQ-1177).
+    for (declaration, condition, requirement, suffix, reason) in [
+        (
+            "unique: {columns: []}",
+            "invalid_declaration",
+            "REQ-0397",
+            "unique",
+            "columns names at least one column",
+        ),
+        (
+            "unique: {columns: [ABSENT]}",
+            "unknown_field",
+            "REQ-0405",
+            "unique.columns",
+            "unknown column 'ABSENT'",
+        ),
+        (
+            "row_count: {}",
+            "invalid_declaration",
+            "REQ-0399",
+            "row_count",
+            "row_count requires one bound",
+        ),
+        (
+            "row_count: {min: 19, max: 18}",
+            "invalid_declaration",
+            "REQ-0399",
+            "row_count",
+            "row_count min exceeds max",
+        ),
+        (
+            "row_count: {id: \"a'b\", min: 0}",
+            "duplicate_identifier",
+            "REQ-0398",
+            "row_count",
+            "verification id \"a'b\" repeats verifications[0].row_count",
+        ),
+    ] {
+        for minimum in [0, 18] {
+            let written = format!("{prefix}verifications:\n  - row_count: {{id: \"a'b\", min: {minimum}}}\n  - {declaration}\n  - row_count: {{min: 0}}\n");
+            let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
+            let mut host = Host {
+                bytes: bytes.clone().into(),
+                reads: 0,
+            };
+            let attempt = run.execute_with_port(&mut host);
+            let actual = specification_report::complete(&run, &attempt, id(), &mut host).unwrap();
+            assert_eq!(host.reads, 1);
+            assert_eq!(actual["outcome"], "failure");
+            assert_eq!(actual["artifacts"], json!([]));
+            assert_eq!(actual["tables"].as_array().unwrap().len(), 1);
+            assert_eq!(actual["verifications"].as_array().unwrap().len(), 1);
+            let record = &actual["verifications"][0];
+            assert_eq!(record["verification_id"], "a'b");
+            assert_eq!(record["evaluated_count"], 1);
+            if minimum == 0 {
+                assert_eq!(record["failure"], Json::Null);
+            } else {
+                assert_eq!(record["failure"]["condition"], "row_count_failed");
+                assert_eq!(record["failure"]["context"]["verification_id"], "a'b");
+                assert_eq!(record["failure"]["log_context"]["verification_id"], "a'b");
+            }
+            assert_eq!(
+                actual["diagnostics"],
+                json!([{"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":[format!("verifications[1].{suffix}")],"context":{"reason":reason}}])
+            );
+        }
+    }
+    let written = format!("{prefix}verifications:\n  - row_count: {{}}\n");
+    // Derivation grammar is deferred until ingestion but is still before checks.
+    let invalid_formula = written.replace("SUM(LB.LBSTRESN)", "SUM(");
+    let run = PreparedRun::prepare(prepare(&schema, invalid_formula.as_bytes())).unwrap();
+    let mut host = Host {
+        bytes: bytes.clone().into(),
+        reads: 0,
+    };
+    let actual =
+        specification_report::complete(&run, &run.execute_with_port(&mut host), id(), &mut host)
+            .unwrap();
+    assert_eq!(actual["verifications"], json!([]));
+    assert_eq!(
+        actual["diagnostics"][0]["spec_paths"],
+        json!(["rows[1].derivations.AVAL.aggregate"])
+    );
+    // A missing output key is reached after derivation and before declaration checks.
+    let run = PreparedRun::prepare(prepare(
+        &schema,
+        written
+            .replace("derivation: LB.STUDYID", "derivation: {literal: null}")
+            .as_bytes(),
+    ))
+    .unwrap();
+    let actual =
+        specification_report::complete(&run, &run.execute_with_port(&mut host), id(), &mut host)
+            .unwrap();
+    assert_eq!(actual["verifications"], json!([]));
+    assert_eq!(actual["diagnostics"][0]["condition"], "missing_key");
+    // Even a later unsupported operation prevents all source requests; it is
+    // not hidden behind an earlier language declaration finding.
+    let unsupported = format!("{written}  - assert: {{expr: 'TRUE'}}\n");
+    assert!(matches!(
+        PreparedRun::prepare(prepare(&schema, unsupported.as_bytes())),
+        Err(yamaa_adapters::specification_run::Error::Prepare(
+            yamaa_engine::specification::PrepareError::Unsupported(_)
+        ))
+    ));
+}
+
+#[test]
+fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
+    use serde_json::json;
+    use yamaa_adapters::{specification_diagnostics, specification_run::PreparedRun};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let schema = schema(&root.join("yaml"));
+    let raw =
+        std::fs::read_to_string(root.join("benchmarks/adam-adlb-ordered-sum/spec.yaml")).unwrap();
+    let bytes = std::fs::read(root.join("benchmarks/adam-adlb-ordered-sum/input/lb.csv")).unwrap();
+    for (replacement, condition, requirement, context) in [
+        (
+            "[]",
+            "invalid_field_type",
+            "REQ-0065",
+            json!({"row":"total","group_by":[]}),
+        ),
+        (
+            "[LB.STUDYID, LB.STUDYID]",
+            "invalid_field_type",
+            "REQ-0065",
+            json!({"row":"total","group_by":["LB.STUDYID","LB.STUDYID"]}),
+        ),
+        (
+            "[STUDYID]",
+            "unknown_field",
+            "REQ-0066",
+            json!({"row":"total","identifier":"STUDYID","dataset":"LB"}),
+        ),
+    ] {
+        let written = raw.replace(
+            "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]",
+            &format!("group_by: {replacement}"),
+        );
+        let error = PreparedRun::prepare(prepare(&schema, written.as_bytes()))
+            .expect_err("preflight without source");
+        assert_eq!(specification_diagnostics::findings(&error,None).unwrap(),json!([{"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":["rows[1].group_by"],"context":context}]).as_array().unwrap().clone());
+    }
+    let written = raw
+        .replace("id: total", "id: total\n    dataset: ABSENT")
+        .replace("    group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]\n", "");
+    let error = PreparedRun::prepare(prepare(&schema, written.as_bytes()))
+        .err()
+        .unwrap();
+    assert_eq!(specification_diagnostics::findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","requirement":null,"spec_paths":["rows[1].dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
+    let written = raw.replace(
+        "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]",
+        "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT, LB.ABSENT]",
+    );
+    let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
+    let error = run.execute_csv(&bytes).err().unwrap();
+    assert_eq!(
+        specification_diagnostics::findings(&error, Some(run.source())).unwrap(),
+        vec![
+            json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["rows[1].group_by[3]"],"context":{"identifier":"LB.ABSENT"}})
+        ]
+    );
+    for (written, path, requirement, context) in [
+        (
+            raw.replace("PARAM: {literal: Total of Components}", "PARAM: LB.LBTEST"),
+            "rows[1].derivations.PARAM.source",
+            "REQ-0067",
+            json!({"identifier":"LB.LBTEST","row":"total","dataset":"LB"}),
+        ),
+        (
+            raw.replace("derivation: LB.VISIT", "derivation: LB.LBTEST"),
+            "columns.AVISIT.derivation.source",
+            "REQ-0107",
+            json!({"identifier":"LB.LBTEST","dataset":"LB"}),
+        ),
+    ] {
+        let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
+        let error = run
+            .execute_csv(&bytes)
+            .err()
+            .expect("scope finding after ingestion");
+        assert_eq!(specification_diagnostics::findings(&error,Some(run.source())).unwrap(),json!([{"phase":"validation","condition":"ungrouped_driver_field","requirement":requirement,"spec_paths":[path],"context":context}]).as_array().unwrap().clone());
+    }
+}
+
+#[test]
+fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
+    use serde_json::{json, Value as Json};
+    use yamaa_adapters::{
+        specification_report::{self, ArtifactPort, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_engine::specification::SourceDeclaration;
+    struct Host {
+        bytes: Arc<[u8]>,
+        reads: usize,
+        published: Vec<Vec<u8>>,
+    }
+    impl SourcePort for Host {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(&mut self, _: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+            self.reads += 1;
+            Ok(self.bytes.clone())
+        }
+    }
+    impl ArtifactPort for Host {
+        type Error = ();
+        fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
+            assert_eq!(path, "adlb.csv");
+            self.published.push(bytes.to_vec());
+            Ok(())
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let schema = schema(&root.join("yaml"));
+    let case = root.join("benchmarks/adam-adlb-ordered-sum");
+    let raw = std::fs::read_to_string(case.join("spec.yaml"))
+        .unwrap()
+        .replace("LBSTRESN: float", "LBSTRESN: str");
+    let input = std::fs::read_to_string(case.join("input/lb.csv")).unwrap();
+    let id = || Identity {
+        runtime: "python",
+        runtime_version: "fixture-runtime",
+        engine_version: "fixture-engine",
+        example: "adam-adlb-ordered-sum",
+        specification: "spec.yaml",
+        base_directory: ".",
+    };
+    for all_missing in [false, true] {
+        let mut expected: Json = serde_json::from_str(include_str!(
+            "fixtures/specifications/adam-adlb-ordered-sum.json"
+        ))
+        .unwrap();
+        expected["tables"][0]["types"][6] = json!("str");
+        let mut source = String::new();
+        for (i, line) in input.lines().enumerate() {
+            if i == 0 {
+                source.push_str(line);
+                source.push('\n');
+                continue;
+            }
+            let (fields, value) = line.rsplit_once(',').unwrap();
+            let value = if all_missing { "" } else { value };
+            source.push_str(&format!("{fields},{value}\n"));
+            expected["tables"][0]["rows"][i - 1][6] = if value.is_empty() {
+                json!({"type":"missing","value":null})
+            } else {
+                json!({"type":"str","value":value})
+            };
+        }
+        let mut host = Host {
+            bytes: source.into_bytes().into(),
+            reads: 0,
+            published: Vec::new(),
+        };
+        let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
+        let attempt = run.execute_with_port(&mut host);
+        let actual = specification_report::complete(&run, &attempt, id(), &mut host).unwrap();
+        if all_missing {
+            for row in expected["tables"][1]["rows"].as_array_mut().unwrap() {
+                row[5] = json!({"type":"missing","value":null});
+            }
+            let original = std::fs::read_to_string(case.join("expected/adlb.csv")).unwrap();
+            let records = original
+                .lines()
+                .enumerate()
+                .map(|(i, line)| {
+                    if i == 0 {
+                        line.to_owned()
+                    } else {
+                        let mut cells = line.split(',').collect::<Vec<_>>();
+                        cells[5] = "";
+                        cells.join(",")
+                    }
+                })
+                .collect::<Vec<_>>();
+            let content = format!("{}\n", records.join("\n"));
+            expected["artifacts"][0]["records"] = json!(records);
+            expected["artifacts"][0]["content"] = json!(content);
+            expected["artifacts"][0]["byte_length"] = json!(content.len());
+            assert_eq!(host.published, vec![content.into_bytes()]);
+        } else {
+            expected["outcome"] = json!("failure");
+            expected["artifacts"] = json!([]);
+            expected["verifications"] = json!([]);
+            expected["tables"].as_array_mut().unwrap().pop();
+            expected["diagnostics"] = json!([{"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0510","spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":{"expr":"SUM(LB.LBSTRESN)","reducer":"SUM","source":"LB.LBSTRESN","expected":"numeric","actual":"str"}}]);
+            expected["nodes"][0]["outcome"] = json!("failure");
+            expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
+            assert!(host.published.is_empty());
+        }
+        assert_eq!(host.reads, 1);
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
+fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
+    use serde_json::{json, Value as Json};
+    use yamaa_adapters::{
+        specification_diagnostics,
+        specification_report::{self, ArtifactPort, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_engine::specification::SourceDeclaration;
+    struct Host {
+        bytes: Arc<[u8]>,
+        reads: usize,
+        published: Vec<Vec<u8>>,
+    }
+    impl SourcePort for Host {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(&mut self, _: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+            self.reads += 1;
+            Ok(self.bytes.clone())
+        }
+    }
+    impl ArtifactPort for Host {
+        type Error = ();
+        fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
+            assert_eq!(path, "adlb.csv");
+            self.published.push(bytes.to_vec());
+            Ok(())
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let schema = schema(&root.join("yaml"));
+    let case = root.join("benchmarks/adam-adlb-ordered-sum");
+    let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+    let written = raw
+        .replace(
+            "label: Parameter\n",
+            "label: Parameter\n    derivation: LB.LBTEST\n",
+        )
+        .replace("      PARAM: LB.LBTEST\n", "")
+        .replace(
+            "label: Derivation Type\n",
+            "label: Derivation Type\n    derivation: {literal: null}\n",
+        )
+        .replace("      DTYPE: {literal: null}\n", "");
+    let mut host = Host {
+        bytes: std::fs::read(case.join("input/lb.csv")).unwrap().into(),
+        reads: 0,
+        published: Vec::new(),
+    };
+    let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
+    let attempt = run.execute_with_port(&mut host);
+    let actual = specification_report::complete(
+        &run,
+        &attempt,
+        Identity {
+            runtime: "python",
+            runtime_version: "fixture-runtime",
+            engine_version: "fixture-engine",
+            example: "adam-adlb-ordered-sum",
+            specification: "spec.yaml",
+            base_directory: ".",
+        },
+        &mut host,
+    )
+    .unwrap();
+    let expected: Json = serde_json::from_str(include_str!(
+        "fixtures/specifications/adam-adlb-ordered-sum.json"
+    ))
+    .unwrap();
+    assert_eq!(actual, expected);
+    assert_eq!(host.reads, 1);
+    assert_eq!(
+        host.published,
+        vec![std::fs::read(case.join("expected/adlb.csv")).unwrap()]
+    );
+    // The inherited declaration retains its column path, although it executes
+    // at row construction for the template without an override.
+    let bad = written.replace("derivation: LB.LBTEST", "derivation: LB.ABSENT");
+    let run = PreparedRun::prepare(prepare(&schema, bad.as_bytes())).unwrap();
+    let error = run.execute_csv(&host.bytes).err().unwrap();
+    assert_eq!(
+        specification_diagnostics::findings(&error, Some(run.source())).unwrap(),
+        vec![
+            json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["columns.PARAM.derivation.source"],"context":{"identifier":"LB.ABSENT"}})
+        ]
+    );
+    let bad = raw.replace(
+        "label: Analysis Value\n",
+        "label: Analysis Value\n    derivation: {aggregate: {expr: 'SUM(LB.LBSTRESN)'}}\n",
+    );
+    let error = PreparedRun::prepare(prepare(&schema, bad.as_bytes()))
+        .expect_err("dataset aggregate is not a row default");
+    assert_eq!(
+        specification_diagnostics::findings(&error, None).unwrap(),
+        vec![
+            json!({"phase":"validation","condition":"duplicate_derivation","requirement":"REQ-1260","spec_paths":["columns.AVAL.derivation"],"context":{"column":"AVAL","rows":["collected","total"]}})
+        ]
+    );
+    // Unknown row names are reported first, then missing coverage in declared
+    // column order, then the independently conflicting root filter.
+    let bad = raw
+        .replace("domain: ADLB", "domain: ADLB\nfilter: 'TRUE'")
+        .replace("      PARAM: LB.LBTEST\n", "")
+        .replacen(
+            "    derivations:\n",
+            "    derivations:\n      ABSENT: {literal: ignored}\n",
+            1,
+        );
+    let error = PreparedRun::prepare(prepare(&schema, bad.as_bytes()))
+        .expect_err("preflight without source");
+    assert_eq!(
+        specification_diagnostics::findings(&error, None).unwrap(),
+        vec![
+            json!({"phase":"validation","condition":"undeclared_column","requirement":null,"spec_paths":["rows[0].derivations.ABSENT"],"context":{"column":"ABSENT"}}),
+            json!({"phase":"validation","condition":"missing_derivation","requirement":"REQ-0200","spec_paths":["columns.PARAM.derivation"],"context":{"column":"PARAM","rows":["collected"]}}),
+            json!({"phase":"validation","condition":"conflicting_row_construction","requirement":"REQ-1171","spec_paths":["filter","rows"],"context":{}}),
+        ]
+    );
+}

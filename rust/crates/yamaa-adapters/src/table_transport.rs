@@ -391,7 +391,7 @@ fn preflight(mut input: &[u8]) -> Result<TableSchema, Error> {
 
 /// Rebuild visible values into fresh arrays, removing all masked physical payloads
 /// and out-of-slice buffers before the public IPC writer sees them.
-fn sanitized_batch<T: TableAccess<Error = std::convert::Infallible>>(
+pub(crate) fn sanitized_batch<T: TableAccess<Error = std::convert::Infallible>>(
     table: &T,
     start: usize,
     rows: usize,

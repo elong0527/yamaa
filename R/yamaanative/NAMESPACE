@@ -39,3 +39,5 @@ export(traverse_inheritance)
 export(prepare_specification)
 export(specification_source)
 export(specification_failure_report)
+
+export(specification_report)

@@ -1001,6 +1001,7 @@ def lower(
             else:
                 expression = {
                     "reduce": {
+                        "identifier": ast["argument"]["name"],
                         "column": reference(ast["argument"]["name"])["source"],
                         "reducer": ast["name"],
                         "text": value["expr"],

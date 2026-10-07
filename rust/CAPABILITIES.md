@@ -402,7 +402,9 @@ ESCAPE/temporal diagnostic differences. Python remains default and
 
 The internal [original-specification compiler](SPECIFICATION_COMPILER.md) connects
 raw current-schema/YAML capture to the existing engine for standalone source/compute
-failure runs in Python and R. Independent whole failure reports cover two original
-arithmetic documents. This remains supplemental integration evidence: it does not
-qualify the full #1739 cohort, complete successful publication or replace the
-production resource port and default runtime.
+failures and the original ordered-sum success in Python and R. Independent whole
+reports cover two arithmetic failure documents and all 17 ADLB rows, checks and
+exact published CSV bytes. Shared typed ingestion, ordered SUM, verification
+records and CSV rendering operate through explicit host IO ports. This remains
+supplemental integration evidence: the full #1739 cohort, general row compilation,
+production resource/publication ports and default runtime cutover remain open.

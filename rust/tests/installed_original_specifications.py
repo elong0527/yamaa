@@ -2,7 +2,9 @@
 
 import builtins
 import json
+import os
 import platform
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -10,7 +12,7 @@ from unittest.mock import patch
 import yamaa_native
 
 ROOT = Path(__file__).with_name("specification-original")
-CASES = ("negative-zero-division", "negative-integer-overflow")
+CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum")
 
 
 def modules():
@@ -72,10 +74,30 @@ class OriginalSpecifications(unittest.TestCase):
                     runtime_version=metadata[0],
                     engine_version=metadata[1],
                 )
-                for created in (1, 0):
-                    expected["source_reads"][0]["snapshots_created"] = created
-                    actual = json.loads(specification.failure_report(capture, metadata))
-                    self.assertEqual(actual, expected)
+                published = []
+                with tempfile.TemporaryDirectory() as directory:
+
+                    def publish(path, content, *, name=name, published=published):
+                        self.assertEqual(name, "adam-adlb-ordered-sum")
+                        self.assertEqual(path, "adlb.csv")
+                        self.assertEqual(
+                            content,
+                            (ROOT / "cases" / name / "expected" / path).read_bytes(),
+                        )
+                        pending = Path(directory) / "candidate.csv"
+                        pending.write_bytes(content)
+                        os.replace(pending, Path(directory) / path)
+                        published.append((Path(directory) / path).read_bytes())
+
+                    for created in (1, 0):
+                        expected["source_reads"][0]["snapshots_created"] = created
+                        actual = json.loads(
+                            specification.report(capture, publish, metadata)
+                        )
+                        self.assertEqual(actual, expected)
+                self.assertEqual(
+                    len(published), 2 if name == "adam-adlb-ordered-sum" else 0
+                )
                 self.assertEqual((state["requests"], state["reads"]), (2, 1))
 
     def test_original_host_errors_and_interruptions_survive_native_return(self):
@@ -99,6 +121,32 @@ class OriginalSpecifications(unittest.TestCase):
 
             with self.assertRaises(type(failure)) as raised:
                 specification.failure_report(capture, metadata)
+            self.assertIs(raised.exception, failure)
+            self.assertEqual(len(calls), 1)
+
+    def test_publication_retains_original_errors_and_interruptions(self):
+        name = "adam-adlb-ordered-sum"
+        specification = prepare(name)
+        metadata = (
+            platform.python_version(),
+            yamaa_native.engine_info()["core_version"],
+            name,
+            "spec.yaml",
+            ".",
+        )
+        content = (ROOT / "cases" / name / "input/lb.csv").read_bytes()
+        for failure in (
+            OSError("retained publication failure"),
+            KeyboardInterrupt("retained publication interrupt"),
+        ):
+            calls = []
+
+            def publish(*args, calls=calls, failure=failure):
+                calls.append(args)
+                raise failure
+
+            with self.assertRaises(type(failure)) as raised:
+                specification.report(lambda *_: (content, True), publish, metadata)
             self.assertIs(raised.exception, failure)
             self.assertEqual(len(calls), 1)
 

@@ -673,6 +673,64 @@ def test_a_grouped_template_carries_the_grain_it_partitions_on() -> None:
     assert plan.rows[0].group_fields == ("X",)
 
 
+@pytest.mark.parametrize(
+    "groups,requirement,condition,context,path",
+    [
+        (
+            [],
+            "REQ-0065",
+            "invalid_field_type",
+            {"row": "row", "group_by": []},
+            "rows[0].group_by",
+        ),
+        (
+            ["SRC.ABSENT", "SRC.ABSENT"],
+            "REQ-0065",
+            "invalid_field_type",
+            {"row": "row", "group_by": ["SRC.ABSENT", "SRC.ABSENT"]},
+            "rows[0].group_by",
+        ),
+        *[
+            (
+                [name],
+                "REQ-0066",
+                "unknown_field",
+                {"row": "row", "identifier": name, "dataset": "SRC"},
+                "rows[0].group_by",
+            )
+            for name in ("A", "ABSENT", "OTHER.X", "SRC.X.extra")
+        ],
+        (
+            ["SRC.ABSENT"],
+            "REQ-0103",
+            "unknown_field",
+            {"identifier": "SRC.ABSENT"},
+            "rows[0].group_by[0]",
+        ),
+    ],
+)
+def test_group_reference_binding_preserves_declaration_findings(
+    groups, requirement, condition, context, path
+) -> None:
+    """Direct callers supplying sources still receive shape errors without a crash."""
+    spec = specification(
+        [Column(name="A", type="str")],
+        [
+            Row(
+                id="row",
+                group_by=groups,
+                derivations={"A": derivation({"literal": "one"})},
+            )
+        ],
+    )
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source_table()})
+    assert [
+        (d.requirement, d.condition, d.context, d.spec_paths)
+        for d in raised.value.diagnostics
+    ] == [(requirement, condition, context, (path,))]
+
+
 def test_a_grouped_row_derivation_cannot_read_a_field_outside_the_grain() -> None:
     # REQ-0067: a driver field that varies within the group has no single
     # value for the candidate, so it is read through an aggregate or not at

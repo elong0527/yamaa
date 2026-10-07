@@ -14,6 +14,7 @@ use yamaa_engine::specification::{
 pub enum Error {
     Prepare(PrepareError),
     Source(TextTableError),
+    TypedSource(crate::typed_csv::Error),
     Bind(BindError),
     Execution(DatasetTransportError),
 }
@@ -69,18 +70,22 @@ impl PreparedRun {
     pub fn key_names(&self) -> impl Iterator<Item = &str> {
         self.prepared.key_names()
     }
+    pub fn compiled(&self) -> &PreparedSpecification {
+        &self.prepared
+    }
     pub fn source(&self) -> &SourceDeclaration {
         self.prepared.source()
     }
     /// One run borrows raw captured bytes, creates an owned lossless snapshot,
     /// binds its actual schema, then executes with the existing portable response.
     pub fn execute_csv(&self, bytes: &[u8]) -> Result<DatasetResponse, Error> {
-        let table = Self::decode_csv(bytes)?;
+        let table = self.decode_csv(bytes)?;
         self.execute_table(&table)
     }
-    fn decode_csv(bytes: &[u8]) -> Result<ArrowTable, Error> {
-        csv_source::parse_text_table(
+    fn decode_csv(&self, bytes: &[u8]) -> Result<ArrowTable, Error> {
+        crate::typed_csv::parse(
             bytes,
+            &self.source().types,
             csv_source::Limits::default(),
             TableLimits {
                 max_rows: 65_536,
@@ -89,7 +94,11 @@ impl PreparedRun {
                 max_cells: 262_144,
             },
         )
-        .map_err(Error::Source)
+        .map_err(|error| match error {
+            crate::typed_csv::Error::Csv(error) => Error::Source(TextTableError::Csv(error)),
+            crate::typed_csv::Error::Table(error) => Error::Source(TextTableError::Table(error)),
+            error => Error::TypedSource(error),
+        })
     }
     fn execute_table(&self, table: &ArrowTable) -> Result<DatasetResponse, Error> {
         let plan = self
@@ -126,7 +135,7 @@ impl PreparedRun {
                 if snapshots_created.is_none() {
                     return attempt;
                 }
-                match Self::decode_csv(attempt.snapshot.as_deref().expect("captured bytes")) {
+                match self.decode_csv(attempt.snapshot.as_deref().expect("captured bytes")) {
                     Err(error) => attempt.result = Err(PortError::Run(error)),
                     Ok(table) => {
                         attempt.result = self.execute_table(&table).map_err(PortError::Run);

@@ -38,8 +38,18 @@ class StagingTests(unittest.TestCase):
                     module.read_bytes(),
                     (staging.REPOSITORY / "yaml" / module.name).read_bytes(),
                 )
-            for name in ("negative-zero-division", "negative-integer-overflow"):
-                for relative in ("spec.yaml", "input/lb.csv", "expected/error.yaml"):
+            for name in (
+                "negative-zero-division",
+                "negative-integer-overflow",
+                "adam-adlb-ordered-sum",
+            ):
+                for relative in (
+                    "spec.yaml",
+                    "input/lb.csv",
+                    "expected/adlb.csv"
+                    if name == "adam-adlb-ordered-sum"
+                    else "expected/error.yaml",
+                ):
                     self.assertEqual(
                         (original / "cases" / name / relative).read_bytes(),
                         (

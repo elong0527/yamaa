@@ -386,6 +386,7 @@ enum Reducer {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Reduction {
+    identifier: Option<String>,
     column: usize,
     reducer: Reducer,
     text: String,
@@ -883,7 +884,11 @@ fn assignments(
                 }
                 Expression::Reduce(reduction) => {
                     path(&reduction.text)?;
+                    if let Some(identifier) = &reduction.identifier {
+                        path(identifier)?;
+                    }
                     dataset::Expression::Reduce {
+                        identifier: reduction.identifier,
                         column: reduction.column,
                         reducer: match reduction.reducer {
                             Reducer::Sum => NumericReducer::Sum,
@@ -1167,6 +1172,25 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             diagnostic: crate::numeric_transport::predicate(error)?,
             identity: None,
         },
+        ExecutionError::ReductionType {
+            path,
+            expression,
+            reducer,
+            source,
+            actual,
+        } => Outcome::Condition {
+            matched_key: None,
+            partition: None,
+            verifications: None,
+            identity: None,
+            diagnostic: crate::numeric_transport::reduction_type(
+                path,
+                expression,
+                reducer.name(),
+                source,
+                actual,
+            ),
+        },
         ExecutionError::Reduction {
             path,
             error: TableReductionError::Reduction(ReductionError::Arithmetic { error, .. }),
@@ -1177,6 +1201,19 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             verifications: None,
             diagnostic: arithmetic(error, path),
             identity: keys.map(identity),
+        },
+        ExecutionError::VerificationDeclaration {
+            path,
+            condition,
+            requirement,
+            reason,
+            records: completed,
+        } => Outcome::Condition {
+            matched_key: None,
+            partition: None,
+            identity: None,
+            diagnostic: crate::numeric_transport::declaration(path, condition, requirement, reason),
+            verifications: Some(records(completed)),
         },
         ExecutionError::VerificationPredicate {
             error,

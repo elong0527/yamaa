@@ -148,3 +148,28 @@ publication and the four remaining original cohort documents still require work.
 R's wrapper retains original host errors/interruptions after native return; Python
 keeps its original callback exception. No numerical policy or default cutover is
 selected here.
+
+## Ordered-sum compiler and publication slice
+
+The shared entry point now lowers the unchanged ordered-sum document's record and
+group templates, typed source fields, ordered SUM, unique and row_count checks.
+An independent complete report pins all 17 rows and the original 1,030-byte CSV;
+permanent installed Python/R tests exercise exact publication and original host
+error/interrupt preservation. Verification declaration findings execute in the
+shared engine after output keys and retain completed check records.
+
+This adds a third original document to supplemental compiler integration tests.
+It does not promote the fixed inventory or complete #1739. Remaining work includes
+general row declaration/scope/default handling, lookup/window/inheritance documents,
+complete host frontends and release platform evidence. The Python observer's
+late-declaration ledger loss is fixed with independent complete-report regressions. The six-case cohort remains unchanged.
+
+
+Row-default and reduction follow-up: source/literal defaults now inherit in each
+template without an override; coverage and invalid aggregate-default conflicts
+retain preflight ordering. Runtime numeric reductions skip missing values before
+type checks and retain the authored operand in REQ-0510 diagnostics. Independent
+reference and shared-run tests cover full reports and exact CSV for all-missing
+text groups. Unknown grouping fields now receive a shared-style reference planning
+diagnostic after ingestion instead of a Python grouping KeyError. Dependency-bearing
+row expressions and broader phase relationships remain open.

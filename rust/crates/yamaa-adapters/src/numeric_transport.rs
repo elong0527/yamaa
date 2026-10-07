@@ -729,3 +729,50 @@ fn execute(request: &str) -> Result<String, NumericTransportError> {
     };
     serde_json::to_string(&response).map_err(|_| NumericTransportError::Internal)
 }
+
+/// A compiler finding reached in the engine's verification sequence.
+pub(crate) fn declaration(
+    path: String,
+    condition: &'static str,
+    requirement: &'static str,
+    reason: String,
+) -> Box<Diagnostic> {
+    Box::new(Diagnostic {
+        phase: "validation",
+        condition,
+        requirement,
+        spec_paths: vec![path],
+        context: [("reason".into(), text(reason))].into_iter().collect(),
+        source_span: None,
+        operand_route: None,
+        position: None,
+    })
+}
+
+/// A present nonnumeric reduction argument, after ordered source collection.
+pub(crate) fn reduction_type(
+    path: String,
+    expression: String,
+    reducer: &'static str,
+    source: String,
+    actual: ValueType,
+) -> Box<Diagnostic> {
+    Box::new(Diagnostic {
+        phase: "validation",
+        condition: "incompatible_input_type",
+        requirement: "REQ-0510",
+        spec_paths: vec![path],
+        context: [
+            ("expr".into(), text(expression)),
+            ("reducer".into(), text(reducer)),
+            ("source".into(), text(source)),
+            ("expected".into(), text("numeric")),
+            ("actual".into(), text(type_name(actual))),
+        ]
+        .into_iter()
+        .collect(),
+        source_span: None,
+        operand_route: None,
+        position: None,
+    })
+}

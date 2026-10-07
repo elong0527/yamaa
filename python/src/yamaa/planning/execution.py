@@ -5297,6 +5297,31 @@ def plan_execution(
                 driver = next(iter(specification.input))
             if driver is None or driver not in bindings.datasets:
                 continue
+            # Group keys are source references too. Resolve them after ingestion
+            # so an unknown stored field is a planning diagnostic, not a later
+            # driver_groups KeyError (REQ-0103).
+            group_names = tuple(row.group_by or ())
+            well_formed = bool(group_names) and len(set(group_names)) == len(
+                group_names
+            )
+            for position, variable in enumerate(group_names if well_formed else ()):
+                # REQ-0065/REQ-0066 shape findings are already in preflight.
+                if not variable.startswith(f"{driver}.") or variable.count(".") != 1:
+                    continue
+                _validate_qualified_reference(
+                    _Reference(
+                        variable,
+                        f"rows[{index}].group_by[{position}]",
+                        reach="declared",
+                    ),
+                    {driver},
+                    bindings,
+                    column_types,
+                    diagnostics,
+                    intermediates=intermediates,
+                    row=row,
+                    reference_compiler=reference_compiler,
+                )
             row_scope = _row_scope(specification, row, driver)
             grouped = row.group_by is not None
             filter_path = f"rows[{index}].filter" if row.filter is not None else None

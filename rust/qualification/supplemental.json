@@ -448,6 +448,16 @@
         "rust/tests/installed_original_specifications.py",
         "R/yamaanative/tests/original_specifications.R"
       ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/adam-adlb-ordered-sum.json",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R"
+      ]
     }
   ],
   "suites": [

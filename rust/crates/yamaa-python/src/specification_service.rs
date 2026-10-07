@@ -28,85 +28,17 @@ impl Specification {
         capture: &Bound<'_, PyAny>,
         metadata: &Bound<'_, PyTuple>,
     ) -> PyResult<String> {
-        use std::sync::Arc;
-        use yamaa_adapters::{
-            specification_report::{self, Identity},
-            specification_run::{PortError, SourcePort},
-        };
-        struct Port<'a, 'py> {
-            capture: &'a Bound<'py, PyAny>,
-            reads: usize,
-        }
-        impl SourcePort for Port<'_, '_> {
-            type Error = PyErr;
-            fn capture_reads(&self) -> usize {
-                self.reads
-            }
-            fn capture(
-                &mut self,
-                source: &yamaa_engine::specification::SourceDeclaration,
-                maximum: usize,
-            ) -> PyResult<Arc<[u8]>> {
-                let result = self.capture.call1((&source.name, &source.path, maximum))?;
-                let result = result.cast::<PyTuple>()?;
-                if result.len() != 2 {
-                    return Err(pyo3::exceptions::PyValueError::new_err(
-                        "invalid capture response",
-                    ));
-                }
-                let content = result.get_item(0)?;
-                let content = content.cast::<PyBytes>()?;
-                let created = result.get_item(1)?.extract::<bool>()?;
-                if content.as_bytes().len() > maximum {
-                    return Err(pyo3::exceptions::PyValueError::new_err(
-                        "capture byte limit",
-                    ));
-                }
-                self.reads += usize::from(created);
-                Ok(Arc::from(content.as_bytes()))
-            }
-        }
-        if metadata.len() != 5 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "invalid report metadata",
-            ));
-        }
-        let fields = metadata
-            .iter()
-            .map(|item| {
-                let text = item.cast::<PyString>()?.to_str()?;
-                if text.len() > 4096 {
-                    return Err(pyo3::exceptions::PyValueError::new_err(
-                        "report metadata limit",
-                    ));
-                }
-                Ok(text.to_owned())
-            })
-            .collect::<PyResult<Vec<_>>>()?;
-        let attempt = self
-            .inner
-            .execute_with_port(&mut Port { capture, reads: 0 });
-        if let Err(PortError::Capture(error)) = &attempt.result {
-            return Err(error.clone_ref(py));
-        }
-        specification_report::failure(
-            &self.inner,
-            &attempt,
-            Identity {
-                runtime: "python",
-                runtime_version: &fields[0],
-                engine_version: &fields[1],
-                example: &fields[2],
-                specification: &fields[3],
-                base_directory: &fields[4],
-            },
-        )
-        .map(|value| value.to_string())
-        .map_err(|_| {
-            pyo3::exceptions::PyValueError::new_err(
-                "unsupported or invalid failure-report observation",
-            )
-        })
+        self.observed_report(py, capture, None, metadata)
+    }
+    /// Execute once and publish through an explicit host callback after shared checks.
+    fn report(
+        &self,
+        py: Python<'_>,
+        capture: &Bound<'_, PyAny>,
+        publish: &Bound<'_, PyAny>,
+        metadata: &Bound<'_, PyTuple>,
+    ) -> PyResult<String> {
+        self.observed_report(py, capture, Some(publish), metadata)
     }
     /// Decode and bind owned captured CSV bytes; no reference interpreter is imported.
     fn execute_csv<'py>(
@@ -192,4 +124,127 @@ pub fn _prepare_specification(
     let inner = PreparedRun::prepare(document)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(failure(&e, None)))?;
     Ok(Specification { inner })
+}
+
+impl Specification {
+    fn observed_report(
+        &self,
+        py: Python<'_>,
+        capture: &Bound<'_, PyAny>,
+        publisher: Option<&Bound<'_, PyAny>>,
+        metadata: &Bound<'_, PyTuple>,
+    ) -> PyResult<String> {
+        use std::sync::Arc;
+        use yamaa_adapters::{
+            specification_report::{self, Identity},
+            specification_run::{PortError, SourcePort},
+        };
+        struct Port<'a, 'py> {
+            capture: &'a Bound<'py, PyAny>,
+            reads: usize,
+        }
+        impl SourcePort for Port<'_, '_> {
+            type Error = PyErr;
+            fn capture_reads(&self) -> usize {
+                self.reads
+            }
+            fn capture(
+                &mut self,
+                source: &yamaa_engine::specification::SourceDeclaration,
+                maximum: usize,
+            ) -> PyResult<Arc<[u8]>> {
+                let result = self.capture.call1((&source.name, &source.path, maximum))?;
+                let result = result.cast::<PyTuple>()?;
+                if result.len() != 2 {
+                    return Err(pyo3::exceptions::PyValueError::new_err(
+                        "invalid capture response",
+                    ));
+                }
+                let content = result.get_item(0)?;
+                let content = content.cast::<PyBytes>()?;
+                let created = result.get_item(1)?.extract::<bool>()?;
+                if content.as_bytes().len() > maximum {
+                    return Err(pyo3::exceptions::PyValueError::new_err(
+                        "capture byte limit",
+                    ));
+                }
+                self.reads += usize::from(created);
+                Ok(Arc::from(content.as_bytes()))
+            }
+        }
+        if !capture.is_callable() || publisher.is_some_and(|callback| !callback.is_callable()) {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "capture and publish must be callable",
+            ));
+        }
+        if metadata.len() != 5 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "invalid report metadata",
+            ));
+        }
+        let fields = metadata
+            .iter()
+            .map(|item| {
+                let text = item.cast::<PyString>()?.to_str()?;
+                if text.len() > 4096 {
+                    return Err(pyo3::exceptions::PyValueError::new_err(
+                        "report metadata limit",
+                    ));
+                }
+                Ok(text.to_owned())
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        let attempt = self
+            .inner
+            .execute_with_port(&mut Port { capture, reads: 0 });
+        if let Err(PortError::Capture(error)) = &attempt.result {
+            return Err(error.clone_ref(py));
+        }
+        let identity = Identity {
+            runtime: "python",
+            runtime_version: &fields[0],
+            engine_version: &fields[1],
+            example: &fields[2],
+            specification: &fields[3],
+            base_directory: &fields[4],
+        };
+        if let Some(callback) = publisher {
+            struct Publisher<'a, 'py>(&'a Bound<'py, PyAny>);
+            impl specification_report::ArtifactPort for Publisher<'_, '_> {
+                type Error = PyErr;
+                fn publish(&mut self, path: &str, content: &[u8]) -> PyResult<()> {
+                    let result = self.0.call1((path, PyBytes::new(self.0.py(), content)))?;
+                    if !result.is_none() {
+                        return Err(pyo3::exceptions::PyValueError::new_err(
+                            "publisher must return None",
+                        ));
+                    }
+                    Ok(())
+                }
+            }
+            specification_report::complete(
+                &self.inner,
+                &attempt,
+                identity,
+                &mut Publisher(callback),
+            )
+            .map(|value| value.to_string())
+            .map_err(|error| match error {
+                specification_report::CompleteError::Publish(error) => error,
+                specification_report::CompleteError::Report(_) => {
+                    pyo3::exceptions::PyValueError::new_err(
+                        "unsupported or invalid report observation",
+                    )
+                }
+            })
+        } else {
+            specification_report::failure(&self.inner, &attempt, identity)
+                .map(|value| value.to_string())
+                .map_err(|_| {
+                    pyo3::exceptions::PyValueError::new_err(
+                        "unsupported or invalid failure-report observation",
+                    )
+                })
+        }
+    }
 }

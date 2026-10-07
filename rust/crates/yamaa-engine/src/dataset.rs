@@ -36,7 +36,7 @@ use yamaa_core::{
     conversion::{convert, ConversionError},
     reduction::NumericReducer,
     table::{CellError, TableAccess, TableSchema, ValueRef},
-    value::Value,
+    value::{Value, ValueType},
 };
 
 /// Contiguous stages of one attempt; clocks and measurement storage belong to adapters.
@@ -80,6 +80,9 @@ pub enum Expression {
     },
     Column(usize),
     Reduce {
+        /// Authored operand identity when supplied by the specification compiler.
+        /// Typed plans without an authored name use the bound source field name.
+        identifier: Option<String>,
         column: usize,
         reducer: NumericReducer,
         text: String,
@@ -175,6 +178,12 @@ pub struct RowTemplate {
 /// Error-severity dataset checks supported by this closed application slice.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Check {
+    /// A compiler finding evaluated in declaration order after output keys.
+    InvalidDeclaration {
+        condition: &'static str,
+        requirement: &'static str,
+        reason: String,
+    },
     Assert(BoundPredicate),
     /// Compiler checkpoint before a later deferred declaration error; emits no record.
     PredicateDeclaration(BoundPredicate),
@@ -238,7 +247,6 @@ pub enum PlanError {
     InconsistentRowColumns,
     NonGroupSource,
     UngroupedReduction,
-    NonNumericReduction,
     InvalidBounds,
     DuplicateVerificationPath,
     Filter(BindingError),
@@ -391,20 +399,19 @@ fn validate_assignment(
                 return Err(PlanError::EmptyPath);
             }
         }
-        Expression::Reduce { column, text, .. } => {
+        Expression::Reduce {
+            column,
+            text,
+            identifier,
+            ..
+        } => {
             if *column >= source.columns().len() {
                 return Err(PlanError::InvalidSource);
-            }
-            if !matches!(
-                source.columns()[*column].kind,
-                yamaa_core::value::ColumnType::Int | yamaa_core::value::ColumnType::Float
-            ) {
-                return Err(PlanError::NonNumericReduction);
             }
             if !matches!(mode, RowMode::Groups(_)) {
                 return Err(PlanError::UngroupedReduction);
             }
-            if text.is_empty() {
+            if text.is_empty() || identifier.as_ref().is_some_and(String::is_empty) {
                 return Err(PlanError::EmptyPath);
             }
         }
@@ -583,6 +590,7 @@ impl DatasetPlan {
                 return Err(PlanError::DuplicateVerificationPath);
             }
             match &verification.check {
+                Check::InvalidDeclaration { .. } => {}
                 Check::Assert(predicate) | Check::PredicateDeclaration(predicate) => predicate
                     .validate(0, &vec![true; width], true)
                     .map_err(PlanError::Predicate)?,
@@ -740,6 +748,13 @@ pub enum ExecutionError<E> {
         value_count: usize,
         identity: Option<RowIdentity>,
     },
+    VerificationDeclaration {
+        path: String,
+        condition: &'static str,
+        requirement: &'static str,
+        reason: String,
+        records: Vec<CheckRecord>,
+    },
     VerificationPredicate {
         error: yamaa_core::predicate::EvaluationError<CellError<Infallible>>,
         records: Vec<CheckRecord>,
@@ -761,6 +776,13 @@ pub enum ExecutionError<E> {
         path: String,
         source_row: usize,
         error: CellError<E>,
+    },
+    ReductionType {
+        path: String,
+        expression: String,
+        reducer: NumericReducer,
+        source: String,
+        actual: ValueType,
     },
     Reduction {
         path: String,
@@ -948,6 +970,7 @@ fn evaluate<T: TableAccess + ?Sized>(
             )?,
         ),
         Expression::Reduce {
+            identifier,
             column,
             reducer,
             text,
@@ -960,6 +983,19 @@ fn evaluate<T: TableAccess + ?Sized>(
             text,
         ) {
             Ok(value) => Value::from(value),
+            Err(TableReductionError::Reduction(
+                yamaa_core::reduction::ReductionError::IncompatibleInputType { actual, .. },
+            )) => {
+                return Err(Box::new(ExecutionError::ReductionType {
+                    path: assignment.path.clone(),
+                    expression: text.clone(),
+                    reducer: *reducer,
+                    source: identifier
+                        .clone()
+                        .unwrap_or_else(|| table.schema().columns()[*column].name.clone()),
+                    actual,
+                }));
+            }
             Err(error) => {
                 let identity = if matches!(&error, TableReductionError::Reduction(yamaa_core::reduction::ReductionError::Arithmetic { error, .. }) if error.phase() == "derivation")
                 {
@@ -1295,6 +1331,19 @@ impl DatasetPlan {
         let mut records = Vec::new();
         for verification in &self.verifications {
             let record = match &verification.check {
+                Check::InvalidDeclaration {
+                    condition,
+                    requirement,
+                    reason,
+                } => {
+                    return Err(Box::new(ExecutionError::VerificationDeclaration {
+                        path: verification.path.clone(),
+                        condition,
+                        requirement,
+                        reason: reason.clone(),
+                        records,
+                    }));
+                }
                 Check::Assert(_) | Check::Implies { .. } | Check::PredicateDeclaration(_) => {
                     let Some(record) = crate::dataset_verification::predicate_check(
                         verification,
