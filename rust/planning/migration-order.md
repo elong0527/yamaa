@@ -1,7 +1,7 @@
 # Shared Rust migration implementation order
 
 Reconciled 2026-10-07 against main `aa58b22251895d57eb675abe55dbf9fddaefa789`
-and issues #1585, #1739–#1742, #1751–#1755, #1757 and #1758.
+and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
 ## Goal and starting point

@@ -1,7 +1,7 @@
 # Shared compiler prerequisites for the fixed M2 cohort
 
 For the current cross-issue delivery order after #1756 and the API/architecture
-issues #1751–#1758, see [the migration order](migration-order.md). The baseline
+issues #1751-#1758, see [the migration order](migration-order.md). The baseline
 audit below remains historical evidence, not a statement that model admission
 or original-YAML host entrypoints still need to start from scratch.
 
@@ -120,7 +120,7 @@ No default cutover, POWER policy assumption, automatic golden regeneration or
 full-language completion claim follows from this cohort. #1740/#1741/#1742 and
 remaining #1585 release/cutover scope stay active.
 
-The sequence above predates #1751–#1758. Its first two slices and the ordered-sum
+The sequence above predates #1751-#1758. Its first two slices and the ordered-sum
 part of the third have merged in #1747, #1750 and #1756. Portable diagnostics,
 core-owned compiled representation and engine ports now precede the remaining
 lookup/window/inheritance extensions; the linked migration order explains the
