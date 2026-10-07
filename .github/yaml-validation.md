@@ -196,6 +196,16 @@ uv run --project python --no-sync python -m yamaa.style benchmarks/*/spec*.yaml
 uv run --project python --no-sync python -m yamaa.style --fix benchmarks/<name>/spec.yaml
 ```
 
+Rule ownership is a separate step as well. `check_rule_rewrite.py` resolves
+every requirement to one owning contract and its provenance, and requires the
+verification contract and `yaml/schema_verification.yaml` to name the same
+checks: a requirement that opens with a check no registry declares fails, and
+so does a registered check that opens no requirement:
+
+```bash
+uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_rewrite.py
+```
+
 Column labels are checked by `validate_repository.py`
 (`validate_column_labels`, covering plain and inherited specs alike),
 so there is no separate label-check step anymore.

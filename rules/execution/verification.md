@@ -231,39 +231,6 @@ set, grouped by subject and parameter. Its `when` selects the rows that
 carry a baseline value. A group whose rows never carry one is not required
 to have one.
 
-### Functional dependency
-
-<a id="req-1153"></a>
-
-**REQ-1153.** `determines` requires its two listed columns to stand in a
-functional dependency: within each group, every distinct value of the first
-column is paired with exactly one distinct value of the second. `group_by`
-partitions the artifact's rows exactly as [REQ-0386](verification.md#req-0386)
-partitions them for `row_count`; without `group_by` the whole artifact is one
-group. Missing values participate as values, as in [REQ-0381](verification.md#req-0381):
-a missing determinant paired with two different dependents fails, while a
-missing determinant paired only with a missing dependent passes. A one-to-one
-mapping in both directions -- the code/decode bijection the ADaM conformance
-rules require of pairs like `TRTP` and `TRTPN` -- is two `determines`
-declarations with the columns reversed. `determines` requires an `id`. A
-`determines` that does not list exactly two columns, declares no `id`, or
-names an unknown column is rejected.
-
-### Reference membership
-
-<a id="req-1155"></a>
-
-**REQ-1155.** `subset_of` requires every non-missing value of the declared
-`column` to equal some value of `reference_column` in the named `dataset`.
-The named dataset must be declared in the study document; it need not be a
-derivation source of this specification, which is what distinguishes this
-check from the producer-side link assertions [REQ-0369](verification.md#req-0369)
-requires. `subset_of` requires an `id`. The ADaM conformance rule that every
-`USUBJID` appear in SDTM `DM` is a `subset_of` naming the study's `DM` dataset
-and its `USUBJID` column. A `subset_of` that declares no `id`, names a
-dataset the study document does not declare, or names an unknown column or
-reference column is rejected.
-
 ### Severity and the warning log
 
 <a id="req-0389"></a>

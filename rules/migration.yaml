@@ -2220,9 +2220,11 @@ requirements:
   REQ-1150: {"file": "values/types.md", "sources": ["schema_shared.yaml:comment:3"]}
   REQ-1151: {"file": "storage/resources.md", "sources": ["schema_shared.yaml:project_path.description"]}
   REQ-1152: {"file": "execution/verification.md", "sources": ["schema_verification.yaml:comment:43"]}
-  REQ-1153: {"file": "execution/verification.md", "sources": ["cdisc:adam-conformance-rules-5.0:code-decode-bijection"]}
+  # REQ-1153 and REQ-1155 named verifications the schema never registered;
+  # their CDISC needs stay open in #1780.
+  REQ-1153: {"file": "execution/verification.md", "sources": ["cdisc:adam-conformance-rules-5.0:code-decode-bijection"], "retired": true, "replacement": []}
   REQ-1154: {"file": "execution/verification.md", "sources": ["schema_verification.yaml:dataset_verifications.row_count.when.description"]}
-  REQ-1155: {"file": "execution/verification.md", "sources": ["cdisc:adam-conformance-rules-5.0:usubjid-membership"]}
+  REQ-1155: {"file": "execution/verification.md", "sources": ["cdisc:adam-conformance-rules-5.0:usubjid-membership"], "retired": true, "replacement": []}
   REQ-1156: {"file": "submission/terminology.md", "sources": ["schema_metadata.yaml:submission_column_class.inventory_vocabulary.description"]}
   REQ-1157: {"file": "submission/metadata.md", "sources": ["cdisc:adam-conformance-rules-5.0:copy-fidelity"]}
   REQ-1158: {"file": "storage/ingestion.md", "sources": ["schema.yaml:dataset_class.empty_string.description"]}

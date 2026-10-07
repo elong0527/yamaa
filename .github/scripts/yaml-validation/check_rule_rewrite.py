@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Validate canonical rule ownership, legacy aliases, and schema provenance."""
+"""Validate canonical rule ownership, legacy aliases, and schema provenance.
+
+The verification contract and the verification schema must also name the same
+checks: a requirement that defines a verification no registry declares, or a
+registered verification no requirement defines, is a second authority that
+neither the validator nor an engine will honor.
+"""
 
 import argparse
 import re
@@ -19,6 +25,18 @@ SECTIONS = [
     "Requirements",
     "Error conditions",
 ]
+VERIFICATION_CONTRACT = "execution/verification.md"
+VERIFICATION_REGISTRIES = (
+    "column_verifications",
+    "dataset_verifications",
+    "intermediate_verifications",
+)
+# A requirement defines a verification when it opens with the check's name,
+# as in "**REQ-0381.** `unique` requires ...".
+DEFINING_NAME = re.compile(
+    r"^\*\*(REQ-[0-9]{4,})\.\*\*\s+(?:An?\s+|The\s+)?`([a-z][a-z0-9_]*)`",
+    re.MULTILINE,
+)
 
 
 class UniqueLoader(yaml.SafeLoader):
@@ -57,6 +75,54 @@ def resolve_requirement(identifier, migration):
             if current not in resolved:
                 resolved.append(current)
     return resolved
+
+
+def verification_registry_errors(root):
+    """Match the checks the verification contract defines with the registries.
+
+    A requirement in the verification contract may open with a registered
+    check or with a field one declares (`filter`, `when`); any other opening
+    name defines a check the schema rejects. Every registered check must open
+    at least one requirement, so none is registered without its contract.
+    """
+    schema_path = root / "yaml/schema_verification.yaml"
+    contract_path = root / "rules" / VERIFICATION_CONTRACT
+    if not schema_path.is_file() or not contract_path.is_file():
+        return []  # A partial root carries no verification vocabulary to match.
+    schema = yaml.load(schema_path.read_text(encoding="ascii"), Loader=UniqueLoader)
+    registered = set()
+    declared = set()
+
+    def names(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                declared.add(key)
+                names(value)
+        elif isinstance(node, list):
+            for value in node:
+                names(value)
+
+    for registry in VERIFICATION_REGISTRIES:
+        operations = schema.get(registry)
+        if isinstance(operations, dict):
+            registered.update(operations)
+    names(schema)
+    contract = contract_path.read_text(encoding="ascii")
+    defined = {}
+    for identifier, name in DEFINING_NAME.findall(contract):
+        defined.setdefault(name, identifier)
+    errors = [
+        f"{VERIFICATION_CONTRACT}: {identifier} defines `{name}`, "
+        "which no verification registry declares"
+        for name, identifier in sorted(defined.items())
+        if name not in declared
+    ]
+    errors.extend(
+        f"schema_verification.yaml: `{name}` is registered but no "
+        f"{VERIFICATION_CONTRACT} requirement defines it"
+        for name in sorted(registered - defined.keys())
+    )
+    return errors
 
 
 def check(root):
@@ -261,6 +327,7 @@ def check(root):
             current = resolve_requirement(target, migration) if target else []
             if len(current) != 1 or value != f"See {current[0]}.":
                 errors.append(f"schema description has no canonical owner: {source}")
+    errors.extend(verification_registry_errors(root))
     return errors, {
         family: (mapped[family], total) for family, total in sorted(coverage.items())
     }
@@ -280,7 +347,8 @@ def main():
     print(f"Legacy coverage: {mapped}/{total}; {total - mapped} unmapped")
     if not errors:
         print(
-            "PASS: Canonical ownership, schema provenance, and compatibility aliases."
+            "PASS: Canonical ownership, schema provenance, compatibility aliases,"
+            " and verification registry."
         )
     return int(bool(errors))
 

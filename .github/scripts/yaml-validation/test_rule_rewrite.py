@@ -50,6 +50,35 @@ class RuleRewriteTests(unittest.TestCase):
         self.assertEqual(resolve_requirement("R999-1", migration), [])
         self.assertTrue(resolve_requirement("R001-12a", migration))
 
+    def test_contract_defining_an_unregistered_verification_fails(self):
+        # REQ-1153 and REQ-1155 once defined checks no registry declared.
+        self.replace(
+            self.rules / "execution/verification.md",
+            "**REQ-0382.** `all_or_none` requires",
+            "**REQ-0382.** `exactly_one` requires",
+        )
+        errors, _ = check(self.root)
+        self.assertIn(
+            "execution/verification.md: REQ-0382 defines `exactly_one`, "
+            "which no verification registry declares",
+            errors,
+        )
+
+    def test_registered_verification_without_a_defining_requirement_fails(self):
+        self.replace(
+            self.root / "yaml/schema_verification.yaml",
+            "    row_count: # See REQ-1152.\n",
+            "    exactly_one:\n"
+            "        - id: {type: verification_id, required: false}\n"
+            "    row_count: # See REQ-1152.\n",
+        )
+        errors, _ = check(self.root)
+        self.assertIn(
+            "schema_verification.yaml: `exactly_one` is registered but no "
+            "execution/verification.md requirement defines it",
+            errors,
+        )
+
     def test_file_move_preserves_requirement_ids(self):
         source = self.rules / "values/numbers.md"
         source.rename(source.with_name("representation.md"))
