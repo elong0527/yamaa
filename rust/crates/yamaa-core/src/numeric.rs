@@ -102,35 +102,17 @@ pub struct ArithmeticError {
 impl ArithmeticError {
     /// Distinguish integer-digits validation from numeric derivation failures.
     pub fn phase(&self) -> &'static str {
-        if matches!(self.kind, ArithmeticErrorKind::InvalidRoundingDigits) {
-            "validation"
-        } else {
-            "derivation"
-        }
+        self.kind.diagnostic_code().definition().phase
     }
 
     /// Return the portable condition vocabulary entry for this arithmetic failure.
     pub fn condition(&self) -> &'static str {
-        match self.kind {
-            ArithmeticErrorKind::IntegerOverflow { .. } => "integer_overflow",
-            ArithmeticErrorKind::DivisionByZero => "division_by_zero",
-            ArithmeticErrorKind::SqrtOfNegative => "sqrt_of_negative",
-            ArithmeticErrorKind::LnOfNonpositive => "ln_of_nonpositive",
-            ArithmeticErrorKind::InvalidRoundingDigits => "incompatible_input_type",
-            ArithmeticErrorKind::InvalidPower { .. } => "invalid_power",
-        }
+        self.kind.diagnostic_code().definition().condition
     }
 
     /// Return the normative arithmetic requirement, matching the Python reference.
     pub fn requirement(&self) -> &'static str {
-        match self.kind {
-            ArithmeticErrorKind::IntegerOverflow { .. } => "REQ-0434",
-            ArithmeticErrorKind::DivisionByZero => "REQ-0430",
-            ArithmeticErrorKind::SqrtOfNegative => "REQ-0431",
-            ArithmeticErrorKind::LnOfNonpositive => "REQ-0432",
-            ArithmeticErrorKind::InvalidRoundingDigits => "REQ-0418",
-            ArithmeticErrorKind::InvalidPower { .. } => "REQ-0433",
-        }
+        self.kind.diagnostic_code().definition().requirement
     }
 }
 

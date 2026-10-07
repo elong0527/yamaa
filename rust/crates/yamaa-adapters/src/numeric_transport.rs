@@ -5,9 +5,8 @@ use crate::scalar_transport::{ScalarValue, MAX_REQUEST_BYTES};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, convert::Infallible, fmt, panic::catch_unwind};
 use yamaa_core::{
-    conversion::{ConversionError, ConversionValue},
-    evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver, Operand},
-    numeric::ArithmeticErrorKind,
+    conversion::ConversionError,
+    evaluation::NumericResolver,
     numeric_compiler::{compile_numeric_with_policy, CompileError, CompileLimits, MathPolicy},
     numeric_parser::{GrammarFailure, ParseError, ParseResource, SourcePosition, SourceSpan},
     value::{ColumnType, Selection, Value, ValueType},
@@ -189,6 +188,36 @@ pub(crate) struct Diagnostic {
     position: Option<Position>,
 }
 
+impl From<yamaa_core::diagnostic::Diagnostic> for Diagnostic {
+    /// Translate representation only; core owns vocabulary, context and geometry.
+    fn from(diagnostic: yamaa_core::diagnostic::Diagnostic) -> Self {
+        use yamaa_core::diagnostic::ContextValue as CoreValue;
+        let definition = diagnostic.definition();
+        Self {
+            phase: definition.phase,
+            condition: definition.condition,
+            requirement: definition.requirement,
+            spec_paths: diagnostic.spec_paths,
+            context: diagnostic
+                .context
+                .into_iter()
+                .map(|(key, value)| {
+                    (
+                        key,
+                        match value {
+                            CoreValue::Scalar(value) => scalar(value),
+                            CoreValue::Integer(integer) => ContextValue::Integer { integer },
+                        },
+                    )
+                })
+                .collect(),
+            source_span: diagnostic.source_span.map(Into::into),
+            operand_route: diagnostic.operand_route,
+            position: None,
+        }
+    }
+}
+
 #[derive(Serialize)]
 struct Unsupported {
     function: &'static str,
@@ -295,17 +324,6 @@ pub(crate) fn predicate<E>(
         position: None,
     }))
 }
-/// Stable column vocabulary names, without inventing a boolean destination.
-fn target_name(value: ColumnType) -> &'static str {
-    match value {
-        ColumnType::Str => "str",
-        ColumnType::Int => "int",
-        ColumnType::Float => "float",
-        ColumnType::Date => "date",
-        ColumnType::DateTime => "datetime",
-    }
-}
-
 /// Preserve exact raw-value counts and identifier provenance for a key-grain source read.
 pub(crate) fn multiple_values(
     path: String,
@@ -398,97 +416,17 @@ pub(crate) fn baseline_ambiguity(
     }))
 }
 
-/// Transport conversion data, including canonical out-of-range integer diagnostics.
+/// Serialize core-owned completed-result diagnostics, including wide integers.
 pub(crate) fn conversion(error: ConversionError, path: String) -> Box<Diagnostic> {
-    let mut context = Context::new();
-    context.insert(
-        "from".into(),
-        text(error.source_type().map_or("missing", type_name)),
-    );
-    context.insert("to".into(), text(target_name(error.target)));
-    let requirement = error.requirement();
-    context.insert(
-        "value".into(),
-        match error.value {
-            ConversionValue::Runtime(value) => scalar(value),
-            ConversionValue::Integer(integer) => ContextValue::Integer { integer },
-        },
-    );
-    Box::new(Diagnostic {
-        phase: "convert",
-        condition: "conversion_failed",
-        requirement,
-        spec_paths: vec![path],
-        context,
-        source_span: None,
-        operand_route: None,
-        position: None,
-    })
+    Box::new(error.into_diagnostic(path).into())
 }
 
-/// Reuse exact arithmetic diagnostic encoding for already-bound dataset reductions.
+/// Serialize the same core diagnostic used for bound numeric reductions.
 pub(crate) fn arithmetic(
     error: yamaa_core::numeric::ArithmeticError,
     path: String,
 ) -> Box<Diagnostic> {
-    Box::new(Diagnostic {
-        phase: error.phase(),
-        condition: error.condition(),
-        requirement: error.requirement(),
-        spec_paths: vec![path],
-        context: numeric_context(&NumericCondition::Arithmetic(error.kind), &error.expression),
-        source_span: None,
-        operand_route: None,
-        position: None,
-    })
-}
-
-/// Translate a numeric condition's context without recomputing its semantics.
-fn numeric_context(condition: &NumericCondition, expression: &str) -> Context {
-    let mut context = Context::from([("expr".into(), text(expression))]);
-    match condition {
-        NumericCondition::UnknownField { identifier } => {
-            context.insert("identifier".into(), text(identifier));
-        }
-        NumericCondition::IncompatibleInput { identifier, actual } => {
-            context.insert("source".into(), text(identifier));
-            context.insert("expected".into(), text("numeric"));
-            context.insert("actual".into(), text(type_name(*actual)));
-        }
-        NumericCondition::Arithmetic(ArithmeticErrorKind::InvalidRoundingDigits) => {
-            context.insert("expected".into(), text("int"));
-            context.insert("actual".into(), text("float"));
-        }
-        NumericCondition::Arithmetic(ArithmeticErrorKind::InvalidPower {
-            base_bits,
-            exponent_bits,
-        }) => {
-            context.insert(
-                "base".into(),
-                scalar(Value::float(f64::from_bits(*base_bits))),
-            );
-            context.insert(
-                "exponent".into(),
-                scalar(Value::float(f64::from_bits(*exponent_bits))),
-            );
-        }
-        NumericCondition::Arithmetic(ArithmeticErrorKind::IntegerOverflow { value }) => {
-            context.insert("value".into(), text(value.to_string()));
-            context.insert("minimum".into(), scalar(Value::Int(i64::MIN)));
-            context.insert("maximum".into(), scalar(Value::Int(i64::MAX)));
-        }
-        NumericCondition::LiteralOverflow { value } => {
-            context.insert("value".into(), text(value));
-            context.insert("minimum".into(), scalar(Value::Int(i64::MIN)));
-            context.insert("maximum".into(), scalar(Value::Int(i64::MAX)));
-        }
-        NumericCondition::Arithmetic(
-            ArithmeticErrorKind::DivisionByZero
-            | ArithmeticErrorKind::SqrtOfNegative
-            | ArithmeticErrorKind::LnOfNonpositive,
-        ) => {}
-    }
-    context
+    Box::new(error.into_diagnostic(path).into())
 }
 
 /// Separate invalid grammar, unsupported functions and compile resource policy.
@@ -564,36 +502,14 @@ fn compile_outcome(error: CompileError, expression: &str, path: String) -> Outco
     }
 }
 
-/// Encode compiled numeric failures identically for scalar and dataset execution.
+/// Serialize core diagnostics without reclassifying opaque resolver failures.
 pub(crate) fn numeric(
     error: yamaa_core::numeric_compiler::CompiledEvaluationError<Infallible>,
 ) -> Result<Box<Diagnostic>, NumericTransportError> {
-    let EvaluationErrorKind::Numeric(condition) = error.evaluation.kind else {
-        return Err(NumericTransportError::Internal);
-    };
-    Ok(Box::new(Diagnostic {
-        phase: condition.phase(),
-        condition: condition.condition(),
-        requirement: condition.requirement(),
-        spec_paths: vec![error.evaluation.location.spec_path],
-        context: numeric_context(&condition, &error.evaluation.location.expression),
-        source_span: Some(error.source_span.into()),
-        operand_route: Some(
-            error
-                .evaluation
-                .location
-                .operands
-                .into_iter()
-                .map(|o| match o {
-                    Operand::Unary => "unary".into(),
-                    Operand::Left => "left".into(),
-                    Operand::Right => "right".into(),
-                    Operand::Argument(i) => format!("argument:{i}"),
-                })
-                .collect(),
-        ),
-        position: None,
-    }))
+    error
+        .diagnostic()
+        .map(|diagnostic| Box::new(diagnostic.into()))
+        .ok_or(NumericTransportError::Internal)
 }
 
 /// Preserve lifecycle ownership, source geometry and both replacement failures.

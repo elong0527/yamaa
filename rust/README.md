@@ -10,6 +10,9 @@ The executable fixture inventory and its evidence gates are described in
 [QUALIFICATION.md](QUALIFICATION.md). Missing native reports remain visible;
 component probes do not imply full benchmark qualification.
 
+The core-owned numeric/conversion diagnostic model, semantic-cause registry and
+remaining cross-family migration are described in [DIAGNOSTICS.md](DIAGNOSTICS.md).
+
 Decimal rounding characterization and the reference/rule discrepancies that
 precede its implementation are recorded in
 [ROUNDING_ASSESSMENT.md](ROUNDING_ASSESSMENT.md).

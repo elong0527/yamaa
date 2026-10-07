@@ -86,6 +86,7 @@ jobs:
           uv run --project ../python --locked python tools/check_regex.py
           uv run --project ../python --locked python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-reference-assessment.json"
           python tools/check_dependencies.py
+          python tools/check_diagnostics.py
           python -m unittest discover -s tests -p 'test_*.py'
       - name: Preserve Python 3.12 numerical assessment coverage
         working-directory: rust
