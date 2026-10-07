@@ -10,7 +10,7 @@ The executable fixture inventory and its evidence gates are described in
 [QUALIFICATION.md](QUALIFICATION.md). Missing native reports remain visible;
 component probes do not imply full benchmark qualification.
 
-The core-owned numeric/conversion diagnostic model, semantic-cause registry and
+The core-owned numeric/conversion, resource and preflight diagnostic model, semantic-cause registry and
 remaining cross-family migration are described in [DIAGNOSTICS.md](DIAGNOSTICS.md).
 
 Core-owned bound expressions and function signatures, with the remaining

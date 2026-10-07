@@ -2,7 +2,8 @@
 """Require production Rust requirement literals to name current normative rules.
 
 The Rust diagnostic integration test separately reaches every typed registry cause
-through actual evaluation/conversion. Public condition names are deliberately not
+through evaluation, conversion, resource classification or original-document compilation.
+Public condition names are deliberately not
 unique keys: several existing failure causes share a condition spelling.
 """
 
