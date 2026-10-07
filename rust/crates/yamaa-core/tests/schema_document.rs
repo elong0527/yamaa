@@ -1,5 +1,5 @@
 use yamaa_core::schema::{
-    Document, DocumentError, DocumentLimits, DocumentNode as N, DocumentResource,
+    Document, DocumentError, DocumentKind, DocumentLimits, DocumentNode as N, DocumentResource,
 };
 
 #[test]
@@ -14,7 +14,8 @@ fn decoded_tree_preserves_order_width_and_unicode_scalar_lengths() {
     let document = Document::new(nodes.clone(), 4, DocumentLimits::default()).unwrap();
     assert_eq!(document.nodes(), nodes);
     assert_eq!(document.nodes()[3].length(), Some(3));
-    assert_eq!(document.nodes()[1].type_name(), "int");
+    assert_eq!(document.nodes()[1].kind(), DocumentKind::Integer);
+    assert_eq!(document.nodes()[1].kind().name(), "integer");
     assert_eq!(document.field(4, "a"), Some(3));
     assert_eq!(document.field(4, "missing"), None);
 }

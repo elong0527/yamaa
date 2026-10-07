@@ -1228,6 +1228,10 @@
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.md",
       "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/schema_kinds.md",
+      "role": "documentation"
     }
   ]
 }
