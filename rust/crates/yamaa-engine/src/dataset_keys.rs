@@ -13,7 +13,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
 ) -> Result<Vec<Candidate>, Box<ExecutionError<T::Error>>> {
     let rows = table.row_count();
     if rows
-        .checked_mul(plan.keys.len())
+        .checked_mul(plan.keys().len())
         .is_none_or(|cells| cells > limits.key_cells)
     {
         return Err(Box::new(ExecutionError::Grouping(
@@ -29,7 +29,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
     budget.work(rows, 1)?;
     for row in 0..rows {
-        if let Some(filter) = &plan.templates[0].filter {
+        if let Some(filter) = &plan.templates()[0].filter {
             let truth =
                 crate::dataset_predicate::evaluate(filter, table, row, &[], budget.predicate())
                     .map_err(|error| match error.kind {
@@ -50,9 +50,9 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
     let rows = retained.len();
     let mut key_table = Dataset {
         schema: TableSchema::new(
-            plan.keys
+            plan.keys()
                 .iter()
-                .map(|&column| plan.output.columns()[column].clone())
+                .map(|&column| plan.output().columns()[column].clone())
                 .collect(),
         )
         .expect("admitted distinct output keys form a valid schema"),
@@ -65,10 +65,10 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
     for &row in &retained {
         let mut probe = Candidate {
             members: vec![row],
-            values: vec![Value::Missing; plan.output.columns().len()],
-            completed: vec![false; plan.output.columns().len()],
+            values: vec![Value::Missing; plan.output().columns().len()],
+            completed: vec![false; plan.output().columns().len()],
         };
-        for assignment in &plan.templates[0].assignments {
+        for assignment in &plan.templates()[0].assignments {
             probe.values[assignment.column] = evaluate(
                 table,
                 assignment,
@@ -87,14 +87,14 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
             probe.completed[assignment.column] = true;
         }
         key_table.rows.push(
-            plan.keys
+            plan.keys()
                 .iter()
                 .map(|&column| core::mem::replace(&mut probe.values[column], Value::Missing))
                 .collect(),
         );
     }
-    let key_columns: Vec<_> = (0..plan.keys.len()).collect();
-    budget.work(rows, plan.keys.len())?;
+    let key_columns: Vec<_> = (0..plan.keys().len()).collect();
+    budget.work(rows, plan.keys().len())?;
     let partitions = partition(
         &key_table,
         &key_columns,
@@ -102,7 +102,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         limits.key_cells,
     )
     .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
-    budget.work(partitions.len(), plan.keys.len())?;
+    budget.work(partitions.len(), plan.keys().len())?;
     budget.work(rows, 1)?;
     let mut groups = Vec::new();
     groups
@@ -121,7 +121,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         }
     }
     groups.sort_unstable_by_key(|members| members[0]);
-    plan.check_capacity(0, groups.len(), limits)?;
+    Executor { plan }.check_capacity(0, groups.len(), limits)?;
     let mut candidates = Vec::new();
     candidates
         .try_reserve_exact(groups.len())
@@ -134,10 +134,10 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         }
         let mut candidate = Candidate {
             members: members.into_iter().map(|member| retained[member]).collect(),
-            values: vec![Value::Missing; plan.output.columns().len()],
-            completed: vec![false; plan.output.columns().len()],
+            values: vec![Value::Missing; plan.output().columns().len()],
+            completed: vec![false; plan.output().columns().len()],
         };
-        for (&column, value) in plan.keys.iter().zip(keys) {
+        for (&column, value) in plan.keys().iter().zip(keys) {
             candidate.values[column] = value;
             candidate.completed[column] = true;
         }
@@ -303,7 +303,7 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
             path: assignment.path.clone(),
             identifier: identifier.into(),
             value_count: distinct.len(),
-            identity: failure_identity(candidate, &plan.keys, row, budget)?,
+            identity: failure_identity(candidate, plan.keys(), row, budget)?,
         }));
     }
     Ok(first.map_or(Value::Missing, own))

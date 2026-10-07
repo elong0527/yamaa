@@ -2,35 +2,6 @@
 use super::*;
 use crate::table_grouping::Key;
 
-/// Validate every equality pair and output dependency without reading any source data.
-pub(super) fn validate(
-    lookup: &Lookup,
-    sources: &[SecondarySource],
-    available: &[bool],
-    output: &TableSchema,
-) -> Result<(), PlanError> {
-    let source = sources.get(lookup.source).ok_or(PlanError::InvalidLookup)?;
-    if lookup.column >= source.schema.columns().len() || lookup.keys.is_empty() {
-        return Err(PlanError::InvalidLookup);
-    }
-    for (index, key) in lookup.keys.iter().enumerate() {
-        let field = source
-            .schema
-            .columns()
-            .get(key.source_column)
-            .ok_or(PlanError::InvalidLookup)?;
-        if !available.get(key.output_column).copied().unwrap_or(false)
-            || field.kind != output.columns()[key.output_column].kind
-            || lookup.keys[..index]
-                .iter()
-                .any(|previous| previous.source_column == key.source_column)
-        {
-            return Err(PlanError::InvalidLookup);
-        }
-    }
-    Ok(())
-}
-
 /// Count all matching records before reading a value or applying output conversion.
 pub(super) fn read<E>(
     table: &dyn TableAccess<Error = E>,
@@ -72,42 +43,6 @@ pub(super) struct Context<'a> {
     pub candidate: &'a Candidate,
     pub plan: &'a DatasetPlan,
     pub row: usize,
-}
-
-/// Admit raw driver equality in record scope or on available group keys.
-pub(super) fn validate_row(
-    lookup: &RowLookup,
-    driver: &TableSchema,
-    sources: &[SecondarySource],
-    mode: &RowMode,
-) -> Result<(), PlanError> {
-    let source = sources.get(lookup.source).ok_or(PlanError::InvalidLookup)?;
-    if matches!(mode, RowMode::Keys)
-        || lookup.column >= source.schema.columns().len()
-        || lookup.keys.is_empty()
-    {
-        return Err(PlanError::InvalidLookup);
-    }
-    for (index, key) in lookup.keys.iter().enumerate() {
-        let left = driver
-            .columns()
-            .get(key.driver_column)
-            .ok_or(PlanError::InvalidLookup)?;
-        let right = source
-            .schema
-            .columns()
-            .get(key.source_column)
-            .ok_or(PlanError::InvalidLookup)?;
-        if left.kind != right.kind
-            || matches!(mode, RowMode::Groups(keys) if !keys.contains(&key.driver_column))
-            || lookup.keys[..index]
-                .iter()
-                .any(|prior| prior.source_column == key.source_column)
-        {
-            return Err(PlanError::InvalidLookup);
-        }
-    }
-    Ok(())
 }
 
 /// Resolve every raw driver match field before the bounded secondary scan.
@@ -183,8 +118,8 @@ fn read_matching<E>(
         budget.identity_refs(keys.iter().map(|(_, value)| *value))?;
         return Err(Box::new(ExecutionError::MultipleMatches {
             path: context.assignment.path.clone(),
-            dataset: context.plan.secondary[source].name.clone(),
-            intermediate: alloc::format!("intermediate({})", context.plan.secondary[source].name),
+            dataset: context.plan.secondary()[source].name.clone(),
+            intermediate: alloc::format!("intermediate({})", context.plan.secondary()[source].name),
             match_count: count,
             matched_key: keys
                 .iter()
@@ -192,7 +127,12 @@ fn read_matching<E>(
                     (table.schema().columns()[*column].name.clone(), own(*value))
                 })
                 .collect(),
-            identity: failure_identity(context.candidate, &context.plan.keys, context.row, budget)?,
+            identity: failure_identity(
+                context.candidate,
+                context.plan.keys(),
+                context.row,
+                budget,
+            )?,
         }));
     }
     budget.work(1, 1)?;

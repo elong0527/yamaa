@@ -12,6 +12,7 @@ use yamaa_core::{
     table::{TableAccess, TableSchema},
     value::Value,
 };
+use yamaa_engine::dataset::DatasetExecution;
 use yamaa_engine::dataset::{self, DatasetPlan};
 
 fn text(d: &Document, id: usize) -> &str {

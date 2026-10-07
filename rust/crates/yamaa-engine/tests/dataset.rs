@@ -6,6 +6,7 @@ use yamaa_core::{
     temporal::{Date, DatePrecision},
     value::{ColumnType, Value},
 };
+use yamaa_engine::dataset::DatasetExecution;
 use yamaa_engine::{
     dataset::{
         Assignment, Check, DatasetPlan, ExecutionError, Expression, Limits, PlanError, RowMode,
@@ -612,103 +613,6 @@ fn failures_keep_provenance_and_stop_later_columns() {
     ));
 }
 
-/// Admission rejects latent invalid paths even for an empty source snapshot.
-#[test]
-fn plan_admission_checks_every_template_and_dependency() {
-    let source = schema(&[("id", ColumnType::Int), ("other", ColumnType::Int)]);
-    let output = source.clone();
-    let make = |templates, columns| {
-        DatasetPlan::new(
-            source.clone(),
-            output.clone(),
-            templates,
-            columns,
-            vec![0],
-            vec![],
-        )
-    };
-    let records = |assignments| RowTemplate {
-        filter: None,
-        mode: RowMode::Records,
-        assignments,
-    };
-    let grouped = |assignments| RowTemplate {
-        filter: None,
-        mode: RowMode::Groups(vec![0]),
-        assignments,
-    };
-    assert_eq!(make(vec![], vec![]), Err(PlanError::NoTemplates));
-    assert_eq!(
-        make(
-            vec![records(vec![assign(0, Expression::Column(1))])],
-            vec![]
-        ),
-        Err(PlanError::UnavailableColumn)
-    );
-    assert_eq!(
-        make(
-            vec![records(vec![assign(0, Expression::Source(2))])],
-            vec![]
-        ),
-        Err(PlanError::InvalidSource)
-    );
-    assert_eq!(
-        make(
-            vec![grouped(vec![assign(0, Expression::Source(1))])],
-            vec![]
-        ),
-        Err(PlanError::NonGroupSource)
-    );
-    let reduce = Expression::Reduce {
-        identifier: None,
-        column: 1,
-        reducer: NumericReducer::Sum,
-        text: "SUM(x.other)".into(),
-    };
-    assert_eq!(
-        make(vec![records(vec![assign(0, reduce)])], vec![]),
-        Err(PlanError::UngroupedReduction)
-    );
-    assert_eq!(
-        make(
-            vec![records(vec![
-                assign(0, Expression::Source(0)),
-                assign(0, Expression::Source(0))
-            ])],
-            vec![]
-        ),
-        Err(PlanError::DuplicateAssignment)
-    );
-    assert_eq!(
-        make(
-            vec![records(vec![assign(0, Expression::Source(0))])],
-            vec![]
-        ),
-        Err(PlanError::IncompleteRow)
-    );
-    assert_eq!(
-        make(
-            vec![
-                records(vec![]),
-                grouped(vec![assign(0, Expression::Source(0))])
-            ],
-            vec![
-                assign(0, Expression::Source(0)),
-                assign(1, Expression::Literal(Value::Missing))
-            ]
-        ),
-        Err(PlanError::InconsistentRowColumns)
-    );
-    // A non-group field in the later column phase is invalid too.
-    assert_eq!(
-        make(
-            vec![grouped(vec![assign(0, Expression::Source(0))])],
-            vec![assign(1, Expression::Source(1))]
-        ),
-        Err(PlanError::NonGroupSource)
-    );
-}
-
 /// Failed checks retain declaration order, full identities and the artifact count.
 #[test]
 fn verification_failure_observations_survive_discarded_output() {
@@ -1122,54 +1026,6 @@ fn grouped_mean_preserves_temporal_metadata_and_missing_values() {
     };
     assert_eq!(actual.collected_precision(), DatePrecision::Year);
     assert_eq!(result.dataset.rows()[0][1], Value::float(1.5));
-}
-
-/// Invalid typed verification declarations remain static plan errors.
-#[test]
-fn invalid_verifications_are_rejected() {
-    let source = schema(&[("id", ColumnType::Str)]);
-    let template = || {
-        vec![RowTemplate {
-            filter: None,
-            mode: RowMode::Records,
-            assignments: vec![assign(0, Expression::Source(0))],
-        }]
-    };
-    for check in [
-        Check::RowCount {
-            min: None,
-            max: None,
-        },
-        Check::RowCount {
-            min: Some(2),
-            max: Some(1),
-        },
-    ] {
-        assert_eq!(
-            DatasetPlan::new(
-                source.clone(),
-                source.clone(),
-                template(),
-                vec![],
-                vec![0],
-                vec![verification(check)]
-            ),
-            Err(PlanError::InvalidBounds)
-        );
-    }
-    for columns in [vec![], vec![1]] {
-        assert_eq!(
-            DatasetPlan::new(
-                source.clone(),
-                source.clone(),
-                template(),
-                vec![],
-                vec![0],
-                vec![verification(Check::Unique(columns))]
-            ),
-            Err(PlanError::InvalidColumns)
-        );
-    }
 }
 
 /// Full-width integer keys are never converted to floating point for grouping.

@@ -36,7 +36,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                 EvaluationErrorKind::Resolution { error, .. } => Err(error),
                 EvaluationErrorKind::Numeric(condition) => {
                     let identity = if condition.phase() == "derivation" {
-                        failure_identity(candidate, &plan.keys, row, budget)?
+                        failure_identity(candidate, plan.keys(), row, budget)?
                     } else {
                         None
                     };
