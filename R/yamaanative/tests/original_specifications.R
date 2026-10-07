@@ -12,22 +12,23 @@ root <- system.file("specification-original", package="yamaanative", mustWork=TR
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
 module_names <- c("schema.yaml",sort(setdiff(list.files(file.path(root,"schema"),pattern="[.]yaml$"),"schema.yaml")))
 modules <- setNames(lapply(file.path(root,"schema",module_names),rawfile),module_names)
-for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum")) {
+for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-lookup")) {
   case <- file.path(root,"cases",case_name)
   handle <- prepare_specification(modules,"schema.yaml","spec.yaml",rawfile(file.path(case,"spec.yaml")))
   gc()
-  stopifnot(identical(specification_source(handle),list(name="LB",path="input/lb.csv")))
-  state <- new.env(parent=emptyenv()); state$reads <- 0L; state$requests <- 0L; state$content <- NULL
+  inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else c(LB="input/lb.csv")
+  stopifnot(identical(specification_source(handle),list(name=names(inputs)[[1L]],path=unname(inputs[[1L]]))))
+  state <- new.env(parent=emptyenv()); state$reads <- 0L; state$requests <- character(); state$content <- list()
   capture <- function(name,path,maximum) {
-    stopifnot(name=="LB",path=="input/lb.csv")
-    state$requests <- state$requests+1L
-    created <- is.null(state$content)
+    stopifnot(identical(path,unname(inputs[[name]])))
+    state$requests <- c(state$requests,name)
+    created <- is.null(state$content[[path]])
     if(created){
-      state$content <- readBin(file.path(case,path),"raw",n=maximum+1L)
-      stopifnot(length(state$content)<=maximum)
+      state$content[[path]] <- readBin(file.path(case,path),"raw",n=maximum+1L)
+      stopifnot(length(state$content[[path]])<=maximum)
       state$reads <- state$reads+1L
     }
-    list(state$content,created)
+    list(state$content[[path]],created)
   }
   expected <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
   expected <- sub('"runtime":"python"','"runtime":"r"',expected,fixed=TRUE)
@@ -36,7 +37,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   published <- 0L
   directory <- tempfile("original-published-"); dir.create(directory)
   publish <- function(path,content) {
-    stopifnot(case_name=="adam-adlb-ordered-sum",path=="adlb.csv")
+    stopifnot(case_name %in% c("adam-adlb-ordered-sum","schema-lookup"),path==if(case_name=="schema-lookup") "adsl.csv" else "adlb.csv")
     stopifnot(identical(content,rawfile(file.path(case,"expected",path))))
     pending <- file.path(directory,"candidate.csv")
     writeBin(content,pending)
@@ -47,11 +48,11 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   }
   for(created in c(1L,0L)) {
     report <- specification_report(handle,capture,publish,case_name)
-    if(created==0L) expected <- sub('"snapshots_created":1','"snapshots_created":0',expected,fixed=TRUE)
+    if(created==0L) expected <- gsub('"snapshots_created":1','"snapshots_created":0',expected,fixed=TRUE)
     stopifnot(identical(report,expected))
   }
-  stopifnot(state$reads==1L,state$requests==2L)
-  stopifnot(published==if(case_name=="adam-adlb-ordered-sum") 2L else 0L)
+  stopifnot(state$reads==length(inputs),identical(state$requests,rep(names(inputs),2L)))
+  stopifnot(published==if(case_name %in% c("adam-adlb-ordered-sum","schema-lookup")) 2L else 0L)
   unlink(directory,recursive=TRUE)
   cat(case_name,"complete original report and cached source capture passed\n")
   expired <- unserialize(serialize(handle,NULL))
@@ -68,7 +69,7 @@ for(kind in c("error","interrupt")) {
 }
 for(rejected in list(FALSE,NULL,NA,logical(),c(TRUE,FALSE),1L,"TRUE")) {
   calls <- 0L
-  capture <- function(...) list(rawfile(file.path(case,"input/lb.csv")),TRUE)
+  capture <- function(name,path,maximum) list(rawfile(file.path(case,path)),TRUE)
   publish <- function(...) {calls <<- calls+1L;rejected}
   actual <- tryCatch(specification_report(handle,capture,publish,case_name),error=identity)
   stopifnot(inherits(actual,"error"),calls==1L)
@@ -79,7 +80,7 @@ cat("rejected and malformed publication results passed\n")
 for(kind in c("error","interrupt")) {
   failure <- structure(list(message="retained publication condition",call=NULL,payload=new.env()),class=c("publication_test_condition",kind,"condition"))
   calls <- 0L
-  capture <- function(...) list(rawfile(file.path(case,"input/lb.csv")),TRUE)
+  capture <- function(name,path,maximum) list(rawfile(file.path(case,path)),TRUE)
   publish <- function(...) {calls <<- calls+1L;stop(failure)}
   actual <- tryCatch(specification_report(handle,capture,publish,case_name),error=identity,interrupt=identity)
   stopifnot(identical(actual,failure),calls==1L)

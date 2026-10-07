@@ -738,10 +738,13 @@ fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
     };
     for created in [1, 0] {
         let attempt = run.execute_with_port(&mut port);
-        assert!(attempt.read.captured);
-        assert_eq!(attempt.read.snapshots_created, Some(created));
-        assert!(Arc::ptr_eq(attempt.snapshot.as_ref().unwrap(), &content));
-        assert_eq!(attempt.table.as_ref().unwrap().row_count(), 2);
+        assert!(attempt.sources[0].read.captured);
+        assert_eq!(attempt.sources[0].read.snapshots_created, Some(created));
+        assert!(Arc::ptr_eq(
+            attempt.sources[0].snapshot.as_ref().unwrap(),
+            &content
+        ));
+        assert_eq!(attempt.sources[0].table.as_ref().unwrap().row_count(), 2);
         let response = attempt.result.unwrap();
         assert!(response.table.is_none());
         assert!(response.outcome.contains("division_by_zero"));
@@ -750,24 +753,24 @@ fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
     let invalid = raw.replace("100 * (AVAL - BASE) / BASE", "AVAL +");
     let run = PreparedRun::prepare(prepare(&schema, invalid.as_bytes())).unwrap();
     let attempt = run.execute_with_port(&mut port);
-    assert!(attempt.table.is_some());
+    assert!(attempt.sources[0].table.is_some());
     assert!(matches!(
         attempt.result,
         Err(PortError::Run(Error::Bind(_)))
     ));
     port.content = Arc::from(b"A\n\"bad".as_slice());
     let attempt = run.execute_with_port(&mut port);
-    assert!(attempt.snapshot.is_some());
-    assert!(attempt.table.is_none());
+    assert!(attempt.sources[0].snapshot.is_some());
+    assert!(attempt.sources[0].table.is_none());
     assert!(matches!(
         attempt.result,
         Err(PortError::Run(Error::Source(_)))
     ));
     port.fail = true;
     let attempt = run.execute_with_port(&mut port);
-    assert!(!attempt.read.captured);
-    assert_eq!(attempt.read.snapshots_created, Some(0));
-    assert!(attempt.snapshot.is_none() && attempt.table.is_none());
+    assert!(!attempt.sources[0].read.captured);
+    assert_eq!(attempt.sources[0].read.snapshots_created, Some(0));
+    assert!(attempt.sources[0].snapshot.is_none() && attempt.sources[0].table.is_none());
     assert!(matches!(
         attempt.result,
         Err(PortError::Capture("resource_path_missing"))
@@ -1825,4 +1828,98 @@ fn original_lookup_compiles_multiple_schemas_and_executes_named_selections() {
             );
         }
     }
+}
+
+#[test]
+fn original_lookup_complete_report_uses_all_captured_sources_and_actual_handlers() {
+    use serde_json::{json, Value as Json};
+    use std::collections::BTreeMap;
+    use yamaa_adapters::{
+        specification_report::{self, ArtifactPort, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_core::specification::SourceDeclaration;
+    struct Host {
+        content: BTreeMap<String, Arc<[u8]>>,
+        seen: Vec<String>,
+        reads: usize,
+        requests: Vec<String>,
+        published: Vec<Vec<u8>>,
+    }
+    impl SourcePort for Host {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+            self.requests.push(source.name.clone());
+            if !self.seen.contains(&source.name) {
+                self.seen.push(source.name.clone());
+                self.reads += 1;
+            }
+            let bytes = Arc::clone(&self.content[&source.path]);
+            assert!(bytes.len() <= maximum);
+            Ok(bytes)
+        }
+    }
+    impl ArtifactPort for Host {
+        type Error = ();
+        fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
+            assert_eq!(path, "adsl.csv");
+            self.published.push(bytes.to_vec());
+            Ok(())
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let case = root.join("benchmarks/schema-lookup");
+    let schema = schema(&root.join("yaml"));
+    let prepared = PreparedRun::prepare(prepare(
+        &schema,
+        &std::fs::read(case.join("spec.yaml")).unwrap(),
+    ))
+    .unwrap();
+    let content = prepared
+        .compiled()
+        .sources()
+        .iter()
+        .map(|source| {
+            (
+                source.path.clone(),
+                Arc::from(std::fs::read(case.join(&source.path)).unwrap()),
+            )
+        })
+        .collect();
+    let mut host = Host {
+        content,
+        seen: Vec::new(),
+        reads: 0,
+        requests: Vec::new(),
+        published: Vec::new(),
+    };
+    for created in [1, 0] {
+        let attempt = prepared.execute_with_port(&mut host);
+        assert_eq!(attempt.sources.len(), 3);
+        let id = Identity {
+            runtime: "python",
+            runtime_version: "fixture-runtime",
+            engine_version: "fixture-engine",
+            example: "schema-lookup",
+            specification: "spec.yaml",
+            base_directory: ".",
+        };
+        let actual = specification_report::complete(&prepared, &attempt, id, &mut host).unwrap();
+        let mut expected: Json =
+            serde_json::from_str(include_str!("fixtures/specifications/schema-lookup.json"))
+                .unwrap();
+        for source in expected["source_reads"].as_array_mut().unwrap() {
+            source["snapshots_created"] = json!(created);
+        }
+        assert_eq!(actual, expected);
+    }
+    assert_eq!(host.requests, ["DM", "AE", "MEDDRA", "DM", "AE", "MEDDRA"]);
+    assert_eq!(host.reads, 3);
+    assert_eq!(
+        host.published,
+        vec![std::fs::read(case.join("expected/adsl.csv")).unwrap(); 2]
+    );
 }

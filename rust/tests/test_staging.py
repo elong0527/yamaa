@@ -42,14 +42,12 @@ class StagingTests(unittest.TestCase):
                 "negative-zero-division",
                 "negative-integer-overflow",
                 "adam-adlb-ordered-sum",
+                "schema-lookup",
             ):
-                for relative in (
-                    "spec.yaml",
-                    "input/lb.csv",
-                    "expected/adlb.csv"
-                    if name == "adam-adlb-ordered-sum"
-                    else "expected/error.yaml",
-                ):
+                files = ("spec.yaml", "input/dm.csv", "input/ae.csv", "input/meddict.csv", "expected/adsl.csv") if name == "schema-lookup" else (
+                    "spec.yaml", "input/lb.csv", "expected/adlb.csv" if name == "adam-adlb-ordered-sum" else "expected/error.yaml"
+                )
+                for relative in files:
                     self.assertEqual(
                         (original / "cases" / name / relative).read_bytes(),
                         (

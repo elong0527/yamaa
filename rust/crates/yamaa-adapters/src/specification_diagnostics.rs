@@ -214,6 +214,13 @@ fn preparing(error: &PreflightFinding) -> Option<Value> {
 /// have no fabricated language condition and must remain host boundary failures.
 pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec<Value>> {
     match error {
+        Error::Sources(errors) => {
+            let mut result = Vec::new();
+            for (source, error) in errors {
+                result.extend(findings(error, Some(source))?);
+            }
+            Some(result)
+        }
         Error::Prepare(PrepareError::Invalid(errors)) => errors.iter().map(preparing).collect(),
         Error::Bind(error) => binding(error, source?),
         Error::TypedSource(crate::typed_csv::Error::UnknownField { field }) => {
@@ -291,6 +298,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             Error::Bind(_) => ("bind", "internal"),
             Error::Execution(error) if error.is_internal() => ("execute", "internal"),
             Error::Execution(_) => ("execute", "execution_boundary"),
+            Error::Sources(_) => ("ingest", "source_collection_boundary"),
         };
         json!({"status":"rejected","stage":stage,"code":code})
     };

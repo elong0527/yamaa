@@ -237,9 +237,9 @@ fn reuse_repeats_effects_and_reports_actual_cached_captures() {
     for created in [1, 0] {
         decoder.trace.borrow_mut().clear();
         run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
-        assert_eq!(attempt.read.snapshots_created, Some(created));
+        assert_eq!(attempt.sources[0].read.snapshots_created, Some(created));
         assert!(Arc::ptr_eq(
-            attempt.snapshot.as_ref().unwrap(),
+            attempt.sources[0].snapshot.as_ref().unwrap(),
             &port.snapshot
         ));
         let execution = attempt.result.as_ref().unwrap().result.as_ref().unwrap();
@@ -265,17 +265,23 @@ fn capture_decode_and_binding_failures_stop_later_effects_without_losing_payload
         panic!("capture error")
     };
     assert!(Rc::ptr_eq(&payload, &port.payload));
-    assert!(!attempt.read.captured && attempt.snapshot.is_none() && attempt.table.is_none());
+    assert!(
+        !attempt.sources[0].read.captured
+            && attempt.sources[0].snapshot.is_none()
+            && attempt.sources[0].table.is_none()
+    );
     assert_eq!(*decoder.trace.borrow(), ["capture"]);
     port.fail = false;
     decoder.fail = true;
     decoder.trace.borrow_mut().clear();
     run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
-    let Err(PortError::Run(RunError::Decode(Payload(ref payload)))) = attempt.result else {
-        panic!("decode error")
+    let Err(PortError::Run(RunError::Sources(ref failures))) = attempt.result else {
+        panic!("decode error");
     };
-    assert!(Rc::ptr_eq(payload, &decoder.payload));
-    assert!(attempt.snapshot.is_some() && attempt.table.is_none());
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].0, 0);
+    assert!(Rc::ptr_eq(&failures[0].1 .0, &decoder.payload));
+    assert!(attempt.sources[0].snapshot.is_some() && attempt.sources[0].table.is_none());
     assert_eq!(*decoder.trace.borrow(), ["capture", "decode"]);
     decoder.fail = false;
     decoder.trace.borrow_mut().clear();
@@ -285,7 +291,7 @@ fn capture_decode_and_binding_failures_stop_later_effects_without_losing_payload
         attempt.result,
         Err(PortError::Run(RunError::Bind(_)))
     ));
-    assert!(attempt.table.is_some());
+    assert!(attempt.sources[0].table.is_some());
     assert_eq!(*decoder.trace.borrow(), ["capture", "decode", "schema"]);
 }
 #[test]
@@ -297,8 +303,8 @@ fn accounting_and_resource_failures_preserve_snapshots_and_precede_later_effects
     port.reads = 1;
     run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
     assert!(matches!(attempt.result, Err(PortError::CaptureAccounting)));
-    assert_eq!(attempt.read.snapshots_created, None);
-    assert!(attempt.snapshot.is_some() && attempt.table.is_none());
+    assert_eq!(attempt.sources[0].read.snapshots_created, None);
+    assert!(attempt.sources[0].snapshot.is_some() && attempt.sources[0].table.is_none());
     assert_eq!(*decoder.trace.borrow(), ["capture"]);
     decoder.trace.borrow_mut().clear();
     let bytes = run::execute_bytes(
@@ -346,14 +352,18 @@ fn runtime_errors_and_panic_boundaries_keep_the_observed_source() {
         panic!("opaque access error")
     };
     assert!(Rc::ptr_eq(&payload, &decoder.payload));
-    assert!(attempt.snapshot.is_some() && attempt.table.is_some());
+    assert!(attempt.sources[0].snapshot.is_some() && attempt.sources[0].table.is_some());
     decoder.fail_cell = false;
     decoder.panic_cell = true;
     let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
     }));
     assert!(panic.is_err());
-    assert!(attempt.read.captured && attempt.snapshot.is_some() && attempt.table.is_some());
+    assert!(
+        attempt.sources[0].read.captured
+            && attempt.sources[0].snapshot.is_some()
+            && attempt.sources[0].table.is_some()
+    );
     assert!(matches!(attempt.result, Err(PortError::Incomplete)));
 }
 
@@ -568,5 +578,259 @@ mod publication {
             Err(CompleteError::OutputLimit)
         ));
         assert_eq!(*report.trace.borrow(), ["begin", "encode"]);
+    }
+}
+
+mod source_collection {
+    use super::*;
+    fn prepared() -> PreparedSpecification {
+        let original = document("ID + 1", "input.csv");
+        let d = original.document();
+        let root = d.root();
+        let input = d.field(root, "input").unwrap();
+        let mut nodes = d.nodes().to_vec();
+        for (name, path) in [("SECOND", "second.csv"), ("THIRD", "third.csv")] {
+            let name = Tree::Text(name).append(&mut nodes);
+            let value = Tree::Map(vec![("path", Tree::Text(path))]).append(&mut nodes);
+            let N::Mapping(fields) = &mut nodes[input] else {
+                unreachable!()
+            };
+            fields.push((name, value));
+        }
+        let base = Tree::Text("base").append(&mut nodes);
+        let driver = Tree::Text("SRC").append(&mut nodes);
+        let N::Mapping(fields) = &mut nodes[root] else {
+            unreachable!()
+        };
+        fields.push((base, driver));
+        fn reorder(id: usize, source: &[N], ordered: &mut Vec<N>) -> usize {
+            let node = match &source[id] {
+                N::Mapping(fields) => N::Mapping(
+                    fields
+                        .iter()
+                        .map(|&(a, b)| (reorder(a, source, ordered), reorder(b, source, ordered)))
+                        .collect(),
+                ),
+                N::Sequence(items) => N::Sequence(
+                    items
+                        .iter()
+                        .map(|&id| reorder(id, source, ordered))
+                        .collect(),
+                ),
+                node => node.clone(),
+            };
+            let id = ordered.len();
+            ordered.push(node);
+            id
+        }
+        let mut ordered = Vec::new();
+        let root = reorder(root, &nodes, &mut ordered);
+        let d = Document::new(ordered, root, DocumentLimits::default()).unwrap();
+        let model = SpecificationDocument::admit(d, &mut ValidationBudget::new(Default::default()))
+            .unwrap()
+            .unwrap();
+        PreparedSpecification::prepare(&model).unwrap()
+    }
+    struct Capture {
+        trace: Trace,
+        requests: Vec<String>,
+        limits: Vec<usize>,
+        seen: Vec<String>,
+        reads: usize,
+        fail: Option<String>,
+        payload: Rc<()>,
+    }
+    impl SourcePort for Capture {
+        type Error = Payload;
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            limit: usize,
+        ) -> Result<Arc<[u8]>, Payload> {
+            self.trace.borrow_mut().push("capture");
+            self.requests.push(source.name.clone());
+            self.limits.push(limit);
+            if self.fail.as_deref() == Some(source.name.as_str()) {
+                return Err(Payload(Rc::clone(&self.payload)));
+            }
+            if !self.seen.contains(&source.name) {
+                self.seen.push(source.name.clone());
+                self.reads += 1;
+            }
+            Ok(Arc::from(b"held snapshot".as_slice()))
+        }
+    }
+    #[derive(Debug)]
+    struct DecodeFailure {
+        recoverable: bool,
+        payload: Rc<()>,
+    }
+    struct Decode {
+        trace: Trace,
+        fail: Vec<String>,
+        recoverable: bool,
+        panic: bool,
+        payload: Rc<()>,
+    }
+    impl SourceDecoder for Decode {
+        type Error = DecodeFailure;
+        type Table = Table;
+        fn continue_after(&self, error: &DecodeFailure) -> bool {
+            error.recoverable
+        }
+        fn decode(
+            &mut self,
+            source: &SourceDeclaration,
+            _bytes: &[u8],
+        ) -> Result<Table, DecodeFailure> {
+            self.trace.borrow_mut().push("decode");
+            if self.fail.contains(&source.name) {
+                assert!(!self.panic, "injected decoder interruption");
+                return Err(DecodeFailure {
+                    recoverable: self.recoverable,
+                    payload: Rc::clone(&self.payload),
+                });
+            }
+            Ok(Table {
+                schema: source_schema(),
+                trace: Rc::clone(&self.trace),
+                fail: false,
+                panic: false,
+                payload: Rc::clone(&self.payload),
+            })
+        }
+    }
+    fn source_schema() -> TableSchema {
+        super::source()
+    }
+    fn ports() -> (Capture, Decode) {
+        let trace = Trace::default();
+        let payload = Rc::new(());
+        (
+            Capture {
+                trace: Rc::clone(&trace),
+                requests: Vec::new(),
+                limits: Vec::new(),
+                seen: Vec::new(),
+                reads: 0,
+                fail: None,
+                payload: Rc::clone(&payload),
+            },
+            Decode {
+                trace,
+                fail: Vec::new(),
+                recoverable: true,
+                panic: false,
+                payload,
+            },
+        )
+    }
+    #[test]
+    fn ordered_collection_caches_snapshots_but_repeats_execution() {
+        let prepared = prepared();
+        let (mut port, mut decoder) = ports();
+        let mut attempt = CapturedAttempt::new(prepared.source());
+        for created in [1, 0] {
+            port.trace.borrow_mut().clear();
+            run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+            assert!(attempt.result.as_ref().unwrap().result.is_ok());
+            assert_eq!(attempt.sources.len(), 3);
+            assert!(attempt
+                .sources
+                .iter()
+                .all(|s| s.read.snapshots_created == Some(created)
+                    && s.snapshot.is_some()
+                    && s.table.is_some()));
+            assert_eq!(
+                &port.trace.borrow()[..6],
+                ["capture", "decode", "capture", "decode", "capture", "decode"]
+            );
+        }
+        assert_eq!(
+            port.requests,
+            ["SRC", "SECOND", "THIRD", "SRC", "SECOND", "THIRD"]
+        );
+        assert_eq!(port.limits, [1024, 1011, 998, 1024, 1011, 998]);
+        assert_eq!(port.reads, 3);
+    }
+    #[test]
+    fn semantic_decode_findings_collect_but_opaque_failures_abort() {
+        let prepared = prepared();
+        for recoverable in [true, false] {
+            let (mut port, mut decoder) = ports();
+            decoder.fail = vec!["SRC".into(), "THIRD".into()];
+            decoder.recoverable = recoverable;
+            let mut attempt = CapturedAttempt::new(prepared.source());
+            run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+            let Err(PortError::Run(RunError::Sources(errors))) = attempt.result else {
+                panic!("ingestion errors")
+            };
+            assert_eq!(
+                errors.iter().map(|(index, _)| *index).collect::<Vec<_>>(),
+                if recoverable { vec![0, 2] } else { vec![0] }
+            );
+            assert!(errors
+                .iter()
+                .all(|(_, error)| Rc::ptr_eq(&error.payload, &decoder.payload)));
+            assert_eq!(port.requests.len(), if recoverable { 3 } else { 1 });
+            assert!(!port.trace.borrow().contains(&"cell"));
+        }
+    }
+    #[test]
+    fn byte_and_cell_budgets_cover_the_whole_collection() {
+        let prepared = prepared();
+        let (mut port, mut decoder) = ports();
+        let mut attempt = CapturedAttempt::new(prepared.source());
+        let mut bounded = limits();
+        bounded.source_bytes = 20;
+        run::execute_with_port_into(&prepared, &mut port, &mut decoder, bounded, &mut attempt);
+        assert!(matches!(
+            attempt.result,
+            Err(PortError::Run(RunError::SourceBytes { limit: 20 }))
+        ));
+        assert_eq!(port.requests, ["SRC", "SECOND"]);
+        assert_eq!(port.limits, [20, 7]);
+        assert!(attempt.sources[1].snapshot.is_some() && attempt.sources[1].table.is_none());
+        assert!(!port.trace.borrow().contains(&"cell"));
+        let (mut port, mut decoder) = ports();
+        let mut bounded = limits();
+        bounded.source_cells = 2;
+        run::execute_with_port_into(&prepared, &mut port, &mut decoder, bounded, &mut attempt);
+        assert!(matches!(
+            attempt.result,
+            Err(PortError::Run(RunError::SourceCells))
+        ));
+        assert_eq!(port.requests, ["SRC", "SECOND", "THIRD"]);
+        assert!(attempt.sources.iter().all(|s| s.table.is_some()));
+        assert!(!port.trace.borrow().contains(&"cell"));
+    }
+    #[test]
+    fn later_capture_failure_and_decoder_panic_retain_prior_observations() {
+        let prepared = prepared();
+        let (mut port, mut decoder) = ports();
+        port.fail = Some("SECOND".into());
+        let mut attempt = CapturedAttempt::new(prepared.source());
+        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        let Err(PortError::Capture(Payload(ref payload))) = attempt.result else {
+            panic!("capture failure")
+        };
+        assert!(Rc::ptr_eq(payload, &port.payload));
+        assert_eq!(attempt.sources.len(), 2);
+        assert!(attempt.sources[0].table.is_some());
+        assert!(!attempt.sources[1].read.captured);
+        port.fail = None;
+        decoder.fail = vec!["SECOND".into()];
+        decoder.panic = true;
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt)
+        }))
+        .is_err());
+        assert!(matches!(attempt.result, Err(PortError::Incomplete)));
+        assert_eq!(attempt.sources.len(), 2);
+        assert!(attempt.sources[0].table.is_some());
+        assert!(attempt.sources[1].snapshot.is_some() && attempt.sources[1].table.is_none());
     }
 }
