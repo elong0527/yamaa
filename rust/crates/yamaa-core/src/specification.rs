@@ -25,6 +25,9 @@ pub use lookup_diagnostics::LookupFinding;
 mod rows;
 #[path = "specification_verifications.rs"]
 mod verifications;
+#[path = "specification_windows.rs"]
+mod windows;
+pub use windows::WindowFinding;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UnsupportedFeature {
@@ -112,6 +115,7 @@ pub enum PreflightFinding {
 }
 #[derive(Debug)]
 pub enum BindError {
+    Internal,
     SourceCount,
     PredicatePolicy(crate::predicate_compiler::Error),
     InvalidPredicateBinding(crate::bound_expression::BindingError),
@@ -123,6 +127,7 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    Window(WindowFinding),
     Lookup(LookupFinding),
     QualifiedReference {
         path: String,
@@ -173,6 +178,7 @@ pub struct SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    Window(alloc::boxed::Box<windows::Declaration>),
     Source(String),
     Compute(CompiledNumeric),
     /// Reference planning emits formula diagnostics after source ingestion.
@@ -710,6 +716,14 @@ impl PreparedSpecification {
                     }
                     Some(Operation::Source(reference.into()))
                 }
+                "row_number"
+                | "rank"
+                | "row_value"
+                | "previous_non_missing"
+                | "locf"
+                | "baseline_flag" => Some(Operation::Window(alloc::boxed::Box::new(
+                    windows::Declaration::prepare(d, payload, op, &path, limits, &mut extra)?,
+                ))),
                 "compute" => {
                     for &(name, _) in mapping(d, payload)? {
                         let name = text(d, name)?;
@@ -929,6 +943,9 @@ impl PreparedSpecification {
                 Ok(binding)
             };
             let expression = match &declaration.operation {
+                Operation::Window(window) => window
+                    .bind(&catalog, &mut edges, &mut findings)?
+                    .map(Expression::Window),
                 Operation::InvalidNumeric { expression, error } => {
                     findings.push(BindFinding::Numeric {
                         path: reference_path.clone(),

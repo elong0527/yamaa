@@ -57,3 +57,12 @@ compiler coverage and the full six-document cohort remain required. Adapters sti
 typed probe plans; #1754 retires those semantic responsibilities as domain APIs
 replace the probes. No public API cutover, benchmark inventory promotion or
 numerical-policy change is included here.
+
+Original output-window declarations now compile into core `Window` values after
+shared schema admission expands named windows. Column binding records the actual
+source, grouping, ordering and predicate dependencies; the existing engine owns
+partition execution. The unchanged window fixture covers all 13 rows and the
+complete CSV through installed hosts. Field-specific validation and baseline
+ambiguity reports retain their observed source tables and partition identity.
+Qualified window reads, row-template windows and broader baseline type failures
+remain outside this bounded compiler slice; they are not full-language coverage.

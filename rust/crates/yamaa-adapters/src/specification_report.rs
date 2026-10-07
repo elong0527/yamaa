@@ -77,6 +77,15 @@ fn condition(run: &PreparedRun, value: &Value) -> Result<Value, Error> {
         context.insert("key".into(), json!(names));
         context.insert("intermediate_key".into(), key.into());
     }
+    if let Some(partition) = value.get("partition").filter(|v| !v.is_null()) {
+        let partition = partition.as_array().ok_or(Error::InvalidObservation)?;
+        let mut keys = Map::new();
+        for field in partition {
+            let name = field["name"].as_str().ok_or(Error::InvalidObservation)?;
+            keys.insert(name.into(), plain(&field["value"])?);
+        }
+        context.insert("keys".into(), json!([keys]));
+    }
     Ok(
         json!({"phase":diagnostic["phase"],"condition":diagnostic["condition"],"requirement":diagnostic["requirement"],"spec_paths":diagnostic["spec_paths"],"context":context}),
     )

@@ -43,8 +43,9 @@ class StagingTests(unittest.TestCase):
                 "negative-integer-overflow",
                 "adam-adlb-ordered-sum",
                 "schema-lookup",
+                "schema-window-functions",
             ):
-                files = ("spec.yaml", "input/dm.csv", "input/ae.csv", "input/meddict.csv", "expected/adsl.csv") if name == "schema-lookup" else (
+                files = ("spec.yaml", "input/dm.csv", "input/ae.csv", "input/meddict.csv", "expected/adsl.csv") if name == "schema-lookup" else ("spec.yaml", "input/vs.csv", "expected/advs.csv") if name == "schema-window-functions" else (
                     "spec.yaml", "input/lb.csv", "expected/adlb.csv" if name == "adam-adlb-ordered-sum" else "expected/error.yaml"
                 )
                 for relative in files:

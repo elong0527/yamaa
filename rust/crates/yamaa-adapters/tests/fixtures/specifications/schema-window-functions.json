@@ -1,0 +1,1522 @@
+{
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "backend": "rust",
+  "runtime_version": "fixture-runtime",
+  "engine_version": "fixture-engine",
+  "example": "schema-window-functions",
+  "outcome": "success",
+  "artifacts": [
+    {
+      "name": "advs",
+      "profile": "csv",
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "VISITN",
+        "VISIT",
+        "VSDTC",
+        "TRTSDT",
+        "VSSTRESN",
+        "VSEVAL",
+        "VSSEQ",
+        "SEVRANKC",
+        "SEVRANKD",
+        "PREVRES",
+        "NEXTRES",
+        "EVALPREV",
+        "LASTRES",
+        "CARRYRES",
+        "BLFL"
+      ],
+      "types": [
+        "str",
+        "str",
+        "int",
+        "str",
+        "date",
+        "date",
+        "float",
+        "str",
+        "int",
+        "int",
+        "int",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "str"
+      ],
+      "row_count": 13,
+      "records": [
+        "STUDYID,USUBJID,VISITN,VISIT,VSDTC,TRTSDT,VSSTRESN,VSEVAL,VSSEQ,SEVRANKC,SEVRANKD,PREVRES,NEXTRES,EVALPREV,LASTRES,CARRYRES,BLFL",
+        "YAMAA-01,01,1,VISIT 1,2025-01-02,2025-01-12,120,Y,1,3,2,,118,,,120,",
+        "YAMAA-01,01,2,VISIT 2,2025-01-09,2025-01-12,118,Y,2,4,3,120,,120,120,118,Y",
+        "YAMAA-01,01,3,VISIT 3,2025-01-16,2025-01-12,,N,,5,4,118,122,,118,118,",
+        "YAMAA-01,01,4,VISIT 4,2025-01-23,2025-01-12,122,Y,3,1,1,,122,118,118,122,",
+        "YAMAA-01,01,5,VISIT 5,2025-01-30,2025-01-12,122,Y,4,1,1,122,,122,122,122,",
+        "YAMAA-01,02,1,VISIT 1,2025-02-01,2025-02-10,98,Y,1,2,2,,,,,98,",
+        "YAMAA-01,02,2,VISIT 2,2025-02-08,2025-02-10,,Y,2,3,3,98,,98,98,98,Y",
+        "YAMAA-01,02,3,VISIT 3,2025-02-15,2025-02-10,,Y,3,3,3,,105,,98,98,",
+        "YAMAA-01,02,4,VISIT 4,2025-02-22,2025-02-10,105,Y,4,1,1,,,,98,105,",
+        "YAMAA-01,03,1,VISIT 1,2025-03-01,2025-03-20,130,Y,1,1,1,,130,,,130,",
+        "YAMAA-01,03,2,VISIT 2,2025-03-08,2025-03-20,130,Y,2,1,1,130,128,130,130,130,",
+        "YAMAA-01,03,3,VISIT 3,2025-03-15,2025-03-20,128,N,,3,2,130,,,130,128,Y",
+        "YAMAA-01,04,1,VISIT 1,2025-04-01,2025-03-15,115,Y,1,1,1,,,,,115,"
+      ],
+      "byte_length": 1035,
+      "content": "STUDYID,USUBJID,VISITN,VISIT,VSDTC,TRTSDT,VSSTRESN,VSEVAL,VSSEQ,SEVRANKC,SEVRANKD,PREVRES,NEXTRES,EVALPREV,LASTRES,CARRYRES,BLFL\nYAMAA-01,01,1,VISIT 1,2025-01-02,2025-01-12,120,Y,1,3,2,,118,,,120,\nYAMAA-01,01,2,VISIT 2,2025-01-09,2025-01-12,118,Y,2,4,3,120,,120,120,118,Y\nYAMAA-01,01,3,VISIT 3,2025-01-16,2025-01-12,,N,,5,4,118,122,,118,118,\nYAMAA-01,01,4,VISIT 4,2025-01-23,2025-01-12,122,Y,3,1,1,,122,118,118,122,\nYAMAA-01,01,5,VISIT 5,2025-01-30,2025-01-12,122,Y,4,1,1,122,,122,122,122,\nYAMAA-01,02,1,VISIT 1,2025-02-01,2025-02-10,98,Y,1,2,2,,,,,98,\nYAMAA-01,02,2,VISIT 2,2025-02-08,2025-02-10,,Y,2,3,3,98,,98,98,98,Y\nYAMAA-01,02,3,VISIT 3,2025-02-15,2025-02-10,,Y,3,3,3,,105,,98,98,\nYAMAA-01,02,4,VISIT 4,2025-02-22,2025-02-10,105,Y,4,1,1,,,,98,105,\nYAMAA-01,03,1,VISIT 1,2025-03-01,2025-03-20,130,Y,1,1,1,,130,,,130,\nYAMAA-01,03,2,VISIT 2,2025-03-08,2025-03-20,130,Y,2,1,1,130,128,130,130,130,\nYAMAA-01,03,3,VISIT 3,2025-03-15,2025-03-20,128,N,,3,2,130,,,130,128,Y\nYAMAA-01,04,1,VISIT 1,2025-04-01,2025-03-15,115,Y,1,1,1,,,,,115,\n"
+    }
+  ],
+  "diagnostics": [],
+  "unsupported": [],
+  "handler_counts": [],
+  "nodes": [
+    {
+      "specification": "spec.yaml",
+      "outcome": "success",
+      "diagnostics": [],
+      "unsupported": [],
+      "handler_counts": []
+    }
+  ],
+  "tables": [
+    {
+      "specification": "spec.yaml",
+      "stage": "source",
+      "name": "VS",
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "VISITN",
+        "VISIT",
+        "VSDTC",
+        "TRTSDT",
+        "VSSTRESN",
+        "VSEVAL"
+      ],
+      "types": [
+        "str",
+        "str",
+        "int",
+        "str",
+        "date",
+        "date",
+        "float",
+        "str"
+      ],
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "01"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 1"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-02"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-12"
+          },
+          {
+            "type": "float",
+            "value": "405e000000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "01"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 2"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-09"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-12"
+          },
+          {
+            "type": "float",
+            "value": "405d800000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "01"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 3"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-16"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-12"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "str",
+            "value": "N"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "01"
+          },
+          {
+            "type": "int",
+            "value": "4"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 4"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-23"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-12"
+          },
+          {
+            "type": "float",
+            "value": "405e800000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "01"
+          },
+          {
+            "type": "int",
+            "value": "5"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 5"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-30"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-12"
+          },
+          {
+            "type": "float",
+            "value": "405e800000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "02"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 1"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-01"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-10"
+          },
+          {
+            "type": "float",
+            "value": "4058800000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "02"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 2"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-08"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-10"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "02"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 3"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-15"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-10"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "02"
+          },
+          {
+            "type": "int",
+            "value": "4"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 4"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-22"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-10"
+          },
+          {
+            "type": "float",
+            "value": "405a400000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "03"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 1"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-01"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-20"
+          },
+          {
+            "type": "float",
+            "value": "4060400000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "03"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 2"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-08"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-20"
+          },
+          {
+            "type": "float",
+            "value": "4060400000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "03"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 3"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-15"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-20"
+          },
+          {
+            "type": "float",
+            "value": "4060000000000000"
+          },
+          {
+            "type": "str",
+            "value": "N"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "04"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 1"
+          },
+          {
+            "type": "date",
+            "value": "2025-04-01"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-15"
+          },
+          {
+            "type": "float",
+            "value": "405cc00000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ]
+      ]
+    },
+    {
+      "specification": "spec.yaml",
+      "stage": "derived",
+      "name": "output",
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "VISITN",
+        "VISIT",
+        "VSDTC",
+        "TRTSDT",
+        "VSSTRESN",
+        "VSEVAL",
+        "VSSEQ",
+        "SEVRANKC",
+        "SEVRANKD",
+        "PREVRES",
+        "NEXTRES",
+        "EVALPREV",
+        "LASTRES",
+        "CARRYRES",
+        "BLFL"
+      ],
+      "types": [
+        "str",
+        "str",
+        "int",
+        "str",
+        "date",
+        "date",
+        "float",
+        "str",
+        "int",
+        "int",
+        "int",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "str"
+      ],
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "01"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 1"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-02"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-12"
+          },
+          {
+            "type": "float",
+            "value": "405e000000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "405d800000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "405e000000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "01"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 2"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-09"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-12"
+          },
+          {
+            "type": "float",
+            "value": "405d800000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "int",
+            "value": "4"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "float",
+            "value": "405e000000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "405e000000000000"
+          },
+          {
+            "type": "float",
+            "value": "405e000000000000"
+          },
+          {
+            "type": "float",
+            "value": "405d800000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "01"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 3"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-16"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-12"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "str",
+            "value": "N"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "int",
+            "value": "5"
+          },
+          {
+            "type": "int",
+            "value": "4"
+          },
+          {
+            "type": "float",
+            "value": "405d800000000000"
+          },
+          {
+            "type": "float",
+            "value": "405e800000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "405d800000000000"
+          },
+          {
+            "type": "float",
+            "value": "405d800000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "01"
+          },
+          {
+            "type": "int",
+            "value": "4"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 4"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-23"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-12"
+          },
+          {
+            "type": "float",
+            "value": "405e800000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "405e800000000000"
+          },
+          {
+            "type": "float",
+            "value": "405d800000000000"
+          },
+          {
+            "type": "float",
+            "value": "405d800000000000"
+          },
+          {
+            "type": "float",
+            "value": "405e800000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "01"
+          },
+          {
+            "type": "int",
+            "value": "5"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 5"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-30"
+          },
+          {
+            "type": "date",
+            "value": "2025-01-12"
+          },
+          {
+            "type": "float",
+            "value": "405e800000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          },
+          {
+            "type": "int",
+            "value": "4"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "float",
+            "value": "405e800000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "405e800000000000"
+          },
+          {
+            "type": "float",
+            "value": "405e800000000000"
+          },
+          {
+            "type": "float",
+            "value": "405e800000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "02"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 1"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-01"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-10"
+          },
+          {
+            "type": "float",
+            "value": "4058800000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "4058800000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "02"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 2"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-08"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-10"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "float",
+            "value": "4058800000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "4058800000000000"
+          },
+          {
+            "type": "float",
+            "value": "4058800000000000"
+          },
+          {
+            "type": "float",
+            "value": "4058800000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "02"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 3"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-15"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-10"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "405a400000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "4058800000000000"
+          },
+          {
+            "type": "float",
+            "value": "4058800000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "02"
+          },
+          {
+            "type": "int",
+            "value": "4"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 4"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-22"
+          },
+          {
+            "type": "date",
+            "value": "2025-02-10"
+          },
+          {
+            "type": "float",
+            "value": "405a400000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          },
+          {
+            "type": "int",
+            "value": "4"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "4058800000000000"
+          },
+          {
+            "type": "float",
+            "value": "405a400000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "03"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 1"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-01"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-20"
+          },
+          {
+            "type": "float",
+            "value": "4060400000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "4060400000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "4060400000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "03"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 2"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-08"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-20"
+          },
+          {
+            "type": "float",
+            "value": "4060400000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "float",
+            "value": "4060400000000000"
+          },
+          {
+            "type": "float",
+            "value": "4060000000000000"
+          },
+          {
+            "type": "float",
+            "value": "4060400000000000"
+          },
+          {
+            "type": "float",
+            "value": "4060400000000000"
+          },
+          {
+            "type": "float",
+            "value": "4060400000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "03"
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 3"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-15"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-20"
+          },
+          {
+            "type": "float",
+            "value": "4060000000000000"
+          },
+          {
+            "type": "str",
+            "value": "N"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "int",
+            "value": "3"
+          },
+          {
+            "type": "int",
+            "value": "2"
+          },
+          {
+            "type": "float",
+            "value": "4060400000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "4060400000000000"
+          },
+          {
+            "type": "float",
+            "value": "4060000000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "04"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "VISIT 1"
+          },
+          {
+            "type": "date",
+            "value": "2025-04-01"
+          },
+          {
+            "type": "date",
+            "value": "2025-03-15"
+          },
+          {
+            "type": "float",
+            "value": "405cc00000000000"
+          },
+          {
+            "type": "str",
+            "value": "Y"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "int",
+            "value": "1"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "float",
+            "value": "405cc00000000000"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ]
+      ]
+    }
+  ],
+  "verifications": [],
+  "callbacks": [],
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "path": "input/vs.csv",
+      "outcome": "captured",
+      "condition": null,
+      "snapshots_created": 1
+    }
+  ],
+  "error": null
+}
