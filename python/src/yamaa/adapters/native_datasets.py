@@ -336,7 +336,7 @@ def _execute(
             ),
         )
         for i, check in enumerate(specification.verifications or ())
-        if check.operation in {"assert", "implies"}
+        if check.operation == "assert"
     )
     if len(specification.input) > 1 and specification.rows:
         required.append(

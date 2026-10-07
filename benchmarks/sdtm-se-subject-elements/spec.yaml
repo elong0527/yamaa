@@ -145,8 +145,9 @@ verifications:
       max: 6
   - assert:
       id: elements-have-ordered-bounds
-      expr: "SESTDTC IS NOT NULL AND SEENDTC IS NOT NULL
+      require: "SESTDTC IS NOT NULL AND SEENDTC IS NOT NULL
         AND SESTDTC <= SEENDTC"
   - assert:
       id: every-element-carries-its-plan
-      expr: "ETCD IS NOT NULL AND ELEMENT IS NOT NULL AND TAETORD IS NOT NULL"
+      require: "ETCD IS NOT NULL AND ELEMENT IS NOT NULL
+        AND TAETORD IS NOT NULL"

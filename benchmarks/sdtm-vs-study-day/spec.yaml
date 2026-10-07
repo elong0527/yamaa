@@ -147,15 +147,15 @@ verifications:
   - row_count:
       min: 7
       max: 7
-  - implies:
+  - assert:
       id: study-day-requires-both-dates
       when: "VSDTC IS NOT NULL AND RFSTDTC IS NOT NULL"
-      then: "VSDY IS NOT NULL"
-  - implies:
+      require: "VSDY IS NOT NULL"
+  - assert:
       id: study-day-has-no-day-zero
       when: "VSDY IS NOT NULL"
-      then: "VSDY <> 0"
-  - implies:
+      require: "VSDY <> 0"
+  - assert:
       id: reference-start-date-is-study-day-one
       when: "VSDTC IS NOT NULL AND RFSTDTC IS NOT NULL AND VSDTC = RFSTDTC"
-      then: "VSDY = 1"
+      require: "VSDY = 1"

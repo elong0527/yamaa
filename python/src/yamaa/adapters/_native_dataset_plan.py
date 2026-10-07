@@ -589,11 +589,10 @@ def admit(
         allowed = {
             "unique": {"columns", "id", "severity"},
             "row_count": {"min", "max", "id", "severity"},
-            "assert": {"expr", "id", "severity"},
-            "implies": {"when", "then", "id", "severity"},
+            "assert": {"when", "require", "id", "severity"},
         }.get(operation, set())
         if (
-            operation not in {"unique", "row_count", "assert", "implies"}
+            operation not in {"unique", "row_count", "assert"}
             or not isinstance(payload, dict)
             or set(payload) - allowed
             or payload.get("severity", "error") != "error"
@@ -604,8 +603,8 @@ def admit(
             for value in (payload.get("min"), payload.get("max"))
         ):
             reject("row_count_bounds", path)
-        elif operation in {"assert", "implies"}:
-            for field in ("expr",) if operation == "assert" else ("when", "then"):
+        elif operation == "assert":
+            for field in ("when", "require"):
                 text = payload.get(field)
                 if not isinstance(text, str):
                     continue
@@ -1174,12 +1173,13 @@ def checks(specification, outputs, *, predicate_analyzer=None):
                         "unknown_field",
                     )
             check = {op: [outputs[name] for name in names]}
-        elif op in {"assert", "implies"}:
+        elif op == "assert":
             predicates = {}
-            for field in ("expr",) if op == "assert" else ("when", "then"):
-                if field == "then":
+            guarded = payload.get("when") is not None
+            for field in ("when", "require") if guarded else ("require",):
+                if field == "require" and "when" in predicates:
                     # Validate when natively before any later syntax/name error
-                    # in then, without evaluating rows or emitting a record.
+                    # in require, without evaluating rows or emitting a record.
                     lowered.append(
                         {
                             "path": path,
@@ -1221,9 +1221,9 @@ def checks(specification, outputs, *, predicate_analyzer=None):
                     lambda name: {"column": outputs[name]},
                     literal,
                 )
-            if op == "implies":
+            if "when" in predicates:
                 lowered.pop()  # Both declarations are complete; use the ordinary check.
-            check = {op: predicates["expr"] if op == "assert" else predicates}
+            check = {op: predicates}
         else:
             minimum, maximum = payload.get("min"), payload.get("max")
             if any(

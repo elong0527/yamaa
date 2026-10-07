@@ -536,15 +536,21 @@ fn filter_errors_withhold_ipc_even_when_false_is_known() {
 #[test]
 fn predicate_checks_reject_invalid_bindings_before_source_decoding() {
     let predicate = filtered_request()["templates"][0]["filter"].clone();
-    for kind in ["assert", "implies", "predicate_declaration"] {
+    for kind in [
+        "assert",
+        "assert_when",
+        "assert_guarded",
+        "predicate_declaration",
+    ] {
         for read in [json!({"source": 1}), json!({"column": 99})] {
             let mut invalid = predicate.clone();
             invalid["bindings"][0]["read"] = read;
             let mut req = request();
-            let check = if kind == "implies" {
-                json!({"implies": {"when": predicate, "then": invalid}})
-            } else {
-                json!({kind: invalid})
+            let check = match kind {
+                "assert" => json!({"assert": {"require": invalid}}),
+                "assert_when" => json!({"assert": {"when": invalid, "require": predicate}}),
+                "assert_guarded" => json!({"assert": {"when": predicate, "require": invalid}}),
+                _ => json!({kind: invalid}),
             };
             req["verifications"] = json!([{"path":"verifications[0]","check":check}]);
             assert_eq!(
@@ -561,18 +567,18 @@ fn predicate_checks_reject_invalid_bindings_before_source_decoding() {
 fn declaration_checkpoint_emits_no_record_and_does_not_evaluate_rows() {
     let mut req = request();
     req["output"][1]["kind"] = json!("str");
-    let predicate = json!({"path":"verifications[1].implies.when","text":"'x' LIKE x ESCAPE '1'",
+    let predicate = json!({"path":"verifications[1].assert.when","text":"'x' LIKE x ESCAPE '1'",
         "nodes":[{"like":{"value":{"literal":{"str":"x"}},"pattern":{"identifier":"x"},"escape":"1","negated":false}}],
         "root":0,"bindings":[{"name":"x","read":{"column":1}}]});
     req["verifications"].as_array_mut().unwrap().push(
-        json!({"path":"verifications[1].implies","check":{"predicate_declaration":predicate}}),
+        json!({"path":"verifications[1].assert","check":{"predicate_declaration":predicate}}),
     );
     let input = source(vec![Some(1), Some(2)], vec![Some("1"), Some("1")]);
     let (table, result) = outcome(&req, &input);
     assert!(table.is_some());
     assert_eq!(result["status"], "success");
     assert_eq!(result["verifications"].as_array().unwrap().len(), 1);
-    req["verifications"][1]["check"] = json!({"assert":predicate});
+    req["verifications"][1]["check"] = json!({"assert":{"require":predicate}});
     let (table, result) = outcome(&req, &input);
     assert!(table.is_none());
     assert_eq!(result["status"], "condition");

@@ -110,15 +110,15 @@ verifications:
   - all_or_none:
       id: exposure-reference-completeness
       columns: [RFXSTDTC, RFXENDTC, RFSTDTC]
-  - implies:
+  - assert:
       id: exposure-window-is-ordered
       when: "RFXSTDTC IS NOT NULL AND RFXENDTC IS NOT NULL"
-      then: "RFXENDTC >= RFXSTDTC"
-  - implies:
+      require: "RFXENDTC >= RFXSTDTC"
+  - assert:
       id: consent-precedes-first-exposure
       when: "RFXSTDTC IS NOT NULL"
-      then: "RFICDTC <= RFXSTDTC"
-  - implies:
+      require: "RFICDTC <= RFXSTDTC"
+  - assert:
       id: participation-ends-no-earlier-than-last-exposure
       when: "RFXENDTC IS NOT NULL"
-      then: "RFENDTC >= RFXENDTC"
+      require: "RFENDTC >= RFXENDTC"

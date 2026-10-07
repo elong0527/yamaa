@@ -90,7 +90,7 @@ verifications:
   - all_or_none:
       id: best-response-value-rank-and-date-agree
       columns: [AVALC, AVAL, ADT]
-  - implies:
+  - assert:
       id: best-response-is-not-before-randomization
       when: "ADT IS NOT NULL"
-      then: "ADT >= RANDDT"
+      require: "ADT >= RANDDT"

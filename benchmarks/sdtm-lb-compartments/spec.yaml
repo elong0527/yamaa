@@ -102,11 +102,11 @@ verifications:
   - row_count:
       min: 5
       max: 5
-  - implies:
+  - assert:
       id: not-done-record-has-no-result
       when: "LBSTAT = 'NOT DONE'"
-      then: "LBORRES IS NULL AND LBSTRESN IS NULL"
-  - implies:
+      require: "LBORRES IS NULL AND LBSTRESN IS NULL"
+  - assert:
       id: collected-result-is-not-flagged
       when: "LBORRES IS NOT NULL"
-      then: "LBSTAT IS NULL"
+      require: "LBSTAT IS NULL"

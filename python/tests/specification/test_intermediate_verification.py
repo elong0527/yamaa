@@ -30,7 +30,7 @@ def test_intermediate_accepts_short_and_named_unique_checks() -> None:
         {"unique": {"columns": []}},
         {"unique": {"columns": ["STUDYID"], "severity": "warning"}},
         {"unique": {"id": None, "columns": ["STUDYID"]}},
-        {"assert": {"expr": "TRUE"}},
+        {"assert": {"require": "TRUE"}},
     ],
 )
 def test_intermediate_rejects_invalid_unique_checks(verification: dict) -> None:

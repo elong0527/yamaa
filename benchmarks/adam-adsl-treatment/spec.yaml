@@ -183,15 +183,15 @@ verifications:
   - all_or_none:
       id: treatment-period-completeness
       columns: [TRTSDT, TRTSDTM, TRTEDT, TRTEDTM, TRTDURD]
-  - implies:
+  - assert:
       id: start-time-imputation-requires-a-start-datetime
       when: "TRTSTMF = 'H'"
-      then: "TRTSDTM IS NOT NULL"
-  - implies:
+      require: "TRTSDTM IS NOT NULL"
+  - assert:
       id: end-time-imputation-requires-an-end-datetime
       when: "TRTETMF = 'H'"
-      then: "TRTEDTM IS NOT NULL"
-  - implies:
+      require: "TRTEDTM IS NOT NULL"
+  - assert:
       id: placebo-subject-is-in-safety-population
       when: "TRT01A = 'PLACEBO'"
-      then: "SAFFL = 'Y'"
+      require: "SAFFL = 'Y'"

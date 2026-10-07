@@ -7202,8 +7202,7 @@ def validate_spec_predicates(
             if not isinstance(payload, dict):
                 continue
             fields = (
-                ('when', 'then') if keyword == 'implies'
-                else ('expr',) if keyword == 'assert'
+                ('when', 'require') if keyword == 'assert'
                 else ('filter', 'when') if keyword == 'row_count'
                 else ()
             )

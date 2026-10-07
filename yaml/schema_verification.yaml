@@ -35,14 +35,13 @@ dataset_verifications:
         - id: {type: verification_id, required: false}
         - columns: {type: "list[variable]", required: true}
         - severity: {type: verification_severity, required: false, default: error}
-    implies:
-        - id: {type: verification_id, required: false}
-        - when: {type: predicate, required: true}
-        - then: {type: predicate, required: true}
-        - severity: {type: verification_severity, required: false, default: error}
     assert:
         - id: {type: verification_id, required: false}
-        - expr: {type: predicate, required: true}
+        - when:
+            type: predicate
+            required: false
+            description: See REQ-0383.
+        - require: {type: predicate, required: true}
         - severity: {type: verification_severity, required: false, default: error}
     row_count: # See REQ-1152.
         - id: {type: verification_id, required: false}

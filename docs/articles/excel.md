@@ -53,10 +53,10 @@ columns:                       # this section (below) is the Variable sheet
 verifications:                 # <- no cell for this either
   - unique:
       columns: [STUDYID, USUBJID]
-  - implies:
+  - assert:
       id: bmi-missing-only-without-usable-inputs
       when: "BMI IS NULL"
-      then: "HEIGHTCM IS NULL OR HEIGHTCM = 0 OR WEIGHTKG IS NULL"
+      require: "HEIGHTCM IS NULL OR HEIGHTCM = 0 OR WEIGHTKG IS NULL"
 ```
 
 ### What the two tables above have no cell for
@@ -72,7 +72,7 @@ what has no Excel counterpart at all. Four things:
 3. **Dependency order vs delivery order.** One `Variable Order` column does both
    jobs. yamaa splits them into `columns` order and `output.columns`.
 4. **The two verifications.** `Key Variables` looks like it asserts uniqueness,
-   but nothing executes it. The `implies` rule -- "BMI is empty only when
+   but nothing executes it. The `assert` rule -- "BMI is empty only when
    height or weight is unusable" -- normally survives as a sentence in a review email.
 
 Going the other way, every one of the eleven columns has a yamaa field --
@@ -104,7 +104,7 @@ as `core`, `codelist`, `length`, or `comment`.
 | Input datasets (usually only in a Comment) | `input:` | Every input is declared and named |
 | Structure: "one record per subject per visit" | `base` plus `rows` templates | Row count comes from these, not from a sentence |
 | Copy the corporate template and edit | `parents:` | Real layering; a change to the parent flows down (Specification composition) |
-| Dataset-level review checks | `verifications:` | `unique`, `row_count`, `all_or_none`, `implies`, `assert` |
+| Dataset-level review checks | `verifications:` | `unique`, `row_count`, `all_or_none`, `assert` |
 
 ### 2.2 Variable level
 
@@ -294,10 +294,10 @@ What changed:
         expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
 
 verifications:
-  - implies:
+  - assert:
       id: bmi-missing-only-without-usable-inputs
       when: "BMI IS NULL"
-      then: "HEIGHTCM IS NULL OR HEIGHTCM = 0 OR WEIGHTKG IS NULL"
+      require: "HEIGHTCM IS NULL OR HEIGHTCM = 0 OR WEIGHTKG IS NULL"
 ```
 
 What changed:
@@ -308,9 +308,9 @@ What changed:
 - **"rounded to 1 decimal" has no translation, on purpose.** A derivation does
   not round; decimal places are a project rendering setting. Rounding belongs
   to the TFL, not to the ADaM value.
-- The `implies` verification turns "BMI is empty exactly when height or weight
-  is unusable" -- normally a note to the reviewer -- into an executable
-  assertion.
+- The `assert` verification, limited by `when`, turns "BMI is empty exactly
+  when height or weight is unusable" -- normally a note to the reviewer --
+  into an executable assertion.
 
 ### Example 3: Predecessor and the declared-key lookup
 

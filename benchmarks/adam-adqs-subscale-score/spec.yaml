@@ -103,11 +103,11 @@ verifications:
   - row_count:
       min: 25
       max: 25
-  - implies:
+  - assert:
       id: subscale-score-rests-on-three-answered-items
       when: "PARAMCD = 'PFSCORE' AND AVAL IS NOT NULL"
-      then: "ITEMANS >= 3"
-  - implies:
+      require: "ITEMANS >= 3"
+  - assert:
       id: an-item-response-stays-within-the-answer-range
       when: "PARAMCD IN ('PF01', 'PF02', 'PF03', 'PF04')"
-      then: "AVAL IS NULL OR AVAL BETWEEN 0 AND 4"
+      require: "AVAL IS NULL OR AVAL BETWEEN 0 AND 4"

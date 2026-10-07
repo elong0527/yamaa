@@ -206,27 +206,27 @@ verifications:
   - row_count:
       min: 3
       max: 3
-  - implies:
+  - assert:
       id: numeric-dose-has-no-dose-text
       when: "CMDOSE IS NOT NULL"
-      then: "CMDOSTXT IS NULL"
-  - implies:
+      require: "CMDOSTXT IS NULL"
+  - assert:
       id: dose-range-kept-as-text
       when: "CMTRT = 'IBUPROFEN'"
-      then: "CMDOSTXT = '200-400' AND CMDOSE IS NULL"
-  - implies:
+      require: "CMDOSTXT = '200-400' AND CMDOSE IS NULL"
+  - assert:
       id: partial-start-date-kept-at-collected-precision
       when: "CMTRT = 'LISINOPRIL'"
-      then: "CMSTDTC = '2023-09'"
-  - implies:
+      require: "CMSTDTC = '2023-09'"
+  - assert:
       id: taken-before-study-names-screening
       when: "CMSTRTPT = 'BEFORE'"
-      then: "CMSTTPT = 'SCREENING'"
-  - implies:
+      require: "CMSTTPT = 'SCREENING'"
+  - assert:
       id: ongoing-has-no-end-date
       when: "CMENRTPT = 'ONGOING'"
-      then: "CMENDTC IS NULL AND CMENTPT = 'END OF STUDY'"
-  - implies:
+      require: "CMENDTC IS NULL AND CMENTPT = 'END OF STUDY'"
+  - assert:
       id: blank-end-date-is-ongoing
       when: "CMENDTC IS NULL"
-      then: "CMENRTPT = 'ONGOING'"
+      require: "CMENRTPT = 'ONGOING'"

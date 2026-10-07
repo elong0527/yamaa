@@ -997,8 +997,8 @@ def test_filter_scope_allows_promoted_column_defaults(specification, index):
 @pytest.mark.parametrize(
     "operation,payload",
     [
-        ("assert", {"expr": "str_contains(PARAMCD, 'COMP')"}),
-        ("implies", {"when": "TRUE", "then": "AVAL = 9223372036854775808"}),
+        ("assert", {"require": "str_contains(PARAMCD, 'COMP')"}),
+        ("assert", {"when": "TRUE", "require": "AVAL = 9223372036854775808"}),
     ],
 )
 def test_unsupported_predicate_checks_never_read_sources(
@@ -1022,7 +1022,7 @@ def test_predicate_check_capability_is_required_before_provider(
 ):
     """A row-filter-only native installation cannot start a predicate-check run."""
     doc = specification.model_dump(exclude_unset=True)
-    doc["verifications"].append({"assert": {"expr": "TRUE"}})
+    doc["verifications"].append({"assert": {"require": "TRUE"}})
     monkeypatch.setitem(
         sys.modules,
         "yamaa_native",
@@ -1050,28 +1050,28 @@ def test_predicate_check_capability_is_required_before_provider(
         (None, "invalid_declaration", {"reason": "a predicate must be text"}),
     ],
 )
-def test_later_implication_declaration_retains_native_antecedent_validation(
+def test_later_require_declaration_retains_native_when_validation(
     specification, text, condition, context
 ):
-    """Lowering defers then-side errors until Rust validates the when declaration."""
+    """Lowering defers require-side errors until Rust validates the when declaration."""
     doc = specification.model_dump(exclude_unset=True)
-    doc["verifications"].append({"implies": {"when": "AVAL = 'bad'", "then": text}})
+    doc["verifications"].append({"assert": {"when": "AVAL = 'bad'", "require": text}})
     spec = Specification.model_validate(doc)
     admit(spec)
     sources = load_source_tables(spec.input, ProjectResources(CASE))
     plan = plan_execution(spec, sources, supported_operations=OPERATIONS)
     req, error = lower(plan, sources["LB"].table)
     assert error.condition == condition
-    assert error.spec_paths == ("verifications[2].implies.then",)
+    assert error.spec_paths == ("verifications[2].assert.require",)
     if context is not None:
         assert error.context == context
     assert len(req["verifications"]) == 3
     checkpoint = req["verifications"][2]
-    assert checkpoint["path"] == "verifications[2].implies"
+    assert checkpoint["path"] == "verifications[2].assert"
     assert set(checkpoint["check"]) == {"predicate_declaration"}
     assert (
         checkpoint["check"]["predicate_declaration"]["path"]
-        == "verifications[2].implies.when"
+        == "verifications[2].assert.when"
     )
 
 

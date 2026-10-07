@@ -1542,7 +1542,7 @@ class InstalledSpecification(unittest.TestCase):
             self.compare(self.load(doc), self.sources).result.status, "failure"
         )
 
-    def test_assertion_and_implication_records(self):
+    def test_assert_and_guarded_assert_records(self):
         """All completed check observations and exact failed identities survive native checks."""
         for held in (False, True):
             with self.subTest(held=held):
@@ -1553,18 +1553,18 @@ class InstalledSpecification(unittest.TestCase):
                         {
                             "assert": {
                                 "id": "avals",
-                                "expr": "AVAL IS NULL OR AVAL >= 0"
+                                "require": "AVAL IS NULL OR AVAL >= 0"
                                 if held
                                 else "AVAL IS NOT NULL",
                             }
                         },
                         {
-                            "implies": {
+                            "assert": {
                                 "id": "derived",
                                 "when": "DTYPE IS NOT NULL"
                                 if held
                                 else "DTYPE IS NULL",
-                                "then": "PARAMCD = 'TOTAL'"
+                                "require": "PARAMCD = 'TOTAL'"
                                 if held
                                 else "AVAL IS NOT NULL",
                             }
@@ -1589,14 +1589,14 @@ class InstalledSpecification(unittest.TestCase):
     def test_predicate_check_conditions_and_declaration_order(self):
         """Declaration and dynamic errors preserve exact diagnostics and prior ledger rows."""
         cases = [
-            {"assert": {"expr": "AVAL = 'bad'"}},
-            {"assert": {"expr": "z = a"}},
-            {"assert": {"expr": "AVAL >"}},
-            {"implies": {"when": "FALSE", "then": "AVAL = 'bad'"}},
-            {"implies": {"when": "FALSE", "then": "'x' LIKE PARAMCD ESCAPE '1'"}},
-            {"implies": {"when": "AVAL = 'bad'", "then": "AVAL >"}},
-            {"implies": {"when": "AVAL = 'bad'", "then": "z = a"}},
-            {"implies": {"when": "'x' LIKE PARAMCD ESCAPE '1'", "then": "AVAL >"}},
+            {"assert": {"require": "AVAL = 'bad'"}},
+            {"assert": {"require": "z = a"}},
+            {"assert": {"require": "AVAL >"}},
+            {"assert": {"when": "FALSE", "require": "AVAL = 'bad'"}},
+            {"assert": {"when": "FALSE", "require": "'x' LIKE PARAMCD ESCAPE '1'"}},
+            {"assert": {"when": "AVAL = 'bad'", "require": "AVAL >"}},
+            {"assert": {"when": "AVAL = 'bad'", "require": "z = a"}},
+            {"assert": {"when": "'x' LIKE PARAMCD ESCAPE '1'", "require": "AVAL >"}},
         ]
         for case in cases:
             for empty in (False, True):
@@ -1616,7 +1616,7 @@ class InstalledSpecification(unittest.TestCase):
             with self.subTest(scenario=scenario):
                 doc = copy.deepcopy(self.document)
                 doc["output"]["verification_log"] = "checks.csv"
-                doc["verifications"].append({"assert": {"expr": "AVAL = 'bad'"}})
+                doc["verifications"].append({"assert": {"require": "AVAL = 'bad'"}})
                 if scenario == "keys":
                     doc["keys"] = ["STUDYID"]
                 else:
@@ -1950,7 +1950,7 @@ class InstalledSpecification(unittest.TestCase):
                         doc["columns"][0]["derivation"] = {"literal": True}
                     else:
                         doc["verifications"].append(
-                            {"assert": {"expr": "VALUE = 'bad'"}}
+                            {"assert": {"require": "VALUE = 'bad'"}}
                         )
                     self.compare(
                         self.load(doc),

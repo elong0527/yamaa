@@ -41,6 +41,20 @@ One term per concept across all rules, schema comments, and messages:
 - **driver** - banned from normative text, schema descriptions, and
   user-facing messages. Use input dataset or `row.dataset`.
 
+A field that holds a predicate is named for how it treats the three truth
+values, so one name never covers two treatments:
+
+| Field | Treatment |
+| --- | --- |
+| `filter` | Keeps the rows or records whose result is `TRUE`. |
+| `when` | `TRUE` selects a branch, row, or group; `FALSE` and `UNKNOWN` are treated alike and select nothing (`case`, `assert`, `row_count`). |
+| `require` | The result must be `TRUE`; `FALSE` and `UNKNOWN` fail (`assert`). |
+| `condition` | Each of `TRUE`, `FALSE`, and `UNKNOWN` has its own result (`flag`). |
+
+`expr` holds an expression in a closed text grammar that produces a value
+(`compute`, `aggregate`), never a predicate. `then` and `otherwise` hold
+values (`case`), never predicates.
+
 ## Maintenance rules
 
 - Keep `schema.yaml` and every `schema_*.yaml` module compact and strictly valid

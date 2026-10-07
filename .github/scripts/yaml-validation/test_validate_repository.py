@@ -343,7 +343,8 @@ class TestPredicateLanguage(unittest.TestCase):
                     {
                         'assert': {
                             'id': 'known-age',
-                            'expr': 'MISSING > 0',
+                            'when': 'GUARD = 1',
+                            'require': 'MISSING > 0',
                         }
                     }
                 ],
@@ -353,9 +354,13 @@ class TestPredicateLanguage(unittest.TestCase):
                 spec, 'example/spec.yaml', spec_path
             )
 
-        self.assertEqual(len(errors), 1)
-        self.assertIn('verifications[0].assert.expr', errors[0])
-        self.assertIn("unknown identifier 'MISSING'", errors[0])
+        # REQ-0383: an assert's `when` is a predicate site of its own, so
+        # each field reports at its own path.
+        self.assertEqual(len(errors), 2)
+        self.assertIn('verifications[0].assert.when', errors[0])
+        self.assertIn("unknown identifier 'GUARD'", errors[0])
+        self.assertIn('verifications[0].assert.require', errors[1])
+        self.assertIn("unknown identifier 'MISSING'", errors[1])
 
     def test_validates_the_predicate_a_source_filter_declares(self):
         # REQ-0132: the filter selects right-side records, so it resolves
@@ -4287,7 +4292,7 @@ class TestSpecContracts(unittest.TestCase):
             "verifications": [
                 {"row_count": {}},
                 {"all_or_none": {"id": "complete", "columns": ["USUBJID"]}},
-                {"assert": {"id": "complete", "expr": "TRUE"}},
+                {"assert": {"id": "complete", "require": "TRUE"}},
             ],
         }
 
@@ -4459,7 +4464,7 @@ class TestSpecContracts(unittest.TestCase):
                 {
                     "assert": {
                         "id": "one-row-per-subject",
-                        "expr": "TRUE",
+                        "require": "TRUE",
                     }
                 },
             ],

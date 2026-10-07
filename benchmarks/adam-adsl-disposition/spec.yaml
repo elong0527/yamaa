@@ -82,7 +82,7 @@ verifications:
   - row_count:
       min: 6
       max: 6
-  - implies:
+  - assert:
       id: discontinuation-has-reason
       when: "EOSSTT = 'DISCONTINUED'"
-      then: "DCSREAS IS NOT NULL"
+      require: "DCSREAS IS NOT NULL"

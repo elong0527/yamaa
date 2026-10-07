@@ -117,7 +117,7 @@ verifications:
   - row_count:
       min: 18
       max: 18
-  - implies:
+  - assert:
       id: treatment-emergent-event-has-known-onset-and-exposure
       when: "TRTEMFL = 'Y'"
-      then: "ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL"
+      require: "ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL"

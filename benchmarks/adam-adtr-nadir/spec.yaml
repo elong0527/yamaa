@@ -92,7 +92,7 @@ verifications:
   - row_count:
       min: 14
       max: 14
-  - implies:
+  - assert:
       id: dated-assessment-has-a-nadir
       when: "ADT IS NOT NULL"
-      then: "NADIR IS NOT NULL"
+      require: "NADIR IS NOT NULL"

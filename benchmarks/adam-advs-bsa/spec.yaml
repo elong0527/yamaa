@@ -96,12 +96,12 @@ verifications:
   # already carries a BSA record.
   - assert:
       id: no-pre-existing-target
-      expr: "NOT (PARAMCD = 'BSA' AND DTYPE IS NULL)"
+      require: "NOT (PARAMCD = 'BSA' AND DTYPE IS NULL)"
   # The formula assumes centimeters and kilograms, so each height and
   # weight record's parameter label must name that unit.
   - assert:
       id: verify-height-unit
-      expr: "PARAMCD <> 'HEIGHT' OR PARAM LIKE '%(cm)%'"
+      require: "PARAMCD <> 'HEIGHT' OR PARAM LIKE '%(cm)%'"
   - assert:
       id: verify-weight-unit
-      expr: "PARAMCD <> 'WEIGHT' OR PARAM LIKE '%(kg)%'"
+      require: "PARAMCD <> 'WEIGHT' OR PARAM LIKE '%(kg)%'"

@@ -102,15 +102,15 @@ verifications:
   - all_or_none:
       id: analysis-date-completeness
       columns: [ASTDTC, ASTDT]
-  - implies:
+  - assert:
       id: imputation-flag-requires-an-analysis-date
       when: "ASTDTF IS NOT NULL"
-      then: "ASTDT IS NOT NULL"
-  - implies:
+      require: "ASTDT IS NOT NULL"
+  - assert:
       id: supplied-day-never-precedes-treatment-start
       when: "ASTDTF = 'D'"
-      then: "TRTSDT IS NULL OR ASTDT >= TRTSDT"
-  - implies:
+      require: "TRTSDT IS NULL OR ASTDT >= TRTSDT"
+  - assert:
       id: treatment-emergent-event-has-an-analysis-date
       when: "TRTEMFL = 'Y'"
-      then: "ASTDT IS NOT NULL AND ASTDT >= TRTSDT"
+      require: "ASTDT IS NOT NULL AND ASTDT >= TRTSDT"

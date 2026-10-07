@@ -156,13 +156,13 @@ pub enum Check {
         requirement: &'static str,
         reason: String,
     },
-    Assert(BoundPredicate),
+    /// `require` must hold on every row that `when`, if present, binds (REQ-0383).
+    Assert {
+        when: Option<BoundPredicate>,
+        require: BoundPredicate,
+    },
     /// Compiler checkpoint before a later deferred declaration error; emits no record.
     PredicateDeclaration(BoundPredicate),
-    Implies {
-        when: BoundPredicate,
-        then: BoundPredicate,
-    },
     Unique(Vec<usize>),
     RowCount {
         min: Option<i64>,
@@ -544,11 +544,11 @@ impl DatasetPlan {
             }
             match &verification.check {
                 Check::InvalidDeclaration { .. } => {}
-                Check::Assert(predicate) | Check::PredicateDeclaration(predicate) => predicate
+                Check::PredicateDeclaration(predicate) => predicate
                     .validate(0, &vec![true; width], true)
                     .map_err(PlanError::Predicate)?,
-                Check::Implies { when, then } => {
-                    for predicate in [when, then] {
+                Check::Assert { when, require } => {
+                    for predicate in when.iter().chain([require]) {
                         predicate
                             .validate(0, &vec![true; width], true)
                             .map_err(PlanError::Predicate)?;

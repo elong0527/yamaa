@@ -144,11 +144,11 @@ verifications:
   - row_count:
       min: 10
       max: 10
-  - implies:
+  - assert:
       id: standardized-unit-is-mm
       when: "TRSTRESN IS NOT NULL"
-      then: "TRSTRESU = 'mm'"
-  - implies:
+      require: "TRSTRESU = 'mm'"
+  - assert:
       id: not-done-carries-no-result
       when: "TRSTAT = 'NOT DONE'"
-      then: "TRSTRESC IS NULL"
+      require: "TRSTRESC IS NULL"

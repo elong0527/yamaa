@@ -148,8 +148,8 @@ verifications:
   - row_count:
       min: 11
       max: 11
-  - implies:
+  - assert:
       id: race-value-has-parent-identifier
       when: "QVAL IS NOT NULL"
-      then: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL
+      require: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL
         AND IDVARVAL IS NOT NULL"

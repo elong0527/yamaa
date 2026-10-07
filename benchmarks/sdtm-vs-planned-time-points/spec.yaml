@@ -215,11 +215,11 @@ verifications:
   # A post-dose reading dated before the first dose, or a pre-dose reading
   # dated after it, stops the run; a subject with no dose date is not
   # checked.
-  - implies:
+  - assert:
       id: post-dose-reading-at-or-after-dose
       when: "VSTPTNUM > 1 AND VSDTC IS NOT NULL AND EXSTDTC IS NOT NULL"
-      then: "VSDTC >= EXSTDTC"
-  - implies:
+      require: "VSDTC >= EXSTDTC"
+  - assert:
       id: pre-dose-reading-at-or-before-dose
       when: "VSTPTNUM = 1 AND VSDTC IS NOT NULL AND EXSTDTC IS NOT NULL"
-      then: "VSDTC <= EXSTDTC"
+      require: "VSDTC <= EXSTDTC"

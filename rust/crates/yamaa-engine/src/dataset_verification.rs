@@ -32,7 +32,7 @@ fn sample(kind: ColumnType) -> Value {
     }
 }
 
-/// Validate declarations in order, then evaluate every row without implication short circuit.
+/// Validate declarations in order, then evaluate every row without a `when` short circuit.
 /// Semantic failures retain previously completed check records and never an output artifact.
 pub(crate) fn predicate_check<E>(
     verification: &Verification,
@@ -41,12 +41,11 @@ pub(crate) fn predicate_check<E>(
     budget: &mut Budget,
     records: &mut Vec<CheckRecord>,
 ) -> Result<Option<CheckRecord>, Box<ExecutionError<E>>> {
-    let (when, then, metadata) = match &verification.check {
-        Check::Assert(predicate) => (None, predicate, Some(("assert_failed", "REQ-0384"))),
-        Check::PredicateDeclaration(predicate) => (None, predicate, None),
-        Check::Implies { when, then } => {
-            (Some(when), then, Some(("implication_failed", "REQ-0383")))
+    let (when, require, metadata) = match &verification.check {
+        Check::Assert { when, require } => {
+            (when.as_ref(), require, Some(("assert_failed", "REQ-0384")))
         }
+        Check::PredicateDeclaration(predicate) => (None, predicate, None),
         _ => unreachable!("only predicate checks use this service"),
     };
     let samples: Vec<_> = dataset
@@ -71,18 +70,18 @@ pub(crate) fn predicate_check<E>(
     if let Some(when) = when {
         evaluate(when, &samples)?;
     }
-    evaluate(then, &samples)?;
+    evaluate(require, &samples)?;
     let Some((condition, requirement)) = metadata else {
         return Ok(None);
     };
     let mut offending = Vec::new();
     for (position, values) in dataset.rows().iter().enumerate() {
-        let antecedent = match when {
+        let binds = match when {
             Some(when) => evaluate(when, values)?,
             None => Truth::True,
         };
-        let consequent = evaluate(then, values)?;
-        if antecedent == Truth::True && consequent != Truth::True {
+        let holds = evaluate(require, values)?;
+        if binds == Truth::True && holds != Truth::True {
             offending.push(position);
         }
     }

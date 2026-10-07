@@ -445,9 +445,12 @@ struct Template {
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 enum Check {
-    Assert(Predicate),
+    Assert {
+        #[serde(default)]
+        when: Option<Predicate>,
+        require: Predicate,
+    },
     PredicateDeclaration(Predicate),
-    Implies { when: Predicate, then: Predicate },
     Unique(Vec<usize>),
     RowCount(Bounds),
 }
@@ -582,14 +585,13 @@ impl PreparedDataset {
                 .map(|verification| {
                     path(&verification.path)?;
                     let check = match verification.check {
-                        Check::Assert(predicate) => dataset::Check::Assert(predicate.prepare()?),
+                        Check::Assert { when, require } => dataset::Check::Assert {
+                            when: when.map(Predicate::prepare).transpose()?,
+                            require: require.prepare()?,
+                        },
                         Check::PredicateDeclaration(predicate) => {
                             dataset::Check::PredicateDeclaration(predicate.prepare()?)
                         }
-                        Check::Implies { when, then } => dataset::Check::Implies {
-                            when: when.prepare()?,
-                            then: then.prepare()?,
-                        },
                         Check::Unique(columns) => {
                             if columns.len() > MAX_COLUMNS {
                                 return Err(Error::RequestLimit);

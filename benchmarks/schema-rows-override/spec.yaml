@@ -80,7 +80,7 @@ verifications:
   - row_count:
       min: 11
       max: 11
-  - implies:
+  - assert:
       id: bmi-blank-without-usable-height
       when: "PARAMCD = 'BMI' AND (HEIGHTBL IS NULL OR HEIGHTBL = 0)"
-      then: "AVAL IS NULL"
+      require: "AVAL IS NULL"

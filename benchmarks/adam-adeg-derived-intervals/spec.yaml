@@ -126,15 +126,15 @@ verifications:
   - row_count:
       min: 51
       max: 51
-  - implies:
+  - assert:
       id: collected-qt-rr-unit-is-ms-or-msec
       when: "PARAMCD = 'QT' OR PARAMCD = 'RR'"
-      then: "AVALU = 'ms' OR AVALU = 'msec'"
-  - implies:
+      require: "AVALU = 'ms' OR AVALU = 'msec'"
+  - assert:
       id: contributing-hr-uses-beats-per-minute
       when: "PARAMCD = 'HR' AND AVAL IS NOT NULL AND AVAL <> 0"
-      then: "AVALU = 'beats/min'"
-  - implies:
+      require: "AVALU = 'beats/min'"
+  - assert:
       id: new-records-carry-ms
       when: "PARAMCD = 'QTCBR' OR PARAMCD = 'QTCFR' OR PARAMCD = 'RRR'"
-      then: "AVALU = 'ms'"
+      require: "AVALU = 'ms'"

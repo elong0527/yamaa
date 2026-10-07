@@ -54,7 +54,7 @@ verifications:
   - row_count:
       min: 8
       max: 8
-  - implies:
+  - assert:
       id: ratio-needs-a-usable-lower-limit
       when: "R2ANRLO IS NULL"
-      then: "AVAL IS NULL OR ANRLO IS NULL OR ANRLO = 0"
+      require: "AVAL IS NULL OR ANRLO IS NULL OR ANRLO = 0"

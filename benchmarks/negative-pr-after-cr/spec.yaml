@@ -65,4 +65,5 @@ verifications:
   # first assessment passing: without it that row would be UNKNOWN and fail.
   - assert:
       id: response-does-not-fall-back-after-a-complete-response
-      expr: "NOT (AVALC = 'PR' AND PREVAVALC IS NOT NULL AND PREVAVALC = 'CR')"
+      require: "NOT (AVALC = 'PR' AND PREVAVALC IS NOT NULL
+        AND PREVAVALC = 'CR')"

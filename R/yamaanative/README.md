@@ -217,9 +217,9 @@ and remaining integration gates. Python remains the default backend.
 names as JSON text before source loading. `row_filter` denotes explicit typed
 row-template predicates in [dataset/1](../../rust/DATASET_TRANSPORT.md), including
 Boolean logic, comparisons, null tests, IN, BETWEEN and Unicode LIKE. The R package
-also advertises `predicate_checks` for typed assert/implies checks over completed
-output columns. These validate declaration types even for empty output, evaluate
-implication sides eagerly and retain earlier check records on a predicate condition.
+also advertises `predicate_checks` for typed assert checks, with an optional `when`,
+over completed output columns. These validate declaration types even for empty output,
+evaluate `when` and `require` eagerly and retain earlier check records on a predicate condition.
 The `key_grain` feature additionally supports standalone key combinations with
 complete source memberships, first-occurrence order and exact raw-value conflict
 diagnostics. Missing identities remain separate until output validation. The package

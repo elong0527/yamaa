@@ -104,7 +104,7 @@ verifications:
   - row_count:
       min: 10
       max: 10
-  - implies:
+  - assert:
       id: occurrence-flag-requires-treatment-emergence
       when: "AOCCFL = 'Y' OR AOCCSFL = 'Y' OR AOCCPFL = 'Y'"
-      then: "TRTEMFL = 'Y'"
+      require: "TRTEMFL = 'Y'"

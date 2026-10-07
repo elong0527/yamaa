@@ -171,11 +171,11 @@ verifications:
       max: 8
   - assert:
       id: visits-span-their-form-dates
-      expr: "SVSTDTC IS NOT NULL AND SVENDTC IS NOT NULL
+      require: "SVSTDTC IS NOT NULL AND SVENDTC IS NOT NULL
         AND SVSTDTC <= SVENDTC"
   - assert:
       id: planned-visits-carry-their-plan
-      expr: "NOT (VISITNUM < 99 AND (VISITDY IS NULL OR TAETORD IS NULL))"
+      require: "NOT (VISITNUM < 99 AND (VISITDY IS NULL OR TAETORD IS NULL))"
   - assert:
       id: unplanned-visits-carry-a-description
-      expr: "NOT (VISITNUM >= 99 AND SVUPDES IS NULL)"
+      require: "NOT (VISITNUM >= 99 AND SVUPDES IS NULL)"

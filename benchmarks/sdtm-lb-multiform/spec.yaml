@@ -362,12 +362,12 @@ verifications:
   - row_count:
       min: 18
       max: 18
-  - implies:
+  - assert:
       id: not-done-record-has-no-result
       when: "LBSTAT = 'NOT DONE'"
-      then: "LBORRES IS NULL AND LBSTRESC IS NULL AND LBORRESU IS NULL
+      require: "LBORRES IS NULL AND LBSTRESC IS NULL AND LBORRESU IS NULL
         AND LBSTRESN IS NULL AND LBSTRESU IS NULL"
-  - implies:
+  - assert:
       id: completed-record-is-not-flagged
       when: "LBSTAT IS NULL"
-      then: "LBORRES IS NOT NULL"
+      require: "LBORRES IS NOT NULL"

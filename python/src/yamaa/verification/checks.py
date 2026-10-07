@@ -58,7 +58,6 @@ _COLUMN_REQUIREMENTS = {
 _DATASET_REQUIREMENTS = {
     "unique": ("unique_failed", "REQ-0381"),
     "all_or_none": ("all_or_none_failed", "REQ-0382"),
-    "implies": ("implication_failed", "REQ-0383"),
     "assert": ("assert_failed", "REQ-0384"),
     "row_count": ("row_count_failed", "REQ-0385"),
 }
@@ -224,7 +223,7 @@ def _predicate(
     # Operand compatibility is a property of the declaration and its field
     # schema, not of whichever values happen to occur in a row. Evaluate the
     # parsed predicate once with a representative non-missing value of every
-    # declared type so an empty table, or a short-circuited implication, cannot
+    # declared type so an empty table, or a row a `when` exempts, cannot
     # hide an invalid comparison.
     samples: dict[str, RuntimeValue] = {
         name: _PREDICATE_SAMPLES[column_type] for name, column_type in available.items()
@@ -275,7 +274,7 @@ def _truth(
 
     R004 decides an operand incompatibility and an unknown field before any
     row is read, so neither may be folded into three-valued logic: doing so
-    would let an unevaluable antecedent silently satisfy an `implies`.
+    would let an unevaluable `when` silently exempt a row from an `assert`.
     """
     result = evaluate_predicate(ast, MappingResolver(dict(row)))
     if isinstance(result, ConditionResult):
@@ -664,17 +663,22 @@ def _identifier(arguments: Mapping[str, JsonValue], spec_path: str) -> str | Non
     return identifier
 
 
-def _implication_fails(
-    when: PredicateAst,
-    then: PredicateAst,
+def _assertion_fails(
+    when: PredicateAst | None,
+    require: PredicateAst,
     row: Mapping[str, RuntimeValue],
     when_path: str,
-    then_path: str,
+    require_path: str,
 ) -> bool:
-    """Evaluate both predicates before applying implication truth semantics."""
-    when_truth = _truth(when, row, when_path)
-    then_truth = _truth(then, row, then_path)
-    return when_truth is TruthValue.TRUE and then_truth is not TruthValue.TRUE
+    """Evaluate both predicates before applying the REQ-0383 guard.
+
+    A row fails when `require` is not TRUE and `when`, if declared, is TRUE.
+    Both predicates are evaluated on every row, so a condition raised by
+    `require` is reported even on a row its `when` exempts.
+    """
+    when_truth = TruthValue.TRUE if when is None else _truth(when, row, when_path)
+    require_truth = _truth(require, row, require_path)
+    return when_truth is TruthValue.TRUE and require_truth is not TruthValue.TRUE
 
 
 def _dataset_failure(
@@ -756,25 +760,21 @@ def _dataset_failure(
             for index, row in enumerate(rows)
             if len({row[name] is MISSING for name in names}) > 1
         ]
-    elif keyword == "implies":
-        when_path = f"{spec_path}.when"
-        then_path = f"{spec_path}.then"
-        when = _predicate(arguments.get("when"), when_path, "REQ-0397", predicate_types)
-        then = _predicate(arguments.get("then"), then_path, "REQ-0397", predicate_types)
-        offending = [
-            key_maps[index]
-            for index, row in enumerate(predicate_rows)
-            if _implication_fails(when, then, row, when_path, then_path)
-        ]
     else:
-        assertion_path = f"{spec_path}.expr"
-        assertion = _predicate(
-            arguments.get("expr"), assertion_path, "REQ-0397", predicate_types
+        when_path = f"{spec_path}.when"
+        require_path = f"{spec_path}.require"
+        when = (
+            _predicate(arguments["when"], when_path, "REQ-0397", predicate_types)
+            if arguments.get("when") is not None
+            else None
+        )
+        require = _predicate(
+            arguments.get("require"), require_path, "REQ-0397", predicate_types
         )
         offending = [
             key_maps[index]
             for index, row in enumerate(predicate_rows)
-            if _truth(assertion, row, assertion_path) is not TruthValue.TRUE
+            if _assertion_fails(when, require, row, when_path, require_path)
         ]
 
     if not offending:

@@ -72,4 +72,4 @@ verifications:
       max: 9
   - assert:
       id: every-administration-has-dose-and-unit
-      expr: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"
+      require: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"

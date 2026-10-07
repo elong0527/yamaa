@@ -77,11 +77,11 @@ verifications:
   - row_count:
       min: 7
       max: 7
-  - implies:
+  - assert:
       id: treatment-emergent-onset-is-not-before-first-dose
       when: "TRTEMFL = 'Y'"
-      then: "ASTDTM >= TRTSDTM"
-  - implies:
+      require: "ASTDTM >= TRTSDTM"
+  - assert:
       id: occurrence-flag-requires-treatment-emergence
       when: "AOCCFL = 'Y'"
-      then: "TRTEMFL = 'Y'"
+      require: "TRTEMFL = 'Y'"

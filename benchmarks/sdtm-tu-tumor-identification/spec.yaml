@@ -132,11 +132,11 @@ verifications:
   - row_count:
       min: 6
       max: 6
-  - implies:
+  - assert:
       id: new-lesion-identified-post-baseline
       when: "TUORRES = 'NEW'"
-      then: "VISITNUM > 1"
-  - implies:
+      require: "VISITNUM > 1"
+  - assert:
       id: standardized-result-copies-classification
       when: "TUORRES IS NOT NULL"
-      then: "TUSTRESC = TUORRES"
+      require: "TUSTRESC = TUORRES"

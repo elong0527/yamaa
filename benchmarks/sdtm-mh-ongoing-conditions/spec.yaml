@@ -82,15 +82,15 @@ verifications:
   - row_count:
       min: 7
       max: 7
-  - implies:
+  - assert:
       id: ongoing-has-no-end-date
       when: "MHENRTPT = 'ONGOING'"
-      then: "MHENDTC IS NULL"
-  - implies:
+      require: "MHENDTC IS NULL"
+  - assert:
       id: ended-before-has-end-date
       when: "MHENRTPT = 'BEFORE'"
-      then: "MHENDTC IS NOT NULL"
-  - implies:
+      require: "MHENDTC IS NOT NULL"
+  - assert:
       id: end-reference-names-screening
       when: "MHENRTPT IS NOT NULL"
-      then: "MHENTPT = 'SCREENING'"
+      require: "MHENTPT = 'SCREENING'"

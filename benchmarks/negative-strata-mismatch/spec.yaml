@@ -79,4 +79,4 @@ verifications:
   # strata disagree with the independently collected ones rejects the run.
   - assert:
       id: randomized-strata-agree
-      expr: "STRAT1R = STRAT1"
+      require: "STRAT1R = STRAT1"

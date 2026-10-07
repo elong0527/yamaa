@@ -199,19 +199,19 @@ verifications:
   - all_or_none:
       id: shift-needs-both-of-its-classifications
       columns: [ANRIND, SHIFT1]
-  - implies:
+  - assert:
       id: a-baseline-record-is-its-own-reference
       when: "ABLFL = 'Y' AND R2BASE IS NOT NULL"
-      then: "R2BASE = 1"
-  - implies:
+      require: "R2BASE = 1"
+  - assert:
       id: a-classification-rests-on-both-of-its-limits
       when: "ANRIND IS NOT NULL"
-      then: "ANRLO IS NOT NULL AND ANRHI IS NOT NULL"
-  - implies:
+      require: "ANRLO IS NOT NULL AND ANRHI IS NOT NULL"
+  - assert:
       id: criterion-is-met-only-above-its-limit
       when: "CRIT1FL = 'Y'"
-      then: "AVAL > CRITLIM"
-  - implies:
+      require: "AVAL > CRITLIM"
+  - assert:
       id: criterion-2-is-met-only-below-its-limit
       when: "CRIT2FL = 'Y'"
-      then: "AVAL < ANRLO"
+      require: "AVAL < ANRLO"

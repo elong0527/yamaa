@@ -231,7 +231,7 @@ verifications:
   - row_count:
       min: 9
       max: 9
-  - implies:
+  - assert:
       id: uncollected-result-has-status
       when: FAORRES IS NULL
-      then: FASTAT = 'NOT DONE'
+      require: FASTAT = 'NOT DONE'

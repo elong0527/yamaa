@@ -77,11 +77,11 @@ verifications:
   - row_count:
       min: 5
       max: 5
-  - implies:
+  - assert:
       id: death-date-marks-flag
       when: "DTHDTC IS NOT NULL"
-      then: "DTHFL = 'Y'"
-  - implies:
+      require: "DTHFL = 'Y'"
+  - assert:
       id: flag-needs-date
       when: "DTHFL = 'Y'"
-      then: "DTHDTC IS NOT NULL"
+      require: "DTHDTC IS NOT NULL"

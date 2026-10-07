@@ -183,7 +183,7 @@ verifications:
   - row_count:
       min: 10
       max: 10
-  - implies:
+  - assert:
       id: unanswered-prespecified-has-status
       when: "MHPRESP = 'Y' AND MHOCCUR IS NULL"
-      then: "MHSTAT = 'NOT DONE'"
+      require: "MHSTAT = 'NOT DONE'"

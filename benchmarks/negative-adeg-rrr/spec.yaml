@@ -77,13 +77,13 @@ rows:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
-  - implies:
+  - assert:
       id: contributing-hr-uses-beats-per-minute
       when: "PARAMCD = 'HR' AND AVAL IS NOT NULL AND AVAL <> 0"
-      then: "AVALU = 'beats/min'"
+      require: "AVALU = 'beats/min'"
   # An RRR record that did not come from the calculation fails here; the
   # collected RRR input record is the defect this benchmark shows.
-  - implies:
+  - assert:
       id: reject-pre-existing-rrr
       when: "PARAMCD = 'RRR'"
-      then: "_PROVENANCE = 'derived'"
+      require: "_PROVENANCE = 'derived'"

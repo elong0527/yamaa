@@ -95,8 +95,8 @@ verifications:
       max: 9
   - assert:
       id: measured-lesions-do-not-exceed-the-target-lesions
-      expr: "NMEAS IS NULL OR NMEAS <= NTARGET"
-  - implies:
+      require: "NMEAS IS NULL OR NMEAS <= NTARGET"
+  - assert:
       id: complete-assessment-has-a-sum
       when: "ANL01FL = 'Y'"
-      then: "AVAL IS NOT NULL"
+      require: "AVAL IS NOT NULL"

@@ -141,12 +141,12 @@ rows:
           expr: "ONLY(ODM.Value)"
 
 verifications:
-  - implies:
+  - assert:
       id: not-done-record-has-no-result
       when: "LBSTAT = 'NOT DONE'"
-      then: "LBORRES IS NULL AND LBORRESU IS NULL
+      require: "LBORRES IS NULL AND LBORRESU IS NULL
         AND LBSTRESN IS NULL AND LBSTRESU IS NULL"
-  - implies:
+  - assert:
       id: completed-result-is-not-flagged
       when: "LBSTAT IS NULL"
-      then: "LBORRES IS NOT NULL"
+      require: "LBORRES IS NOT NULL"

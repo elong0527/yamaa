@@ -116,15 +116,15 @@ verifications:
   - row_count:
       min: 10
       max: 10
-  - implies:
+  - assert:
       id: numeric-response-is-missing-only-when-not-evaluable
       when: "AVAL IS NULL"
-      then: "AVALC = 'NOT EVALUABLE'"
-  - implies:
+      require: "AVALC = 'NOT EVALUABLE'"
+  - assert:
       id: responder-meets-threshold
       when: "AVALC = 'RESPONDER'"
-      then: "PCHG <= -75"
-  - implies:
+      require: "PCHG <= -75"
+  - assert:
       id: safety-override-is-not-a-responder
       when: "SAEFL = 'Y' OR DCSREAS IS NOT NULL"
-      then: "AVALC = 'NON-RESPONDER'"
+      require: "AVALC = 'NON-RESPONDER'"
