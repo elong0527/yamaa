@@ -80,6 +80,37 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   expired <- unserialize(serialize(handle,NULL))
   stopifnot(inherits(tryCatch(specification_source(expired),error=identity),"error"))
 }
+# Replay existing complete graph failure truth through the raw-YAML entry point.
+inherited_prepare <- get(".prepare_inherited_specification",envir=asNamespace("yamaanative"))
+replay <- read.delim(file.path(root,"inheritance-replay.tsv"),sep="\t",quote="",comment.char="",colClasses="character",check.names=FALSE,fileEncoding="UTF-8")
+stopifnot(length(unique(replay$case))==7L)
+for(name in unique(replay$case)) {
+  rows <- replay[replay$case==name,,drop=FALSE]
+  expected_calls <- rows[nzchar(rows$operation),,drop=FALSE]
+  calls <- 0L
+  event <- function(operation) {
+    calls <<- calls+1L
+    stopifnot(calls<=nrow(expected_calls),identical(operation,expected_calls$operation[[calls]]))
+    expected_calls[calls,,drop=FALSE]
+  }
+  canonicalize <- function(declaring,written) {
+    row <- event("canonicalize")
+    stopifnot(identical(declaring,row$declaring[[1L]]),identical(written,row$written[[1L]]))
+    if(!nzchar(row$identity[[1L]])) return(NULL)
+    c(row$identity[[1L]],row$display_path[[1L]])
+  }
+  parent_capture <- function(identity,display_path,maximum) {
+    row <- event("read")
+    stopifnot(identical(identity,row$identity[[1L]]),identical(display_path,row$display_path[[1L]]))
+    if(!nzchar(row$source_yaml[[1L]])) return(NULL)
+    bytes <- charToRaw(row$source_yaml[[1L]])
+    stopifnot(length(bytes)<=maximum)
+    bytes
+  }
+  actual <- tryCatch(inherited_prepare(modules,"schema.yaml",rows$entry[[1L]],charToRaw(rows$entry_yaml[[1L]]),canonicalize,parent_capture,function(...) stop("failed traversal reached rebasing")),error=identity)
+  stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),rows$expected[[1L]]),calls==nrow(expected_calls))
+}
+cat("seven raw inherited-loader failure contracts and complete traces passed\n")
 # The inherited preparation callbacks retain exact R errors and interrupts.
 inherited_prepare <- get(".prepare_inherited_specification",envir=asNamespace("yamaanative"))
 inherit_case <- file.path(root,"cases","schema-inheritance")

@@ -1,6 +1,7 @@
 """Installed original-YAML execution with reference semantic imports forbidden."""
 
 import builtins
+import csv
 import json
 import os
 import platform
@@ -78,6 +79,44 @@ class OriginalSpecifications(unittest.TestCase):
         guard = patch("builtins.__import__", side_effect=reject)
         guard.start()
         self.addCleanup(guard.stop)
+
+    def test_inherited_raw_loader_replays_existing_complete_failure_contracts(self):
+        with (ROOT / "inheritance-replay.tsv").open(newline="", encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        names = list(dict.fromkeys(record["case"] for record in records))
+        self.assertEqual(len(names), 7)
+        for name in names:
+            with self.subTest(case=name):
+                case = [row for row in records if row["case"] == name]
+                expected = [row for row in case if row["operation"]]
+                calls = []
+
+                def event(operation):
+                    self.assertLess(len(calls), len(expected))
+                    row = expected[len(calls)]
+                    self.assertEqual(operation, row["operation"])
+                    calls.append(row)
+                    return row
+
+                def canonicalize(declaring, written):
+                    row = event("canonicalize")
+                    self.assertEqual((declaring, written), (row["declaring"], row["written"]))
+                    return (row["identity"], row["display_path"]) if row["identity"] else None
+
+                def capture(identity, display_path, maximum):
+                    row = event("read")
+                    self.assertEqual((identity, display_path), (row["identity"], row["display_path"]))
+                    content = row["source_yaml"].encode()
+                    self.assertLessEqual(len(content), maximum)
+                    return content or None
+
+                with self.assertRaises(ValueError) as caught:
+                    yamaa_native._prepare_inherited_specification(
+                        modules(), 0, case[0]["entry"], case[0]["entry_yaml"].encode(),
+                        canonicalize, capture, lambda *_: self.fail("failed traversal reached rebasing")
+                    )
+                self.assertEqual(json.loads(str(caught.exception)), json.loads(case[0]["expected"]))
+                self.assertEqual(calls, expected)
 
     def test_inherited_callbacks_preserve_original_failures(self):
         case = ROOT / "cases/schema-inheritance"
