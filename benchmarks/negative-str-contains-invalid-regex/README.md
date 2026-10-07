@@ -25,11 +25,19 @@ Decide what the term must contain. To flag a term that mentions severe
 intensity, as the goal states, remove the bracket:
 
 ```yaml
-when: "str_contains(AE.AETERM, 'SEVERE')"
+derivation:
+  case:
+    - when: "str_contains(AE.AETERM, 'SEVERE')"
+      then: {literal: SEVERE}
+    - otherwise: {literal: MILD}
 ```
 
 Only if the literal text `SEVERE[` is meant, escape the bracket:
 
 ```yaml
-when: "str_contains(AE.AETERM, 'SEVERE\\[')"
+derivation:
+  case:
+    - when: "str_contains(AE.AETERM, 'SEVERE\\[')"
+      then: {literal: SEVERE}
+    - otherwise: {literal: MILD}
 ```
