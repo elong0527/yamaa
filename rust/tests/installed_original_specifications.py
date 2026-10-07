@@ -2,6 +2,7 @@
 
 import builtins
 import csv
+import gc
 import json
 import os
 import platform
@@ -102,6 +103,98 @@ class OriginalSpecifications(unittest.TestCase):
                 })
             finally:
                 os.chdir(previous)
+
+    def test_owned_result_retains_projected_output_and_save_never_reexecutes(self):
+        for name in CASES:
+            with self.subTest(name=name):
+                specification = prepare(name)
+                requests = []
+                sealed = False
+                def capture(dataset, path, maximum):
+                    self.assertFalse(sealed, "save recaptured study data")
+                    requests.append(path)
+                    content = (ROOT / "cases" / name / path).read_bytes()
+                    self.assertLessEqual(len(content), maximum)
+                    return content, True
+                metadata = ("fixture-runtime", "fixture-engine", name, specification_name(name), ".")
+                result = specification.build(capture, metadata)
+                sealed = True
+                del specification
+                gc.collect()
+                expected = json.loads((ROOT / "expected" / (name + ".json")).read_text())
+                unsaved = dict(expected, artifacts=[])
+                self.assertEqual(json.loads(result.observations()), unsaved)
+                if expected["outcome"] != "success":
+                    self.assertIsNone(result.output())
+                    with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                        result.save(lambda *_: self.fail("failed result reached publisher"))
+                    continue
+                artifact = expected["artifacts"][0]
+                derived = [t for t in expected["tables"] if t["stage"] == "derived"][0]
+                projection = [derived["columns"].index(c) for c in artifact["columns"]]
+                snapshot = json.loads(yamaa_native.table_snapshot(result.output()))
+                self.assertEqual(snapshot["columns"], list(map(list, zip(artifact["columns"], artifact["types"]))))
+                self.assertEqual(snapshot["row_count"], str(artifact["row_count"]))
+                def scalar(v):
+                    kind, value = v["type"], v["value"]
+                    if kind in ("date", "datetime"):
+                        return {kind: {"text": value, "precision": "day" if kind == "date" else "second"}}
+                    return {kind: value}
+                self.assertEqual(snapshot["rows"], [[scalar(row[c]) for c in projection] for row in derived["rows"]])
+                captured = list(requests)
+                for failure in (OSError("save failed"), KeyboardInterrupt("save interrupted")):
+                    calls = []
+                    def fail(*args):
+                        calls.append(args)
+                        raise failure
+                    with self.assertRaises(type(failure)) as caught:
+                        result.save(fail)
+                    self.assertIs(caught.exception, failure)
+                    self.assertEqual(len(calls), 1)
+                    self.assertEqual(json.loads(result.observations()), unsaved)
+                with tempfile.TemporaryDirectory() as directory:
+                    published = []
+                    def publish(path, content):
+                        expected_bytes = (ROOT / "cases" / name / "expected" / path).read_bytes()
+                        self.assertEqual(content, expected_bytes)
+                        pending = Path(directory) / "pending"
+                        pending.write_bytes(content)
+                        os.replace(pending, Path(directory) / path)
+                        published.append((Path(directory) / path).read_bytes())
+                    for _ in range(2):
+                        self.assertEqual(json.loads(result.save(publish)), expected)
+                    self.assertEqual(len(published), 2)
+                self.assertEqual(requests, captured)
+
+    def test_build_capture_preserves_original_host_failure(self):
+        spec = prepare("schema-lookup")
+        metadata = ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", ".")
+        for failure in (OSError("capture failed"), KeyboardInterrupt("capture interrupted"), SystemExit("capture stopped")):
+            calls = []
+            def capture(*args):
+                calls.append(args)
+                raise failure
+            with self.assertRaises(type(failure)) as caught:
+                spec.build(capture, metadata)
+            self.assertIs(caught.exception, failure)
+            self.assertEqual(len(calls), 1)
+
+    def test_output_rejection_discards_table_and_blocks_save(self):
+        name = "adam-adlb-ordered-sum"
+        source = (ROOT / "cases" / name / "spec.yaml").read_bytes()
+        source = source.replace(b"columns: [STUDYID,", b"columns: [STUDYID, STUDYID,", 1)
+        spec = yamaa_native._prepare_document("spec.yaml", source, lambda *_: None, lambda *_: None, lambda *_: "")
+        result = spec.build(
+            lambda _, path, maximum: ((ROOT / "cases" / name / path).read_bytes(), True),
+            ("fixture-runtime", "fixture-engine", name, "spec.yaml", "."),
+        )
+        self.assertIsNone(result.output())
+        self.assertEqual(json.loads(result.observations())["diagnostics"], [{
+            "phase": "validation", "condition": "duplicate_identifier", "requirement": "REQ-0234",
+            "spec_paths": ["output.columns[1]"], "context": {"column": "STUDYID"},
+        }])
+        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+            result.save(lambda *_: self.fail("rejected output reached publication"))
 
     def test_inherited_raw_loader_replays_existing_complete_failure_contracts(self):
         with (ROOT / "inheritance-replay.tsv").open(newline="", encoding="ascii") as stream:

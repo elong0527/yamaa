@@ -241,6 +241,78 @@ pub enum CompleteError<E> {
     Report(Error),
     Publish(E),
 }
+
+/// An owned build result; obtaining it never calls a publisher. Table bytes are
+/// the admitted output projection, while private report artifacts are prospective.
+#[derive(Debug)]
+pub struct BuildResult {
+    prepared: yamaa_engine::specification_output::PreparedOutput<Value>,
+    table: Option<Vec<u8>>,
+}
+impl BuildResult {
+    pub fn output(&self) -> Option<&[u8]> {
+        self.table.as_deref()
+    }
+    /// Build-phase observations exclude later save requests and their artifacts.
+    pub fn observations(&self) -> Value {
+        let mut report = self.prepared.prepared_report().clone();
+        report["artifacts"] = json!([]);
+        report
+    }
+    /// Return complete publication observations only after the publisher succeeds.
+    pub fn save<P: ArtifactPort>(
+        &self,
+        publisher: &mut P,
+    ) -> Result<&Value, yamaa_engine::specification_output::SaveError<P::Error>> {
+        self.prepared.save(publisher)
+    }
+}
+
+/// Prepare a public-result candidate without recapturing data or publishing bytes.
+pub fn build_result<E>(
+    run: &PreparedRun,
+    attempt: &CapturedAttempt<E>,
+    id: Identity<'_>,
+) -> Result<BuildResult, Error> {
+    use yamaa_engine::specification_output::{self as output, CompleteError as E};
+    let execution = attempt
+        .result
+        .as_ref()
+        .ok()
+        .and_then(|r| r.execution.as_ref());
+    let prepared = output::prepare(
+        run.compiled(),
+        execution,
+        8 * 1024 * 1024,
+        &mut Report {
+            run,
+            attempt,
+            id,
+            value: None,
+        },
+        &mut CsvEncoder,
+    )
+    .map_err(|error| match error {
+        E::Report(e) | E::Encode(e) => e,
+        E::Projection => Error::InvalidObservation,
+        E::OutputLimit => Error::OutputLimit,
+        E::Publish(never) => match never {},
+    })?;
+    let table = prepared
+        .artifact()
+        .map(|artifact| {
+            crate::table_transport::encode_projected_dataset(
+                &execution.ok_or(Error::InvalidObservation)?.dataset,
+                artifact.projection(),
+            )
+            .map_err(|e| match e {
+                crate::table_transport::TableTransportError::OutputLimit => Error::OutputLimit,
+                _ => Error::InvalidObservation,
+            })
+        })
+        .transpose()?;
+    Ok(BuildResult { prepared, table })
+}
 impl<E> From<Error> for CompleteError<E> {
     fn from(error: Error) -> Self {
         Self::Report(error)

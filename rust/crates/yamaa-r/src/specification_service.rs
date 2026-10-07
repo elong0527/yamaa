@@ -34,7 +34,7 @@ pub(super) fn boundary(run: impl FnOnce() -> std::result::Result<Robj, String>) 
         ),
     }
 }
-fn address(value: &Robj) -> std::result::Result<usize, String> {
+pub(super) fn address(value: &Robj) -> std::result::Result<usize, String> {
     if !value.is_external_pointer() {
         return Err("invalid specification handle".into());
     }
@@ -45,7 +45,7 @@ fn address(value: &Robj) -> std::result::Result<usize, String> {
     }
     Ok(address)
 }
-fn resolve(value: &Robj) -> std::result::Result<Arc<PreparedRun>, String> {
+pub(super) fn resolve(value: &Robj) -> std::result::Result<Arc<PreparedRun>, String> {
     let address = address(value)?;
     HANDLES
         .with(|handles| handles.borrow().get(&address).and_then(Weak::upgrade))
@@ -184,109 +184,31 @@ fn observed_report(
     metadata: List,
 ) -> List {
     boundary(|| {
-        use yamaa_adapters::{
-            specification_report::{self, Identity},
-            specification_run::SourcePort,
-        };
-        struct Port {
-            capture: Function,
-            reads: usize,
-        }
-        impl SourcePort for Port {
-            type Error = String;
-            fn capture_reads(&self) -> usize {
-                self.reads
-            }
-            fn capture(
-                &mut self,
-                source: &yamaa_engine::specification::SourceDeclaration,
-                maximum: usize,
-            ) -> std::result::Result<Arc<[u8]>, String> {
-                let result = self
-                    .capture
-                    .call(pairlist!(
-                        name = source.name.as_str(),
-                        path = source.path.as_str(),
-                        maximum = maximum as i32
-                    ))
-                    .map_err(|_| "source capture callback failed")?;
-                let result = result
-                    .as_list()
-                    .filter(|list| list.len() == 2)
-                    .ok_or("invalid capture response")?;
-                let content = result.elt(0).map_err(|_| "missing capture content")?;
-                let content = content
-                    .as_raw()
-                    .ok_or("capture content must be raw bytes")?;
-                let created = result
-                    .elt(1)
-                    .map_err(|_| "missing capture count")?
-                    .as_bool()
-                    .ok_or("invalid capture count")?;
-                if content.len() > maximum {
-                    return Err("capture byte limit".into());
-                }
-                self.reads += usize::from(created);
-                Ok(Arc::from(content.as_slice()))
-            }
-        }
-        if metadata.len() != 5 {
-            return Err("invalid report metadata".into());
-        }
-        let fields = metadata
-            .iter()
-            .map(|(_, value)| {
-                let bytes = value.as_raw().ok_or("report metadata must be raw UTF-8")?;
-                if bytes.len() > 4096 {
-                    return Err("report metadata limit".into());
-                }
-                std::str::from_utf8(bytes.as_slice())
-                    .map(str::to_owned)
-                    .map_err(|_| "invalid report metadata UTF-8".into())
-            })
-            .collect::<std::result::Result<Vec<String>, String>>()?;
+        use crate::specification_result::{capture_attempt, fields, identity, Publisher};
+        use yamaa_adapters::specification_report;
+        let fields = fields(&metadata)?;
         let run = resolve(&handle)?;
-        let attempt = run.execute_with_port(&mut Port { capture, reads: 0 });
-        let identity = Identity {
-            runtime: "r",
-            runtime_version: &fields[0],
-            engine_version: &fields[1],
-            example: &fields[2],
-            specification: &fields[3],
-            base_directory: &fields[4],
-        };
+        let attempt = capture_attempt(&run, capture);
         if let Some(callback) = publisher {
-            struct Publisher(Function);
-            impl specification_report::ArtifactPort for Publisher {
-                type Error = String;
-                fn publish(
-                    &mut self,
-                    path: &str,
-                    content: &[u8],
-                ) -> std::result::Result<(), String> {
-                    let result = self
-                        .0
-                        .call(pairlist!(path = path, content = Raw::from_bytes(content)))
-                        .map_err(|_| "publication callback failed")?;
-                    if result.as_bool() != Some(true) {
-                        return Err("publication callback rejected output".into());
-                    }
-                    Ok(())
+            specification_report::complete(
+                &run,
+                &attempt,
+                identity(&fields),
+                &mut Publisher(callback),
+            )
+            .map(|value| r!(value.to_string()))
+            .map_err(|error| match error {
+                specification_report::CompleteError::Publish(error) => error,
+                specification_report::CompleteError::Report(_) => {
+                    "unsupported or invalid report observation".into()
                 }
-            }
-            specification_report::complete(&run, &attempt, identity, &mut Publisher(callback))
-                .map(|value| r!(value.to_string()))
-                .map_err(|error| match error {
-                    specification_report::CompleteError::Publish(error) => error,
-                    specification_report::CompleteError::Report(_) => {
-                        "unsupported or invalid report observation".into()
-                    }
-                })
+            })
         } else {
-            specification_report::failure(&run, &attempt, identity)
+            specification_report::failure(&run, &attempt, identity(&fields))
                 .map(|value| r!(value.to_string()))
                 .map_err(|_| "unsupported or invalid failure-report observation".into())
         }
     })
 }
+
 extendr_module! {mod specification_service;fn prepare_specification;fn specification_source;fn execute_specification_csv;fn specification_failure_report;fn specification_report;}

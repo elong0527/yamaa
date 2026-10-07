@@ -79,6 +79,39 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   }
   stopifnot(state$reads==length(inputs),identical(state$requests,rep(names(inputs),2L)))
   stopifnot(published==if(case_name %in% c("adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup")) 2L else 0L)
+  # Result construction does not publish; later saves retain bytes and never read.
+  build <- get(".specification_build",envir=asNamespace("yamaanative"))
+  build_output <- get(".build_output",envir=asNamespace("yamaanative"))
+  build_observations <- get(".build_observations",envir=asNamespace("yamaanative"))
+  build_save <- get(".build_save",envir=asNamespace("yamaanative"))
+  before <- published
+  result <- build(handle,capture,case_name,specification)
+  requests_after_build <- state$requests
+  unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',expected)
+  stopifnot(identical(build_observations(result),unsaved),published==before)
+  if(case_name %in% c("negative-zero-division","negative-integer-overflow")) {
+    stopifnot(is.null(build_output(result)))
+    failed_save <- tryCatch(build_save(result,function(...) stop("failed result reached publisher")),error=identity)
+    stopifnot(inherits(failed_save,"error"),identical(conditionMessage(failed_save),"cannot save a failed build"))
+  } else {
+    bytes <- build_output(result)
+    stopifnot(is.raw(bytes),length(bytes)>0L)
+    altered <- bytes; altered[[1L]] <- as.raw(0L)
+    stopifnot(identical(build_output(result),bytes))
+    for(kind in c("error","interrupt")) {
+      failure <- structure(list(message="retained save condition",call=NULL,payload=new.env()),class=c("save_test_condition",kind,"condition"))
+      calls <- 0L
+      actual <- tryCatch(build_save(result,function(...) {calls <<- calls+1L;stop(failure)}),error=identity,interrupt=identity)
+      stopifnot(identical(actual,failure),calls==1L,identical(build_observations(result),unsaved))
+    }
+    for(i in seq_len(2L)) stopifnot(identical(build_save(result,publish),expected))
+    stopifnot(published==before+2L)
+  }
+  stopifnot(identical(state$requests,requests_after_build))
+  expired_result <- unserialize(serialize(result,NULL))
+  stopifnot(inherits(tryCatch(build_output(expired_result),error=identity),"error"))
+  stopifnot(inherits(tryCatch(build_output(handle),error=identity),"error"))
+  stopifnot(inherits(tryCatch(specification_source(result),error=identity),"error"))
   unlink(directory,recursive=TRUE)
   cat(case_name,"complete original report and cached source capture passed\n")
   expired <- unserialize(serialize(handle,NULL))
@@ -148,6 +181,9 @@ for(kind in c("error","interrupt")) {
   calls <- 0L
   capture <- function(...) {calls <<- calls+1L;stop(failure)}
   actual <- tryCatch(specification_failure_report(handle,capture,"failure"),error=identity,interrupt=identity)
+  stopifnot(identical(actual,failure),calls==1L)
+  calls <- 0L
+  actual <- tryCatch(build(handle,capture,"failure"),error=identity,interrupt=identity)
   stopifnot(identical(actual,failure),calls==1L)
 }
 # A later capture must retain prior observations and propagate the exact condition.
