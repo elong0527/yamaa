@@ -80,6 +80,27 @@ engine's actual handler counts, including inherited named-selection handlers.
 
 ## Output lifecycle
 
+Building can now stop before publication and return an owned result.
+`specification_output::prepare` checks the output declaration, resolves the
+projection, bounds encoding and prepares observations without accepting any
+publication authority. Its `PreparedOutput` retains the artifact path, exact
+bytes and projection. A failed or rejected result has no artifact and cannot
+call a publisher through `save`. A successful save borrows the held bytes;
+repeated explicit saves repeat only publication, including after a publisher
+failure. They never read data, evaluate expressions or encode the output again.
+
+The adapter retains the admitted output projection as owned Arrow IPC and keeps
+prospective artifact observations private. Build-phase observations exclude
+artifacts; `save` returns publication observations only after its callback
+succeeds. Later saves do not modify the original build-phase observations.
+Python exposes this through the internal prepared specification's `build` method
+and an owned result; R uses registered result handles. Neither binding retains
+the capture callback or borrows a source/result buffer. Installed tests compare
+all six complete reports and exact saved bytes, and check failed-save rejection,
+opaque publication errors/interruptions, repeated saves and expired R handles.
+These internal results supply the build/save boundary for the public API;
+host data-frame/issue/log properties and file-path entry points remain to connect.
+
 Successful response preparation retains the engine's accepted typed execution.
 Publication does not infer acceptance from serialized JSON or decode its own IPC
 output. An unsuccessful attempt reaches only the failure-report formatter.

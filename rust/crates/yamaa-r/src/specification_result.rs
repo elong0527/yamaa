@@ -1,0 +1,168 @@
+//! Registered owned result handles; callers never supply a Rust pointer to dereference.
+use crate::specification_service::{address, boundary, resolve as resolve_specification};
+use extendr_api::prelude::*;
+use std::{
+    cell::{Cell, RefCell},
+    collections::BTreeMap,
+    sync::{Arc, Weak},
+};
+use yamaa_adapters::{
+    specification_report::{self, BuildResult, Identity},
+    specification_run::{CapturedAttempt, PreparedRun, SourcePort},
+};
+
+thread_local! {static RESULTS:RefCell<BTreeMap<usize,Weak<BuildResult>>>=const{RefCell::new(BTreeMap::new())};}
+struct Handle {
+    result: Arc<BuildResult>,
+    identity: Cell<usize>,
+}
+impl Drop for Handle {
+    fn drop(&mut self) {
+        RESULTS.with(|values| {
+            values.borrow_mut().remove(&self.identity.get());
+        });
+    }
+}
+fn resolve(value: &Robj) -> std::result::Result<Arc<BuildResult>, String> {
+    let id = address(value)?;
+    RESULTS
+        .with(|values| values.borrow().get(&id).and_then(Weak::upgrade))
+        .ok_or_else(|| "unknown build result handle".into())
+}
+pub(super) fn fields(metadata: &List) -> std::result::Result<Vec<String>, String> {
+    if metadata.len() != 5 {
+        return Err("invalid report metadata".into());
+    }
+    metadata
+        .iter()
+        .map(|(_, value)| {
+            let bytes = value.as_raw().ok_or("report metadata must be raw UTF-8")?;
+            if bytes.len() > 4096 {
+                return Err("report metadata limit".into());
+            }
+            std::str::from_utf8(bytes.as_slice())
+                .map(str::to_owned)
+                .map_err(|_| "invalid report metadata UTF-8".into())
+        })
+        .collect()
+}
+pub(super) fn identity(fields: &[String]) -> Identity<'_> {
+    Identity {
+        runtime: "r",
+        runtime_version: &fields[0],
+        engine_version: &fields[1],
+        example: &fields[2],
+        specification: &fields[3],
+        base_directory: &fields[4],
+    }
+}
+struct Port {
+    capture: Function,
+    reads: usize,
+}
+impl SourcePort for Port {
+    type Error = String;
+    fn capture_reads(&self) -> usize {
+        self.reads
+    }
+    fn capture(
+        &mut self,
+        source: &yamaa_engine::specification::SourceDeclaration,
+        maximum: usize,
+    ) -> std::result::Result<Arc<[u8]>, String> {
+        let result = self
+            .capture
+            .call(pairlist!(
+                name = source.name.as_str(),
+                path = source.path.as_str(),
+                maximum = maximum as i32
+            ))
+            .map_err(|_| "source capture callback failed")?;
+        let result = result
+            .as_list()
+            .filter(|v| v.len() == 2)
+            .ok_or("invalid capture response")?;
+        let content = result.elt(0).map_err(|_| "missing capture content")?;
+        let content = content
+            .as_raw()
+            .ok_or("capture content must be raw bytes")?;
+        let created = result
+            .elt(1)
+            .map_err(|_| "missing capture count")?
+            .as_bool()
+            .ok_or("invalid capture count")?;
+        if content.len() > maximum {
+            return Err("capture byte limit".into());
+        }
+        self.reads += usize::from(created);
+        Ok(Arc::from(content.as_slice()))
+    }
+}
+pub(super) fn capture_attempt(run: &PreparedRun, capture: Function) -> CapturedAttempt<String> {
+    run.execute_with_port(&mut Port { capture, reads: 0 })
+}
+pub(super) struct Publisher(pub(super) Function);
+impl specification_report::ArtifactPort for Publisher {
+    type Error = String;
+    fn publish(&mut self, path: &str, content: &[u8]) -> std::result::Result<(), String> {
+        let result = self
+            .0
+            .call(pairlist!(path = path, content = Raw::from_bytes(content)))
+            .map_err(|_| "publication callback failed")?;
+        if result.as_bool() != Some(true) {
+            return Err("publication callback rejected output".into());
+        }
+        Ok(())
+    }
+}
+#[extendr]
+fn specification_build(handle: Robj, capture: Function, metadata: List) -> List {
+    boundary(|| {
+        let fields = fields(&metadata)?;
+        let run = resolve_specification(&handle)?;
+        let attempt = capture_attempt(&run, capture);
+        let result = Arc::new(
+            specification_report::build_result(&run, &attempt, identity(&fields))
+                .map_err(|_| "unsupported or invalid build observation")?,
+        );
+        let handle = ExternalPtr::new(Handle {
+            result,
+            identity: Cell::new(0),
+        });
+        let id = address(handle.as_robj())?;
+        handle.identity.set(id);
+        RESULTS.with(|values| {
+            values
+                .borrow_mut()
+                .insert(id, Arc::downgrade(&handle.result));
+        });
+        Ok(handle.into_robj())
+    })
+}
+#[extendr]
+fn build_output(handle: Robj) -> List {
+    boundary(|| {
+        Ok(resolve(&handle)?
+            .output()
+            .map_or_else(|| r!(NULL), |v| Raw::from_bytes(v).into_robj()))
+    })
+}
+#[extendr]
+fn build_observations(handle: Robj) -> List {
+    boundary(|| Ok(r!(resolve(&handle)?.observations().to_string())))
+}
+#[extendr]
+fn build_save(handle: Robj, publish: Function) -> List {
+    boundary(|| {
+        resolve(&handle)?
+            .save(&mut Publisher(publish))
+            .map(|v| r!(v.to_string()))
+            .map_err(|error| match error {
+                yamaa_engine::specification_output::SaveError::FailedBuild => {
+                    "cannot save a failed build".into()
+                }
+                yamaa_engine::specification_output::SaveError::Publish(error) => error,
+            })
+    })
+}
+extendr_module! {mod specification_result; fn specification_build; fn build_output; fn build_observations; fn build_save;}

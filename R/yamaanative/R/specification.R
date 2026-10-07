@@ -148,7 +148,7 @@ specification_report <- function(handle, capture, publish, example,
   .specification_observed_report(handle, capture, publish, example, specification, base_directory)
 }
 
-.specification_observed_report <- function(handle, capture, publish, example, specification, base_directory) {
+.specification_observed_report <- function(handle, capture, publish, example, specification, base_directory, build=FALSE) {
   if (!is.function(capture)) stop("capture must be a function", call. = FALSE)
   force(capture)
   failure <- NULL
@@ -169,7 +169,9 @@ specification_report <- function(handle, capture, publish, example,
   })
   metadata <- lapply(list(as.character(getRversion()), engine_info()$core_version,
                           example, specification, base_directory), .specification_text_bytes, maximum=4096)
-  if (is.null(publish)) {
+  if (build) {
+    result <- .Call(wrap__specification_build, handle, dispatch, metadata)
+  } else if (is.null(publish)) {
     result <- .Call(wrap__specification_failure_report, handle, dispatch, metadata)
   } else {
     force(publish)
@@ -186,5 +188,31 @@ specification_report <- function(handle, capture, publish, example,
   }
   if (!is.null(failure)) stop(failure)
   if (!is.null(result$error)) stop(result$error, call. = FALSE)
+  result$value
+}
+
+# Internal owned-result API; building captures/evaluates, saving only publishes.
+.specification_build <- function(handle,capture,example,specification="spec.yaml",base_directory=".") {
+  .specification_observed_report(handle,capture,NULL,example,specification,base_directory,build=TRUE)
+}
+.build_output <- function(handle) {
+  result <- .Call(wrap__build_output,handle)
+  if (!is.null(result$error)) stop(result$error,call.=FALSE)
+  result$value
+}
+.build_observations <- function(handle) {
+  result <- .Call(wrap__build_observations,handle)
+  if (!is.null(result$error)) stop(result$error,call.=FALSE)
+  result$value
+}
+.build_save <- function(handle,publish) {
+  if (!is.function(publish)) stop("publish must be a function",call.=FALSE)
+  force(publish)
+  failure <- NULL
+  dispatch <- function(path,content) tryCatch(identical(publish(path,content),TRUE),
+    error=function(e) {failure <<- e;FALSE},interrupt=function(e) {failure <<- e;FALSE})
+  result <- .Call(wrap__build_save,handle,dispatch)
+  if (!is.null(failure)) stop(failure)
+  if (!is.null(result$error)) stop(result$error,call.=FALSE)
   result$value
 }

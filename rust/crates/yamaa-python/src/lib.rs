@@ -4,6 +4,7 @@ mod function_callback;
 mod reference_catalog;
 mod schema_service;
 mod specification_inheritance;
+mod specification_result;
 mod specification_service;
 mod temporal_result;
 use pyo3::types::PyDict;
@@ -258,6 +259,7 @@ fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<reference_catalog::ReferenceCatalog>()?;
     module.add_class::<schema_service::Schema>()?;
     module.add_class::<specification_service::Specification>()?;
+    module.add_class::<specification_result::BuildResult>()?;
     module.add_function(wrap_pyfunction!(
         specification_service::_prepare_specification,
         module

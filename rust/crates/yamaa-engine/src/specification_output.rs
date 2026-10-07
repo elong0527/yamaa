@@ -1,6 +1,6 @@
 //! Gate artifact encoding and publication on accepted execution and observations.
 use crate::dataset::{Dataset, Execution};
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 use yamaa_core::{
     specification::{OutputFinding, PreparedSpecification},
     table::TableAccess,
@@ -50,6 +50,66 @@ pub enum CompleteError<R, C, P> {
     Publish(P),
 }
 
+/// A failed build cannot be saved; publisher failures retain their original value.
+#[derive(Debug)]
+pub enum SaveError<E> {
+    FailedBuild,
+    Publish(E),
+}
+
+/// Prepared bytes and projection belong to this successful build, not its caller.
+#[derive(Debug)]
+pub struct Artifact {
+    path: String,
+    bytes: Vec<u8>,
+    projection: Vec<usize>,
+}
+impl Artifact {
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+    pub fn projection(&self) -> &[usize] {
+        &self.projection
+    }
+}
+
+/// A completed build retains either its failure report or an immutable artifact.
+/// The prepared report may describe prospective publication; only save proves it.
+#[derive(Debug)]
+pub struct PreparedOutput<R> {
+    report: R,
+    artifact: Option<Artifact>,
+}
+impl<R> PreparedOutput<R> {
+    pub fn prepared_report(&self) -> &R {
+        &self.report
+    }
+    pub fn artifact(&self) -> Option<&Artifact> {
+        self.artifact.as_ref()
+    }
+    /// Repeat only the explicit publication request. Never capture, decode,
+    /// evaluate or encode again, including after a failed publication attempt.
+    pub fn save<P: ArtifactPort>(&self, publisher: &mut P) -> Result<&R, SaveError<P::Error>> {
+        let artifact = self.artifact.as_ref().ok_or(SaveError::FailedBuild)?;
+        publisher
+            .publish(&artifact.path, &artifact.bytes)
+            .map_err(SaveError::Publish)?;
+        Ok(&self.report)
+    }
+}
+
+pub type Preparation<R, C> = Result<
+    PreparedOutput<<R as OutputReport>::Report>,
+    CompleteError<
+        <R as OutputReport>::Error,
+        <C as ArtifactEncoder>::Error,
+        core::convert::Infallible,
+    >,
+>;
+
 pub type Completion<R, C, P> = Result<
     <R as OutputReport>::Report,
     CompleteError<
@@ -71,13 +131,44 @@ pub fn complete<R: OutputReport, C: ArtifactEncoder, P: ArtifactPort>(
     codec: &mut C,
     publisher: &mut P,
 ) -> Completion<R, C, P> {
+    let result =
+        prepare(prepared, execution, byte_limit, report, codec).map_err(|error| match error {
+            CompleteError::Report(e) => CompleteError::Report(e),
+            CompleteError::Encode(e) => CompleteError::Encode(e),
+            CompleteError::Projection => CompleteError::Projection,
+            CompleteError::OutputLimit => CompleteError::OutputLimit,
+            CompleteError::Publish(never) => match never {},
+        })?;
+    if let Some(artifact) = &result.artifact {
+        publisher
+            .publish(&artifact.path, &artifact.bytes)
+            .map_err(CompleteError::Publish)?;
+    }
+    Ok(result.report)
+}
+
+/// Complete output checks and bounded encoding/reporting without publication.
+/// No publisher is accepted, so result construction cannot write an artifact.
+pub fn prepare<R: OutputReport, C: ArtifactEncoder>(
+    prepared: &PreparedSpecification,
+    execution: Option<&Execution>,
+    byte_limit: usize,
+    report: &mut R,
+    codec: &mut C,
+) -> Preparation<R, C> {
     let Some(execution) = execution else {
-        return report.failure().map_err(CompleteError::Report);
+        return Ok(PreparedOutput {
+            report: report.failure().map_err(CompleteError::Report)?,
+            artifact: None,
+        });
     };
     report.begin(execution).map_err(CompleteError::Report)?;
     let findings = prepared.output_findings();
     if !findings.is_empty() {
-        return report.rejected(&findings).map_err(CompleteError::Report);
+        return Ok(PreparedOutput {
+            report: report.rejected(&findings).map_err(CompleteError::Report)?,
+            artifact: None,
+        });
     }
     let projection = prepared
         .projection()
@@ -101,8 +192,12 @@ pub fn complete<R: OutputReport, C: ArtifactEncoder, P: ArtifactPort>(
     let completed = report
         .success(execution, &projection, &bytes)
         .map_err(CompleteError::Report)?;
-    publisher
-        .publish(prepared.output_path(), &bytes)
-        .map_err(CompleteError::Publish)?;
-    Ok(completed)
+    Ok(PreparedOutput {
+        report: completed,
+        artifact: Some(Artifact {
+            path: prepared.output_path().into(),
+            bytes,
+            projection,
+        }),
+    })
 }

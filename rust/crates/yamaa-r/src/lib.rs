@@ -4,6 +4,7 @@ mod function_callback;
 mod inheritance_callback;
 mod scalars;
 mod specification_inheritance;
+mod specification_result;
 mod specification_service;
 
 /// Validate raw request bytes before any Rust string is constructed. R character
@@ -272,6 +273,7 @@ extendr_module! {
     mod yamaanative;
     use scalars;
     use specification_service;
+    use specification_result;
     use specification_inheritance;
     use function_callback;
     use inheritance_callback;

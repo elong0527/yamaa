@@ -147,6 +147,21 @@ pub(crate) fn decode_snapshot(input: &[u8]) -> Result<ArrowTable, Error> {
 /// Export only a checked owned dataset; this is not a generic untrusted table API.
 /// The caller's execution policy has already bounded retained cell/text payloads.
 pub(crate) fn encode_dataset(table: &yamaa_engine::dataset::Dataset) -> Result<Vec<u8>, Error> {
+    encode_dataset_projection(table, None)
+}
+
+/// Export the projection already admitted by the output use case.
+pub(crate) fn encode_projected_dataset(
+    table: &yamaa_engine::dataset::Dataset,
+    projection: &[usize],
+) -> Result<Vec<u8>, Error> {
+    encode_dataset_projection(table, Some(projection))
+}
+
+fn encode_dataset_projection(
+    table: &yamaa_engine::dataset::Dataset,
+    projection: Option<&[usize]>,
+) -> Result<Vec<u8>, Error> {
     if table.row_count() > LIMITS.max_rows
         || table.schema().columns().len() > LIMITS.max_columns
         || table
@@ -157,9 +172,13 @@ pub(crate) fn encode_dataset(table: &yamaa_engine::dataset::Dataset) -> Result<V
         return Err(Error::ShapeLimit);
     }
     let batch = sanitized_batch(table, 0, table.row_count()).map_err(|_| Error::Internal)?;
+    let batch = match projection {
+        Some(projection) => batch.project(projection).map_err(|_| Error::Internal)?,
+        None => batch,
+    };
     let mut output = LimitedWriter::new(MAX_INPUT_BYTES);
     let result = (|| {
-        let mut writer = StreamWriter::try_new(&mut output, &physical_schema(table.schema()))?;
+        let mut writer = StreamWriter::try_new(&mut output, &batch.schema())?;
         writer.write(&batch)?;
         writer.finish()
     })();

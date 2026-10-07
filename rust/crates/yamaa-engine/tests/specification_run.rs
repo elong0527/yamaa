@@ -512,6 +512,57 @@ mod publication {
         }
     }
     #[test]
+    fn owned_result_only_publishes_retained_bytes_when_saved() {
+        let plan = prepared("result.csv", &["VALUE", "ID"]);
+        let execution = execution(&plan);
+        let (mut report, mut codec, mut publisher) = hosts();
+        let result = output::prepare(&plan, Some(&execution), 16, &mut report, &mut codec).unwrap();
+        assert_eq!(*report.trace.borrow(), ["begin", "encode", "report"]);
+        assert_eq!(result.artifact().unwrap().projection(), [1, 0]);
+        assert_eq!(result.artifact().unwrap().path(), "result.csv");
+        assert_eq!(result.artifact().unwrap().bytes(), b"VALUE,ID\n8,7\n");
+        // Everything used to execute and encode can disappear before saving.
+        drop(execution);
+        drop(plan);
+        drop(codec);
+        drop(report);
+        publisher.trace.borrow_mut().clear();
+        publisher.fail = Some("publish");
+        let Err(output::SaveError::Publish(Payload(payload))) = result.save(&mut publisher) else {
+            panic!("opaque publication failure");
+        };
+        assert!(Rc::ptr_eq(&payload, &publisher.payload));
+        assert_eq!(*publisher.trace.borrow(), ["publish"]);
+        publisher.fail = None;
+        for _ in 0..2 {
+            assert_eq!(*result.save(&mut publisher).unwrap(), "success");
+        }
+        assert_eq!(*publisher.trace.borrow(), ["publish", "publish", "publish"]);
+    }
+    #[test]
+    fn failed_or_rejected_build_cannot_reach_save_authority() {
+        let plan = prepared("result.csv", &["VALUE", "ID"]);
+        let (mut report, mut codec, mut publisher) = hosts();
+        let failure = output::prepare(&plan, None, 16, &mut report, &mut codec).unwrap();
+        assert!(matches!(
+            failure.save(&mut publisher),
+            Err(output::SaveError::FailedBuild)
+        ));
+        assert!(failure.artifact().is_none());
+        assert_eq!(*report.trace.borrow(), ["failure"]);
+        report.trace.borrow_mut().clear();
+        let invalid = prepared("result.csv", &["ID", "ID"]);
+        let execution = execution(&invalid);
+        let rejected =
+            output::prepare(&invalid, Some(&execution), 16, &mut report, &mut codec).unwrap();
+        assert!(matches!(
+            rejected.save(&mut publisher),
+            Err(output::SaveError::FailedBuild)
+        ));
+        assert!(rejected.artifact().is_none());
+        assert_eq!(*report.trace.borrow(), ["begin", "rejected"]);
+    }
+    #[test]
     fn output_findings_and_report_failures_block_encoding_or_publication() {
         let invalid = prepared("result.unknown", &["ID", "ID", "ABSENT"]);
         let execution = execution(&invalid);
