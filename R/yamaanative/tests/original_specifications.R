@@ -303,5 +303,131 @@ stopifnot(identical(parquet_requests,"input/lb.csv"),length(parquet_saved)==2L,
           !is.null(build_output(parquet_result)))
 cat("native Parquet output construction and explicit save passed\n")
 
+# Only the source container changes. The complete original report and exact CSV
+# remain independent truth. The runtime PATH still contains no Python executable.
+case_name <- "adam-adlb-ordered-sum"
+case <- file.path(root,"cases",case_name)
+source <- sub("path: input/lb.csv, types: {LBSTRESN: float}","path: input/lb.parquet",
+              rawToChar(rawfile(file.path(case,"spec.yaml"))),fixed=TRUE)
+handle <- prepare_entry("spec.yaml",charToRaw(source),no_port,no_port,no_port)
+expected <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
+expected <- sub('"runtime":"python"','"runtime":"r"',expected,fixed=TRUE)
+expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
+expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+expected <- gsub('"path":"input/lb.csv"','"path":"input/lb.parquet"',expected,fixed=TRUE)
+requests <- character(); saves <- 0L
+capture <- function(name,path,maximum) {
+  stopifnot(name=="LB",path=="input/lb.parquet")
+  requests <<- c(requests,path)
+  content <- rawfile(file.path(root,"pq","ordered-sum.parquet"))
+  stopifnot(length(content)<=maximum)
+  list(content,TRUE)
+}
+result <- build(handle,capture,case_name)
+unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',expected)
+stopifnot(identical(build_observations(result),unsaved),!is.null(build_output(result)))
+rm(handle);gc()
+for(i in seq_len(2L)) {
+  report <- build_save(result,function(path,content) {
+    stopifnot(path=="adlb.csv",identical(content,rawfile(file.path(case,"expected","adlb.csv"))))
+    saves <<- saves+1L
+    TRUE
+  })
+  stopifnot(identical(report,expected),identical(build_observations(result),unsaved))
+}
+stopifnot(identical(requests,"input/lb.parquet"),saves==2L)
+redundant <- sub("input/lb.csv","input/lb.parquet",rawToChar(rawfile(file.path(case,"spec.yaml"))),fixed=TRUE)
+failure <- tryCatch(prepare_entry("spec.yaml",charToRaw(redundant),no_port,no_port,no_port),error=identity)
+stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),
+  '{"outcome":{"diagnostics":[{"condition":"redundant_field_type","context":{"dataset":"LB","field":"LBSTRESN","type":"float"},"phase":"validation","requirement":"REQ-0533","spec_paths":["input.LB.types.LBSTRESN"]}],"status":"invalid"},"protocol":"specification/prototype"}'))
+cat("native Parquet source complete original report, exact CSV and preflight passed\n")
+
+# Independent codec failures retain a complete failed report and deny save.
+source <- '{"schema_version":"1.0","domain":"TEST","input":{"SRC":{"path":"input.parquet"}},"keys":["ID"],"columns":[{"name":"ID","type":"int","derivation":{"compute":{"expr":"1"}}}],"output":{"path":"output.csv","columns":["ID"]}}'
+handle <- prepare_entry("spec.yaml",charToRaw(source),no_port,no_port,no_port)
+cases <- list(
+  c("utf8","source_parquet_invalid","REQ-1038",'"dataset":"SRC","path":"input.parquet"'),
+  c("utf8-bool","source_field_type_unsupported","REQ-1040",'"dataset":"SRC","field":"OTHER","path":"input.parquet","stored_type":"bool"'),
+  c("utf8-time","source_field_value_invalid","REQ-1041",'"dataset":"SRC","field":"OTHER","path":"input.parquet","row":1,"value":1'),
+  c("empty-name","source_field_name_empty","REQ-1039",'"dataset":"SRC","field":1,"path":"input.parquet"'),
+  c("duplicate","source_field_name_duplicate","REQ-1039",'"dataset":"SRC","field":"I","path":"input.parquet"')
+)
+unsupported_types <- c(int32="int32",uint64="uint64",float32="float",binary="binary",
+  milliseconds="timestamp[ms]",timezone="timestamp[us, tz=UTC]",list="list<element: int64>",
+  "fixed-list"="fixed_size_list<element: int64>[2]",struct="struct<item: int64>",decimal="decimal128(10, 2)")
+for(name in names(unsupported_types)) cases[[length(cases)+1L]] <- c(
+  paste0("unsupported-",name),"source_field_type_unsupported","REQ-1040",
+  paste0('"dataset":"SRC","field":"FIELD","path":"input.parquet","stored_type":"',unsupported_types[[name]],'"'))
+for(test in cases) {
+  requests <- character()
+  capture <- function(name,path,maximum) {
+    stopifnot(name=="SRC",path=="input.parquet")
+    requests <<- c(requests,path)
+    content <- rawfile(file.path(root,"pq",paste0(test[[1L]],".parquet")))
+    stopifnot(length(content)<=maximum)
+    list(content,TRUE)
+  }
+  result <- build(handle,capture,test[[1L]])
+  finding <- paste0('{"condition":"',test[[2L]],'","context":{',test[[4L]],'},"phase":"ingest","requirement":"',test[[3L]],'","spec_paths":["input.SRC.path"]}')
+  expected <- paste0('{"artifacts":[],"backend":"rust","callbacks":[],"diagnostics":[',finding,'],"engine_version":"',engine_info()$core_version,'","error":null,"example":"',test[[1L]],'","handler_counts":[],"nodes":[{"diagnostics":[',finding,'],"handler_counts":[],"outcome":"failure","specification":"spec.yaml","unsupported":[]}],"outcome":"failure","report_version":"0.3.0-draft","runtime":"r","runtime_version":"',as.character(getRversion()),'","source_reads":[{"base_directory":".","condition":null,"outcome":"captured","path":"input.parquet","snapshots_created":1}],"tables":[],"unsupported":[],"verifications":[]}')
+  stopifnot(identical(build_observations(result),expected),is.null(build_output(result)))
+  failure <- tryCatch(build_save(result,no_port),error=identity)
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"),identical(requests,"input.parquet"))
+}
+cat("native Parquet source complete failed reports and save gates passed\n")
+
+# Input policy remains core-owned and retained output distinguishes missing text
+# from present empty text after the preparation handle has been released.
+for(policy in c("missing","present")) {
+  source <- paste0('{"schema_version":"1.0","domain":"TEST","input":{"SRC":{"path":"input.PARQUET","empty_string":"',policy,'"}},"keys":["I"],"columns":[{"name":"I","type":"int","derivation":"SRC.I"},{"name":"S","type":"str","derivation":"SRC.S"}],"output":{"path":"output.csv","columns":["I","S"]}}')
+  handle <- prepare_entry("spec.yaml",charToRaw(source),no_port,no_port,no_port)
+  requests <- character(); saves <- 0L
+  capture <- function(name,path,maximum) {
+    stopifnot(name=="SRC",path=="input.PARQUET")
+    requests <<- c(requests,path)
+    content <- rawfile(file.path(root,"pq","text.parquet"))
+    stopifnot(length(content)<=maximum)
+    list(content,TRUE)
+  }
+  result <- build(handle,capture,policy)
+  rm(handle);gc()
+  expected <- charToRaw(if(policy=="missing") "I,S\n1,\n2,X\n" else 'I,S\n1,""\n2,X\n')
+  for(i in seq_len(2L)) {
+    report <- build_save(result,function(path,content) {
+      stopifnot(path=="output.csv",identical(content,expected))
+      saves <<- saves+1L
+      TRUE
+    })
+    stopifnot(grepl('"outcome":"success"',report,fixed=TRUE))
+  }
+  stopifnot(identical(requests,"input.PARQUET"),saves==2L)
+}
+cat("native Parquet empty-string input policy and retained save passed\n")
+
+# Semantic failures collect through the final source in declaration order; a
+# failed input collection exposes no partial tables or publication capability.
+source <- '{"schema_version":"1.0","domain":"TEST","base":"FIRST","input":{"FIRST":{"path":"FIRST.parquet"},"SECOND":{"path":"SECOND.parquet"},"THIRD":{"path":"THIRD.parquet"}},"keys":["ID"],"columns":[{"name":"ID","type":"int","derivation":{"compute":{"expr":"1"}}}],"output":{"path":"output.csv","columns":["ID"]}}'
+handle <- prepare_entry("spec.yaml",charToRaw(source),no_port,no_port,no_port)
+requests <- character()
+capture <- function(name,path,maximum) {
+  stopifnot(path==paste0(name,".parquet"))
+  requests <<- c(requests,name)
+  fixture <- c(FIRST="utf8-time",SECOND="duplicate",THIRD="text")[[name]]
+  content <- rawfile(file.path(root,"pq",paste0(fixture,".parquet")))
+  stopifnot(length(content)<=maximum)
+  list(content,TRUE)
+}
+result <- build(handle,capture,"collection")
+findings <- paste0(
+  '{"condition":"source_field_value_invalid","context":{"dataset":"FIRST","field":"OTHER","path":"FIRST.parquet","row":1,"value":1},"phase":"ingest","requirement":"REQ-1041","spec_paths":["input.FIRST.path"]},',
+  '{"condition":"source_field_name_duplicate","context":{"dataset":"SECOND","field":"I","path":"SECOND.parquet"},"phase":"ingest","requirement":"REQ-1039","spec_paths":["input.SECOND.path"]}')
+reads <- paste0('{"base_directory":".","condition":null,"outcome":"captured","path":"',c("FIRST","SECOND","THIRD"),'.parquet","snapshots_created":1}',collapse=",")
+expected <- paste0('{"artifacts":[],"backend":"rust","callbacks":[],"diagnostics":[',findings,'],"engine_version":"',engine_info()$core_version,'","error":null,"example":"collection","handler_counts":[],"nodes":[{"diagnostics":[',findings,'],"handler_counts":[],"outcome":"failure","specification":"spec.yaml","unsupported":[]}],"outcome":"failure","report_version":"0.3.0-draft","runtime":"r","runtime_version":"',as.character(getRversion()),'","source_reads":[',reads,'],"tables":[],"unsupported":[],"verifications":[]}')
+stopifnot(identical(build_observations(result),expected),is.null(build_output(result)),
+          identical(requests,c("FIRST","SECOND","THIRD")))
+failure <- tryCatch(build_save(result,no_port),error=identity)
+stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"))
+cat("native Parquet source failure collection and complete report passed\n")
+
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

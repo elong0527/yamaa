@@ -894,7 +894,7 @@ mod domain_usecase {
     #[test]
     fn rejected_vocabulary_precedes_every_study_effect() {
         let (mut port, mut decoder) = fixtures();
-        let document = document("ID + 1", "input.parquet");
+        let document = document("ID + 1", "input.unknown");
         let Err(PrepareError::Unsupported(check_findings)) = domain::check(&document) else {
             panic!("check must reject unsupported source format");
         };

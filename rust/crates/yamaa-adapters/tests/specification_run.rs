@@ -83,6 +83,71 @@ fn limits() -> dataset::Limits {
         identity_text_bytes: 10_000_000,
     }
 }
+
+#[test]
+fn parquet_input_policy_and_owned_source_observations_use_the_shared_build_path() {
+    use yamaa_adapters::specification_run::{PreparedRun, SourcePort};
+    use yamaa_core::specification::SourceDeclaration;
+    use yamaa_core::table::ValueRef;
+    struct Port {
+        content: Arc<[u8]>,
+        calls: usize,
+    }
+    impl SourcePort for Port {
+        type Error = std::convert::Infallible;
+        fn capture_reads(&self) -> usize {
+            self.calls
+        }
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            maximum: usize,
+        ) -> Result<Arc<[u8]>, Self::Error> {
+            assert_eq!(source.path, "input.PARQUET");
+            assert!(self.content.len() <= maximum);
+            self.calls += 1;
+            Ok(self.content.clone())
+        }
+    }
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    for (policy, first) in [
+        ("missing", ValueRef::Missing),
+        ("present", ValueRef::Str("")),
+    ] {
+        let raw = format!(
+            r#"schema_version: "1.0"
+domain: TEST
+input:
+  SRC: {{path: input.PARQUET, empty_string: {policy}}}
+keys: [I]
+columns:
+  - {{name: I, type: int, derivation: SRC.I}}
+  - {{name: S, type: str, derivation: SRC.S}}
+output: {{path: output.csv, columns: [I, S]}}
+"#
+        );
+        let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
+        let content = std::fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/pq/text.parquet"),
+        )
+        .unwrap();
+        let mut port = Port {
+            content: content.into(),
+            calls: 0,
+        };
+        let attempt = run.execute_with_port(&mut port);
+        assert_eq!(port.calls, 1);
+        drop(port);
+        drop(run);
+        let source = attempt.sources[0].table.as_ref().unwrap();
+        assert_eq!(source.cell(0, 1).unwrap(), first);
+        assert_eq!(source.cell(1, 1).unwrap(), ValueRef::Str("X"));
+        assert!(attempt.sources[0].read.captured);
+        assert_eq!(attempt.sources[0].read.snapshots_created, Some(1));
+        let response = attempt.result.unwrap();
+        assert!(response.table.is_some());
+    }
+}
 #[test]
 fn original_yaml_to_checked_numeric_failure_without_python_plan() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");

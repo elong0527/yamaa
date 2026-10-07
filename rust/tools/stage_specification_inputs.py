@@ -125,6 +125,7 @@ def stage(destination: Path):
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specs",
         destination / "expected",
     )
+    shutil.copytree(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/pq", destination / "pq")
 
     # R compares complete JSON without adding a JSON-library runtime dependency.
     for path in (destination / "expected").glob("*.json"):

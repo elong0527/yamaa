@@ -123,13 +123,21 @@ fn compiler_retains_admission_binding_and_resource_boundaries() {
         matches!(&findings[..], [BindFinding::Numeric { path, expression, .. }] if path == "columns.VALUE.derivation.compute.expr" && expression == "ID +")
     );
     let Err(PrepareError::Unsupported(features)) =
-        PreparedSpecification::prepare(&document("ID + 1", "input.parquet"))
+        PreparedSpecification::prepare(&document("ID + 1", "input.bad"))
     else {
         panic!("unsupported admission")
     };
     assert!(features
         .iter()
         .any(|f| f.operation == "source_format" && f.path == "input.SRC.path"));
+    let prepared = PreparedSpecification::prepare(&document("ID + 1", "input.PARQUET")).unwrap();
+    assert_eq!(
+        prepared.source().profile,
+        yamaa_core::specification::SourceProfile::Parquet
+    );
+    assert!(!prepared.source().empty_string_present);
+    assert!(prepared.source().text_is_missing(""));
+    assert!(!prepared.source().text_is_missing("NA"));
     assert!(matches!(
         PreparedSpecification::prepare_with_limits(
             &document("ID + 1", "input.csv"),

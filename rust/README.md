@@ -19,6 +19,9 @@ compiled-specification migration, are described in [COMPILED_MODEL.md](COMPILED_
 Native source capture/decoding ports and the shared application lifecycle, with
 the remaining driven-port migration, are described in [PORTS.md](PORTS.md).
 
+Held Parquet source decoding and its resource/diagnostic qualification boundaries
+are described in [PARQUET_SOURCE.md](PARQUET_SOURCE.md).
+
 Decimal rounding characterization and the reference/rule discrepancies that
 precede its implementation are recorded in
 [ROUNDING_ASSESSMENT.md](ROUNDING_ASSESSMENT.md).

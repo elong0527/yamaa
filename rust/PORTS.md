@@ -9,7 +9,7 @@ and codec interfaces are native traits; adapters translate values and errors.
 | Port | Owner | Current implementations | Failures |
 | --- | --- | --- | --- |
 | `specification_run::SourcePort` | engine | Python and R capture bridges; engine and adapter test fakes | Original opaque capture error; regressing snapshot counter |
-| `specification_run::SourceDecoder` | engine | Adapter CSV/Arrow decoder; engine test fake | Original decoder error; byte/cell capacity limits |
+| `specification_run::SourceDecoder` | engine | Adapter CSV/Parquet/Arrow decoder; engine test fake | Original decoder error; byte/cell capacity limits |
 | `specification_output::ArtifactEncoder` | engine | Adapter CSV/Parquet encoders; native test fake | Original codec error; checked output byte limit |
 | `specification_output::OutputReport` | engine | Portable JSON report formatter; native test fake | Observation or report-budget failure before publication |
 | `specification_output::ArtifactPort` | engine | Python/R atomic publication bridges; native test fake | Original opaque publication error, without retry |
@@ -71,7 +71,10 @@ reopening or reparsing input. An interrupted attempt remains explicitly
 incomplete until the adapter maps its boundary failure.
 
 The CSV adapter retains its existing profile, type conversion and capacity
-settings. The adapter serializes the engine result through the existing response
+settings. The held Parquet decoder uses the compiler's declared profile and
+empty-string policy, with bounded physical decoding and ordered semantic
+findings described in [PARQUET_SOURCE.md](PARQUET_SOURCE.md).
+The adapter serializes the engine result through the existing response
 formatter; it no longer chooses capture, binding or execution order. Tests use
 native fake ports to pin order, cached counts, original non-Clone errors,
 capacity failures before cell reads, and observations surviving a panic in a
