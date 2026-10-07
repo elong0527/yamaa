@@ -118,6 +118,7 @@ def stage(destination: Path):
     stage_decode_replay(destination)
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv", destination / "inheritance-preparation.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv", destination / "preflight.tsv")
+    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv", destination / "output-declarations.tsv")
     for name in SCHEMA_MODULES:
         shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
     for name in CASES:

@@ -269,6 +269,33 @@ class OriginalSpecifications(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
             result.save(lambda *_: self.fail("rejected output reached publication"))
 
+    def test_core_output_findings_preserve_independent_complete_failed_reports(self):
+        def no_parent(*_):
+            self.fail("standalone output declaration reached an inheritance port")
+        with (ROOT / "output-declarations.tsv").open(encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), 5)
+        self.assertEqual(sum(len(json.loads(r["expected"])["diagnostics"]) for r in records), 8)
+        for record in records:
+            with self.subTest(case=record["case"]):
+                reads = []
+                def capture(dataset, path, maximum):
+                    self.assertEqual((dataset, path), ("SRC", "source.csv"))
+                    self.assertGreaterEqual(maximum, 5)
+                    reads.append(path)
+                    return b"ID\n1\n", True
+                spec = yamaa_native._prepare_document("spec.yaml", record["source"].encode("ascii"), no_parent, no_parent, no_parent)
+                result = spec.build(capture, ("fixture-runtime", "fixture-engine", "output-" + record["case"], "spec.yaml", "."))
+                del spec
+                gc.collect()
+                self.assertEqual(json.loads(result.observations()), json.loads(record["expected"]))
+                self.assertIsNone(result.output())
+                for _ in range(2):
+                    with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                        result.save(lambda *_: self.fail("output failure reached publication"))
+                    self.assertEqual(json.loads(result.observations()), json.loads(record["expected"]))
+                self.assertEqual(reads, ["source.csv"])
+
     def test_inherited_raw_loader_replays_existing_complete_failure_contracts(self):
         with (ROOT / "inheritance-replay.tsv").open(newline="", encoding="ascii") as stream:
             records = list(csv.DictReader(stream, delimiter="\t"))

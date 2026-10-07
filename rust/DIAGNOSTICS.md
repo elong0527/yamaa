@@ -1,7 +1,7 @@
 # Portable diagnostic foundation
 
 The #1753 slices move numeric evaluation, arithmetic/reduction, completed-result
-conversion, classified resource and original-document preflight diagnostics into
+conversion, classified resource, original-document preflight and output-declaration diagnostics into
 `yamaa-core::diagnostic`. The
 original-specification runner and existing dataset/numeric transports consume
 those core diagnostics. Adapters encode runtime values and source offsets but
@@ -59,6 +59,16 @@ authority is reached. The existing installed original-document suite separately
 checks the Parquet redundant-type preflight finding; the core test exercises all
 five declared type spellings. These are preparation and retained-run contracts,
 not public API or whole-inventory qualification.
+
+Five independent output-declaration documents carry eight complete ordered
+findings in `tests/fixtures/output_declarations.tsv`. The reference implementation
+produced these complete failure reports after source ingestion and derivation.
+Core output findings now own their vocabulary and geometry; the report adapter
+uses the same typed projection as preflight and resource failures. Rust and both
+installed hosts compare the full reports, including source tables and capture
+accounting, then require repeated save attempts to fail without publication or
+recapture after the compiled handle is released. Output declaration checks still
+follow derivation, key checks and verification.
 
 `tools/check_diagnostics.py` checks literal requirement IDs across every Rust
 crate's source against current normative rule definitions, including mappings

@@ -57,6 +57,88 @@ fn texts(values: &[&str]) -> V {
 }
 type Expected<'a> = (&'a str, Option<&'a str>, Vec<&'a str>, Vec<(&'a str, V)>);
 
+pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
+    let mut fields = base(
+        "TEST",
+        inputs(),
+        vec![column("ID", Some(source()))],
+        vec![Text("ID")],
+    );
+    fields.push(("base", Text("SRC")));
+    let output = &mut fields
+        .iter_mut()
+        .find(|(name, _)| *name == "output")
+        .unwrap()
+        .1;
+    *output = Map(vec![
+        ("path", Text("result.bad")),
+        ("columns", List(vec![Text("ABSENT"), Text("ABSENT")])),
+    ]);
+    let mut nodes = Vec::new();
+    let root = Map(fields).append(&mut nodes);
+    let document = Document::new(nodes, root, Default::default()).unwrap();
+    let model =
+        SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
+            .unwrap()
+            .unwrap();
+    let compiled = PreparedSpecification::prepare(&model).unwrap();
+    let findings = compiled.output_findings();
+    let expected = [
+        (
+            "unknown_artifact_profile",
+            "REQ-0760",
+            "output.path",
+            vec![
+                ("path", text("result.bad")),
+                ("permitted", texts(&[".csv", ".parquet"])),
+            ],
+        ),
+        (
+            "undeclared_column",
+            "REQ-0234",
+            "output.columns[0]",
+            vec![("column", text("ABSENT"))],
+        ),
+        (
+            "duplicate_identifier",
+            "REQ-0234",
+            "output.columns[1]",
+            vec![("column", text("ABSENT"))],
+        ),
+        (
+            "internal_column_in_keys",
+            "REQ-0220",
+            "keys[0]",
+            vec![("column", text("ID"))],
+        ),
+    ];
+    assert_eq!(findings.len(), expected.len());
+    findings
+        .iter()
+        .zip(expected)
+        .map(|(finding, (condition, requirement, path, fields))| {
+            let diagnostic = finding.diagnostic();
+            let definition = diagnostic.definition();
+            assert_eq!(
+                (
+                    definition.phase,
+                    definition.condition,
+                    definition.requirement
+                ),
+                ("validation", condition, Some(requirement))
+            );
+            assert_eq!(diagnostic.spec_paths, [path]);
+            assert_eq!(
+                diagnostic.context,
+                fields.into_iter().map(|(k, v)| (k.into(), v)).collect()
+            );
+            assert_eq!(diagnostic.source_span, None);
+            assert_eq!(diagnostic.operand_route, None);
+            diagnostic.code
+        })
+        .collect()
+}
+
 fn check(fields: Vec<(&str, Tree<'_>)>, expected: Vec<Expected<'_>>) -> BTreeSet<ConditionCode> {
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);

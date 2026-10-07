@@ -3,7 +3,7 @@
 //! Registry keys identify causes, not public condition strings: the language uses
 //! `conversion_failed` for several requirements. Migrated causes cover numeric
 //! evaluation, completed-result conversion, classified resource failures and
-//! original-document preflight. Other families retain their existing error types
+//! original-document preflight and output declarations. Other families retain their existing error types
 //! until their semantics and provenance migrate here.
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
@@ -71,6 +71,10 @@ conditions! {
     PreflightDriverUnavailable => ("validation", "driver_unavailable", None),
     PreflightDomainInputCollision => ("validation", "duplicate_identifier", Some("REQ-0080")),
     PreflightRedundantSourceType => ("validation", "redundant_field_type", Some("REQ-0533")),
+    OutputUnknownProfile => ("validation", "unknown_artifact_profile", Some("REQ-0760")),
+    OutputDuplicateColumn => ("validation", "duplicate_identifier", Some("REQ-0234")),
+    OutputUndeclaredColumn => ("validation", "undeclared_column", Some("REQ-0234")),
+    OutputInternalKey => ("validation", "internal_column_in_keys", Some("REQ-0220")),
 }
 
 /// Owned context retains scalar kinds and ordered sequences. Diagnostic integers

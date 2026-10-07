@@ -440,5 +440,30 @@ failure <- tryCatch(build_save(result,no_port),error=identity)
 stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"))
 cat("native Parquet source failure collection and complete report passed\n")
 
+output_truth <- read.delim(file.path(root,"output-declarations.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(output_truth)==5L)
+for(i in seq_len(nrow(output_truth))) {
+  handle <- prepare_entry("spec.yaml",charToRaw(output_truth$source[[i]]),no_port,no_port,no_port)
+  reads <- character()
+  capture <- function(dataset,path,maximum) {
+    stopifnot(dataset=="SRC",path=="source.csv",maximum>=5L)
+    reads <<- c(reads,path)
+    list(charToRaw("ID\n1\n"),TRUE)
+  }
+  result <- build(handle,capture,paste0("output-",output_truth$case[[i]]),"spec.yaml")
+  rm(handle); gc()
+  expected <- gsub('"runtime":"python"','"runtime":"r"',output_truth$expected[[i]],fixed=TRUE)
+  expected <- gsub('"runtime_version":"fixture-runtime"',paste0('"runtime_version":"',as.character(getRversion()),'"'),expected,fixed=TRUE)
+  expected <- gsub('"engine_version":"fixture-engine"',paste0('"engine_version":"',engine_info()$core_version,'"'),expected,fixed=TRUE)
+  stopifnot(identical(build_observations(result),expected),is.null(build_output(result)))
+  for(j in seq_len(2L)) {
+    failure <- tryCatch(build_save(result,no_port),error=identity)
+    stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"),
+              identical(build_observations(result),expected))
+  }
+  stopifnot(identical(reads,"source.csv"))
+}
+cat("core output declarations complete independent failed reports and retained save gates passed\n")
+
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)
