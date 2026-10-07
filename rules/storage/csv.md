@@ -69,9 +69,10 @@ output.
 **REQ-0731.** A missing value is written as no characters at all, unquoted. A
 collected empty string is written as two quote characters. The two forms stay
 apart in the artifact, and no text is ever pressed into service as a sentinel
-for absence. Reading does not restore the pair: [REQ-0529](ingestion.md#req-0529) reads an empty field as
-missing whether it was bare or quoted, so a collected empty string written here
-returns as missing if this artifact is later read as a delimited source.
+for absence. Reading does not restore the pair.
+[REQ-0529](ingestion.md#req-0529) reads an empty field as missing whether it
+was bare or quoted. A collected empty string written here therefore returns as
+missing if this artifact is later read as a delimited source.
 
     STUDYID,COMMENT,NOTE
     S1,plain text,

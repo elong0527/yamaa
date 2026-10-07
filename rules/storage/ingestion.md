@@ -249,7 +249,7 @@ the container cannot honor. The declaration fails validation.
 
 **REQ-0751.** A specification that reads an artifact another specification
 produced learns the byte encoding from the producer through the
-producing-specification link this contract defines: the producer's
+producing-specification link this contract defines. The producer's
 `output.path` states the profile by its extension, just as `output.columns`
 states the fields.
 The consumer reads the profile from the producing specification, not from
