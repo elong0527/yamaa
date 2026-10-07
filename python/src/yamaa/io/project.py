@@ -10,7 +10,7 @@ import weakref
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path, PurePath
-from typing import Literal
+from typing import BinaryIO, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -119,6 +119,27 @@ class ResourceFailure(ValueError):
         self.written_path = written_path
         self.requirement = _RESOURCE_REQUIREMENTS.get(condition)
         super().__init__(f"{condition}: {written_path!r}")
+
+
+class ResourceByteLimit(ValueError):
+    """A caller's capture byte ceiling was exceeded, without a language finding."""
+
+    def __init__(self, maximum: int) -> None:
+        self.maximum = maximum
+        super().__init__("resource byte limit exceeded")
+
+
+def _read_at_most(handle: BinaryIO, maximum: int) -> bytes:
+    """Read a bounded prefix without allocating the caller's entire ceiling."""
+    chunks: list[bytes] = []
+    remaining = maximum
+    while remaining:
+        chunk = handle.read(min(remaining, 64 * 1024))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
 
 
 def rooted_project_segments(written_path: str) -> tuple[str, ...] | None:
@@ -734,8 +755,16 @@ class ProjectResources:
             if self._entry_identity(status) != expected_identity:
                 raise _PathChanged
 
-    def capture(self, written_path: str) -> ResourceSnapshot:
-        """Validate a path and return its run-wide immutable snapshot."""
+    def capture(
+        self, written_path: str, *, maximum: int | None = None
+    ) -> ResourceSnapshot:
+        """Retain a snapshot, bounding reads when the caller supplies a ceiling.
+
+        A ceiling is resource policy, not a language validation condition. Cached
+        snapshots obey the same ceiling without allocating another copy.
+        """
+        if maximum is not None and (type(maximum) is not int or maximum < 0):
+            raise TypeError("resource byte ceiling must be a nonnegative integer")
         try:
             opened = self._open_resource(written_path)
         except _PathChanged as error:
@@ -747,11 +776,15 @@ class ProjectResources:
         try:
             accepted = self._store.path_snapshots.get(opened.key)
             if accepted is not None:
+                if maximum is not None and len(accepted.content) > maximum:
+                    raise ResourceByteLimit(maximum)
                 return accepted
 
             identity = (opened.status.st_dev, opened.status.st_ino)
             accepted = self._store.by_identity.get(identity)
             if accepted is not None:
+                if maximum is not None and len(accepted.content) > maximum:
+                    raise ResourceByteLimit(maximum)
                 self._store.path_snapshots[opened.key] = accepted
                 self._store.paths[id(accepted)].append(
                     (opened.key, written_path, self._base)
@@ -765,7 +798,15 @@ class ProjectResources:
                     raise ResourceFailure(
                         "resource_path_not_regular_file", written_path
                     )
-                content = handle.read()
+                if maximum is not None and opened_status.st_size > maximum:
+                    raise ResourceByteLimit(maximum)
+                content = (
+                    handle.read()
+                    if maximum is None
+                    else _read_at_most(handle, maximum + 1)
+                )
+                if maximum is not None and len(content) > maximum:
+                    raise ResourceByteLimit(maximum)
         except ResourceFailure:
             raise
         except OSError as error:
@@ -834,7 +875,9 @@ class ProjectResources:
                     opened_status = os.fstat(handle.fileno())
                     if not stat.S_ISREG(opened_status.st_mode):
                         raise OSError("resource is no longer a regular file")
-                    content = handle.read()
+                    # One extra byte detects extension without reading a grown
+                    # file beyond the bytes this snapshot already retains.
+                    content = _read_at_most(handle, len(snapshot.content) + 1)
             except (OSError, ResourceFailure) as error:
                 raise ResourceFailure(
                     "resource_path_content_changed",

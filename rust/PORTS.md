@@ -214,3 +214,13 @@ failures are not language findings. This mapping changes neither filesystem
 authority nor resolution order. Production filesystem adapters, preflight file
 checks before study reads, additional IO causes, and public host integration
 remain required; the callback prototypes do not gain file authority here.
+
+Python's existing descriptor-anchored `ProjectResources.capture` accepts an
+optional trusted byte ceiling. It checks file size before reading and stops at
+one byte beyond that ceiling if the file grows. Refusal is an opaque resource
+policy error, creates no snapshot and adds no cached alias to verification.
+Bounded reads use small chunks rather than allocating the entire ceiling.
+Verification compares at most the retained length plus one byte, directly, so
+an extended file cannot force an unbounded read. Approved roots, link checks,
+relative-path fallback and default capture behavior retain their existing rules.
+The native callback and R ports still require production integration.
