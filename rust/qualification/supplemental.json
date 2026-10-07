@@ -721,7 +721,7 @@
       "id": "r/original-specifications",
       "runtime": "r",
       "path": "R/yamaanative/tests/original_specifications.R",
-      "staged_path": "tests/original_specifications.R",
+      "staged_path": "original_specifications.R",
       "level": "compile"
     }
   ],

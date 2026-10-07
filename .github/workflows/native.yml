@@ -349,6 +349,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/predicate_syntax.R" predicate_syntax.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/predicate_execution.R" predicate_execution.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/schema.R" schema.R
+          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/original_specifications.R" original_specifications.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/inheritance.R" inheritance.R
           cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/yaml.R" yaml.R
           R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
