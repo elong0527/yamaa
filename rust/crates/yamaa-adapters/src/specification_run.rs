@@ -6,10 +6,7 @@ use crate::{
     dataset_transport::{self, DatasetResponse, DatasetTransportError},
     specification_source::PreparedDocument,
 };
-use std::{
-    panic::{catch_unwind, AssertUnwindSafe},
-    sync::Arc,
-};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use yamaa_engine::specification::{
     BindError, PrepareError, PreparedSpecification, SourceDeclaration,
 };
@@ -19,6 +16,7 @@ pub enum Error {
     Prepare(PrepareError),
     Source(TextTableError),
     TypedSource(crate::typed_csv::Error),
+    Sources(Vec<(SourceDeclaration, Error)>),
     Bind(BindError),
     Execution(DatasetTransportError),
 }
@@ -31,10 +29,9 @@ pub enum PortError<E> {
 }
 /// Observations survive failed binding/execution. The table is the exact owned
 /// source snapshot used for execution; reporting never reopens or reparses data.
+pub type CapturedSource = application::CapturedSource<ArrowTable>;
 pub struct CapturedAttempt<E> {
-    pub read: SourceRead,
-    pub snapshot: Option<Arc<[u8]>>,
-    pub table: Option<ArrowTable>,
+    pub sources: Vec<CapturedSource>,
     pub result: Result<DatasetResponse, PortError<E>>,
 }
 
@@ -68,7 +65,9 @@ impl PreparedRun {
             application::execute_bytes(&self.prepared, bytes, &mut CsvDecoder, limits())
         }))
         .map_err(|_| Error::Execution(DatasetTransportError::Internal))?;
-        let execution = attempt.result.map_err(run_error)?;
+        let execution = attempt
+            .result
+            .map_err(|error| run_error(error, &self.prepared))?;
         response(execution)
     }
 
@@ -96,14 +95,22 @@ impl PreparedRun {
                     DatasetTransportError::Internal,
                 ))),
                 Err(application::PortError::Capture(error)) => Err(PortError::Capture(error)),
-                Err(application::PortError::Run(error)) => Err(PortError::Run(run_error(error))),
+                Err(application::PortError::Run(error)) => {
+                    Err(PortError::Run(run_error(error, &self.prepared)))
+                }
                 Err(application::PortError::CaptureAccounting) => Err(PortError::CaptureAccounting),
             }
         };
         CapturedAttempt {
-            read: attempt.read,
-            snapshot: attempt.snapshot,
-            table: attempt.table.map(|table| table.0),
+            sources: attempt
+                .sources
+                .into_iter()
+                .map(|source| CapturedSource {
+                    read: source.read,
+                    snapshot: source.snapshot,
+                    table: source.table.map(|table| table.0),
+                })
+                .collect(),
             result,
         }
     }
@@ -125,9 +132,18 @@ fn response(
         .map_err(Error::Execution)
 }
 
-fn run_error(error: application::RunError<Error>) -> Error {
+fn run_error(error: application::RunError<Error>, prepared: &PreparedSpecification) -> Error {
     match error {
         application::RunError::Decode(error) => error,
+        application::RunError::Sources(mut errors) if prepared.sources().len() == 1 => {
+            errors.pop().expect("source failure").1
+        }
+        application::RunError::Sources(errors) => Error::Sources(
+            errors
+                .into_iter()
+                .map(|(index, error)| (prepared.sources()[index].clone(), error))
+                .collect(),
+        ),
         application::RunError::Bind(error) => Error::Bind(error),
         application::RunError::SourceBytes { limit } => {
             Error::Source(TextTableError::Csv(csv_source::Error::Limit {
@@ -145,6 +161,16 @@ struct CsvDecoder;
 impl application::SourceDecoder for CsvDecoder {
     type Error = Error;
     type Table = dataset_transport::Snapshot;
+    fn continue_after(&self, error: &Self::Error) -> bool {
+        matches!(
+            error,
+            Error::Source(TextTableError::Csv(csv_source::Error::Profile { .. }))
+                | Error::TypedSource(
+                    crate::typed_csv::Error::UnknownField { .. }
+                        | crate::typed_csv::Error::FieldParse { .. }
+                )
+        )
+    }
     fn decode(
         &mut self,
         source: &SourceDeclaration,

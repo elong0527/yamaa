@@ -12,7 +12,7 @@ from unittest.mock import patch
 import yamaa_native
 
 ROOT = Path(__file__).with_name("specification-original")
-CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum")
+CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-lookup")
 
 
 def modules():
@@ -45,19 +45,20 @@ class OriginalSpecifications(unittest.TestCase):
         for name in CASES:
             with self.subTest(name=name):
                 specification = prepare(name)
-                self.assertEqual(specification.source(), ("LB", "input/lb.csv"))
-                state = {"requests": 0, "reads": 0, "bytes": None}
+                sources = {"DM":"input/dm.csv", "AE":"input/ae.csv", "MEDDRA":"input/meddict.csv"} if name == "schema-lookup" else {"LB":"input/lb.csv"}
+                self.assertEqual(specification.source(), next(iter(sources.items())))
+                state = {"requests": [], "reads": 0, "bytes": {}}
 
                 def capture(dataset, path, maximum, *, state=state, case_name=name):
-                    self.assertEqual((dataset, path), ("LB", "input/lb.csv"))
-                    state["requests"] += 1
-                    created = state["bytes"] is None
+                    self.assertEqual(sources[dataset], path)
+                    state["requests"].append((dataset,path))
+                    created = path not in state["bytes"]
                     if created:
                         with (ROOT / "cases" / case_name / path).open("rb") as stream:
-                            state["bytes"] = stream.read(maximum + 1)
-                        self.assertLessEqual(len(state["bytes"]), maximum)
+                            state["bytes"][path] = stream.read(maximum + 1)
+                        self.assertLessEqual(len(state["bytes"][path]), maximum)
                         state["reads"] += 1
-                    return state["bytes"], created
+                    return state["bytes"][path], created
 
                 metadata = (
                     platform.python_version(),
@@ -78,8 +79,8 @@ class OriginalSpecifications(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as directory:
 
                     def publish(path, content, *, name=name, published=published):
-                        self.assertEqual(name, "adam-adlb-ordered-sum")
-                        self.assertEqual(path, "adlb.csv")
+                        self.assertIn(name, ("adam-adlb-ordered-sum", "schema-lookup"))
+                        self.assertEqual(path, "adsl.csv" if name == "schema-lookup" else "adlb.csv")
                         self.assertEqual(
                             content,
                             (ROOT / "cases" / name / "expected" / path).read_bytes(),
@@ -90,15 +91,52 @@ class OriginalSpecifications(unittest.TestCase):
                         published.append((Path(directory) / path).read_bytes())
 
                     for created in (1, 0):
-                        expected["source_reads"][0]["snapshots_created"] = created
+                        for source in expected["source_reads"]:
+                            source["snapshots_created"] = created
                         actual = json.loads(
                             specification.report(capture, publish, metadata)
                         )
                         self.assertEqual(actual, expected)
                 self.assertEqual(
-                    len(published), 2 if name == "adam-adlb-ordered-sum" else 0
+                    len(published), 2 if name in ("adam-adlb-ordered-sum", "schema-lookup") else 0
                 )
-                self.assertEqual((state["requests"], state["reads"]), (2, 1))
+                self.assertEqual(state["requests"], list(sources.items()) * 2)
+                self.assertEqual(state["reads"], len(sources))
+
+    def test_lookup_failures_retain_complete_reference_observations(self):
+        name = "schema-lookup"
+        original = (ROOT / "cases" / name / "spec.yaml").read_bytes()
+        cases = json.loads((ROOT / "expected/lookup-failures.json").read_text())
+        for variant in cases:
+            with self.subTest(variant=variant["name"]):
+                raw = original.replace(variant["before"].encode(), variant["after"].encode())
+                spec = yamaa_native._prepare_specification(modules(), 0, "spec.yaml", raw)
+                requests = []
+                def capture(dataset, path, maximum):
+                    requests.append(dataset)
+                    return (ROOT / "cases" / name / path).read_bytes(), True
+                def publish(*args):
+                    self.fail("failed lookup published")
+                metadata = ("fixture-runtime", "fixture-engine", name, "spec.yaml", ".")
+                actual = json.loads(spec.report(capture, publish, metadata))
+                expected = json.loads((ROOT / "expected" / (name + ".json")).read_text())
+                expected["outcome"] = expected["nodes"][0]["outcome"] = "failure"
+                for field in ("diagnostics", "handler_counts"):
+                    expected[field] = expected["nodes"][0][field] = variant[field]
+                expected["artifacts"] = expected["verifications"] = []
+                expected["tables"] = [table for table in expected["tables"] if table["stage"] == "source"]
+                self.assertEqual(actual, expected)
+                self.assertEqual(requests, ["DM", "AE", "MEDDRA"])
+
+    def test_single_buffer_rejects_missing_secondary_sources_explicitly(self):
+        spec = prepare("schema-lookup")
+        source = (ROOT / "cases/schema-lookup/input/dm.csv").read_bytes()
+        with self.assertRaises(ValueError) as raised:
+            spec.execute_csv(source)
+        self.assertEqual(json.loads(str(raised.exception)), {
+            "protocol": "specification/prototype",
+            "outcome": {"status": "rejected", "stage": "bind", "code": "source_count"},
+        })
 
     def test_original_host_errors_and_interruptions_survive_native_return(self):
         specification = prepare(CASES[0])
@@ -149,6 +187,49 @@ class OriginalSpecifications(unittest.TestCase):
                 specification.report(lambda *_: (content, True), publish, metadata)
             self.assertIs(raised.exception, failure)
             self.assertEqual(len(calls), 1)
+
+    def test_lookup_collects_source_findings_and_never_publishes(self):
+        name = "schema-lookup"
+        raw = (ROOT / "cases" / name / "spec.yaml").read_bytes().replace(
+            b"DM: input/dm.csv", b"DM: {path: input/dm.csv, types: {ABSENT: int}}"
+        ).replace(b"AE: input/ae.csv", b"AE: {path: input/ae.csv, types: {AEDY: date}}")
+        spec = yamaa_native._prepare_specification(modules(), 0, "spec.yaml", raw)
+        metadata = ("fixture-runtime", "fixture-engine", name, "spec.yaml", ".")
+        requests = []
+        def capture(dataset, path, maximum):
+            requests.append(dataset)
+            return (ROOT / "cases" / name / path).read_bytes(), True
+        def publish(*args):
+            self.fail("ingestion failure reached publication")
+        actual = json.loads(spec.report(capture, publish, metadata))
+        expected = json.loads((ROOT / "expected" / (name + ".json")).read_text())
+        expected["outcome"] = expected["nodes"][0]["outcome"] = "failure"
+        expected["diagnostics"] = [
+            {"phase":"validation", "condition":"unknown_field", "requirement":"REQ-0532", "spec_paths":["input.DM.types.ABSENT"], "context":{"dataset":"DM", "field":"ABSENT"}},
+            {"phase":"ingest", "condition":"field_parse_failed", "requirement":"REQ-0536", "spec_paths":["input.AE.types.AEDY"], "context":{"dataset":"AE", "field":"AEDY", "type":"date", "value":"50"}},
+        ]
+        expected["nodes"][0]["diagnostics"] = expected["diagnostics"]
+        for field in ("artifacts", "tables", "verifications", "handler_counts"):
+            expected[field] = []
+        expected["nodes"][0]["handler_counts"] = []
+        self.assertEqual(actual, expected)
+        self.assertEqual(requests, ["DM", "AE", "MEDDRA"])
+
+    def test_lookup_retains_later_source_exception_identity(self):
+        name = "schema-lookup"
+        spec = prepare(name)
+        metadata = ("fixture-runtime", "fixture-engine", name, "spec.yaml", ".")
+        for failure in (OSError("second source failed"), KeyboardInterrupt("second source interrupted")):
+            requests = []
+            def capture(dataset, path, maximum):
+                requests.append(dataset)
+                if dataset == "AE":
+                    raise failure
+                return (ROOT / "cases" / name / path).read_bytes(), True
+            with self.assertRaises(type(failure)) as raised:
+                spec.failure_report(capture, metadata)
+            self.assertIs(raised.exception, failure)
+            self.assertEqual(requests, ["DM", "AE"])
 
     def test_unsupported_preparation_has_no_source_effect(self):
         source = (ROOT / "cases" / CASES[0] / "spec.yaml").read_bytes()

@@ -27,7 +27,11 @@ admitted assignment path without exposing its internal index.
 
 `specification::PreparedSpecification` compiles the existing supported subset of
 normalized original documents. Preparation inspects the admitted document;
-binding consumes the actual captured source schema after ingestion. Both steps
+binding consumes actual captured source schemas in authored input order after
+ingestion. The driver index is independent of that order. Input-backed named
+selections compile filters from original predicate text, match keys from completed
+output dependencies, and record ordering/absence handling into the same core
+`Intermediate` declarations used by the dataset engine. Both steps
 now run entirely in core. Unsupported declarations, resource failures, deferred
 formula diagnostics and output checks retain their existing boundaries.
 

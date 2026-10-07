@@ -66,6 +66,18 @@ fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> 
 }
 fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Vec<Value>> {
     Some(match error {
+        BindFinding::Lookup(finding) => {
+            let context = finding.context.iter().map(|(name, value)| {
+                let value = match value {
+                    yamaa_core::value::Value::Str(value) => json!(value),
+                    yamaa_core::value::Value::Int(value) => json!(value),
+                    _ => return None,
+                };
+                Some((name.clone(), value))
+            }).collect::<Option<serde_json::Map<_, _>>>()?;
+            let definition = finding.definition;
+            vec![diagnostic(definition.phase, definition.condition, Some(definition.requirement), vec![finding.path.clone()], context.into())]
+        },
         BindFinding::QualifiedReference {path,name,row,finding} => {
             use yamaa_core::reference_scope::Finding as F;
             let (condition,requirement,context)=match finding {
@@ -214,6 +226,13 @@ fn preparing(error: &PreflightFinding) -> Option<Value> {
 /// have no fabricated language condition and must remain host boundary failures.
 pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec<Value>> {
     match error {
+        Error::Sources(errors) => {
+            let mut result = Vec::new();
+            for (source, error) in errors {
+                result.extend(findings(error, Some(source))?);
+            }
+            Some(result)
+        }
         Error::Prepare(PrepareError::Invalid(errors)) => errors.iter().map(preparing).collect(),
         Error::Bind(error) => binding(error, source?),
         Error::TypedSource(crate::typed_csv::Error::UnknownField { field }) => {
@@ -288,9 +307,11 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             Error::TypedSource(_) => ("ingest", "source_boundary"),
             Error::Bind(BindError::Catalog(_)) => ("bind", "reference_catalog"),
             Error::Bind(BindError::DependencyPolicy(_)) => ("bind", "dependency_policy"),
+            Error::Bind(BindError::SourceCount) => ("bind", "source_count"),
             Error::Bind(_) => ("bind", "internal"),
             Error::Execution(error) if error.is_internal() => ("execute", "internal"),
             Error::Execution(_) => ("execute", "execution_boundary"),
+            Error::Sources(_) => ("ingest", "source_collection_boundary"),
         };
         json!({"status":"rejected","stage":stage,"code":code})
     };

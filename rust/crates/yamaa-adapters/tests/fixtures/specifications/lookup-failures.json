@@ -1,0 +1,395 @@
+[
+  {
+    "name": "filter_grammar",
+    "before": "AE.AEOUT = 'FATAL'",
+    "after": "AE.AEOUT =",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "invalid_predicate",
+        "requirement": "REQ-0188",
+        "spec_paths": [
+          "intermediates[0].filter"
+        ],
+        "context": {
+          "position": 10,
+          "predicate": "AE.AEOUT ="
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "filter_unknown",
+    "before": "AE.AEOUT = 'FATAL'",
+    "after": "AE.ABSENT = 'FATAL'",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0120",
+        "spec_paths": [
+          "intermediates[0].filter"
+        ],
+        "context": {
+          "identifier": "AE.ABSENT",
+          "intermediate": "DEATHEV"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0103",
+        "spec_paths": [
+          "columns.DTHDY.derivation.source"
+        ],
+        "context": {
+          "identifier": "DEATHEV.AEDY"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0103",
+        "spec_paths": [
+          "columns.DTHCAUS.derivation.source"
+        ],
+        "context": {
+          "identifier": "DEATHEV.AEDECOD"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "filter_bare",
+    "before": "AE.AEOUT = 'FATAL'",
+    "after": "AEOUT = 'FATAL'",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0120",
+        "spec_paths": [
+          "intermediates[0].filter"
+        ],
+        "context": {
+          "identifier": "AEOUT",
+          "intermediate": "DEATHEV",
+          "suggestion": "AE.AEOUT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0103",
+        "spec_paths": [
+          "columns.DTHDY.derivation.source"
+        ],
+        "context": {
+          "identifier": "DEATHEV.AEDY"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0103",
+        "spec_paths": [
+          "columns.DTHCAUS.derivation.source"
+        ],
+        "context": {
+          "identifier": "DEATHEV.AEDECOD"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "filter_type",
+    "before": "AE.AEOUT = 'FATAL'",
+    "after": "AE.AEOUT = 1",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "requirement": "REQ-0190",
+        "spec_paths": [
+          "intermediates[0].filter"
+        ],
+        "context": {
+          "left_type": "str",
+          "right_type": "int"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "intermediate_field",
+    "before": "DEATHEV.AEDY",
+    "after": "DEATHEV.ABSENT",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0125",
+        "spec_paths": [
+          "columns.DTHDY.derivation.source"
+        ],
+        "context": {
+          "identifier": "DEATHEV.ABSENT"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "key_source",
+    "before": "key: {LLTNAME: DTHCAUS}",
+    "after": "key: {ABSENT: DTHCAUS}",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0116",
+        "spec_paths": [
+          "intermediates[1].key"
+        ],
+        "context": {
+          "identifier": "MEDDRA.ABSENT",
+          "intermediate": "MEDDRA_PT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0103",
+        "spec_paths": [
+          "columns.DTHPTERM.derivation.source"
+        ],
+        "context": {
+          "identifier": "MEDDRA_PT.PTNAME"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "key_output",
+    "before": "key: {LLTNAME: DTHCAUS}",
+    "after": "key: {LLTNAME: ABSENT}",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0117",
+        "spec_paths": [
+          "intermediates[1].key"
+        ],
+        "context": {
+          "identifier": "ABSENT",
+          "intermediate": "MEDDRA_PT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0103",
+        "spec_paths": [
+          "columns.DTHPTERM.derivation.source"
+        ],
+        "context": {
+          "identifier": "MEDDRA_PT.PTNAME"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "key_type",
+    "before": "key: {LLTNAME: DTHCAUS}",
+    "after": "key: {LLTNAME: DTHDY}",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "requirement": "REQ-0323",
+        "spec_paths": [
+          "intermediates[1].key"
+        ],
+        "context": {
+          "actual": "str",
+          "expected": "int",
+          "intermediate": "MEDDRA_PT",
+          "source": "DTHDY"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0103",
+        "spec_paths": [
+          "columns.DTHPTERM.derivation.source"
+        ],
+        "context": {
+          "identifier": "MEDDRA_PT.PTNAME"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "order_unknown",
+    "before": "order_by: [AE.AEDY]",
+    "after": "order_by: [AE.ABSENT]",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0120",
+        "spec_paths": [
+          "intermediates[0].order_by[0]"
+        ],
+        "context": {
+          "identifier": "AE.ABSENT",
+          "intermediate": "DEATHEV"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0103",
+        "spec_paths": [
+          "columns.DTHDY.derivation.source"
+        ],
+        "context": {
+          "identifier": "DEATHEV.AEDY"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0103",
+        "spec_paths": [
+          "columns.DTHCAUS.derivation.source"
+        ],
+        "context": {
+          "identifier": "DEATHEV.AEDECOD"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "order_bare",
+    "before": "order_by: [AE.AEDY]",
+    "after": "order_by: [AEDY]",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0120",
+        "spec_paths": [
+          "intermediates[0].order_by[0]"
+        ],
+        "context": {
+          "identifier": "AEDY",
+          "intermediate": "DEATHEV",
+          "suggestion": "AE.AEDY"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0103",
+        "spec_paths": [
+          "columns.DTHDY.derivation.source"
+        ],
+        "context": {
+          "identifier": "DEATHEV.AEDY"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0103",
+        "spec_paths": [
+          "columns.DTHCAUS.derivation.source"
+        ],
+        "context": {
+          "identifier": "DEATHEV.AEDECOD"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "no_keep",
+    "before": "    order_by: [AE.AEDY]\n    keep: last\n",
+    "after": "",
+    "diagnostics": [
+      {
+        "phase": "join",
+        "condition": "multiple_matches",
+        "requirement": "REQ-0127",
+        "spec_paths": [
+          "intermediates[0]"
+        ],
+        "context": {
+          "dataset": "AE",
+          "intermediate": "DEATHEV",
+          "intermediate_key": {
+            "USUBJID": "01"
+          },
+          "key": [
+            "USUBJID"
+          ],
+          "keys": [
+            {
+              "USUBJID": "01"
+            }
+          ],
+          "match_count": 2
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "no_match",
+    "before": "    no_match: null\n",
+    "after": "",
+    "diagnostics": [
+      {
+        "phase": "join",
+        "condition": "unmatched_key",
+        "requirement": "REQ-0124",
+        "spec_paths": [
+          "intermediates[0]"
+        ],
+        "context": {
+          "dataset": "AE",
+          "intermediate": "DEATHEV",
+          "intermediate_key": {
+            "USUBJID": "03"
+          },
+          "key": [
+            "USUBJID"
+          ],
+          "keys": [
+            {
+              "USUBJID": "03"
+            }
+          ]
+        }
+      }
+    ],
+    "handler_counts": [
+      {
+        "spec_path": "columns.DTHDY.derivation.source.multiple_matches",
+        "handler": "multiple_matches",
+        "count": 1
+      }
+    ]
+  }
+]

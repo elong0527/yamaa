@@ -773,26 +773,36 @@ fn shared_reference_truth_and_occurrence_traces() {
             Limits::default(),
         )
         .unwrap();
-        let mut port = Port::default();
-        if fields[3] != "-" {
-            for binding in fields[3].split(';') {
-                let (name, value) = binding.split_once('=').unwrap();
-                port.values
-                    .insert(name.into(), [fixture_value(value)].into());
+        let compiled = yamaa_core::predicate_compiler::compile(
+            fields[1],
+            "rows[0].filter",
+            Default::default(),
+        )
+        .unwrap();
+        // Both independently authored typed IR and original syntax must satisfy
+        // the same truth and read trace; neither supplies the other's oracle.
+        for p in [p, compiled] {
+            let mut port = Port::default();
+            if fields[3] != "-" {
+                for binding in fields[3].split(';') {
+                    let (name, value) = binding.split_once('=').unwrap();
+                    port.values
+                        .insert(name.into(), [fixture_value(value)].into());
+                }
             }
+            let result = p.evaluate(&mut port);
+            let actual = match &result {
+                Ok(Truth::True) => "TRUE",
+                Ok(Truth::False) => "FALSE",
+                Ok(Truth::Unknown) => "UNKNOWN",
+                Err(error) => match &error.kind {
+                    ErrorKind::Condition(condition) => condition.condition(),
+                    _ => panic!("unexpected failure {error:?}"),
+                },
+            };
+            assert_eq!(actual, fields[4], "{}", fields[0]);
+            assert_eq!(port.trace.join(","), fields[5], "{}", fields[0]);
         }
-        let result = p.evaluate(&mut port);
-        let actual = match &result {
-            Ok(Truth::True) => "TRUE",
-            Ok(Truth::False) => "FALSE",
-            Ok(Truth::Unknown) => "UNKNOWN",
-            Err(error) => match &error.kind {
-                ErrorKind::Condition(condition) => condition.condition(),
-                _ => panic!("unexpected failure {error:?}"),
-            },
-        };
-        assert_eq!(actual, fields[4], "{}", fields[0]);
-        assert_eq!(port.trace.join(","), fields[5], "{}", fields[0]);
     }
 }
 

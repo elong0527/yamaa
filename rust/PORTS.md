@@ -20,14 +20,20 @@ and codec interfaces are native traits; adapters translate values and errors.
 ## Current lifecycle
 
 Core preparation admits the supported vocabulary before a source request can be
-made. An engine attempt requests one immutable byte snapshot, measures the port's
-actual snapshot counter, decodes an owned table, binds its actual schema, checks
-capacity and executes the admitted core plan. The same prepared model can be
+made. An engine attempt requests immutable byte snapshots in input declaration
+order, measures each actual snapshot counter, and decodes owned tables. After
+complete ingestion it binds all actual schemas, checks total cell capacity and
+executes the admitted core plan with its selected driver. Retained snapshots,
+including invalid inputs, share one cumulative byte budget. The same prepared model can be
 reused; each attempt repeats the request and execution. A cached capture still
 counts as a request, with zero newly created snapshots. Held bytes are compared
 directly by the capture implementation; there is no digest identity.
 
 Capture, decoding, binding, resource and runtime failures remain distinct.
+A decoder explicitly classifies semantic ingestion findings that can be collected
+while later declared sources are captured. Resource and opaque boundary failures
+stop the collection. Partial tables remain held internally, but portable table
+observations appear only after the whole input collection was ingested.
 No failed operation retries or falls back to another implementation. The attempt
 retains the exact captured bytes and decoded table for reporting, including after
 binding or runtime failure. `execute_with_port_into` updates these observations
@@ -39,7 +45,9 @@ The CSV adapter retains its existing profile, type conversion and capacity
 settings. The adapter serializes the engine result through the existing response
 formatter; it no longer chooses capture, binding or execution order. Tests use
 native fake ports to pin order, cached counts, original non-Clone errors,
-capacity failures before cell reads, and observations surviving a panic.
+capacity failures before cell reads, and observations surviving a panic in a
+later source. The portable report preserves every requested capture and the
+engine's actual handler counts, including inherited named-selection handlers.
 
 ## Output lifecycle
 

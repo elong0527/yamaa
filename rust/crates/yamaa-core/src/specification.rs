@@ -1,4 +1,4 @@
-//! Bounded original-specification compiler prototype: single untyped CSV driver,
+//! Bounded original-specification compiler prototype: declared CSV sources,
 //! implicit key grain, source columns and checked numeric computations.
 //! Admission never reads study data; binding consumes only the captured source schema.
 use crate::{
@@ -16,6 +16,11 @@ use crate::{
 };
 use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
+#[path = "specification_intermediates.rs"]
+mod intermediates;
+#[path = "specification_lookup_diagnostics.rs"]
+mod lookup_diagnostics;
+pub use lookup_diagnostics::LookupFinding;
 #[path = "specification_rows.rs"]
 mod rows;
 #[path = "specification_verifications.rs"]
@@ -107,6 +112,9 @@ pub enum PreflightFinding {
 }
 #[derive(Debug)]
 pub enum BindError {
+    SourceCount,
+    PredicatePolicy(crate::predicate_compiler::Error),
+    InvalidPredicateBinding(crate::bound_expression::BindingError),
     Invalid(Vec<BindFinding>),
     Catalog(reference_binding::Error),
     DependencyPolicy(column_dependencies::Error),
@@ -115,6 +123,7 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    Lookup(LookupFinding),
     QualifiedReference {
         path: String,
         name: String,
@@ -180,7 +189,9 @@ struct Declaration {
 /// Private admitted representation: no caller-provided typed plan or binding indices.
 #[derive(Debug)]
 pub struct PreparedSpecification {
-    source: SourceDeclaration,
+    sources: Vec<SourceDeclaration>,
+    driver: usize,
+    intermediates: intermediates::Declarations,
     output: TableSchema,
     projection: Vec<String>,
     output_path: String,
@@ -514,30 +525,23 @@ impl PreparedSpecification {
         optional_features(
             d,
             root,
-            &[
-                "parents",
-                "filter",
-                "intermediates",
-                "submission",
-                "metadata",
-            ],
+            &["parents", "filter", "submission", "metadata"],
             "",
             &mut extra,
         );
         let inputs = mapping(d, field(d, root, "input")?)?;
-        if inputs.len() != 1 {
-            reject(&mut extra, "multiple_sources", "input".into());
+        if has_rows && inputs.len() != 1 {
+            reject(&mut extra, "multiple_source_rows", "rows".into());
         }
         let driver = match spec.default_driver() {
             Some(driver) => driver,
             None if !extra.is_empty() => return Err(PrepareError::Unsupported(extra)),
             None => return Err(PrepareError::Internal),
         };
-        let selected = inputs
+        let driver_index = inputs
             .iter()
-            .find(|&&(name, _)| text(d, name).is_ok_and(|name| name == driver))
-            .ok_or(PrepareError::Internal)?
-            .1;
+            .position(|&(name, _)| text(d, name).is_ok_and(|name| name == driver))
+            .ok_or(PrepareError::Internal)?;
         for &(name, id) in inputs {
             let prefix = format!("input.{}", text(d, name)?);
             optional_features(d, id, &["schema", "ordinal"], &prefix, &mut extra);
@@ -552,40 +556,41 @@ impl PreparedSpecification {
         }
         // Unsupported row/intermediate/metadata semantics must never reach the
         // closed no-row lowering representation, even when their shapes are valid.
-        if extra.iter().any(|feature| {
-            matches!(
-                feature.operation.as_str(),
-                "parents" | "intermediates" | "submission"
-            )
-        }) {
+        if extra
+            .iter()
+            .any(|feature| matches!(feature.operation.as_str(), "parents" | "submission"))
+        {
             return Err(PrepareError::Unsupported(extra));
         }
-        let mut source_types = Vec::new();
-        if let Some(id) = d
-            .field(selected, "types")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        {
-            let fields = mapping(d, id)?;
-            if fields.len() > limits.source_fields {
-                return Err(PrepareError::Limit("source_fields"));
+        let mut sources = Vec::new();
+        for &(name, selected) in inputs {
+            let mut source_types = Vec::new();
+            if let Some(id) = d
+                .field(selected, "types")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+            {
+                let fields = mapping(d, id)?;
+                if fields.len() > limits.source_fields {
+                    return Err(PrepareError::Limit("source_fields"));
+                }
+                for &(name, kind) in fields {
+                    let kind = match text(d, kind)? {
+                        "str" => ColumnType::Str,
+                        "int" => ColumnType::Int,
+                        "float" => ColumnType::Float,
+                        "date" => ColumnType::Date,
+                        "datetime" => ColumnType::DateTime,
+                        _ => return Err(PrepareError::Internal),
+                    };
+                    source_types.push((text(d, name)?.into(), kind));
+                }
             }
-            for &(name, kind) in fields {
-                let kind = match text(d, kind)? {
-                    "str" => ColumnType::Str,
-                    "int" => ColumnType::Int,
-                    "float" => ColumnType::Float,
-                    "date" => ColumnType::Date,
-                    "datetime" => ColumnType::DateTime,
-                    _ => return Err(PrepareError::Internal),
-                };
-                source_types.push((text(d, name)?.into(), kind));
-            }
+            sources.push(SourceDeclaration {
+                name: text(d, name)?.into(),
+                types: source_types,
+                path: text(d, field(d, selected, "path")?)?.into(),
+            });
         }
-        let source = SourceDeclaration {
-            name: driver.into(),
-            types: source_types,
-            path: text(d, field(d, selected, "path")?)?.into(),
-        };
         let output_id = field(d, root, "output")?;
         optional_features(
             d,
@@ -638,13 +643,20 @@ impl PreparedSpecification {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let verifications = verifications::Verifications::prepare(d, &output)?;
+        let intermediates =
+            intermediates::Declarations::prepare(d, &sources, driver_index, limits, &mut extra)?;
+        if has_rows && !intermediates.is_empty() {
+            reject(&mut extra, "intermediate_rows", "rows".into());
+        }
         if has_rows {
             if !extra.is_empty() {
                 return Err(PrepareError::Unsupported(extra));
             }
             let rows = rows::Rows::prepare(d, &output, driver, limits)?;
             return Ok(Self {
-                source,
+                sources,
+                driver: driver_index,
+                intermediates,
                 output,
                 projection,
                 output_path,
@@ -690,9 +702,13 @@ impl PreparedSpecification {
                             reject(&mut extra, name, format!("{path}.{name}"));
                         }
                     }
-                    Some(Operation::Source(
-                        text(d, field(d, payload, "variable")?)?.into(),
-                    ))
+                    let reference = text(d, field(d, payload, "variable")?)?;
+                    if reference.split_once('.').is_some_and(|(relation, _)| {
+                        relation != driver && !intermediates.contains(relation)
+                    }) {
+                        reject(&mut extra, "secondary_source_expression", path.clone());
+                    }
+                    Some(Operation::Source(reference.into()))
                 }
                 "compute" => {
                     for &(name, _) in mapping(d, payload)? {
@@ -735,7 +751,9 @@ impl PreparedSpecification {
             return Err(PrepareError::Unsupported(extra));
         }
         Ok(Self {
-            source,
+            sources,
+            driver: driver_index,
+            intermediates,
             output,
             projection,
             output_path,
@@ -746,7 +764,13 @@ impl PreparedSpecification {
         })
     }
     pub fn source(&self) -> &SourceDeclaration {
-        &self.source
+        &self.sources[self.driver]
+    }
+    pub fn sources(&self) -> &[SourceDeclaration] {
+        &self.sources
+    }
+    pub fn driver_index(&self) -> usize {
+        self.driver
     }
     pub fn key_names(&self) -> impl Iterator<Item = &str> {
         self.keys
@@ -813,10 +837,18 @@ impl PreparedSpecification {
 
     /// Bind only immutable source metadata. No cell reads or expression evaluation.
     pub fn bind(&self, source: &TableSchema) -> Result<DatasetPlan, BindError> {
+        self.bind_sources(&[source])
+    }
+    /// Schemas follow authored input order, independently of the selected driver.
+    pub fn bind_sources(&self, schemas: &[&TableSchema]) -> Result<DatasetPlan, BindError> {
+        if schemas.len() != self.sources.len() {
+            return Err(BindError::SourceCount);
+        }
+        let source = schemas[self.driver];
         if let Some(rows) = &self.rows {
             return rows.bind(
                 source,
-                &self.source.name,
+                &self.source().name,
                 &self.output,
                 &self.keys,
                 self.verifications(),
@@ -842,15 +874,23 @@ impl PreparedSpecification {
         let catalog = Catalog::compile(
             &output_fields,
             &[reference_binding::Dataset {
-                name: &self.source.name,
+                name: &self.source().name,
                 fields: &source_fields,
             }],
             Default::default(),
         )
         .map_err(BindError::Catalog)?;
+        let mut findings = Vec::new();
+        let (secondary, intermediates) = self.intermediates.bind(
+            &self.sources,
+            self.driver,
+            schemas,
+            &self.output,
+            &self.keys,
+            &mut findings,
+        )?;
         let mut assignments = BTreeMap::new();
         let mut dependencies = Vec::new();
-        let mut findings = Vec::new();
         for (column, declaration) in self.declarations.iter().enumerate() {
             let mut edges = Vec::new();
             let path = &declaration.path;
@@ -898,24 +938,47 @@ impl PreparedSpecification {
                     None
                 }
                 Operation::Source(name) => {
-                    bind(name, &mut findings)?.map(|binding| match binding {
-                        reference_binding::Binding::Dataset { field, .. } => {
-                            if self.keys.contains(&column) {
-                                Expression::Source(field)
-                            } else {
-                                Expression::Collect {
-                                    column: field,
-                                    identifier: name.clone(),
-                                    filter: None,
-                                    selection: None,
+                    if let Some((index, field)) = self.intermediates.reference(name) {
+                        if let Some(item) = &intermediates[index] {
+                            edges.extend(item.keys.iter().map(|key| key.output_column));
+                            let column = secondary[item.source]
+                                .schema
+                                .columns()
+                                .iter()
+                                .position(|c| c.name == field);
+                            if column.is_none() {
+                                findings.push(BindFinding::Lookup(LookupFinding::reference(
+                                    path, name, None, "REQ-0125", None,
+                                )));
+                            }
+                            column.map(|column| Expression::Intermediate { index, column })
+                        } else {
+                            findings.push(BindFinding::UnknownReference {
+                                path: path.clone(),
+                                name: name.clone(),
+                            });
+                            None
+                        }
+                    } else {
+                        bind(name, &mut findings)?.map(|binding| match binding {
+                            reference_binding::Binding::Dataset { field, .. } => {
+                                if self.keys.contains(&column) {
+                                    Expression::Source(field)
+                                } else {
+                                    Expression::Collect {
+                                        column: field,
+                                        identifier: name.clone(),
+                                        filter: None,
+                                        selection: None,
+                                    }
                                 }
                             }
-                        }
-                        reference_binding::Binding::Output { column, .. } => {
-                            edges.push(column);
-                            Expression::Column(column)
-                        }
-                    })
+                            reference_binding::Binding::Output { column, .. } => {
+                                edges.push(column);
+                                Expression::Column(column)
+                            }
+                        })
+                    }
                 }
                 Operation::Compute(compiled) => {
                     // The reference emits expression-local qualification findings first,
@@ -997,8 +1060,15 @@ impl PreparedSpecification {
                 columns.push(assignment)
             }
         }
-        DatasetPlan::new(
-            source.clone(),
+        DatasetPlan::new_with_intermediates(
+            crate::dataset::SourceSchemas {
+                primary: source.clone(),
+                secondary,
+            },
+            intermediates
+                .into_iter()
+                .map(|item| item.expect("validated intermediate"))
+                .collect(),
             self.output.clone(),
             vec![RowTemplate {
                 mode: RowMode::Keys,

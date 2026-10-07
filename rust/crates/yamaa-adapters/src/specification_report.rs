@@ -65,6 +65,18 @@ fn condition(run: &PreparedRun, value: &Value) -> Result<Value, Error> {
             .collect::<Result<Map<_, _>, Error>>()?;
         context.insert("keys".into(), json!([keys]));
     }
+    if let Some(matched) = value.get("matched_key").filter(|v| !v.is_null()) {
+        let matched = matched.as_array().ok_or(Error::InvalidObservation)?;
+        let mut names = Vec::new();
+        let mut key = Map::new();
+        for field in matched {
+            let name = field["name"].as_str().ok_or(Error::InvalidObservation)?;
+            names.push(name);
+            key.insert(name.into(), plain(&field["value"])?);
+        }
+        context.insert("key".into(), json!(names));
+        context.insert("intermediate_key".into(), key.into());
+    }
     Ok(
         json!({"phase":diagnostic["phase"],"condition":diagnostic["condition"],"requirement":diagnostic["requirement"],"spec_paths":diagnostic["spec_paths"],"context":context}),
     )
@@ -76,7 +88,7 @@ pub fn failure<E>(
     attempt: &CapturedAttempt<E>,
     id: Identity<'_>,
 ) -> Result<Value, Error> {
-    if !attempt.read.captured {
+    if attempt.sources.is_empty() || attempt.sources.iter().any(|source| !source.read.captured) {
         return Err(Error::UnsupportedOutcome);
     }
     let mut verifications = Vec::new();
@@ -109,6 +121,11 @@ pub fn failure<E>(
         _ => return Err(Error::UnsupportedOutcome),
     };
     let mut report = envelope(run, attempt, &id)?;
+    if let Ok(response) = &attempt.result {
+        let value: Value =
+            serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
+        set_handler_counts(&mut report, &value)?;
+    }
     set_diagnostics(&mut report, diagnostics);
     report["verifications"] = json!(verifications);
     bounded(report)
@@ -150,23 +167,31 @@ fn table_observation<T: TableAccess>(
     )
 }
 fn envelope<E>(
-    run: &PreparedRun,
+    _run: &PreparedRun,
     attempt: &CapturedAttempt<E>,
     id: &Identity<'_>,
 ) -> Result<Value, Error> {
-    if !attempt.read.captured {
+    if attempt.sources.is_empty() || attempt.sources.iter().any(|source| !source.read.captured) {
         return Err(Error::UnsupportedOutcome);
     }
     let mut tables = Vec::new();
-    if let Some(table) = &attempt.table {
-        tables.push(table_observation(table, id, "source", &run.source().name)?);
+    if attempt.sources.iter().all(|source| source.table.is_some()) {
+        for source in &attempt.sources {
+            tables.push(table_observation(
+                source.table.as_ref().expect("complete ingestion"),
+                id,
+                "source",
+                &source.read.source.name,
+            )?);
+        }
     }
+    let reads = attempt.sources.iter().map(|source| Ok(json!({"base_directory":id.base_directory,"path":source.read.source.path,"outcome":"captured","condition":null,"snapshots_created":source.read.snapshots_created.ok_or(Error::InvalidObservation)?}))).collect::<Result<Vec<_>,Error>>()?;
     Ok(
         json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,
         "outcome":"failure","artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],
         "nodes":[{"specification":id.specification,"outcome":"failure","diagnostics":[],"unsupported":[],"handler_counts":[]}],
         "tables":tables,"verifications":[],"callbacks":[],
-        "source_reads":[{"base_directory":id.base_directory,"path":attempt.read.source.path,"outcome":"captured","condition":null,"snapshots_created":attempt.read.snapshots_created.ok_or(Error::InvalidObservation)?}],"error":null}),
+        "source_reads":reads,"error":null}),
     )
 }
 fn bounded(report: Value) -> Result<Value, Error> {
@@ -175,6 +200,26 @@ fn bounded(report: Value) -> Result<Value, Error> {
     } else {
         Ok(report)
     }
+}
+fn set_handler_counts(report: &mut Value, response: &Value) -> Result<(), Error> {
+    let Some(raw) = response.get("handler_counts") else {
+        return Ok(());
+    };
+    let counts = raw
+        .as_array()
+        .ok_or(Error::InvalidObservation)?
+        .iter()
+        .map(|entry| {
+            let path = entry["spec_path"]
+                .as_str()
+                .ok_or(Error::InvalidObservation)?;
+            let handler = entry["handler"].as_str().ok_or(Error::InvalidObservation)?;
+            Ok(json!({"spec_path":path,"handler":handler,"count":count(entry,"count")?}))
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    report["handler_counts"] = json!(counts);
+    report["nodes"][0]["handler_counts"] = report["handler_counts"].clone();
+    Ok(())
 }
 fn set_diagnostics(report: &mut Value, diagnostics: Vec<Value>) {
     report["diagnostics"] = json!(diagnostics);
@@ -381,6 +426,7 @@ impl<E> yamaa_engine::specification_output::OutputReport for Report<'_, '_, E> {
         if !unexpected.is_empty() {
             return Err(Error::InvalidObservation);
         }
+        set_handler_counts(&mut report, &value)?;
         report["verifications"] = json!(checks);
         self.value = Some(report);
         Ok(())

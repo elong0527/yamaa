@@ -738,10 +738,13 @@ fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
     };
     for created in [1, 0] {
         let attempt = run.execute_with_port(&mut port);
-        assert!(attempt.read.captured);
-        assert_eq!(attempt.read.snapshots_created, Some(created));
-        assert!(Arc::ptr_eq(attempt.snapshot.as_ref().unwrap(), &content));
-        assert_eq!(attempt.table.as_ref().unwrap().row_count(), 2);
+        assert!(attempt.sources[0].read.captured);
+        assert_eq!(attempt.sources[0].read.snapshots_created, Some(created));
+        assert!(Arc::ptr_eq(
+            attempt.sources[0].snapshot.as_ref().unwrap(),
+            &content
+        ));
+        assert_eq!(attempt.sources[0].table.as_ref().unwrap().row_count(), 2);
         let response = attempt.result.unwrap();
         assert!(response.table.is_none());
         assert!(response.outcome.contains("division_by_zero"));
@@ -750,24 +753,24 @@ fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
     let invalid = raw.replace("100 * (AVAL - BASE) / BASE", "AVAL +");
     let run = PreparedRun::prepare(prepare(&schema, invalid.as_bytes())).unwrap();
     let attempt = run.execute_with_port(&mut port);
-    assert!(attempt.table.is_some());
+    assert!(attempt.sources[0].table.is_some());
     assert!(matches!(
         attempt.result,
         Err(PortError::Run(Error::Bind(_)))
     ));
     port.content = Arc::from(b"A\n\"bad".as_slice());
     let attempt = run.execute_with_port(&mut port);
-    assert!(attempt.snapshot.is_some());
-    assert!(attempt.table.is_none());
+    assert!(attempt.sources[0].snapshot.is_some());
+    assert!(attempt.sources[0].table.is_none());
     assert!(matches!(
         attempt.result,
         Err(PortError::Run(Error::Source(_)))
     ));
     port.fail = true;
     let attempt = run.execute_with_port(&mut port);
-    assert!(!attempt.read.captured);
-    assert_eq!(attempt.read.snapshots_created, Some(0));
-    assert!(attempt.snapshot.is_none() && attempt.table.is_none());
+    assert!(!attempt.sources[0].read.captured);
+    assert_eq!(attempt.sources[0].read.snapshots_created, Some(0));
+    assert!(attempt.sources[0].snapshot.is_none() && attempt.sources[0].table.is_none());
     assert!(matches!(
         attempt.result,
         Err(PortError::Capture("resource_path_missing"))
@@ -1732,5 +1735,384 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
             json!({"phase":"validation","condition":"missing_derivation","requirement":"REQ-0200","spec_paths":["columns.PARAM.derivation"],"context":{"column":"PARAM","rows":["collected"]}}),
             json!({"phase":"validation","condition":"conflicting_row_construction","requirement":"REQ-1171","spec_paths":["filter","rows"],"context":{}}),
         ]
+    );
+}
+
+#[test]
+fn original_lookup_compiles_multiple_schemas_and_executes_named_selections() {
+    use yamaa_core::specification::{BindError, PreparedSpecification};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let schema = schema(&root.join("yaml"));
+    let case = root.join("benchmarks/schema-lookup");
+    let original = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+    // Driver position never changes authored capture order or secondary indices.
+    for raw in [
+        original.clone(),
+        original.replace(
+            "  DM: input/dm.csv\n  AE: input/ae.csv",
+            "  AE: input/ae.csv\n  DM: input/dm.csv",
+        ),
+    ] {
+        let document = prepare(&schema, raw.as_bytes());
+        let prepared = PreparedSpecification::prepare(document.model()).unwrap();
+        assert_eq!(prepared.sources().len(), 3);
+        assert_eq!(prepared.source().name, "DM");
+        let tables = prepared
+            .sources()
+            .iter()
+            .map(|source| {
+                csv_source::parse_text_table(
+                    &std::fs::read(case.join(&source.path)).unwrap(),
+                    Default::default(),
+                    TableLimits {
+                        max_rows: 100,
+                        max_columns: 64,
+                        max_cells: 6400,
+                        max_batches: 1,
+                    },
+                )
+                .unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert!(matches!(
+            prepared.bind(tables[prepared.driver_index()].schema()),
+            Err(BindError::SourceCount)
+        ));
+        let schemas = tables.iter().map(TableAccess::schema).collect::<Vec<_>>();
+        let plan = prepared.bind_sources(&schemas).unwrap();
+        let secondary = tables
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| *index != prepared.driver_index())
+            .map(|(_, table)| table as &dyn TableAccess<Error = _>)
+            .collect::<Vec<_>>();
+        for _ in 0..2 {
+            let attempt = plan.execute_observed_sources(
+                &tables[prepared.driver_index()],
+                &secondary,
+                limits(),
+            );
+            let execution = attempt.result.unwrap();
+            let bytes =
+                yamaa_adapters::csv_artifact::render(&execution.dataset, &[0, 1, 2, 3], 8192)
+                    .unwrap();
+            assert_eq!(
+                bytes,
+                std::fs::read(case.join("expected/adsl.csv")).unwrap()
+            );
+            assert_eq!(bytes.len(), 138);
+            assert_eq!(execution.verifications.len(), 1);
+            assert_eq!(execution.verifications[0].failed_count, 0);
+            let actual = attempt
+                .handler_counts
+                .iter()
+                .map(|entry| (entry.spec_path.as_str(), entry.handler.name(), entry.count))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                actual,
+                [
+                    (
+                        "columns.DTHDY.derivation.source.multiple_matches",
+                        "multiple_matches",
+                        1
+                    ),
+                    ("columns.DTHDY.derivation.source.no_match", "no_match", 2),
+                    (
+                        "columns.DTHCAUS.derivation.source.multiple_matches",
+                        "multiple_matches",
+                        1
+                    ),
+                    ("columns.DTHCAUS.derivation.source.no_match", "no_match", 2),
+                    ("columns.DTHPTERM.derivation.source.no_match", "no_match", 2),
+                ]
+            );
+        }
+    }
+}
+
+#[test]
+fn original_lookup_complete_report_uses_all_captured_sources_and_actual_handlers() {
+    use serde_json::{json, Value as Json};
+    use std::collections::BTreeMap;
+    use yamaa_adapters::{
+        specification_report::{self, ArtifactPort, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_core::specification::SourceDeclaration;
+    struct Host {
+        content: BTreeMap<String, Arc<[u8]>>,
+        seen: Vec<String>,
+        reads: usize,
+        requests: Vec<String>,
+        published: Vec<Vec<u8>>,
+    }
+    impl SourcePort for Host {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+            self.requests.push(source.name.clone());
+            if !self.seen.contains(&source.name) {
+                self.seen.push(source.name.clone());
+                self.reads += 1;
+            }
+            let bytes = Arc::clone(&self.content[&source.path]);
+            assert!(bytes.len() <= maximum);
+            Ok(bytes)
+        }
+    }
+    impl ArtifactPort for Host {
+        type Error = ();
+        fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
+            assert_eq!(path, "adsl.csv");
+            self.published.push(bytes.to_vec());
+            Ok(())
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let case = root.join("benchmarks/schema-lookup");
+    let schema = schema(&root.join("yaml"));
+    let prepared = PreparedRun::prepare(prepare(
+        &schema,
+        &std::fs::read(case.join("spec.yaml")).unwrap(),
+    ))
+    .unwrap();
+    let content = prepared
+        .compiled()
+        .sources()
+        .iter()
+        .map(|source| {
+            (
+                source.path.clone(),
+                Arc::from(std::fs::read(case.join(&source.path)).unwrap()),
+            )
+        })
+        .collect();
+    let mut host = Host {
+        content,
+        seen: Vec::new(),
+        reads: 0,
+        requests: Vec::new(),
+        published: Vec::new(),
+    };
+    for created in [1, 0] {
+        let attempt = prepared.execute_with_port(&mut host);
+        assert_eq!(attempt.sources.len(), 3);
+        let id = Identity {
+            runtime: "python",
+            runtime_version: "fixture-runtime",
+            engine_version: "fixture-engine",
+            example: "schema-lookup",
+            specification: "spec.yaml",
+            base_directory: ".",
+        };
+        let actual = specification_report::complete(&prepared, &attempt, id, &mut host).unwrap();
+        let mut expected: Json =
+            serde_json::from_str(include_str!("fixtures/specifications/schema-lookup.json"))
+                .unwrap();
+        for source in expected["source_reads"].as_array_mut().unwrap() {
+            source["snapshots_created"] = json!(created);
+        }
+        assert_eq!(actual, expected);
+    }
+    assert_eq!(host.requests, ["DM", "AE", "MEDDRA", "DM", "AE", "MEDDRA"]);
+    assert_eq!(host.reads, 3);
+    assert_eq!(
+        host.published,
+        vec![std::fs::read(case.join("expected/adsl.csv")).unwrap(); 2]
+    );
+}
+
+#[test]
+fn original_lookup_failures_match_independent_diagnostics_and_completed_observations() {
+    use serde_json::{json, Value as Json};
+    use yamaa_adapters::{
+        specification_report::{self, ArtifactPort, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_core::specification::SourceDeclaration;
+    struct Host {
+        case: std::path::PathBuf,
+        requests: Vec<String>,
+    }
+    impl SourcePort for Host {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.requests.len()
+        }
+        fn capture(&mut self, source: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+            self.requests.push(source.name.clone());
+            Ok(Arc::from(
+                std::fs::read(self.case.join(&source.path)).unwrap(),
+            ))
+        }
+    }
+    impl ArtifactPort for Host {
+        type Error = ();
+        fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
+            panic!("failed lookup published")
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let case = root.join("benchmarks/schema-lookup");
+    let schema = schema(&root.join("yaml"));
+    let original = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+    let cases: Vec<Json> =
+        serde_json::from_str(include_str!("fixtures/specifications/lookup-failures.json")).unwrap();
+    for variant in cases {
+        let raw = original.replace(
+            variant["before"].as_str().unwrap(),
+            variant["after"].as_str().unwrap(),
+        );
+        let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
+        let mut host = Host {
+            case: case.clone(),
+            requests: vec![],
+        };
+        let attempt = run.execute_with_port(&mut host);
+        let actual = specification_report::complete(
+            &run,
+            &attempt,
+            Identity {
+                runtime: "python",
+                runtime_version: "fixture-runtime",
+                engine_version: "fixture-engine",
+                example: "schema-lookup",
+                specification: "spec.yaml",
+                base_directory: ".",
+            },
+            &mut host,
+        )
+        .unwrap();
+        let mut expected: Json =
+            serde_json::from_str(include_str!("fixtures/specifications/schema-lookup.json"))
+                .unwrap();
+        expected["outcome"] = json!("failure");
+        expected["nodes"][0]["outcome"] = json!("failure");
+        for field in ["diagnostics", "handler_counts"] {
+            expected[field] = variant[field].clone();
+            expected["nodes"][0][field] = variant[field].clone();
+        }
+        expected["artifacts"] = json!([]);
+        expected["verifications"] = json!([]);
+        expected["tables"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|table| table["stage"] == "source");
+        assert_eq!(actual, expected, "{}", variant["name"]);
+        assert_eq!(host.requests, ["DM", "AE", "MEDDRA"]);
+    }
+}
+
+#[test]
+fn directly_admitted_intermediate_order_terms_keep_omitted_schema_defaults() {
+    use yamaa_core::{
+        schema::{DocumentLimits, ValidationBudget},
+        specification::PreparedSpecification,
+    };
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let case = root.join("benchmarks/schema-lookup");
+    let raw = std::fs::read_to_string(case.join("spec.yaml"))
+        .unwrap()
+        .replace(
+            "order_by: [AE.AEDY]",
+            "order_by: [{variable: AE.AEDY, direction: desc, nulls: first}]",
+        );
+    let normalized = prepare(&schema(&root.join("yaml")), raw.as_bytes());
+    for (omit_direction, omit_nulls) in [(true, true), (true, false), (false, true), (false, false)]
+    {
+        let input = normalized.model().document();
+        let selection = sequence(input, input.field(input.root(), "intermediates").unwrap())[0];
+        let term = sequence(input, input.field(selection, "order_by").unwrap())[0];
+        let mut nodes = input.nodes().to_vec();
+        let N::Mapping(fields) = &input.nodes()[term] else {
+            panic!("mapping order term")
+        };
+        nodes[term] = N::Mapping(
+            fields
+                .iter()
+                .copied()
+                .filter(|&(name, _)| {
+                    !((omit_direction && text(input, name) == "direction")
+                        || (omit_nulls && text(input, name) == "nulls"))
+                })
+                .collect(),
+        );
+        fn copy_node(input: &[N], id: usize, output: &mut Vec<N>) -> usize {
+            let node = match &input[id] {
+                N::Sequence(items) => N::Sequence(
+                    items
+                        .iter()
+                        .map(|&id| copy_node(input, id, output))
+                        .collect(),
+                ),
+                N::Mapping(items) => N::Mapping(
+                    items
+                        .iter()
+                        .map(|&(a, b)| (copy_node(input, a, output), copy_node(input, b, output)))
+                        .collect(),
+                ),
+                node => node.clone(),
+            };
+            let id = output.len();
+            output.push(node);
+            id
+        }
+        let mut reachable = Vec::new();
+        let root = copy_node(&nodes, input.root(), &mut reachable);
+        let document = Document::new(reachable, root, DocumentLimits::default()).unwrap();
+        let model =
+            SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
+                .unwrap()
+                .unwrap();
+        let prepared = PreparedSpecification::prepare(&model).unwrap();
+        let tables = prepared
+            .sources()
+            .iter()
+            .map(|source| {
+                csv_source::parse_text_table(
+                    &std::fs::read(case.join(&source.path)).unwrap(),
+                    Default::default(),
+                    TableLimits {
+                        max_rows: 100,
+                        max_columns: 64,
+                        max_cells: 6400,
+                        max_batches: 1,
+                    },
+                )
+                .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let schemas = tables.iter().map(TableAccess::schema).collect::<Vec<_>>();
+        let plan = prepared.bind_sources(&schemas).unwrap();
+        let order = &plan.intermediates()[0].selection.as_ref().unwrap().order_by[0];
+        assert_eq!(order.descending, !omit_direction);
+        assert_eq!(order.nulls_first, !omit_nulls);
+    }
+}
+
+#[test]
+fn single_buffer_execution_reports_source_count_without_an_internal_failure() {
+    use yamaa_adapters::{specification_diagnostics, specification_run::PreparedRun};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let case = root.join("benchmarks/schema-lookup");
+    let run = PreparedRun::prepare(prepare(
+        &schema(&root.join("yaml")),
+        &std::fs::read(case.join("spec.yaml")).unwrap(),
+    ))
+    .unwrap();
+    let error = run
+        .execute_csv(&std::fs::read(case.join("input/dm.csv")).unwrap())
+        .err()
+        .unwrap();
+    let actual: serde_json::Value = serde_json::from_str(&specification_diagnostics::failure(
+        &error,
+        Some(run.source()),
+    ))
+    .unwrap();
+    assert_eq!(
+        actual,
+        serde_json::json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"bind","code":"source_count"}})
     );
 }
