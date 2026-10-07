@@ -1,0 +1,169 @@
+{
+  "artifacts": [],
+  "backend": "rust",
+  "callbacks": [],
+  "diagnostics": [
+    {
+      "condition": "integer_overflow",
+      "context": {
+        "expr": "CELLCNT * VOLUML",
+        "keys": [
+          {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-102"
+          }
+        ],
+        "maximum": 9223372036854775807,
+        "minimum": -9223372036854775808,
+        "value": "9223372036854776832"
+      },
+      "phase": "derivation",
+      "requirement": "REQ-0434",
+      "spec_paths": [
+        "columns.CELLTOT.derivation.compute"
+      ]
+    }
+  ],
+  "engine_version": "fixture-engine",
+  "error": null,
+  "example": "negative-integer-overflow",
+  "handler_counts": [],
+  "nodes": [
+    {
+      "diagnostics": [
+        {
+          "condition": "integer_overflow",
+          "context": {
+            "expr": "CELLCNT * VOLUML",
+            "keys": [
+              {
+                "STUDYID": "YAMAA-01",
+                "USUBJID": "YAMAA-01-102"
+              }
+            ],
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "value": "9223372036854776832"
+          },
+          "phase": "derivation",
+          "requirement": "REQ-0434",
+          "spec_paths": [
+            "columns.CELLTOT.derivation.compute"
+          ]
+        }
+      ],
+      "handler_counts": [],
+      "outcome": "failure",
+      "specification": "spec.yaml",
+      "unsupported": []
+    }
+  ],
+  "outcome": "failure",
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "runtime_version": "fixture-runtime",
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "condition": null,
+      "outcome": "captured",
+      "path": "input/lb.csv",
+      "snapshots_created": 1
+    }
+  ],
+  "tables": [
+    {
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "CELLCNT",
+        "VOLUML"
+      ],
+      "name": "LB",
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-101"
+          },
+          {
+            "type": "str",
+            "value": "5000000"
+          },
+          {
+            "type": "str",
+            "value": "20"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-102"
+          },
+          {
+            "type": "str",
+            "value": "9007199254740993"
+          },
+          {
+            "type": "str",
+            "value": "1024"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-103"
+          },
+          {
+            "type": "str",
+            "value": "9223372036854775807"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-104"
+          },
+          {
+            "type": "missing",
+            "value": null
+          },
+          {
+            "type": "str",
+            "value": "10"
+          }
+        ]
+      ],
+      "specification": "spec.yaml",
+      "stage": "source",
+      "types": [
+        "str",
+        "str",
+        "str",
+        "str"
+      ]
+    }
+  ],
+  "unsupported": [],
+  "verifications": []
+}
