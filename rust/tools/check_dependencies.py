@@ -20,6 +20,7 @@ ALLOWED = {
         "arrow-buffer",
         "arrow-ipc",
         "flatbuffers",
+        "parquet",
     },
     "yamaa-python": {
         "yamaa-core",

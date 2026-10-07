@@ -555,12 +555,180 @@ class OriginalSpecifications(unittest.TestCase):
 
     def test_unsupported_preparation_has_no_source_effect(self):
         source = (ROOT / "cases" / CASES[0] / "spec.yaml").read_bytes()
-        source = source.replace(b"100 * (AVAL - BASE) / BASE", b"LN(AVAL)")
-        with self.assertRaises(ValueError) as raised:
-            yamaa_native._prepare_specification(modules(), 0, "spec.yaml", source)
-        self.assertEqual(
-            json.loads(str(raised.exception))["outcome"]["status"], "unsupported"
-        )
+        for candidate in (
+            source.replace(b"100 * (AVAL - BASE) / BASE", b"LN(AVAL)"),
+            source.replace(b"input/lb.csv", b"input/lb.parquet"),
+        ):
+            with self.subTest(source=candidate):
+                self.assertNotEqual(candidate, source)
+                with self.assertRaises(ValueError) as raised:
+                    yamaa_native._prepare_specification(modules(), 0, "spec.yaml", candidate)
+                self.assertEqual(
+                    json.loads(str(raised.exception))["outcome"]["status"], "unsupported"
+                )
+
+
+class ParquetOriginalOutput(unittest.TestCase):
+    def test_original_build_saves_parquet_with_independent_logical_readback(self):
+        # Only the declared output container changes; inputs and committed truth
+        # remain unchanged. No reference module participates in native execution.
+        name = "adam-adlb-ordered-sum"
+        case = ROOT / "cases" / name
+        raw = (case / "spec.yaml").read_bytes()
+        source = raw.replace(b"path: adlb.csv", b"path: adlb.parquet")
+        self.assertNotEqual(source, raw)
+        expected = json.loads((ROOT / "expected" / (name + ".json")).read_text())
+        unsaved = dict(expected, artifacts=[])
+        original_import = builtins.__import__
+        def reject(module, *args, **kwargs):
+            if module.split(".")[0] in {"yamaa", "pydantic", "yaml", "yaml12", "pyarrow"}:
+                self.fail("reference semantic import during native build/save: " + module)
+            return original_import(module, *args, **kwargs)
+        def no_parent(*_):
+            self.fail("standalone preparation invoked a parent")
+        requests, saved = [], []
+        def capture(dataset, path, maximum):
+            requests.append((dataset, path))
+            data = (case / path).read_bytes()
+            self.assertLessEqual(len(data), maximum)
+            return data, True
+        def publish(path, data):
+            self.assertEqual(path, "adlb.parquet")
+            saved.append(data)
+        with patch("builtins.__import__", side_effect=reject):
+            spec = yamaa_native._prepare_document("spec.yaml", source, no_parent, no_parent, no_parent)
+            result = spec.build(capture, ("fixture-runtime", "fixture-engine", name, "spec.yaml", "."))
+            del spec
+            gc.collect()
+            self.assertEqual(json.loads(result.observations()), unsaved)
+            self.assertIsNotNone(result.output())
+            report = json.loads(result.save(publish))
+            self.assertEqual(json.loads(result.observations()), unsaved)
+            self.assertEqual(dict(report, artifacts=[]), unsaved)
+        self.assertEqual(requests, [("LB", "input/lb.csv")])
+        self.assertEqual(len(saved), 1)
+
+        # This independent reader runs only after the native build/save has
+        # completed under the import guard. It is an oracle, never a fallback.
+        import io
+        import struct
+        import pyarrow.parquet as pq
+        reader = pq.ParquetFile(io.BytesIO(saved[0]))
+        artifact = expected["artifacts"][0]
+        derived = next(t for t in expected["tables"] if t["stage"] == "derived")
+        self.assertEqual(reader.schema_arrow.names, artifact["columns"])
+        self.assertIsNone(reader.metadata.metadata)
+        self.assertEqual(reader.metadata.num_rows, artifact["row_count"])
+        expected_types = {"str": ("BYTE_ARRAY", "STRING"), "float": ("DOUBLE", "NONE")}
+        for column, kind in enumerate(artifact["types"]):
+            physical, logical = expected_types[kind]
+            self.assertEqual(reader.schema.column(column).physical_type, physical)
+            self.assertEqual(reader.schema.column(column).logical_type.type, logical)
+        for group in range(reader.metadata.num_row_groups):
+            for column in range(reader.metadata.num_columns):
+                self.assertEqual(reader.metadata.row_group(group).column(column).compression, "UNCOMPRESSED")
+                self.assertEqual(reader.schema.column(column).max_definition_level, 1)
+        actual = reader.read().to_pylist()
+        projection = [derived["columns"].index(c) for c in artifact["columns"]]
+        for row, truth in zip(actual, derived["rows"], strict=True):
+            for column, index in zip(artifact["columns"], projection, strict=True):
+                cell = truth[index]
+                value = row[column]
+                if cell["type"] == "float":
+                    value = struct.pack(">d", value).hex()
+                elif cell["type"] == "int":
+                    value = str(value)
+                self.assertEqual(value, cell["value"])
+        observed = report["artifacts"][0]
+        self.assertEqual(observed["profile"], "parquet")
+        self.assertEqual(observed["content"], "")
+        self.assertEqual(observed["byte_length"], len(saved[0]))
+        logical = [json.dumps(artifact["columns"], ensure_ascii=True)]
+        logical.extend(json.dumps([row[c] for c in artifact["columns"]], ensure_ascii=True) for row in actual)
+        self.assertEqual(observed["records"], logical)
+
+    def test_closed_parquet_types_and_exact_values_with_independent_reader(self):
+        # Hand-authored boundary values qualify the codec independently of the
+        # existing original-document cohort and its unchanged expected reports.
+        kinds = {"ID": "str", "S": "str", "I": "int", "F": "float", "D": "date", "T": "datetime"}
+        projection = ["T", "I", "S", "F", "D", "EMPTY"]
+        specification = {
+            "schema_version": "1.0", "domain": "TEST", "keys": ["I"],
+            "input": {"SOURCE": {"path": "input.csv", "types": kinds}},
+            "output": {"path": "output.parquet", "columns": projection},
+            "columns": [
+                {"name": name, "type": kind, "label": name, "derivation": "SOURCE." + name}
+                for name, kind in kinds.items()
+            ] + [{"name": "EMPTY", "type": "str", "label": "Empty text"}],
+            "rows": [{"id": "all", "derivations": {"EMPTY": {"literal": ""}}}],
+        }
+        data = (
+            "ID,S,I,F,D,T\n"
+            "a,,\u002d9223372036854775808,-0.0,0001-01-01,1969-12-31T23:59:59\n"
+            "b,\u00e9\U0001f642,9223372036854775807,5e-324,9999-12-31,9999-12-31T23:59:59\n"
+            "c,text,9007199254740993,1.2345678901234567,,\n"
+        ).encode("utf-8")
+        original_import = builtins.__import__
+        def reject(module, *args, **kwargs):
+            if module.split(".")[0] in {"yamaa", "pydantic", "yaml", "yaml12", "pyarrow"}:
+                self.fail("reference semantic import during native build/save: " + module)
+            return original_import(module, *args, **kwargs)
+        def no_parent(*_):
+            self.fail("standalone preparation invoked a parent")
+        requests, saved = [], []
+        def capture(dataset, path, maximum):
+            requests.append((dataset, path))
+            self.assertLessEqual(len(data), maximum)
+            return data, True
+        def publish(path, content):
+            self.assertEqual(path, "output.parquet")
+            saved.append(content)
+        with patch("builtins.__import__", side_effect=reject):
+            prepared = yamaa_native._prepare_document(
+                "spec.yaml", json.dumps(specification).encode("ascii"), no_parent, no_parent, no_parent
+            )
+            result = prepared.build(capture, ("fixture-runtime", "fixture-engine", "parquet-types", "spec.yaml", "."))
+            self.assertIsNotNone(result.output(), result.observations())
+            report = json.loads(result.save(publish))
+        self.assertEqual(requests, [("SOURCE", "input.csv")])
+        self.assertEqual(len(saved), 1)
+
+        import datetime
+        import io
+        import struct
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        reader = pq.ParquetFile(io.BytesIO(saved[0]))
+        self.assertEqual(reader.schema_arrow, pa.schema([
+            pa.field("T", pa.timestamp("us")), pa.field("I", pa.int64()),
+            pa.field("S", pa.string()), pa.field("F", pa.float64()),
+            pa.field("D", pa.date32()), pa.field("EMPTY", pa.string()),
+        ]))
+        self.assertIsNone(reader.metadata.metadata)
+        self.assertEqual(reader.metadata.num_rows, 3)
+        self.assertEqual([reader.schema.column(i).physical_type for i in range(6)],
+                         ["INT64", "INT64", "BYTE_ARRAY", "DOUBLE", "INT32", "BYTE_ARRAY"])
+        timestamp = json.loads(reader.schema.column(0).logical_type.to_json())
+        self.assertEqual(timestamp["Type"], "Timestamp")
+        self.assertIs(timestamp["isAdjustedToUTC"], False)
+        self.assertEqual(timestamp["timeUnit"], "microseconds")
+        for i in range(6):
+            self.assertEqual(reader.schema.column(i).max_definition_level, 1)
+            self.assertEqual(reader.metadata.row_group(0).column(i).compression, "UNCOMPRESSED")
+        rows = reader.read().to_pylist()
+        self.assertEqual([row["I"] for row in rows], [-(2**63), 2**63 - 1, 2**53 + 1])
+        self.assertEqual([row["S"] for row in rows], [None, "\u00e9\U0001f642", "text"])
+        self.assertEqual([row["EMPTY"] for row in rows], ["", "", ""])
+        self.assertEqual([struct.pack(">d", row["F"]).hex() for row in rows],
+                         ["8000000000000000", "0000000000000001", "3ff3c0ca428c59fb"])
+        self.assertEqual([row["D"] for row in rows],
+                         [datetime.date(1, 1, 1), datetime.date(9999, 12, 31), None])
+        self.assertEqual([row["T"] for row in rows],
+                         [datetime.datetime(1969, 12, 31, 23, 59, 59),
+                          datetime.datetime(9999, 12, 31, 23, 59, 59), None])
+        logical = [json.dumps(projection)]
+        logical.extend(json.dumps([row[name] for name in projection], default=lambda value: value.isoformat()) for row in rows)
+        self.assertEqual(report["artifacts"][0]["records"], logical)
 
 
 if __name__ == "__main__":

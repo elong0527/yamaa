@@ -672,9 +672,6 @@ impl PreparedSpecification {
         );
         optional_features(d, output_id, &["decimals"], "output", &mut extra);
         let output_path = String::from(text(d, field(d, output_id, "path")?)?);
-        if output_profile(&output_path) == Some("parquet") {
-            reject(&mut extra, "output_parquet", "output.path".into());
-        }
         // Output declaration errors retain their post-verification phase.
         let projection = sequence(d, field(d, output_id, "columns")?)?
             .iter()
@@ -868,6 +865,9 @@ impl PreparedSpecification {
     }
     pub fn output_path(&self) -> &str {
         &self.output_path
+    }
+    pub fn output_profile(&self) -> Option<&'static str> {
+        output_profile(&self.output_path)
     }
     pub fn output_name(&self) -> &str {
         let name = output_basename(&self.output_path);

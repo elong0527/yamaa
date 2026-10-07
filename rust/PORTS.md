@@ -10,7 +10,7 @@ and codec interfaces are native traits; adapters translate values and errors.
 | --- | --- | --- | --- |
 | `specification_run::SourcePort` | engine | Python and R capture bridges; engine and adapter test fakes | Original opaque capture error; regressing snapshot counter |
 | `specification_run::SourceDecoder` | engine | Adapter CSV/Arrow decoder; engine test fake | Original decoder error; byte/cell capacity limits |
-| `specification_output::ArtifactEncoder` | engine | Adapter CSV encoder; native test fake | Original codec error; checked output byte limit |
+| `specification_output::ArtifactEncoder` | engine | Adapter CSV/Parquet encoders; native test fake | Original codec error; checked output byte limit |
 | `specification_output::OutputReport` | engine | Portable JSON report formatter; native test fake | Observation or report-budget failure before publication |
 | `specification_output::ArtifactPort` | engine | Python/R atomic publication bridges; native test fake | Original opaque publication error, without retry |
 | `TableAccess` | core | Immutable Arrow snapshots and engine output tables; test fakes | Bounds or original opaque cell-access error |
@@ -110,13 +110,38 @@ preparation, and one publication request. An error at any step stops later
 requests. The engine independently rejects a codec result beyond the supplied
 byte limit, even if the codec violated its allocation contract.
 
-Report formatting and CSV representation remain adapter responsibilities. A
+Report formatting and CSV/Parquet representation remain adapter responsibilities. A
 report error, including its size budget, must be returned before publication.
 Opaque codec/report/publication failures are retained without cloning or retry.
 The current report still uses the existing portable transport for diagnostic
 observations; replacing that formatting transport is a later cleanup. Native
 fake ports pin declaration order, rejection, codec overruns, error identity,
 report-before-publication order and repeated explicit requests.
+
+The Parquet output adapter writes the closed profile directly from the admitted
+typed table: optional UTF-8 strings, signed INT64, DOUBLE, date INT32 and
+timezone-free microsecond timestamps. It preserves column projection, record
+order, missing values, empty strings, full-range integers and finite float bits.
+Files are uncompressed and have no key/value metadata. The private build/save
+path selects the encoder from the declared output extension; input Parquet is
+still explicitly Unsupported before study-data capture.
+
+Resource policy limits projected columns/cells, schema construction, per-column
+staging in groups of at most 1,024 rows, and encoded output bytes. Charges precede
+text copies; a codec failure or refusal discards the incomplete file. The output
+sink limit alone is not a bound on total process memory. Portable artifact
+observations record actual byte length and logical JSON records, with complete
+stored calendar fields and exact finite scalar spelling. The binary bytes are
+retained for explicit save, never reconstructed from those report records.
+
+Rust tests exercise all closed types, boundary values, row-group order, empty
+tables, projection, error identity and limits. Installed tests vary only the
+ordered-sum case's output container and preserve its independently committed
+non-artifact observations. Python blocks semantic imports during native build
+and save, then uses PyArrow as an independent reader; a separate hand-authored
+case checks every closed type and exact boundary value. R builds and saves with
+Python unavailable. These checks do not promote the six-case inventory from its
+reference-assisted level or qualify the unimplemented public file frontend.
 
 ## Remaining migration
 
@@ -126,7 +151,7 @@ codelist resources, with resolved paths and declaring-file provenance. Current
 source bridges retain their existing path behavior; the #1751 target resolves
 each path relative to its declaring file without an approved-root boundary.
 
-Parquet encoding/decoding, general publication/save policy, environment
+Parquet decoding, general publication/save policy, environment
 activation, shared reusable test fakes, and consolidation of the two function
 interfaces remain open. The existing inheritance JSON callback bridge also
 remains to be replaced. No new unimplemented port is presented as a working
