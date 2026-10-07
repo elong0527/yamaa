@@ -135,10 +135,12 @@ one match survived the filter.
 <a id="req-0357"></a>
 
 **REQ-0357.** An aggregate declares no handler at all. A variable it
-names that does not exist is [Name binding](../specification/binding.md)'s unresolved reference, a right side
-that reduces to no matching record is [Lookup and joins](../operations/lookup.md)'s absent match, and a group
-whose records all hold missing values is neither condition. [Aggregation](../operations/aggregation.md) states
-what each reducer returns for such a group.
+names that does not exist is [Name binding](../specification/binding.md)'s
+unresolved reference. A right side that reduces to no matching record is
+[Lookup and joins](../operations/lookup.md)'s absent match. A group whose
+records all hold missing values is neither condition.
+[Aggregation](../operations/aggregation.md) states what each reducer returns
+for such a group.
 
 ### Result handlers
 

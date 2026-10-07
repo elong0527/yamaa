@@ -33,14 +33,17 @@ Its filter may read only its own donor fields and earlier derived names.
 Its derivations may also read the records other intermediates select for
 each donor under [REQ-1263](../operations/lookup.md#req-1263).
 Neither its filter nor its derivations may reference a current row.
-An exposed derived field must have a determinable type: `source` keeps its
-source type, including a read of another intermediate's column under
-[REQ-1263](../operations/lookup.md#req-1263), a string/integer/float
-`literal` has that type, `row_number` and
-`rank` are integer, and `str_case` is string. A `case` has a type only when
-all nonmissing branches have the same determinable type. Other exposed
-derived fields fail row-driver validation as
-`unknown_intermediate_driver_type`.
+An exposed derived field must have a determinable type:
+
+- `source` keeps its source type, including a read of another
+  intermediate's column under [REQ-1263](../operations/lookup.md#req-1263);
+- a string/integer/float `literal` has that type;
+- `row_number` and `rank` are integer;
+- `str_case` is string.
+
+A `case` has a type only when all nonmissing branches have the same
+determinable type. Other exposed derived fields fail row-driver validation
+as `unknown_intermediate_driver_type`.
 An ineligible intermediate fails as `invalid_intermediate_driver` at the row
 template's `dataset` field.
 
@@ -103,12 +106,12 @@ upstream. The expanded records enter the specification as ordinary input.
 **REQ-0042.** The `keys` state the output row identity, and `keys` must be
 declared. When `rows` is absent or empty, row construction derives the
 distinct combination of `keys` over the input records, in first-appearance
-order, and that key table is the output row set. The key table is standalone:
-one row per unique key combination, with no link back to the input records,
-so the input records a key combination was derived from decide its column
-values and never how many rows the artifact carries. `base` is required
-in that case, unless `input` declares exactly one dataset, which
-supplies the input records.
+order, and that key table is the output row set. The key table is
+standalone. It has one row per unique key combination and no link back to
+the input records. Therefore, the input records a key combination was
+derived from decide its column values and never how many rows the artifact
+carries. `base` is required in that case, unless `input` declares exactly
+one dataset, which supplies the input records.
 
 <a id="req-0043"></a>
 
