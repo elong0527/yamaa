@@ -991,6 +991,24 @@ fn aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path() 
     let data = std::fs::read(case.join("input/lb.csv")).unwrap();
     for (expr, condition, requirement, context) in [
         (
+            "SUM(AVAL)",
+            "invalid_aggregate_context",
+            "REQ-0329",
+            json!({"expr":"SUM(AVAL)","reason":"a grouped row aggregate reads its row driver"}),
+        ),
+        (
+            "SUM(ABSENT)",
+            "invalid_aggregate_context",
+            "REQ-0329",
+            json!({"expr":"SUM(ABSENT)","reason":"a grouped row aggregate reads its row driver"}),
+        ),
+        (
+            "SUM(OTHER.X)",
+            "invalid_aggregate_context",
+            "REQ-0329",
+            json!({"expr":"SUM(OTHER.X)","reason":"a grouped row aggregate reads 'LB', not 'OTHER'"}),
+        ),
+        (
             "SUM(LB.ABSENT)",
             "unknown_field",
             "REQ-0103",

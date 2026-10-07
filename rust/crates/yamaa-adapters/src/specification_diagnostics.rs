@@ -91,6 +91,18 @@ fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Ve
             }
             vec![validation(error.condition(),Some(error.requirement()),path.clone(),context)]
         },
+        BindFinding::AggregateScope{path,expression,relation}=> {
+            let reason = match relation {
+                None => "a grouped row aggregate reads its row driver".into(),
+                Some(relation) => {
+                    let mut budget = yamaa_core::schema::ValidationBudget::new(Default::default());
+                    let driver = yamaa_core::schema::quoted_diagnostic_text(&source.name, &mut budget).ok()?;
+                    let relation = yamaa_core::schema::quoted_diagnostic_text(relation, &mut budget).ok()?;
+                    format!("a grouped row aggregate reads {driver}, not {relation}")
+                },
+            };
+            vec![validation("invalid_aggregate_context",Some("REQ-0329"),path.clone(),json!({"expr":expression,"reason":reason}))]
+        },
         BindFinding::Numeric{path,expression,error}=>vec![numeric(path,expression,error)?],
         BindFinding::QualifiedNumericReference{path,expression,identifier}=>vec![validation("qualified_identifier",Some("REQ-0442"),path.clone(),json!({"expr":expression,"identifier":identifier}))],
         BindFinding::UnknownReference{path,name}=>vec![validation("unknown_field",Some("REQ-0103"),path.clone(),json!({"identifier":name}))],

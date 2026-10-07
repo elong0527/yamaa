@@ -362,13 +362,30 @@ impl Rows {
                         None
                     }
                 }
-                RowOperation::Sum { name, expression } => {
-                    resolve(name, &declaration.path, findings).map(|column| Expression::Reduce {
-                        identifier: Some(name.clone()),
-                        column,
-                        reducer: NumericReducer::Sum,
-                        text: expression.clone(),
-                    })
+                RowOperation::Sum {
+                    name: operand,
+                    expression,
+                } => {
+                    let relation = operand.split_once('.').map(|(relation, _)| relation);
+                    if relation != Some(name) {
+                        // Scope findings follow ingestion, like grammar findings,
+                        // and suppress generic field binding for the invalid operand.
+                        findings.push(BindFinding::AggregateScope {
+                            path: declaration.path.clone(),
+                            expression: expression.clone(),
+                            relation: relation.map(String::from),
+                        });
+                        None
+                    } else {
+                        resolve(operand, &declaration.path, findings).map(|column| {
+                            Expression::Reduce {
+                                identifier: Some(operand.clone()),
+                                column,
+                                reducer: NumericReducer::Sum,
+                                text: expression.clone(),
+                            }
+                        })
+                    }
                 }
             };
             Ok(expression.map(|expression| Assignment {

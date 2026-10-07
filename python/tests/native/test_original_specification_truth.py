@@ -333,3 +333,58 @@ def test_reference_row_default_scope_and_preflight_order(variant, tmp_path):
         assert len(actual["source_reads"]) == (
             1 if variant in {"unknown", "unknown_group", "unknown_sum"} else 0
         )
+
+
+@pytest.mark.parametrize(
+    "expr,reason",
+    [
+        ("SUM(AVAL)", "a grouped row aggregate reads its row driver"),
+        ("SUM(ABSENT)", "a grouped row aggregate reads its row driver"),
+        ("SUM(OTHER.X)", "a grouped row aggregate reads 'LB', not 'OTHER'"),
+    ],
+)
+@pytest.mark.parametrize("invalid_source", [False, True])
+def test_reference_grouped_aggregate_scope_follows_ingestion(
+    expr, reason, invalid_source, tmp_path
+):
+    case = tmp_path / "adam-adlb-ordered-sum"
+    shutil.copytree(ROOT / "benchmarks/adam-adlb-ordered-sum", case)
+    specification = case / "spec.yaml"
+    specification.write_text(
+        specification.read_text().replace("SUM(LB.LBSTRESN)", expr)
+    )
+    if invalid_source:
+        source = case / "input/lb.csv"
+        source.write_text(source.read_text().replace(",0.1", ",invalid", 1))
+    actual = execute_example(
+        case,
+        schema_root=ROOT / "yaml",
+        output_dir=tmp_path / "output",
+        backend="python",
+    ).model_dump(mode="json")
+    expected = {
+        "phase": "validation",
+        "condition": "invalid_aggregate_context",
+        "requirement": "REQ-0329",
+        "spec_paths": ["rows[1].derivations.AVAL.aggregate"],
+        "context": {"expr": expr, "reason": reason},
+    }
+    if invalid_source:
+        expected = {
+            "phase": "ingest",
+            "condition": "field_parse_failed",
+            "requirement": "REQ-0536",
+            "spec_paths": ["input.LB.types.LBSTRESN"],
+            "context": {
+                "dataset": "LB",
+                "field": "LBSTRESN",
+                "type": "float",
+                "value": "invalid",
+            },
+        }
+    assert actual["outcome"] == "failure"
+    assert actual["diagnostics"] == [expected]
+    assert len(actual["source_reads"]) == 1
+    assert len(actual["tables"]) == (0 if invalid_source else 1)
+    assert not actual["artifacts"]
+    assert not actual["verifications"]

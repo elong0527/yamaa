@@ -35,7 +35,9 @@ retaining their own paths. Coverage errors, conflicting root filters and aggrega
 default conflicts fail before source capture. Grouping fields and scalar group
 scope bind after ingestion. Nonnumeric SUM arguments retain REQ-0510 at the authored
 aggregate path; all-missing groups remain missing, and source access failures take
-precedence over fold errors. Row-output dependencies, broader expressions and
+precedence over fold errors. Bare SUM operands and operands naming a different
+driver retain REQ-0329 after ingestion, before generic field binding.
+Row-output dependencies, broader expressions and
 remaining phase/default relationships still need shared-compiler work.
 
 ## Resource ownership and host boundary

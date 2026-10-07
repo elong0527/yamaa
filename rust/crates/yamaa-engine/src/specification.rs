@@ -126,6 +126,11 @@ pub enum BindFinding {
         expression: String,
         error: yamaa_core::aggregate_parser::GrammarFailure,
     },
+    AggregateScope {
+        path: String,
+        expression: String,
+        relation: Option<String>,
+    },
     QualifiedNumericReference {
         path: String,
         expression: String,
