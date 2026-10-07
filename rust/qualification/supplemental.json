@@ -428,6 +428,26 @@
         "python/tests/native/test_numeric_lifecycle_vectors.py",
         "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs"
       ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/negative-zero-division.json",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/negative-integer-overflow.json",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R"
+      ]
     }
   ],
   "suites": [
@@ -689,6 +709,20 @@
       "path": "rust/tests/installed_yaml.py",
       "staged_path": "installed_yaml.py",
       "level": "compile"
+    },
+    {
+      "id": "python/original-specifications",
+      "runtime": "python",
+      "path": "rust/tests/installed_original_specifications.py",
+      "staged_path": "installed_original_specifications.py",
+      "level": "compile"
+    },
+    {
+      "id": "r/original-specifications",
+      "runtime": "r",
+      "path": "R/yamaanative/tests/original_specifications.R",
+      "staged_path": "tests/original_specifications.R",
+      "level": "compile"
     }
   ],
   "support_files": [
@@ -855,6 +889,10 @@
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/tables/zero_columns.arrow",
       "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/README.md",
+      "role": "documentation"
     }
   ]
 }

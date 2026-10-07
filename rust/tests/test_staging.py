@@ -3,6 +3,7 @@
 import contextlib
 import importlib.util
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -31,6 +32,29 @@ class StagingTests(unittest.TestCase):
             self.assertTrue((embedded / "rust-toolchain.toml").is_file())
             self.assertFalse((embedded / "target").exists())
             self.assertFalse((embedded / "Cargo.lock").exists())
+            original = destination / "inst/specification-original"
+            for module in (original / "schema").glob("*.yaml"):
+                self.assertEqual(
+                    module.read_bytes(),
+                    (staging.REPOSITORY / "yaml" / module.name).read_bytes(),
+                )
+            for name in ("negative-zero-division", "negative-integer-overflow"):
+                for relative in ("spec.yaml", "input/lb.csv", "expected/error.yaml"):
+                    self.assertEqual(
+                        (original / "cases" / name / relative).read_bytes(),
+                        (
+                            staging.REPOSITORY / "benchmarks" / name / relative
+                        ).read_bytes(),
+                    )
+                truth = (
+                    staging.WORKSPACE
+                    / "crates/yamaa-adapters/tests/fixtures/specifications"
+                    / (name + ".json")
+                )
+                self.assertEqual(
+                    json.loads((original / "expected" / (name + ".json")).read_text()),
+                    json.loads(truth.read_text()),
+                )
             for fixture in (
                 "aggregate_syntax.tsv",
                 "numeric_syntax.tsv",

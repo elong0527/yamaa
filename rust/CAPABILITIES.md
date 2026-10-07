@@ -399,3 +399,10 @@ literal-pattern Contains nodes with cumulative matching limits. See
 [PREDICATE_SYNTAX.md](PREDICATE_SYNTAX.md) for limits, evidence and the explicit
 ESCAPE/temporal diagnostic differences. Python remains default and
 `execution_supported=false`.
+
+The internal [original-specification compiler](SPECIFICATION_COMPILER.md) connects
+raw current-schema/YAML capture to the existing engine for standalone source/compute
+failure runs in Python and R. Independent whole failure reports cover two original
+arithmetic documents. This remains supplemental integration evidence: it does not
+qualify the full #1739 cohort, complete successful publication or replace the
+production resource port and default runtime.

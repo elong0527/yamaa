@@ -129,3 +129,22 @@ shared source binding/lowering. Submission/value metadata relationships still ne
 explicit implementation or Unsupported disposition before study effects. The
 existing Python model call is not disconnected by structural service availability.
 All six unchanged original-YAML cohort runs and the R entry point remain required.
+
+## Next execution slice: original standalone failure runs
+
+The bounded shared compiler now connects captured raw schema/YAML, structural
+admission, source-independent preflight, lossless CSV ingestion, source binding,
+source/compute lowering and checked dataset execution. Both owned host handles
+exercise the original division-by-zero and integer-overflow fixtures; a shared
+source-port observation path retains actual reads, cached snapshot counts and
+source tables for complete failure-report comparison. See
+[the compiler boundary](../SPECIFICATION_COMPILER.md) for its supported scope.
+
+The report truth is independently authored and separately checked against the
+reference implementation. This is a two-fixture integration slice, not completion
+of #1739 or promotion of existing assisted inventory entries. Production source
+capture/verification, stable complete schema/capture diagnostics, successful output
+publication and the four remaining original cohort documents still require work.
+R's wrapper retains original host errors/interruptions after native return; Python
+keeps its original callback exception. No numerical policy or default cutover is
+selected here.

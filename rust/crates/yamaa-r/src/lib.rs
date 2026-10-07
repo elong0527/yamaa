@@ -3,6 +3,7 @@ use extendr_api::prelude::*;
 mod function_callback;
 mod inheritance_callback;
 mod scalars;
+mod specification_service;
 
 /// Validate raw request bytes before any Rust string is constructed. R character
 /// encoding marks are not proof that the held bytes satisfy UTF-8 invariants.
@@ -269,6 +270,7 @@ fn engine_info() -> List {
 extendr_module! {
     mod yamaanative;
     use scalars;
+    use specification_service;
     use function_callback;
     use inheritance_callback;
     fn engine_info;

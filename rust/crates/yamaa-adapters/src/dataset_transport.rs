@@ -744,39 +744,7 @@ impl PreparedDataset {
                 self.plan
                     .execute_observed_functions(&source, &references, functions, LIMITS)
             };
-            let (table, outcome) = match attempt.result {
-                Ok(result) => (
-                    Some(encode_dataset(&result.dataset).map_err(Error::Table)?),
-                    Outcome::Success {
-                        verifications: records(result.verifications),
-                    },
-                ),
-                Err(error) => (None, failure(*error)?),
-            };
-            let outcome = bounded_json(
-                &Envelope {
-                    protocol: PROTOCOL,
-                    outcome,
-                    handler_counts: attempt
-                        .handler_counts
-                        .into_iter()
-                        .map(|entry| HandlerCount {
-                            spec_path: entry.spec_path,
-                            handler: entry.handler.name(),
-                            count: entry.count.to_string(),
-                        })
-                        .collect(),
-                },
-                MAX_OUTPUT_BYTES,
-            )
-            .map_err(|error| {
-                if error == TableTransportError::OutputLimit {
-                    Error::OutputLimit
-                } else {
-                    Error::Internal
-                }
-            })?;
-            Ok(DatasetResponse { table, outcome })
+            response(attempt)
         }
     }
 }
@@ -1225,4 +1193,61 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
         // and coordinate failures impossible. Never invent missing or acceptance.
         _ => return Err(Error::Internal),
     })
+}
+
+/// Encode engine observations through one existing diagnostic vocabulary.
+fn response(attempt: dataset::ExecutionAttempt<CallbackError>) -> Result<DatasetResponse, Error> {
+    let (table, outcome) = match attempt.result {
+        Ok(result) => (
+            Some(encode_dataset(&result.dataset).map_err(Error::Table)?),
+            Outcome::Success {
+                verifications: records(result.verifications),
+            },
+        ),
+        Err(error) => (None, failure(*error)?),
+    };
+    let outcome = bounded_json(
+        &Envelope {
+            protocol: PROTOCOL,
+            outcome,
+            handler_counts: attempt
+                .handler_counts
+                .into_iter()
+                .map(|entry| HandlerCount {
+                    spec_path: entry.spec_path,
+                    handler: entry.handler.name(),
+                    count: entry.count.to_string(),
+                })
+                .collect(),
+        },
+        MAX_OUTPUT_BYTES,
+    )
+    .map_err(|error| {
+        if error == TableTransportError::OutputLimit {
+            Error::OutputLimit
+        } else {
+            Error::Internal
+        }
+    })?;
+    Ok(DatasetResponse { table, outcome })
+}
+
+/// Execute an already bound shared compiler plan over an owned source snapshot.
+/// Only the closed compiler calls this entry point; callbacks/secondary sources
+/// are not implicit, and the same response limits apply as the typed-plan bridge.
+pub(crate) fn execute_specification_plan(
+    plan: &DatasetPlan,
+    source: &crate::arrow_table::ArrowTable,
+) -> Result<DatasetResponse, Error> {
+    catch_unwind(AssertUnwindSafe(|| {
+        let cells = source
+            .row_count()
+            .checked_mul(source.schema().columns().len());
+        if cells.is_none_or(|cells| cells > MAX_SOURCE_CELLS) {
+            return Err(Error::Table(TableTransportError::ShapeLimit));
+        }
+        let source = functions::Snapshot(source);
+        response(plan.execute_observed(&source, LIMITS))
+    }))
+    .map_err(|_| Error::Internal)?
 }

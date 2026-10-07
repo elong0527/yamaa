@@ -1,0 +1,139 @@
+{
+  "artifacts": [],
+  "backend": "rust",
+  "callbacks": [],
+  "diagnostics": [
+    {
+      "condition": "division_by_zero",
+      "context": {
+        "expr": "100 * (AVAL - BASE) / BASE",
+        "keys": [
+          {
+            "PARAMCD": "ALT",
+            "STUDYID": "PILOT7",
+            "USUBJID": "P7-742"
+          }
+        ]
+      },
+      "phase": "derivation",
+      "requirement": "REQ-0430",
+      "spec_paths": [
+        "columns.PCHG.derivation.compute"
+      ]
+    }
+  ],
+  "engine_version": "fixture-engine",
+  "error": null,
+  "example": "negative-zero-division",
+  "handler_counts": [],
+  "nodes": [
+    {
+      "diagnostics": [
+        {
+          "condition": "division_by_zero",
+          "context": {
+            "expr": "100 * (AVAL - BASE) / BASE",
+            "keys": [
+              {
+                "PARAMCD": "ALT",
+                "STUDYID": "PILOT7",
+                "USUBJID": "P7-742"
+              }
+            ]
+          },
+          "phase": "derivation",
+          "requirement": "REQ-0430",
+          "spec_paths": [
+            "columns.PCHG.derivation.compute"
+          ]
+        }
+      ],
+      "handler_counts": [],
+      "outcome": "failure",
+      "specification": "spec.yaml",
+      "unsupported": []
+    }
+  ],
+  "outcome": "failure",
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "runtime_version": "fixture-runtime",
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "condition": null,
+      "outcome": "captured",
+      "path": "input/lb.csv",
+      "snapshots_created": 1
+    }
+  ],
+  "tables": [
+    {
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "LBTESTCD",
+        "LBSTRESN",
+        "LBBLRESN"
+      ],
+      "name": "LB",
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "PILOT7"
+          },
+          {
+            "type": "str",
+            "value": "P7-741"
+          },
+          {
+            "type": "str",
+            "value": "ALT"
+          },
+          {
+            "type": "str",
+            "value": "42"
+          },
+          {
+            "type": "str",
+            "value": "35"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "PILOT7"
+          },
+          {
+            "type": "str",
+            "value": "P7-742"
+          },
+          {
+            "type": "str",
+            "value": "ALT"
+          },
+          {
+            "type": "str",
+            "value": "38"
+          },
+          {
+            "type": "str",
+            "value": "0"
+          }
+        ]
+      ],
+      "specification": "spec.yaml",
+      "stage": "source",
+      "types": [
+        "str",
+        "str",
+        "str",
+        "str",
+        "str"
+      ]
+    }
+  ],
+  "unsupported": [],
+  "verifications": []
+}

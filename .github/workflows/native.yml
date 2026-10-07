@@ -148,6 +148,8 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_syntax.py" installed_predicate_syntax.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_execution.py" installed_predicate_execution.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema.py" installed_schema.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_original_specifications.py" installed_original_specifications.py
+          python "${GITHUB_WORKSPACE}/rust/tools/stage_specification_inputs.py" specification-original
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_yaml.py" installed_yaml.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.tsv" yaml_transport.tsv
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema_loading.py" installed_schema_loading.py

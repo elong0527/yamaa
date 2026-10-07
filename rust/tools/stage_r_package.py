@@ -1,6 +1,7 @@
 """Stage a standalone R source package without maintaining duplicate Rust code."""
 
 import argparse
+import importlib.util
 import shutil
 from pathlib import Path
 
@@ -70,6 +71,13 @@ def stage(destination: Path):
         WORKSPACE / "crates/yamaa-core/tests/fixtures/column_dependencies.tsv",
         resources / "column_dependencies.tsv",
     )
+    helper_spec = importlib.util.spec_from_file_location(
+        "stage_specification_inputs",
+        Path(__file__).with_name("stage_specification_inputs.py"),
+    )
+    helper = importlib.util.module_from_spec(helper_spec)
+    helper_spec.loader.exec_module(helper)
+    helper.stage(resources / "specification-original")
     print(destination)
 
 
