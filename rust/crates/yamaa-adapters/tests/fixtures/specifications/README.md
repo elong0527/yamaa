@@ -26,7 +26,7 @@ declaration-order source observations, all four output rows, the five inherited
 handler-count records and the successful unique check. Source ordering uses
 stored text; the selected `DTHDY` value is converted to an integer afterward.
 
-These reports cover four fixtures, not the complete six-case #1739 cohort.
+These reports cover five fixtures, not the complete six-case #1739 cohort.
 Original YAML/schema/CSV files are staged from the repository, not duplicated here.
 
 `lookup-failures.json` contains twelve authored diagnostic expectations for
@@ -35,3 +35,16 @@ ordering references, and unmatched/ambiguous selections. The Python reference
 checks these independently. Core adapter and installed Python tests compare the
 entire failed report, including source snapshots and the handler prefix recorded
 before an unmatched selection. No candidate report is used to write this file.
+
+The `schema-window-functions` expectation is authored from the unchanged input
+and expected CSVs, declared column types, and literal report metadata. It includes
+all 13 rows, exact binary64 cells, temporal cells, filtered numbering/offsets,
+competition and dense ties, carry-forward values, and baseline flags. The full
+1,035-byte artifact is compared directly. Independent reference execution checks
+the authored report before native and installed-host comparisons.
+
+`window-failures.json` adds nine independently checked cases for zero offsets,
+required/forbidden ordering, unknown source/group/order/filter fields, predicate
+grammar and baseline ties. The baseline case changes a copied source date and
+checks the original partition identity in its failure report; committed source
+and expected benchmark files remain unchanged.

@@ -12,7 +12,7 @@ from unittest.mock import patch
 import yamaa_native
 
 ROOT = Path(__file__).with_name("specification-original")
-CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-lookup")
+CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-lookup")
 
 
 def modules():
@@ -45,7 +45,7 @@ class OriginalSpecifications(unittest.TestCase):
         for name in CASES:
             with self.subTest(name=name):
                 specification = prepare(name)
-                sources = {"DM":"input/dm.csv", "AE":"input/ae.csv", "MEDDRA":"input/meddict.csv"} if name == "schema-lookup" else {"LB":"input/lb.csv"}
+                sources = {"DM":"input/dm.csv", "AE":"input/ae.csv", "MEDDRA":"input/meddict.csv"} if name == "schema-lookup" else ({"VS":"input/vs.csv"} if name == "schema-window-functions" else {"LB":"input/lb.csv"})
                 self.assertEqual(specification.source(), next(iter(sources.items())))
                 state = {"requests": [], "reads": 0, "bytes": {}}
 
@@ -79,8 +79,8 @@ class OriginalSpecifications(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as directory:
 
                     def publish(path, content, *, name=name, published=published):
-                        self.assertIn(name, ("adam-adlb-ordered-sum", "schema-lookup"))
-                        self.assertEqual(path, "adsl.csv" if name == "schema-lookup" else "adlb.csv")
+                        self.assertIn(name, ("adam-adlb-ordered-sum", "schema-window-functions", "schema-lookup"))
+                        self.assertEqual(path, {"schema-lookup":"adsl.csv", "schema-window-functions":"advs.csv", "adam-adlb-ordered-sum":"adlb.csv"}[name])
                         self.assertEqual(
                             content,
                             (ROOT / "cases" / name / "expected" / path).read_bytes(),
@@ -98,7 +98,7 @@ class OriginalSpecifications(unittest.TestCase):
                         )
                         self.assertEqual(actual, expected)
                 self.assertEqual(
-                    len(published), 2 if name in ("adam-adlb-ordered-sum", "schema-lookup") else 0
+                    len(published), 2 if name in ("adam-adlb-ordered-sum", "schema-window-functions", "schema-lookup") else 0
                 )
                 self.assertEqual(state["requests"], list(sources.items()) * 2)
                 self.assertEqual(state["reads"], len(sources))
@@ -128,6 +128,36 @@ class OriginalSpecifications(unittest.TestCase):
                 self.assertEqual(actual, expected)
                 self.assertEqual(requests, ["DM", "AE", "MEDDRA"])
 
+    def test_window_failures_retain_complete_reference_observations(self):
+        name = "schema-window-functions"
+        original = (ROOT / "cases" / name / "spec.yaml").read_bytes()
+        cases = json.loads((ROOT / "expected/window-failures.json").read_text())
+        for variant in cases:
+            with self.subTest(variant=variant["name"]):
+                raw = original.replace(variant["before"].encode(), variant["after"].encode())
+                spec = yamaa_native._prepare_specification(modules(), 0, "spec.yaml", raw)
+                requests = []
+                def capture(dataset, path, maximum):
+                    requests.append(dataset)
+                    content = (ROOT / "cases" / name / path).read_bytes()
+                    if "input_before" in variant:
+                        content = content.replace(variant["input_before"].encode(), variant["input_after"].encode())
+                    return content, True
+                def publish(*args):
+                    self.fail("failed window published")
+                metadata = ("fixture-runtime", "fixture-engine", name, "spec.yaml", ".")
+                actual = json.loads(spec.report(capture, publish, metadata))
+                expected = json.loads((ROOT / "expected" / (name + ".json")).read_text())
+                expected["outcome"] = expected["nodes"][0]["outcome"] = "failure"
+                for field in ("diagnostics", "handler_counts"):
+                    expected[field] = expected["nodes"][0][field] = variant[field]
+                expected["artifacts"] = expected["verifications"] = []
+                expected["tables"] = [table for table in expected["tables"] if table["stage"] == "source"]
+                for row, column, value in variant.get("source_cells", []):
+                    expected["tables"][0]["rows"][row][column] = value
+                self.assertEqual(actual, expected)
+                self.assertEqual(requests, ["VS"])
+
     def test_single_buffer_rejects_missing_secondary_sources_explicitly(self):
         spec = prepare("schema-lookup")
         source = (ROOT / "cases/schema-lookup/input/dm.csv").read_bytes()
@@ -137,6 +167,7 @@ class OriginalSpecifications(unittest.TestCase):
             "protocol": "specification/prototype",
             "outcome": {"status": "rejected", "stage": "bind", "code": "source_count"},
         })
+
 
     def test_original_host_errors_and_interruptions_survive_native_return(self):
         specification = prepare(CASES[0])

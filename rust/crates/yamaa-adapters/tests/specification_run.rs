@@ -2116,3 +2116,176 @@ fn single_buffer_execution_reports_source_count_without_an_internal_failure() {
         serde_json::json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"bind","code":"source_count"}})
     );
 }
+
+#[test]
+fn original_window_yaml_compiles_and_publishes_complete_independent_report() {
+    use serde_json::{json, Value as Json};
+    use yamaa_adapters::{
+        specification_report::{self, ArtifactPort, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_core::specification::SourceDeclaration;
+    struct Host {
+        bytes: Arc<[u8]>,
+        reads: usize,
+        requests: usize,
+        published: Vec<Vec<u8>>,
+    }
+    impl SourcePort for Host {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+            assert_eq!((&*source.name, &*source.path), ("VS", "input/vs.csv"));
+            assert!(self.bytes.len() <= maximum);
+            self.requests += 1;
+            self.reads = 1;
+            Ok(self.bytes.clone())
+        }
+    }
+    impl ArtifactPort for Host {
+        type Error = ();
+        fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
+            assert_eq!(path, "advs.csv");
+            self.published.push(bytes.to_vec());
+            Ok(())
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let case = root.join("benchmarks/schema-window-functions");
+    let prepared = prepare(
+        &schema(&root.join("yaml")),
+        &std::fs::read(case.join("spec.yaml")).unwrap(),
+    );
+    assert!(
+        !prepared.windows().is_empty(),
+        "shared admission expands named windows"
+    );
+    let run = PreparedRun::prepare(prepared).unwrap();
+    let mut host = Host {
+        bytes: Arc::from(std::fs::read(case.join("input/vs.csv")).unwrap()),
+        reads: 0,
+        requests: 0,
+        published: vec![],
+    };
+    for created in [1, 0] {
+        let attempt = run.execute_with_port(&mut host);
+        let report = specification_report::complete(
+            &run,
+            &attempt,
+            Identity {
+                runtime: "python",
+                runtime_version: "fixture-runtime",
+                engine_version: "fixture-engine",
+                example: "schema-window-functions",
+                specification: "spec.yaml",
+                base_directory: ".",
+            },
+            &mut host,
+        )
+        .unwrap();
+        let mut expected: Json = serde_json::from_str(include_str!(
+            "fixtures/specifications/schema-window-functions.json"
+        ))
+        .unwrap();
+        expected["source_reads"][0]["snapshots_created"] = json!(created);
+        assert_eq!(report, expected);
+    }
+    assert_eq!((host.reads, host.requests), (1, 2));
+    assert_eq!(
+        host.published,
+        vec![std::fs::read(case.join("expected/advs.csv")).unwrap(); 2]
+    );
+}
+
+#[test]
+fn original_window_failures_match_independent_diagnostics_and_completed_observations() {
+    use serde_json::{json, Value as Json};
+    use yamaa_adapters::{
+        specification_report::{self, ArtifactPort, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_core::specification::SourceDeclaration;
+    struct Host {
+        bytes: Arc<[u8]>,
+        requests: Vec<String>,
+    }
+    impl SourcePort for Host {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.requests.len()
+        }
+        fn capture(&mut self, source: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+            self.requests.push(source.name.clone());
+            assert_eq!(source.path, "input/vs.csv");
+            Ok(self.bytes.clone())
+        }
+    }
+    impl ArtifactPort for Host {
+        type Error = ();
+        fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
+            panic!("failed window published")
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let case = root.join("benchmarks/schema-window-functions");
+    let schema = schema(&root.join("yaml"));
+    let original = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+    let cases: Vec<Json> =
+        serde_json::from_str(include_str!("fixtures/specifications/window-failures.json")).unwrap();
+    for variant in cases {
+        let raw = original.replace(
+            variant["before"].as_str().unwrap(),
+            variant["after"].as_str().unwrap(),
+        );
+        let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
+        let mut content = std::fs::read_to_string(case.join("input/vs.csv")).unwrap();
+        if let Some(input_before) = variant["input_before"].as_str() {
+            content = content.replace(input_before, variant["input_after"].as_str().unwrap());
+        }
+        let mut host = Host {
+            bytes: Arc::from(content.into_bytes()),
+            requests: vec![],
+        };
+        let attempt = run.execute_with_port(&mut host);
+        let actual = specification_report::complete(
+            &run,
+            &attempt,
+            Identity {
+                runtime: "python",
+                runtime_version: "fixture-runtime",
+                engine_version: "fixture-engine",
+                example: "schema-window-functions",
+                specification: "spec.yaml",
+                base_directory: ".",
+            },
+            &mut host,
+        )
+        .unwrap();
+        let mut expected: Json = serde_json::from_str(include_str!(
+            "fixtures/specifications/schema-window-functions.json"
+        ))
+        .unwrap();
+        expected["outcome"] = json!("failure");
+        expected["nodes"][0]["outcome"] = json!("failure");
+        for field in ["diagnostics", "handler_counts"] {
+            expected[field] = variant[field].clone();
+            expected["nodes"][0][field] = variant[field].clone();
+        }
+        expected["artifacts"] = json!([]);
+        expected["verifications"] = json!([]);
+        expected["tables"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|table| table["stage"] == "source");
+        if let Some(cells) = variant["source_cells"].as_array() {
+            for cell in cells {
+                expected["tables"][0]["rows"][cell[0].as_u64().unwrap() as usize]
+                    [cell[1].as_u64().unwrap() as usize] = cell[2].clone();
+            }
+        }
+        assert_eq!(actual, expected, "{}", variant["name"]);
+        assert_eq!(host.requests, ["VS"]);
+    }
+}

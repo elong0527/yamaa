@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[3]
         "negative-integer-overflow",
         "adam-adlb-ordered-sum",
         "schema-lookup",
+        "schema-window-functions",
     ],
 )
 def test_authored_reports_match_reference_without_native_execution(name, tmp_path):
@@ -474,4 +475,49 @@ def test_authored_lookup_failures_match_independent_reference(variant, tmp_path)
     expected["tables"] = [
         table for table in expected["tables"] if table["stage"] == "source"
     ]
+    assert actual == expected
+
+
+WINDOW_FAILURES = json.loads(
+    (
+        ROOT
+        / "rust/crates/yamaa-adapters/tests/fixtures/specifications/window-failures.json"
+    ).read_text()
+)
+
+
+@pytest.mark.parametrize("variant", WINDOW_FAILURES, ids=lambda case: case["name"])
+def test_authored_window_failures_match_independent_reference(variant, tmp_path):
+    case = tmp_path / "schema-window-functions"
+    shutil.copytree(ROOT / "benchmarks/schema-window-functions", case)
+    path = case / "spec.yaml"
+    path.write_text(path.read_text().replace(variant["before"], variant["after"]))
+    if "input_before" in variant:
+        source = case / "input/vs.csv"
+        source.write_text(
+            source.read_text().replace(variant["input_before"], variant["input_after"])
+        )
+    actual = execute_example(
+        case,
+        schema_root=ROOT / "yaml",
+        output_dir=tmp_path / "output",
+        backend="python",
+    ).model_dump(mode="json")
+    expected = json.loads(
+        (
+            ROOT
+            / "rust/crates/yamaa-adapters/tests/fixtures/specifications/schema-window-functions.json"
+        ).read_text()
+    )
+    for field in ("runtime", "backend", "runtime_version", "engine_version"):
+        expected[field] = actual[field]
+    expected["outcome"] = expected["nodes"][0]["outcome"] = "failure"
+    for field in ("diagnostics", "handler_counts"):
+        expected[field] = expected["nodes"][0][field] = variant[field]
+    expected["artifacts"] = expected["verifications"] = []
+    expected["tables"] = [
+        table for table in expected["tables"] if table["stage"] == "source"
+    ]
+    for row, column, value in variant.get("source_cells", []):
+        expected["tables"][0]["rows"][row][column] = value
     assert actual == expected

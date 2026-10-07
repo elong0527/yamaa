@@ -1,0 +1,448 @@
+[
+  {
+    "name": "zero_offset",
+    "before": "offset: -1",
+    "after": "offset: 0",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "zero_offset",
+        "spec_paths": [
+          "columns.PREVRES.derivation.row_value.offset"
+        ],
+        "requirement": "REQ-0328",
+        "context": {
+          "offset": 0
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "zero_offset",
+        "spec_paths": [
+          "columns.EVALPREV.derivation.row_value.offset"
+        ],
+        "requirement": "REQ-0328",
+        "context": {
+          "offset": 0
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "no_order",
+    "before": "  VISIT_ORDER:\n    group_by: [USUBJID]\n    order_by: [VISITN]",
+    "after": "  VISIT_ORDER:\n    group_by: [USUBJID]",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "window_order_by_required",
+        "spec_paths": [
+          "columns.PREVRES.derivation.row_value.window"
+        ],
+        "requirement": "REQ-0340",
+        "context": {
+          "operation": "row_value"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "window_order_by_required",
+        "spec_paths": [
+          "columns.NEXTRES.derivation.row_value.window"
+        ],
+        "requirement": "REQ-0340",
+        "context": {
+          "operation": "row_value"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "window_order_by_required",
+        "spec_paths": [
+          "columns.LASTRES.derivation.previous_non_missing.window"
+        ],
+        "requirement": "REQ-0340",
+        "context": {
+          "operation": "previous_non_missing"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "window_order_by_required",
+        "spec_paths": [
+          "columns.CARRYRES.derivation.locf.window"
+        ],
+        "requirement": "REQ-0340",
+        "context": {
+          "operation": "locf"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "baseline_order",
+    "before": "reference_date: TRTSDT\n        window:\n          group_by: [USUBJID]",
+    "after": "reference_date: TRTSDT\n        window:\n          group_by: [USUBJID]\n          order_by: [VISITN]",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "window_order_by_forbidden",
+        "spec_paths": [
+          "columns.BLFL.derivation.baseline_flag.window.order_by"
+        ],
+        "requirement": "REQ-0341",
+        "context": {
+          "operation": "baseline_flag"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "unknown_source",
+    "before": "source: VSSTRESN",
+    "after": "source: ABSENT",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.PREVRES.derivation.row_value.source"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.NEXTRES.derivation.row_value.source"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.EVALPREV.derivation.row_value.source"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.LASTRES.derivation.previous_non_missing.source"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.CARRYRES.derivation.locf.source"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "unknown_group",
+    "before": "group_by: [USUBJID]",
+    "after": "group_by: [ABSENT]",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.VSSEQ.derivation.row_number.window.group_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.SEVRANKC.derivation.rank.window.group_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.SEVRANKD.derivation.rank.window.group_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.PREVRES.derivation.row_value.window.group_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.NEXTRES.derivation.row_value.window.group_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.EVALPREV.derivation.row_value.window.group_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.LASTRES.derivation.previous_non_missing.window.group_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.CARRYRES.derivation.locf.window.group_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.BLFL.derivation.baseline_flag.window.group_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "unknown_order",
+    "before": "order_by: [VISITN]",
+    "after": "order_by: [ABSENT]",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.VSSEQ.derivation.row_number.window.order_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.PREVRES.derivation.row_value.window.order_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.NEXTRES.derivation.row_value.window.order_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.EVALPREV.derivation.row_value.window.order_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.LASTRES.derivation.previous_non_missing.window.order_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.CARRYRES.derivation.locf.window.order_by[0]"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "filter_unknown",
+    "before": "VSEVAL = 'Y'",
+    "after": "ABSENT = 'Y'",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.VSSEQ.derivation.row_number.window.filter"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.EVALPREV.derivation.row_value.window.filter"
+        ],
+        "requirement": null,
+        "context": {
+          "identifier": "ABSENT"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "filter_grammar",
+    "before": "VSEVAL = 'Y'",
+    "after": "VSEVAL =",
+    "diagnostics": [
+      {
+        "phase": "validation",
+        "condition": "invalid_predicate",
+        "spec_paths": [
+          "columns.VSSEQ.derivation.row_number.window.filter"
+        ],
+        "requirement": "REQ-0188",
+        "context": {
+          "predicate": "VSEVAL =",
+          "position": 8
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "invalid_predicate",
+        "spec_paths": [
+          "columns.EVALPREV.derivation.row_value.window.filter"
+        ],
+        "requirement": "REQ-0188",
+        "context": {
+          "predicate": "VSEVAL =",
+          "position": 8
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  {
+    "name": "baseline_tie",
+    "before": "BASELINE_NO_CHANGE",
+    "after": "BASELINE_NO_CHANGE",
+    "input_before": "2025-01-16",
+    "input_after": "2025-01-09",
+    "source_cells": [
+      [
+        2,
+        4,
+        {
+          "type": "date",
+          "value": "2025-01-09"
+        }
+      ]
+    ],
+    "diagnostics": [
+      {
+        "phase": "derivation",
+        "condition": "ambiguous_baseline",
+        "spec_paths": [
+          "columns.BLFL.derivation.baseline_flag"
+        ],
+        "requirement": "REQ-0322",
+        "context": {
+          "column": "BLFL",
+          "date": "2025-01-09",
+          "keys": [
+            {
+              "USUBJID": "01"
+            }
+          ],
+          "match_count": 2,
+          "operation": "baseline_flag"
+        }
+      }
+    ],
+    "handler_counts": []
+  }
+]

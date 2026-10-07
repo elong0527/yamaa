@@ -66,6 +66,15 @@ fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> 
 }
 fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Vec<Value>> {
     Some(match error {
+        BindFinding::Window(finding) => {
+            use yamaa_core::specification::WindowFinding;
+            let (path,context) = match finding {
+                WindowFinding::ZeroOffset {path} => (path,json!({"offset":0})),
+                WindowFinding::Order {path,operation,..} => (path,json!({"operation":operation})),
+            };
+            let definition = finding.definition();
+            vec![diagnostic(definition.phase,definition.condition,Some(definition.requirement),vec![path.clone()],context)]
+        },
         BindFinding::Lookup(finding) => {
             let context = finding.context.iter().map(|(name, value)| {
                 let value = match value {

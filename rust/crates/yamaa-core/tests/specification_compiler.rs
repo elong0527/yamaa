@@ -141,3 +141,81 @@ fn compiler_retains_admission_binding_and_resource_boundaries() {
         Err(PrepareError::Limit("columns"))
     ));
 }
+
+fn window_document(filter: &str) -> SpecificationDocument {
+    let original = document("0", "input.csv");
+    let input = original.document();
+    let N::Sequence(columns) = &input.nodes()[input.field(input.root(), "columns").unwrap()] else {
+        unreachable!()
+    };
+    let derivation = input.field(columns[1], "derivation").unwrap();
+    let value = input.field(derivation, "value").unwrap();
+    let payload = input.field(value, "compute").unwrap();
+    let mut nodes = input.nodes().to_vec();
+    let window = Tree::Map(vec![
+        ("order_by", Tree::List(vec![Tree::Text("ID")])),
+        ("filter", Tree::Text(filter)),
+    ])
+    .append(&mut nodes);
+    let window_name = Tree::Text("window").append(&mut nodes);
+    let operation = Tree::Text("row_number").append(&mut nodes);
+    nodes[payload] = N::Mapping(vec![(window_name, window)]);
+    nodes[value] = N::Mapping(vec![(operation, payload)]);
+    fn copy_node(input: &[N], id: usize, output: &mut Vec<N>) -> usize {
+        let node = match &input[id] {
+            N::Sequence(items) => N::Sequence(
+                items
+                    .iter()
+                    .map(|&id| copy_node(input, id, output))
+                    .collect(),
+            ),
+            N::Mapping(items) => N::Mapping(
+                items
+                    .iter()
+                    .map(|&(a, b)| (copy_node(input, a, output), copy_node(input, b, output)))
+                    .collect(),
+            ),
+            node => node.clone(),
+        };
+        let id = output.len();
+        output.push(node);
+        id
+    }
+    let mut ordered = Vec::new();
+    let root = copy_node(&nodes, input.root(), &mut ordered);
+    let doc = Document::new(ordered, root, Default::default()).unwrap();
+    SpecificationDocument::admit(doc, &mut ValidationBudget::new(Default::default()))
+        .unwrap()
+        .unwrap()
+}
+
+#[test]
+fn window_compiler_binds_output_dependencies_without_engine_or_records() {
+    use yamaa_core::dataset::WindowKind;
+    let prepared = PreparedSpecification::prepare(&window_document("ID > 0")).unwrap();
+    let plan = prepared.bind(&source()).unwrap();
+    let Expression::Window(window) = &plan.columns()[0].expression else {
+        panic!("compiled window")
+    };
+    assert_eq!(window.kind, WindowKind::RowNumber);
+    assert!(window.group_by.is_empty());
+    assert_eq!(window.order_by[0].column, 0);
+    assert!(!window.order_by[0].descending);
+    assert!(!window.order_by[0].nulls_first);
+    assert_eq!(
+        window.filter.as_ref().unwrap().plan().spec_path(),
+        "columns.VALUE.derivation.row_number.window.filter"
+    );
+    let policy = CompilationLimits {
+        source_fields: 0,
+        ..Default::default()
+    };
+    assert!(matches!(
+        PreparedSpecification::prepare_with_limits(&window_document("ID > 0"), policy),
+        Err(PrepareError::Limit("window_order"))
+    ));
+    assert!(matches!(
+        PreparedSpecification::prepare(&window_document("SRC.ID > 0")),
+        Err(PrepareError::Unsupported(_))
+    ));
+}

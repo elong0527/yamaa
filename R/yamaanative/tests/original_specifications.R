@@ -12,11 +12,11 @@ root <- system.file("specification-original", package="yamaanative", mustWork=TR
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
 module_names <- c("schema.yaml",sort(setdiff(list.files(file.path(root,"schema"),pattern="[.]yaml$"),"schema.yaml")))
 modules <- setNames(lapply(file.path(root,"schema",module_names),rawfile),module_names)
-for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-lookup")) {
+for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-window-functions","schema-lookup")) {
   case <- file.path(root,"cases",case_name)
   handle <- prepare_specification(modules,"schema.yaml","spec.yaml",rawfile(file.path(case,"spec.yaml")))
   gc()
-  inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else c(LB="input/lb.csv")
+  inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else if(case_name=="schema-window-functions") c(VS="input/vs.csv") else c(LB="input/lb.csv")
   stopifnot(identical(specification_source(handle),list(name=names(inputs)[[1L]],path=unname(inputs[[1L]]))))
   state <- new.env(parent=emptyenv()); state$reads <- 0L; state$requests <- character(); state$content <- list()
   capture <- function(name,path,maximum) {
@@ -37,7 +37,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   published <- 0L
   directory <- tempfile("original-published-"); dir.create(directory)
   publish <- function(path,content) {
-    stopifnot(case_name %in% c("adam-adlb-ordered-sum","schema-lookup"),path==if(case_name=="schema-lookup") "adsl.csv" else "adlb.csv")
+    stopifnot(case_name %in% c("adam-adlb-ordered-sum","schema-window-functions","schema-lookup"),path==if(case_name=="schema-lookup") "adsl.csv" else if(case_name=="schema-window-functions") "advs.csv" else "adlb.csv")
     stopifnot(identical(content,rawfile(file.path(case,"expected",path))))
     pending <- file.path(directory,"candidate.csv")
     writeBin(content,pending)
@@ -52,7 +52,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
     stopifnot(identical(report,expected))
   }
   stopifnot(state$reads==length(inputs),identical(state$requests,rep(names(inputs),2L)))
-  stopifnot(published==if(case_name %in% c("adam-adlb-ordered-sum","schema-lookup")) 2L else 0L)
+  stopifnot(published==if(case_name %in% c("adam-adlb-ordered-sum","schema-window-functions","schema-lookup")) 2L else 0L)
   unlink(directory,recursive=TRUE)
   cat(case_name,"complete original report and cached source capture passed\n")
   expired <- unserialize(serialize(handle,NULL))

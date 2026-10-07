@@ -478,6 +478,27 @@
         "rust/tests/installed_original_specifications.py",
         "python/tests/native/test_original_specification_truth.py"
       ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/schema-window-functions.json",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R",
+        "python/tests/native/test_original_specification_truth.py"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/window-failures.json",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tests/installed_original_specifications.py",
+        "python/tests/native/test_original_specification_truth.py"
+      ]
     }
   ],
   "suites": [
