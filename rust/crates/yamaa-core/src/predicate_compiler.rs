@@ -18,7 +18,6 @@ pub struct Limits {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnsupportedLiteral {
     WideInteger,
-    NonFiniteFloat,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -71,12 +70,7 @@ fn scalar(parsed: &ParsedPredicate, index: usize) -> Result<Scalar, Error> {
         }
         K::Number { fractional: true } => {
             let value: f64 = written.parse().map_err(|_| Error::Internal)?;
-            if !value.is_finite() {
-                return Err(Error::UnsupportedLiteral {
-                    kind: UnsupportedLiteral::NonFiniteFloat,
-                    span: node.span,
-                });
-            }
+            // Literal overflow follows the shared non-finite-to-missing rule.
             Value::float(value)
         }
         K::Temporal {

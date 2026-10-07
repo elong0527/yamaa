@@ -34,6 +34,9 @@ fn original_predicate_forms_execute_with_independent_truth() {
         ("X <> 9007199254740992", Truth::True),
         ("-9223372036854775808 < +0001", Truth::True),
         ("-2.50e+3 <= -2500", Truth::True),
+        ("1e309 = 0", Truth::Unknown),
+        ("-1e9999 IS NULL", Truth::True),
+        ("TRUE OR X = 1e309", Truth::True),
         ("3 > 2 AND 3 >= 3", Truth::True),
         ("M IS NULL AND X IS NOT NULL", Truth::True),
         ("AE.AEOUT IN ('RECOVERED', 'FATAL', NULL)", Truth::True),
@@ -109,19 +112,16 @@ fn whole_expression_grammar_and_carrier_limits_precede_execution() {
         compile("FALSE AND X =", "site", Limits::default()),
         Err(Error::Parse(ParseError::Grammar { .. }))
     ));
-    for (text, kind) in [
-        (
-            "FALSE AND X = 9223372036854775808",
-            UnsupportedLiteral::WideInteger,
-        ),
-        ("TRUE OR X = 1e309", UnsupportedLiteral::NonFiniteFloat),
+    for text in [
+        "FALSE AND X = 9223372036854775808",
+        "X = -9223372036854775809",
     ] {
         let Err(Error::UnsupportedLiteral { kind: actual, span }) =
             compile(text, "site", Limits::default())
         else {
             panic!("expected literal rejection")
         };
-        assert_eq!(actual, kind);
+        assert_eq!(actual, UnsupportedLiteral::WideInteger);
         assert!(text[span.start..span.end].parse::<f64>().is_ok());
     }
     let limits = Limits {

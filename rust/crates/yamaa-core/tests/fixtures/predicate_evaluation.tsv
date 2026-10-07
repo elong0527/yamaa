@@ -19,3 +19,6 @@ not-between	a NOT BETWEEN b AND c	$a $b $c between not	a=i:4;b=i:1;c=i:3	TRUE	a,
 like-escape	a LIKE '100!%' ESCAPE '!'	$a s:3130302125 like:21	a=s:31303025	TRUE	a
 like-dangling-dynamic	a LIKE b ESCAPE '!'	$a $b like:21	a=s:61;b=s:6121	invalid_predicate	a,b
 bool-incompatible	a = b	$a $b eq	a=b:false;b=b:false	incompatible_input_type	a,b
+nonfinite-literal-missing	1e309 = a	missing $a eq	a=i:0	UNKNOWN	a
+nonfinite-literal-eager	TRUE OR a = 1e309	true $a missing eq or	a=i:1	TRUE	a
+nonfinite-literal-absent	FALSE AND a = -1e9999	false $a missing eq and	-	unknown_field	a
