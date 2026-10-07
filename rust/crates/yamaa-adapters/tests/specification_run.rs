@@ -1734,3 +1734,95 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
         ]
     );
 }
+
+#[test]
+fn original_lookup_compiles_multiple_schemas_and_executes_named_selections() {
+    use yamaa_core::specification::{BindError, PreparedSpecification};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let schema = schema(&root.join("yaml"));
+    let case = root.join("benchmarks/schema-lookup");
+    let original = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+    // Driver position never changes authored capture order or secondary indices.
+    for raw in [
+        original.clone(),
+        original.replace(
+            "  DM: input/dm.csv\n  AE: input/ae.csv",
+            "  AE: input/ae.csv\n  DM: input/dm.csv",
+        ),
+    ] {
+        let document = prepare(&schema, raw.as_bytes());
+        let prepared = PreparedSpecification::prepare(document.model()).unwrap();
+        assert_eq!(prepared.sources().len(), 3);
+        assert_eq!(prepared.source().name, "DM");
+        let tables = prepared
+            .sources()
+            .iter()
+            .map(|source| {
+                csv_source::parse_text_table(
+                    &std::fs::read(case.join(&source.path)).unwrap(),
+                    Default::default(),
+                    TableLimits {
+                        max_rows: 100,
+                        max_columns: 64,
+                        max_cells: 6400,
+                        max_batches: 1,
+                    },
+                )
+                .unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert!(matches!(
+            prepared.bind(tables[prepared.driver_index()].schema()),
+            Err(BindError::SourceCount)
+        ));
+        let schemas = tables.iter().map(TableAccess::schema).collect::<Vec<_>>();
+        let plan = prepared.bind_sources(&schemas).unwrap();
+        let secondary = tables
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| *index != prepared.driver_index())
+            .map(|(_, table)| table as &dyn TableAccess<Error = _>)
+            .collect::<Vec<_>>();
+        for _ in 0..2 {
+            let attempt = plan.execute_observed_sources(
+                &tables[prepared.driver_index()],
+                &secondary,
+                limits(),
+            );
+            let execution = attempt.result.unwrap();
+            let bytes =
+                yamaa_adapters::csv_artifact::render(&execution.dataset, &[0, 1, 2, 3], 8192)
+                    .unwrap();
+            assert_eq!(
+                bytes,
+                std::fs::read(case.join("expected/adsl.csv")).unwrap()
+            );
+            assert_eq!(bytes.len(), 138);
+            assert_eq!(execution.verifications.len(), 1);
+            assert_eq!(execution.verifications[0].failed_count, 0);
+            let actual = attempt
+                .handler_counts
+                .iter()
+                .map(|entry| (entry.spec_path.as_str(), entry.handler.name(), entry.count))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                actual,
+                [
+                    (
+                        "columns.DTHDY.derivation.source.multiple_matches",
+                        "multiple_matches",
+                        1
+                    ),
+                    ("columns.DTHDY.derivation.source.no_match", "no_match", 2),
+                    (
+                        "columns.DTHCAUS.derivation.source.multiple_matches",
+                        "multiple_matches",
+                        1
+                    ),
+                    ("columns.DTHCAUS.derivation.source.no_match", "no_match", 2),
+                    ("columns.DTHPTERM.derivation.source.no_match", "no_match", 2),
+                ]
+            );
+        }
+    }
+}
