@@ -99,10 +99,33 @@ class OriginalSpecifications(unittest.TestCase):
                 with self.assertRaises(ValueError) as caught:
                     yamaa_native._prepare_document("spec.yaml", wrong, no_parent, no_parent, no_parent)
                 self.assertEqual(json.loads(str(caught.exception))["outcome"], {
-                    "status": "rejected", "stage": "capture", "code": "normalization",
+                    "status": "invalid", "diagnostics": [{
+                        "phase": "validation", "condition": "schema_version_mismatch",
+                        "requirement": None, "spec_paths": ["schema_version"],
+                        "context": {"expected": "1.0", "actual": "99.0"},
+                    }],
                 })
             finally:
                 os.chdir(previous)
+
+    def test_schema_context_preserves_exact_integers_and_constraint_values(self):
+        def no_port(*_):
+            self.fail("invalid entry reached parent or study authority")
+        for literal, expected in [("true", True), ("123456789012345678901234567890", 123456789012345678901234567890), ("null", None)]:
+            with self.subTest(literal=literal):
+                with self.assertRaises(ValueError) as caught:
+                    yamaa_native._prepare_document("spec.yaml", ("schema_version: " + literal).encode(), no_port, no_port, no_port)
+                self.assertEqual(json.loads(str(caught.exception))["outcome"], {
+                    "status": "invalid", "diagnostics": [{"phase": "validation", "condition": "schema_version_mismatch", "requirement": None, "spec_paths": ["schema_version"], "context": {"expected": "1.0", "actual": expected}}],
+                })
+        path = ROOT / "cases/adam-adlb-ordered-sum/spec.yaml"
+        text = path.read_bytes().replace(b"domain: ADLB", b"domain: bad-name", 1)
+        self.assertNotEqual(text, path.read_bytes())
+        with self.assertRaises(ValueError) as caught:
+            yamaa_native._prepare_document("spec.yaml", text, no_port, no_port, no_port)
+        self.assertEqual(json.loads(str(caught.exception))["outcome"], {
+            "status": "invalid", "diagnostics": [{"phase": "validation", "condition": "pattern_mismatch", "requirement": "REQ-0287", "spec_paths": ["domain"], "context": {"value": "bad-name", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}}],
+        })
 
     def test_owned_result_retains_projected_output_and_save_never_reexecutes(self):
         for name in CASES:

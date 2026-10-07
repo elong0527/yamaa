@@ -131,3 +131,26 @@ activation, shared reusable test fakes, and consolidation of the two function
 interfaces remain open. The existing inheritance JSON callback bridge also
 remains to be replaced. No new unimplemented port is presented as a working
 capability, and no public default, golden fixture or qualification level changes.
+
+### Captured standalone schema findings
+
+Standalone schema validation and named-window expansion retain semantic findings
+with the exact captured entry, the admitted schema, and the input arena for the
+failed pass. The arena for window expansion is normalized; it must not be
+replaced by the raw document when resolving context occurrence IDs. Final model
+findings carry text context and do not need an arena copy. Successful preparation
+does not make these failure snapshots.
+
+The shared adapter resolves context references before either host receives them:
+version values, permitted values, patterns, minimum lengths and sizes become the
+same portable validation diagnostic records as runtime findings. Mathematical
+integer context is serialized exactly, including beyond signed i64. This uses
+serde_json's arbitrary-precision number representation only at the transport
+boundary; it does not widen runtime integers or change arithmetic policy.
+
+Context expansion charges a conservative escaped-JSON byte budget before copies.
+A resource refusal or invalid internal context remains a boundary rejection,
+not a fabricated specification condition. YAML decoding and capture IO failures,
+inherited-loader diagnostics, and the public issues-table frontend still have
+separate integration gates. This does not qualify a public frontend or promote
+any benchmark inventory row.

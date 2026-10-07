@@ -328,16 +328,25 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
 }
 
 /// Schema capture/preparation never echoes arbitrary source bytes in host errors.
-/// Detailed schema validation observations will be connected with the source port.
+/// Semantic findings resolve against their retained schema and pass input.
 pub fn capture_failure(error: &crate::specification_source::Error) -> String {
     use crate::specification_source::Error;
+    if let Error::Findings(captured) = error {
+        return match captured_schema::findings(captured) {
+            Ok(diagnostics) => json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":diagnostics}}).to_string(),
+            Err(error) => {
+                let code = match error { captured_schema::Error::Limit => "diagnostic_context_limit", captured_schema::Error::InvalidContext => "diagnostic_context" };
+                json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":code}}).to_string()
+            },
+        };
+    }
     let code = match error {
         Error::Limit(_) => "capture_limit",
         Error::Decode { .. } => "yaml_decode",
         Error::Bundle(_) => "schema_bundle",
         Error::Normalize(_) => "normalization",
         Error::Validation(_) => "validation_policy",
-        Error::Model(_) => "invalid_model",
+        Error::Findings(_) => unreachable!("handled captured findings"),
         Error::InheritanceRequired => "inheritance_required",
     };
     json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":code}}).to_string()
@@ -357,3 +366,6 @@ pub(crate) fn type_name(kind: yamaa_core::value::ColumnType) -> &'static str {
 #[path = "specification_inheritance_diagnostics.rs"]
 mod inherited;
 pub use inherited::failure as inheritance_failure;
+
+#[path = "specification_schema_diagnostics.rs"]
+mod captured_schema;

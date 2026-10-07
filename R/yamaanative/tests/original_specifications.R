@@ -12,6 +12,14 @@ root <- system.file("specification-original", package="yamaanative", mustWork=TR
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
 module_names <- c("schema.yaml",sort(setdiff(list.files(file.path(root,"schema"),pattern="[.]yaml$"),"schema.yaml")))
 modules <- setNames(lapply(file.path(root,"schema",module_names),rawfile),module_names)
+# Both hosts receive already-resolved context from the captured Rust schema.
+prepare_entry <- get(".prepare_document",envir=asNamespace("yamaanative"))
+no_port <- function(...) stop("invalid entry reached source authority")
+for(literal in c("true","123456789012345678901234567890","null")) {
+  failure <- tryCatch(prepare_entry("spec.yaml",charToRaw(paste0("schema_version: ",literal)),no_port,no_port,no_port),error=identity)
+  expected <- paste0('{"outcome":{"diagnostics":[{"condition":"schema_version_mismatch","context":{"actual":',literal,',"expected":"1.0"},"phase":"validation","requirement":null,"spec_paths":["schema_version"]}],"status":"invalid"},"protocol":"specification/prototype"}')
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),expected))
+}
 for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup")) {
   case <- file.path(root,"cases",case_name)
   specification <- if(case_name=="schema-inheritance") "spec_study.yaml" else "spec.yaml"
