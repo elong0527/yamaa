@@ -128,6 +128,16 @@ class OriginalSpecifications(unittest.TestCase):
                 self.assertEqual(actual, expected)
                 self.assertEqual(requests, ["DM", "AE", "MEDDRA"])
 
+    def test_single_buffer_rejects_missing_secondary_sources_explicitly(self):
+        spec = prepare("schema-lookup")
+        source = (ROOT / "cases/schema-lookup/input/dm.csv").read_bytes()
+        with self.assertRaises(ValueError) as raised:
+            spec.execute_csv(source)
+        self.assertEqual(json.loads(str(raised.exception)), {
+            "protocol": "specification/prototype",
+            "outcome": {"status": "rejected", "stage": "bind", "code": "source_count"},
+        })
+
     def test_original_host_errors_and_interruptions_survive_native_return(self):
         specification = prepare(CASES[0])
         metadata = (

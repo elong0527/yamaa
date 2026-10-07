@@ -307,6 +307,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             Error::TypedSource(_) => ("ingest", "source_boundary"),
             Error::Bind(BindError::Catalog(_)) => ("bind", "reference_catalog"),
             Error::Bind(BindError::DependencyPolicy(_)) => ("bind", "dependency_policy"),
+            Error::Bind(BindError::SourceCount) => ("bind", "source_count"),
             Error::Bind(_) => ("bind", "internal"),
             Error::Execution(error) if error.is_internal() => ("execute", "internal"),
             Error::Execution(_) => ("execute", "execution_boundary"),

@@ -157,8 +157,16 @@ impl Declarations {
                     } else {
                         (
                             text(d, field(d, term, "variable")?)?,
-                            text(d, field(d, term, "direction")?)? == "desc",
-                            text(d, field(d, term, "nulls")?)? == "first",
+                            d.field(term, "direction")
+                                .map(|id| text(d, id))
+                                .transpose()?
+                                .unwrap_or("asc")
+                                == "desc",
+                            d.field(term, "nulls")
+                                .map(|id| text(d, id))
+                                .transpose()?
+                                .unwrap_or("last")
+                                == "first",
                         )
                     };
                     order.push((name.into(), descending, nulls_first));

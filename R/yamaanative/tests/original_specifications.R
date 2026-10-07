@@ -58,6 +58,10 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   expired <- unserialize(serialize(handle,NULL))
   stopifnot(inherits(tryCatch(specification_source(expired),error=identity),"error"))
 }
+# The legacy single-buffer entry point cannot satisfy a multi-source declaration.
+source_count <- tryCatch(execute_specification_csv(handle,rawfile(file.path(case,"input/dm.csv"))),error=identity)
+stopifnot(inherits(source_count,"error"))
+stopifnot(identical(conditionMessage(source_count),'{"outcome":{"code":"source_count","stage":"bind","status":"rejected"},"protocol":"specification/prototype"}'))
 # The same condition object (including private payload identity) must cross the
 # native call; neither errors nor interrupts may be converted into text or retried.
 for(kind in c("error","interrupt")) {

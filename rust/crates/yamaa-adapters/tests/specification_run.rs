@@ -2004,3 +2004,115 @@ fn original_lookup_failures_match_independent_diagnostics_and_completed_observat
         assert_eq!(host.requests, ["DM", "AE", "MEDDRA"]);
     }
 }
+
+#[test]
+fn directly_admitted_intermediate_order_terms_keep_omitted_schema_defaults() {
+    use yamaa_core::{
+        schema::{DocumentLimits, ValidationBudget},
+        specification::PreparedSpecification,
+    };
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let case = root.join("benchmarks/schema-lookup");
+    let raw = std::fs::read_to_string(case.join("spec.yaml"))
+        .unwrap()
+        .replace(
+            "order_by: [AE.AEDY]",
+            "order_by: [{variable: AE.AEDY, direction: desc, nulls: first}]",
+        );
+    let normalized = prepare(&schema(&root.join("yaml")), raw.as_bytes());
+    for (omit_direction, omit_nulls) in [(true, true), (true, false), (false, true), (false, false)]
+    {
+        let input = normalized.model().document();
+        let selection = sequence(input, input.field(input.root(), "intermediates").unwrap())[0];
+        let term = sequence(input, input.field(selection, "order_by").unwrap())[0];
+        let mut nodes = input.nodes().to_vec();
+        let N::Mapping(fields) = &input.nodes()[term] else {
+            panic!("mapping order term")
+        };
+        nodes[term] = N::Mapping(
+            fields
+                .iter()
+                .copied()
+                .filter(|&(name, _)| {
+                    !((omit_direction && text(input, name) == "direction")
+                        || (omit_nulls && text(input, name) == "nulls"))
+                })
+                .collect(),
+        );
+        fn copy_node(input: &[N], id: usize, output: &mut Vec<N>) -> usize {
+            let node = match &input[id] {
+                N::Sequence(items) => N::Sequence(
+                    items
+                        .iter()
+                        .map(|&id| copy_node(input, id, output))
+                        .collect(),
+                ),
+                N::Mapping(items) => N::Mapping(
+                    items
+                        .iter()
+                        .map(|&(a, b)| (copy_node(input, a, output), copy_node(input, b, output)))
+                        .collect(),
+                ),
+                node => node.clone(),
+            };
+            let id = output.len();
+            output.push(node);
+            id
+        }
+        let mut reachable = Vec::new();
+        let root = copy_node(&nodes, input.root(), &mut reachable);
+        let document = Document::new(reachable, root, DocumentLimits::default()).unwrap();
+        let model =
+            SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
+                .unwrap()
+                .unwrap();
+        let prepared = PreparedSpecification::prepare(&model).unwrap();
+        let tables = prepared
+            .sources()
+            .iter()
+            .map(|source| {
+                csv_source::parse_text_table(
+                    &std::fs::read(case.join(&source.path)).unwrap(),
+                    Default::default(),
+                    TableLimits {
+                        max_rows: 100,
+                        max_columns: 64,
+                        max_cells: 6400,
+                        max_batches: 1,
+                    },
+                )
+                .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let schemas = tables.iter().map(TableAccess::schema).collect::<Vec<_>>();
+        let plan = prepared.bind_sources(&schemas).unwrap();
+        let order = &plan.intermediates()[0].selection.as_ref().unwrap().order_by[0];
+        assert_eq!(order.descending, !omit_direction);
+        assert_eq!(order.nulls_first, !omit_nulls);
+    }
+}
+
+#[test]
+fn single_buffer_execution_reports_source_count_without_an_internal_failure() {
+    use yamaa_adapters::{specification_diagnostics, specification_run::PreparedRun};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let case = root.join("benchmarks/schema-lookup");
+    let run = PreparedRun::prepare(prepare(
+        &schema(&root.join("yaml")),
+        &std::fs::read(case.join("spec.yaml")).unwrap(),
+    ))
+    .unwrap();
+    let error = run
+        .execute_csv(&std::fs::read(case.join("input/dm.csv")).unwrap())
+        .err()
+        .unwrap();
+    let actual: serde_json::Value = serde_json::from_str(&specification_diagnostics::failure(
+        &error,
+        Some(run.source()),
+    ))
+    .unwrap();
+    assert_eq!(
+        actual,
+        serde_json::json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"bind","code":"source_count"}})
+    );
+}
