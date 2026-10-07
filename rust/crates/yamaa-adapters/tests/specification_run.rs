@@ -831,7 +831,7 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
         let mut expected: serde_json::Value = serde_json::from_slice(
             &std::fs::read(
                 Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("tests/fixtures/specifications")
+                    .join("tests/fixtures/specs")
                     .join(format!("{name}.json")),
             )
             .unwrap(),
@@ -1180,10 +1180,8 @@ fn original_success_report_follows_actual_atomic_publication_and_output_failures
         base_directory: ".",
     };
     let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
-    let expected: Json = serde_json::from_str(include_str!(
-        "fixtures/specifications/adam-adlb-ordered-sum.json"
-    ))
-    .unwrap();
+    let expected: Json =
+        serde_json::from_str(include_str!("fixtures/specs/adam-adlb-ordered-sum.json")).unwrap();
     let attempt = run.execute_with_port(&mut port);
     let report = specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
     assert_eq!(report, expected);
@@ -1251,10 +1249,8 @@ fn original_success_report_follows_actual_atomic_publication_and_output_failures
         &mut publisher,
     )
     .unwrap();
-    let original: Json = serde_json::from_str(include_str!(
-        "fixtures/specifications/adam-adlb-ordered-sum.json"
-    ))
-    .unwrap();
+    let original: Json =
+        serde_json::from_str(include_str!("fixtures/specs/adam-adlb-ordered-sum.json")).unwrap();
     let rows = original["tables"][1]["rows"].as_array().unwrap();
     let keys=[0,1,2,12,3,4,5,13,6,14,7,8,9,15,10,11,16].into_iter().map(|row|json!({"STUDYID":rows[row][0]["value"],"USUBJID":rows[row][1]["value"],"PARAMCD":rows[row][3]["value"],"AVISIT":rows[row][2]["value"]})).collect::<Vec<_>>();
     let diagnostic = json!({"phase":"verification","condition":"unique_failed","requirement":"REQ-0381","spec_paths":["verifications[0].unique"],"context":{"columns":["USUBJID"],"failure_count":5,"keys":&keys[..5]}});
@@ -1551,10 +1547,9 @@ fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
         base_directory: ".",
     };
     for all_missing in [false, true] {
-        let mut expected: Json = serde_json::from_str(include_str!(
-            "fixtures/specifications/adam-adlb-ordered-sum.json"
-        ))
-        .unwrap();
+        let mut expected: Json =
+            serde_json::from_str(include_str!("fixtures/specs/adam-adlb-ordered-sum.json"))
+                .unwrap();
         expected["tables"][0]["types"][6] = json!("str");
         let mut source = String::new();
         for (i, line) in input.lines().enumerate() {
@@ -1686,10 +1681,8 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
         &mut host,
     )
     .unwrap();
-    let expected: Json = serde_json::from_str(include_str!(
-        "fixtures/specifications/adam-adlb-ordered-sum.json"
-    ))
-    .unwrap();
+    let expected: Json =
+        serde_json::from_str(include_str!("fixtures/specs/adam-adlb-ordered-sum.json")).unwrap();
     assert_eq!(actual, expected);
     assert_eq!(host.reads, 1);
     assert_eq!(
@@ -1912,8 +1905,7 @@ fn original_lookup_complete_report_uses_all_captured_sources_and_actual_handlers
         };
         let actual = specification_report::complete(&prepared, &attempt, id, &mut host).unwrap();
         let mut expected: Json =
-            serde_json::from_str(include_str!("fixtures/specifications/schema-lookup.json"))
-                .unwrap();
+            serde_json::from_str(include_str!("fixtures/specs/schema-lookup.json")).unwrap();
         for source in expected["source_reads"].as_array_mut().unwrap() {
             source["snapshots_created"] = json!(created);
         }
@@ -1962,7 +1954,7 @@ fn original_lookup_failures_match_independent_diagnostics_and_completed_observat
     let schema = schema(&root.join("yaml"));
     let original = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
     let cases: Vec<Json> =
-        serde_json::from_str(include_str!("fixtures/specifications/lookup-failures.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/specs/lookup-failures.json")).unwrap();
     for variant in cases {
         let raw = original.replace(
             variant["before"].as_str().unwrap(),
@@ -1989,8 +1981,7 @@ fn original_lookup_failures_match_independent_diagnostics_and_completed_observat
         )
         .unwrap();
         let mut expected: Json =
-            serde_json::from_str(include_str!("fixtures/specifications/schema-lookup.json"))
-                .unwrap();
+            serde_json::from_str(include_str!("fixtures/specs/schema-lookup.json")).unwrap();
         expected["outcome"] = json!("failure");
         expected["nodes"][0]["outcome"] = json!("failure");
         for field in ["diagnostics", "handler_counts"] {
@@ -2188,10 +2179,9 @@ fn original_window_yaml_compiles_and_publishes_complete_independent_report() {
             &mut host,
         )
         .unwrap();
-        let mut expected: Json = serde_json::from_str(include_str!(
-            "fixtures/specifications/schema-window-functions.json"
-        ))
-        .unwrap();
+        let mut expected: Json =
+            serde_json::from_str(include_str!("fixtures/specs/schema-window-functions.json"))
+                .unwrap();
         expected["source_reads"][0]["snapshots_created"] = json!(created);
         assert_eq!(report, expected);
     }
@@ -2236,7 +2226,7 @@ fn original_window_failures_match_independent_diagnostics_and_completed_observat
     let schema = schema(&root.join("yaml"));
     let original = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
     let cases: Vec<Json> =
-        serde_json::from_str(include_str!("fixtures/specifications/window-failures.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/specs/window-failures.json")).unwrap();
     for variant in cases {
         let raw = original.replace(
             variant["before"].as_str().unwrap(),
@@ -2266,10 +2256,9 @@ fn original_window_failures_match_independent_diagnostics_and_completed_observat
             &mut host,
         )
         .unwrap();
-        let mut expected: Json = serde_json::from_str(include_str!(
-            "fixtures/specifications/schema-window-functions.json"
-        ))
-        .unwrap();
+        let mut expected: Json =
+            serde_json::from_str(include_str!("fixtures/specs/schema-window-functions.json"))
+                .unwrap();
         expected["outcome"] = json!("failure");
         expected["nodes"][0]["outcome"] = json!("failure");
         for field in ["diagnostics", "handler_counts"] {
@@ -2589,10 +2578,8 @@ fn inherited_original_preparation_prunes_before_source_binding() {
             &mut data,
         )
         .unwrap();
-        let mut expected: serde_json::Value = serde_json::from_str(include_str!(
-            "fixtures/specifications/schema-inheritance.json"
-        ))
-        .unwrap();
+        let mut expected: serde_json::Value =
+            serde_json::from_str(include_str!("fixtures/specs/schema-inheritance.json")).unwrap();
         expected["source_reads"][0]["snapshots_created"] = serde_json::json!(created);
         assert_eq!(report, expected);
     }

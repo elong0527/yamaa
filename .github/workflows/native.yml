@@ -361,6 +361,27 @@ jobs:
             --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
             --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaanative_0.1.0.tar.gz" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Check R source package outside checkout
+        working-directory: ${{ runner.temp }}
+        env:
+          _R_CHECK_CRAN_INCOMING_REMOTE_: 'false'
+        run: |
+          mkdir native-r-check
+          cd native-r-check
+          git -C "${GITHUB_WORKSPACE}" rev-parse HEAD > source-revision.txt
+          R CMD check --no-manual ../yamaanative_0.1.0.tar.gz
+          python -c 'from pathlib import Path; lines = Path("yamaanative.Rcheck/00check.log").read_text().splitlines(); assert "Status: OK" in lines, "R package check has unresolved findings"'
+      - name: Preserve R package check
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-r-check-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/native-r-check/source-revision.txt
+            ${{ runner.temp }}/native-r-check/yamaanative.Rcheck/00check.log
+            ${{ runner.temp }}/native-r-check/yamaanative.Rcheck/00install.out
+            ${{ runner.temp }}/native-r-check/yamaanative.Rcheck/tests/*.Rout*
+          if-no-files-found: error
       - name: Preserve R supplemental qualification
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5

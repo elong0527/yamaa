@@ -122,7 +122,7 @@ def stage(destination: Path):
     for name in CASES:
         shutil.copytree(REPOSITORY / "benchmarks" / name, destination / "cases" / name)
     shutil.copytree(
-        REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specifications",
+        REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specs",
         destination / "expected",
     )
 

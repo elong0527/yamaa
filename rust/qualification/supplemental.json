@@ -446,7 +446,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/negative-zero-division.json",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-zero-division.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -456,7 +456,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/negative-integer-overflow.json",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-integer-overflow.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -466,7 +466,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/adam-adlb-ordered-sum.json",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/adam-adlb-ordered-sum.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -476,7 +476,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/schema-lookup.json",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/schema-lookup.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -486,7 +486,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/lookup-failures.json",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/lookup-failures.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -496,7 +496,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/schema-window-functions.json",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/schema-window-functions.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -507,7 +507,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/window-failures.json",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/window-failures.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -517,7 +517,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/schema-inheritance.json",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/schema-inheritance.json",
       "family": "specification",
       "level": "compile",
       "consumers": [
@@ -969,7 +969,7 @@
       "role": "input"
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/specifications/README.md",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/README.md",
       "role": "documentation"
     }
   ]
