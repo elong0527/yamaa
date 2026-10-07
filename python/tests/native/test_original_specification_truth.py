@@ -13,7 +13,12 @@ ROOT = Path(__file__).resolve().parents[3]
 
 @pytest.mark.parametrize(
     "name",
-    ["negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum"],
+    [
+        "negative-zero-division",
+        "negative-integer-overflow",
+        "adam-adlb-ordered-sum",
+        "schema-lookup",
+    ],
 )
 def test_authored_reports_match_reference_without_native_execution(name, tmp_path):
     actual = json.loads(

@@ -20,5 +20,11 @@ successful checks, and the exact 1,030-byte CSV artifact. Installed tests compar
 published bytes to the unchanged benchmark golden and retain original publication
 errors and interruptions. No engine output is promoted into expected truth.
 
-These reports cover three fixtures, not the complete six-case #1739 cohort.
+The `schema-lookup` expectation is authored from the three committed source CSVs,
+the 138-byte expected artifact and literal specification metadata. It retains
+declaration-order source observations, all four output rows, the five inherited
+handler-count records and the successful unique check. Source ordering uses
+stored text; the selected `DTHDY` value is converted to an integer afterward.
+
+These reports cover four fixtures, not the complete six-case #1739 cohort.
 Original YAML/schema/CSV files are staged from the repository, not duplicated here.
