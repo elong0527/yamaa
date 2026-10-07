@@ -3089,6 +3089,19 @@ fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
 
 #[test]
 fn original_column_literals_match_complete_reference_reports_and_csv() {
+    independent_scalar_reports(include_str!("fixtures/column_literals.tsv"), "literal", 4);
+}
+
+#[test]
+fn original_conversion_handlers_match_complete_reference_reports_and_csv() {
+    independent_scalar_reports(
+        include_str!("fixtures/original_conversion_handlers.tsv"),
+        "handler",
+        5,
+    );
+}
+
+fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize) {
     use yamaa_adapters::{
         specification_report::{self, ArtifactPort, Identity},
         specification_run::{PreparedRun, SourcePort},
@@ -3123,7 +3136,7 @@ fn original_column_literals_match_complete_reference_reports_and_csv() {
     }
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut cases = 0;
-    for row in include_str!("fixtures/column_literals.tsv").lines().skip(1) {
+    for row in fixture.lines().skip(1) {
         let fields = row.split('\t').collect::<Vec<_>>();
         assert_eq!(fields.len(), 4);
         let bytes = (0..fields[3].len())
@@ -3137,7 +3150,7 @@ fn original_column_literals_match_complete_reference_reports_and_csv() {
         };
         let run = PreparedRun::prepare(prepare(&schema, fields[1].as_bytes())).unwrap();
         let attempt = run.execute_with_port(&mut port);
-        let example = format!("literal-{}", fields[0]);
+        let example = format!("{prefix}-{}", fields[0]);
         let result = specification_report::build_result(
             &run,
             &attempt,
@@ -3177,5 +3190,5 @@ fn original_column_literals_match_complete_reference_reports_and_csv() {
         assert_eq!(port.reads, 1);
         cases += 1;
     }
-    assert_eq!(cases, 4);
+    assert_eq!(cases, expected_cases);
 }

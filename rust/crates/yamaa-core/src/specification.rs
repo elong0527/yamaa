@@ -231,6 +231,7 @@ enum Operation {
 }
 #[derive(Clone, Debug)]
 struct Declaration {
+    handler: Option<crate::conversion::LiteralHandler>,
     path: String,
     operation: Operation,
 }
@@ -845,13 +846,16 @@ impl PreparedSpecification {
                 .field(id, "derivation")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 .ok_or(PrepareError::Internal)?;
-            if d.field(derivation, "unconvertible").is_some() {
-                reject(
-                    &mut extra,
-                    "unconvertible",
-                    format!("{prefix}.derivation.unconvertible"),
-                );
-            }
+            let handler = d
+                .field(derivation, "unconvertible")
+                .map(|id| {
+                    let spec_path = format!("{prefix}.derivation.unconvertible");
+                    Ok(crate::conversion::LiteralHandler {
+                        value: literal(d, id, &spec_path)?,
+                        spec_path,
+                    })
+                })
+                .transpose()?;
             let ops = mapping(d, field(d, derivation, "value")?)?;
             let &[(op, payload)] = ops else {
                 return Err(PrepareError::Internal);
@@ -918,7 +922,11 @@ impl PreparedSpecification {
                 }
             };
             if let Some(operation) = operation {
-                declarations.push(Declaration { path, operation });
+                declarations.push(Declaration {
+                    handler,
+                    path,
+                    operation,
+                });
             }
         }
         if !extra.is_empty() {
@@ -1260,6 +1268,21 @@ impl PreparedSpecification {
             self.keys.clone(),
             self.verifications.checks.clone(),
         )
+        .and_then(|plan| {
+            plan.with_conversion_handlers(
+                self.declarations
+                    .iter()
+                    .filter_map(|declaration| {
+                        declaration.handler.as_ref().map(|handler| {
+                            crate::dataset::ConversionHandler {
+                                assignment_path: declaration.path.clone(),
+                                handler: handler.clone(),
+                            }
+                        })
+                    })
+                    .collect(),
+            )
+        })
         .map_err(BindError::InvalidPlan)
     }
 }
