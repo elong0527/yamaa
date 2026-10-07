@@ -208,7 +208,7 @@ impl<'a> Reader<'a> {
 /// Parse one struct prefix; return its exact byte extent for page-body slicing.
 /// Binary payloads borrow the held input. The node budget bounds all owned AST
 /// collections before count-driven work; no allocation uses an unchecked count.
-pub(super) fn parse(bytes: &[u8], limits: Limits) -> Result<(Value<'_>, usize), Error> {
+pub(super) fn parse(bytes: &[u8], limits: Limits) -> Result<(Value<'_>, usize, usize), Error> {
     // Bound recursion independently of caller policy so a trusted but overly
     // permissive request cannot turn malformed nesting into a stack overflow.
     let limits = Limits {
@@ -222,7 +222,7 @@ pub(super) fn parse(bytes: &[u8], limits: Limits) -> Result<(Value<'_>, usize), 
         limits,
     };
     let value = reader.value(12, 0)?;
-    Ok((value, reader.position))
+    Ok((value, reader.position, reader.nodes))
 }
 
 #[cfg(test)]
@@ -244,8 +244,9 @@ mod tests {
             0x15, 0xac, 0x02, 0x48, 3, 0xff, 0, 0x61, 0x12, 0x19, 0x21, 1, 2, 0x1b, 1, 0x3c, 0xff,
             0, 0, 0x99,
         ];
-        let (root, used) = parse(&data, limits()).unwrap();
+        let (root, used, nodes) = parse(&data, limits()).unwrap();
         assert_eq!(used, 19);
+        assert_eq!(nodes, 10);
         assert_eq!(root.field(1), Some(&Value::Integer(150)));
         assert_eq!(root.field(5), Some(&Value::Binary(&data[5..8])));
         if let Some(Value::Binary(bytes)) = root.field(5) {
@@ -276,7 +277,7 @@ mod tests {
             0x06, 2, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 1, 0x06, 2, 0xfe, 0xff,
             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 1, 0,
         ];
-        let (value, used) = parse(&data, limits()).unwrap();
+        let (value, used, _) = parse(&data, limits()).unwrap();
         assert_eq!(used, data.len());
         let Value::Struct(fields) = &value else {
             panic!();
