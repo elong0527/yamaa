@@ -12,6 +12,7 @@ use yamaa_core::{
 };
 
 enum Tree<'a> {
+    Scalar(N),
     Text(&'a str),
     Map(Vec<(&'a str, Tree<'a>)>),
     List(Vec<Tree<'a>>),
@@ -19,6 +20,7 @@ enum Tree<'a> {
 impl Tree<'_> {
     fn append(self, nodes: &mut Vec<N>) -> usize {
         let node = match self {
+            Self::Scalar(node) => node,
             Self::Text(value) => N::Text(value.into()),
             Self::List(values) => {
                 N::Sequence(values.into_iter().map(|v| v.append(nodes)).collect())
@@ -37,6 +39,17 @@ impl Tree<'_> {
 }
 
 fn document(expression: &str, input_path: &str) -> SpecificationDocument {
+    operation_document(
+        "compute",
+        Tree::Map(vec![("expr", Tree::Text(expression))]),
+        input_path,
+    )
+}
+fn operation_document(
+    operation: &str,
+    payload: Tree<'_>,
+    input_path: &str,
+) -> SpecificationDocument {
     use Tree::*;
     let column = |name, op, field, value| {
         Map(vec![
@@ -63,7 +76,14 @@ fn document(expression: &str, input_path: &str) -> SpecificationDocument {
             "columns",
             List(vec![
                 column("ID", "source", "variable", "SRC.ID"),
-                column("VALUE", "compute", "expr", expression),
+                Map(vec![
+                    ("name", Text("VALUE")),
+                    ("type", Text("int")),
+                    (
+                        "derivation",
+                        Map(vec![("value", Map(vec![(operation, payload)]))]),
+                    ),
+                ]),
             ]),
         ),
         (
@@ -344,4 +364,49 @@ fn directly_admitted_windows_preserve_defaults_and_explicit_options() {
             }
         }
     }
+}
+
+fn literal_document(node: N) -> SpecificationDocument {
+    operation_document("literal", Tree::Scalar(node), "input.csv")
+}
+
+#[test]
+fn scalar_column_leaves_use_the_common_compiled_literal_expression() {
+    use yamaa_core::value::Value;
+    for (node, value) in [
+        (N::Null, Value::Missing),
+        (
+            N::Text("λ,\"quoted\"".into()),
+            Value::Str("λ,\"quoted\"".into()),
+        ),
+        (N::Boolean(true), Value::Bool(true)),
+        (N::Float(1.5), Value::float(1.5)),
+        (
+            N::Integer("9223372036854775807".into()),
+            Value::Int(i64::MAX),
+        ),
+        (
+            N::Integer("-9223372036854775808".into()),
+            Value::Int(i64::MIN),
+        ),
+    ] {
+        let prepared = PreparedSpecification::prepare(&literal_document(node)).unwrap();
+        let plan = prepared.bind(&source()).unwrap();
+        assert_eq!(plan.columns()[0].expression, Expression::Literal(value));
+        assert_eq!(plan.columns()[0].path, "columns.VALUE.derivation.literal");
+        assert_eq!(plan.output().columns()[1].kind, ColumnType::Int);
+        assert_eq!(plan.keys(), [0]);
+    }
+}
+
+#[test]
+fn unrepresented_literal_integers_remain_unsupported_before_binding() {
+    let Err(PrepareError::Unsupported(features)) =
+        PreparedSpecification::prepare(&literal_document(N::Integer("9223372036854775808".into())))
+    else {
+        panic!("wide integer must not narrow")
+    };
+    assert_eq!(features.len(), 1);
+    assert_eq!(features[0].operation, "wide_integer_literal");
+    assert_eq!(features[0].path, "columns.VALUE.derivation.literal");
 }

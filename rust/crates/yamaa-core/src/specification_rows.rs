@@ -81,18 +81,7 @@ fn declaration(
             }
             RowOperation::Source(name.into())
         }
-        "literal" => RowOperation::Literal(match &d.nodes()[payload] {
-            N::Null => Value::Missing,
-            N::Text(value) => Value::Str(value.clone()),
-            N::Boolean(value) => Value::Bool(*value),
-            N::Float(value) => Value::float(*value),
-            N::Integer(value) => Value::Int(
-                value
-                    .parse()
-                    .map_err(|_| unsupported("wide_integer_literal", &path))?,
-            ),
-            _ => return Err(unsupported("literal", &path)),
-        }),
+        "literal" => RowOperation::Literal(literal(d, payload, &path)?),
         "aggregate" if grouped => {
             closed_fields(d, payload, &["expr"], &path)?;
             let expression = text(d, field(d, payload, "expr")?)?;
