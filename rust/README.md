@@ -16,6 +16,9 @@ remaining cross-family migration are described in [DIAGNOSTICS.md](DIAGNOSTICS.m
 Core-owned bound expressions and function signatures, with the remaining
 compiled-specification migration, are described in [COMPILED_MODEL.md](COMPILED_MODEL.md).
 
+Native source capture/decoding ports and the shared application lifecycle, with
+the remaining driven-port migration, are described in [PORTS.md](PORTS.md).
+
 Decimal rounding characterization and the reference/rule discrepancies that
 precede its implementation are recorded in
 [ROUNDING_ASSESSMENT.md](ROUNDING_ASSESSMENT.md).
