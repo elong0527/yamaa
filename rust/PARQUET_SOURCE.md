@@ -60,3 +60,21 @@ expose no output and cannot publish; repeated save reads no source again. Python
 blocks reference semantic imports during the build, and R removes Python from PATH.
 These are supplemental integration gates, not promotion of the benchmark inventory
 to `shared_run`, public facade qualification or default cutover.
+
+
+## Shared profile ownership
+
+`yamaa-core::parquet_source` admits portable storage metadata without Arrow,
+Parquet library types or host callbacks. It selects the five closed logical pairs,
+legacy annotation compatibility, name/type precedence, root/leaf shape and raw
+calendar/whole-second bounds. The codec translates metadata, performs physical
+and compression work, and retains the existing stored-type diagnostic spelling.
+Complete physical decoding still precedes semantic profile findings. Lazy field
+translation stops at the first profile failure and does not run on root-alignment
+rejection. The five profile failure causes use the common core diagnostic registry;
+resource, unavailable-codec and physical-table boundaries remain distinct.
+
+The unchanged independent Parquet files and complete installed-host reports retain
+their bytes, field/temporal-before-text precedence, source-read collection and
+repeated failed-save gates. This ownership move does not extend the supported
+profile or qualify production filesystem ports/public frontend tuples.

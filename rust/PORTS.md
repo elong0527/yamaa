@@ -75,9 +75,9 @@ their closed failure causes and diagnostic context. Its immutable typed rows own
 normalized values independently of source bytes and declarations. The CSV adapter
 retains physical Arrow representation and checks the existing table capacities
 before conversion. Profile behavior and effect ordering are preserved. The held
-Parquet decoder uses the compiler's declared profile and
-empty-string policy, with bounded physical decoding and ordered semantic
-findings described in [PARQUET_SOURCE.md](PARQUET_SOURCE.md).
+Parquet decoder translates storage metadata into the core-owned closed type
+profile and temporal admission. It uses the compiler's empty-string policy, with
+bounded physical decoding and ordered semantic findings described in [PARQUET_SOURCE.md](PARQUET_SOURCE.md).
 The adapter serializes the engine result through the existing response
 formatter; it no longer chooses capture, binding or execution order. Tests use
 native fake ports to pin order, cached counts, original non-Clone errors,

@@ -118,6 +118,11 @@ conditions! {
     PredicateInvalidRegex => ("validation", "invalid_predicate", Some("REQ-1244")),
     SourceTypeUnknownField => ("validation", "unknown_field", Some("REQ-0532")),
     SourceTypeFieldParse => ("ingest", "field_parse_failed", Some("REQ-0536")),
+    ParquetInvalid => ("ingest", "source_parquet_invalid", Some("REQ-1038")),
+    ParquetFieldNameEmpty => ("ingest", "source_field_name_empty", Some("REQ-1039")),
+    ParquetFieldNameDuplicate => ("ingest", "source_field_name_duplicate", Some("REQ-1039")),
+    ParquetFieldTypeUnsupported => ("ingest", "source_field_type_unsupported", Some("REQ-1040")),
+    ParquetFieldValueInvalid => ("ingest", "source_field_value_invalid", Some("REQ-1041")),
 }
 
 /// Owned context retains scalar kinds and ordered sequences. Diagnostic integers

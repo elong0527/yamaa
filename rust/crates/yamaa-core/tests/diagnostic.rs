@@ -15,6 +15,8 @@ mod binding;
 mod csv;
 #[path = "diagnostic/grammar.rs"]
 mod grammar;
+#[path = "diagnostic/parquet.rs"]
+mod parquet;
 #[path = "diagnostic/preflight.rs"]
 mod preflight;
 impl NumericResolver for Bindings {
@@ -147,6 +149,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(binding::lookup_reached());
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());
+    reached.extend(parquet::reached());
     assert_eq!(reached, CONDITIONS.iter().copied().collect());
     assert_eq!(
         CONDITIONS.len(),

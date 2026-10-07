@@ -21,6 +21,7 @@ pub mod match_value;
 pub mod numeric;
 pub mod numeric_compiler;
 pub mod numeric_parser;
+pub mod parquet_source;
 pub mod predicate;
 pub mod predicate_compiler;
 pub mod predicate_parser;

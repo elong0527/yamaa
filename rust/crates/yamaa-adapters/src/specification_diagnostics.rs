@@ -89,42 +89,12 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
         Error::Prepare(PrepareError::Invalid(errors)) => errors.iter().map(preparing).collect(),
         Error::Bind(error) => binding(error, source?),
         Error::ParquetSource(error) => {
-            use crate::parquet_source::Error as P;
             let source = source?;
-            let (condition, requirement, extra) = match error {
-                P::Malformed => ("source_parquet_invalid", "REQ-1038", json!({})),
-                P::EmptyName { field } => (
-                    "source_field_name_empty",
-                    "REQ-1039",
-                    json!({"field":field}),
-                ),
-                P::DuplicateName { field } => (
-                    "source_field_name_duplicate",
-                    "REQ-1039",
-                    json!({"field":field}),
-                ),
-                P::Unsupported { field, stored_type } => (
-                    "source_field_type_unsupported",
-                    "REQ-1040",
-                    json!({"field":field,"stored_type":stored_type}),
-                ),
-                P::Value { field, row, value } => (
-                    "source_field_value_invalid",
-                    "REQ-1041",
-                    json!({"field":field,"row":row,"value":value}),
-                ),
-                _ => return None,
-            };
-            let mut context = json!({"dataset":source.name,"path":source.path});
-            context.as_object_mut()?.extend(extra.as_object()?.clone());
-            Some(vec![diagnostic(
-                "ingest",
-                condition,
-                Some(requirement),
-                vec![format!("input.{}.path", source.name)],
-                context,
-            )])
+            Some(vec![portable_diagnostic(
+                error.diagnostic(&source.name, &source.path)?,
+            )?])
         }
+
         Error::TypedSource(crate::typed_csv::Error::Typing(error)) => {
             Some(vec![portable_diagnostic(error.diagnostic(&source?.name)?)?])
         }
