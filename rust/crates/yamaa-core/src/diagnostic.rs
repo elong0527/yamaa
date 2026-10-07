@@ -10,6 +10,8 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
 use crate::{numeric_parser::SourceSpan, value::Value};
 
+#[path = "diagnostic_grammar.rs"]
+mod grammar;
 #[path = "diagnostic_numeric.rs"]
 mod numeric;
 
@@ -75,6 +77,13 @@ conditions! {
     OutputDuplicateColumn => ("validation", "duplicate_identifier", Some("REQ-0234")),
     OutputUndeclaredColumn => ("validation", "undeclared_column", Some("REQ-0234")),
     OutputInternalKey => ("validation", "internal_column_in_keys", Some("REQ-0220")),
+    NumericInvalidExpression => ("validation", "invalid_numeric_expression", Some("REQ-0439")),
+    NumericProhibitedConstruct => ("validation", "prohibited_construct", Some("REQ-0441")),
+    NumericProhibitedFunction => ("validation", "prohibited_function", Some("REQ-0440")),
+    AggregateInvalidExpression => ("validation", "invalid_aggregate_expression", Some("REQ-0499")),
+    AggregateProhibitedConstruct => ("validation", "prohibited_construct", Some("REQ-0512")),
+    AggregateProhibitedFunction => ("validation", "prohibited_function", Some("REQ-0500")),
+    AggregateNestedReduction => ("validation", "nested_reduction", Some("REQ-0502")),
 }
 
 /// Owned context retains scalar kinds and ordered sequences. Diagnostic integers

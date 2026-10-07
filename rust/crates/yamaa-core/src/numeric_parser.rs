@@ -70,20 +70,15 @@ pub enum GrammarFailure {
 impl GrammarFailure {
     /// The shared condition vocabulary entry for a validation failure.
     pub fn condition(&self) -> &'static str {
-        match self {
-            Self::InvalidExpression => "invalid_numeric_expression",
-            Self::ProhibitedConstruct { .. } => "prohibited_construct",
-            Self::ProhibitedFunction { .. } => "prohibited_function",
-        }
+        self.code().definition().condition
     }
 
     /// The language requirement owning this failure.
     pub fn requirement(&self) -> &'static str {
-        match self {
-            Self::InvalidExpression => "REQ-0439",
-            Self::ProhibitedConstruct { .. } => "REQ-0441",
-            Self::ProhibitedFunction { .. } => "REQ-0440",
-        }
+        self.code()
+            .definition()
+            .requirement
+            .expect("numeric grammar requirement")
     }
 }
 

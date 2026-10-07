@@ -6,9 +6,7 @@ use crate::{
 };
 use serde_json::{json, Value};
 use yamaa_core::{
-    column_dependencies,
-    numeric_compiler::CompileError,
-    numeric_parser::{GrammarFailure, ParseError},
+    column_dependencies, numeric_compiler::CompileError, numeric_parser::ParseError,
     reference_binding,
 };
 use yamaa_engine::specification::{
@@ -31,28 +29,7 @@ fn numeric(path: &str, expression: &str, error: &CompileError) -> Option<Value> 
     let CompileError::Parse(ParseError::Grammar { failure, .. }) = error else {
         return None;
     };
-    let mut context = json!({"expr":expression});
-    match failure {
-        GrammarFailure::InvalidExpression => {}
-        GrammarFailure::ProhibitedConstruct { construct } => {
-            context["construct"] = json!(construct)
-        }
-        GrammarFailure::ProhibitedFunction {
-            name,
-            argument_count,
-        } => {
-            context["function"] = json!(&expression[name.start..name.end]);
-            if let Some(count) = argument_count {
-                context["argument_count"] = json!(count);
-            }
-        }
-    }
-    Some(validation(
-        failure.condition(),
-        Some(failure.requirement()),
-        path.into(),
-        context,
-    ))
+    portable_diagnostic(failure.diagnostic(path, expression)?)
 }
 fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> {
     let BindError::Invalid(findings) = error else {
@@ -96,22 +73,7 @@ fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Ve
             };
             vec![validation(condition,requirement,path.clone(),context)]
         },
-        BindFinding::Aggregate{path,expression,error}=> {
-            use yamaa_core::aggregate_parser::GrammarFailure as A;
-            let mut context=json!({"expr":expression});
-            match error {
-                A::InvalidExpression => {},
-                A::ProhibitedConstruct {construct} => context["construct"]=json!(construct),
-                A::ProhibitedFunction {name,argument_count} => {
-                    context["function"]=json!(&expression[name.start..name.end]);
-                    if let Some(count)=argument_count {context["argument_count"]=json!(count);}
-                },
-                A::NestedReduction {outer,inner} => {
-                    context["outer"]=json!(outer.name());context["inner"]=json!(inner.name());
-                },
-            }
-            vec![validation(error.condition(),Some(error.requirement()),path.clone(),context)]
-        },
+        BindFinding::Aggregate{path,expression,error}=>vec![portable_diagnostic(error.diagnostic(path,expression)?)?],
         BindFinding::AggregateScope{path,expression,relation}=> {
             let reason = match relation {
                 None => "a grouped row aggregate reads its row driver".into(),

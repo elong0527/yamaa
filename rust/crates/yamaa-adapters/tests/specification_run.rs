@@ -657,6 +657,23 @@ fn core_preflight_matches_independent_complete_findings() {
 
 #[test]
 fn core_output_declarations_match_independent_complete_failed_reports() {
+    independent_failed_reports(
+        include_str!("fixtures/output_declarations.tsv"),
+        "output",
+        (5, 8),
+    );
+}
+
+#[test]
+fn core_grammar_matches_independent_complete_failed_reports() {
+    independent_failed_reports(
+        include_str!("fixtures/grammar_diagnostics.tsv"),
+        "grammar",
+        (7, 7),
+    );
+}
+
+fn independent_failed_reports(fixture: &str, prefix: &str, expected_counts: (usize, usize)) {
     use serde_json::Value;
     use yamaa_adapters::{
         specification_report::{self, ArtifactPort, Identity},
@@ -685,16 +702,13 @@ fn core_output_declarations_match_independent_complete_failed_reports() {
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut cases = 0;
     let mut findings = 0;
-    for row in include_str!("fixtures/output_declarations.tsv")
-        .lines()
-        .skip(1)
-    {
+    for row in fixture.lines().skip(1) {
         let fields = row.split('\t').collect::<Vec<_>>();
         assert_eq!(fields.len(), 3);
         let run = PreparedRun::prepare(prepare(&schema, fields[1].as_bytes())).unwrap();
         let mut port = Port(0);
         let attempt = run.execute_with_port(&mut port);
-        let example = format!("output-{}", fields[0]);
+        let example = format!("{prefix}-{}", fields[0]);
         let result = specification_report::build_result(
             &run,
             &attempt,
@@ -724,7 +738,7 @@ fn core_output_declarations_match_independent_complete_failed_reports() {
         findings += expected["diagnostics"].as_array().unwrap().len();
         cases += 1;
     }
-    assert_eq!((cases, findings), (5, 8));
+    assert_eq!((cases, findings), expected_counts);
 }
 
 #[test]
