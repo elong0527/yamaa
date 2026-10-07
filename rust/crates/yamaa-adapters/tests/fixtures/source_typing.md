@@ -1,0 +1,7 @@
+# Original source typing truth
+
+Four independently authored documents were captured from the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. Complete failed reports pin an unknown declared field, unknown-field admission before a bad conversion, stored row/field conversion order despite reversed declarations, and invalid temporal text. Each row retains exact source bytes as hexadecimal, authored paths, requirements, original failed text and source capture observations. No existing expectation is regenerated.
+
+Core admits immutable type declarations and converts the admitted CSV into owned normalized values. Missing declarations fail in written order before conversion; conversion follows stored row and field order without result handlers. The adapter checks the existing Arrow resource bounds before calling conversion and constructs the physical Arrow table afterward. Core owns both typed-source diagnostic causes; structural defects and policy limits have no fabricated language finding.
+
+Rust and both installed hosts compare complete independent reports after releasing preparation and block repeated failed saves without recapture or publication. Existing exact-width integer, float bits, temporal precision, present/missing text and source-finding collection probes retain their observations. This is private original-document evidence; production filesystem ports, public frontend cutover and inventory promotion remain separate gates.

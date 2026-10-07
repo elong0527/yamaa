@@ -5,6 +5,7 @@ use yamaa_adapters::{
 };
 use yamaa_core::{
     table::{TableAccess, ValueRef},
+    typed_csv::Error as TypingError,
     value::ColumnType as T,
 };
 fn limits() -> TableLimits {
@@ -67,7 +68,7 @@ fn unknown_fields_follow_written_declaration_order_before_conversion() {
         limits(),
     )
     .unwrap_err();
-    assert!(matches!(error,Error::UnknownField{field} if field=="Z"));
+    assert!(matches!(error,Error::Typing(TypingError::UnknownField{field}) if field=="Z"));
 }
 #[test]
 fn conversion_failure_follows_rows_then_stored_fields_not_declaration_order() {
@@ -79,7 +80,7 @@ fn conversion_failure_follows_rows_then_stored_fields_not_declaration_order() {
     )
     .unwrap_err();
     assert!(
-        matches!(error,Error::FieldParse{field,target:T::Int,value} if field=="B"&&value=="bad")
+        matches!(error,Error::Typing(TypingError::FieldParse{field,target:T::Int,value}) if field=="B"&&value=="bad")
     );
     let error = typed_csv::parse(
         b"A,B\nfirst,second",
@@ -88,7 +89,9 @@ fn conversion_failure_follows_rows_then_stored_fields_not_declaration_order() {
         limits(),
     )
     .unwrap_err();
-    assert!(matches!(error,Error::FieldParse{field,value,..} if field=="A"&&value=="first"));
+    assert!(
+        matches!(error,Error::Typing(TypingError::FieldParse{field,value,..}) if field=="A"&&value=="first")
+    );
 }
 #[test]
 fn profile_failure_precedes_unknown_fields_and_nonfinite_spellings_normalize() {
@@ -123,7 +126,7 @@ fn incomplete_temporal_text_is_not_implicitly_imputed() {
     for (kind, text) in [(T::Date, "2024-03"), (T::DateTime, "2024-03-02")] {
         let input = format!("X\n{text}");
         assert!(
-            matches!(typed_csv::parse(input.as_bytes(),&[("X".into(),kind)],Default::default(),limits()),Err(Error::FieldParse {field,value,..}) if field=="X"&&value==text)
+            matches!(typed_csv::parse(input.as_bytes(),&[("X".into(),kind)],Default::default(),limits()),Err(Error::Typing(TypingError::FieldParse {field,value,..})) if field=="X"&&value==text)
         );
     }
 }

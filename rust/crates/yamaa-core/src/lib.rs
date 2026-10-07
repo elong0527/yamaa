@@ -30,6 +30,7 @@ pub mod resource;
 pub mod schema;
 pub mod specification;
 pub mod temporal;
+pub mod typed_csv;
 pub mod value;
 
 /// Version of the shared core compiled into a native installation.

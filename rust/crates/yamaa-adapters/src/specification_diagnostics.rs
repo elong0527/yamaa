@@ -18,9 +18,6 @@ fn diagnostic(
 ) -> Value {
     json!({"phase":phase,"condition":condition,"requirement":requirement,"spec_paths":paths,"context":context})
 }
-fn validation(condition: &str, requirement: Option<&str>, path: String, context: Value) -> Value {
-    diagnostic("validation", condition, requirement, vec![path], context)
-}
 fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> {
     let BindError::Invalid(findings) = error else {
         return None;
@@ -128,28 +125,8 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
                 context,
             )])
         }
-        Error::TypedSource(crate::typed_csv::Error::UnknownField { field }) => {
-            let source = source?;
-            Some(vec![validation(
-                "unknown_field",
-                Some("REQ-0532"),
-                format!("input.{}.types.{field}", source.name),
-                json!({"dataset":source.name,"field":field}),
-            )])
-        }
-        Error::TypedSource(crate::typed_csv::Error::FieldParse {
-            field,
-            target,
-            value,
-        }) => {
-            let source = source?;
-            Some(vec![diagnostic(
-                "ingest",
-                "field_parse_failed",
-                Some("REQ-0536"),
-                vec![format!("input.{}.types.{field}", source.name)],
-                json!({"dataset":source.name,"field":field,"type":type_name(*target),"value":value}),
-            )])
+        Error::TypedSource(crate::typed_csv::Error::Typing(error)) => {
+            Some(vec![portable_diagnostic(error.diagnostic(&source?.name)?)?])
         }
 
         Error::Source(TextTableError::Csv(error)) => {

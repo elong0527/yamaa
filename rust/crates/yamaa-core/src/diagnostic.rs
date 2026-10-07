@@ -116,6 +116,8 @@ conditions! {
     PredicateInvalidExpression => ("validation", "invalid_predicate", Some("REQ-0188")),
     PredicateInvalidEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
     PredicateInvalidRegex => ("validation", "invalid_predicate", Some("REQ-1244")),
+    SourceTypeUnknownField => ("validation", "unknown_field", Some("REQ-0532")),
+    SourceTypeFieldParse => ("ingest", "field_parse_failed", Some("REQ-0536")),
 }
 
 /// Owned context retains scalar kinds and ordered sequences. Diagnostic integers

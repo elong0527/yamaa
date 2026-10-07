@@ -118,3 +118,63 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
     assert!(error.requirement().is_none());
     reached
 }
+
+pub(super) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnostic::ConditionCode>
+{
+    use yamaa_core::{
+        csv_source,
+        diagnostic::{Context, ContextValue},
+        typed_csv::PreparedTypes,
+        value::{ColumnType, Value},
+    };
+    let mut reached = std::collections::BTreeSet::new();
+    for (declarations, content, phase, condition, requirement, field, extra) in [
+        (
+            vec![
+                ("X".into(), ColumnType::Int),
+                ("ABSENT".into(), ColumnType::Int),
+            ],
+            b"X\ninvalid".as_slice(),
+            "validation",
+            "unknown_field",
+            "REQ-0532",
+            "ABSENT",
+            vec![],
+        ),
+        (
+            vec![("B".into(), ColumnType::Int), ("A".into(), ColumnType::Int)],
+            b"A,B\n1,bad\nworse,2".as_slice(),
+            "ingest",
+            "field_parse_failed",
+            "REQ-0536",
+            "B",
+            vec![("type", "int"), ("value", "bad")],
+        ),
+    ] {
+        let types = PreparedTypes::new(&declarations, 16).unwrap();
+        let error = types
+            .convert(csv_source::parse(content, Default::default()).unwrap())
+            .unwrap_err();
+        let diagnostic = error.diagnostic("SRC").unwrap();
+        let definition = diagnostic.definition();
+        assert_eq!(
+            (
+                definition.phase,
+                definition.condition,
+                definition.requirement
+            ),
+            (phase, condition, Some(requirement))
+        );
+        assert_eq!(diagnostic.spec_paths, [format!("input.SRC.types.{field}")]);
+        let expected: Context = [("dataset", "SRC"), ("field", field)]
+            .into_iter()
+            .chain(extra)
+            .map(|(key, value)| (key.into(), ContextValue::Scalar(Value::Str(value.into()))))
+            .collect();
+        assert_eq!(diagnostic.context, expected);
+        assert_eq!(diagnostic.source_span, None);
+        assert_eq!(diagnostic.operand_route, None);
+        reached.insert(diagnostic.code);
+    }
+    reached
+}

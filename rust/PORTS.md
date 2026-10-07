@@ -13,7 +13,7 @@ and codec interfaces are native traits; adapters translate values and errors.
 | `specification_output::ArtifactEncoder` | engine | Adapter CSV/Parquet encoders; native test fake | Original codec error; checked output byte limit |
 | `specification_output::OutputReport` | engine | Portable JSON report formatter; native test fake | Observation or report-budget failure before publication |
 | `specification_output::ArtifactPort` | engine | Python/R atomic publication bridges; native test fake | Original opaque publication error, without retry |
-| `TableAccess` | core | Immutable Arrow snapshots and engine output tables; test fakes | Bounds or original opaque cell-access error |
+| `TableAccess` | core | Immutable Arrow snapshots, core normalized CSV tables and engine output tables; test fakes | Bounds or original opaque cell-access error |
 | `inheritance::SourcePort` | engine | Existing inheritance bridge | Source failure or traversal resource limit |
 | `function_invocation::FunctionPort` and `dataset::FunctionBindings` | engine | Python/R native callback bridges | Original host exception, rejected representation or typed invocation failure |
 
@@ -70,9 +70,12 @@ in place so an outer panic boundary can preserve completed observations without
 reopening or reparsing input. An interrupted attempt remains explicitly
 incomplete until the adapter maps its boundary failure.
 
-Core owns pure CSV profile admission, its closed failure causes and diagnostic
-context. The CSV adapter retains physical Arrow representation and declared type
-conversion; existing profile behavior and capacity settings are preserved. The held Parquet decoder uses the compiler's declared profile and
+Core owns pure CSV profile admission, declared type admission/conversion, and
+their closed failure causes and diagnostic context. Its immutable typed rows own
+normalized values independently of source bytes and declarations. The CSV adapter
+retains physical Arrow representation and checks the existing table capacities
+before conversion. Profile behavior and effect ordering are preserved. The held
+Parquet decoder uses the compiler's declared profile and
 empty-string policy, with bounded physical decoding and ordered semantic
 findings described in [PARQUET_SOURCE.md](PARQUET_SOURCE.md).
 The adapter serializes the engine result through the existing response

@@ -3,7 +3,7 @@
 The #1753 slices move numeric evaluation, arithmetic/reduction, completed-result
 conversion, classified resource, original-document preflight, output-declaration
 numeric/aggregate grammar, binding/dependency, CSV profile, window and
-named-selection/predicate grammar diagnostics into
+named-selection/predicate grammar and declared CSV source typing diagnostics into
 `yamaa-core::diagnostic`. The
 original-specification runner and existing dataset/numeric transports consume
 those core diagnostics. Adapters encode runtime values and source offsets but
@@ -119,3 +119,14 @@ Three negative window/row documents retain actual reference capture/ingestion
 before binding failure, including repeated results and failed save gates. These
 complete-report observations do not promote assisted inventory records or remove
 the five assisted-route timing gaps.
+
+
+Declared CSV source typing is a pure core service over the admitted CSV carrier.
+Immutable declarations are checked before decode; unknown fields precede cell
+conversion, which follows stored row/field order and never invokes a result
+handler. Its owned normalized table outlives declarations and source bytes.
+Core owns REQ-0532 and REQ-0536 context; structural carrier defects and declaration
+policy failures have no semantic projection. The adapter retains resource checks
+before conversion and Arrow allocation afterward. Four complete independent failed
+reports in `tests/fixtures/source_typing.tsv` pin those boundaries and retained
+save gates in Rust and both installed hosts.
