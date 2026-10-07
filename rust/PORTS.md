@@ -35,6 +35,19 @@ bundled schema selection, environment/lock/function-test gates and host issue
 tables are not provided by this use case yet. It does not expose resolved YAML
 or choose either host's public result representation.
 
+The internal `_prepare_document` (Python) and `.prepare_document` (R) boundaries
+now accept raw entry bytes and parent/path ports without caller-supplied schema
+modules. Shared decoding selects standalone or inherited preparation by field
+presence, including an invalid null `parents` field; there is no retry/fallback.
+Entry bytes are decoded once and retained with the chosen lifecycle's provenance.
+The package embeds the current domain schema closure, reproduced byte-for-byte by
+`generate_shipped_schema.py` from authoritative YAML. Shared admission checks
+the declared `schema_version` and rejects unavailable versions before parent IO.
+Environment and submission schema roots are separate and are not included yet.
+Installed original-document tests use this boundary for all six documents and
+the seven complete inherited-loader failures. Public path APIs and complete
+capture diagnostics are still required before conformance inventory promotion.
+
 Core preparation admits the supported vocabulary before a source request can be
 made. An engine attempt requests immutable byte snapshots in input declaration
 order, measures each actual snapshot counter, and decodes owned tables. After

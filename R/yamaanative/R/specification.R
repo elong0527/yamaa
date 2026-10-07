@@ -52,6 +52,22 @@ prepare_specification <- function(modules, entry, identity, source) {
 .prepare_inherited_specification <- function(modules, entry, identity, source,
     canonicalize, capture, rebase) {
   args <- .specification_inputs(modules, entry, identity, source)
+  .prepare_with_ports(canonicalize,capture,rebase,function(dispatch) {
+    .Call(wrap__prepare_inherited_specification,args$names,args$modules,
+          args$entry,args$identity,args$source,dispatch)
+  })
+}
+
+# Package-owned schema; native code chooses the raw-document preparation lifecycle.
+.prepare_document <- function(identity, source, canonicalize, capture, rebase) {
+  identity <- .specification_text_bytes(identity,65536)
+  if (!is.raw(source) || length(source)>16777216) stop("source must be bounded raw YAML",call.=FALSE)
+  .prepare_with_ports(canonicalize,capture,rebase,function(dispatch) {
+    .Call(wrap__prepare_document,identity,source,dispatch)
+  })
+}
+
+.prepare_with_ports <- function(canonicalize,capture,rebase,invoke) {
   if (!is.function(canonicalize) || !is.function(capture) || !is.function(rebase)) {
     stop("inheritance ports must be functions", call.=FALSE)
   }
@@ -78,8 +94,7 @@ prepare_specification <- function(modules, entry, identity, source) {
     list(0L,value)
   }, error=function(e) {failure <<- e;list(1L,NULL)},
      interrupt=function(e) {failure <<- e;list(1L,NULL)})
-  result <- .Call(wrap__prepare_inherited_specification,args$names,args$modules,
-                 args$entry,args$identity,args$source,dispatch)
+  result <- invoke(dispatch)
   if (!is.null(failure)) stop(failure)
   if (!is.null(result$error)) stop(result$error,call.=FALSE)
   result$value

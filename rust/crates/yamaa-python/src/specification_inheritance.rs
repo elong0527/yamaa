@@ -10,6 +10,45 @@ use yamaa_adapters::{
 };
 use yamaa_engine::inheritance::{Source as Identity, SourceError};
 
+/// Package-owned schema and shared standalone/inherited selection.
+#[pyfunction]
+pub fn _prepare_document(
+    identity: &str,
+    source: &Bound<'_, PyBytes>,
+    canonicalize: &Bound<'_, PyAny>,
+    capture: &Bound<'_, PyAny>,
+    rebase: &Bound<'_, PyAny>,
+) -> PyResult<Specification> {
+    if !canonicalize.is_callable() || !capture.is_callable() || !rebase.is_callable() {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "inheritance ports must be callable",
+        ));
+    }
+    let limits = yamaa_adapters::specification_source::Limits::default();
+    if identity.len() > limits.identity_bytes || source.as_bytes().len() > limits.captured_bytes {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "invalid or over-limit specification source",
+        ));
+    }
+    let document = yamaa_adapters::shipped_schema::prepare(
+        Source {
+            identity: identity.into(),
+            bytes: source.as_bytes().to_vec(),
+        },
+        identity.into(),
+        &mut Port {
+            canonicalize,
+            capture,
+            rebase,
+        },
+    )
+    .map_err(|error| match inheritance_failure(error) {
+        Ok(message) => pyo3::exceptions::PyValueError::new_err(message),
+        Err(error) => error,
+    })?;
+    from_document(document)
+}
+
 fn text(value: &Bound<'_, PyAny>, maximum: usize) -> PyResult<String> {
     let value = value.cast::<PyString>()?.to_str()?;
     if value.len() > maximum {

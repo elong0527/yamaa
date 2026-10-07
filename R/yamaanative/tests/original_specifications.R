@@ -16,7 +16,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   case <- file.path(root,"cases",case_name)
   specification <- if(case_name=="schema-inheritance") "spec_study.yaml" else "spec.yaml"
   if(case_name=="schema-inheritance") {
-    inherited_prepare <- get(".prepare_inherited_specification",envir=asNamespace("yamaanative"))
+    inherited_prepare <- get(".prepare_document",envir=asNamespace("yamaanative"))
     parent_reads <- character(); parent_resolutions <- character()
     canonicalize <- function(declaring,written) {
       parent_resolutions <<- c(parent_resolutions,written)
@@ -34,9 +34,13 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
       stopifnot(identical(dirname(layer),dirname(entry)))
       written
     }
-    handle <- inherited_prepare(modules,"schema.yaml",normalizePath(file.path(case,specification),winslash="/"),rawfile(file.path(case,specification)),canonicalize,parent_capture,rebase)
+    handle <- inherited_prepare(normalizePath(file.path(case,specification),winslash="/"),rawfile(file.path(case,specification)),canonicalize,parent_capture,rebase)
     stopifnot(identical(parent_reads,c("spec_organization.yaml","spec_compound.yaml")),identical(parent_resolutions,c("spec_organization.yaml","spec_compound.yaml","spec_organization.yaml")))
-  } else handle <- prepare_specification(modules,"schema.yaml",specification,rawfile(file.path(case,specification)))
+  } else {
+    no_parent <- function(...) stop("standalone preparation invoked a parent port")
+    handle <- get(".prepare_document",envir=asNamespace("yamaanative"))(
+      specification,rawfile(file.path(case,specification)),no_parent,no_parent,no_parent)
+  }
   gc()
   inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else if(case_name=="schema-window-functions") c(VS="input/vs.csv") else c(LB="input/lb.csv")
   stopifnot(identical(specification_source(handle),list(name=names(inputs)[[1L]],path=unname(inputs[[1L]]))))
@@ -81,7 +85,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   stopifnot(inherits(tryCatch(specification_source(expired),error=identity),"error"))
 }
 # Replay existing complete graph failure truth through the raw-YAML entry point.
-inherited_prepare <- get(".prepare_inherited_specification",envir=asNamespace("yamaanative"))
+inherited_prepare <- get(".prepare_document",envir=asNamespace("yamaanative"))
 replay <- read.delim(file.path(root,"inheritance-replay.tsv"),sep="\t",quote="",comment.char="",colClasses="character",check.names=FALSE,fileEncoding="UTF-8")
 stopifnot(length(unique(replay$case))==7L)
 for(name in unique(replay$case)) {
@@ -107,12 +111,12 @@ for(name in unique(replay$case)) {
     stopifnot(length(bytes)<=maximum)
     bytes
   }
-  actual <- tryCatch(inherited_prepare(modules,"schema.yaml",rows$entry[[1L]],charToRaw(rows$entry_yaml[[1L]]),canonicalize,parent_capture,function(...) stop("failed traversal reached rebasing")),error=identity)
+  actual <- tryCatch(inherited_prepare(rows$entry[[1L]],charToRaw(rows$entry_yaml[[1L]]),canonicalize,parent_capture,function(...) stop("failed traversal reached rebasing")),error=identity)
   stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),rows$expected[[1L]]),calls==nrow(expected_calls))
 }
 cat("seven raw inherited-loader failure contracts and complete traces passed\n")
 # The inherited preparation callbacks retain exact R errors and interrupts.
-inherited_prepare <- get(".prepare_inherited_specification",envir=asNamespace("yamaanative"))
+inherited_prepare <- get(".prepare_document",envir=asNamespace("yamaanative"))
 inherit_case <- file.path(root,"cases","schema-inheritance")
 inherit_entry <- normalizePath(file.path(inherit_case,"spec_study.yaml"),winslash="/")
 inherit_source <- rawfile(inherit_entry)
@@ -124,12 +128,12 @@ for(operation in seq_len(3L)) for(kind in c("error","interrupt")) {
     function(identity,display_path,maximum) rawfile(identity),
     function(layer,entry,written,maximum) written)
   callbacks[[operation]] <- function(...) {calls <<- calls+1L;stop(failure)}
-  actual <- tryCatch(inherited_prepare(modules,"schema.yaml",inherit_entry,inherit_source,callbacks[[1L]],callbacks[[2L]],callbacks[[3L]]),error=identity,interrupt=identity)
+  actual <- tryCatch(inherited_prepare(inherit_entry,inherit_source,callbacks[[1L]],callbacks[[2L]],callbacks[[3L]]),error=identity,interrupt=identity)
   stopifnot(identical(actual,failure),calls==1L)
 }
 for(cycle in c(FALSE,TRUE)) {
   canonicalize <- function(...) if(cycle) c(inherit_entry,inherit_entry) else NULL
-  actual <- tryCatch(inherited_prepare(modules,"schema.yaml",inherit_entry,inherit_source,canonicalize,function(...) stop("unexpected source read"),function(...) stop("unexpected rebase")),error=identity)
+  actual <- tryCatch(inherited_prepare(inherit_entry,inherit_source,canonicalize,function(...) stop("unexpected source read"),function(...) stop("unexpected rebase")),error=identity)
   stopifnot(inherits(actual,"error"),grepl(if(cycle) '"condition":"inheritance_cycle"' else '"condition":"parent_not_found"',conditionMessage(actual),fixed=TRUE),grepl(if(cycle) 'REQ-0655' else 'REQ-0654',conditionMessage(actual),fixed=TRUE))
 }
 cat("inherited preparation callback errors, interrupts and shared diagnostics passed\n")

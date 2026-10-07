@@ -39,6 +39,7 @@ pub mod yaml_transport;
 pub mod csv_artifact;
 pub mod csv_source;
 
+pub mod shipped_schema;
 pub mod specification_source;
 
 pub mod specification_run;

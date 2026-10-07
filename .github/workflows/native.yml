@@ -76,6 +76,7 @@ jobs:
           cargo test -p yamaa-core -p yamaa-engine -p yamaa-adapters --release
           python tools/generate_regex_identifiers.py
           python tools/generate_schema_printable.py
+          python tools/generate_shipped_schema.py
           python tools/check_float_text.py
           python tools/check_sqrt.py
           python tools/check_rounding.py
