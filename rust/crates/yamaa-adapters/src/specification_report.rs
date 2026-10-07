@@ -65,6 +65,18 @@ fn condition(run: &PreparedRun, value: &Value) -> Result<Value, Error> {
             .collect::<Result<Map<_, _>, Error>>()?;
         context.insert("keys".into(), json!([keys]));
     }
+    if let Some(matched) = value.get("matched_key").filter(|v| !v.is_null()) {
+        let matched = matched.as_array().ok_or(Error::InvalidObservation)?;
+        let mut names = Vec::new();
+        let mut key = Map::new();
+        for field in matched {
+            let name = field["name"].as_str().ok_or(Error::InvalidObservation)?;
+            names.push(name);
+            key.insert(name.into(), plain(&field["value"])?);
+        }
+        context.insert("key".into(), json!(names));
+        context.insert("intermediate_key".into(), key.into());
+    }
     Ok(
         json!({"phase":diagnostic["phase"],"condition":diagnostic["condition"],"requirement":diagnostic["requirement"],"spec_paths":diagnostic["spec_paths"],"context":context}),
     )

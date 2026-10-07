@@ -66,6 +66,18 @@ fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> 
 }
 fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Vec<Value>> {
     Some(match error {
+        BindFinding::Lookup(finding) => {
+            let context = finding.context.iter().map(|(name, value)| {
+                let value = match value {
+                    yamaa_core::value::Value::Str(value) => json!(value),
+                    yamaa_core::value::Value::Int(value) => json!(value),
+                    _ => return None,
+                };
+                Some((name.clone(), value))
+            }).collect::<Option<serde_json::Map<_, _>>>()?;
+            let definition = finding.definition;
+            vec![diagnostic(definition.phase, definition.condition, Some(definition.requirement), vec![finding.path.clone()], context.into())]
+        },
         BindFinding::QualifiedReference {path,name,row,finding} => {
             use yamaa_core::reference_scope::Finding as F;
             let (condition,requirement,context)=match finding {

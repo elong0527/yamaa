@@ -18,6 +18,9 @@ use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
 #[path = "specification_intermediates.rs"]
 mod intermediates;
+#[path = "specification_lookup_diagnostics.rs"]
+mod lookup_diagnostics;
+pub use lookup_diagnostics::LookupFinding;
 #[path = "specification_rows.rs"]
 mod rows;
 #[path = "specification_verifications.rs"]
@@ -120,6 +123,7 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    Lookup(LookupFinding),
     QualifiedReference {
         path: String,
         name: String,
@@ -935,20 +939,26 @@ impl PreparedSpecification {
                 }
                 Operation::Source(name) => {
                     if let Some((index, field)) = self.intermediates.reference(name) {
-                        let item = &intermediates[index];
-                        edges.extend(item.keys.iter().map(|key| key.output_column));
-                        let column = secondary[item.source]
-                            .schema
-                            .columns()
-                            .iter()
-                            .position(|c| c.name == field);
-                        if column.is_none() {
+                        if let Some(item) = &intermediates[index] {
+                            edges.extend(item.keys.iter().map(|key| key.output_column));
+                            let column = secondary[item.source]
+                                .schema
+                                .columns()
+                                .iter()
+                                .position(|c| c.name == field);
+                            if column.is_none() {
+                                findings.push(BindFinding::Lookup(LookupFinding::reference(
+                                    path, name, None, "REQ-0125", None,
+                                )));
+                            }
+                            column.map(|column| Expression::Intermediate { index, column })
+                        } else {
                             findings.push(BindFinding::UnknownReference {
                                 path: path.clone(),
                                 name: name.clone(),
                             });
+                            None
                         }
-                        column.map(|column| Expression::Intermediate { index, column })
                     } else {
                         bind(name, &mut findings)?.map(|binding| match binding {
                             reference_binding::Binding::Dataset { field, .. } => {
@@ -1055,7 +1065,10 @@ impl PreparedSpecification {
                 primary: source.clone(),
                 secondary,
             },
-            intermediates,
+            intermediates
+                .into_iter()
+                .map(|item| item.expect("validated intermediate"))
+                .collect(),
             self.output.clone(),
             vec![RowTemplate {
                 mode: RowMode::Keys,

@@ -67,6 +67,19 @@ for(kind in c("error","interrupt")) {
   actual <- tryCatch(specification_failure_report(handle,capture,"failure"),error=identity,interrupt=identity)
   stopifnot(identical(actual,failure),calls==1L)
 }
+# A later capture must retain prior observations and propagate the exact condition.
+for(kind in c("error","interrupt")) {
+  failure <- structure(list(message="retained second source condition",call=NULL,payload=new.env()),class=c("source_test_condition",kind,"condition"))
+  requests <- character()
+  capture <- function(name,path,maximum) {
+    requests <<- c(requests,name)
+    if(name=="AE") stop(failure)
+    list(rawfile(file.path(case,path)),TRUE)
+  }
+  publish <- function(...) stop("source failure reached publication")
+  actual <- tryCatch(specification_report(handle,capture,publish,case_name),error=identity,interrupt=identity)
+  stopifnot(identical(actual,failure),identical(requests,c("DM","AE")))
+}
 for(rejected in list(FALSE,NULL,NA,logical(),c(TRUE,FALSE),1L,"TRUE")) {
   calls <- 0L
   capture <- function(name,path,maximum) list(rawfile(file.path(case,path)),TRUE)

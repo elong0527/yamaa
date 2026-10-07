@@ -1923,3 +1923,84 @@ fn original_lookup_complete_report_uses_all_captured_sources_and_actual_handlers
         vec![std::fs::read(case.join("expected/adsl.csv")).unwrap(); 2]
     );
 }
+
+#[test]
+fn original_lookup_failures_match_independent_diagnostics_and_completed_observations() {
+    use serde_json::{json, Value as Json};
+    use yamaa_adapters::{
+        specification_report::{self, ArtifactPort, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_core::specification::SourceDeclaration;
+    struct Host {
+        case: std::path::PathBuf,
+        requests: Vec<String>,
+    }
+    impl SourcePort for Host {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.requests.len()
+        }
+        fn capture(&mut self, source: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+            self.requests.push(source.name.clone());
+            Ok(Arc::from(
+                std::fs::read(self.case.join(&source.path)).unwrap(),
+            ))
+        }
+    }
+    impl ArtifactPort for Host {
+        type Error = ();
+        fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
+            panic!("failed lookup published")
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let case = root.join("benchmarks/schema-lookup");
+    let schema = schema(&root.join("yaml"));
+    let original = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+    let cases: Vec<Json> =
+        serde_json::from_str(include_str!("fixtures/specifications/lookup-failures.json")).unwrap();
+    for variant in cases {
+        let raw = original.replace(
+            variant["before"].as_str().unwrap(),
+            variant["after"].as_str().unwrap(),
+        );
+        let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
+        let mut host = Host {
+            case: case.clone(),
+            requests: vec![],
+        };
+        let attempt = run.execute_with_port(&mut host);
+        let actual = specification_report::complete(
+            &run,
+            &attempt,
+            Identity {
+                runtime: "python",
+                runtime_version: "fixture-runtime",
+                engine_version: "fixture-engine",
+                example: "schema-lookup",
+                specification: "spec.yaml",
+                base_directory: ".",
+            },
+            &mut host,
+        )
+        .unwrap();
+        let mut expected: Json =
+            serde_json::from_str(include_str!("fixtures/specifications/schema-lookup.json"))
+                .unwrap();
+        expected["outcome"] = json!("failure");
+        expected["nodes"][0]["outcome"] = json!("failure");
+        for field in ["diagnostics", "handler_counts"] {
+            expected[field] = variant[field].clone();
+            expected["nodes"][0][field] = variant[field].clone();
+        }
+        expected["artifacts"] = json!([]);
+        expected["verifications"] = json!([]);
+        expected["tables"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|table| table["stage"] == "source");
+        assert_eq!(actual, expected, "{}", variant["name"]);
+        assert_eq!(host.requests, ["DM", "AE", "MEDDRA"]);
+    }
+}

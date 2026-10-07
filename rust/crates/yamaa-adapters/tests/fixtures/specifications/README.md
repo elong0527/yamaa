@@ -28,3 +28,10 @@ stored text; the selected `DTHDY` value is converted to an integer afterward.
 
 These reports cover four fixtures, not the complete six-case #1739 cohort.
 Original YAML/schema/CSV files are staged from the repository, not duplicated here.
+
+`lookup-failures.json` contains twelve authored diagnostic expectations for
+predicate grammar/type/name errors, missing match fields, incompatible key types,
+ordering references, and unmatched/ambiguous selections. The Python reference
+checks these independently. Core adapter and installed Python tests compare the
+entire failed report, including source snapshots and the handler prefix recorded
+before an unmatched selection. No candidate report is used to write this file.

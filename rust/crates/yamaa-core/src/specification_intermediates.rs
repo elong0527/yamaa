@@ -13,6 +13,7 @@ struct Declaration {
     path: String,
     source: usize,
     keys: Option<Vec<(String, String)>>,
+    filter_text: Option<String>,
     filter: Option<Result<crate::predicate::Plan, predicate_compiler::Error>>,
     order: Vec<(String, bool, bool)>,
     keep: Option<Keep>,
@@ -98,11 +99,13 @@ impl Declarations {
             } else {
                 None
             };
+            let mut filter_text = None;
             let filter = if let Some(filter) = d
                 .field(id, "filter")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
                 let expression = text(d, filter)?;
+                filter_text = Some(expression.into());
                 let compiled = predicate_compiler::compile(
                     expression,
                     &format!("{path}.filter"),
@@ -116,6 +119,11 @@ impl Declarations {
                         crate::predicate_parser::ParseError::Grammar { .. },
                     ))
                     | Ok(_) => {}
+                    Err(predicate_compiler::Error::Parse(
+                        crate::predicate_parser::ParseError::UnsupportedRegex { .. },
+                    )) => {
+                        reject(extra, "predicate_regex", format!("{path}.filter"));
+                    }
                     Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
                     Err(_) => return Err(PrepareError::Limit("predicate_compilation")),
                 }
@@ -174,6 +182,7 @@ impl Declarations {
                 source,
                 keys,
                 filter,
+                filter_text,
                 order,
                 keep,
                 no_match,
@@ -189,7 +198,7 @@ impl Declarations {
         output: &TableSchema,
         keys: &[usize],
         findings: &mut Vec<BindFinding>,
-    ) -> Result<(Vec<SecondarySource>, Vec<Intermediate>), BindError> {
+    ) -> Result<(Vec<SecondarySource>, Vec<Option<Intermediate>>), BindError> {
         let secondary = sources
             .iter()
             .zip(schemas)
@@ -202,6 +211,7 @@ impl Declarations {
             .collect::<Vec<_>>();
         let mut result = Vec::new();
         for item in &self.0 {
+            let mut failed = false;
             let schema = schemas[item.source];
             let source_name = &sources[item.source].name;
             let resolve = |name: &str, path: &str, findings: &mut Vec<BindFinding>| {
@@ -213,10 +223,16 @@ impl Declarations {
                         .position(|column| column.name == name)
                 });
                 if field.is_none() {
-                    findings.push(BindFinding::UnknownReference {
-                        path: path.into(),
-                        name: name.into(),
-                    });
+                    let suggestion = (!name.contains('.')
+                        && schema.columns().iter().any(|c| c.name == name))
+                    .then(|| format!("{source_name}.{name}"));
+                    findings.push(BindFinding::Lookup(LookupFinding::reference(
+                        path,
+                        name,
+                        Some(&item.name),
+                        "REQ-0120",
+                        suggestion,
+                    )));
                 }
                 field
             };
@@ -227,66 +243,109 @@ impl Declarations {
                     (name.clone(), name.clone())
                 })
                 .collect::<Vec<_>>();
+            let pairs_declared = item.keys.as_ref().unwrap_or(&default_keys);
             let mut pairs = Vec::new();
-            for (field, name) in item.keys.as_ref().unwrap_or(&default_keys) {
-                let source_column = resolve(
-                    &format!("{source_name}.{field}"),
-                    &format!("{}.key", item.path),
-                    findings,
-                );
-                let output_column = output
-                    .columns()
-                    .iter()
-                    .position(|column| &column.name == name);
-                if output_column.is_none() {
-                    findings.push(BindFinding::UnknownReference {
-                        path: format!("{}.key.{field}", item.path),
-                        name: name.clone(),
-                    });
-                }
-                if let (Some(source_column), Some(output_column)) = (source_column, output_column) {
+            // Reference planning reports types before missing donor/output fields.
+            for (field, name) in pairs_declared {
+                let donor = schema.columns().iter().position(|c| c.name == *field);
+                let target = output.columns().iter().position(|c| c.name == *name);
+                if let (Some(source_column), Some(output_column)) = (donor, target) {
+                    let actual = schema.columns()[source_column].kind;
+                    let expected = output.columns()[output_column].kind;
+                    if !crate::key_relation::comparable(expected.into(), actual.into()) {
+                        findings.push(BindFinding::Lookup(LookupFinding::key_type(
+                            &format!("{}.key", item.path),
+                            &item.name,
+                            name,
+                            expected,
+                            actual,
+                        )));
+                        failed = true;
+                    }
                     pairs.push(MatchKey {
                         source_column,
                         output_column,
                     });
                 }
             }
-            let filter = if let Some(compiled) = &item.filter {
-                let plan = compiled
-                    .as_ref()
-                    .map_err(|error| BindError::PredicatePolicy(error.clone()))?;
-                let mut bindings = Vec::new();
-                let before = findings.len();
-                for name in plan.identifiers() {
-                    if let Some(column) = resolve(name, plan.spec_path(), findings) {
-                        bindings.push(Binding {
-                            name: name.into(),
-                            read: Read::Source(column),
-                        });
+            for (field, _) in pairs_declared {
+                if !schema.columns().iter().any(|c| c.name == *field) {
+                    findings.push(BindFinding::Lookup(LookupFinding::reference(
+                        &format!("{}.key", item.path),
+                        &format!("{source_name}.{field}"),
+                        Some(&item.name),
+                        "REQ-0116",
+                        None,
+                    )));
+                    failed = true;
+                }
+            }
+            for (_, name) in pairs_declared {
+                if !output.columns().iter().any(|c| c.name == *name) {
+                    findings.push(BindFinding::Lookup(LookupFinding::reference(
+                        &format!("{}.key", item.path),
+                        name,
+                        Some(&item.name),
+                        "REQ-0117",
+                        None,
+                    )));
+                    failed = true;
+                }
+            }
+            let filter = match &item.filter {
+                Some(Ok(plan)) => {
+                    let mut bindings = Vec::new();
+                    let before = findings.len();
+                    for name in plan.identifiers() {
+                        if let Some(column) = resolve(name, plan.spec_path(), findings) {
+                            bindings.push(Binding {
+                                name: name.into(),
+                                read: Read::Source(column),
+                            });
+                        }
+                    }
+                    if findings.len() == before {
+                        Some(
+                            BoundPredicate::new(plan.clone(), bindings)
+                                .map_err(BindError::InvalidPredicateBinding)?,
+                        )
+                    } else {
+                        failed = true;
+                        None
                     }
                 }
-                if findings.len() == before {
-                    Some(
-                        BoundPredicate::new(plan.clone(), bindings)
-                            .map_err(BindError::InvalidPredicateBinding)?,
-                    )
-                } else {
+                Some(Err(predicate_compiler::Error::Parse(
+                    crate::predicate_parser::ParseError::Grammar {
+                        position, failure, ..
+                    },
+                ))) => {
+                    findings.push(BindFinding::Lookup(LookupFinding::grammar(
+                        &format!("{}.filter", item.path),
+                        item.filter_text.as_deref().expect("written predicate"),
+                        position.character,
+                        failure,
+                    )));
+                    // A syntax rejection does not remove the declaration's schema.
                     None
                 }
-            } else {
-                None
+                Some(Err(error)) => return Err(BindError::PredicatePolicy(error.clone())),
+                None => None,
             };
             let mut order_by = Vec::new();
-            for (name, descending, nulls_first) in &item.order {
-                if let Some(column) = resolve(name, &format!("{}.order_by", item.path), findings) {
+            for (index, (name, descending, nulls_first)) in item.order.iter().enumerate() {
+                if let Some(column) =
+                    resolve(name, &format!("{}.order_by[{index}]", item.path), findings)
+                {
                     order_by.push(OrderTerm {
                         column,
                         descending: *descending,
                         nulls_first: *nulls_first,
                     });
+                } else {
+                    failed = true;
                 }
             }
-            result.push(Intermediate {
+            result.push((!failed).then(|| Intermediate {
                 identifier: item.name.clone(),
                 path: item.path.clone(),
                 source: if item.source > driver {
@@ -298,7 +357,7 @@ impl Declarations {
                 filter,
                 selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
                 no_match: item.no_match.clone(),
-            });
+            }));
         }
         Ok((secondary, result))
     }

@@ -412,3 +412,30 @@ def test_lookup_collects_ingestion_findings_in_source_order(tmp_path):
     assert all(r["snapshots_created"] == 1 for r in actual["source_reads"])
     for field in ("artifacts", "tables", "verifications", "handler_counts"):
         assert actual[field] == []
+
+
+LOOKUP_FAILURES = json.loads(
+    (ROOT / "rust/crates/yamaa-adapters/tests/fixtures/specifications/lookup-failures.json").read_text()
+)
+
+
+@pytest.mark.parametrize("variant", LOOKUP_FAILURES, ids=lambda case: case["name"])
+def test_authored_lookup_failures_match_independent_reference(variant, tmp_path):
+    case = tmp_path / "schema-lookup"
+    shutil.copytree(ROOT / "benchmarks/schema-lookup", case)
+    path = case / "spec.yaml"
+    path.write_text(path.read_text().replace(variant["before"], variant["after"]))
+    actual = execute_example(
+        case, schema_root=ROOT / "yaml", output_dir=tmp_path / "output", backend="python"
+    ).model_dump(mode="json")
+    expected = json.loads(
+        (ROOT / "rust/crates/yamaa-adapters/tests/fixtures/specifications/schema-lookup.json").read_text()
+    )
+    for field in ("runtime", "backend", "runtime_version", "engine_version"):
+        expected[field] = actual[field]
+    expected["outcome"] = expected["nodes"][0]["outcome"] = "failure"
+    for field in ("diagnostics", "handler_counts"):
+        expected[field] = expected["nodes"][0][field] = variant[field]
+    expected["artifacts"] = expected["verifications"] = []
+    expected["tables"] = [table for table in expected["tables"] if table["stage"] == "source"]
+    assert actual == expected

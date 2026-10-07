@@ -103,6 +103,31 @@ class OriginalSpecifications(unittest.TestCase):
                 self.assertEqual(state["requests"], list(sources.items()) * 2)
                 self.assertEqual(state["reads"], len(sources))
 
+    def test_lookup_failures_retain_complete_reference_observations(self):
+        name = "schema-lookup"
+        original = (ROOT / "cases" / name / "spec.yaml").read_bytes()
+        cases = json.loads((ROOT / "expected/lookup-failures.json").read_text())
+        for variant in cases:
+            with self.subTest(variant=variant["name"]):
+                raw = original.replace(variant["before"].encode(), variant["after"].encode())
+                spec = yamaa_native._prepare_specification(modules(), 0, "spec.yaml", raw)
+                requests = []
+                def capture(dataset, path, maximum):
+                    requests.append(dataset)
+                    return (ROOT / "cases" / name / path).read_bytes(), True
+                def publish(*args):
+                    self.fail("failed lookup published")
+                metadata = ("fixture-runtime", "fixture-engine", name, "spec.yaml", ".")
+                actual = json.loads(spec.report(capture, publish, metadata))
+                expected = json.loads((ROOT / "expected" / (name + ".json")).read_text())
+                expected["outcome"] = expected["nodes"][0]["outcome"] = "failure"
+                for field in ("diagnostics", "handler_counts"):
+                    expected[field] = expected["nodes"][0][field] = variant[field]
+                expected["artifacts"] = expected["verifications"] = []
+                expected["tables"] = [table for table in expected["tables"] if table["stage"] == "source"]
+                self.assertEqual(actual, expected)
+                self.assertEqual(requests, ["DM", "AE", "MEDDRA"])
+
     def test_original_host_errors_and_interruptions_survive_native_return(self):
         specification = prepare(CASES[0])
         metadata = (
