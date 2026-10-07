@@ -1,5 +1,10 @@
 # Shared compiler prerequisites for the fixed M2 cohort
 
+For the current cross-issue delivery order after #1756 and the API/architecture
+issues #1751–#1758, see [the migration order](migration-order.md). The baseline
+audit below remains historical evidence, not a statement that model admission
+or original-YAML host entrypoints still need to start from scratch.
+
 Audited against PR [#1745](https://github.com/elong0527/yamaa/pull/1745), merged
 as `875b18c205e9a0c4226b9f1040163db2d8ca384b` after all 11 final-head Actions
 checks and full base-to-head review passed. This document describes remaining
@@ -114,6 +119,12 @@ object from original YAML with no Python-produced document or plan.
 No default cutover, POWER policy assumption, automatic golden regeneration or
 full-language completion claim follows from this cohort. #1740/#1741/#1742 and
 remaining #1585 release/cutover scope stay active.
+
+The sequence above predates #1751–#1758. Its first two slices and the ordered-sum
+part of the third have merged in #1747, #1750 and #1756. Portable diagnostics,
+core-owned compiled representation and engine ports now precede the remaining
+lookup/window/inheritance extensions; the linked migration order explains the
+bounded public-facade gate and the later full-API gate.
 
 ## First implementation slice: normalized model admission
 
