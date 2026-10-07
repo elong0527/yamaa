@@ -234,14 +234,18 @@ standard.
 
 **REQ-0983.** Each document produces one `def:leaf` whose `ID` is its generated
 identifier, whose `xlink:href` is the document's `href`, and whose
-`def:title` is its `title`. A document of kind `annotated_crf` is also listed
-in `def:AnnotatedCRF`, one of kind `supplemental` in `def:SupplementalDoc`,
-and one of kind `other` in neither; every kind may be referenced from an
-origin, a method, or a comment. `href` names a file the submission package
-carries, and this contract does not require it to exist when the document is
-generated: supporting documents are assembled outside this language, and a
-document generated before its annotated case report form is finished is still
-the correct document.
+`def:title` is its `title`. A document's kind decides where else it is
+listed:
+
+- a document of kind `annotated_crf` is also listed in `def:AnnotatedCRF`;
+- one of kind `supplemental` is also listed in `def:SupplementalDoc`; and
+- one of kind `other` is listed in neither.
+
+Every kind may be referenced from an origin, a method, or a comment. `href`
+names a file the submission package carries. This contract does not require
+the file to exist when the document is generated. Supporting documents are
+assembled outside this language. A document generated before its annotated
+case report form is finished is still the correct document.
 
 <a id="req-0984"></a>
 
@@ -483,9 +487,9 @@ places on a regulatory submission:
 - each element begins on its own line, indented by two spaces per level of
   nesting below `ODM`, which is unindented;
 - an element whose content is text carries that text between its tags on one
-  line, opening tag, text, and closing tag together; text holding a `U+000A`
-  therefore spans lines, and the following element still begins at its own
-  indentation;
+  line, opening tag, text, and closing tag together. Text that holds a
+  `U+000A` therefore spans lines, and the following element still begins at
+  its own indentation;
 - an element with no content is written as a self-closing tag with no space
   before `/>`;
 - attributes are written on the element's opening line, separated by one
@@ -511,11 +515,16 @@ compared byte for byte.
 
 <a id="req-1009"></a>
 
-**REQ-1009.** Publication follows [Artifact publication](../storage/publication.md)'s procedure exactly: the complete
-document is written to a temporary regular file in the target's directory,
-flushed and closed, and atomically moved onto the target; a failure leaves the
-previous file and no residue. Generation completes before publication begins,
-so a failure at any point publishes nothing.
+**REQ-1009.** Publication follows
+[Artifact publication](../storage/publication.md)'s procedure exactly. The
+complete document is:
+
+1. written to a temporary regular file in the target's directory;
+2. flushed and closed; and
+3. atomically moved onto the target.
+
+A failure leaves the previous file and no residue. Generation completes before
+publication begins, so a failure at any point publishes nothing.
 
 <a id="req-1010"></a>
 
@@ -529,9 +538,10 @@ regardless of which requirement above it satisfied.
 <a id="req-1011"></a>
 
 **REQ-1011.** The following are outside this contract. None has a field in
-the schema [Submission metadata](metadata.md), [Controlled terminology](terminology.md), and `schema_define.yaml` close, so a
-specification that tries to declare one is rejected as an unknown field rather
-than generating a document that quietly omits it.
+the schema [Submission metadata](metadata.md),
+[Controlled terminology](terminology.md), and `schema_define.yaml` close. A
+specification that tries to declare one is therefore rejected as an unknown
+field, rather than generating a document that quietly omits it.
 
 - `arm:AnalysisResultDisplays`: an analysis-results metadata design
 - Split datasets and their `Alias` domain description: a specification that
@@ -555,23 +565,25 @@ declared `method.expression` and never from a derivation.
 **REQ-1013.** Value-level metadata now has its construct: a `rows` entry's
 `submission` map (see [REQ-1162](metadata.md#req-1162) through [REQ-1168](metadata.md#req-1168)) declares per-value
 metadata against statically enumerated `--TESTCD` literals. The mapping to
-Define-XML is therefore fixed: for each column carrying value-level
-metadata, the document generates one `def:ValueListDef` per distinct test
-code value, referenced from the column's `ItemRef`; each value's entry
-becomes a per-value `ItemDef` carrying the column-level declaration merged
-with the row-level overrides; each value list entry carries a
-`def:WhereClauseDef` selecting rows whose `<DOMAIN>TESTCD` equals the
-literal code; and each per-value `ItemDef` carries the row-level entry's
-`def:Origin`.
+Define-XML is therefore fixed:
+
+- for each column carrying value-level metadata, the document generates one
+  `def:ValueListDef` per distinct test code value, referenced from the
+  column's `ItemRef`;
+- each value's entry becomes a per-value `ItemDef` carrying the column-level
+  declaration merged with the row-level overrides;
+- each value list entry carries a `def:WhereClauseDef` selecting rows whose
+  `<DOMAIN>TESTCD` equals the literal code; and
+- each per-value `ItemDef` carries the row-level entry's `def:Origin`.
 
 <a id="req-1169"></a>
 
-**REQ-1169.** No generator consumes the row-level `submission` map yet, so a
+**REQ-1169.** No generator consumes the row-level `submission` map yet. A
 study document that includes a specification carrying value-level metadata
-fails loudly under the `Submission` context rather than generating a
-document that quietly omits the per-value definitions. Declared and
-unconsumed is an error; the failure names the row and column whose metadata
-has no generated form.
+therefore fails loudly under the `Submission` context. It does not generate a
+document that quietly omits the per-value definitions. Declared
+and unconsumed is an error; the failure names the row and column whose
+metadata has no generated form.
 
 ### Interface behavior
 
