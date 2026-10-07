@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-07 against main `cd2ae7a2196198f70860e2828c6d5b56973db262`
+Reconciled 2026-10-07 against main `e6b6f5bc1672c37021e3d4fe8309af4f15272016`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -37,6 +37,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1768 | Original inherited `spec_study.yaml` integration. |
 | #1769 | Shared preflight/build use case with rejection before study reads. |
 | #1770 | Package-owned shipped schema and automatic raw-document preparation. |
+| #1771 | Owned admitted build output and explicit save without recapture. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -44,8 +45,8 @@ qualify the public domain/check facade or replace reference preparation in the
 conformance runner. The existing inventory still records all six as
 `reference_assisted_run`.
 
-The current delivery frontier is owned build results with explicit save (#1771),
-then complete captured schema/source findings, declaring-file path rules and
+The current delivery frontier is complete captured schema/source findings,
+declaring-file path rules and
 production file ports, and the bounded public facade and conformance frontend.
 Schema findings include standalone and inherited preparation; source IO and
 complete failed-run reporting still require integration. The three public
