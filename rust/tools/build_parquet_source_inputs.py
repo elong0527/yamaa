@@ -23,7 +23,7 @@ def write(destination: Path, name: str, table: pa.Table, **options):
 def build(destination: Path):
     destination.mkdir(parents=True, exist_ok=False)
     table = pa.table({
-        "S": pa.array(["", None, "β\x00z"], type=pa.large_string()),
+        "S": pa.array(["", None, "\u03b2\x00z"], type=pa.large_string()),
         "I": pa.array([-(1 << 63), None, (1 << 63) - 1], type=pa.int64()),
         "F": pa.array([-0.0, None, float.fromhex("0x0.0000000000001p-1022")], type=pa.float64()),
         "D": pa.array([-719162, None, 2932896], type=pa.date32()),
