@@ -5300,7 +5300,14 @@ def plan_execution(
             # Group keys are source references too. Resolve them after ingestion
             # so an unknown stored field is a planning diagnostic, not a later
             # driver_groups KeyError (REQ-0103).
-            for position, variable in enumerate(row.group_by or ()):
+            group_names = tuple(row.group_by or ())
+            well_formed = bool(group_names) and len(set(group_names)) == len(
+                group_names
+            )
+            for position, variable in enumerate(group_names if well_formed else ()):
+                # REQ-0065/REQ-0066 shape findings are already in preflight.
+                if not variable.startswith(f"{driver}.") or variable.count(".") != 1:
+                    continue
                 _validate_qualified_reference(
                     _Reference(
                         variable,
