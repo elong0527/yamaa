@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-07 against main `1c06fc5c8c0e2f72283d11a52db8426baa2db701`
+Reconciled 2026-10-07 against main `fc7eca7fdd96d828ce5234d1d4204b098f301988`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -49,6 +49,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1789 | Portable schema kinds, core binding/dependency findings and pure core CSV profile admission. |
 | #1790 | Original scalar column literals and column/row conversion recovery wrappers. |
 | #1791 | Portable window/lookup/predicate findings and three unchanged negative corpus reports. |
+| #1792 | Pure core declared CSV source typing and closed Parquet metadata admission. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -89,19 +90,30 @@ separately observed predicate requirement/context gaps remain unqualified and
 documented in `predicate_diagnostics.md`; locked truth and assisted inventory
 remain unchanged.
 
-The next serial candidate moves declared CSV source typing and the closed Parquet
-source metadata profile into pure core services. Four complete independent CSV
-reports pin unknown-field and stored-cell conversion order, and all 52 independent
-Parquet containers retain their exact bytes and existing reports. Local
-qualification passes 664 Rust tests, strict Clippy, 44 tooling tests, direct and
-source-rebuilt installed Python forms (37 original-document and three schema
-methods), and strict R Status: OK with all 17 scripts. Seventeen changed
-Rust/source/fixture and eighteen R archive members, plus all 52 Parquet binaries
-in both source archives, match directly. The 67-contract/39-suite catalog and 75
-reached canonical diagnostic causes await final-head hosted qualification and
-full review. Physical decoding, resource limits and host/codec representation
-remain at their existing boundaries. Production file ports and all five assisted
-inventory timing gaps remain open.
+#1792 merged as `fc7eca7fdd96d828ce5234d1d4204b098f301988` after all 13
+checks, full final-head review and downloaded installed-artifact auditing. All six
+native jobs passed attempt 1. Six Python forms pass 22 supplemental suites, 37
+original-document and four schema methods each; both R source forms pass all 17
+scripts with strict Status: OK. Seventeen changed native Python and eighteen R
+members, plus all 52 independent Parquet binaries in every source archive, match
+directly. Its 67-contract/39-suite catalog and 75 reached canonical causes retain
+private-route qualification, with the 945-row assisted inventory unchanged.
+
+The next serial candidate connects explicit classified source replies in both
+native bridges and bounded actual file capture in Python. Eight complete
+independently authored source-port reports preserve first/later failure and cached
+prefix counters. The Python reader bounds capture and verification, and lazy
+exports permit importing file IO without the reference parser/planner/evaluator.
+Installed actual-file tests cover complete failures/save gates, successful lookup
+reports, exact CSV and save after input removal. Local qualification passes 664
+Rust tests, strict Clippy, 44 tooling tests, 4,805 reference Python tests (94
+platform/optional skips), and all 23 supplemental suites in direct/source-rebuilt
+Python forms (39 original-document, four file-resource and four schema methods).
+R passes strict Status: OK with all 17 scripts. Five native Python, nine R and five
+host-wheel changed members match directly. The 68-contract/40-suite catalog awaits
+its main-based PR, full review and final-head hosted qualification. Whole-project
+resource preflight, actual R filesystem ports, path-policy approval and public
+frontend/API gates remain open.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance
