@@ -123,6 +123,8 @@ conditions! {
     PredicateInvalidExpression => ("validation", "invalid_predicate", Some("REQ-0188")),
     PredicateInvalidEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
     PredicateInvalidRegex => ("validation", "invalid_predicate", Some("REQ-1244")),
+    RegexInvalidPattern => ("validation", "invalid_regex", Some("REQ-0827")),
+    VerificationMatchesFailed => ("verification", "matches_failed", Some("REQ-0379")),
     SourceTypeUnknownField => ("validation", "unknown_field", Some("REQ-0532")),
     SourceTypeFieldParse => ("ingest", "field_parse_failed", Some("REQ-0536")),
     ParquetInvalid => ("ingest", "source_parquet_invalid", Some("REQ-1038")),

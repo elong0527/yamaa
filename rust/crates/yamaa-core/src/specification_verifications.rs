@@ -181,13 +181,14 @@ impl Verifications {
         let mut extra = Vec::new();
         let mut predicates = BTreeMap::new();
         let mut column_checks = BTreeMap::new();
+        let mut regex_budget = crate::regex::CompileBudget::new(Default::default());
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
             let path = format!("{prefix}[{index}].{op}");
             if column.is_some()
                 && !matches!(
                     op,
-                    "not_missing" | "allowed_values" | "range" | "max_length"
+                    "not_missing" | "allowed_values" | "range" | "max_length" | "matches"
                 )
             {
                 reject(&mut extra, op, path);
@@ -198,6 +199,7 @@ impl Verifications {
                 "allowed_values" if column.is_some() => &["values", "id", "severity"],
                 "range" if column.is_some() => &["min", "max", "id", "severity"],
                 "max_length" if column.is_some() => &["max", "id", "severity"],
+                "matches" if column.is_some() => &["pattern", "id", "severity"],
                 "unique" | "all_or_none" => &["columns", "id", "severity"],
                 "row_count" => &["min", "max", "id", "severity"],
                 "assert" => &["when", "require", "id", "severity"],
@@ -231,7 +233,14 @@ impl Verifications {
             if let Some(column) = column {
                 column_checks.insert(
                     index,
-                    column_checks::prepare(d, op, payload, &path, output.columns()[column].kind)?,
+                    column_checks::prepare(
+                        d,
+                        op,
+                        payload,
+                        &path,
+                        output.columns()[column].kind,
+                        &mut regex_budget,
+                    )?,
                 );
             }
             // The current dataset engine's count bounds are signed 64-bit. Do
@@ -300,6 +309,10 @@ impl Verifications {
             };
             let check = if column.is_some() {
                 let check = column_checks.remove(&index).ok_or(PrepareError::Internal)?;
+                if let Check::InvalidDiagnostic(diagnostic) = check {
+                    result.deferred = Some(DeclarationFinding::Diagnostic(diagnostic));
+                    break;
+                }
                 if let Check::InvalidDeclaration {
                     condition,
                     requirement,

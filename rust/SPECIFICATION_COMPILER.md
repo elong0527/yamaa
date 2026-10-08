@@ -1,5 +1,16 @@
 # Original-specification compiler slice
 
+Error-severity column matches compiles the shared portable pattern once and searches
+present strings as written; authored anchors alone require full boundaries. Missing
+values pass. Invalid syntax retains REQ-0827 with only the pattern at its pattern
+path, deferred until the owning converted column checkpoint. Earlier conversion
+failures still win. Pattern compilation shares capture-width work/storage across a
+column's declarations; execution shares cumulative regex subject/work/state limits
+with predicate evaluation in one attempt. Policy refusals remain separate from
+semantic failures and retain earlier completed observations. Fourteen independent
+full reports, six exact CSV successes, and the unchanged negative-sex-code and
+negative-matches-bad-pattern reports pin the private installed scope.
+
 The implicit key-grain compiler also admits error-severity allowed_values, finite
 numeric range and max_length checks. Permitted literals convert once to the
 declared column kind; missing data bypasses these three checks. Range comparison
@@ -8,7 +19,7 @@ Length counts Unicode scalars. Empty or invalid declarations defer to the owning
 column phase, after its conversion, and preserve earlier records. Twenty complete
 independent reports and the unchanged negative-invalid-sex and
 negative-implausible-age documents pin the new scope. Wider/nonfinite declaration
-literals, matches, warning severity and row-template column checks remain explicit
+literals, warning severity and row-template column checks remain explicit
 unsupported or resource boundaries.
 
 Error-severity `not_missing` checks on implicit key-grain columns now compile into
@@ -19,7 +30,7 @@ to that point and retains the evaluated prefix. IDs have separate namespaces for
 each column and for dataset checks. Prior records survive unrelated later failures
 without rereading sources or admitting an output artifact. Ten independent full
 reports and the unchanged negative-not-missing-age document pin these semantics.
-Matches checks, warning severity and column checks in row templates remain
+Warning severity and column checks in row templates remain
 Unsupported before study capture in this bounded compiler slice.
 
 This internal entry point advances #1739 without changing the default runtime.
@@ -202,7 +213,7 @@ Seventeen independent complete reports cover success, failed checks, null and
 inactive guards, empty output, unknown/qualified fields, grammar, sample types
 and duplicate identities. Three successful cases retain exact CSV bytes. Both
 assertion predicates share the compiler's aggregate text budget before owned
-compilation. Warning severity, column verifications, nontext predicates and the
+compilation. Warning severity, row-template column verifications, nontext predicates and the
 existing special predicate requirement/context gaps remain unsupported.
 
 
@@ -216,5 +227,5 @@ reads share the engine work budget, including repeated references.
 Eleven independent complete reports and three exact successful CSV cases cover
 these behaviors and invalid declarations. The unchanged negative-paired-dates
 benchmark separately retains complete independently checked truth over its
-declared date source cells. Warning severity and column verifications remain
+declared date source cells. Warning severity and row-template column verifications remain
 unsupported; no public frontend or assisted-inventory promotion is claimed.

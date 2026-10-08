@@ -165,6 +165,89 @@ fn column_checks_wait_for_the_declared_prefix_and_retain_prior_records() {
 }
 
 #[test]
+fn repeated_column_patterns_share_subject_budget_and_retain_completed_checks() {
+    use yamaa_engine::dataset::{ColumnVerifications, Resource};
+    let source = table(
+        &[("ID", ColumnType::Str), ("V", ColumnType::Str)],
+        vec![
+            vec![Value::Str("a".into()), Value::Str("bbbbbbbb".into())],
+            vec![Value::Str("b".into()), Value::Str("bbbbbbbb".into())],
+        ],
+    );
+    let make = |count| {
+        DatasetPlan::new(
+            source.schema.clone(),
+            source.schema.clone(),
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![
+                    assign(0, Expression::Source(0)),
+                    assign(1, Expression::Source(1)),
+                ],
+                filter: None,
+            }],
+            vec![],
+            vec![0],
+            vec![],
+        )
+        .unwrap()
+        .with_column_verifications(vec![
+            ColumnVerifications {
+                column: 0,
+                checks: vec![Verification {
+                    path: "columns.ID.verifications[0].not_missing".into(),
+                    check: Check::NotMissing,
+                }],
+            },
+            ColumnVerifications {
+                column: 1,
+                checks: (0..count)
+                    .map(|index| Verification {
+                        path: format!("columns.V.verifications[{index}].matches"),
+                        check: Check::Matches(
+                            yamaa_core::regex::Pattern::compile("b", Default::default()).unwrap(),
+                        ),
+                    })
+                    .collect(),
+            },
+        ])
+        .unwrap()
+    };
+    let low = Limits {
+        scalar_text_bytes: 64,
+        ..limits()
+    };
+    assert!(make(1).execute(&source, low).is_ok());
+    let plan = make(10);
+    for _ in 0..2 {
+        source.reads.borrow_mut().clear();
+        let attempt = plan.execute_observed(&source, low);
+        assert!(matches!(
+            *attempt.result.unwrap_err(),
+            ExecutionError::Limit {
+                resource: Resource::PredicateRegexSubjectBytes,
+                limit: 64,
+                ..
+            }
+        ));
+        assert_eq!(*source.reads.borrow(), [(0, 0), (0, 1), (1, 0), (1, 1)]);
+        assert_eq!(attempt.retained_verifications.len(), 5);
+        assert!(attempt
+            .retained_verifications
+            .iter()
+            .all(|record| record.failed_count == 0));
+        assert_eq!(
+            attempt.retained_verifications[4].path,
+            "columns.V.verifications[3].matches"
+        );
+    }
+    assert_eq!(
+        plan.execute(&source, limits()).unwrap().verifications.len(),
+        11
+    );
+}
+
+#[test]
 fn permitted_value_work_is_admitted_before_comparison_and_retains_the_prior_check() {
     use yamaa_engine::dataset::{ColumnVerifications, Resource};
     let source = table(

@@ -165,6 +165,8 @@ pub enum Check {
     },
     /// Unicode scalar count, rather than encoded bytes or grapheme clusters.
     MaxLength(usize),
+    /// Search the portable pattern as written over each present string.
+    Matches(crate::regex::Pattern),
     /// A core-owned declaration finding deferred until dataset verification.
     InvalidDiagnostic(crate::diagnostic::Diagnostic),
     /// A compiler finding evaluated in declaration order after output keys.
@@ -575,7 +577,8 @@ impl DatasetPlan {
                 Check::NotMissing
                 | Check::AllowedValues(_)
                 | Check::Range { .. }
-                | Check::MaxLength(_) => return Err(PlanError::InvalidColumns),
+                | Check::MaxLength(_)
+                | Check::Matches(_) => return Err(PlanError::InvalidColumns),
                 Check::InvalidDiagnostic(_) => {}
                 Check::InvalidDeclaration { .. } => {}
                 Check::PredicateDeclaration(predicate) => predicate
@@ -659,6 +662,7 @@ impl DatasetPlan {
                         | Check::AllowedValues(_)
                         | Check::Range { .. }
                         | Check::MaxLength(_)
+                        | Check::Matches(_)
                         | Check::InvalidDeclaration { .. }
                         | Check::InvalidDiagnostic(_)
                 ) {

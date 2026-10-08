@@ -3419,6 +3419,14 @@ fn original_column_values_match_complete_reports_and_exact_csv() {
         20,
     );
 }
+#[test]
+fn original_column_matches_match_complete_reports_and_exact_csv() {
+    replay_source_selection_truth(
+        include_str!("fixtures/original_column_matches.tsv"),
+        "column-matches",
+        14,
+    );
+}
 fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
     use yamaa_adapters::{
         specification_report::{self, Identity},

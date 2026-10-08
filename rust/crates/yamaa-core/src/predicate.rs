@@ -256,6 +256,26 @@ impl Budget {
         }
     }
 
+    /// Column checks and predicates share regex work within one application attempt.
+    pub fn search_pattern<'s>(
+        &mut self,
+        pattern: &regex::Pattern,
+        subject: &'s str,
+        limits: regex::MatchLimits,
+    ) -> Result<Option<regex::Match<'s>>, LimitError> {
+        pattern
+            .search_with_budget(subject, limits, &mut self.regex)
+            .map_err(|error| LimitError {
+                resource: match error.resource {
+                    regex::Resource::SubjectBytes => Resource::RegexSubjectBytes,
+                    regex::Resource::Work => Resource::RegexWork,
+                    regex::Resource::StateCells => Resource::RegexStateCells,
+                    _ => unreachable!("search cannot consume compilation resources"),
+                },
+                limit: error.limit,
+            })
+    }
+
     /// Share ordinary application visits with predicate node/scalar visits.
     pub fn work(&mut self, amount: usize) -> Result<(), LimitError> {
         charge(

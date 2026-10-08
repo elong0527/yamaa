@@ -1,5 +1,12 @@
 # Portable diagnostic foundation
 
+Column pattern failures now reach REQ-0379 through the pure completed-string
+service. Invalid compiled pattern syntax owns REQ-0827 with its authored pattern
+and pattern path, without parser offsets or reason fields. Both findings retain
+reference checkpoint order. The shared matcher charges cumulative subject bytes,
+work and state cells across checks and predicates; a policy refusal preserves the
+completed prefix and does not become a false match failure.
+
 Allowed-value, finite-range and Unicode-length checks now own REQ-0376, REQ-0377
 and REQ-0378 through the same pure completed-value service. Their core projection
 retains column and failure count, plus the authored maximum for length. The engine

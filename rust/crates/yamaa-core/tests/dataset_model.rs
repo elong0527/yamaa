@@ -194,6 +194,12 @@ fn column_value_admission_requires_converted_values_and_valid_types_and_bounds()
     )
     .is_ok());
     assert!(make(ColumnType::Str, Check::MaxLength(1)).is_ok());
+    let pattern = yamaa_core::regex::Pattern::compile("b", Default::default()).unwrap();
+    assert_eq!(
+        make(ColumnType::Int, Check::Matches(pattern.clone())),
+        Err(PlanError::InvalidColumns)
+    );
+    assert!(make(ColumnType::Str, Check::Matches(pattern)).is_ok());
 }
 
 /// Admission rejects latent invalid paths even for an empty source snapshot.
