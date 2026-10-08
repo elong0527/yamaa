@@ -1,5 +1,16 @@
 # Original-specification compiler slice
 
+Error-severity `not_missing` checks on implicit key-grain columns now compile into
+the immutable core plan. Column checks wait until every key and their declared
+column prefix are complete, including for empty output. All checks on one column
+run in authored order before that column's failure gate; a duplicate ID is deferred
+to that point and retains the evaluated prefix. IDs have separate namespaces for
+each column and for dataset checks. Prior records survive unrelated later failures
+without rereading sources or admitting an output artifact. Ten independent full
+reports and the unchanged negative-not-missing-age document pin these semantics.
+Other column families, warning severity and column checks in row templates remain
+Unsupported before study capture in this bounded compiler slice.
+
 This internal entry point advances #1739 without changing the default runtime.
 It consumes captured raw current-schema modules and original standalone YAML,
 normalizes and validates them in Rust, and retains schema snapshots, source bytes

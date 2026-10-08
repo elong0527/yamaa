@@ -102,6 +102,7 @@ conditions! {
     SourceFilterSingleValue => ("validation", "prohibited_construct", Some("REQ-0148")),
     SourceUnknownReference => ("validation", "unknown_field", Some("REQ-0103")),
     VerificationUnknownReference => ("validation", "unknown_field", Some("REQ-0405")),
+    VerificationNotMissingFailed => ("verification", "not_missing_failed", Some("REQ-0375")),
     OutputUnknownReference => ("validation", "unknown_field", None),
     OutputUnresolvableReference => ("validation", "unresolvable_name", None),
     ColumnDependencyCycle => ("validation", "dependency_cycle", Some("REQ-0072")),

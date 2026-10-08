@@ -142,6 +142,14 @@ pub struct Execution {
 pub struct ExecutionAttempt<E> {
     pub result: Result<Execution, Box<ExecutionError<E>>>,
     pub handler_counts: Vec<HandlerCount>,
+    /// Completed checks preceding an unrelated failure, outside its diagnostic.
+    pub retained_verifications: Vec<CheckRecord>,
+}
+
+#[derive(Default)]
+struct AttemptObservations {
+    handlers: HandlerCounter,
+    verifications: Vec<CheckRecord>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -697,15 +705,24 @@ impl Executor<'_> {
         observer: &mut dyn FnMut(ExecutionPhase),
     ) -> ExecutionAttempt<T::Error> {
         observer(ExecutionPhase::Admission);
-        let mut handlers = HandlerCounter::default();
+        let mut observations = AttemptObservations::default();
         for declaration in self.plan.conversion_handlers() {
-            handlers.register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
+            observations
+                .handlers
+                .register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
         }
-        let result =
-            self.execute_inner(table, secondary, functions, limits, &mut handlers, observer);
+        let result = self.execute_inner(
+            table,
+            secondary,
+            functions,
+            limits,
+            &mut observations,
+            observer,
+        );
         let attempt = ExecutionAttempt {
             result,
-            handler_counts: handlers.snapshot().to_vec(),
+            handler_counts: observations.handlers.snapshot().to_vec(),
+            retained_verifications: observations.verifications,
         };
         observer(ExecutionPhase::Finished);
         attempt
@@ -718,9 +735,13 @@ impl Executor<'_> {
         secondary: &[&dyn TableAccess<Error = T::Error>],
         functions: &mut dyn FunctionBindings<Error = T::Error>,
         limits: Limits,
-        handlers: &mut HandlerCounter,
+        observations: &mut AttemptObservations,
         observer: &mut dyn FnMut(ExecutionPhase),
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
+        let AttemptObservations {
+            handlers,
+            verifications: records,
+        } = observations;
         for assignment in self
             .plan
             .templates()
@@ -826,6 +847,18 @@ impl Executor<'_> {
                 }
             }
         }
+        let mut completed = vec![false; self.plan.output().columns().len()];
+        for assignment in &self.plan.templates()[0].assignments {
+            completed[assignment.column] = true;
+        }
+        let mut next_column = 0;
+        self.check_columns(
+            &candidates,
+            &completed,
+            &mut next_column,
+            records,
+            &mut budget,
+        )?;
         for assignment in self.plan.columns() {
             let mut numbers = if let Expression::Window(window) = &assignment.expression {
                 Some(windows::Run::new(
@@ -886,6 +919,14 @@ impl Executor<'_> {
                 };
                 candidate.completed[assignment.column] = true;
             }
+            completed[assignment.column] = true;
+            self.check_columns(
+                &candidates,
+                &completed,
+                &mut next_column,
+                records,
+                &mut budget,
+            )?;
         }
         observer(ExecutionPhase::OutputKeys);
         let dataset = Dataset {
@@ -941,13 +982,13 @@ impl Executor<'_> {
             return Err(Box::new(ExecutionError::KeyFailures(failures)));
         }
         observer(ExecutionPhase::Verification);
-        let mut records = Vec::new();
         for verification in self.plan.verifications() {
             let record = match &verification.check {
+                Check::NotMissing => unreachable!("column-only check is rejected at admission"),
                 Check::InvalidDiagnostic(diagnostic) => {
                     return Err(Box::new(ExecutionError::VerificationDiagnostic {
                         diagnostic: diagnostic.clone(),
-                        records,
+                        records: core::mem::take(records),
                     }));
                 }
                 Check::InvalidDeclaration {
@@ -960,7 +1001,7 @@ impl Executor<'_> {
                         condition,
                         requirement,
                         reason: reason.clone(),
-                        records,
+                        records: core::mem::take(records),
                     }));
                 }
                 Check::Assert { .. } | Check::PredicateDeclaration(_) => {
@@ -969,7 +1010,7 @@ impl Executor<'_> {
                         &dataset,
                         self.plan.keys(),
                         &mut budget,
-                        &mut records,
+                        records,
                     )?
                     else {
                         continue;
@@ -1048,12 +1089,102 @@ impl Executor<'_> {
             records.push(record);
         }
         if records.iter().any(|record| record.failed_count != 0) {
-            return Err(Box::new(ExecutionError::VerificationFailures(records)));
+            return Err(Box::new(ExecutionError::VerificationFailures(
+                core::mem::take(records),
+            )));
         }
         Ok(Execution {
             dataset,
-            verifications: records,
+            verifications: core::mem::take(records),
         })
+    }
+
+    /// Check only the available declared prefix, after every key is complete.
+    fn check_columns<E>(
+        &self,
+        candidates: &[Candidate],
+        completed: &[bool],
+        next: &mut usize,
+        records: &mut Vec<CheckRecord>,
+        budget: &mut Budget,
+    ) -> Result<(), Box<ExecutionError<E>>> {
+        if self.plan.keys().iter().any(|&column| !completed[column]) {
+            return Ok(());
+        }
+        while *next < completed.len() && completed[*next] {
+            if let Some(group) = self
+                .plan
+                .column_verifications()
+                .iter()
+                .find(|group| group.column == *next)
+            {
+                let start = records.len();
+                for verification in &group.checks {
+                    match &verification.check {
+                        Check::InvalidDiagnostic(diagnostic) => {
+                            return Err(Box::new(ExecutionError::VerificationDiagnostic {
+                                diagnostic: diagnostic.clone(),
+                                records: core::mem::take(records),
+                            }))
+                        }
+                        Check::InvalidDeclaration {
+                            condition,
+                            requirement,
+                            reason,
+                        } => {
+                            return Err(Box::new(ExecutionError::VerificationDeclaration {
+                                path: verification.path.clone(),
+                                condition,
+                                requirement,
+                                reason: reason.clone(),
+                                records: core::mem::take(records),
+                            }))
+                        }
+                        Check::NotMissing => {
+                            budget.work(candidates.len(), 1)?;
+                            let result = yamaa_core::dataset_checks::not_missing(
+                                candidates.iter().map(|row| &row.values[group.column]),
+                            );
+                            let definition = yamaa_core::dataset_checks::not_missing_definition();
+                            let mut offending_rows = Vec::new();
+                            for position in result.offending_rows {
+                                offending_rows.push(
+                                    failure_identity(
+                                        &candidates[position],
+                                        self.plan.keys(),
+                                        position,
+                                        budget,
+                                    )?
+                                    .expect("all keys are complete before column checks"),
+                                );
+                            }
+                            records.push(CheckRecord {
+                                path: verification.path.clone(),
+                                condition: definition.condition,
+                                requirement: definition
+                                    .requirement
+                                    .expect("column presence has a requirement"),
+                                evaluated_count: candidates.len(),
+                                failed_count: offending_rows.len(),
+                                output_rows: candidates.len(),
+                                offending_rows,
+                            });
+                        }
+                        _ => unreachable!("column check vocabulary is admitted in core"),
+                    }
+                }
+                if records[start..]
+                    .iter()
+                    .any(|record| record.failed_count != 0)
+                {
+                    return Err(Box::new(ExecutionError::VerificationFailures(
+                        core::mem::take(records),
+                    )));
+                }
+            }
+            *next += 1;
+        }
+        Ok(())
     }
 
     /// Reject cardinality overflow and excessive output slots before deriving rows.

@@ -35,6 +35,87 @@ fn verification(check: Check) -> Verification {
     }
 }
 
+#[test]
+fn column_verification_admission_preserves_declared_order_and_closed_phase() {
+    use yamaa_core::dataset::ColumnVerifications;
+    let output = schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]);
+    let make = || {
+        DatasetPlan::new(
+            output.clone(),
+            output.clone(),
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![
+                    assign(0, Expression::Source(0)),
+                    assign(1, Expression::Source(1)),
+                ],
+                filter: None,
+            }],
+            vec![],
+            vec![0],
+            vec![],
+        )
+        .unwrap()
+    };
+    let group = |column, path: &str, check| ColumnVerifications {
+        column,
+        checks: vec![Verification {
+            path: path.into(),
+            check,
+        }],
+    };
+    assert_eq!(
+        make().with_column_verifications(vec![group(2, "invalid", Check::NotMissing)]),
+        Err(PlanError::InvalidColumns)
+    );
+    assert_eq!(
+        make().with_column_verifications(vec![
+            group(1, "late", Check::NotMissing),
+            group(0, "early", Check::NotMissing)
+        ]),
+        Err(PlanError::InvalidColumns)
+    );
+    assert_eq!(
+        make().with_column_verifications(vec![
+            group(0, "same", Check::NotMissing),
+            group(1, "same", Check::NotMissing)
+        ]),
+        Err(PlanError::DuplicateVerificationPath)
+    );
+    assert_eq!(
+        make().with_column_verifications(vec![group(0, "", Check::NotMissing)]),
+        Err(PlanError::EmptyPath)
+    );
+    assert_eq!(
+        make().with_column_verifications(vec![group(0, "wrong-phase", Check::Unique(vec![0]))]),
+        Err(PlanError::InvalidColumns)
+    );
+    assert!(make()
+        .with_column_verifications(vec![
+            group(0, "first", Check::NotMissing),
+            group(1, "second", Check::NotMissing)
+        ])
+        .is_ok());
+    assert_eq!(
+        DatasetPlan::new(
+            output.clone(),
+            output,
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![
+                    assign(0, Expression::Source(0)),
+                    assign(1, Expression::Source(1))
+                ],
+                filter: None
+            }],
+            vec![],
+            vec![0],
+            vec![verification(Check::NotMissing)]
+        ),
+        Err(PlanError::InvalidColumns)
+    );
+}
+
 /// Admission rejects latent invalid paths even for an empty source snapshot.
 #[test]
 fn plan_admission_checks_every_template_and_dependency() {

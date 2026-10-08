@@ -89,6 +89,81 @@ fn limits() -> Limits {
     }
 }
 
+/// A completed later column waits for an earlier unchecked declaration; retained
+/// records survive the earlier column's conversion failure without reading again.
+#[test]
+fn column_checks_wait_for_the_declared_prefix_and_retain_prior_records() {
+    use yamaa_engine::dataset::ColumnVerifications;
+    let source = table(
+        &[("ID", ColumnType::Int), ("V", ColumnType::Int)],
+        vec![vec![Value::Int(1), Value::Missing]],
+    );
+    let plan = DatasetPlan::new(
+        source.schema.clone(),
+        schema(&[
+            ("ID", ColumnType::Int),
+            ("EARLIER", ColumnType::Int),
+            ("LATER", ColumnType::Int),
+        ]),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        vec![
+            assign(2, Expression::Source(1)),
+            assign(1, Expression::Literal(Value::Str("bad".into()))),
+        ],
+        vec![0],
+        vec![],
+    )
+    .unwrap()
+    .with_column_verifications(vec![
+        ColumnVerifications {
+            column: 0,
+            checks: vec![Verification {
+                path: "columns.ID.verifications[0].not_missing".into(),
+                check: Check::NotMissing,
+            }],
+        },
+        ColumnVerifications {
+            column: 2,
+            checks: vec![Verification {
+                path: "columns.LATER.verifications[0].not_missing".into(),
+                check: Check::NotMissing,
+            }],
+        },
+    ])
+    .unwrap();
+    let attempt = plan.execute_observed(&source, limits());
+    assert!(matches!(
+        *attempt.result.unwrap_err(),
+        ExecutionError::Conversion { .. }
+    ));
+    assert_eq!(attempt.retained_verifications.len(), 1);
+    assert_eq!(
+        (
+            attempt.retained_verifications[0].path.as_str(),
+            attempt.retained_verifications[0].failed_count
+        ),
+        ("columns.ID.verifications[0].not_missing", 0)
+    );
+    assert_eq!(*source.reads.borrow(), [(0, 0), (0, 1)]);
+    let empty = table(&[("ID", ColumnType::Int), ("V", ColumnType::Int)], vec![]);
+    let result = plan.execute_observed(&empty, limits()).result.unwrap();
+    assert_eq!(
+        result
+            .verifications
+            .iter()
+            .map(|r| (r.path.as_str(), r.evaluated_count))
+            .collect::<Vec<_>>(),
+        [
+            ("columns.ID.verifications[0].not_missing", 0),
+            ("columns.LATER.verifications[0].not_missing", 0)
+        ]
+    );
+}
+
 /// COUNT uses its owning group and preserves failures and cumulative work admission.
 #[test]
 fn grouped_count_avoids_unused_fields_and_withholds_output_on_read_failure() {

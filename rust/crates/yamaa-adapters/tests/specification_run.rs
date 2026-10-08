@@ -1059,6 +1059,7 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
         "negative-source-missing-field",
         "negative-source-trivial-filter",
         "negative-paired-dates",
+        "negative-not-missing-age",
     ] {
         let case = root.join("benchmarks").join(name);
         let run = PreparedRun::prepare(prepare(
@@ -3398,6 +3399,14 @@ fn original_all_or_none_matches_complete_reports_and_exact_csv() {
         include_str!("fixtures/original_all_or_none.tsv"),
         "all-or-none",
         11,
+    );
+}
+#[test]
+fn original_column_not_missing_matches_complete_reports_and_exact_csv() {
+    replay_source_selection_truth(
+        include_str!("fixtures/original_not_missing.tsv"),
+        "column-check",
+        10,
     );
 }
 fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {

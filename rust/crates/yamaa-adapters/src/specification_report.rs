@@ -154,16 +154,21 @@ pub fn failure<E>(
             }
             let value: Value =
                 serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
+            if !response.retained_verifications.is_empty() {
+                let retained = crate::dataset_transport::retained_verification_outcome(response)
+                    .map_err(|_| Error::InvalidObservation)?;
+                verifications.extend(check_observations(run, &retained, &id)?.0);
+            }
             match value["outcome"]["status"].as_str() {
                 Some("condition") => {
                     if value["outcome"]["verifications"].is_array() {
-                        verifications = check_observations(run, &value["outcome"], &id)?.0;
+                        verifications.extend(check_observations(run, &value["outcome"], &id)?.0);
                     }
                     vec![condition(run, &value["outcome"])?]
                 }
                 Some("failure") => {
                     let (records, diagnostics) = check_observations(run, &value["outcome"], &id)?;
-                    verifications = records;
+                    verifications.extend(records);
                     diagnostics
                 }
                 _ => return Err(Error::UnsupportedOutcome),
@@ -479,6 +484,21 @@ fn check_observations(
                 }
                 "duplicate_key" => json!({"duplicate_count":failed}),
                 "assert_failed" | "all_or_none_failed" => json!({"failure_count":failed}),
+                "not_missing_failed" => {
+                    let column = run
+                        .compiled()
+                        .verification_target(path)
+                        .ok_or(Error::InvalidObservation)?;
+                    let diagnostic = yamaa_core::dataset_checks::not_missing_diagnostic(
+                        path.into(),
+                        column.into(),
+                        failed,
+                    )
+                    .ok_or(Error::InvalidObservation)?;
+                    specification_diagnostics::portable_diagnostic(diagnostic)
+                        .ok_or(Error::InvalidObservation)?["context"]
+                        .clone()
+                }
                 _ => return Err(Error::UnsupportedOutcome),
             };
             if !output_phase {
@@ -500,7 +520,7 @@ fn check_observations(
             let check = condition
                 .strip_suffix("_failed")
                 .ok_or(Error::InvalidObservation)?;
-            observations.push(json!({"specification":id.specification,"spec_path":path,"check":check,"target":null,"requirement":record["requirement"],"verification_id":run.compiled().verification_identity(path),"severity":"error","evaluated_count":count(record,"evaluated_count")?,"failure":detail}));
+            observations.push(json!({"specification":id.specification,"spec_path":path,"check":check,"target":run.compiled().verification_target(path),"requirement":record["requirement"],"verification_id":run.compiled().verification_identity(path),"severity":"error","evaluated_count":count(record,"evaluated_count")?,"failure":detail}));
         }
     }
     Ok((observations, diagnostics))

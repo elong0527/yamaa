@@ -1,0 +1,7 @@
+# Original column presence reports
+
+`original_not_missing.tsv` is independently authored complete-report truth for ten raw YAML documents and their captured CSV bytes. The author enumerated every report field and four successful CSV artifacts, then compared them with reference Python executions before running the candidate. Candidate output never writes expected truth. Only backend and engine/runtime versions are normalized for that reference comparison.
+
+The cases cover present and missing values, empty output, a failed check preceding a later conversion, successful records retained through a later conversion error, a missing key checked before output-key validation, duplicate IDs after a failed prefix, multiple failures in one column, separate column/dataset ID namespaces, and a key declared after an ordinary column although keys complete first. A duplicate declaration replaces the primary diagnostic while preserving its earlier failed record. Every check on one column completes before that column's error gate.
+
+Rust and installed Python/R replay the full reports, repeat with cached-source accounting, save each successful CSV twice and reject failed saves. R runs the cases inside its Python-free PATH guard. The fixtures cover error-severity `not_missing` in implicit key grain; other column families, warning severity and row-template column checks remain Unsupported before study capture. A separate null-arguments probe reaches the existing schema-admission family and is not promoted as portable verification truth.

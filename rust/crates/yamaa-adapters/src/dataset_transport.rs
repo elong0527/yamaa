@@ -500,6 +500,17 @@ pub struct DatasetResponse {
     // The application publishes from its accepted typed result, never by
     // reconstructing execution success from JSON or decoding its own IPC output.
     pub(crate) execution: Option<dataset::Execution>,
+    pub(crate) retained_verifications: Vec<dataset::CheckRecord>,
+}
+
+/// Translate the typed failure ledger without extending the dataset wire protocol.
+pub(crate) fn retained_verification_outcome(
+    response: &DatasetResponse,
+) -> Result<serde_json::Value, Error> {
+    serde_json::to_value(Outcome::Success {
+        verifications: records(response.retained_verifications.clone()),
+    })
+    .map_err(|_| Error::Internal)
 }
 
 /// Validate plan bytes before any IPC decoding, then execute once with no fallback.
@@ -1290,5 +1301,6 @@ pub(crate) fn response(
         table,
         outcome,
         execution,
+        retained_verifications: attempt.retained_verifications,
     })
 }
