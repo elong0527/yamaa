@@ -19,6 +19,8 @@ mod grammar;
 mod parquet;
 #[path = "diagnostic/preflight.rs"]
 mod preflight;
+#[path = "diagnostic/project_functions.rs"]
+mod project_functions;
 impl NumericResolver for Bindings {
     type Error = Infallible;
     fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
@@ -171,6 +173,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         assert_eq!(diagnostic.context.len(), 2);
         reached.insert(diagnostic.code);
     }
+    reached.extend(project_functions::reached());
     reached.extend(preflight::reached());
     reached.extend(preflight::output_reached());
     reached.extend(grammar::reached());

@@ -27,6 +27,7 @@ impl PreflightFinding {
     /// perform validation again, consult a source, or choose a host representation.
     pub fn diagnostic(&self) -> Diagnostic {
         let (code, paths, context): (C, Vec<String>, Context) = match self {
+            Self::ProjectFunction(finding) => return finding.diagnostic(),
             Self::UndeclaredRowColumn { index, column } => (
                 C::PreflightUndeclaredRowColumn,
                 vec![format!("rows[{index}].derivations.{column}")],
