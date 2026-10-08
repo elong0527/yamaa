@@ -701,6 +701,18 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
     for (kind, column_checks, dataset_checks, condition, requirement, path, reason) in [
         (
             "int",
+            List(vec![]),
+            List(vec![Map(vec![(
+                "unique",
+                Map(vec![("id", Text("")), ("columns", List(vec![Text("ID")]))]),
+            )])]),
+            "invalid_declaration",
+            "REQ-0374",
+            "verifications[0].unique",
+            "a verification id is text",
+        ),
+        (
+            "int",
             List(vec![Map(vec![(
                 "allowed_values",
                 Map(vec![("values", List(vec![]))]),
@@ -839,6 +851,7 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
         .unwrap();
         let prepared = PreparedSpecification::prepare(&model).unwrap();
         let findings = prepared.verification_declaration_diagnostics();
+        assert_eq!(prepared.verification_declaration_diagnostics(), findings);
         assert_eq!(findings.len(), 1);
         reached.insert(check(
             findings.into_iter().next().unwrap(),

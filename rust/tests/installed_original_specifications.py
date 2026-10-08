@@ -408,7 +408,7 @@ class OriginalSpecifications(unittest.TestCase):
     def test_static_verification_check_issues_need_no_study_authority(self):
         with (ROOT / "static-verification-checks.tsv").open(encoding="utf-8") as stream:
             cases = list(csv.DictReader(stream, delimiter="\t"))
-        self.assertEqual(len(cases), 14)
+        self.assertEqual(len(cases), 15)
         def no_port(*args):
             raise AssertionError("static check entered a resource authority")
         for row in cases:

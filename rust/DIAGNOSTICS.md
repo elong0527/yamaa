@@ -1,7 +1,7 @@
 # Portable diagnostic foundation
 
-Known verification declaration findings now project through seven additional
-canonical causes for required payloads, repeated IDs, bounds, cardinality, column
+Known verification declaration findings now project through eight additional
+canonical causes for invalid IDs, required payloads, repeated IDs, bounds, cardinality, column
 types and unknown declared columns. The shared checker queries these owned findings
 without study authority. A build keeps its earlier arithmetic/conversion failure
 and its existing declaration checkpoint order. The thin issue encoder sends JSON

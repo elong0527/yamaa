@@ -3466,7 +3466,7 @@ fn deferred_column_findings_stop_later_payload_compilation_but_keep_vocabulary_a
 fn static_verification_checks_match_complete_issues_without_study_authority() {
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let truth = include_str!("fixtures/static_verification_checks.tsv");
-    assert_eq!(truth.lines().count(), 15);
+    assert_eq!(truth.lines().count(), 16);
     for line in truth.lines().skip(1) {
         let fields = line.split('\t').collect::<Vec<_>>();
         assert_eq!(fields.len(), 3);

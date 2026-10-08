@@ -731,7 +731,7 @@ source_selection_truth("original-column-matches.tsv","column-matches",16L)
 cat("original column matches complete reports, cached reads and exact saved CSV passed\n")
 
 static_truth <- read.delim(file.path(root,"static-verification-checks.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="UTF-8",check.names=FALSE)
-stopifnot(nrow(static_truth)==14L)
+stopifnot(nrow(static_truth)==15L)
 check_issues <- get(".specification_check_issues",envir=asNamespace("yamaanative"))
 for(i in seq_len(nrow(static_truth))) {
   handle <- prepare_entry("spec.yaml",hex_raw(static_truth$source_hex[[i]]),no_port,no_port,no_port)

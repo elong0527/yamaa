@@ -125,6 +125,7 @@ conditions! {
     PredicateInvalidRegex => ("validation", "invalid_predicate", Some("REQ-1244")),
     RegexInvalidPattern => ("validation", "invalid_regex", Some("REQ-0827")),
     VerificationMatchesFailed => ("verification", "matches_failed", Some("REQ-0379")),
+    VerificationIdentifierType => ("validation", "invalid_declaration", Some("REQ-0374")),
     VerificationDeclarationRequired => ("validation", "invalid_declaration", Some("REQ-0397")),
     VerificationIdentifierRepeated => ("validation", "duplicate_identifier", Some("REQ-0398")),
     VerificationBounds => ("validation", "invalid_declaration", Some("REQ-0399")),

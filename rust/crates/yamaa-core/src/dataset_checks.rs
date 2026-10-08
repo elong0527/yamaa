@@ -131,6 +131,7 @@ pub fn declaration_diagnostic(
     reason: String,
 ) -> Option<Diagnostic> {
     let code = match (condition, requirement) {
+        ("invalid_declaration", "REQ-0374") => ConditionCode::VerificationIdentifierType,
         ("invalid_declaration", "REQ-0397") => ConditionCode::VerificationDeclarationRequired,
         ("duplicate_identifier", "REQ-0398") => ConditionCode::VerificationIdentifierRepeated,
         ("invalid_declaration", "REQ-0399") => ConditionCode::VerificationBounds,
