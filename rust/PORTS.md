@@ -254,7 +254,10 @@ and every parent/file identity is checked again before accepting the file. Only
 an absent entry allows a relative fallback. Observed permission and wrong-kind
 failures are terminal. First captures check size before allocation, read bounded
 chunks and compare a fresh read directly. Reuse verifies all retained aliases;
-limits and changes never create a snapshot. The adapter interprets no study data.
+limits and changes never create a snapshot. Declaring-file views share the same
+selected roots and byte store; every accepted base/path spelling is retained even
+when two spellings resolve to one key. Metadata resolution does not capture bytes.
+The adapter interprets no study data.
 
 The [qualification scope](crates/yamaa-adapters/tests/fixtures/native_file_resources.md)
 pins real CSV/Parquet input, complete independent reports, cached counters, direct
