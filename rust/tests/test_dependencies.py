@@ -15,7 +15,9 @@ class DependencyTests(unittest.TestCase):
     def metadata(self):
         return {
             "packages": [
-                {"name": name, "dependencies": [{"name": d} for d in deps]}
+                {"name": name, "dependencies": [
+                    dict(name=d,target="cfg(unix)",kind=None,req="=1.1.5",features=["fs"])
+                    if d=="rustix" else {"name":d} for d in deps]}
                 for name, deps in guard.ALLOWED.items()
             ]
         }
@@ -37,6 +39,7 @@ class DependencyTests(unittest.TestCase):
                     "pyo3",
                     "extendr-api",
                     "saphyr-parser",
+                    "rustix",
                 ):
                     with self.subTest(crate=crate, kind=kind, dependency=dependency):
                         metadata = self.metadata()
@@ -52,6 +55,15 @@ class DependencyTests(unittest.TestCase):
         metadata = self.metadata()
         metadata["packages"][0]["dependencies"].append({"name": "yamaa-engine"})
         self.assertTrue(guard.violations(metadata))
+
+    def test_filesystem_dependency_cannot_become_portable_build_or_unpinned(self):
+        for field,value in [("target",None),("target","cfg(windows)"),("kind","build"),("kind","dev"),("req","^1"),("features",["fs","process"])]:
+            with self.subTest(field=field,value=value):
+                metadata=self.metadata()
+                package=next(p for p in metadata["packages"] if p["name"]=="yamaa-adapters")
+                dependency=next(d for d in package["dependencies"] if d["name"]=="rustix")
+                dependency[field]=value
+                self.assertTrue(guard.violations(metadata))
 
     def test_rejects_unreviewed_member(self):
         metadata = self.metadata()
