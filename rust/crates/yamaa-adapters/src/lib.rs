@@ -53,3 +53,6 @@ pub mod specification_check;
 pub mod specification_report;
 
 pub mod typed_csv;
+
+#[cfg(unix)]
+pub mod file_resources;

@@ -1621,6 +1621,10 @@
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.md",
       "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/native_file_resources.md",
+      "role": "documentation"
     }
   ]
 }

@@ -136,6 +136,19 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   stopifnot(inherits(tryCatch(build_output(expired_result),error=identity),"error"))
   stopifnot(inherits(tryCatch(build_output(handle),error=identity),"error"))
   stopifnot(inherits(tryCatch(specification_source(result),error=identity),"error"))
+  # Exercise native filesystem transport over every unchanged original input.
+  ports <- get(".file_resources_ports",envir=asNamespace("yamaanative"))(case,case)
+  native_expected <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
+  native_expected <- sub('"runtime":"python"','"runtime":"r"',native_expected,fixed=TRUE)
+  native_expected <- sub('fixture-runtime',as.character(getRversion()),native_expected,fixed=TRUE)
+  native_expected <- sub('fixture-engine',engine_info()$core_version,native_expected,fixed=TRUE)
+  for(created in c(1L,0L)) {
+    if(created==0L) native_expected <- gsub('"snapshots_created":1','"snapshots_created":0',native_expected,fixed=TRUE)
+    actual <- specification_report(handle,ports$capture,publish,case_name,specification,inspect=ports$inspect)
+    stopifnot(identical(actual,native_expected))
+  }
+  stopifnot(ports$reads()==length(inputs))
+  cat(case_name,"native file source complete report and cached direct bytes passed\n")
   unlink(directory,recursive=TRUE)
   cat(case_name,"complete original report and cached source capture passed\n")
   expired <- unserialize(serialize(handle,NULL))
@@ -305,8 +318,27 @@ for(i in seq_len(nrow(inspection_truth))) {
   stopifnot(identical(specification_failure_report(handle,capture,"schema-lookup",inspect=inspect),expected),identical(requests,c("DM","AE","MEDDRA")))
   requests <- character()
   stopifnot(identical(specification_report(handle,capture,function(...) stop("inspection failure published"),"schema-lookup",inspect=inspect),expected),identical(requests,c("DM","AE","MEDDRA")))
+  # Construct the same independently authored metadata causes using real files.
+  directory <- tempfile("native-inspection-"); dir.create(directory)
+  dir.create(file.path(directory,"input"))
+  paths <- c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv")
+  for(name in names(paths)) {
+    path <- file.path(directory,paths[[name]])
+    if(name %in% names(causes)) {
+      if(causes[[name]]=="not_regular_file") dir.create(path)
+    } else writeBin(charToRaw("bytes that must remain unread"),path)
+  }
+  ports <- get(".file_resources_ports",envir=asNamespace("yamaanative"))(directory,directory)
+  for(j in seq_len(2L)) {
+    result <- build(handle,ports$capture,"schema-lookup",inspect=ports$inspect)
+    stopifnot(identical(build_observations(result),expected),is.null(build_output(result)),ports$reads()==0L)
+    actual <- tryCatch(build_save(result,function(...) stop("native inspection failure published")),error=identity)
+    stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),"cannot save a failed build"))
+  }
+  unlink(directory,recursive=TRUE)
 }
 cat("metadata inspection complete zero-read reports and retained save gates passed\n")
+cat("native file metadata complete zero-read reports and retained save gates passed\n")
 for(kind in c("error","interrupt")) {
   failure <- structure(list(message="original inspection condition",call=NULL,payload=new.env()),class=c("inspection_test_condition",kind,"condition"))
   for(returned in c(FALSE,TRUE)) {
@@ -479,6 +511,25 @@ stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),
   '{"outcome":{"diagnostics":[{"condition":"redundant_field_type","context":{"dataset":"LB","field":"LBSTRESN","type":"float"},"phase":"validation","requirement":"REQ-0533","spec_paths":["input.LB.types.LBSTRESN"]}],"status":"invalid"},"protocol":"specification/prototype"}'))
 cat("native Parquet source complete original report, exact CSV and preflight passed\n")
 
+# Native filesystem bytes also enter the shared held-Parquet decoder.
+directory <- tempfile("native-parquet-source-"); dir.create(directory)
+dir.create(file.path(directory,"input"))
+stopifnot(file.copy(file.path(root,"pq","ordered-sum.parquet"),file.path(directory,"input","lb.parquet")))
+handle <- prepare_entry("spec.yaml",charToRaw(source),no_port,no_port,no_port)
+ports <- get(".file_resources_ports",envir=asNamespace("yamaanative"))(directory,directory)
+native_expected <- expected
+for(created in c(1L,0L)) {
+  if(created==0L) native_expected <- gsub('"snapshots_created":1','"snapshots_created":0',native_expected,fixed=TRUE)
+  actual <- specification_report(handle,ports$capture,function(path,content) {
+    stopifnot(path=="adlb.csv",identical(content,rawfile(file.path(case,"expected","adlb.csv"))))
+    TRUE
+  },case_name,inspect=ports$inspect)
+  stopifnot(identical(actual,native_expected))
+}
+stopifnot(ports$reads()==1L)
+unlink(directory,recursive=TRUE)
+cat("native file Parquet source complete original report, cached bytes and exact CSV passed\n")
+
 # Independent codec failures retain a complete failed report and deny save.
 source <- '{"schema_version":"1.0","domain":"TEST","input":{"SRC":{"path":"input.parquet"}},"keys":["ID"],"columns":[{"name":"ID","type":"int","derivation":{"compute":{"expr":"1"}}}],"output":{"path":"output.csv","columns":["ID"]}}'
 handle <- prepare_entry("spec.yaml",charToRaw(source),no_port,no_port,no_port)
@@ -514,8 +565,22 @@ for(test in cases) {
   stopifnot(identical(build_observations(result),expected),is.null(build_output(result)))
   failure <- tryCatch(build_save(result,no_port),error=identity)
   stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"),identical(requests,"input.parquet"))
+  directory <- tempfile("native-parquet-failure-"); dir.create(directory)
+  stopifnot(file.copy(file.path(root,"pq",paste0(test[[1L]],".parquet")),file.path(directory,"input.parquet")))
+  ports <- get(".file_resources_ports",envir=asNamespace("yamaanative"))(directory,directory)
+  native_expected <- expected
+  for(created in c(1L,0L)) {
+    if(created==0L) native_expected <- gsub('"snapshots_created":1','"snapshots_created":0',native_expected,fixed=TRUE)
+    native_result <- build(handle,ports$capture,test[[1L]],inspect=ports$inspect)
+    stopifnot(identical(build_observations(native_result),native_expected),is.null(build_output(native_result)))
+    failure <- tryCatch(build_save(native_result,no_port),error=identity)
+    stopifnot(inherits(failure,"error"),conditionMessage(failure)=="cannot save a failed build")
+  }
+  stopifnot(ports$reads()==1L)
+  unlink(directory,recursive=TRUE)
 }
 cat("native Parquet source complete failed reports and save gates passed\n")
+cat("native file Parquet source complete failed reports, cached bytes and save gates passed\n")
 
 # Input policy remains core-owned and retained output distinguishes missing text
 # from present empty text after the preparation handle has been released.
@@ -738,6 +803,43 @@ for(i in seq_len(nrow(static_truth))) {
   for(j in seq_len(2L)) stopifnot(identical(check_issues(handle),static_truth$expected[[i]]))
 }
 cat("static verification check complete issues without study authority passed\n")
+
+# Byte transport keeps bounded captures, authority and registered handle lifetimes.
+directory <- tempfile("native-resource-policy-"); dir.create(directory)
+dir.create(file.path(directory,"spec")); dir.create(file.path(directory,"data"))
+writeBin(charToRaw("retained"),file.path(directory,"data","source"))
+file_ports <- get(".file_resources_ports",envir=asNamespace("yamaanative"))
+ports <- file_ports(directory,file.path(directory,"spec"))
+stopifnot(is.null(ports$inspect("SRC","../data/source")),ports$reads()==0L)
+actual <- tryCatch(ports$capture("SRC","../data/source",7L),error=identity)
+stopifnot(inherits(actual,"error"),conditionMessage(actual)=="resource capture limit",ports$reads()==0L)
+first <- ports$capture("SRC","../data/source",8L)
+stopifnot(identical(first,list(charToRaw("retained"),TRUE)),ports$reads()==1L)
+first[[1L]][[1L]] <- as.raw(0L)
+stopifnot(identical(ports$capture("SRC","../data/source",8L),list(charToRaw("retained"),FALSE)),ports$reads()==1L)
+for(maximum in list(-1L,NA_integer_,Inf,1.5,TRUE,"8",structure(8L,class="ceiling"),1e100,1+0i)) {
+  stopifnot(inherits(tryCatch(ports$capture("SRC","../data/source",maximum),error=identity),"error"))
+}
+writeBin(charToRaw("changed!"),file.path(directory,"data","source"))
+actual <- tryCatch(ports$capture("SRC","../data/source",8L),error=identity)
+stopifnot(inherits(actual,"error"),conditionMessage(actual)=="captured resource content changed",ports$reads()==1L)
+fresh <- file_ports(directory,file.path(directory,"spec"))
+stopifnot(identical(fresh$capture("SRC","../data/source",8L),list(charToRaw("changed!"),TRUE)))
+stopifnot(identical(ports$inspect("SRC","absent")[[1L]],"missing"))
+stopifnot(identical(ports$inspect("SRC","../data")[[1L]],"not_regular_file"))
+outside <- tempfile("outside-native-root-"); writeBin(charToRaw("outside"),outside)
+stopifnot(file.symlink(outside,file.path(directory,"spec","link")))
+actual <- tryCatch(ports$capture("SRC","link",8L),error=identity)
+stopifnot(inherits(actual,"error"),conditionMessage(actual)=="resource path contains a symbolic link")
+actual <- tryCatch(ports$capture("SRC",outside,8L),error=identity)
+stopifnot(inherits(actual,"error"),conditionMessage(actual)=="resource path outside approved roots")
+expired <- unserialize(serialize(ports$handle,NULL))
+reply <- .Call(get("wrap__file_resource_reads",envir=asNamespace("yamaanative")),expired)
+stopifnot(!is.null(reply$error))
+gc()
+stopifnot(ports$reads()==1L)
+unlink(directory,recursive=TRUE); unlink(outside)
+cat("native file byte ceilings, snapshot mutation, link authority and registered handles passed\n")
 
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)

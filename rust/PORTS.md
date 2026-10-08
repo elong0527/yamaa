@@ -8,7 +8,7 @@ and codec interfaces are native traits; adapters translate values and errors.
 
 | Port | Owner | Current implementations | Failures |
 | --- | --- | --- | --- |
-| `specification_run::SourcePort` | engine | Python/R metadata and capture bridges; descriptor-backed Python resource adapter; native fakes | Known inspection findings in declaration order; original opaque error; invalid snapshot counter |
+| `specification_run::SourcePort` | engine | Python/R metadata and capture bridges; descriptor-backed Python resource adapter; Unix Rust/R study-source adapter; native fakes | Known inspection findings in declaration order; original opaque error; invalid snapshot counter |
 | `specification_run::SourceDecoder` | engine | Adapter CSV/Parquet/Arrow decoder; engine test fake | Original decoder error; byte/cell capacity limits |
 | `specification_output::ArtifactEncoder` | engine | Adapter CSV/Parquet encoders; native test fake | Original codec error; checked output byte limit |
 | `specification_output::OutputReport` | engine | Portable JSON report formatter; native test fake | Observation or report-budget failure before publication |
@@ -158,7 +158,7 @@ codelist resources, with resolved paths and declaring-file provenance. Current
 source bridges retain their existing path behavior; the #1751 target resolves
 each path relative to its declaring file without an approved-root boundary.
 
-Production Parquet file ports, general publication/save policy, environment
+Public source-file integration, general publication/save policy, environment
 activation, shared reusable test fakes, and consolidation of the two function
 interfaces remain open. The existing inheritance JSON callback bridge also
 remains to be replaced. No new unimplemented port is presented as a working
@@ -242,5 +242,23 @@ preserving their qualified request timing. Seven independently authored complete
 reports match actual reference-file failures, including multiple failures; installed
 hosts pin original error/interrupt identity, malformed replies and repeated builds.
 Python exercises descriptor-backed metadata inspection without reference semantic
-imports. The R filesystem implementation, environment/function preflight and public
-facade remain open. Existing reference APIs keep their names and behavior until cutover.
+imports. The Unix R study-source adapter supplies the same metadata/capture port over real CSV and Parquet files; entry/layer/environment/codelist filesystem preparation, environment/function preflight and the public facade remain open. Existing reference APIs keep their names and behavior until cutover.
+
+
+## Native Unix file resources
+
+`yamaa-adapters::file_resources::Resources` implements the engine source trait and
+backs the private registered R file-resource bridge. Approved root descriptors stay
+held for the adapter lifetime; individual components open without following links,
+and every parent/file identity is checked again before accepting the file. Only
+an absent entry allows a relative fallback. Observed permission and wrong-kind
+failures are terminal. First captures check size before allocation, read bounded
+chunks and compare a fresh read directly. Reuse verifies all retained aliases;
+limits and changes never create a snapshot. The adapter interprets no study data.
+
+The [qualification scope](crates/yamaa-adapters/tests/fixtures/native_file_resources.md)
+pins real CSV/Parquet input, complete independent reports, cached counters, direct
+byte equality and registered handle lifetime in installed R without Python. The
+existing approved-root/link/fallback behavior remains pending #1751's separate
+path-policy approval. This Unix implementation does not provide the public file
+facade, specification/inheritance filesystem preparation or atomic publication.
