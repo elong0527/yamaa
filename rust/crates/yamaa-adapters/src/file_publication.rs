@@ -99,60 +99,137 @@ impl Publisher {
         }
     }
     pub fn publish(&mut self, declared: &str, content: &[u8]) -> Result<(), Error> {
+        self.publish_with_checkpoint(declared, content, |_| {})
+    }
+    fn publish_with_checkpoint(
+        &mut self,
+        declared: &str,
+        content: &[u8],
+        checkpoint: impl FnOnce(&str),
+    ) -> Result<(), Error> {
         if declared != self.declared {
             return Err(Error::PathMismatch);
         }
         if content.len() > MAX_OUTPUT_BYTES {
             return Err(Error::Limit);
         }
+        let _lock = DirectoryLock::acquire(&self.parent)?;
         self.check_target()?;
-        let (name, descriptor) = self.temporary()?;
-        let mut temporary = Pending {
-            parent: &self.parent,
-            name: Some(name),
-        };
+        let (temporary, descriptor) = self.temporary()?;
         let mut file = File::from(descriptor);
         file.write_all(content)?;
         file.flush()?;
         file.sync_all()?;
         let held = fs::fstat(&file)?;
-        let name = temporary.name.as_deref().ok_or(Error::Changed)?;
-        let observed = fs::statat(&self.parent, name, AtFlags::SYMLINK_NOFOLLOW)?;
+        drop(file);
+        let observed = fs::statat(
+            &temporary.directory,
+            "candidate.part",
+            AtFlags::SYMLINK_NOFOLLOW,
+        )?;
         if kind(&held) != FileType::RegularFile || identity(&held) != identity(&observed) {
             return Err(Error::Changed);
         }
         self.check_target()?;
-        fs::renameat(&self.parent, name, &self.parent, self.name.as_str())?;
-        temporary.name = None;
+        checkpoint(&temporary.name);
+        fs::renameat(
+            &temporary.directory,
+            "candidate.part",
+            &self.parent,
+            self.name.as_str(),
+        )?;
         Ok(())
     }
-    fn temporary(&self) -> Result<(String, OwnedFd), Error> {
+    fn temporary(&self) -> Result<(Pending<'_>, OwnedFd), Error> {
         for _ in 0..64 {
             let number = NEXT.fetch_add(1, Ordering::Relaxed);
-            let name = format!(".yamaa-output-{}-{number}.part", std::process::id());
-            match fs::openat(
+            let name = format!(".yamaa-output-{}-{number}.stage", std::process::id());
+            match fs::mkdirat(
                 &self.parent,
                 name.as_str(),
-                OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-                Mode::RUSR | Mode::WUSR,
+                Mode::RUSR | Mode::WUSR | Mode::XUSR,
             ) {
-                Ok(file) => return Ok((name, file)),
+                Ok(()) => (),
                 Err(rustix::io::Errno::EXIST) => continue,
                 Err(error) => return Err(error.into()),
             }
+            let mut selected = None;
+            let opened = (|| {
+                let initial = fs::statat(&self.parent, name.as_str(), AtFlags::SYMLINK_NOFOLLOW)?;
+                if kind(&initial) != FileType::Directory
+                    || initial.st_uid != rustix::process::geteuid().as_raw()
+                {
+                    return Err(Error::Changed);
+                }
+                selected = Some(identity(&initial));
+                if initial.st_mode & 0o777 != 0o700 {
+                    return Err(Error::Changed);
+                }
+                let directory = fs::openat(
+                    &self.parent,
+                    name.as_str(),
+                    OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+                    Mode::empty(),
+                )?;
+                if identity(&fs::fstat(&directory)?) != identity(&initial) {
+                    return Err(Error::Changed);
+                }
+                Ok(Pending {
+                    parent: &self.parent,
+                    name: name.clone(),
+                    directory,
+                    identity: identity(&initial),
+                })
+            })();
+            let temporary = match opened {
+                Ok(temporary) => temporary,
+                Err(error) => {
+                    if selected.is_some_and(|selected| {
+                        fs::statat(&self.parent, name.as_str(), AtFlags::SYMLINK_NOFOLLOW)
+                            .is_ok_and(|current| identity(&current) == selected)
+                    }) {
+                        let _ = fs::unlinkat(&self.parent, name.as_str(), AtFlags::REMOVEDIR);
+                    }
+                    return Err(error);
+                }
+            };
+            let file = fs::openat(
+                &temporary.directory,
+                "candidate.part",
+                OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+                Mode::RUSR | Mode::WUSR,
+            )?;
+            return Ok((temporary, file));
         }
         Err(Error::Limit)
     }
 }
 struct Pending<'a> {
     parent: &'a OwnedFd,
-    name: Option<String>,
+    name: String,
+    directory: OwnedFd,
+    identity: (i128, i128, FileType),
 }
 impl Drop for Pending<'_> {
     fn drop(&mut self) {
-        if let Some(name) = &self.name {
-            let _ = fs::unlinkat(self.parent, name.as_str(), AtFlags::empty());
+        let _ = fs::unlinkat(&self.directory, "candidate.part", AtFlags::empty());
+        if fs::statat(self.parent, self.name.as_str(), AtFlags::SYMLINK_NOFOLLOW)
+            .is_ok_and(|current| identity(&current) == self.identity)
+        {
+            let _ = fs::unlinkat(self.parent, self.name.as_str(), AtFlags::REMOVEDIR);
         }
+    }
+}
+struct DirectoryLock<'a>(&'a OwnedFd);
+impl<'a> DirectoryLock<'a> {
+    fn acquire(parent: &'a OwnedFd) -> Result<Self, Error> {
+        fs::flock(parent, fs::FlockOperation::NonBlockingLockExclusive)?;
+        Ok(Self(parent))
+    }
+}
+impl Drop for DirectoryLock<'_> {
+    fn drop(&mut self) {
+        let _ = fs::flock(self.0, fs::FlockOperation::Unlock);
     }
 }
 impl yamaa_engine::specification_output::ArtifactPort for Publisher {
@@ -170,4 +247,38 @@ fn identity(status: &fs::Stat) -> (i128, i128, FileType) {
         i128::from(status.st_ino),
         kind(status),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn replacing_the_parent_temporary_entry_does_not_replace_checked_bytes() {
+        let path =
+            std::env::temp_dir().join(format!("yamaa-publication-race-{}", std::process::id()));
+        std::fs::create_dir(&path).unwrap();
+        let target = path.join("result.csv");
+        std::fs::write(&target, b"old").unwrap();
+        let mut publisher = Publisher::new("result.csv", target.to_str().unwrap()).unwrap();
+        publisher
+            .publish_with_checkpoint("result.csv", b"checked", |name| {
+                let entry = path.join(name);
+                if entry.is_dir() {
+                    use std::os::unix::fs::MetadataExt;
+                    let metadata = std::fs::metadata(&entry).unwrap();
+                    assert_eq!(metadata.mode() & 0o777, 0o700);
+                    assert_eq!(metadata.uid(), rustix::process::geteuid().as_raw());
+                    std::fs::rename(&entry, path.join("moved")).unwrap();
+                    std::fs::create_dir(&entry).unwrap();
+                    std::fs::write(entry.join("candidate.part"), b"replacement").unwrap();
+                } else {
+                    std::fs::remove_file(&entry).unwrap();
+                    std::fs::write(&entry, b"replacement").unwrap();
+                }
+            })
+            .unwrap();
+        let actual = std::fs::read(target).unwrap();
+        std::fs::remove_dir_all(path).unwrap();
+        assert_eq!(actual, b"checked");
+    }
 }

@@ -1,4 +1,15 @@
-# Private byte publication to one absolute file explicitly selected by the caller.
+#' Private native file publisher
+#'
+#' Available on the qualified Unix hosts. `target` is the absolute file explicitly
+#' selected by the caller; `declared_path` is the specification spelling every
+#' publication request must match. Read-root authority does not select this file.
+#' `publish` replaces it with bounded raw bytes; `save` publishes an owned native
+#' build result through its failed-build gate without reading study data again.
+#' @param target One absolute UTF-8 file target.
+#' @param declared_path One declared UTF-8 artifact path.
+#' @return A registered native handle with `publish(path, content)` and
+#'   `save(result_handle)` closures.
+#' @keywords internal
 .file_publisher_port <- function(target, declared_path) {
   target <- .specification_text_bytes(target,65536)
   declared <- .specification_text_bytes(declared_path,65536)

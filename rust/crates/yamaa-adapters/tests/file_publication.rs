@@ -98,6 +98,45 @@ fn directory_suffixes_are_not_normalized_into_file_targets() {
     }
 }
 #[test]
+fn native_publication_respects_an_exclusive_selected_parent_lock() {
+    use rustix::fs::{self as native, FlockOperation, Mode, OFlags};
+    let directory = Directory::new();
+    fs::write(directory.target(), b"old").unwrap();
+    let lock = native::open(
+        &directory.0,
+        OFlags::RDONLY | OFlags::DIRECTORY,
+        Mode::empty(),
+    )
+    .unwrap();
+    native::flock(&lock, FlockOperation::LockExclusive).unwrap();
+    let mut publisher = directory.publisher();
+    assert!(matches!(
+        publisher.publish("declared.csv", b"new"),
+        Err(Error::Io(_))
+    ));
+    assert_eq!(fs::read(directory.target()).unwrap(), b"old");
+    assert_eq!(directory.names(), vec!["output.csv"]);
+    native::flock(&lock, FlockOperation::Unlock).unwrap();
+    publisher.publish("declared.csv", b"new").unwrap();
+    assert_eq!(fs::read(directory.target()).unwrap(), b"new");
+    assert_eq!(directory.names(), vec!["output.csv"]);
+}
+#[test]
+fn another_completed_save_is_intentionally_replaced_by_the_next_explicit_save() {
+    let directory = Directory::new();
+    let mut first = directory.publisher();
+    let mut second = directory.publisher();
+    second.publish("declared.csv", b"intervening").unwrap();
+    first
+        .publish("declared.csv", b"selected replacement")
+        .unwrap();
+    assert_eq!(
+        fs::read(directory.target()).unwrap(),
+        b"selected replacement"
+    );
+    assert_eq!(directory.names(), vec!["output.csv"]);
+}
+#[test]
 fn a_new_link_or_directory_is_refused_without_following_or_replacing_it() {
     let directory = Directory::new();
     let mut publisher = directory.publisher();

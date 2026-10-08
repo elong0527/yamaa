@@ -16,7 +16,7 @@ class DependencyTests(unittest.TestCase):
         return {
             "packages": [
                 {"name": name, "dependencies": [
-                    dict(name=d,target="cfg(unix)",kind=None,req="=1.1.5",features=["fs"])
+                    dict(name=d,target="cfg(unix)",kind=None,req="=1.1.5",features=["fs","process"])
                     if d=="rustix" else {"name":d} for d in deps]}
                 for name, deps in guard.ALLOWED.items()
             ]
@@ -57,7 +57,7 @@ class DependencyTests(unittest.TestCase):
         self.assertTrue(guard.violations(metadata))
 
     def test_filesystem_dependency_cannot_become_portable_build_or_unpinned(self):
-        for field,value in [("target",None),("target","cfg(windows)"),("kind","build"),("kind","dev"),("req","^1"),("features",["fs","process"])]:
+        for field,value in [("target",None),("target","cfg(windows)"),("kind","build"),("kind","dev"),("req","^1"),("features",["fs"]),("features",["fs","process","net"])]:
             with self.subTest(field=field,value=value):
                 metadata=self.metadata()
                 package=next(p for p in metadata["packages"] if p["name"]=="yamaa-adapters")
