@@ -83,3 +83,39 @@ fn signature_preserves_authored_order_and_missing_defaults() {
     assert_eq!(admitted.returns(), ColumnType::Date);
     assert!(admitted.may_return_missing());
 }
+
+#[test]
+fn versionless_signature_reuses_exact_defaults_and_refuses_host_renaming() {
+    use yamaa_core::function_signature::{ProjectFunctionIdentity, ProjectInvocationPlan};
+    let id = ProjectFunctionIdentity {
+        name: "identity".into(),
+        call: "program.identity".into(),
+    };
+    let parameter = Parameter {
+        name: "x".into(),
+        host_name: "x".into(),
+        kind: ValueType::Int,
+        accepts_missing: true,
+        presence: Presence::Optional(Value::Missing),
+    };
+    let plan =
+        ProjectInvocationPlan::new(id.clone(), vec![parameter.clone()], ColumnType::Int, false)
+            .unwrap();
+    assert_eq!(plan.identity(), &id);
+    assert_eq!(
+        plan.signature().parameters(),
+        std::slice::from_ref(&parameter)
+    );
+    let mut renamed = parameter.clone();
+    renamed.host_name = "host_x".into();
+    assert_eq!(
+        ProjectInvocationPlan::new(id.clone(), vec![renamed], ColumnType::Int, false),
+        Err(PlanError::InvalidHostMapping)
+    );
+    let mut wrong = parameter;
+    wrong.presence = Presence::Optional(Value::float(1.0));
+    assert_eq!(
+        ProjectInvocationPlan::new(id, vec![wrong], ColumnType::Int, false),
+        Err(PlanError::InvalidDefault { parameter: 0 })
+    );
+}

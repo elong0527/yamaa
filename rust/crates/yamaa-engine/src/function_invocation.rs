@@ -9,7 +9,8 @@ use yamaa_core::{
 };
 
 pub use yamaa_core::function_signature::{
-    FunctionIdentity, InvocationPlan, Parameter, PlanError, Presence,
+    FunctionIdentity, InvocationPlan, LogicalSignature, Parameter, PlanError, Presence,
+    ProjectFunctionIdentity, ProjectInvocationPlan,
 };
 
 /// A borrowed mapped argument; callbacks receive nothing beyond this ordered list.
@@ -59,11 +60,11 @@ pub enum FailureKind<E> {
 
 /// Fatal failures bypass conversion handlers and retain the exact host payload.
 #[derive(Debug, PartialEq)]
-pub struct InvocationFailure<E> {
-    pub identity: FunctionIdentity,
+pub struct InvocationFailure<E, I = FunctionIdentity> {
+    pub identity: I,
     pub kind: FailureKind<E>,
 }
-impl<E> InvocationFailure<E> {
+impl<E, I> InvocationFailure<E, I> {
     /// Every runtime function failure belongs to derivation, before conversion.
     pub fn phase(&self) -> &'static str {
         "derivation"
@@ -99,20 +100,39 @@ pub fn invoke<P: FunctionPort>(
     supplied: &BTreeMap<String, Value>,
     port: &mut P,
 ) -> Result<Value, InvocationFailure<P::Error>> {
+    invoke_signature(plan.identity(), plan.signature(), supplied, port)
+}
+
+/// Run a versionless admitted package function through the same scalar semantics.
+/// Lock verification and this build's complete test suite are prior engine gates.
+pub fn invoke_project<P: FunctionPort>(
+    plan: &ProjectInvocationPlan,
+    supplied: &BTreeMap<String, Value>,
+    port: &mut P,
+) -> Result<Value, InvocationFailure<P::Error, ProjectFunctionIdentity>> {
+    invoke_signature(plan.identity(), plan.signature(), supplied, port)
+}
+
+fn invoke_signature<P: FunctionPort, I: Clone>(
+    identity: &I,
+    signature: &LogicalSignature,
+    supplied: &BTreeMap<String, Value>,
+    port: &mut P,
+) -> Result<Value, InvocationFailure<P::Error, I>> {
     let failure = |kind| InvocationFailure {
-        identity: plan.identity().clone(),
+        identity: identity.clone(),
         kind,
     };
     let unknown: Vec<_> = supplied
         .keys()
-        .filter(|name| !plan.parameters().iter().any(|p| &p.name == *name))
+        .filter(|name| !signature.parameters().iter().any(|p| &p.name == *name))
         .cloned()
         .collect();
     if !unknown.is_empty() {
         return Err(failure(FailureKind::UnknownArguments(unknown)));
     }
-    let mut arguments = Vec::with_capacity(plan.parameters().len());
-    for parameter in plan.parameters() {
+    let mut arguments = Vec::with_capacity(signature.parameters().len());
+    for parameter in signature.parameters() {
         let value = match supplied.get(&parameter.name) {
             Some(value) => value,
             None => match &parameter.presence {
@@ -147,12 +167,12 @@ pub fn invoke<P: FunctionPort>(
         })
     })?;
     let actual = match returned.value_type() {
-        None if plan.may_return_missing() => return Ok(returned),
+        None if signature.may_return_missing() => return Ok(returned),
         None => return Err(failure(FailureKind::UndeclaredMissing)),
         Some(ValueType::Bool) => return Err(failure(FailureKind::BooleanResult)),
         Some(actual) => actual,
     };
-    let expected = match plan.returns() {
+    let expected = match signature.returns() {
         ColumnType::Str => ValueType::Str,
         ColumnType::Int => ValueType::Int,
         ColumnType::Float => ValueType::Float,
@@ -161,7 +181,7 @@ pub fn invoke<P: FunctionPort>(
     };
     if actual != expected {
         return Err(failure(FailureKind::ResultType {
-            expected: plan.returns(),
+            expected: signature.returns(),
             actual,
         }));
     }

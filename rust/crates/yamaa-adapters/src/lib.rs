@@ -72,3 +72,5 @@ pub mod file_publication;
 pub mod file_publication;
 #[cfg(any(unix, windows))]
 pub mod file_resources;
+
+pub mod project_source;

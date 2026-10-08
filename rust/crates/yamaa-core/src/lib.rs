@@ -43,3 +43,19 @@ pub mod regex;
 
 pub mod reduction;
 pub mod table;
+
+pub mod project_environment;
+
+pub mod project_environment_document;
+
+pub mod project_function;
+
+pub mod project_function_document;
+
+pub mod project_function_result;
+
+pub mod project_limits;
+
+pub mod project_terminology;
+
+pub mod project_terminology_document;

@@ -32,6 +32,7 @@ pub struct Parameter {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlanError {
     EmptyIdentity,
+    InvalidHostMapping,
     InvalidName { parameter: usize },
     DuplicateName { parameter: usize },
     EmptyHostName { parameter: usize },
@@ -39,37 +40,19 @@ pub enum PlanError {
     InvalidDefault { parameter: usize },
 }
 
-/// Immutable logical invocation plan. Admission budgets for materialized names,
-/// values and callbacks belong to the caller; this is not an untrusted byte API.
+/// One admitted logical signature, independent of legacy or package identity.
 #[derive(Clone, Debug, PartialEq)]
-pub struct InvocationPlan {
-    identity: FunctionIdentity,
+pub struct LogicalSignature {
     parameters: Vec<Parameter>,
     returns: ColumnType,
     may_return_missing: bool,
 }
-
-impl InvocationPlan {
-    /// Validate the normalized closed signature without calling project code.
-    /// Host identifier syntax, qualified callable resolution and activation are
-    /// prerequisites owned by the selected host's environment compiler.
+impl LogicalSignature {
     pub fn new(
-        identity: FunctionIdentity,
         parameters: Vec<Parameter>,
         returns: ColumnType,
         may_return_missing: bool,
     ) -> Result<Self, PlanError> {
-        if [
-            &identity.name,
-            &identity.contract_version,
-            &identity.implementation_version,
-            &identity.call,
-        ]
-        .iter()
-        .any(|s| s.is_empty())
-        {
-            return Err(PlanError::EmptyIdentity);
-        }
         let mut names = BTreeSet::new();
         let mut host_names = BTreeSet::new();
         for (parameter, item) in parameters.iter().enumerate() {
@@ -100,30 +83,103 @@ impl InvocationPlan {
             }
         }
         Ok(Self {
-            identity,
             parameters,
             returns,
             may_return_missing,
         })
     }
-
-    /// Retain immutable identity for diagnostics surrounding this application step.
-    pub fn identity(&self) -> &FunctionIdentity {
-        &self.identity
-    }
-
-    /// Inspect the immutable logical signature for static argument binding.
     pub fn parameters(&self) -> &[Parameter] {
         &self.parameters
     }
-
-    /// Declared logical result type, before completed-result conversion.
     pub fn returns(&self) -> ColumnType {
         self.returns
     }
-
-    /// Whether an explicit missing result belongs to the declared contract.
     pub fn may_return_missing(&self) -> bool {
         self.may_return_missing
+    }
+}
+
+/// Immutable legacy plan. Its required versions and existing wire contract remain.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InvocationPlan {
+    identity: FunctionIdentity,
+    signature: LogicalSignature,
+}
+impl InvocationPlan {
+    pub fn new(
+        identity: FunctionIdentity,
+        parameters: Vec<Parameter>,
+        returns: ColumnType,
+        may_return_missing: bool,
+    ) -> Result<Self, PlanError> {
+        if [
+            &identity.name,
+            &identity.contract_version,
+            &identity.implementation_version,
+            &identity.call,
+        ]
+        .iter()
+        .any(|s| s.is_empty())
+        {
+            return Err(PlanError::EmptyIdentity);
+        }
+        Ok(Self {
+            identity,
+            signature: LogicalSignature::new(parameters, returns, may_return_missing)?,
+        })
+    }
+    pub fn identity(&self) -> &FunctionIdentity {
+        &self.identity
+    }
+    pub fn signature(&self) -> &LogicalSignature {
+        &self.signature
+    }
+    pub fn parameters(&self) -> &[Parameter] {
+        self.signature.parameters()
+    }
+    pub fn returns(&self) -> ColumnType {
+        self.signature.returns()
+    }
+    pub fn may_return_missing(&self) -> bool {
+        self.signature.may_return_missing()
+    }
+}
+
+/// New package-based identity has no contract or implementation version fields.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProjectFunctionIdentity {
+    pub name: String,
+    pub call: String,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProjectInvocationPlan {
+    identity: ProjectFunctionIdentity,
+    signature: LogicalSignature,
+}
+impl ProjectInvocationPlan {
+    /// Host syntax, complete static coverage and activation precede this trusted
+    /// typed construction; declaration names also name the host arguments.
+    pub fn new(
+        identity: ProjectFunctionIdentity,
+        parameters: Vec<Parameter>,
+        returns: ColumnType,
+        may_return_missing: bool,
+    ) -> Result<Self, PlanError> {
+        if identity.name.is_empty() || identity.call.is_empty() {
+            return Err(PlanError::EmptyIdentity);
+        }
+        if parameters.iter().any(|p| p.name != p.host_name) {
+            return Err(PlanError::InvalidHostMapping);
+        }
+        Ok(Self {
+            identity,
+            signature: LogicalSignature::new(parameters, returns, may_return_missing)?,
+        })
+    }
+    pub fn identity(&self) -> &ProjectFunctionIdentity {
+        &self.identity
+    }
+    pub fn signature(&self) -> &LogicalSignature {
+        &self.signature
     }
 }
