@@ -1,5 +1,14 @@
 # Original-specification compiler slice
 
+The admitted plan exposes a bounded static verification assessment to the shared
+checker. Known column declaration findings appear in column order before dataset
+findings; held checks and data-dependent violations have no static issue. This
+query does not capture a source, bind its schema, evaluate a formula or change a
+build's failure order. Both native bindings receive the same five issue fields,
+with context already encoded as JSON text. Fourteen independently enumerated
+payloads pin this preparatory contract, including the source format's escaped
+Unicode literal. Public file-based check/domain facades remain a separate gate.
+
 Error-severity column matches compiles the shared portable pattern once and searches
 present strings as written; authored anchors alone require full boundaries. Missing
 values pass. Invalid syntax retains REQ-0827 with only the pattern at its pattern

@@ -49,6 +49,7 @@ pub mod specification_run;
 
 pub mod specification_diagnostics;
 
+pub mod specification_check;
 pub mod specification_report;
 
 pub mod typed_csv;

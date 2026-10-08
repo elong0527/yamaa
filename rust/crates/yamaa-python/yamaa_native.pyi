@@ -63,6 +63,7 @@ def decode_yaml(source: bytes) -> str:
 
 # Internal bounded original-YAML compiler. Source capture remains explicit host IO.
 class _Specification:
+    def check_issues(self) -> str: ...
     def build(
         self, capture: Callable[[str, str, int], tuple[bytes, bool] | tuple[Literal["missing", "not_regular_file"], BaseException]],
         metadata: tuple[str, str, str, str, str],

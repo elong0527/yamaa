@@ -626,6 +626,7 @@
         "_Schema.traverse_inheritance",
         "_Specification",
         "_Specification.build",
+        "_Specification.check_issues",
         "_Specification.execute_csv",
         "_Specification.failure_report",
         "_Specification.report",

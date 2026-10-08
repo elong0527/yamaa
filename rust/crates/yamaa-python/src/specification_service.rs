@@ -15,6 +15,11 @@ pub struct Specification {
 }
 #[pymethods]
 impl Specification {
+    /// Core-owned known declaration findings; no source callback is accepted.
+    fn check_issues(&self) -> PyResult<String> {
+        yamaa_adapters::specification_check::issues(&self.inner)
+            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.message()))
+    }
     /// Source IO remains explicit host authority after shared admission.
     fn source(&self) -> (String, String) {
         let source = self.inner.source();

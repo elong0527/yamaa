@@ -220,4 +220,14 @@ fn observed_report(
     })
 }
 
-extendr_module! {mod specification_service;fn prepare_specification;fn specification_source;fn execute_specification_csv;fn specification_failure_report;fn specification_report;}
+#[extendr]
+fn check_specification_issues(handle: Robj) -> List {
+    boundary(|| {
+        let run = resolve(&handle)?;
+        yamaa_adapters::specification_check::issues(&run)
+            .map(|value| r!(value))
+            .map_err(|error| error.message().into())
+    })
+}
+
+extendr_module! {mod specification_service;fn prepare_specification;fn specification_source;fn execute_specification_csv;fn specification_failure_report;fn specification_report;fn check_specification_issues;}
