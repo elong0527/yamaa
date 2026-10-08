@@ -428,16 +428,20 @@ jobs:
           python -m pip install --no-deps -r "${RUNNER_TEMP}/cohort-requirements.txt" "${RUNNER_TEMP}"/cohort-reference/*.whl
       - name: Require complete public runs through the M1 comparator
         working-directory: ${{ runner.temp }}
-        # Unix public file ports are qualified here. Windows file transport
-        # remains an explicit migration blocker and has no shared-run promotion.
+        # Both Unix hosts remain mandatory. Windows requires the complete Python
+        # public cohort while retaining the unqualified R route explicitly.
         run: |
           revision="$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)"
-          for platform in ubuntu-24.04 macos-15; do
+          for platform in ubuntu-24.04 macos-15 windows-latest; do
             for form in wheel source; do
+              r_evidence=()
+              if [ "${platform}" != windows-latest ]; then
+                r_evidence=(--r-evidence "cohort-input/native-r-qualification-${platform}/r-source")
+              fi
               python -I "${GITHUB_WORKSPACE}/rust/tools/qualify_public_cohort.py" \
                 --fixtures "${GITHUB_WORKSPACE}/benchmarks" \
                 --python-evidence "cohort-input/native-qualification-${platform}-3.14/${form}" \
-                --r-evidence "cohort-input/native-r-qualification-${platform}/r-source" \
+                "${r_evidence[@]}" \
                 --output "public-cohort/${platform}/${form}" --source-revision "${revision}"
             done
           done

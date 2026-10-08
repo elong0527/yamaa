@@ -193,12 +193,12 @@ pub(super) fn issue_rows(issues: &[yamaa_adapters::issue_rows::Issue]) -> Vec<Is
         })
         .collect()
 }
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 struct FileTarget<'a> {
     declared: &'a str,
     target: &'a str,
 }
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 impl specification_report::ArtifactPort for FileTarget<'_> {
     type Error = yamaa_adapters::file_publication::Error;
     fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), Self::Error> {
@@ -211,7 +211,7 @@ impl BuildResult {
     fn issues(&self) -> Vec<IssueRow> {
         issue_rows(self.inner.issues())
     }
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     fn save_file(&self, declared: &str, target: &str) -> PyResult<String> {
         let mut publisher = FileTarget { declared, target };
         self.inner

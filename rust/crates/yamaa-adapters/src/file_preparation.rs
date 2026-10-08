@@ -126,7 +126,7 @@ impl InheritancePort for Parents<'_> {
             .resources
             .resolve_from(declaring, written)
             .map_err(available)?;
-        let display_path = if written.starts_with('/') {
+        let display_path = if std::path::Path::new(written).is_absolute() {
             written.to_owned()
         } else {
             format!("{}/{written}", directory(declaring).map_err(available)?)
@@ -174,7 +174,7 @@ fn directory(identity: &str) -> Result<&str, ResourceError> {
     identity
         .rsplit_once('/')
         .map(|(directory, _)| directory)
-        .filter(|_| identity.starts_with('/'))
+        .filter(|_| std::path::Path::new(identity).is_absolute())
         .ok_or(ResourceError::InvalidPath)
 }
 /// Lexical only: preparation never inspects or opens a study/output path.

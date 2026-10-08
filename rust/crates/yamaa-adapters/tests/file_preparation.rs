@@ -1,4 +1,4 @@
-#![cfg(unix)]
+#![cfg(any(unix, windows))]
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -67,6 +67,7 @@ fn standalone_retains_entry_and_checks_without_study_capture() {
     assert_eq!(prepared.capture_reads(), 2);
 }
 
+#[cfg(unix)]
 #[test]
 fn canonical_entry_identity_retains_a_selected_root_with_a_backslash_name() {
     let study = Study::new();
@@ -156,6 +157,7 @@ fn inherited_paths_rebase_lexically_and_shared_parent_bytes_are_retained_once() 
     assert!(prepared.build().result.is_ok());
     assert_eq!(prepared.capture_reads(), 3);
 }
+#[cfg(unix)]
 #[test]
 fn selected_read_roots_and_no_link_authority_remain_enforced() {
     let study = Study::new();
@@ -182,6 +184,7 @@ fn selected_read_roots_and_no_link_authority_remain_enforced() {
     assert_eq!(error.into_message(), "resource path outside approved roots");
 }
 
+#[cfg(unix)]
 #[test]
 fn unreadable_parent_is_unavailable_without_fallback_or_study_capture() {
     use std::os::unix::fs::PermissionsExt;

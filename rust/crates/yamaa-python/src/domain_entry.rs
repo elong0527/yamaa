@@ -1,6 +1,6 @@
 //! Public-request argument/result conversion; the shared engine owns the lifecycle.
 use pyo3::{exceptions::PyException, prelude::*, types::PyBytes};
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use std::sync::Mutex;
 use yamaa_adapters::issue_rows::Issue;
 
@@ -8,7 +8,7 @@ pyo3::create_exception!(yamaa, DomainError, PyException);
 
 #[pyclass(frozen, module = "yamaa._native", name = "_DomainResult")]
 pub struct Domain {
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     inner: Option<Mutex<yamaa_adapters::file_application::Domain>>,
     failures: Vec<Issue>,
 }
@@ -16,7 +16,7 @@ pub struct Domain {
 impl Domain {
     /// Private installed-run evidence; unsupported preparation has no build report.
     fn observations(&self) -> PyResult<Option<String>> {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(inner) = &self.inner {
             return inner
                 .lock()
@@ -28,7 +28,7 @@ impl Domain {
         Ok(None)
     }
     fn output<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyBytes>>> {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(inner) = &self.inner {
             return inner
                 .lock()
@@ -41,7 +41,7 @@ impl Domain {
         Ok(None)
     }
     fn issues(&self) -> PyResult<Vec<crate::specification_result::IssueRow>> {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(inner) = &self.inner {
             return inner
                 .lock()
@@ -53,7 +53,7 @@ impl Domain {
         Ok(crate::specification_result::issue_rows(&self.failures))
     }
     fn save(&self) -> PyResult<bool> {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(inner) = &self.inner {
             return inner
                 .lock()
@@ -67,7 +67,7 @@ impl Domain {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 fn unavailable() -> Vec<Issue> {
     vec![Issue::from_core(yamaa_core::application_issue::unsupported(
         "native_file_transport",
@@ -78,7 +78,7 @@ fn unavailable() -> Vec<Issue> {
 #[pyfunction]
 #[pyo3(signature=(specification,environment=None))]
 pub fn _domain_file(py: Python<'_>, specification: &str, environment: Option<&str>) -> Domain {
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     {
         let result = yamaa_adapters::file_application::domain(
             yamaa_engine::domain_entry::Request {
@@ -105,7 +105,7 @@ pub fn _domain_file(py: Python<'_>, specification: &str, environment: Option<&st
             },
         }
     }
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = (py, specification, environment);
         Domain {
@@ -120,7 +120,7 @@ pub fn _check_file(
     specification: &str,
     environment: Option<&str>,
 ) -> Vec<crate::specification_result::IssueRow> {
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     {
         let issues = yamaa_adapters::file_application::check(
             yamaa_engine::domain_entry::Request {
@@ -138,7 +138,7 @@ pub fn _check_file(
         );
         crate::specification_result::issue_rows(&issues)
     }
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = (py, specification, environment);
         crate::specification_result::issue_rows(&unavailable())

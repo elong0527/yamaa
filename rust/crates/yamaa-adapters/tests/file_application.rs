@@ -1,12 +1,14 @@
-#![cfg(unix)]
+#![cfg(any(unix, windows))]
 use std::{
     fs,
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
+#[cfg(unix)]
+use yamaa_adapters::file_resources::Error;
 use yamaa_adapters::{
     file_application, file_configuration, file_preparation::FileSpecification,
-    file_resources::Error, specification_report::Identity,
+    specification_report::Identity,
 };
 use yamaa_engine::domain_entry::Request;
 static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -184,6 +186,7 @@ fn project_configuration_keeps_current_root_fallback_and_captured_config() {
     assert!(prepared.build().result.is_ok());
     assert_eq!(prepared.capture_reads(), 3);
 }
+#[cfg(unix)]
 #[test]
 fn entry_link_and_outside_read_remain_refused() {
     let study = Study::new();
@@ -233,6 +236,7 @@ fn invalid_project_configuration_is_rejected_before_entry_capture() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn publication_refuses_linked_parents_for_existing_and_absent_targets() {
     for existing in [false, true] {
@@ -273,6 +277,7 @@ fn publication_refuses_linked_parents_for_existing_and_absent_targets() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn publication_refuses_parent_link_substitution_after_build() {
     let study = Study::new();
@@ -292,6 +297,7 @@ fn publication_refuses_parent_link_substitution_after_build() {
     assert_eq!(fs::read_dir(study.0.join("held")).unwrap().count(), 0);
 }
 
+#[cfg(unix)]
 #[test]
 fn publication_retains_the_selected_physical_root_after_name_substitution() {
     let study = Study::new();

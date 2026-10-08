@@ -1,7 +1,7 @@
 //! Optional Python installation probe; this is not an execution backend.
 use pyo3::prelude::*;
 mod domain_entry;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 mod file_specification;
 mod function_callback;
 mod reference_catalog;
@@ -260,7 +260,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     module.add_function(wrap_pyfunction!(domain_entry::_domain_file, module)?)?;
     module.add_function(wrap_pyfunction!(domain_entry::_check_file, module)?)?;
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     {
         module.add_class::<file_specification::Specification>()?;
         module.add_function(wrap_pyfunction!(

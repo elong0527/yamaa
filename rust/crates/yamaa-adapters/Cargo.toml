@@ -35,3 +35,7 @@ snap = "=1.1.2"
 # Safe descriptor-relative filesystem IO for the native R resource transport.
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "=1.1.5", features = ["fs", "process"] }
+
+# User-mode, handle-relative Windows filesystem transport only.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Threading", "Win32_Security_Authorization", "Win32_Globalization"] }

@@ -15,9 +15,29 @@ class DependencyTests(unittest.TestCase):
     def metadata(self):
         return {
             "packages": [
-                {"name": name, "dependencies": [
-                    dict(name=d,target="cfg(unix)",kind=None,req="=1.1.5",features=["fs","process"])
-                    if d=="rustix" else {"name":d} for d in deps]}
+                {
+                    "name": name,
+                    "dependencies": [
+                        {
+                            "name": d,
+                            "target": "cfg(unix)",
+                            "kind": None,
+                            "req": "=1.1.5",
+                            "features": ["fs", "process"],
+                        }
+                        if d == "rustix"
+                        else {
+                            "name": d,
+                            "target": "cfg(windows)",
+                            "kind": None,
+                            "req": "=0.61.2",
+                            "features": guard.WINDOWS_FILE_FEATURES.copy(),
+                        }
+                        if d == "windows-sys"
+                        else {"name": d}
+                        for d in deps
+                    ],
+                }
                 for name, deps in guard.ALLOWED.items()
             ]
         }
@@ -40,6 +60,7 @@ class DependencyTests(unittest.TestCase):
                     "extendr-api",
                     "saphyr-parser",
                     "rustix",
+                    "windows-sys",
                 ):
                     with self.subTest(crate=crate, kind=kind, dependency=dependency):
                         metadata = self.metadata()
@@ -57,12 +78,44 @@ class DependencyTests(unittest.TestCase):
         self.assertTrue(guard.violations(metadata))
 
     def test_filesystem_dependency_cannot_become_portable_build_or_unpinned(self):
-        for field,value in [("target",None),("target","cfg(windows)"),("kind","build"),("kind","dev"),("req","^1"),("features",["fs"]),("features",["fs","process","net"])]:
-            with self.subTest(field=field,value=value):
-                metadata=self.metadata()
-                package=next(p for p in metadata["packages"] if p["name"]=="yamaa-adapters")
-                dependency=next(d for d in package["dependencies"] if d["name"]=="rustix")
-                dependency[field]=value
+        for field, value in [
+            ("target", None),
+            ("target", "cfg(windows)"),
+            ("kind", "build"),
+            ("kind", "dev"),
+            ("req", "^1"),
+            ("features", ["fs"]),
+            ("features", ["fs", "process", "net"]),
+        ]:
+            with self.subTest(field=field, value=value):
+                metadata = self.metadata()
+                package = next(
+                    p for p in metadata["packages"] if p["name"] == "yamaa-adapters"
+                )
+                dependency = next(
+                    d for d in package["dependencies"] if d["name"] == "rustix"
+                )
+                dependency[field] = value
+                self.assertTrue(guard.violations(metadata))
+
+    def test_windows_sdk_cannot_gain_other_targets_features_or_dependency_kinds(self):
+        for field, value in [
+            ("target", None),
+            ("target", "cfg(unix)"),
+            ("kind", "build"),
+            ("kind", "dev"),
+            ("req", "^0.61"),
+            ("features", ["Win32_Networking_WinSock"]),
+        ]:
+            with self.subTest(field=field, value=value):
+                metadata = self.metadata()
+                package = next(
+                    p for p in metadata["packages"] if p["name"] == "yamaa-adapters"
+                )
+                dependency = next(
+                    d for d in package["dependencies"] if d["name"] == "windows-sys"
+                )
+                dependency[field] = value
                 self.assertTrue(guard.violations(metadata))
 
     def test_rejects_unreviewed_member(self):

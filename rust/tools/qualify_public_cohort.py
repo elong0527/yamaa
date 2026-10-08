@@ -12,7 +12,7 @@ import json
 import shutil
 from pathlib import Path
 
-from yamaa.adapters.qualification import Batch, load_inventory, qualify
+from yamaa.adapters.qualification import Batch, MissingRoute, load_inventory, qualify
 
 COHORT = (
     "adam-adlb-ordered-sum",
@@ -76,7 +76,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixtures", type=Path, required=True)
     parser.add_argument("--python-evidence", type=Path, required=True)
-    parser.add_argument("--r-evidence", type=Path, required=True)
+    parser.add_argument("--r-evidence", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--source-revision", required=True)
     args = parser.parse_args(argv)
@@ -88,18 +88,29 @@ def main(argv=None):
     python_record, python_batch = installed_evidence(
         args.python_evidence, "python", args.source_revision
     )
-    r_record, r_batch = installed_evidence(args.r_evidence, "r", args.source_revision)
-    # Runner kernel/image patch versions may differ between independent jobs.
-    # Keep both exact platform records; compare the declared OS family here.
-    if (
-        python_record["platform"].split("-", 1)[0]
-        != r_record["platform"].split("-", 1)[0]
-    ):
-        raise ValueError("Python and R complete-run evidence must share an OS family")
-    if python_batch.core_version != r_batch.core_version:
-        raise ValueError("Python and R complete-run evidence must share a core version")
-    if python_batch.evidence != r_batch.evidence:
-        raise ValueError("Python and R complete-run evidence must share an Actions run")
+    r_batch = None
+    if args.r_evidence is not None:
+        r_record, r_batch = installed_evidence(
+            args.r_evidence, "r", args.source_revision
+        )
+        # Runner kernel/image patch versions may differ between independent jobs.
+        if (
+            python_record["platform"].split("-", 1)[0]
+            != r_record["platform"].split("-", 1)[0]
+        ):
+            raise ValueError(
+                "Python and R complete-run evidence must share an OS family"
+            )
+        if python_batch.core_version != r_batch.core_version:
+            raise ValueError(
+                "Python and R complete-run evidence must share a core version"
+            )
+        if python_batch.evidence != r_batch.evidence:
+            raise ValueError(
+                "Python and R complete-run evidence must share an Actions run"
+            )
+    elif not python_record["platform"].lower().startswith("windows-"):
+        raise ValueError("Unix cohort qualification requires both installed hosts")
     reference = Batch.model_validate_json(
         (args.python_evidence / "python-batch.json").read_text()
     )
@@ -112,10 +123,10 @@ def main(argv=None):
     if reference.source_revision != args.source_revision:
         raise ValueError("stale independent reference batch")
     args.output.mkdir(parents=True)
-    for runtime, directory in (
-        ("python", args.python_evidence),
-        ("r", args.r_evidence),
-    ):
+    evidence_directories = [("python", args.python_evidence)]
+    if args.r_evidence is not None:
+        evidence_directories.append(("r", args.r_evidence))
+    for runtime, directory in evidence_directories:
         supplemental = directory / "supplemental" if runtime == "python" else directory
         shutil.copyfile(
             supplemental / "supplemental.json",
@@ -137,7 +148,7 @@ def main(argv=None):
         ),
         encoding="utf-8",
     )
-    batches = (
+    batches = [
         retain_reports(
             reference,
             args.python_evidence / "reports" / "python",
@@ -148,20 +159,43 @@ def main(argv=None):
             args.python_evidence / "public-reports",
             args.output / "python-reports",
         ),
-        retain_reports(
-            r_batch, args.r_evidence / "public-reports", args.output / "r-reports"
-        ),
-    )
+    ]
+    if r_batch is not None:
+        batches.append(
+            retain_reports(
+                r_batch, args.r_evidence / "public-reports", args.output / "r-reports"
+            )
+        )
+    required_routes = [
+        ("python", "python", "reference_run"),
+        ("python", "rust", "shared_run"),
+    ]
+    if r_batch is not None:
+        required_routes.append(("r", "rust", "shared_run"))
     required = tuple(
         (name, runtime, backend, level)
         for name in COHORT
-        for runtime, backend, level in (
-            ("python", "python", "reference_run"),
-            ("python", "rust", "shared_run"),
-            ("r", "rust", "shared_run"),
+        for runtime, backend, level in required_routes
+    )
+    missing_routes = (
+        ()
+        if r_batch is not None
+        else (
+            MissingRoute(
+                runtime="r",
+                backend="rust",
+                blocker="windows_r_scope_unqualified",
+                issue="#1742",
+            ),
         )
     )
-    inventory = qualify(fixtures, args.source_revision, batches, required=required)
+    inventory = qualify(
+        fixtures,
+        args.source_revision,
+        tuple(batches),
+        required=required,
+        missing_routes=missing_routes,
+    )
     (args.output / "coverage.json").write_text(
         inventory.model_dump_json(indent=2) + "\n", encoding="utf-8"
     )
