@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     bound_expression::Read,
-    function_signature::{InvocationPlan, Presence},
+    function_signature::{InvocationPlan, LogicalSignature, Presence, ProjectInvocationPlan},
 };
 use alloc::collections::BTreeSet;
 /// Already admitted literal or statically bound current-candidate value.
@@ -26,9 +26,9 @@ pub struct FunctionArgument {
 
 /// Immutable invocation plus source/output bindings; activation remains an outer gate.
 #[derive(Clone, Debug, PartialEq)]
-pub struct BoundFunction {
+pub struct BoundFunction<S = InvocationPlan> {
     slot: usize,
-    signature: InvocationPlan,
+    signature: S,
     arguments: Vec<FunctionArgument>,
 }
 
@@ -40,38 +40,65 @@ impl BoundFunction {
         signature: InvocationPlan,
         arguments: Vec<FunctionArgument>,
     ) -> Result<Self, PlanError> {
-        let mut names = BTreeSet::new();
-        for argument in &arguments {
-            if !names.insert(argument.name.as_str())
-                || !signature
-                    .parameters()
-                    .iter()
-                    .any(|p| p.name == argument.name)
-            {
-                return Err(PlanError::InvalidFunction);
-            }
-        }
-        if signature
-            .parameters()
-            .iter()
-            .any(|p| matches!(p.presence, Presence::Required) && !names.contains(p.name.as_str()))
-        {
-            return Err(PlanError::InvalidFunction);
-        }
+        validate_arguments(signature.signature(), &arguments)?;
         Ok(Self {
             slot,
             signature,
             arguments,
         })
     }
+}
 
+/// Versionless call to a package admitted from the explicit environment.
+pub type BoundProjectFunction = BoundFunction<ProjectInvocationPlan>;
+impl BoundProjectFunction {
+    pub fn new_project(
+        slot: usize,
+        signature: ProjectInvocationPlan,
+        arguments: Vec<FunctionArgument>,
+    ) -> Result<Self, PlanError> {
+        validate_arguments(signature.signature(), &arguments)?;
+        Ok(Self {
+            slot,
+            signature,
+            arguments,
+        })
+    }
+}
+
+fn validate_arguments(
+    signature: &LogicalSignature,
+    arguments: &[FunctionArgument],
+) -> Result<(), PlanError> {
+    let mut names = BTreeSet::new();
+    for argument in arguments {
+        if !names.insert(argument.name.as_str())
+            || !signature
+                .parameters()
+                .iter()
+                .any(|p| p.name == argument.name)
+        {
+            return Err(PlanError::InvalidFunction);
+        }
+    }
+    if signature
+        .parameters()
+        .iter()
+        .any(|p| matches!(p.presence, Presence::Required) && !names.contains(p.name.as_str()))
+    {
+        return Err(PlanError::InvalidFunction);
+    }
+    Ok(())
+}
+
+impl<S> BoundFunction<S> {
     /// Identify the caller-owned callback slot without resolving project code.
     pub fn slot(&self) -> usize {
         self.slot
     }
 
     /// Match the entire immutable signature and identity against activated bindings.
-    pub fn signature(&self) -> &InvocationPlan {
+    pub fn signature(&self) -> &S {
         &self.signature
     }
 

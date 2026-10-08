@@ -12,7 +12,7 @@ mod conversion;
 pub use conversion::ConversionHandler;
 #[path = "dataset_functions.rs"]
 mod functions;
-pub use functions::{BoundFunction, FunctionArgument, FunctionInput};
+pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, FunctionInput};
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use intermediates::{Intermediate, SourceSchemas};
@@ -33,6 +33,8 @@ pub enum Expression {
     Compute(BoundNumeric),
     /// Explicit prebound host invocation; never discovered or activated during execution.
     Function(BoundFunction),
+    /// Versionless package invocation, activated before any study read.
+    ProjectFunction(BoundProjectFunction),
     /// Column-phase windows over completed key-grain output rows.
     Window(Window),
     /// First present raw operand in authored order, followed by one output conversion.
@@ -296,6 +298,7 @@ fn validate_assignment(
                 }
             })?,
         Expression::Function(function) => function.validate(source, available, mode)?,
+        Expression::ProjectFunction(function) => function.validate(source, available, mode)?,
         Expression::FirstAvailable(selection) => selection.validate(source, available, mode)?,
         Expression::Intermediate { index, column } => {
             if !matches!(mode, RowMode::Keys) {
@@ -500,6 +503,7 @@ impl DatasetPlan {
                                 | Expression::Lookup(_)
                                 | Expression::RowLookup(_)
                                 | Expression::Function(_)
+                                | Expression::ProjectFunction(_)
                                 | Expression::Intermediate { .. }
                         ))
                 {
@@ -546,6 +550,11 @@ impl DatasetPlan {
                 }
                 if keyed
                     && matches!(&assignment.expression, Expression::Function(function) if function.reads_source())
+                {
+                    return Err(PlanError::InvalidKeyMode);
+                }
+                if keyed
+                    && matches!(&assignment.expression, Expression::ProjectFunction(function) if function.reads_source())
                 {
                     return Err(PlanError::InvalidKeyMode);
                 }

@@ -74,3 +74,5 @@ pub mod file_publication;
 pub mod file_resources;
 
 pub mod project_source;
+
+pub mod project_lock;

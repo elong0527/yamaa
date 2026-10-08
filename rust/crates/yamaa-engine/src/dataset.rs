@@ -168,6 +168,15 @@ pub enum ExecutionError<E> {
         error: crate::function_invocation::InvocationFailure<E>,
         identity: Option<RowIdentity>,
     },
+    /// Versionless package failure retains the original host payload and name/call.
+    ProjectFunction {
+        path: String,
+        error: crate::function_invocation::InvocationFailure<
+            E,
+            yamaa_core::function_signature::ProjectFunctionIdentity,
+        >,
+        identity: Option<RowIdentity>,
+    },
     Numeric {
         error: yamaa_core::numeric_compiler::CompiledEvaluationError<Infallible>,
         identity: Option<RowIdentity>,
@@ -349,6 +358,19 @@ fn evaluate<T: TableAccess + ?Sized>(
     budget.work(reads, 1)?;
     let value = match &assignment.expression {
         Expression::Function(function) => functions::evaluate(
+            function,
+            table,
+            candidate,
+            functions::Context {
+                plan,
+                row,
+                assignment,
+            },
+            budget,
+            handlers,
+            *functions,
+        )?,
+        Expression::ProjectFunction(function) => functions::evaluate_project(
             function,
             table,
             candidate,
@@ -751,6 +773,13 @@ impl Executor<'_> {
         {
             if let Expression::Function(function) = &assignment.expression {
                 if functions.signature(function.slot()) != Some(function.signature()) {
+                    return Err(Box::new(ExecutionError::FunctionBinding {
+                        slot: function.slot(),
+                    }));
+                }
+            }
+            if let Expression::ProjectFunction(function) = &assignment.expression {
+                if functions.project_signature(function.slot()) != Some(function.signature()) {
                     return Err(Box::new(ExecutionError::FunctionBinding {
                         slot: function.slot(),
                     }));

@@ -151,10 +151,31 @@ pub struct ProjectFunctionIdentity {
     pub name: String,
     pub call: String,
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct ProjectInvocationPlan {
     identity: ProjectFunctionIdentity,
     signature: LogicalSignature,
+}
+impl PartialEq for ProjectInvocationPlan {
+    /// Default metadata must preserve the bits that the activated callable was
+    /// tested against. Runtime value equality continues to compare both zeros
+    /// numerically; only versionless plan identity requires this extra check.
+    fn eq(&self, other: &Self) -> bool {
+        self.identity == other.identity
+            && self.signature == other.signature
+            && self
+                .signature
+                .parameters
+                .iter()
+                .zip(&other.signature.parameters)
+                .all(|(left, right)| match (&left.presence, &right.presence) {
+                    (
+                        Presence::Optional(Value::Float(left)),
+                        Presence::Optional(Value::Float(right)),
+                    ) => left.get().to_bits() == right.get().to_bits(),
+                    _ => true,
+                })
+    }
 }
 impl ProjectInvocationPlan {
     /// Host syntax, complete static coverage and activation precede this trusted

@@ -1023,6 +1023,9 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             identity: keys.map(identity),
         },
         ExecutionError::FunctionBinding { .. } => return Err(Error::FunctionBinding),
+        // dataset/1 admits only legacy versioned declarations. Versionless
+        // package calls use the owned file application rather than this wire.
+        ExecutionError::ProjectFunction { .. } => return Err(Error::UnsupportedProtocol),
         ExecutionError::Numeric {
             error,
             identity: keys,

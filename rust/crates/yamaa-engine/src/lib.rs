@@ -38,3 +38,5 @@ pub mod table_reduction;
 pub mod specification;
 pub mod specification_output;
 pub mod specification_run;
+
+pub mod project_activation;

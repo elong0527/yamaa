@@ -119,3 +119,30 @@ fn versionless_signature_reuses_exact_defaults_and_refuses_host_renaming() {
         Err(PlanError::InvalidDefault { parameter: 0 })
     );
 }
+
+#[test]
+fn versionless_default_identity_keeps_zero_sign_without_changing_value_comparison() {
+    use yamaa_core::function_signature::{ProjectFunctionIdentity, ProjectInvocationPlan};
+    let make = |zero| {
+        ProjectInvocationPlan::new(
+            ProjectFunctionIdentity {
+                name: "identity".into(),
+                call: "program.identity".into(),
+            },
+            vec![Parameter {
+                name: "x".into(),
+                host_name: "x".into(),
+                kind: ValueType::Float,
+                accepts_missing: false,
+                presence: Presence::Optional(Value::float(zero)),
+            }],
+            ColumnType::Float,
+            false,
+        )
+        .unwrap()
+    };
+    let negative = make(-0.0);
+    assert_eq!(negative, negative.clone());
+    assert_ne!(negative, make(0.0));
+    assert_eq!(Value::float(-0.0), Value::float(0.0));
+}
