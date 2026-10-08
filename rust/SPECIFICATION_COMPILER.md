@@ -3,11 +3,14 @@
 Error-severity column matches compiles the shared portable pattern once and searches
 present strings as written; authored anchors alone require full boundaries. Missing
 values pass. Invalid syntax retains REQ-0827 with only the pattern at its pattern
-path, deferred until the owning converted column checkpoint. Earlier conversion
+path, deferred until the owning converted column checkpoint. Complete verification
+vocabulary is admitted before payload compilation. IDs and column payloads then
+compile in declaration order through the first deferred finding, keeping earlier
+syntax/ID findings ahead of later compilation limits. Earlier conversion
 failures still win. Pattern compilation shares capture-width work/storage across a
 column's declarations; execution shares cumulative regex subject/work/state limits
 with predicate evaluation in one attempt. Policy refusals remain separate from
-semantic failures and retain earlier completed observations. Fourteen independent
+semantic failures and retain earlier completed observations. Sixteen independent
 full reports, six exact CSV successes, and the unchanged negative-sex-code and
 negative-matches-bad-pattern reports pin the private installed scope.
 
