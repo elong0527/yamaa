@@ -77,7 +77,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                     selection: None,
                 },
                 key_grain::CollectionContext {
-                    assignment: context.assignment,
+                    path: &context.assignment.path,
                     candidate,
                     plan: context.plan,
                     row: context.row,

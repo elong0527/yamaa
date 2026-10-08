@@ -57,3 +57,11 @@ contains only the surviving LB source, and retains the successful unique check.
 The reference independently validates the entire authored report. A native adapter
 integration compares that report and the unchanged CSV, including a cached repeat;
 installed Python and R prototypes also compare the entire report and artifact.
+
+The `negative-source-missing-field` and `negative-source-trivial-filter` reports
+are authored from their committed ODM text/missing cells and error declarations.
+Their complete observations were independently compared with reference Python
+execution. The latter binds a filtered `first_available` source before rejecting
+an inapplicable filter on the completed ARM output. Both installed hosts replay
+new/cached captures and retained failed-save gates; assisted inventory promotion
+remains pending the public frontend.

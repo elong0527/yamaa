@@ -6341,3 +6341,67 @@ fn numeric_reductions_check_present_values_after_collecting_source_arguments() {
             .is_empty());
     }
 }
+
+#[test]
+fn first_available_skips_unselected_reads_and_does_not_fallback_after_conversion() {
+    use yamaa_core::dataset::{FirstAvailable, SelectionRead, SelectionSource};
+    let mut source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("A", ColumnType::Str),
+            ("B", ColumnType::Str),
+        ],
+        vec![
+            vec![
+                Value::Int(1),
+                Value::Str("bad".into()),
+                Value::Str("20".into()),
+            ],
+            vec![
+                Value::Int(1),
+                Value::Str("other".into()),
+                Value::Str("20".into()),
+            ],
+        ],
+    );
+    let make = |columns: &[usize]| {
+        key_plan(
+            &source,
+            schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]),
+            vec![0],
+            vec![assign(0, Expression::Source(0))],
+            vec![assign(
+                1,
+                Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                    columns
+                        .iter()
+                        .map(|&column| SelectionSource {
+                            path: format!("operand.{column}"),
+                            read: SelectionRead::Collect {
+                                column,
+                                identifier: format!("SRC.C{column}"),
+                                filter: None,
+                            },
+                        })
+                        .collect(),
+                    Value::Int(99),
+                ))),
+            )],
+        )
+    };
+    let skipped = make(&[2, 1]);
+    let chosen = make(&[1, 2]);
+    source.fail = Some((0, 1));
+    assert_eq!(
+        skipped.execute(&source, limits()).unwrap().dataset.rows(),
+        &[vec![Value::Int(1), Value::Int(20)]]
+    );
+    assert!(source.reads.borrow().iter().all(|&(_, column)| column != 1));
+    source.fail = None;
+    source.rows[1][1] = Value::Str("bad".into());
+    source.reads.borrow_mut().clear();
+    assert!(
+        matches!(*chosen.execute(&source, limits()).unwrap_err(),ExecutionError::Conversion { ref path, output_row:0, .. } if path=="columns.V")
+    );
+    assert!(source.reads.borrow().iter().all(|&(_, column)| column != 2));
+}

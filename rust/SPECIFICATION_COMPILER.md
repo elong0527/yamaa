@@ -141,9 +141,28 @@ missing/no-match behavior and original source/declaration order. Repeated identi
 occurrences and BETWEEN subjects share one admitted field binding.
 
 The admitted slice includes filtered non-key driver columns. Filtered key
-assignments, secondary source expressions, source ordering and first-available
-composition remain explicit Unsupported operations before study authority. The
+assignments, secondary source expressions and source ordering remain explicit
+Unsupported operations before study authority. The
 unchanged negative-source-missing-field document now retains independent complete
 reference truth on the private route. Thirteen independently authored source-filter
 reports preserve five successful cases (three distinct exact CSV outputs) and
 eight post-ingestion failures; broader predicate parity gaps remain documented.
+
+
+`first_available` now compiles driver-backed filtered operands and completed
+output references into a core-owned ordered selection. All operand bindings are
+admitted before execution, including names that runtime selection will skip.
+Execution selects the first present raw value and converts its result once; an
+unconvertible selected value does not advance to a later operand. The optional
+missing literal records no handler count. Empty lists and omitted/null fallback
+retain ordinary missing semantics. Distinct-reading conflicts use the enclosing
+expression path; static findings retain their individual operand paths.
+
+Eleven independently authored reports cover six complete successful outputs and
+five failures, including skipped conflicting reads, unknown names in skipped
+operands and conversion failures. Their exact report/artifact truth was compared
+with actual reference Python execution. The unchanged negative-source-trivial-filter
+document now reaches its complete REQ-0148 failure through the same core compiler.
+Key-phase, row-template, secondary and named-intermediate selection operands
+remain outside this bounded slice. The compiler charges all operand/filter
+metadata before owned compilation, with a separate trusted source-operand policy.

@@ -174,7 +174,7 @@ pub(super) fn collect<T: TableAccess + ?Sized>(
             selection: selection.as_ref(),
         },
         CollectionContext {
-            assignment,
+            path: &assignment.path,
             candidate,
             plan,
             row,
@@ -194,7 +194,7 @@ pub(super) struct Collection<'a> {
 
 /// Carry diagnostic provenance without constructing a synthetic output assignment.
 pub(super) struct CollectionContext<'a> {
-    pub assignment: &'a Assignment,
+    pub path: &'a str,
     pub candidate: &'a Candidate,
     pub plan: &'a DatasetPlan,
     pub row: usize,
@@ -216,7 +216,7 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
         selection,
     } = read;
     let CollectionContext {
-        assignment,
+        path,
         candidate,
         plan,
         row,
@@ -259,7 +259,7 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
     for &source_row in members {
         let value = table.cell(source_row, column).map_err(|error| {
             Box::new(ExecutionError::Cell {
-                path: assignment.path.clone(),
+                path: path.into(),
                 source_row,
                 error,
             })
@@ -279,11 +279,11 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
     }
     if distinct.len() > 1 {
         if let Some(selection) = selection {
-            let chosen = select(table, assignment, &carrying, selection, budget)?;
+            let chosen = select(table, path, &carrying, selection, budget)?;
             budget.work(1, 1)?;
             let value = table.cell(chosen, column).map_err(|error| {
                 Box::new(ExecutionError::Cell {
-                    path: assignment.path.clone(),
+                    path: path.into(),
                     source_row: chosen,
                     error,
                 })
@@ -293,14 +293,14 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
             }
             handlers
                 .record(
-                    &alloc::format!("{}.multiple_matches", assignment.path),
+                    &alloc::format!("{}.multiple_matches", path),
                     HandlerKind::MultipleMatches,
                 )
                 .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
             return Ok(own(value));
         }
         return Err(Box::new(ExecutionError::MultipleValues {
-            path: assignment.path.clone(),
+            path: path.into(),
             identifier: identifier.into(),
             value_count: distinct.len(),
             identity: failure_identity(candidate, plan.keys(), row, budget)?,
@@ -312,7 +312,7 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
 /// Select a stable extremum without sorting or cloning donor payloads.
 fn select<T: TableAccess + ?Sized>(
     table: &T,
-    assignment: &Assignment,
+    path: &str,
     carrying: &[usize],
     selection: &SourceSelection,
     budget: &mut Budget,
@@ -326,7 +326,7 @@ fn select<T: TableAccess + ?Sized>(
             let mut read = |source_row| -> Result<ValueRef<'_>, Box<ExecutionError<T::Error>>> {
                 let value = table.cell(source_row, term.column).map_err(|error| {
                     Box::new(ExecutionError::Cell {
-                        path: assignment.path.clone(),
+                        path: path.into(),
                         source_row,
                         error,
                     })

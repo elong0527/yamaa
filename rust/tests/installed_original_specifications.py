@@ -14,7 +14,7 @@ from unittest.mock import patch
 import yamaa_native
 
 ROOT = Path(__file__).with_name("specification-original")
-CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field")
+CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter")
 
 
 def modules():
@@ -394,9 +394,15 @@ class OriginalSpecifications(unittest.TestCase):
             self.assertIsNotNone(result.output())
 
     def test_original_filtered_sources_complete_reports_and_exact_csv(self):
-        with (ROOT / "source-filters.tsv").open(encoding="ascii") as stream:
+        self._source_selection_reports("source-filters.tsv", "source-filter", 13)
+
+    def test_original_first_available_complete_reports_and_exact_csv(self):
+        self._source_selection_reports("first-available.tsv", "first-available", 11)
+
+    def _source_selection_reports(self, filename, prefix, cases):
+        with (ROOT / filename).open(encoding="ascii") as stream:
             records = list(csv.DictReader(stream, delimiter="\t"))
-        self.assertEqual(len(records), 13)
+        self.assertEqual(len(records), cases)
         for record in records:
             with self.subTest(case=record["case"]):
                 raw = bytes.fromhex(record["source_hex"])
@@ -405,7 +411,7 @@ class OriginalSpecifications(unittest.TestCase):
                 spec = yamaa_native._prepare_document("spec.yaml", raw, no_parent, no_parent, no_parent)
                 content = bytes.fromhex(record["input_hex"])
                 expected = json.loads(record["expected"])
-                metadata = ("fixture-runtime", "fixture-engine", "source-filter-" + record["case"], "spec.yaml", ".")
+                metadata = ("fixture-runtime", "fixture-engine", prefix + "-" + record["case"], "spec.yaml", ".")
                 calls = []
                 def capture(name, path, maximum):
                     self.assertEqual((name, path), ("SRC", "source.csv"))
@@ -643,7 +649,7 @@ class OriginalSpecifications(unittest.TestCase):
         for name in CASES:
             with self.subTest(name=name):
                 specification = prepare(name)
-                sources = {"DM":"input/dm.csv", "AE":"input/ae.csv", "MEDDRA":"input/meddict.csv"} if name == "schema-lookup" else ({"VS":"input/vs.csv"} if name in ("schema-window-functions", "negative-row-no-prior") else ({"ODM":"input/odm.csv"} if name == "negative-source-missing-field" else {"LB":"input/lb.csv"}))
+                sources = {"DM":"input/dm.csv", "AE":"input/ae.csv", "MEDDRA":"input/meddict.csv"} if name == "schema-lookup" else ({"VS":"input/vs.csv"} if name in ("schema-window-functions", "negative-row-no-prior") else ({"ODM":"input/odm.csv"} if name in ("negative-source-missing-field", "negative-source-trivial-filter") else {"LB":"input/lb.csv"}))
                 self.assertEqual(specification.source(), next(iter(sources.items())))
                 state = {"requests": [], "reads": 0, "bytes": {}}
 

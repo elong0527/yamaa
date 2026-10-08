@@ -52,6 +52,12 @@ impl Declaration {
         extra: &mut Vec<UnsupportedFeature>,
         intermediates: &intermediates::Declarations,
     ) -> Result<Self, PrepareError> {
+        if let N::Text(variable) = &d.nodes()[payload] {
+            return Ok(Self {
+                variable: variable.clone(),
+                filter: None,
+            });
+        }
         for &(name, _) in mapping(d, payload)? {
             let name = text(d, name)?;
             if !["variable", "filter"].contains(&name) {
@@ -199,5 +205,46 @@ impl Declaration {
     }
     pub fn has_filter(&self) -> bool {
         self.filter.is_some()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct FirstAvailable {
+    pub sources: Vec<Declaration>,
+    pub missing: Value,
+}
+impl FirstAvailable {
+    pub fn prepare(
+        d: &Document,
+        payload: usize,
+        path: &str,
+        extra: &mut Vec<UnsupportedFeature>,
+        intermediates: &intermediates::Declarations,
+    ) -> Result<Self, PrepareError> {
+        for &(name, _) in mapping(d, payload)? {
+            let name = text(d, name)?;
+            if !["sources", "missing"].contains(&name) {
+                reject(extra, name, format!("{path}.{name}"));
+            }
+        }
+        let mut sources = Vec::new();
+        for (index, &operand) in sequence(d, field(d, payload, "sources")?)?
+            .iter()
+            .enumerate()
+        {
+            sources.push(Declaration::prepare(
+                d,
+                operand,
+                &format!("{path}.sources[{index}]"),
+                extra,
+                intermediates,
+            )?);
+        }
+        let missing = d
+            .field(payload, "missing")
+            .map(|id| literal(d, id, &format!("{path}.missing")))
+            .transpose()?
+            .unwrap_or(Value::Missing);
+        Ok(Self { sources, missing })
     }
 }

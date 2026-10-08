@@ -402,6 +402,57 @@ fn evaluate<T: TableAccess + ?Sized>(
             row,
             budget,
         )?,
+        Expression::FirstAvailable(selection) => {
+            let mut selected = Value::Missing;
+            for operand in selection.sources() {
+                budget.work(1, 1)?;
+                let value = match &operand.read {
+                    yamaa_core::dataset::SelectionRead::Column(column) => {
+                        let value = &candidate.values[*column];
+                        if let Value::Str(text) = value {
+                            budget.scalar_text(text.len())?;
+                        }
+                        value.clone()
+                    }
+                    yamaa_core::dataset::SelectionRead::Collect {
+                        column,
+                        identifier,
+                        filter,
+                    } => {
+                        budget.work(candidate.members.len(), 1)?;
+                        key_grain::collect_bound(
+                            table,
+                            key_grain::Collection {
+                                column: *column,
+                                identifier,
+                                filter: filter.as_deref(),
+                                selection: None,
+                            },
+                            key_grain::CollectionContext {
+                                path: &assignment.path,
+                                candidate,
+                                plan,
+                                row,
+                            },
+                            budget,
+                            handlers,
+                        )?
+                    }
+                };
+                if value != Value::Missing {
+                    selected = value;
+                    break;
+                }
+            }
+            if selected == Value::Missing {
+                if let Value::Str(text) = selection.missing() {
+                    budget.scalar_text(text.len())?;
+                }
+                selection.missing().clone()
+            } else {
+                selected
+            }
+        }
         Expression::Collect { .. } => {
             key_grain::collect(table, assignment, candidate, plan, row, budget, handlers)?
         }

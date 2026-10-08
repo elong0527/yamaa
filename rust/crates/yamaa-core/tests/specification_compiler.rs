@@ -610,3 +610,35 @@ fn source_filters_charge_compilation_before_admission_and_reject_unimplemented_l
         .iter()
         .any(|finding| finding.operation == "predicate_literal"));
 }
+
+#[test]
+fn selection_metadata_and_filters_are_bounded_before_owned_compilation() {
+    let payload = Tree::Map(vec![(
+        "sources",
+        Tree::List(vec![Tree::Map(vec![
+            ("variable", Tree::Text("SRC.ID")),
+            ("filter", Tree::Text("SRC.ID =")),
+        ])]),
+    )]);
+    let document = operation_document("first_available", payload, "input.csv");
+    for (limits, name) in [
+        (
+            CompilationLimits {
+                source_operands: 0,
+                ..Default::default()
+            },
+            "source_operands",
+        ),
+        (
+            CompilationLimits {
+                numeric_bytes: 0,
+                ..Default::default()
+            },
+            "numeric_bytes",
+        ),
+    ] {
+        assert!(
+            matches!(PreparedSpecification::prepare_with_limits(&document,limits),Err(PrepareError::Limit(resource)) if resource==name)
+        );
+    }
+}

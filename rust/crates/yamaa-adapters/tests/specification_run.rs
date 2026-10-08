@@ -1057,6 +1057,7 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
         "negative-row-aggregate",
         "negative-row-no-prior",
         "negative-source-missing-field",
+        "negative-source-trivial-filter",
     ] {
         let case = root.join("benchmarks").join(name);
         let run = PreparedRun::prepare(prepare(
@@ -3368,6 +3369,21 @@ fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
 
 #[test]
 fn original_source_filters_match_complete_reports_and_exact_csv() {
+    replay_source_selection_truth(
+        include_str!("fixtures/source_filters.tsv"),
+        "source-filter",
+        13,
+    );
+}
+#[test]
+fn original_first_available_matches_complete_reports_and_exact_csv() {
+    replay_source_selection_truth(
+        include_str!("fixtures/first_available.tsv"),
+        "first-available",
+        11,
+    );
+}
+fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
     use yamaa_adapters::{
         specification_report::{self, Identity},
         specification_run::{PreparedRun, SourcePort},
@@ -3409,7 +3425,7 @@ fn original_source_filters_match_complete_reports_and_exact_csv() {
     }
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut count = 0;
-    for line in include_str!("fixtures/source_filters.tsv").lines().skip(1) {
+    for line in truth.lines().skip(1) {
         let fields = line.split('\t').collect::<Vec<_>>();
         assert_eq!(fields.len(), 5);
         let raw = bytes(fields[1]);
@@ -3421,7 +3437,7 @@ fn original_source_filters_match_complete_reports_and_exact_csv() {
             saves: 0,
         };
         let attempt = run.execute_with_port(&mut port);
-        let example = format!("source-filter-{}", fields[0]);
+        let example = format!("{prefix}-{}", fields[0]);
         let result = specification_report::build_result(
             &run,
             &attempt,
@@ -3455,5 +3471,5 @@ fn original_source_filters_match_complete_reports_and_exact_csv() {
         assert_eq!(port.reads, 1);
         count += 1;
     }
-    assert_eq!(count, 13);
+    assert_eq!(count, cases);
 }
