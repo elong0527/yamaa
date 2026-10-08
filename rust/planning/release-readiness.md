@@ -2,15 +2,20 @@
 
 This is the finite blocker register for [#1742](https://github.com/elong0527/yamaa/issues/1742).
 It records evidence and decisions still needed, not approval to release or switch
-backends. The support matrix below records #1792 at
-`fc7eca7fdd96d828ce5234d1d4204b098f301988`, including merged diagnostics, strict
-R packaging and held Parquet input/output foundations. Pending PRs and local prototypes do not
-satisfy installed public-API gates. Follow [the delivery order](migration-order.md).
+backends. Main `ebf1f9e7f15bc16839501eaa48d2d9dde6b71521` includes #1811's
+combined `yamaa` packages and bounded public domain/check candidate. Its final-head
+native run 37797361648 passes all six jobs, all fourteen workflow checks and full
+172-file review, with fresh installed-artifact auditing. The older matrix below
+retains historical #1792 evidence; the current frontier includes seventeen public
+original builds in both Unix hosts, five unqualified Windows file-test skips,
+and an unchanged 945-row assisted inventory. Complete public M1 reports are the
+next slice; pending PRs and local prototypes do not settle migration or release
+acceptance. Follow [the delivery order](migration-order.md).
 
 ## Declared API inventory
 
-[release-api.json](release-api.json) records 483 declared names in 34 source files:
-363 Python `__all__` entries, 51 native Python stub symbols/members, 22 legacy R
+[release-api.json](release-api.json) records 484 declared names in 34 source files:
+363 Python `__all__` entries, 52 native Python stub symbols/members, 22 legacy R
 exports, and 47 native R exports/S3 registrations. Re-exports are counted at each
 public location. Private modules and native handles are included for removal
 tracking; their inclusion is not a public compatibility promise.
@@ -108,11 +113,11 @@ numbers identify the implementation/test or decision owner.
 
 | ID | Blocker and current evidence | Owner | Evidence required to close |
 | --- | --- | --- | --- |
-| B01 | Original-YAML production frontend and six-case inventory: private integrations pass, inventory remains reference-assisted. | #1739, #1751 | Both installed public host APIs consume original files, block reference semantics, compare complete observations and saved bytes, and produce evidenced `shared_run` tuples for all six unchanged cases. |
+| B01 | Bounded public frontend merged in #1811; complete public M1 reports and Windows file transport remain open. | #1739, #1751 | Both installed public host APIs consume original files, block reference semantics, compare complete observations and saved bytes, and produce evidenced `shared_run` tuples for all six unchanged cases. |
 | B02 | Public domain/check/result/log/save API and benchmark runner migration. | #1751 | Installed signatures, wrong-argument exceptions, issue rows for specification/data/environment/function failures, logs retained on failure, explicit save, and all 178 Python/R runner pairs migrated. |
 | B03 | API representation, retained helpers and full surface review. | #1751, #1742 | Decide check result, issues.context, full-range R integers/INT64_MIN, custom schema/provenance and IO/ODM/style helpers; test every retained surface and deliberate removal, including class members and undocumented imports. |
 | B04 | Declaring-file path policy and production file ports. Existing rules still enforce approved roots/fallback. | #1751, #1755 | Explicit approval for the containment change, reviewed coordinated requirements, path provenance, no fallback, resource preflight, held snapshots and both-host file/error tests. Approval is currently pending after automatic approval review rejected that separate rewrite. |
-| B05 | One distribution named `yamaa` per host. | #1751, #1754, #1742 | Clean wheel/source and R package installations exercise combined artifacts; remove duplicate/probe exports only after their replacement consumers qualify. |
+| B05 | Combined `yamaa` packages qualify in #1811; obsolete probe/duplicate cleanup remains open. | #1751, #1754, #1742 | Clean wheel/source and R package installations exercise combined artifacts; remove duplicate/probe exports only after their replacement consumers qualify. |
 | B06 | Environment, lock verification and function-definition migration. | #1757 | Reviewed schema/rules, static validation without code/data, installed-version verification and all called-function tests on every build before study reads; migrate five function fixtures in both languages. |
 | B07 | Complete producer workflow. | #1741 | Producer-once execution, function activation before any study data, exact serialized/rounded consumer input, failure ledgers, reuse and explicit publication gates in both installed hosts. |
 | B08 | Terminology and submission. | #1757, #1758 | Cross-source uniqueness and bound list verification; new define API and all three submission cases preserve independently expected fixed-time XML/JSON bytes before retiring old formats. |

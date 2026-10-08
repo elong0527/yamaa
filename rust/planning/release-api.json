@@ -671,6 +671,7 @@
         "_BuildResult.save",
         "_DomainResult",
         "_DomainResult.issues",
+        "_DomainResult.observations",
         "_DomainResult.output",
         "_DomainResult.save",
         "_ReferenceCatalog",

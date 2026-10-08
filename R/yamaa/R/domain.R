@@ -22,6 +22,13 @@
        charToRaw(as.character(getRversion())))
 }
 
+# Private qualification reads the same handle retained by the public save closure.
+# This is transport of Rust observations, with no host semantic preparation.
+.domain_observations <- function(result) {
+  handle <- get("h", envir = environment(result$save), inherits = FALSE)
+  .domain_reply(.Call(wrap__domain_observations, handle))
+}
+
 #' Build a domain through the shared Rust engine
 #' @param specification One domain-specification path.
 #' @param environment Optional environment path. Unsupported environments are issues.

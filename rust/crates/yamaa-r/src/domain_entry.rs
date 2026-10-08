@@ -178,6 +178,21 @@ fn domain_output(handle: Robj) -> List {
     })
 }
 #[extendr]
+fn domain_observations(handle: Robj) -> List {
+    boundary(|| {
+        let state = resolve(&handle)?;
+        let state = state
+            .try_borrow()
+            .map_err(|_| "domain result already borrowed")?;
+        #[cfg(unix)]
+        if let Some(result) = &state.result {
+            return Ok(Raw::from_bytes(result.observations().to_string().as_bytes()).into_robj());
+        }
+        let _ = state;
+        Ok(NULL.into_robj())
+    })
+}
+#[extendr]
 fn domain_save(handle: Robj) -> List {
     boundary(|| {
         let state = resolve(&handle)?;
@@ -202,5 +217,6 @@ extendr_module! {
     fn check_file;
     fn domain_issues;
     fn domain_output;
+    fn domain_observations;
     fn domain_save;
 }

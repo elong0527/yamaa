@@ -7,6 +7,7 @@ import importlib
 import json
 import os
 import platform
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -1394,6 +1395,26 @@ class ParquetOriginalOutput(unittest.TestCase):
 
 
 class PublicDomains(unittest.TestCase):
+    def record_public_report(self, result, name, entry):
+        destination = os.environ.get("YAMAA_PUBLIC_REPORT_DIR")
+        if not destination:
+            return
+        report = json.loads(result._native.observations())
+        self.assertEqual(report["example"], "domain")
+        report["example"] = name
+        # Canonicalize report labels only after the original complete report
+        # comparison. Diagnostic paths, contexts and resource reads are retained.
+        for group in ("nodes", "tables", "verifications", "callbacks"):
+            for record in report[group]:
+                self.assertEqual(record["specification"], str(entry))
+                record["specification"] = entry.name
+        path = Path(destination)
+        path.mkdir(parents=True, exist_ok=True)
+        (path / (name + ".python.rust.json")).write_text(
+            json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+
     def setUp(self):
         original = builtins.__import__
         blocked = ("yamaa._reference_domain", "yamaa.runtime", "yamaa.planning",
@@ -1422,6 +1443,15 @@ class PublicDomains(unittest.TestCase):
                 entry = case / specification_name(name)
                 expected = json.loads((ROOT / "expected" / (name + ".json")).read_text())
                 result = yamaa.domain(entry)
+                observed_expected = json.loads(json.dumps(expected))
+                observed_expected.update(runtime="python", runtime_version=sys.version,
+                                         engine_version=yamaa_native.engine_info()["core_version"],
+                                         example="domain")
+                for group in ("nodes", "tables", "verifications", "callbacks"):
+                    for record in observed_expected[group]:
+                        record["specification"] = str(entry)
+                unsaved = dict(observed_expected, artifacts=[])
+                self.assertEqual(json.loads(result._native.observations()), unsaved)
                 expected_rows = [(r["phase"], r["condition"], r["requirement"], r["spec_paths"],
                                   json.dumps(r["context"],ensure_ascii=False,sort_keys=True,separators=(",", ":")))
                                  for r in expected["diagnostics"]]
@@ -1433,6 +1463,8 @@ class PublicDomains(unittest.TestCase):
                     self.assertIsNone(result.output)
                     with self.assertRaises(yamaa.DomainError):
                         result.save()
+                    self.assertEqual(json.loads(result._native.observations()), unsaved)
+                    self.record_public_report(result, name, entry)
                     continue
                 artifact = expected["artifacts"][0]
                 derived = next(t for t in expected["tables"] if t["stage"] == "derived")
@@ -1457,7 +1489,9 @@ class PublicDomains(unittest.TestCase):
                 for _ in range(2):
                     self.assertTrue(result.save())
                     self.assertEqual(saved.read_bytes(),original)
+                    self.assertEqual(json.loads(result._native.observations()), observed_expected)
                 self.assertEqual(result.output.rows(),rows)
+                self.record_public_report(result, name, entry)
 
     @unittest.skipIf(os.name == "nt", "native file transport is qualified on Unix")
     def test_public_check_without_study_and_save_retry(self):
@@ -1512,6 +1546,7 @@ class PublicDomains(unittest.TestCase):
     def test_public_environment_refusal_and_argument_types(self):
         import yamaa
         result=yamaa.domain("absent.yaml",environment="absent-environment.yaml")
+        self.assertIsNone(result._native.observations())
         self.assertIsNone(result.output)
         self.assertEqual(result.issues["condition"].to_list(),["unsupported_operation"])
         self.assertEqual(yamaa.check("absent.yaml",environment="absent-environment.yaml").issues.rows(),result.issues.rows())
