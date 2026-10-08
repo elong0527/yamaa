@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-08 against main `14da05fa76b3f93249641094294c1255337f2483`
+Reconciled 2026-10-08 against main `a805f49c7306e75c22e1be507990774b25c628f2`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -61,6 +61,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1803 | Bounded Unix native file sources, retained roots/aliases and snapshots, terminal opaque IO and registered R transport. |
 | #1805 | Native explicit-target publication, retained private staging, parent writer coordination and explicit failed-cleanup diagnostics. |
 | #1807 | Private native file preparation, captured parent graph and lexical views, cached original builds and direct native saves. |
+| #1808 | Shared row-column checkpoints and direct grouped MEAN/COUNT with independent complete reports. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -262,29 +263,60 @@ confused Arrow IPC bytes with CSV; independent logical table truth corrected the
 assertions while saved CSV retained original bytes. Approved roots and authored
 link restrictions remain; the requested read-policy change awaits explicit approval.
 
-The combined row compiler candidate `935c04e54abed919618146e3f675a3f9646483f3`
-passes 736 Rust tests/81 targets, strict Clippy, the dependency guard, 45 tooling
-tests, both installed 23-suite Python forms (55 original-document methods), all
-17 strict R scripts and direct source-byte auditing of seven changed Python and
-eight R archive members plus 52 Parquet fixtures. Rebase onto merged file
-preparation preserves its entire committed tree before this documentation update.
-Its catalog has 87 contracts across 40 suites. Final main-based hosted
-qualification, full review and fresh downloaded-artifact auditing remain required.
+The combined row compiler merged in [PR #1808](https://github.com/elong0527/yamaa/pull/1808)
+as `a805f49c7306e75c22e1be507990774b25c628f2` after all 13 checks,
+clean full ten-text-file review and fresh downloaded-artifact auditing of both
+independent TSV contracts. Native run 37765249018 passed all six jobs on attempt
+1. Six installed Python forms retain 23 passing suites and 55 original-document
+methods (three Unix-only skips on Windows). Both strict R forms retain all 17
+scripts and both row-column/reduction witnesses. The 87-contract/40-suite catalog,
+source archives, 52 Parquet fixtures and unchanged assisted inventory match.
+[Final evidence](https://github.com/elong0527/yamaa/pull/1808#issuecomment-6058799316).
+
+Main advanced through #1806/#1804/#1797/#1787 during qualification. The directly
+inspected combined merge tree differs from the qualified head only in seven
+reviewed documentation/reference-test files, with no runtime, schema or benchmark
+truth change. The added baseline reference tests independently passed every check.
+Local proof passed 736 Rust tests, strict Clippy, the dependency guard, 45 tooling
+tests, both installed Python forms and all 17 strict R scripts.
 
 Forty-eight row-column-check reports preserve declaration order, conversion
 failure timing, later keys, multiple templates and existing engine checkpoints.
 Twenty-five grouped MEAN/COUNT reports include twenty-two exact CSV successes,
 three scope failures and two combined presence-check cases. Every complete report
 matches independently enumerated truth and actual reference execution with native
-imports forbidden. Literal UTF-8 truth preserves every decoded expected value;
-no candidate observations write expected results. Both row and non-row plans share
-immutable column groups. Direct grouped driver reductions use existing engine
-services, preserving ordered float bits, missing/empty groups and record versus
-present-value counts. The 945-row assisted inventory remains unchanged.
+imports forbidden. Immutable column groups attach to existing checkpoints;
+direct grouped driver reductions use existing engine services. Candidate
+observations never write expected truth.
 
-Broader rows and aggregate expressions, warning severity, predicate gaps,
-environment/workflow admission and the public facade remain open. The packaging
-lock policy proposal awaits maintainer approval; AGENTS.md remains unchanged.
+The row-filter candidate `b484d3780de29a7c1a64bb1d052ffc7763a965a7`
+passes 741 Rust tests across 89 all-target executions, strict Clippy, the
+dependency guard, 45 tooling tests, both installed 23-suite Python forms (57
+original-document methods), all 17 strict R scripts and direct source-byte
+auditing of ten Python and eleven R changed members plus 52 Parquet fixtures.
+Rebase onto merged main adds only the seven inspected upstream documentation and
+reference-test files; runtime and expected truth remain equal before this plan
+update. Its 89-contract/40-suite catalog includes twenty-six independently
+reference-qualified complete filter reports and two complete native unsupported
+admission envelopes. Final hosted qualification, full review and fresh
+artifact auditing remain required.
+
+Filters read converted candidate columns and direct ungrouped driver fields,
+with true retaining rows and false/unknown dropping them. Grouped filters read
+completed columns and promote admitted row-local defaults. Typed phase findings,
+grammar/source failures, declaration-order templates and checks after filtering
+retain complete truth. Repeated predicate occurrences use one immutable binding
+per identifier while retaining first-use order. Unsupported carriers and parser
+resource failures reject during preparation, before study authority; wide literal
+overflow remains explicitly unqualified. Ungrouped promotion of defaults not
+already selected by a template is unsupported pending the written-rule/reference
+reconciliation recorded with the fixture.
+
+The next delivery target is the bounded public facade and package consolidation,
+so the cohort can qualify through the public frontend. Broader rows and aggregate
+expressions, warning severity, predicate gaps, environment/workflow admission and
+release gates remain open. The packaging-lock policy proposal awaits maintainer
+approval; AGENTS.md remains unchanged.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance
