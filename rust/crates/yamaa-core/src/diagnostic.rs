@@ -98,6 +98,8 @@ conditions! {
     GroupedColumnReference => ("validation", "ungrouped_driver_field", Some("REQ-0107")),
     AggregateDriverScope => ("validation", "invalid_aggregate_context", Some("REQ-0329")),
     QualifiedNumericReference => ("validation", "qualified_identifier", Some("REQ-0442")),
+    SourceFilterReference => ("validation", "unknown_field", Some("REQ-0132")),
+    SourceFilterSingleValue => ("validation", "prohibited_construct", Some("REQ-0148")),
     SourceUnknownReference => ("validation", "unknown_field", Some("REQ-0103")),
     OutputUnknownReference => ("validation", "unknown_field", None),
     OutputUnresolvableReference => ("validation", "unresolvable_name", None),

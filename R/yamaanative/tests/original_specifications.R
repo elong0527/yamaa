@@ -36,7 +36,7 @@ for(i in seq_len(nrow(decode_truth))) {
   failure <- tryCatch(prepare_entry("source.yaml",bytes,no_port,no_port,no_port),error=identity)
   stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),decode_truth$expected[[i]]))
 }
-for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup","negative-formula-flag","negative-row-aggregate","negative-row-no-prior")) {
+for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup","negative-formula-flag","negative-row-aggregate","negative-row-no-prior","negative-source-missing-field")) {
   case <- file.path(root,"cases",case_name)
   specification <- if(case_name=="schema-inheritance") "spec_study.yaml" else "spec.yaml"
   if(case_name=="schema-inheritance") {
@@ -66,7 +66,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
       specification,rawfile(file.path(case,specification)),no_parent,no_parent,no_parent)
   }
   gc()
-  inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else if(case_name %in% c("schema-window-functions","negative-row-no-prior")) c(VS="input/vs.csv") else c(LB="input/lb.csv")
+  inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else if(case_name %in% c("schema-window-functions","negative-row-no-prior")) c(VS="input/vs.csv") else if(case_name=="negative-source-missing-field") c(ODM="input/odm.csv") else c(LB="input/lb.csv")
   stopifnot(identical(specification_source(handle),list(name=names(inputs)[[1L]],path=unname(inputs[[1L]]))))
   state <- new.env(parent=emptyenv()); state$reads <- 0L; state$requests <- character(); state$content <- list()
   capture <- function(name,path,maximum) {
@@ -665,3 +665,50 @@ cat("original row conversion handlers complete independent reports and exact CSV
 
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)
+
+# Source-filter truth uses bytes rather than a host YAML/predicate planner.
+filter_truth <- read.delim(file.path(root,"source-filters.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(filter_truth)==13L)
+hex_raw <- function(hex) {
+  if(!nzchar(hex)) return(raw(0))
+  starts <- seq.int(1L,nchar(hex),by=2L)
+  as.raw(strtoi(substring(hex,starts,starts+1L),base=16L))
+}
+for(i in seq_len(nrow(filter_truth))) {
+  row <- filter_truth[i,,drop=FALSE]
+  handle <- prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port)
+  content <- hex_raw(row$input_hex[[1L]])
+  artifact <- hex_raw(row$artifact_hex[[1L]])
+  expected <- sub('"runtime":"python"','"runtime":"r"',row$expected[[1L]],fixed=TRUE)
+  expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
+  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
+  calls <- 0L
+  capture <- function(name,path,maximum) {
+    stopifnot(name=="SRC",path=="source.csv",length(content)<=maximum)
+    calls <<- calls+1L;list(content,calls==1L)
+  }
+  saves <- 0L
+  publish <- function(path,bytes) {
+    stopifnot(length(artifact)>0L,path=="result.csv",identical(bytes,artifact))
+    saves <<- saves+1L;TRUE
+  }
+  for(created in c(1L,0L)) {
+    if(created==0L) {
+      expected <- gsub('"snapshots_created":1','"snapshots_created":0',expected,fixed=TRUE)
+      unsaved <- gsub('"snapshots_created":1','"snapshots_created":0',unsaved,fixed=TRUE)
+    }
+    result <- build(handle,capture,paste0("source-filter-",row$case[[1L]]))
+    stopifnot(identical(build_observations(result),unsaved))
+    if(length(artifact)) {
+      stopifnot(!is.null(build_output(result)))
+      for(j in seq_len(2L)) stopifnot(identical(build_save(result,publish),expected))
+    } else {
+      stopifnot(is.null(build_output(result)))
+      actual <- tryCatch(build_save(result,publish),error=identity)
+      stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),"cannot save a failed build"))
+    }
+  }
+  stopifnot(calls==2L,saves==if(length(artifact)) 4L else 0L)
+}
+cat("original source filters complete reports, cached reads and exact saved CSV passed\n")

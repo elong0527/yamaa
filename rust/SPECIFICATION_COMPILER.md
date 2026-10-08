@@ -129,3 +129,21 @@ pin row-local recovery and inherited defaults: repeated effective defaults share
 one counter, overrides keep their authored paths, and a wholly overridden default
 has no counter entry. Registration follows effective rows before ordinary columns.
 Nested expressions and other handler families remain Unsupported.
+
+
+Driver-backed source expressions retain optional predicate eligibility in the core
+compiled model and bind it only after complete source ingestion. Filter identifiers
+are confined to their own input dataset; single output or selected intermediate
+values have no record collection to filter. The compiler preserves that normative
+rejection before parsing an inapplicable predicate. Valid bindings reuse the
+existing core predicate and engine distinct-reading collection services, including
+missing/no-match behavior and original source/declaration order. Repeated identifier
+occurrences and BETWEEN subjects share one admitted field binding.
+
+The admitted slice includes filtered non-key driver columns. Filtered key
+assignments, secondary source expressions, source ordering and first-available
+composition remain explicit Unsupported operations before study authority. The
+unchanged negative-source-missing-field document now retains independent complete
+reference truth on the private route. Thirteen independently authored source-filter
+reports preserve five successful cases (three distinct exact CSV outputs) and
+eight post-ingestion failures; broader predicate parity gaps remain documented.
