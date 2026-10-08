@@ -117,6 +117,17 @@ with the derivation below and the admiral function as grounding.
    Same question applies to `adam-adqs-missed-visit-locf`; inspect
    both fixtures before deciding.
 
+   > REVIEWED 2026-10-07 (benchmark-maintenance run) -- candidate
+   > COMPLETED. `adam-advs-windows` already carries expected records:
+   > one per planned visit in the screening, baseline, week 2, or week 4
+   > windows for which no collected record's study day covers its window,
+   > driven from SDTM SV (6af7cbc9, 303efd5a; drift and
+   > the 19-row golden verified 2026-10-07). `adam-adqs-missed-visit-locf`
+   > inspected per the "same question": missed visits already produce
+   > exactly one record per efficacy subject per scheduled visit via
+   > stated protocol row templates (deliberate design, spec header
+   > comment); no change needed.
+
 Dropped from this list: `adam-adlb-bds` already carries PCHG
 (verified in the golden), and ANRIND is covered by
 `adam-adlb-shift-criteria`.
