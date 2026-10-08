@@ -183,13 +183,15 @@ declarations, and matching shares cumulative subject bytes, work and state cells
 with predicates across the whole attempt. Refusals retain the completed prefix;
 the next attempt gets fresh counters.
 
-Fourteen independently authored complete reports cover search, missing/empty input,
+Fifteen independently authored complete reports cover search, missing/empty input,
 Unicode, lookahead, backreferences, deferred syntax/type findings and later
-conversion failures, with six exact successful CSV artifacts. Independently
+conversion failures, with six exact successful CSV artifacts. A compound case retains
+an earlier invalid pattern before a later compilation limit; later vocabulary
+is still scanned while unreachable payload compilation stops. Independently
 authored full reports for unchanged negative-sex-code and
 negative-matches-bad-pattern bring the locally qualified original corpus to
-seventeen. Local immutable runtime `f4b65fd080db31f148515715029d50892117adff`
-passes 690 Rust tests across 78 targets, strict Clippy, 44 tooling tests, both
+seventeen. Local immutable runtime `2847f9c501a457790310ac58accb4edbf45d04dc`
+passes 691 Rust tests across 78 targets, strict Clippy, 44 tooling tests, both
 installed Python forms with 23 suites (49 original-document, six actual-file and
 four schema methods), and all 17 strict R scripts with Status: OK and Python
 absent from PATH. Seventeen changed native Python and eighteen R archive members,
