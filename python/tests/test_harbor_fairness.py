@@ -342,3 +342,40 @@ def test_value_perturbations_preserve_parquet_types_and_partial_dates(tmp_path):
     assert changed["VISITDT"].to_pylist()[0] != "2026-09-01"
     assert changed["VISITDT"].to_pylist()[1] == "2026-09"
     assert changes[0]["columns"] == {"AGE": 1, "VISITDT": 1}
+
+
+@pytest.mark.parametrize(
+    ("original", "expected"),
+    [
+        ("2024-12-27", "2025-01-03"),
+        ("2024-02-24", "2024-03-02"),
+        ("2024-12-27T08:30", "2025-01-03T08:30"),
+        ("2024-12-27T08:30:07", "2025-01-03T08:30:07"),
+        ("2024-12-27T08:30:07.0100", "2025-01-03T08:30:07.0100"),
+        ("2024-12-27T08:30+05:30", "2025-01-03T08:30+05:30"),
+        ("2024-12-27T08:30:07Z", "2025-01-03T08:30:07Z"),
+        ("2024-12-27T08:30:07.0100-04:00", "2025-01-03T08:30:07.0100-04:00"),
+        ("2024-12", "2024-12"),
+        ("2024-02-30T08:30", "2024-02-30T08:30"),
+        ("", ""),
+    ],
+)
+def test_date_challenges_preserve_authored_precision_and_timezone(
+    tmp_path, original, expected
+):
+    import random
+
+    path = tmp_path / "vs.csv"
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["USUBJID", "VSDTC"])
+        writer.writerow(["SUBJ1", original])
+    before = path.read_bytes()
+    changes = grade._perturb_values(tmp_path, random.Random(0))
+    with path.open(newline="") as handle:
+        assert list(csv.DictReader(handle)) == [{"USUBJID": "SUBJ1", "VSDTC": expected}]
+    if original == expected:
+        assert changes == []
+        assert path.read_bytes() == before
+    else:
+        assert changes == [{"file": "vs.csv", "columns": {"VSDTC": 1}}]

@@ -912,7 +912,12 @@ def _perturb_values(input_dir: Path, randomizer: random.Random) -> list[dict]:
                         if len(value) == 10
                         else datetime.fromisoformat(value)
                     )
-                    return (parsed + timedelta(days=date_shift)).isoformat()
+                    shifted = parsed + timedelta(days=date_shift)
+                    if isinstance(shifted, datetime):
+                        # Challenge the date without widening the authored time
+                        # precision or changing its fractional/offset spelling.
+                        return shifted.date().isoformat() + value[10:]
+                    return shifted.isoformat()
             except ValueError:
                 pass
         name = column.upper()

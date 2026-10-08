@@ -290,3 +290,22 @@ def test_an_older_protocol_or_uncommitted_build_cannot_be_ranked(tmp_path):
 def test_the_oracle_workflow_builds_the_tasks_image():
     workflow = (ROOT / ".github" / "workflows" / "harbor-oracle.yml").read_text()
     assert f"docker build -t {build.IMAGE} evaluations/harbor" in workflow
+
+
+def test_minute_precision_fever_reference_passes_complete_changed_input_challenge(
+    tmp_path,
+):
+    benchmark = ROOT / "benchmarks" / "adam-adfa-fever"
+    app = _app(tmp_path, benchmark)
+    contract = build.contract_for(benchmark, "python")
+    text = (build.SOLUTIONS / benchmark.name / "result.py").read_text()
+    text = text.replace("/app/", f"{app.as_posix()}/")
+    reference = tmp_path / "reference.py"
+    reference.write_text(text)
+    (app / "output/result.py").write_text(text)
+    original = (app / "input/vs.csv").read_bytes()
+    result = grade.challenge_rerun(
+        contract, benchmark / "expected", app / "output", reference, _run("python")
+    )
+    assert result["checked"] and result["passed"], result
+    assert (app / "input/vs.csv").read_bytes() == original
