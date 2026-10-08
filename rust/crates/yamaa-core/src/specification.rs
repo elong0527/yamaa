@@ -1076,6 +1076,33 @@ impl PreparedSpecification {
     pub fn verifications(&self) -> &[crate::dataset::Verification] {
         &self.verifications.checks
     }
+    /// Inspect known declaration findings without reading sources or evaluating checks.
+    /// Column findings retain declaration order, followed by dataset findings.
+    pub fn verification_declaration_diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
+        use crate::dataset::Check;
+        self.column_verifications
+            .iter()
+            .chain([&self.verifications])
+            .flat_map(|group| &group.checks)
+            .filter_map(|verification| match &verification.check {
+                Check::InvalidDiagnostic(diagnostic) => Some(diagnostic.clone()),
+                Check::InvalidDeclaration {
+                    condition,
+                    requirement,
+                    reason,
+                } => Some(
+                    crate::dataset_checks::declaration_diagnostic(
+                        verification.path.clone(),
+                        condition,
+                        requirement,
+                        reason.clone(),
+                    )
+                    .expect("compiled verification finding has a registered cause"),
+                ),
+                _ => None,
+            })
+            .collect()
+    }
     pub fn verification_identity(&self, path: &str) -> Option<&str> {
         core::iter::once(&self.verifications)
             .chain(&self.column_verifications)

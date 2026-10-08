@@ -3462,6 +3462,36 @@ fn deferred_column_findings_stop_later_payload_compilation_but_keep_vocabulary_a
                     && item.path == expected)));
     }
 }
+#[test]
+fn static_verification_checks_match_complete_issues_without_study_authority() {
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let truth = include_str!("fixtures/static_verification_checks.tsv");
+    assert_eq!(truth.lines().count(), 16);
+    for line in truth.lines().skip(1) {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        assert_eq!(fields.len(), 3);
+        let source = fields[1]
+            .as_bytes()
+            .chunks_exact(2)
+            .map(|pair| u8::from_str_radix(core::str::from_utf8(pair).unwrap(), 16).unwrap())
+            .collect();
+        let document = schema
+            .prepare_standalone(Source {
+                identity: "spec.yaml".into(),
+                bytes: source,
+            })
+            .unwrap();
+        let run = yamaa_adapters::specification_run::PreparedRun::prepare(document).unwrap();
+        for _ in 0..2 {
+            assert_eq!(
+                yamaa_adapters::specification_check::issues(&run).unwrap(),
+                fields[2],
+                "{}",
+                fields[0]
+            );
+        }
+    }
+}
 fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
     use yamaa_adapters::{
         specification_report::{self, Identity},

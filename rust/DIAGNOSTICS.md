@@ -1,5 +1,13 @@
 # Portable diagnostic foundation
 
+Known verification declaration findings now project through eight additional
+canonical causes for invalid IDs, required payloads, repeated IDs, bounds, cardinality, column
+types and unknown declared columns. The shared checker queries these owned findings
+without study authority. A build keeps its earlier arithmetic/conversion failure
+and its existing declaration checkpoint order. The thin issue encoder sends JSON
+context text identically to both native hosts and refuses output above its byte
+ceiling without returning a partial payload.
+
 Column pattern failures now reach REQ-0379 through the pure completed-string
 service. Invalid compiled pattern syntax owns REQ-0827 with its authored pattern
 and pattern path, without parser offsets or reason fields. Both findings retain

@@ -405,6 +405,18 @@ class OriginalSpecifications(unittest.TestCase):
     def test_original_column_not_missing_complete_reports_and_exact_csv(self):
         self._source_selection_reports("original-not-missing.tsv", "column-check", 10)
 
+    def test_static_verification_check_issues_need_no_study_authority(self):
+        with (ROOT / "static-verification-checks.tsv").open(encoding="utf-8") as stream:
+            cases = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(cases), 15)
+        def no_port(*args):
+            raise AssertionError("static check entered a resource authority")
+        for row in cases:
+            with self.subTest(case=row["case"]):
+                handle = yamaa_native._prepare_document("spec.yaml", bytes.fromhex(row["source_hex"]), no_port, no_port, no_port)
+                for _ in range(2):
+                    self.assertEqual(handle.check_issues(), row["expected"])
+
     def test_original_column_matches_complete_reports_and_exact_csv(self):
         self._source_selection_reports("original-column-matches.tsv", "column-matches", 16)
 

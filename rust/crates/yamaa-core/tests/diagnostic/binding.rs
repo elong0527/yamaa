@@ -695,3 +695,172 @@ pub fn verification_reached() -> BTreeSet<ConditionCode> {
     )]
     .into()
 }
+
+pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    for (kind, column_checks, dataset_checks, condition, requirement, path, reason) in [
+        (
+            "int",
+            List(vec![]),
+            List(vec![Map(vec![(
+                "unique",
+                Map(vec![("id", Text("")), ("columns", List(vec![Text("ID")]))]),
+            )])]),
+            "invalid_declaration",
+            "REQ-0374",
+            "verifications[0].unique",
+            "a verification id is text",
+        ),
+        (
+            "int",
+            List(vec![Map(vec![(
+                "allowed_values",
+                Map(vec![("values", List(vec![]))]),
+            )])]),
+            List(vec![]),
+            "invalid_declaration",
+            "REQ-0397",
+            "columns.V.verifications[0].allowed_values",
+            "allowed_values requires values",
+        ),
+        (
+            "int",
+            List(vec![]),
+            List(vec![
+                Map(vec![(
+                    "unique",
+                    Map(vec![
+                        ("id", Text("same")),
+                        ("columns", List(vec![Text("ID")])),
+                    ]),
+                )]),
+                Map(vec![(
+                    "unique",
+                    Map(vec![
+                        ("id", Text("same")),
+                        ("columns", List(vec![Text("ID")])),
+                    ]),
+                )]),
+            ]),
+            "duplicate_identifier",
+            "REQ-0398",
+            "verifications[1].unique",
+            "verification id 'same' repeats verifications[0].unique",
+        ),
+        (
+            "int",
+            List(vec![Map(vec![(
+                "range",
+                Map(vec![
+                    ("min", Scalar(N::Integer("2".into()))),
+                    ("max", Scalar(N::Integer("1".into()))),
+                ]),
+            )])]),
+            List(vec![]),
+            "invalid_declaration",
+            "REQ-0399",
+            "columns.V.verifications[0].range",
+            "range min exceeds max",
+        ),
+        (
+            "str",
+            List(vec![Map(vec![(
+                "max_length",
+                Map(vec![("max", Scalar(N::Integer("0".into())))]),
+            )])]),
+            List(vec![]),
+            "invalid_declaration",
+            "REQ-0400",
+            "columns.V.verifications[0].max_length",
+            "max_length max is at least one",
+        ),
+        (
+            "int",
+            List(vec![]),
+            List(vec![Map(vec![(
+                "all_or_none",
+                Map(vec![("columns", List(vec![Text("ID")]))]),
+            )])]),
+            "invalid_declaration",
+            "REQ-0401",
+            "verifications[0].all_or_none",
+            "all_or_none names two distinct columns",
+        ),
+        (
+            "int",
+            List(vec![Map(vec![(
+                "max_length",
+                Map(vec![("max", Scalar(N::Integer("1".into())))]),
+            )])]),
+            List(vec![]),
+            "invalid_declaration",
+            "REQ-0404",
+            "columns.V.verifications[0].max_length",
+            "a int column does not admit this verification",
+        ),
+        (
+            "int",
+            List(vec![]),
+            List(vec![Map(vec![(
+                "all_or_none",
+                Map(vec![("columns", List(vec![Text("ID"), Text("UNKNOWN")]))]),
+            )])]),
+            "unknown_field",
+            "REQ-0405",
+            "verifications[0].all_or_none.columns",
+            "unknown column 'UNKNOWN'",
+        ),
+    ] {
+        let mut nodes = vec![];
+        let root = Map(vec![
+            ("schema_version", Text("1.0")),
+            ("domain", Text("TEST")),
+            ("base", Text("SRC")),
+            (
+                "input",
+                Map(vec![("SRC", Map(vec![("path", Text("source.csv"))]))]),
+            ),
+            ("keys", List(vec![Text("ID")])),
+            (
+                "columns",
+                List(vec![
+                    column("ID", Some(op("source", "variable", "SRC.ID"))),
+                    Map(vec![
+                        ("name", Text("V")),
+                        ("type", Text(kind)),
+                        ("derivation", op("source", "variable", "SRC.V")),
+                        ("verifications", column_checks),
+                    ]),
+                ]),
+            ),
+            (
+                "output",
+                Map(vec![
+                    ("path", Text("result.csv")),
+                    ("columns", List(vec![Text("ID"), Text("V")])),
+                ]),
+            ),
+            ("verifications", dataset_checks),
+        ])
+        .append(&mut nodes);
+        let model = SpecificationDocument::admit(
+            Document::new(nodes, root, Default::default()).unwrap(),
+            &mut ValidationBudget::new(Default::default()),
+        )
+        .unwrap()
+        .unwrap();
+        let prepared = PreparedSpecification::prepare(&model).unwrap();
+        let findings = prepared.verification_declaration_diagnostics();
+        assert_eq!(prepared.verification_declaration_diagnostics(), findings);
+        assert_eq!(findings.len(), 1);
+        reached.insert(check(
+            findings.into_iter().next().unwrap(),
+            condition,
+            Some(requirement),
+            &[path],
+            vec![("reason", text(reason))],
+        ));
+        assert_eq!(prepared.source().path, "source.csv");
+    }
+    reached
+}

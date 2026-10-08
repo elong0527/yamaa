@@ -59,6 +59,10 @@ impl PreparedRun {
     pub fn compiled(&self) -> &PreparedSpecification {
         self.checked.compiled()
     }
+    /// Read static findings from the same engine capability used by build.
+    pub fn check_diagnostics(&self) -> Vec<yamaa_core::diagnostic::Diagnostic> {
+        self.checked.verification_declaration_diagnostics()
+    }
     pub fn source(&self) -> &SourceDeclaration {
         self.compiled().source()
     }

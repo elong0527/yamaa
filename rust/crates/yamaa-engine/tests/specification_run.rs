@@ -1060,6 +1060,56 @@ mod domain_usecase {
     use yamaa_engine::domain;
 
     #[test]
+    fn known_verification_findings_need_no_data_and_do_not_move_build_failures() {
+        let original = document("ID / 0", "input.csv");
+        let raw = original.document();
+        assert_eq!(raw.root() + 1, raw.nodes().len());
+        let mut nodes = raw.nodes()[..raw.root()].to_vec();
+        let N::Mapping(fields) = &raw.nodes()[raw.root()] else {
+            panic!("mapping")
+        };
+        let mut fields = fields.clone();
+        let name = nodes.len();
+        nodes.push(N::Text("verifications".into()));
+        let verification =
+            Tree::List(vec![Tree::Map(vec![("row_count", Tree::Map(vec![]))])]).append(&mut nodes);
+        fields.push((name, verification));
+        let root = nodes.len();
+        nodes.push(N::Mapping(fields));
+        let model = SpecificationDocument::admit(
+            Document::new(nodes, root, Default::default()).unwrap(),
+            &mut ValidationBudget::new(Default::default()),
+        )
+        .unwrap()
+        .unwrap();
+        let checked = domain::check(&model).unwrap();
+        let (mut port, mut decoder) = fixtures();
+        for _ in 0..2 {
+            let findings = checked.verification_declaration_diagnostics();
+            assert_eq!(findings.len(), 1);
+            assert_eq!(
+                (
+                    findings[0].definition().condition,
+                    findings[0].definition().requirement
+                ),
+                ("invalid_declaration", Some("REQ-0399"))
+            );
+            assert_eq!(findings[0].spec_paths, ["verifications[0].row_count"]);
+            assert!(port.trace.borrow().is_empty());
+            assert_eq!((port.requests, port.reads), (0, 0));
+        }
+        let attempt = domain::build(&model, &mut port, &mut decoder, limits()).unwrap();
+        let execution = attempt.result.unwrap();
+        let ExecutionError::Numeric { error, .. } = *execution.result.unwrap_err() else {
+            panic!("arithmetic precedes the deferred declaration")
+        };
+        assert_eq!(
+            error.diagnostic().unwrap().definition().condition,
+            "division_by_zero"
+        );
+    }
+
+    #[test]
     fn rejected_vocabulary_precedes_every_study_effect() {
         let (mut port, mut decoder) = fixtures();
         let document = document("ID + 1", "input.unknown");

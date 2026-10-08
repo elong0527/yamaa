@@ -67,6 +67,13 @@ prepare_specification <- function(modules, entry, identity, source) {
   })
 }
 
+# Known core declaration findings, with shared JSON context text and no study IO.
+.specification_check_issues <- function(handle) {
+  result <- .Call(wrap__check_specification_issues,handle)
+  if (!is.null(result$error)) stop(result$error,call.=FALSE)
+  result$value
+}
+
 .prepare_with_ports <- function(canonicalize,capture,rebase,invoke) {
   if (!is.function(canonicalize) || !is.function(capture) || !is.function(rebase)) {
     stop("inheritance ports must be functions", call.=FALSE)
