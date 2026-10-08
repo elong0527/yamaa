@@ -132,7 +132,7 @@ class OriginalSpecifications(unittest.TestCase):
                             self.assertEqual(json.loads(result.save_file(outputs[name], str(target))), expected)
                             self.assertEqual(target.read_bytes(), csv_expected)
                         self.assertEqual(specification.capture_reads(), before + captures)
-                    self.assertEqual(list(Path(directory).glob(".yamaa-output-*.part")), [])
+                    self.assertEqual(list(Path(directory).glob(".yamaa-output-*")), [])
 
     @unittest.skipIf(os.name == "nt", "native file transport is qualified on Unix")
     def test_native_file_preparation_retains_complete_early_findings_and_path_authority(self):
