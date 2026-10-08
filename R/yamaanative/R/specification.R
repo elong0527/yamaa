@@ -127,11 +127,13 @@ specification_source <- function(handle) {
 #' @param example The report example identity.
 #' @param specification Relative specification identity for observations.
 #' @param base_directory Relative source base identity for observations.
+#' @param inspect Optional metadata-only callback taking name and path; returns
+#'   NULL or an explicit classified failure pair before any source capture.
 #' @return Complete portable failure-report JSON; never accepted output artifacts.
 #' @export
 specification_failure_report <- function(handle, capture, example,
-    specification = "spec.yaml", base_directory = ".") {
-  .specification_observed_report(handle, capture, NULL, example, specification, base_directory)
+    specification = "spec.yaml", base_directory = ".", inspect = NULL) {
+  .specification_observed_report(handle, capture, NULL, example, specification, base_directory, inspect=inspect)
 }
 
 #' Execute and publish a bounded original specification through shared Rust
@@ -143,16 +145,19 @@ specification_failure_report <- function(handle, capture, example,
 #' @param example The report example identity.
 #' @param specification Relative specification identity.
 #' @param base_directory Relative source base identity.
+#' @param inspect Optional metadata-only callback taking name and path; returns
+#'   NULL or an explicit classified failure pair before any source capture.
 #' @return Portable report JSON; publication errors and interrupts are rethrown.
 #' @export
 specification_report <- function(handle, capture, publish, example,
-    specification = "spec.yaml", base_directory = ".") {
+    specification = "spec.yaml", base_directory = ".", inspect = NULL) {
   if (!is.function(publish)) stop("publish must be a function", call. = FALSE)
-  .specification_observed_report(handle, capture, publish, example, specification, base_directory)
+  .specification_observed_report(handle, capture, publish, example, specification, base_directory, inspect=inspect)
 }
 
-.specification_observed_report <- function(handle, capture, publish, example, specification, base_directory, build=FALSE) {
+.specification_observed_report <- function(handle, capture, publish, example, specification, base_directory, build=FALSE, inspect=NULL) {
   if (!is.function(capture)) stop("capture must be a function", call. = FALSE)
+  if (!is.null(inspect) && !is.function(inspect)) stop("inspect must be a function", call. = FALSE)
   force(capture)
   failure <- NULL
   dispatch <- function(name, path, maximum) tryCatch({
@@ -178,12 +183,28 @@ specification_report <- function(handle, capture, publish, example,
     failure <<- e
     list(NULL, FALSE)
   })
+  inspect_dispatch <- NULL
+  if (!is.null(inspect)) {
+    force(inspect)
+    inspect_dispatch <- function(name,path) tryCatch({
+      result <- inspect(name,path)
+      if (is.null(result)) return(NULL)
+      if (is.list(result) && length(result)==2L &&
+          is.character(result[[1L]]) && length(result[[1L]])==1L &&
+          !is.na(result[[1L]]) && inherits(result[[2L]],"condition")) {
+        if (inherits(result[[2L]],"interrupt")) stop(result[[2L]])
+        return(result)
+      }
+      stop("invalid source inspection response",call.=FALSE)
+    },error=function(e) {failure <<- e;list(NULL,FALSE)},
+      interrupt=function(e) {failure <<- e;list(NULL,FALSE)})
+  }
   metadata <- lapply(list(as.character(getRversion()), engine_info()$core_version,
                           example, specification, base_directory), .specification_text_bytes, maximum=4096)
   if (build) {
-    result <- .Call(wrap__specification_build, handle, dispatch, metadata)
+    result <- .Call(wrap__specification_build, handle, dispatch, metadata, inspect_dispatch)
   } else if (is.null(publish)) {
-    result <- .Call(wrap__specification_failure_report, handle, dispatch, metadata)
+    result <- .Call(wrap__specification_failure_report, handle, dispatch, metadata, inspect_dispatch)
   } else {
     force(publish)
     publish_dispatch <- function(path, content) tryCatch({
@@ -195,7 +216,7 @@ specification_report <- function(handle, capture, publish, example,
       failure <<- e
       FALSE
     })
-    result <- .Call(wrap__specification_report, handle, dispatch, publish_dispatch, metadata)
+    result <- .Call(wrap__specification_report, handle, dispatch, publish_dispatch, metadata, inspect_dispatch)
   }
   if (!is.null(failure)) stop(failure)
   if (!is.null(result$error)) stop(result$error, call. = FALSE)
@@ -203,8 +224,8 @@ specification_report <- function(handle, capture, publish, example,
 }
 
 # Internal owned-result API; building captures/evaluates, saving only publishes.
-.specification_build <- function(handle,capture,example,specification="spec.yaml",base_directory=".") {
-  .specification_observed_report(handle,capture,NULL,example,specification,base_directory,build=TRUE)
+.specification_build <- function(handle,capture,example,specification="spec.yaml",base_directory=".",inspect=NULL) {
+  .specification_observed_report(handle,capture,NULL,example,specification,base_directory,build=TRUE,inspect=inspect)
 }
 .build_output <- function(handle) {
   result <- .Call(wrap__build_output,handle)

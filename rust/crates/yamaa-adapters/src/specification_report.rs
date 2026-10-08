@@ -115,13 +115,35 @@ fn captured_failure<E>(
     Ok(last)
 }
 
+fn inspected_failures<'a, E>(
+    run: &PreparedRun,
+    attempt: &'a CapturedAttempt<E>,
+) -> Result<&'a [crate::specification_run::InspectionFailure<E>], Error> {
+    let Err(PortError::Inspect(failures)) = &attempt.result else {
+        return Err(Error::UnsupportedOutcome);
+    };
+    if !attempt.sources.is_empty() || failures.is_empty() {
+        return Err(Error::InvalidObservation);
+    }
+    let mut declarations = run.compiled().sources().iter();
+    for failure in failures {
+        if failure.failure.is_none() {
+            return Err(Error::UnsupportedOutcome);
+        }
+        if !declarations.any(|source| source == &failure.source) {
+            return Err(Error::InvalidObservation);
+        }
+    }
+    Ok(failures)
+}
+
 /// Refuse outcomes outside this formatter instead of inventing observations.
 pub fn failure<E>(
     run: &PreparedRun,
     attempt: &CapturedAttempt<E>,
     id: Identity<'_>,
 ) -> Result<Value, Error> {
-    if attempt.sources.is_empty() {
+    if attempt.sources.is_empty() && !matches!(attempt.result, Err(PortError::Inspect(_))) {
         return Err(Error::UnsupportedOutcome);
     }
     let mut verifications = Vec::new();
@@ -165,6 +187,22 @@ pub fn failure<E>(
             vec![specification_diagnostics::portable_diagnostic(diagnostic)
                 .ok_or(Error::InvalidObservation)?]
         }
+        Err(PortError::Inspect(_)) => inspected_failures(run, attempt)?
+            .iter()
+            .map(|failure| {
+                let written = run
+                    .document()
+                    .written_source_path(&failure.source.name)
+                    .ok_or(Error::InvalidObservation)?;
+                specification_diagnostics::portable_diagnostic(
+                    failure
+                        .failure
+                        .ok_or(Error::InvalidObservation)?
+                        .diagnostic(&failure.source.name, written),
+                )
+                .ok_or(Error::InvalidObservation)
+            })
+            .collect::<Result<Vec<_>, Error>>()?,
         _ => return Err(Error::UnsupportedOutcome),
     };
     let mut report = envelope(run, attempt, &id)?;
@@ -214,12 +252,12 @@ fn table_observation<T: TableAccess>(
     )
 }
 fn envelope<E>(
-    _run: &PreparedRun,
+    run: &PreparedRun,
     attempt: &CapturedAttempt<E>,
     id: &Identity<'_>,
 ) -> Result<Value, Error> {
     if attempt.sources.is_empty() {
-        return Err(Error::UnsupportedOutcome);
+        inspected_failures(run, attempt)?;
     }
     if attempt.sources.iter().any(|source| !source.read.captured) {
         captured_failure(attempt)?;

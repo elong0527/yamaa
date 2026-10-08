@@ -8,7 +8,7 @@ and codec interfaces are native traits; adapters translate values and errors.
 
 | Port | Owner | Current implementations | Failures |
 | --- | --- | --- | --- |
-| `specification_run::SourcePort` | engine | Python and R capture bridges; engine and adapter test fakes | Original opaque capture error; regressing snapshot counter |
+| `specification_run::SourcePort` | engine | Python/R metadata and capture bridges; descriptor-backed Python resource adapter; native fakes | Known inspection findings in declaration order; original opaque error; invalid snapshot counter |
 | `specification_run::SourceDecoder` | engine | Adapter CSV/Parquet/Arrow decoder; engine test fake | Original decoder error; byte/cell capacity limits |
 | `specification_output::ArtifactEncoder` | engine | Adapter CSV/Parquet encoders; native test fake | Original codec error; checked output byte limit |
 | `specification_output::OutputReport` | engine | Portable JSON report formatter; native test fake | Observation or report-budget failure before publication |
@@ -233,6 +233,14 @@ only the two represented filesystem causes. Package, IO and specification export
 load lazily so importing this adapter does not load the reference parser, planner,
 evaluator or table codecs. Installed qualification exercises actual missing and
 non-regular files at the first and later source request, cached counters, complete
-failed reports and retained save gates. This is a requested-source capture path;
-whole-project preflight, the R filesystem implementation and the public facade
-remain open. Existing reference APIs keep their names and behavior until cutover.
+failed reports and retained save gates. The metadata-only `inspect` operation checks every declared source before the
+first study capture. Known missing/nonregular causes collect in declaration order;
+opaque errors and interrupts stop before later authority. Inspection cannot change
+the capture counter. A failed preflight retains no source-read or table observations
+and cannot be saved. Hosts may omit inspection for existing explicit-byte callbacks,
+preserving their qualified request timing. Seven independently authored complete
+reports match actual reference-file failures, including multiple failures; installed
+hosts pin original error/interrupt identity, malformed replies and repeated builds.
+Python exercises descriptor-backed metadata inspection without reference semantic
+imports. The R filesystem implementation, environment/function preflight and public
+facade remain open. Existing reference APIs keep their names and behavior until cutover.

@@ -22,10 +22,11 @@ pub enum Error {
     Bind(BindError),
     Execution(DatasetTransportError),
 }
-pub use yamaa_engine::specification_run::{SourcePort, SourceRead};
+pub use yamaa_engine::specification_run::{InspectionFailure, SourcePort, SourceRead};
 #[derive(Debug)]
 pub enum PortError<E> {
     Capture(E),
+    Inspect(Vec<InspectionFailure<E>>),
     Run(Error),
     CaptureAccounting,
 }
@@ -92,6 +93,7 @@ impl PreparedRun {
                     DatasetTransportError::Internal,
                 ))),
                 Err(application::PortError::Capture(error)) => Err(PortError::Capture(error)),
+                Err(application::PortError::Inspect(errors)) => Err(PortError::Inspect(errors)),
                 Err(application::PortError::Run(error)) => {
                     Err(PortError::Run(run_error(error, self.compiled())))
                 }

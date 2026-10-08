@@ -3255,3 +3255,112 @@ fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize
     }
     assert_eq!(cases, expected_cases);
 }
+
+#[test]
+fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
+    use yamaa_adapters::{
+        specification_report::{self, Identity},
+        specification_run::{PortError, PreparedRun, SourcePort},
+    };
+    use yamaa_core::resource::ResourceFailure;
+    use yamaa_engine::specification::SourceDeclaration;
+    struct Port {
+        failures: serde_json::Value,
+        inspected: Vec<String>,
+    }
+    impl SourcePort for Port {
+        type Error = ResourceFailure;
+        fn resource_failure(&self, error: &ResourceFailure) -> Option<ResourceFailure> {
+            Some(*error)
+        }
+        fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), ResourceFailure> {
+            self.inspected.push(source.name.clone());
+            match self.failures[&source.name].as_str() {
+                Some("missing") => Err(ResourceFailure::Missing),
+                Some("not_regular_file") => Err(ResourceFailure::NotRegularFile),
+                None => Ok(()),
+                _ => panic!("unknown independent inspection cause"),
+            }
+        }
+        fn capture_reads(&self) -> usize {
+            0
+        }
+        fn capture(
+            &mut self,
+            _: &SourceDeclaration,
+            _: usize,
+        ) -> Result<Arc<[u8]>, ResourceFailure> {
+            panic!("metadata failure reached study capture");
+        }
+    }
+    struct Publisher;
+    impl specification_report::ArtifactPort for Publisher {
+        type Error = ();
+        fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
+            panic!("inspection failure published");
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let schema = schema(&root.join("yaml"));
+    let run = PreparedRun::prepare(prepare(
+        &schema,
+        &std::fs::read(root.join("benchmarks/schema-lookup/spec.yaml")).unwrap(),
+    ))
+    .unwrap();
+    let metadata = || Identity {
+        runtime: "python",
+        runtime_version: "fixture-runtime",
+        engine_version: "fixture-engine",
+        example: "schema-lookup",
+        specification: "spec.yaml",
+        base_directory: ".",
+    };
+    for line in include_str!("fixtures/source_inspection.tsv")
+        .lines()
+        .skip(1)
+    {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        let mut port = Port {
+            failures: serde_json::from_str(fields[1]).unwrap(),
+            inspected: vec![],
+        };
+        let mut attempt = run.execute_with_port(&mut port);
+        assert_eq!(port.inspected, ["DM", "AE", "MEDDRA"]);
+        assert!(attempt.sources.is_empty());
+        let expected = serde_json::from_str::<serde_json::Value>(fields[2]).unwrap();
+        let result = specification_report::build_result(&run, &attempt, metadata()).unwrap();
+        assert_eq!(result.observations(), expected, "{}", fields[0]);
+        assert!(result.output().is_none());
+        assert!(matches!(
+            result.save(&mut Publisher),
+            Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+        ));
+        let Err(PortError::Inspect(ref mut failures)) = attempt.result else {
+            panic!("inspection findings");
+        };
+        // A cause cannot be attached to a forged declaration, repeated source or
+        // opaque host failure merely because the rest of the ledger is valid.
+        let original = failures[0].source.clone();
+        failures[0].source.path = "forged.csv".into();
+        assert!(specification_report::build_result(&run, &attempt, metadata()).is_err());
+        let Err(PortError::Inspect(ref mut failures)) = attempt.result else {
+            unreachable!();
+        };
+        failures[0].source = original;
+        if failures.len() > 1 {
+            failures.swap(0, 1);
+            assert!(specification_report::build_result(&run, &attempt, metadata()).is_err());
+            let Err(PortError::Inspect(ref mut failures)) = attempt.result else {
+                unreachable!();
+            };
+            failures.swap(0, 1);
+            failures[1].source = failures[0].source.clone();
+            assert!(specification_report::build_result(&run, &attempt, metadata()).is_err());
+        }
+        let Err(PortError::Inspect(ref mut failures)) = attempt.result else {
+            unreachable!();
+        };
+        failures[0].failure = None;
+        assert!(specification_report::build_result(&run, &attempt, metadata()).is_err());
+    }
+}

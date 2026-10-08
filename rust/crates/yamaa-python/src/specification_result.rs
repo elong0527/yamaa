@@ -24,6 +24,34 @@ impl From<PyErr> for CaptureError {
     }
 }
 
+fn failure_reply(result: &Bound<'_, PyAny>) -> PyResult<CaptureError> {
+    let result = result.cast::<PyTuple>()?;
+    if result.len() != 2 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "invalid resource failure reply",
+        ));
+    }
+    let kind = result.get_item(0)?;
+    let kind = kind.cast::<PyString>()?;
+    let failure = match kind.to_str()? {
+        "missing" => ResourceFailure::Missing,
+        "not_regular_file" => ResourceFailure::NotRegularFile,
+        _ => {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "invalid capture failure kind",
+            ))
+        }
+    };
+    let payload = result.get_item(1)?;
+    let payload = payload.cast::<PyBaseException>()?;
+    let interruption =
+        payload.is_instance_of::<PyKeyboardInterrupt>() || payload.is_instance_of::<PySystemExit>();
+    Ok(CaptureError {
+        error: PyErr::from_value(payload.clone().into_any()),
+        failure: (!interruption).then_some(failure),
+    })
+}
+
 pub(super) fn fields(metadata: &Bound<'_, PyTuple>) -> PyResult<Vec<String>> {
     if metadata.len() != 5 {
         return Err(pyo3::exceptions::PyValueError::new_err(
@@ -55,12 +83,25 @@ pub(super) fn identity(fields: &[String]) -> Identity<'_> {
 }
 struct Port<'a, 'py> {
     capture: &'a Bound<'py, PyAny>,
+    inspect: Option<&'a Bound<'py, PyAny>>,
     reads: usize,
 }
 impl SourcePort for Port<'_, '_> {
     type Error = CaptureError;
     fn resource_failure(&self, error: &CaptureError) -> Option<ResourceFailure> {
         error.failure
+    }
+    fn inspect(
+        &mut self,
+        source: &yamaa_engine::specification::SourceDeclaration,
+    ) -> Result<(), CaptureError> {
+        if let Some(inspect) = self.inspect {
+            let result = inspect.call1((&source.name, &source.path))?;
+            if !result.is_none() {
+                return Err(failure_reply(&result)?);
+            }
+        }
+        Ok(())
     }
     fn capture_reads(&self) -> usize {
         self.reads
@@ -76,25 +117,8 @@ impl SourcePort for Port<'_, '_> {
             return Err(pyo3::exceptions::PyValueError::new_err("invalid capture response").into());
         }
         let content = result.get_item(0)?;
-        if let Ok(kind) = content.cast::<PyString>() {
-            let failure = match kind.to_str()? {
-                "missing" => ResourceFailure::Missing,
-                "not_regular_file" => ResourceFailure::NotRegularFile,
-                _ => {
-                    return Err(pyo3::exceptions::PyValueError::new_err(
-                        "invalid capture failure kind",
-                    )
-                    .into())
-                }
-            };
-            let payload = result.get_item(1)?;
-            let payload = payload.cast::<PyBaseException>().map_err(PyErr::from)?;
-            let interruption = payload.is_instance_of::<PyKeyboardInterrupt>()
-                || payload.is_instance_of::<PySystemExit>();
-            return Err(CaptureError {
-                error: PyErr::from_value(payload.clone().into_any()),
-                failure: (!interruption).then_some(failure),
-            });
+        if content.cast::<PyString>().is_ok() {
+            return Err(failure_reply(result.as_any())?);
         }
         let content = content.cast::<PyBytes>().map_err(PyErr::from)?;
         let created = result.get_item(1)?.extract::<bool>()?;
@@ -108,16 +132,31 @@ impl SourcePort for Port<'_, '_> {
 pub(super) fn capture_attempt(
     run: &PreparedRun,
     capture: &Bound<'_, PyAny>,
+    inspect: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<CapturedAttempt<CaptureError>> {
     if !capture.is_callable() {
         return Err(pyo3::exceptions::PyTypeError::new_err(
             "capture must be callable",
         ));
     }
-    let attempt = run.execute_with_port(&mut Port { capture, reads: 0 });
+    if inspect.is_some_and(|value| !value.is_callable()) {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "inspect must be callable",
+        ));
+    }
+    let attempt = run.execute_with_port(&mut Port {
+        capture,
+        inspect,
+        reads: 0,
+    });
     if let Err(PortError::Capture(error)) = &attempt.result {
         if error.failure.is_none() {
             return Err(error.error.clone_ref(capture.py()));
+        }
+    }
+    if let Err(PortError::Inspect(errors)) = &attempt.result {
+        if let Some(error) = errors.iter().find(|error| error.failure.is_none()) {
+            return Err(error.error.error.clone_ref(capture.py()));
         }
     }
     Ok(attempt)
@@ -168,9 +207,10 @@ pub(super) fn build(
     run: &PreparedRun,
     capture: &Bound<'_, PyAny>,
     metadata: &Bound<'_, PyTuple>,
+    inspect: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<BuildResult> {
     let fields = fields(metadata)?;
-    let attempt = capture_attempt(run, capture)?;
+    let attempt = capture_attempt(run, capture, inspect)?;
     let inner =
         specification_report::build_result(run, &attempt, identity(&fields)).map_err(|_| {
             pyo3::exceptions::PyValueError::new_err("unsupported or invalid build observation")

@@ -76,6 +76,68 @@ class FileResources(unittest.TestCase):
                         result.save(lambda *_: self.fail("failed file capture published"))
                     self.assertEqual(json.loads(result.observations()), expected)
 
+    def test_real_file_inspection_fails_before_every_study_capture(self):
+        with (ROOT / "source-inspection.tsv").open(encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), 7)
+        paths = {"DM": "input/dm.csv", "AE": "input/ae.csv", "MEDDRA": "input/meddict.csv"}
+        for record in records:
+            for cached in (False, True):
+                with self.subTest(case=record["case"], cached=cached):
+                    with tempfile.TemporaryDirectory() as directory:
+                        root = Path(directory).resolve()
+                        shutil.copytree(ROOT / "cases/schema-lookup/input", root / "input")
+                        resources = self.resources_type(root)
+                        if cached:
+                            resources.capture("input/dm.csv")
+                        before = resources.capture_reads
+                        for name, kind in json.loads(record["failures"]).items():
+                            location = root / paths[name]
+                            location.unlink()
+                            if kind == "not_regular_file":
+                                location.mkdir()
+                        capture = self.capture_type(resources)
+                        events = []
+                        def inspect(name, path):
+                            events.append((name, path))
+                            return capture.inspect(name, path)
+                        spec = self.prepare()
+                        with patch("yamaa.io.project.os.read", side_effect=AssertionError("metadata inspection read study bytes")):
+                            result = spec.build(capture, ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", "."), inspect=inspect)
+                        self.assertEqual(events, list(paths.items()))
+                        self.assertEqual(resources.capture_reads, before)
+                        expected = json.loads(record["expected"])
+                        self.assertEqual(json.loads(result.observations()), expected)
+                        self.assertIsNone(result.output())
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save(lambda *_: self.fail("metadata failure published"))
+
+    def test_real_file_inspection_repeats_before_successful_cached_capture(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            shutil.copytree(ROOT / "cases/schema-lookup/input", root / "input")
+            resources = self.resources_type(root)
+            capture = self.capture_type(resources)
+            spec = self.prepare()
+            expected = json.loads((ROOT / "expected/schema-lookup.json").read_text())
+            expected["artifacts"] = []
+            events = []
+            def inspect(name, path):
+                events.append(("inspect", name))
+                return capture.inspect(name, path)
+            def read(name, path, maximum):
+                events.append(("capture", name))
+                return capture(name, path, maximum)
+            for created in (1, 0):
+                events.clear()
+                result = spec.build(read, ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", "."), inspect=inspect)
+                self.assertEqual(events, [(kind, name) for kind in ("inspect", "capture") for name in ("DM", "AE", "MEDDRA")])
+                for observation in expected["source_reads"]:
+                    observation["snapshots_created"] = created
+                expected.update(runtime_version="fixture-runtime", engine_version="fixture-engine")
+                self.assertEqual(json.loads(result.observations()), expected)
+            self.assertEqual(resources.capture_reads, 3)
+
     def test_byte_limit_and_changed_cached_bytes_stay_opaque(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

@@ -165,8 +165,13 @@ fn execute_specification_csv(handle: Robj, source: Raw) -> List {
 /// Capture callbacks return list(raw content, logical newly_created). They own
 /// filesystem authorization/cache policy; the shared compiler owns all semantics.
 #[extendr]
-fn specification_failure_report(handle: Robj, capture: Function, metadata: List) -> List {
-    observed_report(handle, capture, None, metadata)
+fn specification_failure_report(
+    handle: Robj,
+    capture: Function,
+    metadata: List,
+    inspect: Robj,
+) -> List {
+    observed_report(handle, capture, None, metadata, inspect)
 }
 #[extendr]
 fn specification_report(
@@ -174,21 +179,25 @@ fn specification_report(
     capture: Function,
     publish: Function,
     metadata: List,
+    inspect: Robj,
 ) -> List {
-    observed_report(handle, capture, Some(publish), metadata)
+    observed_report(handle, capture, Some(publish), metadata, inspect)
 }
 fn observed_report(
     handle: Robj,
     capture: Function,
     publisher: Option<Function>,
     metadata: List,
+    inspect: Robj,
 ) -> List {
     boundary(|| {
-        use crate::specification_result::{capture_attempt, fields, identity, Publisher};
+        use crate::specification_result::{
+            capture_attempt, fields, identity, inspection, Publisher,
+        };
         use yamaa_adapters::specification_report;
         let fields = fields(&metadata)?;
         let run = resolve(&handle)?;
-        let attempt = capture_attempt(&run, capture);
+        let attempt = capture_attempt(&run, capture, inspection(inspect)?);
         if let Some(callback) = publisher {
             specification_report::complete(
                 &run,
