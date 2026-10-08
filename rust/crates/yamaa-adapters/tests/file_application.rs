@@ -126,10 +126,13 @@ fn saved_bytes_use_retained_values_and_save_failure_can_be_retried() {
     .unwrap();
     let mut result = study.build();
     let before = result.output().unwrap().to_vec();
+    let observations = result.observations();
+    assert_eq!(observations["artifacts"], serde_json::json!([]));
     assert!(result.issues().is_empty());
     fs::write(study.0.join("input.csv"), b"changed").unwrap();
     fs::write(study.0.join("spec.yaml"), b"[changed").unwrap();
     assert!(!result.save().unwrap());
+    assert_eq!(result.observations(), observations);
     assert_eq!(result.issues().len(), 1);
     assert_eq!(
         result.issues()[0].context,
@@ -139,6 +142,14 @@ fn saved_bytes_use_retained_values_and_save_failure_can_be_retried() {
     fs::create_dir(study.0.join("absent")).unwrap();
     for _ in 0..2 {
         assert!(result.save().unwrap());
+        let published = result.observations();
+        assert_eq!(
+            published["artifacts"][0]["content"],
+            "ID\n-9223372036854775808\n9223372036854775807\n"
+        );
+        let mut build = published;
+        build["artifacts"] = serde_json::json!([]);
+        assert_eq!(build, observations);
         assert!(result.issues().is_empty());
         assert_eq!(
             fs::read(study.0.join("absent/output.csv")).unwrap(),
@@ -146,6 +157,10 @@ fn saved_bytes_use_retained_values_and_save_failure_can_be_retried() {
         );
     }
     assert_eq!(fs::read_dir(study.0.join("absent")).unwrap().count(), 1);
+    fs::remove_file(study.0.join("absent/output.csv")).unwrap();
+    fs::remove_dir(study.0.join("absent")).unwrap();
+    assert!(!result.save().unwrap());
+    assert_eq!(result.observations(), observations);
 }
 #[test]
 fn project_configuration_keeps_current_root_fallback_and_captured_config() {

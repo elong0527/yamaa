@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-08 against main `d8da923bf63ed5bc1123149a02839c03b6bb4100`
+Reconciled 2026-10-08 against main `ebf1f9e7f15bc16839501eaa48d2d9dde6b71521`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -355,25 +355,39 @@ checks, full final-head review and fresh downloaded package auditing. Native run
 pass all 17 scripts with strict Status: OK. The 89-contract/40-suite catalog and
 945-row assisted inventory retain their prior qualification levels.
 
-The public frontend candidate now uses Rust-owned preparation, checking, builds,
-output conversion and explicit saves, with issues-only check results. Its first
-installed local proof covers both Python forms and all 17 strict R scripts,
-including 17 original public builds. The subsequent package-consolidation
-candidate installs one `yamaa` distribution per host, with private Python
-`yamaa._native` and direct R conversion. It includes bounded oversized-path
-issue handling, lossless R integer vectors and an explicit raw-vector
-representation for NUL-containing strings. Final-head package qualification and
-review are required before this combined candidate merges; these representations
-remain candidates for the final release API. Environment activation and declared
-logs remain unsupported, with no fallback from public domain/check to reference
-semantics. The retained reference helpers continue to support independent
-assessment while their release dispositions remain open.
+#1811 merged as `ebf1f9e7f15bc16839501eaa48d2d9dde6b71521` after all fourteen
+workflow checks and CodeRabbit, clean full 172-file review and a fresh downloaded
+installed-artifact audit. Native run 37797361648 passes all six jobs on attempt 1.
+Six Python package forms pass 23 supplemental suites and 61 original-document
+methods each; both R source packages pass all 17 strict scripts with Python
+absent from runtime PATH. Each host now installs one package named `yamaa`.
+The public domain/check candidate consumes original files through shared Rust
+preparation, checking, builds, owned typed results and explicit native saves.
+Publication retains the selected physical approved-root descriptor and refuses
+linked parent directories. Source-manifest platform rewrites, packaged source
+bytes, Unicode notices and all 52 independent Parquet fixtures were audited.
+[Final evidence](https://github.com/elong0527/yamaa/pull/1811#issuecomment-6063664321).
 
-The next delivery frontier is the public domain/check entry points and one
-installed package per host, followed by cohort conformance through that surface.
-Existing root, link, configuration and fallback policy stays in place while the
-separate declaring-file path-policy approval is pending. Windows native file IO,
-environment/functions, workflow and submission remain distinct unfinished work.
+The next delivery frontier is complete public cohort reports and M1 reconciliation,
+then Windows file transport. Private observation transport reads the same owned
+Rust result behind the public facade; only a successful latest save contributes
+artifact observations. The draft matches all seventeen complete original reports
+through both public hosts, including handler counts and verification observations.
+A local M1 comparison passes all eighteen tuples for the six fixed documents:
+six independent Python reference runs and six public Rust runs in each host.
+Final-revision installed packages, hosted Linux/macOS wheel/source and R evidence,
+and full review remain required before this slice merges. Windows retains five
+Unix file-test skips and receives no shared-run promotion; #1739 and B01 remain
+open for that matrix frontier.
+
+Issues-only checks, lossless character-backed R integer vectors and explicit raw
+vectors for NUL-containing strings remain candidates for the final release API.
+Environment activation and declared logs remain unsupported before study access,
+without reference fallback. Existing approved roots, configuration discovery and
+fallback searches remain while the declaring-file path-policy approval is pending.
+Retained reference helpers continue independent assessment. Broader language,
+environment/functions, workflows, submission, benchmark runner migration, API
+cleanup and release gates remain open; the 945-row assisted inventory is unchanged.
 Schema findings retain standalone and inherited preparation context;
 classified capture failures retain owned failed-build reports. Actual file-port
 integration and complete failure-family coverage remain required. Public

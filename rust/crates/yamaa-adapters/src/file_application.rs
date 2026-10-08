@@ -123,6 +123,7 @@ pub struct Domain {
     declared: String,
     target: Option<crate::file_publication::AnchoredTarget>,
     publication_issues: Failure,
+    published: Option<Value>,
 }
 impl Domain {
     pub fn output(&self) -> Option<&[u8]> {
@@ -139,19 +140,27 @@ impl Domain {
             .chain(self.publication_issues.iter().cloned())
             .collect()
     }
+    /// Retain complete run observations without recapture. Artifacts describe
+    /// only a successful latest save; a refused save returns build observations.
+    pub fn observations(&self) -> Value {
+        self.published
+            .clone()
+            .unwrap_or_else(|| self.result.observations())
+    }
     /// Failed builds never construct a publisher. Operational save failures
     /// remain issues; successful retry clears only the preceding save refusal.
     pub fn save(&mut self) -> Result<bool, FailedBuild> {
         if self.result.output().is_none() {
             return Err(FailedBuild);
         }
+        self.published = None;
         let Some(target) = self.target.as_ref() else {
             return Ok(false);
         };
         let published = target.publisher(&self.declared).and_then(|mut publisher| {
             self.result
                 .save(&mut publisher)
-                .map(|_| ())
+                .cloned()
                 .map_err(|error| match error {
                     yamaa_engine::specification_output::SaveError::Publish(error) => error,
                     yamaa_engine::specification_output::SaveError::FailedBuild => {
@@ -161,7 +170,10 @@ impl Domain {
         });
         self.publication_issues.clear();
         match published {
-            Ok(()) => Ok(true),
+            Ok(report) => {
+                self.published = Some(report);
+                Ok(true)
+            }
             Err(error) => {
                 self.publication_issues = publication_failure(&error);
                 Ok(false)
@@ -256,6 +268,7 @@ impl Ports for Native<'_> {
             declared: prepared.run().compiled().output_path().into(),
             target,
             publication_issues,
+            published: None,
         })
     }
 }

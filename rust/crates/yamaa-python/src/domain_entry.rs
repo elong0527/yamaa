@@ -14,6 +14,19 @@ pub struct Domain {
 }
 #[pymethods]
 impl Domain {
+    /// Private installed-run evidence; unsupported preparation has no build report.
+    fn observations(&self) -> PyResult<Option<String>> {
+        #[cfg(unix)]
+        if let Some(inner) = &self.inner {
+            return inner
+                .lock()
+                .map(|inner| Some(inner.observations().to_string()))
+                .map_err(|_| {
+                    pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
+                });
+        }
+        Ok(None)
+    }
     fn output<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyBytes>>> {
         #[cfg(unix)]
         if let Some(inner) = &self.inner {
