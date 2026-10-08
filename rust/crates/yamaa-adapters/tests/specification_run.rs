@@ -3412,6 +3412,32 @@ fn original_column_not_missing_matches_complete_reports_and_exact_csv() {
     );
 }
 #[test]
+fn row_filter_unsupported_admission_matches_complete_envelopes_before_ports() {
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let truth = include_str!("fixtures/row_filter_admission.tsv");
+    let mut count = 0;
+    for line in truth.lines().skip(1) {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        assert_eq!(fields.len(), 3);
+        let bytes = (0..fields[1].len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&fields[1][i..i + 2], 16).unwrap())
+            .collect::<Vec<_>>();
+        let error =
+            yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &bytes))
+                .unwrap_err();
+        let actual = yamaa_adapters::specification_diagnostics::failure(&error, None);
+        assert_eq!(actual, fields[2], "{}", fields[0]);
+        count += 1;
+    }
+    assert_eq!(count, 2);
+}
+
+#[test]
+fn row_filters_match_complete_independent_reports_and_exact_csv() {
+    replay_source_selection_truth(include_str!("fixtures/row_filters.tsv"), "row-filter", 27);
+}
+#[test]
 fn row_reductions_match_complete_independent_reports_and_exact_csv() {
     replay_source_selection_truth(
         include_str!("fixtures/row_reductions.tsv"),
@@ -3575,7 +3601,13 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
                 base_directory: ".",
             },
         )
-        .unwrap();
+        .unwrap_or_else(|error| {
+            panic!(
+                "{}: {error:?}; execution: {:?}",
+                fields[0],
+                attempt.result.as_ref().err()
+            )
+        });
         let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
         let mut unsaved = expected.clone();
         unsaved["artifacts"] = serde_json::json!([]);

@@ -92,6 +92,36 @@ impl BindFinding {
             Self::Source(finding) => return Some(vec![finding.diagnostic()]),
             Self::Window(finding) => return Some(vec![finding.diagnostic()]),
             Self::Lookup(finding) => return Some(vec![finding.diagnostic()]),
+            Self::RowFilterPhase {
+                path,
+                identifier,
+                row,
+                grouped,
+                qualified,
+            } => (
+                C::RowFilterPhaseBoundary,
+                path,
+                context([
+                    ("identifier", text(identifier)),
+                    ("row", text(row)),
+                    (
+                        "available_phase",
+                        text(if *qualified {
+                            "row_construction"
+                        } else {
+                            "column_derivation"
+                        }),
+                    ),
+                    (
+                        "required_phase",
+                        text(if *grouped {
+                            "grouped_row_filter"
+                        } else {
+                            "row_filter"
+                        }),
+                    ),
+                ]),
+            ),
             Self::QualifiedReference {
                 path,
                 name,

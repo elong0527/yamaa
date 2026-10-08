@@ -149,6 +149,13 @@ pub enum BindFinding {
     Source(SourceFinding),
     Window(WindowFinding),
     Lookup(LookupFinding),
+    RowFilterPhase {
+        path: String,
+        identifier: String,
+        row: String,
+        grouped: bool,
+        qualified: bool,
+    },
     QualifiedReference {
         path: String,
         name: String,
@@ -671,6 +678,15 @@ impl PreparedSpecification {
                 return Err(PrepareError::Limit("row_templates"));
             }
             for &row in rows {
+                if let Some(filter) = d
+                    .field(row, "filter")
+                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                {
+                    numeric_bytes = numeric_bytes
+                        .checked_add(text(d, filter)?.len())
+                        .filter(|&n| n <= limits.numeric_bytes)
+                        .ok_or(PrepareError::Limit("numeric_bytes"))?;
+                }
                 if let Some(group) = d
                     .field(row, "group_by")
                     .filter(|&id| !matches!(d.nodes()[id], N::Null))

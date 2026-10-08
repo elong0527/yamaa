@@ -508,6 +508,20 @@ class OriginalSpecifications(unittest.TestCase):
     def test_original_column_not_missing_complete_reports_and_exact_csv(self):
         self._source_selection_reports("original-not-missing.tsv", "column-check", 10)
 
+    def test_row_filter_unsupported_admission_precedes_all_ports(self):
+        def no_port(*_):
+            self.fail("unsupported row filter reached a parent or study port")
+        with (ROOT / "row-filter-admission.tsv").open(encoding="ascii") as stream:
+            rows = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(rows), 2)
+        for row in rows:
+            with self.subTest(case=row["case"]), self.assertRaises(ValueError) as caught:
+                yamaa_native._prepare_document("spec.yaml", bytes.fromhex(row["source_hex"]), no_port, no_port, no_port)
+            self.assertEqual(json.loads(str(caught.exception)), json.loads(row["expected"]))
+
+    def test_row_filters_complete_reports_and_exact_csv(self):
+        self._source_selection_reports("row-filters.tsv", "row-filter", 27)
+
     def test_row_reductions_complete_reports_and_exact_csv(self):
         self._source_selection_reports("row-reductions.tsv", "row-reduction", 25)
 
