@@ -230,7 +230,7 @@ impl Rows {
         let mut lowered_columns = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
             let prefix = format!("columns.{}", output.columns()[column].name);
-            for name in ["verifications", "submission", "metadata"] {
+            for name in ["submission", "metadata"] {
                 if present(d, id, name) {
                     return Err(unsupported(name, &format!("{prefix}.{name}")));
                 }

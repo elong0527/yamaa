@@ -131,6 +131,7 @@ def stage(destination: Path):
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_assertions.tsv", destination / "original-assertions.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_all_or_none.tsv", destination / "original-all-or-none.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.tsv", destination / "original-not-missing.tsv")
+    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_column_checks.tsv", destination / "row-column-checks.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_column_values.tsv", destination / "original-column-values.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_column_matches.tsv", destination / "original-column-matches.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.tsv", destination / "static-verification-checks.tsv")

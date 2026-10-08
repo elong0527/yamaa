@@ -843,6 +843,9 @@ cat("original all or none complete reports, cached reads and exact saved CSV pas
 source_selection_truth("original-not-missing.tsv","column-check",10L)
 cat("original column not missing complete reports, cached reads and exact saved CSV passed\n")
 
+source_selection_truth("row-column-checks.tsv","row-column",48L)
+cat("row-template column checks complete reports, cached reads and exact saved CSV passed\n")
+
 source_selection_truth("original-column-values.tsv","column-value",20L)
 cat("original column values complete reports, cached reads and exact saved CSV passed\n")
 

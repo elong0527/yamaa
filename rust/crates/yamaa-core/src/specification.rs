@@ -894,6 +894,13 @@ impl PreparedSpecification {
                 return Err(PrepareError::Unsupported(extra));
             }
             let rows = rows::Rows::prepare(d, &output, driver, limits)?;
+            let column_verifications = columns
+                .iter()
+                .enumerate()
+                .map(|(column, &id)| {
+                    verifications::Verifications::prepare_column(d, &output, id, column)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
             return Ok(Self {
                 sources,
                 driver: driver_index,
@@ -905,7 +912,7 @@ impl PreparedSpecification {
                 declarations: Vec::new(),
                 rows: Some(rows),
                 verifications,
-                column_verifications: Vec::new(),
+                column_verifications,
             });
         }
         let mut declarations = Vec::new();
@@ -1127,6 +1134,17 @@ impl PreparedSpecification {
             .find(|check| check.path == path)
             .map(|verification| &verification.check)
     }
+    fn column_verification_groups(&self) -> Vec<crate::dataset::ColumnVerifications> {
+        self.column_verifications
+            .iter()
+            .enumerate()
+            .filter(|(_, group)| !group.checks.is_empty())
+            .map(|(column, group)| crate::dataset::ColumnVerifications {
+                column,
+                checks: group.checks.clone(),
+            })
+            .collect()
+    }
     pub fn output_path(&self) -> &str {
         &self.output_path
     }
@@ -1183,13 +1201,18 @@ impl PreparedSpecification {
         }
         let source = schemas[self.driver];
         if let Some(rows) = &self.rows {
-            return rows.bind(
-                source,
-                &self.source().name,
-                &self.output,
-                &self.keys,
-                self.verifications(),
-            );
+            return rows
+                .bind(
+                    source,
+                    &self.source().name,
+                    &self.output,
+                    &self.keys,
+                    self.verifications(),
+                )
+                .and_then(|plan| {
+                    plan.with_column_verifications(self.column_verification_groups())
+                        .map_err(BindError::InvalidPlan)
+                });
         }
         let output_fields = self
             .output
@@ -1486,19 +1509,7 @@ impl PreparedSpecification {
             self.keys.clone(),
             self.verifications.checks.clone(),
         )
-        .and_then(|plan| {
-            plan.with_column_verifications(
-                self.column_verifications
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, group)| !group.checks.is_empty())
-                    .map(|(column, group)| crate::dataset::ColumnVerifications {
-                        column,
-                        checks: group.checks.clone(),
-                    })
-                    .collect(),
-            )
-        })
+        .and_then(|plan| plan.with_column_verifications(self.column_verification_groups()))
         .and_then(|plan| {
             plan.with_conversion_handlers(
                 self.declarations

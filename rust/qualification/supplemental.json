@@ -869,6 +869,17 @@
         "rust/tests/installed_original_specifications.py",
         "R/yamaanative/tests/original_specifications.R"
       ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_column_checks.tsv",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R"
+      ]
     }
   ],
   "suites": [
@@ -1632,6 +1643,10 @@
     },
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/file_preparation.md",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_column_checks.md",
       "role": "documentation"
     }
   ]
