@@ -193,6 +193,8 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> String {
         Error::Validation(_) => "validation_policy",
         Error::Findings(_) => unreachable!("handled captured findings"),
         Error::InheritanceRequired => "inheritance_required",
+        Error::VersionedRootRequired => "versioned_root_required",
+        Error::UnknownClass(_) => "unknown_class",
     };
     capture_response(json!({"status":"rejected","stage":"capture","code":code}))
 }

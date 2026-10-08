@@ -4,8 +4,8 @@ use crate::yaml_decode::{decode_yaml, DecodeFailure, DecodeLimits, DecodedYaml, 
 use std::sync::Arc;
 use yamaa_core::schema::{
     BundleError, BundleLimits, NormalizationBudget, NormalizationError, NormalizationLimits,
-    SchemaDiagnostic, SchemaModule, SchemaOrigin, SchemaStructure, SpecificationDocument,
-    ValidationError, WindowReference,
+    NormalizedDocument, SchemaDiagnostic, SchemaModule, SchemaOrigin, SchemaStructure,
+    SpecificationDocument, ValidationError, WindowReference,
 };
 #[path = "specification_inheritance.rs"]
 mod inheritance;
@@ -49,6 +49,10 @@ pub enum Error {
     Findings(Box<CapturedFindings>),
     /// This entry point cannot silently treat an inherited layer as standalone.
     InheritanceRequired,
+    /// A versioned root must retain its schema-version admission gate.
+    VersionedRootRequired,
+    /// Only admitted named classes can be selected from the captured closure.
+    UnknownClass(String),
 }
 
 /// A failed semantic pass retains the exact source, schema and context arena.
@@ -83,10 +87,57 @@ pub struct CapturedSchema {
     structure: SchemaStructure,
     limits: Limits,
 }
+
+/// An owned structural root. It grants no specification, code or data authority.
+#[derive(Debug)]
+pub struct CapturedDocument {
+    schema: Arc<CapturedSchema>,
+    class_name: String,
+    source: Source,
+    raw: DecodedYaml,
+    normalized: NormalizedDocument,
+}
+impl CapturedDocument {
+    pub fn class_name(&self) -> &str {
+        &self.class_name
+    }
+    pub fn schema(&self) -> &Arc<CapturedSchema> {
+        &self.schema
+    }
+    pub fn source(&self) -> &Source {
+        &self.source
+    }
+    pub fn raw(&self) -> &DecodedYaml {
+        &self.raw
+    }
+    pub fn normalized(&self) -> &NormalizedDocument {
+        &self.normalized
+    }
+}
 impl CapturedSchema {
     /// Decode the complete host-captured closure using the shared YAML semantics.
     /// Cumulative byte/count admission happens before any source is decoded.
     pub fn admit(sources: Vec<Source>, entry: usize, limits: Limits) -> Result<Arc<Self>, Error> {
+        Self::admit_with_root(sources, entry, "root_class", limits)
+    }
+    /// Capture a closed schema root without interpreting it as a specification.
+    pub fn admit_root(
+        sources: Vec<Source>,
+        entry: usize,
+        root_class: &str,
+        limits: Limits,
+    ) -> Result<Arc<Self>, Error> {
+        if root_class.len() > limits.identity_bytes {
+            return Err(Error::Limit("root_class"));
+        }
+        Self::admit_with_root(sources, entry, root_class, limits)
+    }
+    fn admit_with_root(
+        sources: Vec<Source>,
+        entry: usize,
+        root_class: &str,
+        limits: Limits,
+    ) -> Result<Arc<Self>, Error> {
         if sources.len() > limits.bundle.modules {
             return Err(Error::Limit("schema_modules"));
         }
@@ -118,7 +169,7 @@ impl CapturedSchema {
                 })
             })
             .collect::<Result<Vec<_>, Error>>()?;
-        let structure = SchemaStructure::admit(modules, entry, "root_class", limits.bundle)
+        let structure = SchemaStructure::admit(modules, entry, root_class, limits.bundle)
             .map_err(Error::Bundle)?;
         Ok(Arc::new(Self {
             sources,
@@ -136,6 +187,76 @@ impl CapturedSchema {
     }
     pub fn structure(&self) -> &SchemaStructure {
         &self.structure
+    }
+
+    /// Validate and normalize a versioned root without windows, inheritance or IO.
+    /// Environment-specific admission follows this captured structural gate.
+    pub fn prepare_structural(self: &Arc<Self>, source: Source) -> Result<CapturedDocument, Error> {
+        let raw = self.decode_entry(&source)?;
+        let mut budget = NormalizationBudget::new(self.limits.normalization);
+        let normalized = self
+            .structure
+            .normalize_document(&raw.document, &mut budget)
+            .map_err(|error| self.normalization_failure(&source, &raw.document, error))?;
+        Ok(CapturedDocument {
+            schema: Arc::clone(self),
+            class_name: self.structure.root_class().name.clone(),
+            source,
+            raw,
+            normalized,
+        })
+    }
+
+    /// Normalize a versionless class using the version of its captured schema.
+    /// Function definitions and codelist sources never fabricate document versions.
+    /// A class declaring schema_version must use prepare_structural instead.
+    pub fn prepare_class(self: &Arc<Self>, source: Source) -> Result<CapturedDocument, Error> {
+        self.prepare_named_class(source, &self.structure.root_class().name)
+    }
+    /// Reuse one captured environment schema for independent function/CT sources.
+    /// A selected class cannot bypass its schema-version gate.
+    pub fn prepare_named_class(
+        self: &Arc<Self>,
+        source: Source,
+        class_name: &str,
+    ) -> Result<CapturedDocument, Error> {
+        if class_name.len() > self.limits.identity_bytes {
+            return Err(Error::Limit("class_name"));
+        }
+        let class = self
+            .structure
+            .class_named(class_name)
+            .ok_or_else(|| Error::UnknownClass(class_name.into()))?;
+        if class
+            .fields
+            .iter()
+            .any(|field| field.name == "schema_version")
+        {
+            return Err(Error::VersionedRootRequired);
+        }
+        let raw = self.decode_entry(&source)?;
+        let mut budget = NormalizationBudget::new(self.limits.normalization);
+        let types = self
+            .structure
+            .parse_query_types(&[class_name.into()], budget.validation_scope())
+            .map_err(Error::Validation)?;
+        let normalized = self
+            .structure
+            .normalize_types(
+                &types,
+                &raw.document,
+                raw.document.root(),
+                false,
+                &mut budget,
+            )
+            .map_err(|error| self.normalization_failure(&source, &raw.document, error))?;
+        Ok(CapturedDocument {
+            schema: Arc::clone(self),
+            class_name: class_name.into(),
+            source,
+            raw,
+            normalized,
+        })
     }
 
     /// Structural preparation only: no source data, executable plan or effects.
