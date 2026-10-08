@@ -62,8 +62,8 @@ ERROR_EXAMPLES = [
     "negative-lookup-id-collision",
     "negative-lookup-bad-range",
     # REQ-0143: an unhandled multiple match names the lookup's match under
-    # `key` and `lookup_key` and the offending output row under `keys`, the
-    # way an unmatched key already did.
+    # `key` and `intermediate_key` and the offending output row under `keys`,
+    # the way an unmatched key already did.
     "negative-query-overflow",
     "negative-overlapping-windows",
     "negative-mapping-duplicate-key",
