@@ -380,6 +380,13 @@ pub(super) fn bind_findings(
                         finding,
                     }
                 }
+                crate::project_call_binding::Kind::Scope(
+                    crate::reference_scope::Finding::DriverMismatch
+                    | crate::reference_scope::Finding::UnknownField,
+                ) => BindFinding::UnknownReference {
+                    path,
+                    name: name.clone(),
+                },
                 crate::project_call_binding::Kind::Scope(finding) => {
                     BindFinding::QualifiedReference {
                         path,

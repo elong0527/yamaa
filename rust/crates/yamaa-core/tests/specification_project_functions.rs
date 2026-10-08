@@ -203,6 +203,42 @@ fn stored_field_kinds_bind_exactly_and_nonkey_arguments_use_collection() {
 }
 
 #[test]
+fn missing_stored_fields_and_unknown_relations_keep_authored_argument_diagnostics() {
+    let spec = specification(vec![
+        ("A", "int", call("id", vec![("x", Tree::text("SRC.TYPO"))])),
+        ("B", "int", call("id", vec![("x", Tree::text("OTHER.ID"))])),
+    ]);
+    let prepared = PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
+    let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
+        panic!("complete source-reference findings")
+    };
+    assert_eq!(findings.len(), 2);
+    for (finding, column, name) in [
+        (&findings[0], "A", "SRC.TYPO"),
+        (&findings[1], "B", "OTHER.ID"),
+    ] {
+        let diagnostics = finding
+            .diagnostics(prepared.source())
+            .expect("authored diagnostic");
+        assert_eq!(diagnostics.len(), 1);
+        let diagnostic = &diagnostics[0];
+        assert_eq!(diagnostic.definition().condition, "unknown_field");
+        assert_eq!(diagnostic.definition().requirement, Some("REQ-0103"));
+        assert_eq!(
+            diagnostic.spec_paths,
+            [format!("columns.{column}.derivation.function.args.x")]
+        );
+        assert_eq!(
+            diagnostic.context["identifier"],
+            ContextValue::Scalar(Value::Str(name.into()))
+        );
+        assert_eq!(diagnostic.context.len(), 1);
+        assert_eq!(diagnostic.source_span, None);
+        assert_eq!(diagnostic.operand_route, None);
+    }
+}
+
+#[test]
 fn calls_keep_dependency_cycles_and_legacy_compiler_boundaries() {
     let spec = specification(vec![
         ("A", "int", call("id", vec![("x", Tree::text("B"))])),
