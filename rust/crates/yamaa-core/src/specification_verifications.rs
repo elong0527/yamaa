@@ -155,7 +155,7 @@ impl Verifications {
             let (op, payload) = operation(d, id)?;
             let path = format!("verifications[{index}].{op}");
             let allowed: &[&str] = match op {
-                "unique" => &["columns", "id", "severity"],
+                "unique" | "all_or_none" => &["columns", "id", "severity"],
                 "row_count" => &["min", "max", "id", "severity"],
                 "assert" => &["when", "require", "id", "severity"],
                 _ => {
@@ -249,7 +249,7 @@ impl Verifications {
             } else {
                 None
             };
-            let check = if op == "unique" {
+            let check = if op == "unique" || op == "all_or_none" {
                 let values = if matches!(d.nodes()[payload], N::Sequence(_)) {
                     sequence(d, payload)?
                 } else {
@@ -282,7 +282,20 @@ impl Verifications {
                 if result.deferred.is_some() {
                     break;
                 }
-                Check::Unique(columns)
+                if op == "all_or_none" {
+                    if !columns.iter().any(|column| columns.first() != Some(column)) {
+                        result.deferred = invalid(
+                            path,
+                            "invalid_declaration",
+                            "REQ-0401",
+                            "all_or_none names two distinct columns".into(),
+                        );
+                        break;
+                    }
+                    Check::AllOrNone(columns)
+                } else {
+                    Check::Unique(columns)
+                }
             } else if op == "assert" {
                 let mut when = None;
                 let mut require = None;

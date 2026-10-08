@@ -182,3 +182,17 @@ and duplicate identities. Three successful cases retain exact CSV bytes. Both
 assertion predicates share the compiler's aggregate text budget before owned
 compilation. Warning severity, column verifications, nontext predicates and the
 existing special predicate requirement/context gaps remain unsupported.
+
+
+Original error-severity all_or_none checks bind declared output columns and
+validate at least two distinct names in declaration order. Repeated names are
+permitted. Each row must have every named value present or every value missing;
+empty output holds. Completed checks and full offending-key logs survive failures,
+while diagnostics retain their existing shorter key samples. All declared cell
+reads share the engine work budget, including repeated references.
+
+Eleven independent complete reports and three exact successful CSV cases cover
+these behaviors and invalid declarations. The unchanged negative-paired-dates
+benchmark separately retains complete independently checked truth over its
+declared date source cells. Warning severity and column verifications remain
+unsupported; no public frontend or assisted-inventory promotion is claimed.

@@ -1058,6 +1058,7 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
         "negative-row-no-prior",
         "negative-source-missing-field",
         "negative-source-trivial-filter",
+        "negative-paired-dates",
     ] {
         let case = root.join("benchmarks").join(name);
         let run = PreparedRun::prepare(prepare(
@@ -1657,7 +1658,7 @@ fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
     assert_eq!(actual["diagnostics"][0]["condition"], "missing_key");
     // Even a later unsupported operation prevents all source requests; it is
     // not hidden behind an earlier language declaration finding.
-    let unsupported = format!("{written}  - all_or_none: {{columns: [STUDYID, USUBJID]}}\n");
+    let unsupported = format!("{written}  - row_count: {{min: 1, severity: warning}}\n");
     assert!(matches!(
         PreparedRun::prepare(prepare(&schema, unsupported.as_bytes())),
         Err(yamaa_adapters::specification_run::Error::Prepare(
@@ -3389,6 +3390,14 @@ fn original_assertions_match_complete_reports_and_exact_csv() {
         include_str!("fixtures/original_assertions.tsv"),
         "assert",
         17,
+    );
+}
+#[test]
+fn original_all_or_none_matches_complete_reports_and_exact_csv() {
+    replay_source_selection_truth(
+        include_str!("fixtures/original_all_or_none.tsv"),
+        "all-or-none",
+        11,
     );
 }
 fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {

@@ -1008,6 +1008,27 @@ impl Executor<'_> {
                         )?,
                     }
                 }
+                Check::AllOrNone(columns) => {
+                    budget.work(dataset.rows.len(), columns.len())?;
+                    let offending = dataset.rows.iter().enumerate().filter_map(|(index, row)| {
+                        let missing = matches!(row[columns[0]], Value::Missing);
+                        columns
+                            .iter()
+                            .any(|&column| matches!(row[column], Value::Missing) != missing)
+                            .then_some(index)
+                    });
+                    let offending_rows =
+                        identities(&dataset, self.plan.keys(), offending, &mut budget)?;
+                    CheckRecord {
+                        path: verification.path.clone(),
+                        condition: "all_or_none_failed",
+                        requirement: "REQ-0382",
+                        evaluated_count: dataset.rows.len(),
+                        failed_count: offending_rows.len(),
+                        output_rows: dataset.rows.len(),
+                        offending_rows,
+                    }
+                }
                 Check::RowCount { min, max } => {
                     budget.work(1, 1)?;
                     let count = dataset.rows.len() as i128;

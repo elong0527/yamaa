@@ -1,0 +1,175 @@
+{
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "backend": "rust",
+  "runtime_version": "fixture-runtime",
+  "engine_version": "fixture-engine",
+  "example": "negative-paired-dates",
+  "outcome": "failure",
+  "artifacts": [],
+  "diagnostics": [
+    {
+      "phase": "verification",
+      "condition": "all_or_none_failed",
+      "spec_paths": [
+        "verifications[0].all_or_none"
+      ],
+      "requirement": "REQ-0382",
+      "context": {
+        "verification_id": "paired-death-dates",
+        "failure_count": 1,
+        "keys": [
+          {
+            "STUDYID": "PILOT7",
+            "USUBJID": "P7-812"
+          }
+        ]
+      }
+    }
+  ],
+  "unsupported": [],
+  "handler_counts": [],
+  "nodes": [
+    {
+      "specification": "spec.yaml",
+      "outcome": "failure",
+      "diagnostics": [
+        {
+          "phase": "verification",
+          "condition": "all_or_none_failed",
+          "spec_paths": [
+            "verifications[0].all_or_none"
+          ],
+          "requirement": "REQ-0382",
+          "context": {
+            "verification_id": "paired-death-dates",
+            "failure_count": 1,
+            "keys": [
+              {
+                "STUDYID": "PILOT7",
+                "USUBJID": "P7-812"
+              }
+            ]
+          }
+        }
+      ],
+      "unsupported": [],
+      "handler_counts": []
+    }
+  ],
+  "tables": [
+    {
+      "specification": "spec.yaml",
+      "stage": "source",
+      "name": "DM",
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "RFSTDT",
+        "DTHDTC"
+      ],
+      "types": [
+        "str",
+        "str",
+        "date",
+        "date"
+      ],
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "PILOT7"
+          },
+          {
+            "type": "str",
+            "value": "P7-811"
+          },
+          {
+            "type": "date",
+            "value": "2023-01-02"
+          },
+          {
+            "type": "date",
+            "value": "2023-05-14"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "PILOT7"
+          },
+          {
+            "type": "str",
+            "value": "P7-812"
+          },
+          {
+            "type": "date",
+            "value": "2023-02-10"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ]
+      ]
+    }
+  ],
+  "verifications": [
+    {
+      "specification": "spec.yaml",
+      "spec_path": "verifications[0].all_or_none",
+      "check": "all_or_none",
+      "target": null,
+      "requirement": "REQ-0382",
+      "verification_id": "paired-death-dates",
+      "severity": "error",
+      "evaluated_count": 2,
+      "failure": {
+        "phase": "verification",
+        "condition": "all_or_none_failed",
+        "spec_paths": [
+          "verifications[0].all_or_none"
+        ],
+        "requirement": "REQ-0382",
+        "context": {
+          "verification_id": "paired-death-dates",
+          "failure_count": 1,
+          "keys": [
+            {
+              "STUDYID": "PILOT7",
+              "USUBJID": "P7-812"
+            }
+          ]
+        },
+        "severity": "error",
+        "offending_keys": [
+          {
+            "STUDYID": "PILOT7",
+            "USUBJID": "P7-812"
+          }
+        ],
+        "log_context": {
+          "verification_id": "paired-death-dates",
+          "failure_count": 1,
+          "keys": [
+            {
+              "STUDYID": "PILOT7",
+              "USUBJID": "P7-812"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "callbacks": [],
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "path": "input/dm.csv",
+      "outcome": "captured",
+      "condition": null,
+      "snapshots_created": 1
+    }
+  ],
+  "error": null
+}

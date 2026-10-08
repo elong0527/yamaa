@@ -14,7 +14,7 @@ from unittest.mock import patch
 import yamaa_native
 
 ROOT = Path(__file__).with_name("specification-original")
-CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter")
+CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter", "negative-paired-dates")
 
 
 def modules():
@@ -399,6 +399,9 @@ class OriginalSpecifications(unittest.TestCase):
     def test_original_first_available_complete_reports_and_exact_csv(self):
         self._source_selection_reports("first-available.tsv", "first-available", 11)
 
+    def test_original_all_or_none_complete_reports_and_exact_csv(self):
+        self._source_selection_reports("original-all-or-none.tsv", "all-or-none", 11)
+
     def test_original_assertions_complete_reports_and_exact_csv(self):
         self._source_selection_reports("original-assertions.tsv", "assert", 17)
 
@@ -652,7 +655,7 @@ class OriginalSpecifications(unittest.TestCase):
         for name in CASES:
             with self.subTest(name=name):
                 specification = prepare(name)
-                sources = {"DM":"input/dm.csv", "AE":"input/ae.csv", "MEDDRA":"input/meddict.csv"} if name == "schema-lookup" else ({"VS":"input/vs.csv"} if name in ("schema-window-functions", "negative-row-no-prior") else ({"ODM":"input/odm.csv"} if name in ("negative-source-missing-field", "negative-source-trivial-filter") else {"LB":"input/lb.csv"}))
+                sources = {"DM":"input/dm.csv", "AE":"input/ae.csv", "MEDDRA":"input/meddict.csv"} if name == "schema-lookup" else ({"VS":"input/vs.csv"} if name in ("schema-window-functions", "negative-row-no-prior") else ({"ODM":"input/odm.csv"} if name in ("negative-source-missing-field", "negative-source-trivial-filter") else ({"DM":"input/dm.csv"} if name == "negative-paired-dates" else {"LB":"input/lb.csv"})))
                 self.assertEqual(specification.source(), next(iter(sources.items())))
                 state = {"requests": [], "reads": 0, "bytes": {}}
 

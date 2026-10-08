@@ -171,6 +171,8 @@ pub enum Check {
     /// Compiler checkpoint before a later deferred declaration error; emits no record.
     PredicateDeclaration(BoundPredicate),
     Unique(Vec<usize>),
+    /// Every named column is present together or missing together on each row.
+    AllOrNone(Vec<usize>),
     RowCount {
         min: Option<i64>,
         max: Option<i64>,
@@ -567,6 +569,13 @@ impl DatasetPlan {
                 Check::Unique(columns) => {
                     // Unlike row.group_by, unique.columns permits repeated names.
                     if columns.is_empty() || columns.iter().any(|&column| column >= width) {
+                        return Err(PlanError::InvalidColumns);
+                    }
+                }
+                Check::AllOrNone(columns) => {
+                    if columns.iter().any(|&column| column >= width)
+                        || !columns.iter().any(|column| columns.first() != Some(column))
+                    {
                         return Err(PlanError::InvalidColumns);
                     }
                 }

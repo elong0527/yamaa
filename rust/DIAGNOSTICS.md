@@ -166,3 +166,13 @@ both declaration and sample failures. Seventeen independently authored complete
 reports preserve these phase boundaries, failed-check key context and publication
 rejection, including empty output and inactive guards. The special ESCAPE,
 regex and temporal predicate parity gaps remain unqualified.
+
+
+Original all_or_none verification failures now retain REQ-0382 through the
+existing shared verification records and common report projection. Unknown
+columns precede the two-distinct-name declaration check. Duplicate identities and
+invalid declarations retain the completed check prefix; violated checks preserve
+later records, shortened diagnostic keys and full offending-key log context.
+Eleven complete independent reports and the unchanged negative-paired-dates
+report pin typed source observations and failed publication gates in Rust and both
+installed-host replay suites. Remaining verification families still need migration.
