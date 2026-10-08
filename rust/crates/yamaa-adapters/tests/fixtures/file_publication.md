@@ -1,0 +1,9 @@
+# Native explicit-target file publication
+
+The Unix publisher receives an absolute file target explicitly selected by its caller and one declared path that requests must match. It opens and retains the selected parent directory, rejects an existing link or non-regular target, bounds paths and complete content before publication, writes a new exclusive temporary file in that directory, flushes its complete bytes, rechecks the entry and replaces the target with one descriptor-relative rename. Errors before replacement clean up the candidate and retain the prior artifact. No fallible publication step follows successful replacement.
+
+Five native tests cover repeated complete/empty/UTF-8 writes, unchanged hard-link aliases of the previous file, path mismatch and capacity refusal before effects, link/directory refusal, selected-parent identity after renaming, and an observed permission failure followed by an explicit retry. The publisher implements the existing engine artifact port and interprets no table data.
+
+The private R bridge registers publication handles without dereferencing user pointers. An owned build result saves directly through the native publisher; it does not call an R publication callback. Installed replay compares complete reports for all seventeen unchanged original results, exact successful CSV bytes, repeated retained Parquet bytes, unchanged capture counters and failed-build save gates. Byte transport, explicit target matching and expired handle rejection are also checked with Python absent from PATH.
+
+Publication authority is the caller's explicit target. Study-source approved roots retain their separate existing rules. The public save facade, Windows native publication, general publication diagnostics and callback retirement remain separate migration gates.

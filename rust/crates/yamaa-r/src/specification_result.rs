@@ -73,7 +73,7 @@ impl Drop for Handle {
         });
     }
 }
-fn resolve(value: &Robj) -> std::result::Result<Arc<BuildResult>, String> {
+pub(super) fn resolve(value: &Robj) -> std::result::Result<Arc<BuildResult>, String> {
     let id = address(value)?;
     RESULTS
         .with(|values| values.borrow().get(&id).and_then(Weak::upgrade))

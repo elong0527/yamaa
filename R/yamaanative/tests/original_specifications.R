@@ -149,6 +149,21 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   }
   stopifnot(ports$reads()==length(inputs))
   cat(case_name,"native file source complete report and cached direct bytes passed\n")
+  # Save held successful bytes through native explicit-target publication.
+  target_name <- if(case_name=="schema-lookup") "adsl.csv" else if(case_name=="schema-window-functions") "advs.csv" else "adlb.csv"
+  target <- file.path(directory,target_name)
+  publisher <- get(".file_publisher_port",envir=asNamespace("yamaanative"))(target,target_name)
+  native_result <- build(handle,ports$capture,case_name,specification,inspect=ports$inspect)
+  before_reads <- ports$reads()
+  if(startsWith(case_name,"negative-")) {
+    actual <- tryCatch(publisher$save(native_result),error=identity)
+    stopifnot(inherits(actual,"error"),conditionMessage(actual)=="cannot save a failed build",!file.exists(target))
+  } else {
+    for(j in seq_len(2L)) stopifnot(identical(publisher$save(native_result),native_expected))
+    stopifnot(identical(rawfile(target),rawfile(file.path(case,"expected",target_name))))
+  }
+  stopifnot(ports$reads()==before_reads)
+  cat(case_name,"native file publication complete reports, exact bytes and retained save gates passed\n")
   unlink(directory,recursive=TRUE)
   cat(case_name,"complete original report and cached source capture passed\n")
   expired <- unserialize(serialize(handle,NULL))
@@ -471,6 +486,17 @@ stopifnot(identical(parquet_requests,"input/lb.csv"),length(parquet_saved)==2L,
           identical(build_observations(parquet_result),parquet_unsaved),
           !is.null(build_output(parquet_result)))
 cat("native Parquet output construction and explicit save passed\n")
+
+directory <- tempfile("native-parquet-published-");dir.create(directory)
+publisher <- get(".file_publisher_port",envir=asNamespace("yamaanative"))(file.path(directory,"adlb.parquet"),"adlb.parquet")
+for(j in seq_len(2L)) {
+  actual <- publisher$save(parquet_result)
+  stopifnot(identical(rawfile(file.path(directory,"adlb.parquet")),parquet_saved[[1L]]),
+    identical(sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',actual),parquet_unsaved))
+}
+stopifnot(identical(parquet_requests,"input/lb.csv"))
+unlink(directory,recursive=TRUE)
+cat("native file Parquet publication retained complete report and exact held bytes passed\n")
 
 # Only the source container changes. The complete original report and exact CSV
 # remain independent truth. The runtime PATH still contains no Python executable.
@@ -867,6 +893,25 @@ actual <- tryCatch(changed$capture("SRC","changed-a",8L),error=identity)
 stopifnot(inherits(actual,"error"),conditionMessage(actual)=="captured resource content changed",identical(first,list(charToRaw("original"),TRUE)))
 unlink(directory,recursive=TRUE); unlink(outside)
 cat("native file byte ceilings, snapshot mutation, link authority and registered handles passed\n")
+
+# Explicit publication authority is separate from read roots.
+directory <- tempfile("native-publication-policy-");dir.create(directory)
+target <- file.path(directory,"target.csv")
+writeBin(charToRaw("retained"),target)
+file_publisher <- get(".file_publisher_port",envir=asNamespace("yamaanative"))
+publication <- file_publisher(target,"declared.csv")
+actual <- tryCatch(publication$publish("other.csv",charToRaw("new")),error=identity)
+stopifnot(inherits(actual,"error"),conditionMessage(actual)=="publication path does not match explicit target",identical(rawfile(target),charToRaw("retained")))
+for(content in list("new",1L,structure(charToRaw("new"),class="content"))) {
+  stopifnot(inherits(tryCatch(publication$publish("declared.csv",content),error=identity),"error"))
+}
+stopifnot(identical(publication$publish("declared.csv",charToRaw("complete")),TRUE),identical(rawfile(target),charToRaw("complete")))
+expired <- unserialize(serialize(publication$handle,NULL))
+reply <- .Call(get("wrap__publish_file_artifact",envir=asNamespace("yamaanative")),expired,charToRaw("declared.csv"),charToRaw("must not write"))
+stopifnot(!is.null(reply$error),identical(rawfile(target),charToRaw("complete")))
+stopifnot(identical(list.files(directory,all.files=TRUE,no..=TRUE),"target.csv"))
+unlink(directory,recursive=TRUE)
+cat("native file publication explicit authority, raw transport and registered handles passed\n")
 
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
