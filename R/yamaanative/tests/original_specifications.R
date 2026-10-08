@@ -670,7 +670,7 @@ hex_raw <- function(hex) {
   as.raw(strtoi(substring(hex,starts,starts+1L),base=16L))
 }
 source_selection_truth <- function(filename,prefix,cases) {
-filter_truth <- read.delim(file.path(root,filename),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+filter_truth <- read.delim(file.path(root,filename),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="UTF-8",check.names=FALSE)
 stopifnot(nrow(filter_truth)==cases)
 for(i in seq_len(nrow(filter_truth))) {
   row <- filter_truth[i,,drop=FALSE]
