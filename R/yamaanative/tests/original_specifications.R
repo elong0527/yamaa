@@ -663,9 +663,6 @@ cat("original conversion handlers complete independent reports and exact CSV pas
 scalar_report_truth("original-row-conversion-handlers.tsv","row-handler",8L)
 cat("original row conversion handlers complete independent reports and exact CSV passed\n")
 
-Sys.setenv(PATH=original_path)
-unlink(runtime_path,recursive=TRUE)
-
 # Source-filter truth uses bytes rather than a host YAML/predicate planner.
 hex_raw <- function(hex) {
   if(!nzchar(hex)) return(raw(0))
@@ -717,3 +714,7 @@ source_selection_truth("source-filters.tsv","source-filter",13L)
 cat("original source filters complete reports, cached reads and exact saved CSV passed\n")
 source_selection_truth("first-available.tsv","first-available",11L)
 cat("original first available complete reports, cached reads and exact saved CSV passed\n")
+
+stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
+Sys.setenv(PATH=original_path)
+unlink(runtime_path,recursive=TRUE)
