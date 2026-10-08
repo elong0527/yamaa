@@ -149,23 +149,36 @@ CSV cases. The unchanged negative-paired-dates document qualifies privately,
 bringing the original corpus to twelve. [Final evidence](https://github.com/elong0527/yamaa/pull/1798#issuecomment-6051139650).
 Warning severity, column checks and special predicate gaps remain open.
 
-The next prepared compiler candidate admits error-severity column not_missing.
-Checks follow declared column order after every key is complete; all checks on one
-column finish before its failure gate. Completed records survive later conversion
-failures, and a later declaration finding retains earlier failed records without
-changing its primary diagnostic. Ten independently authored complete reports pin
-empty output, missing keys, separate ID namespaces, prefix retention and four exact
-CSV successes. The unchanged negative-not-missing-age report brings the locally
-qualified original corpus to thirteen. Broader column families and row-template
-column checks remain Unsupported before study capture.
+The original column presence slice is merged in [PR #1799](https://github.com/elong0527/yamaa/pull/1799)
+at `63722ee7e616ed8c1da594bb6b4eaf2ccc15a327`. Its exact final head passes all
+13 checks and full 22-text-file review with no actionable comments. Fresh native
+run 37719793926 passes all six jobs on attempt 1. Every Python platform's direct
+and source-rebuilt form passes 23 suites (47 original-document, six actual-file
+and four schema methods); both R forms pass 17 strict scripts with Status: OK and
+Python absent from PATH. The 78-contract/40-suite catalog, changed archive members,
+all 52 Parquet fixtures and unchanged 945-row assisted inventory match. Ten
+independent complete presence reports retain four exact CSV successes, and the
+unchanged negative-not-missing-age document brings the private original corpus to
+thirteen. [Final evidence](https://github.com/elong0527/yamaa/pull/1799#issuecomment-6051580788).
 
-Local immutable runtime `d39bdabebd582bc93d953dbe81a4cd67421fde95` passes
-684 Rust tests across 78 targets, strict Clippy, 44 tooling tests, both installed
-Python forms with 23 suites (47 original-document, six actual-file and four schema
+The next prepared compiler candidate admits error-severity column allowed_values,
+range and max_length at the same ordered checkpoint. Missing values pass; allowed
+literals convert once to the declared kind, mixed integer/float bounds compare
+exactly, and text length counts Unicode scalars. Twenty independently authored
+complete reports preserve deferred declaration findings, completed prefix records,
+cached captures and six exact successful CSV cases. UTF-8 fixture readers compare
+Rust's canonical report text in both installed hosts. The unchanged
+negative-implausible-age and negative-invalid-sex reports bring the locally
+qualified original corpus to fifteen. Matches, warnings and row-template column
+checks remain Unsupported before study capture.
+
+Local immutable runtime `808e331ac7e0dafef1cdc5897e9b939069ce6833` passes
+687 Rust tests across 78 targets, strict Clippy, 44 tooling tests, both installed
+Python forms with 23 suites (48 original-document, six actual-file and four schema
 methods), and all 17 strict R scripts with Status: OK. R replay stays inside the
 Python-free guard. Sixteen changed native Python and seventeen R archive members,
-plus all 52 Parquet fixtures, match directly. Its 78-contract/40-suite catalog and
-79 reached canonical causes await final main-based review, hosted qualification
+plus all 52 Parquet fixtures, match directly. Its 81-contract/40-suite catalog and
+82 reached canonical causes await final main-based review, hosted qualification
 and downloaded artifact auditing. No assisted inventory tuple or public frontend
 gate is promoted by this prepared candidate.
 
