@@ -2,15 +2,15 @@
 
 This is the finite blocker register for [#1742](https://github.com/elong0527/yamaa/issues/1742).
 It records evidence and decisions still needed, not approval to release or switch
-backends. Main `ebf1f9e7f15bc16839501eaa48d2d9dde6b71521` includes #1811's
-combined `yamaa` packages and bounded public domain/check candidate. Its final-head
-native run 37797361648 passes all six jobs, all fourteen workflow checks and full
-172-file review, with fresh installed-artifact auditing. The older matrix below
-retains historical #1792 evidence; the current frontier includes seventeen public
-original builds in both Unix hosts, five unqualified Windows file-test skips,
-and an unchanged 945-row assisted inventory. Complete public M1 reports are the
-next slice; pending PRs and local prototypes do not settle migration or release
-acceptance. Follow [the delivery order](migration-order.md).
+backends. Main `3895017b619642d4cda1d14b0000e20dc65becd7` includes #1811's
+combined packages and #1812's complete public cohort reports. Native run
+37805429480 passes all seven jobs, all thirteen workflow checks and a clean
+full 13-file review, with fresh package/source auditing and independent replay
+of all 72 downloaded cohort tuples. Both Unix hosts compare all seventeen
+complete original public reports; the 945-row assisted inventory remains
+separate. The older matrix below retains historical #1792 evidence. Windows
+file transport is the next candidate; cross-target checks and local prototypes
+do not settle migration or release acceptance. Follow [the delivery order](migration-order.md).
 
 ## Declared API inventory
 
@@ -113,7 +113,7 @@ numbers identify the implementation/test or decision owner.
 
 | ID | Blocker and current evidence | Owner | Evidence required to close |
 | --- | --- | --- | --- |
-| B01 | Bounded public frontend merged in #1811; complete public M1 reports and Windows file transport remain open. | #1739, #1751 | Both installed public host APIs consume original files, block reference semantics, compare complete observations and saved bytes, and produce evidenced `shared_run` tuples for all six unchanged cases. |
+| B01 | Bounded public frontend and complete Unix public M1 reports qualify in #1811/#1812; Windows file transport remains a candidate. | #1739, #1751 | Both installed public host APIs consume original files, block reference semantics, compare complete observations and saved bytes, and produce evidenced `shared_run` tuples for all six unchanged cases. |
 | B02 | Public domain/check/result/log/save API and benchmark runner migration. | #1751 | Installed signatures, wrong-argument exceptions, issue rows for specification/data/environment/function failures, logs retained on failure, explicit save, and all 178 Python/R runner pairs migrated. |
 | B03 | API representation, retained helpers and full surface review. | #1751, #1742 | Decide check result, issues.context, full-range R integers/INT64_MIN, custom schema/provenance and IO/ODM/style helpers; test every retained surface and deliberate removal, including class members and undocumented imports. |
 | B04 | Declaring-file path policy and production file ports. Existing rules still enforce approved roots/fallback. | #1751, #1755 | Explicit approval for the containment change, reviewed coordinated requirements, path provenance, no fallback, resource preflight, held snapshots and both-host file/error tests. Approval is currently pending after automatic approval review rejected that separate rewrite. |

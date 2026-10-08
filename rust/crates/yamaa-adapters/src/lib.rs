@@ -1,5 +1,8 @@
 //! Infrastructure adapters. The bootstrap resource is embedded at build time.
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
+#[cfg(windows)]
+#[allow(unsafe_code)]
+mod windows_file;
 
 pub mod column_dependency_transport;
 pub mod dataset_profile;
@@ -56,13 +59,16 @@ pub mod specification_report;
 
 pub mod typed_csv;
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub mod file_application;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub mod file_configuration;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub mod file_preparation;
 #[cfg(unix)]
 pub mod file_publication;
-#[cfg(unix)]
+#[cfg(windows)]
+#[path = "file_publication_windows.rs"]
+pub mod file_publication;
+#[cfg(any(unix, windows))]
 pub mod file_resources;

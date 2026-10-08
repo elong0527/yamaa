@@ -84,7 +84,6 @@ class OriginalSpecifications(unittest.TestCase):
         guard.start()
         self.addCleanup(guard.stop)
 
-    @unittest.skipIf(os.name == "nt", "native file transport is qualified on Unix")
     def test_native_file_preparation_builds_all_original_reports_without_host_ports(self):
         outputs = {"schema-lookup": "adsl.csv", "schema-window-functions": "advs.csv", "adam-adlb-ordered-sum": "adlb.csv", "schema-inheritance": "adlb.csv"}
         for name in CASES:
@@ -136,7 +135,6 @@ class OriginalSpecifications(unittest.TestCase):
                         self.assertEqual(specification.capture_reads(), before + captures)
                     self.assertEqual(list(Path(directory).glob(".yamaa-output-*")), [])
 
-    @unittest.skipIf(os.name == "nt", "native file transport is qualified on Unix")
     def test_native_file_preparation_retains_complete_early_findings_and_path_authority(self):
         valid = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
         with tempfile.TemporaryDirectory() as directory:
@@ -145,11 +143,11 @@ class OriginalSpecifications(unittest.TestCase):
             entry.write_text(valid.replace("'1.0'", "'99.0'") + "parents: absent.yaml\n")
             with self.assertRaises(ValueError) as caught:
                 yamaa_native._prepare_file_specification(str(root), str(root), "spec.yaml", [])
-            self.assertEqual(json.loads(str(caught.exception)), {"protocol": "specification/prototype", "outcome": {"status": "invalid", "diagnostics": [{"phase": "validation", "condition": "schema_version_mismatch", "requirement": "REQ-0245", "spec_paths": ["schema_version"], "context": {"expected": "1.0", "actual": "99.0", "source": str(entry), "entry": str(entry)}}]}})
+            self.assertEqual(json.loads(str(caught.exception)), {"protocol": "specification/prototype", "outcome": {"status": "invalid", "diagnostics": [{"phase": "validation", "condition": "schema_version_mismatch", "requirement": "REQ-0245", "spec_paths": ["schema_version"], "context": {"expected": "1.0", "actual": "99.0", "source": entry.resolve().as_posix(), "entry": entry.resolve().as_posix()}}]}})
             entry.write_text(valid + "parents: absent.yaml\n")
             with self.assertRaises(ValueError) as caught:
                 yamaa_native._prepare_file_specification(str(root), str(root), "spec.yaml", [])
-            self.assertEqual(json.loads(str(caught.exception)), {"protocol": "specification/prototype", "outcome": {"status": "invalid", "diagnostics": [{"phase": "validation", "condition": "parent_not_found", "requirement": "REQ-0654", "spec_paths": ["parents"], "context": {"path": "absent.yaml", "source": str(entry)}}]}})
+            self.assertEqual(json.loads(str(caught.exception)), {"protocol": "specification/prototype", "outcome": {"status": "invalid", "diagnostics": [{"phase": "validation", "condition": "parent_not_found", "requirement": "REQ-0654", "spec_paths": ["parents"], "context": {"path": "absent.yaml", "source": entry.resolve().as_posix()}}]}})
             entry.write_text(valid)
             (root / "link.yaml").symlink_to(entry)
             with self.assertRaisesRegex(ValueError, "symbolic link"):
@@ -159,7 +157,6 @@ class OriginalSpecifications(unittest.TestCase):
             with self.assertRaises(TypeError):
                 yamaa_native._prepare_file_specification(str(root), str(root), "spec.yaml", [object()])
 
-    @unittest.skipIf(os.name == "nt", "native file transport is qualified on Unix")
     def test_native_file_preparation_cross_directory_parent_rebases_and_holds_model(self):
         valid = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
         with tempfile.TemporaryDirectory() as directory:
@@ -1428,7 +1425,6 @@ class PublicDomains(unittest.TestCase):
         guard.start()
         self.addCleanup(guard.stop)
 
-    @unittest.skipIf(os.name == "nt", "native file transport is qualified on Unix")
     def test_public_domain_all_original_issues_outputs_and_saved_bytes(self):
         import datetime
         import shutil
@@ -1493,7 +1489,6 @@ class PublicDomains(unittest.TestCase):
                 self.assertEqual(result.output.rows(),rows)
                 self.record_public_report(result, name, entry)
 
-    @unittest.skipIf(os.name == "nt", "native file transport is qualified on Unix")
     def test_public_check_without_study_and_save_retry(self):
         import yamaa
         source = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: absent/output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
@@ -1553,8 +1548,8 @@ class PublicDomains(unittest.TestCase):
         for path in ("x" * 65537, "\u00e9" * 32769):
             refused = yamaa.domain(path)
             self.assertIsNone(refused.output)
-            condition = "unsupported_operation" if os.name == "nt" else "engine_rejected"
-            context = {"operation": "native_file_transport"} if os.name == "nt" else {"code": "resource_path", "stage": "prepare"}
+            condition = "engine_rejected"
+            context = {"code": "resource_path", "stage": "prepare"}
             self.assertEqual(refused.issues["condition"].to_list(), [condition])
             self.assertEqual(json.loads(refused.issues["context"][0]), context)
             self.assertEqual(yamaa.check(path).issues.rows(), refused.issues.rows())

@@ -368,17 +368,26 @@ linked parent directories. Source-manifest platform rewrites, packaged source
 bytes, Unicode notices and all 52 independent Parquet fixtures were audited.
 [Final evidence](https://github.com/elong0527/yamaa/pull/1811#issuecomment-6063664321).
 
-The next delivery frontier is complete public cohort reports and M1 reconciliation,
-then Windows file transport. Private observation transport reads the same owned
-Rust result behind the public facade; only a successful latest save contributes
-artifact observations. The draft matches all seventeen complete original reports
-through both public hosts, including handler counts and verification observations.
-A local M1 comparison passes all eighteen tuples for the six fixed documents:
-six independent Python reference runs and six public Rust runs in each host.
-Final-revision installed packages, hosted Linux/macOS wheel/source and R evidence,
-and full review remain required before this slice merges. Windows retains five
-Unix file-test skips and receives no shared-run promotion; #1739 and B01 remain
-open for that matrix frontier.
+#1812 merged as `3895017b619642d4cda1d14b0000e20dc65becd7` after all thirteen
+workflow checks, clean full 13-file review and fresh downloaded package auditing.
+Native run 37805429480 passes all seven jobs on attempt 1. Four public cohort
+inventories each pass all eighteen tuples for the six fixed documents; a separate
+audit replays all 72 downloaded tuples against exact committed expectations.
+Both public hosts compare all seventeen complete reports and successful save
+observations. CI source `c3df6892c0eb83e27a78bc63bda72a8a761a1482` has the reviewed
+base/head parents. Actual runtimes are CPython 3.14.8 on Linux, CPython 3.14.7 on
+macOS/Windows and R 4.6.1 on Linux/macOS. All source/fixture bytes and the unchanged
+89-contract/40-suite catalog and 945-row assisted inventory are audited directly.
+
+The next delivery frontier is [Windows native file transport](../WINDOWS_FILES.md).
+The candidate preserves approved roots/fallback, retains handle-relative source
+and publication authority, and requires all five former Windows original-suite
+skips to run. Its cohort inventory requires twelve passing Windows Python tuples
+while retaining the R-on-Windows route as explicitly unqualified under #1742.
+Both Unix hosts still require eighteen tuples. Cross-target checks and local
+Unix regressions are draft evidence; immutable package installations, Windows
+execution, complete final-head review and artifact auditing are required before
+this slice merges. #1739 and B01 remain open pending that qualification.
 
 Issues-only checks, lossless character-backed R integer vectors and explicit raw
 vectors for NUL-containing strings remain candidates for the final release API.

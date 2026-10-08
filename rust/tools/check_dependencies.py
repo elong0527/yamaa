@@ -29,6 +29,7 @@ ALLOWED = {
         "zstd",
         "snap",
         "rustix",
+        "windows-sys",
     },
     "yamaa-python": {
         "yamaa-core",
@@ -41,6 +42,19 @@ ALLOWED = {
 }
 
 
+WINDOWS_FILE_FEATURES = [
+    "Wdk_Foundation",
+    "Wdk_Storage_FileSystem",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Threading",
+    "Win32_Security_Authorization",
+    "Win32_Globalization",
+]
+
+
 def violations(metadata):
     packages = {p["name"]: p for p in metadata["packages"]}
     errors = []
@@ -51,11 +65,25 @@ def violations(metadata):
             if dependency["name"] not in ALLOWED.get(name, set()):
                 errors.append(f"{name} must not depend on {dependency['name']}")
             if dependency["name"] == "rustix" and (
-                name != "yamaa-adapters" or dependency.get("target") != "cfg(unix)"
-                or dependency.get("kind") is not None or dependency.get("req") != "=1.1.5"
+                name != "yamaa-adapters"
+                or dependency.get("target") != "cfg(unix)"
+                or dependency.get("kind") is not None
+                or dependency.get("req") != "=1.1.5"
                 or dependency.get("features") != ["fs", "process"]
             ):
-                errors.append("rustix is restricted to the pinned Unix filesystem adapter")
+                errors.append(
+                    "rustix is restricted to the pinned Unix filesystem adapter"
+                )
+            if dependency["name"] == "windows-sys" and (
+                name != "yamaa-adapters"
+                or dependency.get("target") != "cfg(windows)"
+                or dependency.get("kind") is not None
+                or dependency.get("req") != "=0.61.2"
+                or dependency.get("features") != WINDOWS_FILE_FEATURES
+            ):
+                errors.append(
+                    "windows-sys is restricted to the pinned Windows filesystem adapter"
+                )
     return errors
 
 

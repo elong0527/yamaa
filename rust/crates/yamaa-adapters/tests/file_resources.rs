@@ -1,7 +1,9 @@
-#![cfg(unix)]
+#![cfg(any(unix, windows))]
+#[cfg(unix)]
+use std::path::Path;
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
 use yamaa_adapters::file_resources::{Error, Resources};
@@ -26,6 +28,25 @@ impl Study {
     }
     fn text(&self, name: &str) -> String {
         self.path(name).to_str().unwrap().into()
+    }
+    fn resource_key(&self, name: &str) -> String {
+        let path = fs::canonicalize(self.path(name))
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        #[cfg(windows)]
+        {
+            // Expected protocol identities use local-drive paths and forward
+            // separators, independently of the native extended-path spelling.
+            path.strip_prefix(r"\\?\")
+                .unwrap_or(&path)
+                .replace('\\', "/")
+        }
+        #[cfg(unix)]
+        {
+            path
+        }
     }
     fn resources(&self) -> Resources {
         Resources::new(
@@ -121,6 +142,7 @@ fn relative_fallback_order_is_base_then_project_then_declared_data_roots() {
     assert_eq!(resources.capture("d", 32), Err(Error::NotRegularFile));
 }
 
+#[cfg(unix)]
 #[test]
 fn links_are_terminal_and_paths_cannot_escape_the_selected_roots() {
     let study = Study::new();
@@ -183,6 +205,7 @@ fn hard_link_aliases_share_a_snapshot_and_every_accepted_alias_is_verified() {
     assert_eq!(resources.capture_reads(), 1);
 }
 
+#[cfg(unix)]
 #[test]
 fn selected_root_descriptor_survives_renaming_without_following_a_replacement_link() {
     let study = Study::new();
@@ -217,6 +240,7 @@ fn an_outside_declaring_directory_can_reach_an_approved_root_or_fall_back() {
     assert_eq!(resources.capture_reads(), 1);
 }
 
+#[cfg(unix)]
 #[test]
 fn authored_absolute_root_aliases_and_nested_roots_keep_their_selected_authority() {
     let study = Study::new();
@@ -244,6 +268,7 @@ fn authored_absolute_root_aliases_and_nested_roots_keep_their_selected_authority
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn permission_failures_are_terminal_before_any_later_fallback_is_read() {
     use std::os::unix::fs::PermissionsExt;
@@ -278,6 +303,7 @@ fn permission_failures_are_terminal_before_any_later_fallback_is_read() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn unsearchable_directory_does_not_fall_back_to_a_different_file() {
     use std::os::unix::fs::PermissionsExt;
@@ -370,13 +396,7 @@ fn declaring_file_views_resolve_metadata_and_share_held_bytes_before_selecting_d
     let parent = resources
         .resolve_from(&entry, "../data/parent.yaml")
         .unwrap();
-    assert_eq!(
-        parent,
-        fs::canonicalize(study.path("project/data/parent.yaml"))
-            .unwrap()
-            .to_str()
-            .unwrap()
-    );
+    assert_eq!(parent, study.resource_key("project/data/parent.yaml"));
     assert_eq!(resources.capture_reads(), 0);
     let (first, created) = resources
         .capture_from(&entry, "../data/parent.yaml", 6)
@@ -413,6 +433,7 @@ fn every_declaring_base_and_written_alias_is_verified_when_one_fallback_changes(
     assert_eq!(resources.capture_reads(), 1);
 }
 
+#[cfg(unix)]
 #[test]
 fn declaring_file_views_keep_approved_roots_and_terminal_link_failures() {
     let study = Study::new();

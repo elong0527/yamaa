@@ -9,7 +9,7 @@ description = "Python helpers for the yamaa clinical data specification"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT AND Unicode-3.0"
-license-files = ["LICENSE-UNICODE.txt"]
+license-files = ["LICENSE-UNICODE.txt", "LICENSE-WINDOWS.txt"]
 authors = [{ name = "yamaa contributors" }]
 dependencies = [
   "jsonschema>=4.25",

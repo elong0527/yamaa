@@ -1,11 +1,15 @@
 //! Descriptor-anchored bytes under caller-selected approved roots.
 //! Captured equality compares retained bytes. This module interprets no study data.
+#[cfg(windows)]
+use crate::windows_file::{Directory as OwnedFd, Kind as FileType};
+#[cfg(unix)]
 use rustix::fs::{self, AtFlags, FileType, Mode, OFlags};
+#[cfg(unix)]
+use std::os::fd::OwnedFd;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
     io::Read,
-    os::fd::OwnedFd,
     path::Path,
     sync::Arc,
 };
@@ -191,8 +195,9 @@ impl Resources {
         // This is a canonical identity returned by the reader, not an authored
         // path. Selected physical root names can contain a literal backslash on
         // Unix. Keep canonical containment and descriptor/link checks intact.
-        let path = identity.strip_prefix('/').ok_or(Error::InvalidPath)?;
-        let anchor = self.relative_anchor(&[String::new()], path)?;
+        let mut segments = rooted_segments(identity).ok_or(Error::InvalidPath)?;
+        let marker = segments.remove(0);
+        let anchor = self.relative_anchor(&[marker], &segments.join("/"))?;
         self.open_anchor(anchor).map_err(|error| match error {
             WalkError::NoEntry => Error::Missing,
             WalkError::Failure(error) => error,
@@ -342,7 +347,7 @@ impl Resources {
             let mut selected = None;
             for (index, root) in self.roots.iter().enumerate() {
                 for spelling in &root.spellings {
-                    if segments.starts_with(spelling)
+                    if within(&segments, spelling)
                         && selected.is_none_or(|(_, depth)| spelling.len() > depth)
                     {
                         selected = Some((index, spelling.len()));
@@ -353,7 +358,7 @@ impl Resources {
             return Ok(vec![self.anchor(root, segments[depth..].to_vec())?]);
         }
         let mut anchors = Vec::new();
-        let inside = self.roots.iter().any(|r| base.starts_with(&r.canonical));
+        let inside = self.roots.iter().any(|r| within(base, &r.canonical));
         match self.relative_anchor(base, written) {
             Ok(anchor) => anchors.push(anchor),
             Err(error) if inside => return Err(error),
@@ -390,7 +395,7 @@ impl Resources {
         }
         let mut selected = None;
         for (index, root) in self.roots.iter().enumerate() {
-            if resolved.starts_with(&root.canonical)
+            if within(&resolved, &root.canonical)
                 && selected.is_none_or(|(_, depth)| root.canonical.len() > depth)
             {
                 selected = Some((index, root.canonical.len()));
@@ -424,6 +429,7 @@ impl Resources {
         }
         Err(Error::Missing)
     }
+    #[cfg(unix)]
     fn open_anchor(&self, anchor: Anchor) -> Result<Opened, WalkError> {
         let root = &self.roots[anchor.root].descriptor;
         let mut directories = Vec::new();
@@ -504,8 +510,95 @@ impl Resources {
             key: anchor.key,
         })
     }
+    #[cfg(windows)]
+    fn open_anchor(&self, anchor: Anchor) -> Result<Opened, WalkError> {
+        let root = &self.roots[anchor.root].descriptor;
+        let mut directories = Vec::new();
+        let mut witnesses = Vec::new();
+        let mut canonical = self.roots[anchor.root].canonical.clone();
+        let mut file = None;
+        for (index, name) in anchor.remainder.iter().enumerate() {
+            let parent = directories.last().unwrap_or(root);
+            let initial = parent.inspect(name).map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    WalkError::NoEntry
+                } else {
+                    WalkError::Failure(Error::Unreadable)
+                }
+            })?;
+            if initial.kind == FileType::Symlink {
+                return Err(Error::Symlink.into());
+            }
+            let directory = index + 1 != anchor.remainder.len();
+            let required = if directory {
+                FileType::Directory
+            } else {
+                FileType::RegularFile
+            };
+            if initial.kind != required {
+                return Err(Error::NotRegularFile.into());
+            }
+            let opened_identity;
+            if directory {
+                let opened = parent
+                    .directory(name)
+                    .map_err(|_| match parent.inspect(name) {
+                        Ok(current) if identity(&current) == identity(&initial) => {
+                            Error::Unreadable
+                        }
+                        _ => Error::Changed,
+                    })?;
+                let physical = opened.identity().map_err(|_| Error::Unreadable)?;
+                opened_identity = (
+                    i128::from(physical.volume),
+                    i128::from_le_bytes(physical.file),
+                    FileType::Directory,
+                );
+                canonical.push(opened.name().map_err(|_| Error::Unreadable)?);
+                directories.push(opened);
+            } else {
+                let opened = parent
+                    .read_file(name)
+                    .map_err(|_| match parent.inspect(name) {
+                        Ok(current) if identity(&current) == identity(&initial) => {
+                            Error::Unreadable
+                        }
+                        _ => Error::Changed,
+                    })?;
+                opened_identity =
+                    identity(&crate::windows_file::status(&opened).map_err(|_| Error::Unreadable)?);
+                canonical
+                    .push(crate::windows_file::file_name(&opened).map_err(|_| Error::Unreadable)?);
+                file = Some((opened, opened_identity));
+            }
+            if opened_identity != identity(&initial) {
+                return Err(Error::Changed.into());
+            }
+            witnesses.push(opened_identity);
+        }
+        for (index, expected) in witnesses.iter().enumerate() {
+            let parent = if index == 0 {
+                root
+            } else {
+                &directories[index - 1]
+            };
+            let current = parent
+                .inspect(&anchor.remainder[index])
+                .map_err(|_| Error::Changed)?;
+            if identity(&current) != *expected {
+                return Err(Error::Changed.into());
+            }
+        }
+        let (file, identity) = file.ok_or(Error::NotRegularFile)?;
+        Ok(Opened {
+            file,
+            identity,
+            key: canonical,
+        })
+    }
 }
 
+#[cfg(unix)]
 fn selected_root(written: &str) -> Result<Root, Error> {
     bounded(written)?;
     let path = std::fs::canonicalize(written).map_err(|_| Error::InvalidRoot)?;
@@ -519,6 +612,30 @@ fn selected_root(written: &str) -> Result<Root, Error> {
     .map_err(|_| Error::InvalidRoot)?;
     let after = fs::fstat(&descriptor).map_err(|_| Error::InvalidRoot)?;
     if kind(&after) != FileType::Directory || identity(&before) != identity(&after) {
+        return Err(Error::InvalidRoot);
+    }
+    let mut spellings = vec![canonical.clone()];
+    if let Some(spelling) = directory_segments(Path::new(written)) {
+        if !spellings.contains(&spelling) {
+            spellings.push(spelling);
+        }
+    }
+    Ok(Root {
+        descriptor,
+        canonical,
+        spellings,
+    })
+}
+
+#[cfg(windows)]
+fn selected_root(written: &str) -> Result<Root, Error> {
+    bounded(written)?;
+    let path = std::fs::canonicalize(written).map_err(|_| Error::InvalidRoot)?;
+    let canonical = directory_segments(&path).ok_or(Error::InvalidRoot)?;
+    let descriptor = OwnedFd::open(&path).map_err(|_| Error::InvalidRoot)?;
+    let expected = descriptor.identity().map_err(|_| Error::InvalidRoot)?;
+    let current = OwnedFd::open(&path).map_err(|_| Error::InvalidRoot)?;
+    if current.identity().map_err(|_| Error::InvalidRoot)? != expected {
         return Err(Error::InvalidRoot);
     }
     let mut spellings = vec![canonical.clone()];
@@ -569,9 +686,11 @@ fn bounded(text: &str) -> Result<(), Error> {
         Ok(())
     }
 }
+#[cfg(unix)]
 fn kind(status: &fs::Stat) -> FileType {
     FileType::from_raw_mode(status.st_mode)
 }
+#[cfg(unix)]
 fn identity(status: &fs::Stat) -> Identity {
     (
         i128::from(status.st_dev),
@@ -579,12 +698,48 @@ fn identity(status: &fs::Stat) -> Identity {
         kind(status),
     )
 }
+#[cfg(windows)]
+fn identity(status: &crate::windows_file::Status) -> Identity {
+    (
+        i128::from(status.identity.volume),
+        i128::from_le_bytes(status.identity.file),
+        status.kind,
+    )
+}
 fn directory_segments(path: &Path) -> Option<Segments> {
     // Match host directory selection: normalized root aliases retain their authority.
     let normalized: std::path::PathBuf = path.components().collect();
-    rooted_segments(normalized.to_str()?)
+    #[cfg(unix)]
+    {
+        rooted_segments(normalized.to_str()?)
+    }
+    #[cfg(windows)]
+    {
+        let text = normalized.to_str()?.replace('\\', "/");
+        let text = text.strip_prefix("//?/").unwrap_or(&text);
+        if let Some(unc) = text.strip_prefix("UNC/") {
+            rooted_segments(&format!("//{unc}"))
+        } else {
+            rooted_segments(text)
+        }
+    }
 }
 fn rooted_segments(path: &str) -> Option<Segments> {
+    #[cfg(windows)]
+    if let Some(unc) = path.strip_prefix("//") {
+        let mut parts = unc.split('/');
+        let server = parts.next()?;
+        let share = parts.next()?;
+        if [server, share]
+            .iter()
+            .any(|s| s.is_empty() || matches!(*s, "." | ".." | "?"))
+        {
+            return None;
+        }
+        let mut result = vec![format!("//{server}/{share}")];
+        result.extend(parts.map(str::to_owned));
+        return Some(result);
+    }
     let (marker, rest) = if let Some(rest) = path.strip_prefix('/') {
         ("", rest)
     } else if path.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
@@ -625,6 +780,21 @@ fn read_bounded(file: &mut File, maximum: usize) -> Result<Vec<u8>, Error> {
     }
 }
 
+fn within(path: &[String], root: &[String]) -> bool {
+    if path.len() < root.len() {
+        return false;
+    }
+    path.iter().zip(root).all(|(left, right)| {
+        #[cfg(unix)]
+        {
+            left == right
+        }
+        #[cfg(windows)]
+        {
+            crate::windows_file::equal_name(left, right)
+        }
+    })
+}
 fn path_text(segments: &[String]) -> String {
     format!("{}/{}", segments[0], segments[1..].join("/"))
 }
