@@ -217,3 +217,90 @@ fn invalid_project_configuration_is_rejected_before_entry_capture() {
         ));
     }
 }
+
+#[test]
+fn publication_refuses_linked_parents_for_existing_and_absent_targets() {
+    for existing in [false, true] {
+        let study = Study::new();
+        let outside = Study::new();
+        fs::write(
+            study.0.join("spec.yaml"),
+            VALID.replace("output.csv", "link/output.csv"),
+        )
+        .unwrap();
+        fs::write(study.0.join("input.csv"), b"ID\n1\n").unwrap();
+        if existing {
+            fs::write(outside.0.join("output.csv"), b"retained").unwrap();
+        }
+        std::os::unix::fs::symlink(&outside.0, study.0.join("link")).unwrap();
+        let mut result = study.build();
+        assert!(result.output().is_some());
+        assert!(!result.save().unwrap());
+        assert_eq!(
+            result.issues()[0].context,
+            "{\"code\":\"invalid_target\",\"stage\":\"output\"}"
+        );
+        if existing {
+            assert_eq!(fs::read(outside.0.join("output.csv")).unwrap(), b"retained");
+        }
+        assert_eq!(
+            fs::read_dir(&outside.0).unwrap().count(),
+            usize::from(existing)
+        );
+        fs::remove_file(study.0.join("link")).unwrap();
+        fs::create_dir(study.0.join("link")).unwrap();
+        assert!(result.save().unwrap());
+        assert!(result.issues().is_empty());
+        assert_eq!(
+            fs::read(study.0.join("link/output.csv")).unwrap(),
+            b"ID\n1\n"
+        );
+    }
+}
+
+#[test]
+fn publication_refuses_parent_link_substitution_after_build() {
+    let study = Study::new();
+    let outside = Study::new();
+    fs::create_dir(study.0.join("parent")).unwrap();
+    fs::write(
+        study.0.join("spec.yaml"),
+        VALID.replace("output.csv", "parent/output.csv"),
+    )
+    .unwrap();
+    fs::write(study.0.join("input.csv"), b"ID\n1\n").unwrap();
+    let mut result = study.build();
+    fs::rename(study.0.join("parent"), study.0.join("held")).unwrap();
+    std::os::unix::fs::symlink(&outside.0, study.0.join("parent")).unwrap();
+    assert!(!result.save().unwrap());
+    assert_eq!(fs::read_dir(&outside.0).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(study.0.join("held")).unwrap().count(), 0);
+}
+
+#[test]
+fn publication_retains_the_selected_physical_root_after_name_substitution() {
+    let study = Study::new();
+    let outside = Study::new();
+    let root = study.0.join("selected");
+    fs::create_dir(&root).unwrap();
+    fs::write(root.join("spec.yaml"), VALID).unwrap();
+    fs::write(root.join("input.csv"), b"ID\n1\n").unwrap();
+    let path = root.join("spec.yaml");
+    let path = path.to_str().unwrap();
+    let mut result = file_application::domain(
+        Request {
+            specification: path,
+            environment: None,
+        },
+        identity(path),
+    )
+    .unwrap();
+    fs::rename(&root, study.0.join("retained")).unwrap();
+    std::os::unix::fs::symlink(&outside.0, &root).unwrap();
+    assert!(result.save().unwrap());
+    assert_eq!(
+        fs::read(study.0.join("retained/output.csv")).unwrap(),
+        b"ID\n1\n"
+    );
+    assert_eq!(fs::read_dir(&outside.0).unwrap().count(), 0);
+}

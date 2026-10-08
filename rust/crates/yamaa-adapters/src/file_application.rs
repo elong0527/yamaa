@@ -121,7 +121,7 @@ pub struct Domain {
     result: BuildResult,
     output: Option<(crate::public_table::PublicTable, Vec<u8>)>,
     declared: String,
-    target: Option<String>,
+    target: Option<crate::file_publication::AnchoredTarget>,
     publication_issues: Failure,
 }
 impl Domain {
@@ -148,19 +148,17 @@ impl Domain {
         let Some(target) = self.target.as_ref() else {
             return Ok(false);
         };
-        let published = crate::file_publication::Publisher::new(&self.declared, target).and_then(
-            |mut publisher| {
-                self.result
-                    .save(&mut publisher)
-                    .map(|_| ())
-                    .map_err(|error| match error {
-                        yamaa_engine::specification_output::SaveError::Publish(error) => error,
-                        yamaa_engine::specification_output::SaveError::FailedBuild => {
-                            unreachable!("accepted output target")
-                        }
-                    })
-            },
-        );
+        let published = target.publisher(&self.declared).and_then(|mut publisher| {
+            self.result
+                .save(&mut publisher)
+                .map(|_| ())
+                .map_err(|error| match error {
+                    yamaa_engine::specification_output::SaveError::Publish(error) => error,
+                    yamaa_engine::specification_output::SaveError::FailedBuild => {
+                        unreachable!("accepted output target")
+                    }
+                })
+        });
         self.publication_issues.clear();
         match published {
             Ok(()) => Ok(true),

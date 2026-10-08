@@ -1069,6 +1069,30 @@ for(path in c(strrep("x",65537L),strrep("\u00e9",32769L))) {
 unlink(directory,recursive=TRUE)
 cat("public check without study data, full-range integers, retained save retry and environment refusal passed\n")
 
+for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
+  directory <- tempfile("public-linked-output-");dir.create(directory)
+  outside <- tempfile("public-output-outside-");dir.create(outside)
+  entry <- file.path(directory,"spec.yaml")
+  writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
+               "output: {path: link/output.csv, columns: [ID]}","columns:",
+               "  - {name: ID, type: int, derivation: {source: SRC.ID}}"),entry)
+  writeBin(charToRaw("ID\n1\n"),file.path(directory,"input.csv"))
+  target <- file.path(outside,"output.csv")
+  if(existing) writeBin(charToRaw("retained"),target)
+  link <- file.path(directory,"link")
+  if(late) dir.create(link) else stopifnot(file.symlink(outside,link))
+  built <- yamaa_domain(entry)
+  stopifnot(identical(as.character(built$output$ID),"1"))
+  if(late) { unlink(link,recursive=TRUE);stopifnot(file.symlink(outside,link)) }
+  stopifnot(identical(built$save(),FALSE),identical(built$issues$context,'{"code":"invalid_target","stage":"output"}'),
+            identical(list.files(outside,all.files=TRUE,no..=TRUE),if(existing) "output.csv" else character()))
+  if(existing) stopifnot(identical(rawfile(target),charToRaw("retained")))
+  unlink(link);dir.create(link)
+  stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(file.path(link,"output.csv")),charToRaw("ID\n1\n")))
+  unlink(directory,recursive=TRUE);unlink(outside,recursive=TRUE)
+}
+cat("public save rejects linked parents before or after build, retains external targets and permits safe retry passed\n")
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

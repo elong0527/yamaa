@@ -151,8 +151,11 @@ impl Resources {
         Ok(path_text(&self.open(written)?.key))
     }
     /// Publication names the declaration's first anchor, including absent targets.
-    /// This is lexical authority only; the publisher checks its held parent at save.
-    pub(crate) fn publication_target(&self, written: &str) -> Result<String, Error> {
+    /// Retain its selected physical root; parent traversal is checked at save.
+    pub(crate) fn publication_target(
+        &self,
+        written: &str,
+    ) -> Result<crate::file_publication::AnchoredTarget, Error> {
         if matches!(
             written.rsplit(['/', '\\']).next(),
             None | Some("" | "." | "..")
@@ -164,7 +167,15 @@ impl Resources {
             .into_iter()
             .next()
             .ok_or(Error::OutsideRoots)?;
-        Ok(path_text(&anchor.key))
+        let descriptor = self.roots[anchor.root]
+            .descriptor
+            .try_clone()
+            .map_err(|_| Error::Unreadable)?;
+        Ok(crate::file_publication::AnchoredTarget::new(
+            descriptor,
+            anchor.remainder,
+            path_text(&anchor.key),
+        ))
     }
     pub fn capture_from(
         &mut self,

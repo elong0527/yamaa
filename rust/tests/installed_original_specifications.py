@@ -1483,6 +1483,31 @@ class PublicDomains(unittest.TestCase):
             self.assertTrue(built.save())
             self.assertTrue(built.issues.is_empty())
             self.assertEqual((root / "absent/output.csv").read_bytes(),b"ID\n-9223372036854775808\n9223372036854775807\n")
+        for late in (False, True):
+            for existing in (False, True):
+                with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external:
+                    root, outside = Path(directory), Path(external)
+                    entry = root / "spec.yaml"
+                    entry.write_text(source.replace("absent/output.csv", "link/output.csv"))
+                    (root / "input.csv").write_bytes(b"ID\n1\n")
+                    target = outside / "output.csv"
+                    if existing: target.write_bytes(b"retained")
+                    link = root / "link"
+                    if late: link.mkdir()
+                    else: link.symlink_to(outside, target_is_directory=True)
+                    built = yamaa.domain(entry)
+                    self.assertEqual(built.output["ID"].to_list(), [1])
+                    if late:
+                        link.rmdir()
+                        link.symlink_to(outside, target_is_directory=True)
+                    self.assertFalse(built.save())
+                    self.assertEqual(json.loads(built.issues["context"][0]), {"code": "invalid_target", "stage": "output"})
+                    self.assertEqual(sorted(p.name for p in outside.iterdir()), ["output.csv"] if existing else [])
+                    if existing: self.assertEqual(target.read_bytes(), b"retained")
+                    link.unlink(); link.mkdir()
+                    self.assertTrue(built.save())
+                    self.assertTrue(built.issues.is_empty())
+                    self.assertEqual((link / "output.csv").read_bytes(), b"ID\n1\n")
 
     def test_public_environment_refusal_and_argument_types(self):
         import yamaa
