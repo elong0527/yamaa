@@ -155,6 +155,8 @@ pub struct RowTemplate {
 /// Error-severity dataset checks supported by this closed application slice.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Check {
+    /// A core-owned declaration finding deferred until dataset verification.
+    InvalidDiagnostic(crate::diagnostic::Diagnostic),
     /// A compiler finding evaluated in declaration order after output keys.
     InvalidDeclaration {
         condition: &'static str,
@@ -169,6 +171,8 @@ pub enum Check {
     /// Compiler checkpoint before a later deferred declaration error; emits no record.
     PredicateDeclaration(BoundPredicate),
     Unique(Vec<usize>),
+    /// Every named column is present together or missing together on each row.
+    AllOrNone(Vec<usize>),
     RowCount {
         min: Option<i64>,
         max: Option<i64>,
@@ -550,6 +554,7 @@ impl DatasetPlan {
                 return Err(PlanError::DuplicateVerificationPath);
             }
             match &verification.check {
+                Check::InvalidDiagnostic(_) => {}
                 Check::InvalidDeclaration { .. } => {}
                 Check::PredicateDeclaration(predicate) => predicate
                     .validate(0, &vec![true; width], true)
@@ -564,6 +569,13 @@ impl DatasetPlan {
                 Check::Unique(columns) => {
                     // Unlike row.group_by, unique.columns permits repeated names.
                     if columns.is_empty() || columns.iter().any(|&column| column >= width) {
+                        return Err(PlanError::InvalidColumns);
+                    }
+                }
+                Check::AllOrNone(columns) => {
+                    if columns.iter().any(|&column| column >= width)
+                        || !columns.iter().any(|column| columns.first() != Some(column))
+                    {
                         return Err(PlanError::InvalidColumns);
                     }
                 }

@@ -695,6 +695,25 @@ impl PreparedSpecification {
                 }
             }
         }
+        if let Some(verifications) = d
+            .field(root, "verifications")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            for &verification in sequence(d, verifications)? {
+                if let Some(assertion) = d.field(verification, "assert") {
+                    for name in ["when", "require"] {
+                        if let Some(N::Text(expression)) =
+                            d.field(assertion, name).map(|id| &d.nodes()[id])
+                        {
+                            numeric_bytes = numeric_bytes
+                                .checked_add(expression.len())
+                                .filter(|&n| n <= limits.numeric_bytes)
+                                .ok_or(PrepareError::Limit("numeric_bytes"))?;
+                        }
+                    }
+                }
+            }
+        }
         let findings = preflight(spec)?;
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));

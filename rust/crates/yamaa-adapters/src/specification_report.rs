@@ -478,6 +478,7 @@ fn check_observations(
                     json!({"column":run.key_names().nth(position).ok_or(Error::InvalidObservation)?,"missing_count":failed})
                 }
                 "duplicate_key" => json!({"duplicate_count":failed}),
+                "assert_failed" | "all_or_none_failed" => json!({"failure_count":failed}),
                 _ => return Err(Error::UnsupportedOutcome),
             };
             if !output_phase {

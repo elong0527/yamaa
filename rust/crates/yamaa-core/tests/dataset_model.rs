@@ -181,6 +181,35 @@ fn invalid_verifications_are_rejected() {
 }
 
 #[test]
+fn all_or_none_admission_requires_two_distinct_declared_columns() {
+    let source = schema(&[
+        ("ID", ColumnType::Str),
+        ("V", ColumnType::Int),
+        ("W", ColumnType::Date),
+    ]);
+    let make = |columns| {
+        DatasetPlan::new(
+            source.clone(),
+            source.clone(),
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                filter: None,
+                assignments: (0..3)
+                    .map(|column| assign(column, Expression::Source(column)))
+                    .collect(),
+            }],
+            vec![],
+            vec![0],
+            vec![verification(Check::AllOrNone(columns))],
+        )
+    };
+    for columns in [vec![], vec![1], vec![1, 1], vec![1, 2, 3]] {
+        assert_eq!(make(columns), Err(PlanError::InvalidColumns));
+    }
+    assert!(make(vec![1, 1, 2]).is_ok());
+}
+
+#[test]
 fn first_available_admits_every_operand_before_any_source_access() {
     use yamaa_core::dataset::{FirstAvailable, SelectionRead, SelectionSource};
     let source = schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]);

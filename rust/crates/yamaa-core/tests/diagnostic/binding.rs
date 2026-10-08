@@ -635,3 +635,63 @@ pub(super) fn source_filter_reached() -> BTreeSet<ConditionCode> {
     }
     reached
 }
+
+pub fn verification_reached() -> BTreeSet<ConditionCode> {
+    let mut nodes = vec![];
+    let assertion = Map(vec![
+        ("when", Text("FALSE")),
+        ("require", Text("Z > 0 OR A > 0")),
+    ]);
+    let verifications = List(vec![Map(vec![("assert", assertion)])]);
+    let root = Map(vec![
+        ("schema_version", Text("1.0")),
+        ("domain", Text("TEST")),
+        ("base", Text("SRC")),
+        (
+            "input",
+            Map(vec![("SRC", Map(vec![("path", Text("source.csv"))]))]),
+        ),
+        ("keys", List(vec![Text("ID")])),
+        (
+            "columns",
+            List(vec![column("ID", Some(op("source", "variable", "SRC.ID")))]),
+        ),
+        (
+            "output",
+            Map(vec![
+                ("path", Text("result.csv")),
+                ("columns", List(vec![Text("ID")])),
+            ]),
+        ),
+        ("verifications", verifications),
+    ])
+    .append(&mut nodes);
+    let model = SpecificationDocument::admit(
+        Document::new(nodes, root, Default::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap();
+    let prepared = PreparedSpecification::prepare(&model).unwrap();
+    assert_eq!(prepared.verifications().len(), 2);
+    assert!(matches!(
+        prepared.verifications()[0].check,
+        yamaa_core::dataset::Check::PredicateDeclaration(_)
+    ));
+    let diagnostic = prepared
+        .verifications()
+        .iter()
+        .find_map(|check| match &check.check {
+            yamaa_core::dataset::Check::InvalidDiagnostic(diagnostic) => Some(diagnostic),
+            _ => None,
+        })
+        .expect("unknown assertion field retained until verification");
+    [check(
+        diagnostic.clone(),
+        "unknown_field",
+        Some("REQ-0405"),
+        &["verifications[0].assert.require"],
+        vec![("identifier", text("A"))],
+    )]
+    .into()
+}

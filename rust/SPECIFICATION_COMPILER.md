@@ -166,3 +166,33 @@ document now reaches its complete REQ-0148 failure through the same core compile
 Key-phase, row-template, secondary and named-intermediate selection operands
 remain outside this bounded slice. The compiler charges all operand/filter
 metadata before owned compilation, with a separate trusted source-operand policy.
+
+
+Original error-severity dataset assertions compile output-column predicates in
+core. Unknown names and ordinary grammar findings are deferred to declaration
+order after derivation and output keys, retaining the completed check prefix.
+All output references are admitted, including names behind inactive guards.
+Predicate sample validation precedes actual-row evaluation, even for empty
+output or an inactive when clause. A valid when declaration remains a checkpoint
+before a later require finding, preserving incompatible-type precedence.
+
+Seventeen independent complete reports cover success, failed checks, null and
+inactive guards, empty output, unknown/qualified fields, grammar, sample types
+and duplicate identities. Three successful cases retain exact CSV bytes. Both
+assertion predicates share the compiler's aggregate text budget before owned
+compilation. Warning severity, column verifications, nontext predicates and the
+existing special predicate requirement/context gaps remain unsupported.
+
+
+Original error-severity all_or_none checks bind declared output columns and
+validate at least two distinct names in declaration order. Repeated names are
+permitted. Each row must have every named value present or every value missing;
+empty output holds. Completed checks and full offending-key logs survive failures,
+while diagnostics retain their existing shorter key samples. All declared cell
+reads share the engine work budget, including repeated references.
+
+Eleven independent complete reports and three exact successful CSV cases cover
+these behaviors and invalid declarations. The unchanged negative-paired-dates
+benchmark separately retains complete independently checked truth over its
+declared date source cells. Warning severity and column verifications remain
+unsupported; no public frontend or assisted-inventory promotion is claimed.

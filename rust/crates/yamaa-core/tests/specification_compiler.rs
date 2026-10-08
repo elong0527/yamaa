@@ -642,3 +642,84 @@ fn selection_metadata_and_filters_are_bounded_before_owned_compilation() {
         );
     }
 }
+
+#[test]
+fn assertion_text_budget_precedes_deferred_grammar_and_charges_both_predicates() {
+    use Tree::*;
+    let when = "ID = 1";
+    let require = "ID >";
+    let tree = Map(vec![
+        ("schema_version", Text("1.0")),
+        ("domain", Text("TEST")),
+        (
+            "input",
+            Map(vec![("SRC", Map(vec![("path", Text("input.csv"))]))]),
+        ),
+        ("keys", List(vec![Text("ID")])),
+        (
+            "columns",
+            List(vec![Map(vec![
+                ("name", Text("ID")),
+                ("type", Text("int")),
+                (
+                    "derivation",
+                    Map(vec![(
+                        "value",
+                        Map(vec![("source", Map(vec![("variable", Text("SRC.ID"))]))]),
+                    )]),
+                ),
+            ])]),
+        ),
+        (
+            "output",
+            Map(vec![
+                ("path", Text("result.csv")),
+                ("columns", List(vec![Text("ID")])),
+            ]),
+        ),
+        (
+            "verifications",
+            List(vec![Map(vec![(
+                "assert",
+                Map(vec![("when", Text(when)), ("require", Text(require))]),
+            )])]),
+        ),
+    ]);
+    let mut nodes = Vec::new();
+    let root = tree.append(&mut nodes);
+    let document = SpecificationDocument::admit(
+        Document::new(nodes, root, Default::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap();
+    let bytes = when.len() + require.len();
+    assert!(matches!(
+        PreparedSpecification::prepare_with_limits(
+            &document,
+            CompilationLimits {
+                numeric_bytes: bytes - 1,
+                ..Default::default()
+            }
+        ),
+        Err(PrepareError::Limit("numeric_bytes"))
+    ));
+    let plan = PreparedSpecification::prepare_with_limits(
+        &document,
+        CompilationLimits {
+            numeric_bytes: bytes,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .bind(&source())
+    .unwrap();
+    assert!(matches!(
+        &plan.verifications()[0].check,
+        yamaa_core::dataset::Check::PredicateDeclaration(_)
+    ));
+    assert!(
+        matches!(&plan.verifications()[1].check, yamaa_core::dataset::Check::InvalidDiagnostic(d)
+        if d.code == yamaa_core::diagnostic::ConditionCode::PredicateInvalidExpression)
+    );
+}

@@ -146,6 +146,10 @@ pub struct ExecutionAttempt<E> {
 
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError<E> {
+    VerificationDiagnostic {
+        diagnostic: yamaa_core::diagnostic::Diagnostic,
+        records: Vec<CheckRecord>,
+    },
     /// Callback registry does not match a declared signature; detected before table access.
     FunctionBinding {
         slot: usize,
@@ -940,6 +944,12 @@ impl Executor<'_> {
         let mut records = Vec::new();
         for verification in self.plan.verifications() {
             let record = match &verification.check {
+                Check::InvalidDiagnostic(diagnostic) => {
+                    return Err(Box::new(ExecutionError::VerificationDiagnostic {
+                        diagnostic: diagnostic.clone(),
+                        records,
+                    }));
+                }
                 Check::InvalidDeclaration {
                     condition,
                     requirement,
@@ -996,6 +1006,27 @@ impl Executor<'_> {
                                 .flat_map(|members| members.iter().copied()),
                             &mut budget,
                         )?,
+                    }
+                }
+                Check::AllOrNone(columns) => {
+                    budget.work(dataset.rows.len(), columns.len())?;
+                    let offending = dataset.rows.iter().enumerate().filter_map(|(index, row)| {
+                        let missing = matches!(row[columns[0]], Value::Missing);
+                        columns
+                            .iter()
+                            .any(|&column| matches!(row[column], Value::Missing) != missing)
+                            .then_some(index)
+                    });
+                    let offending_rows =
+                        identities(&dataset, self.plan.keys(), offending, &mut budget)?;
+                    CheckRecord {
+                        path: verification.path.clone(),
+                        condition: "all_or_none_failed",
+                        requirement: "REQ-0382",
+                        evaluated_count: dataset.rows.len(),
+                        failed_count: offending_rows.len(),
+                        output_rows: dataset.rows.len(),
+                        offending_rows,
                     }
                 }
                 Check::RowCount { min, max } => {

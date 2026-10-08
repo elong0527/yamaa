@@ -65,3 +65,10 @@ execution. The latter binds a filtered `first_available` source before rejecting
 an inapplicable filter on the completed ARM output. Both installed hosts replay
 new/cached captures and retained failed-save gates; assisted inventory promotion
 remains pending the public frontend.
+
+
+The unchanged `negative-paired-dates` report is authored from its two committed
+DM records, declared date types and REQ-0382 expected failure. It retains the
+complete failed all_or_none record, its identity and offending subject, source
+observations and failed save gate. Every field was compared with actual reference
+Python execution before native qualification.

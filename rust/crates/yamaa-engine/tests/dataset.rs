@@ -2261,6 +2261,49 @@ fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
     );
 }
 
+#[test]
+fn all_or_none_declared_reads_share_work_budget_and_fresh_runs_recover() {
+    use yamaa_engine::dataset::Resource;
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("V", ColumnType::Int),
+            ("W", ColumnType::Int),
+        ],
+        vec![vec![Value::Int(1), Value::Int(2), Value::Int(3)]],
+    );
+    let assignments = || {
+        (0..3)
+            .map(|column| assign(column, Expression::Source(column)))
+            .collect()
+    };
+    let policy = Limits {
+        work_cells: 100,
+        ..limits()
+    };
+    let control = record_plan(&source, source.schema.clone(), assignments(), vec![]);
+    assert!(control.execute(&source, policy).is_ok());
+    let columns = (0..5001).map(|index| 1 + index % 2).collect();
+    let plan = record_plan(
+        &source,
+        source.schema.clone(),
+        assignments(),
+        vec![verification(Check::AllOrNone(columns))],
+    );
+    assert!(matches!(
+        *plan.execute(&source, policy).unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::WorkCells,
+            limit: 100,
+            ..
+        }
+    ));
+    let result = plan.execute(&source, limits()).unwrap();
+    assert_eq!(result.verifications.len(), 1);
+    assert_eq!(result.verifications[0].failed_count, 0);
+    assert_eq!(result.verifications[0].evaluated_count, 1);
+}
+
 /// Bind no-template keys separately from later whole-column derivations.
 fn key_plan(
     source: &Table,
