@@ -576,6 +576,116 @@ fn wide_row_recovery_is_unsupported_at_its_authored_path_before_binding() {
 }
 
 #[test]
+fn row_filters_charge_the_whole_document_before_predicate_parsing() {
+    use Tree::*;
+    let rows = List(
+        ["first", "second"]
+            .into_iter()
+            .map(|id| {
+                Map(vec![
+                    ("id", Text(id)),
+                    ("filter", Text("ID >")),
+                    (
+                        "derivations",
+                        Map(vec![
+                            (
+                                "ID",
+                                Map(vec![(
+                                    "value",
+                                    Map(vec![("source", Map(vec![("variable", Text("SRC.ID"))]))]),
+                                )]),
+                            ),
+                            (
+                                "VALUE",
+                                Map(vec![(
+                                    "value",
+                                    Map(vec![("literal", Scalar(N::Integer("2".into())))]),
+                                )]),
+                            ),
+                        ]),
+                    ),
+                ])
+            })
+            .collect(),
+    );
+    let document = operation_document_with_rows(
+        "literal",
+        Scalar(N::Integer("2".into())),
+        "input.csv",
+        None,
+        Some(rows),
+    );
+    assert!(matches!(
+        PreparedSpecification::prepare_with_limits(
+            &document,
+            CompilationLimits {
+                numeric_bytes: 7,
+                ..Default::default()
+            }
+        ),
+        Err(PrepareError::Limit("numeric_bytes"))
+    ));
+    // Grammar findings remain retained for post-ingestion binding when aggregate text fits.
+    assert!(PreparedSpecification::prepare_with_limits(
+        &document,
+        CompilationLimits {
+            numeric_bytes: 8,
+            ..Default::default()
+        }
+    )
+    .is_ok());
+}
+
+#[test]
+fn grouped_filter_promotes_a_row_local_default_without_claiming_ungrouped_promotion() {
+    use Tree::*;
+    for grouped in [false, true] {
+        let mut fields = vec![
+            ("id", Text("first")),
+            ("filter", Text("VALUE = 2")),
+            (
+                "derivations",
+                Map(vec![(
+                    "ID",
+                    Map(vec![(
+                        "value",
+                        Map(vec![("source", Map(vec![("variable", Text("SRC.ID"))]))]),
+                    )]),
+                )]),
+            ),
+        ];
+        if grouped {
+            fields.push(("group_by", List(vec![Text("SRC.ID")])));
+        }
+        let document = operation_document_with_rows(
+            "literal",
+            Scalar(N::Integer("2".into())),
+            "input.csv",
+            None,
+            Some(List(vec![Map(fields)])),
+        );
+        if grouped {
+            let plan = PreparedSpecification::prepare(&document)
+                .unwrap()
+                .bind(&source())
+                .unwrap();
+            assert_eq!(plan.templates()[0].assignments.len(), 2);
+            assert!(plan.templates()[0].filter.is_some());
+            assert!(plan.columns().is_empty());
+        } else {
+            let Err(PrepareError::Unsupported(features)) =
+                PreparedSpecification::prepare(&document)
+            else {
+                panic!("unreconciled promotion must remain unsupported");
+            };
+            assert_eq!(features.len(), 1);
+            assert_eq!(features[0].operation, "row_filter_default");
+            assert_eq!(features[0].path, "rows[0].filter");
+        }
+    }
+}
+
+#[test]
 fn source_filters_charge_compilation_before_admission_and_reject_unimplemented_literals() {
     let document = operation_document(
         "source",

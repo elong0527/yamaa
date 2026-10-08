@@ -3412,6 +3412,10 @@ fn original_column_not_missing_matches_complete_reports_and_exact_csv() {
     );
 }
 #[test]
+fn row_filters_match_complete_independent_reports_and_exact_csv() {
+    replay_source_selection_truth(include_str!("fixtures/row_filters.tsv"), "row-filter", 26);
+}
+#[test]
 fn row_reductions_match_complete_independent_reports_and_exact_csv() {
     replay_source_selection_truth(
         include_str!("fixtures/row_reductions.tsv"),
@@ -3575,7 +3579,13 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
                 base_directory: ".",
             },
         )
-        .unwrap();
+        .unwrap_or_else(|error| {
+            panic!(
+                "{}: {error:?}; execution: {:?}",
+                fields[0],
+                attempt.result.as_ref().err()
+            )
+        });
         let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
         let mut unsaved = expected.clone();
         unsaved["artifacts"] = serde_json::json!([]);

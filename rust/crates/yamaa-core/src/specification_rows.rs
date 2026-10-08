@@ -4,6 +4,8 @@ use super::*;
 use crate::dataset::Verification;
 use crate::{
     aggregate_parser::{parse_aggregate, ParsedKind, Reducer},
+    bound_expression::{Binding, BoundPredicate, Read},
+    predicate_compiler,
     reduction::NumericReducer,
     reference_scope::{self, Phase, Reach, Scope},
     value::Value,
@@ -40,6 +42,10 @@ struct Template {
     id: String,
     groups: Option<Vec<String>>,
     declarations: Vec<RowDeclaration>,
+    filter: Option<(
+        String,
+        Result<crate::predicate::Plan, predicate_compiler::Error>,
+    )>,
 }
 #[derive(Debug)]
 pub(super) struct Rows {
@@ -157,13 +163,65 @@ impl Rows {
             return Err(PrepareError::Limit("row_templates"));
         }
         let columns = sequence(d, field(d, root, "columns")?)?;
+        let filters = raw_rows
+            .iter()
+            .enumerate()
+            .map(|(index, &row)| {
+                d.field(row, "filter")
+                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                    .map(|id| {
+                        let expression = text(d, id)?;
+                        Ok((
+                            String::from(expression),
+                            predicate_compiler::compile(
+                                expression,
+                                &format!("rows[{index}].filter"),
+                                Default::default(),
+                            ),
+                        ))
+                    })
+                    .transpose()
+            })
+            .collect::<Result<Vec<_>, PrepareError>>()?;
+        let mut filter_defaults = alloc::collections::BTreeSet::new();
+        for (index, (&row, filter)) in raw_rows.iter().zip(&filters).enumerate() {
+            if let Some((_, Ok(plan))) = filter {
+                for name in plan
+                    .identifiers()
+                    .into_iter()
+                    .filter(|name| !name.contains('.'))
+                {
+                    let Some(column) = output.columns().iter().position(|c| c.name == name) else {
+                        continue;
+                    };
+                    if d.field(columns[column], "derivation")
+                        .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
+                    {
+                        if !present(d, row, "group_by")
+                            && !raw_rows.iter().any(|&other| {
+                                d.field(other, "derivations")
+                                    .is_some_and(|id| d.field(id, name).is_some())
+                            })
+                        {
+                            return Err(unsupported(
+                                "row_filter_default",
+                                &format!("rows[{index}].filter"),
+                            ));
+                        }
+                        filter_defaults.insert(column);
+                    }
+                }
+            }
+        }
         let mut templates = Vec::new();
         let mut selected = Vec::new();
         for (column, metadata) in output.columns().iter().enumerate() {
-            if raw_rows.iter().any(|&row| {
-                d.field(row, "derivations")
-                    .is_some_and(|id| d.field(id, &metadata.name).is_some())
-            }) {
+            if filter_defaults.contains(&column)
+                || raw_rows.iter().any(|&row| {
+                    d.field(row, "derivations")
+                        .is_some_and(|id| d.field(id, &metadata.name).is_some())
+                })
+            {
                 selected.push(column);
                 // Admit every written default, even when all templates override
                 // it. Actual inherited defaults are lowered in each row's scope.
@@ -181,9 +239,14 @@ impl Rows {
                 }
             }
         }
-        for (index, &row) in raw_rows.iter().enumerate() {
+        for (index, (&row, filter)) in raw_rows.iter().zip(filters).enumerate() {
             let path = format!("rows[{index}]");
-            closed_fields(d, row, &["id", "dataset", "group_by", "derivations"], &path)?;
+            closed_fields(
+                d,
+                row,
+                &["id", "dataset", "group_by", "derivations", "filter"],
+                &path,
+            )?;
             if let Some(id) = d
                 .field(row, "dataset")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -235,10 +298,24 @@ impl Rows {
                 };
                 declarations.push(declaration(d, id, column, prefix, groups.is_some())?);
             }
+            // Other datasets require lookup/join state outside this closed row language.
+            if groups.is_none()
+                && filter.as_ref().is_some_and(|(_, compiled)| {
+                    compiled.as_ref().is_ok_and(|plan| {
+                        plan.identifiers().into_iter().any(|name| {
+                            name.contains('.')
+                                && name.split_once('.').map(|(dataset, _)| dataset) != Some(driver)
+                        })
+                    })
+                })
+            {
+                return Err(unsupported("row_filter_dataset", &format!("{path}.filter")));
+            }
             templates.push(Template {
                 id: text(d, field(d, row, "id")?)?.into(),
                 groups,
                 declarations,
+                filter,
             });
         }
         let mut lowered_columns = Vec::new();
@@ -413,6 +490,49 @@ impl Rows {
         };
         let mut templates = Vec::new();
         for (index, template) in self.templates.iter().enumerate() {
+            let filter_path = format!("rows[{index}].filter");
+            let predicate = match &template.filter {
+                Some((
+                    text,
+                    Err(predicate_compiler::Error::Parse(
+                        crate::predicate_parser::ParseError::Grammar {
+                            position, failure, ..
+                        },
+                    )),
+                )) => {
+                    findings.push(BindFinding::Lookup(LookupFinding::grammar(
+                        &filter_path,
+                        text,
+                        position.character,
+                        failure,
+                    )));
+                    None
+                }
+                Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
+                Some((_, Ok(plan))) => Some(plan),
+                None => None,
+            };
+            let grouped = template.groups.is_some();
+            // Qualified grouped-filter failures precede derivation binding, as in reference planning.
+            if let Some(plan) = predicate.filter(|_| grouped) {
+                let mut seen = alloc::collections::BTreeSet::new();
+                for identifier in plan
+                    .identifiers()
+                    .into_iter()
+                    .filter(|name| name.contains('.'))
+                {
+                    if !seen.insert(identifier) {
+                        continue;
+                    }
+                    findings.push(BindFinding::RowFilterPhase {
+                        path: filter_path.clone(),
+                        identifier: identifier.into(),
+                        row: template.id.clone(),
+                        grouped,
+                        qualified: true,
+                    });
+                }
+            }
             let mode = match &template.groups {
                 None => RowMode::Records,
                 Some(groups) => RowMode::Groups(
@@ -444,10 +564,63 @@ impl Rows {
                     assignments.push(value);
                 }
             }
+            let mut bindings = Vec::new();
+            let before_filter = findings.len();
+            if let Some(plan) = predicate {
+                let mut seen = alloc::collections::BTreeSet::new();
+                for identifier in plan.identifiers() {
+                    if !seen.insert(identifier) {
+                        continue;
+                    }
+                    if identifier.contains('.') {
+                        if !grouped {
+                            if let Some(column) = resolve(identifier, &filter_path, &mut findings) {
+                                bindings.push(Binding {
+                                    name: identifier.into(),
+                                    read: Read::Source(column),
+                                });
+                            }
+                        }
+                    } else if let Some(declaration) = template
+                        .declarations
+                        .iter()
+                        .find(|declaration| output.columns()[declaration.column].name == identifier)
+                    {
+                        bindings.push(Binding {
+                            name: identifier.into(),
+                            read: Read::Column(declaration.column),
+                        });
+                    } else {
+                        findings.push(BindFinding::RowFilterPhase {
+                            path: filter_path.clone(),
+                            identifier: identifier.into(),
+                            row: template.id.clone(),
+                            grouped,
+                            qualified: false,
+                        });
+                    }
+                }
+            }
+            // Invalid templates never reach executable-plan admission. Keep semantic findings
+            // instead of manufacturing a transport error for their incomplete bindings.
+            let filter = if findings.len() != before_filter
+                || grouped
+                    && predicate.is_some_and(|plan| {
+                        plan.identifiers()
+                            .into_iter()
+                            .any(|name| name.contains('.'))
+                    }) {
+                None
+            } else {
+                predicate
+                    .map(|plan| BoundPredicate::new(plan.clone(), bindings))
+                    .transpose()
+                    .map_err(BindError::InvalidPredicateBinding)?
+            };
             templates.push(RowTemplate {
                 mode,
                 assignments,
-                filter: None,
+                filter,
             });
         }
         let mut columns = Vec::new();

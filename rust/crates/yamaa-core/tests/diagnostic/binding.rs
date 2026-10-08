@@ -305,6 +305,71 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             vec![("expr", text(expr)), ("reason", text(reason))],
         ));
     }
+    for (grouped, predicate, identifier, available, required) in [
+        (
+            false,
+            "UNKNOWN > 1",
+            "UNKNOWN",
+            "column_derivation",
+            "row_filter",
+        ),
+        (
+            true,
+            "SRC.V > 1",
+            "SRC.V",
+            "row_construction",
+            "grouped_row_filter",
+        ),
+        (
+            true,
+            "UNKNOWN > 1",
+            "UNKNOWN",
+            "column_derivation",
+            "grouped_row_filter",
+        ),
+    ] {
+        let mut row = vec![
+            ("id", Text("first")),
+            ("filter", Text(predicate)),
+            (
+                "derivations",
+                Map(vec![
+                    ("ID", op("source", "variable", "SRC.ID")),
+                    (
+                        "VALUE",
+                        if grouped {
+                            op("aggregate", "expr", "COUNT(SRC.V)")
+                        } else {
+                            op("source", "variable", "SRC.V")
+                        },
+                    ),
+                ]),
+            ),
+        ];
+        if grouped {
+            row.push(("group_by", List(vec![Text("SRC.ID")])));
+        }
+        let prepared = compile(op("compute", "expr", "1"), Some(List(vec![Map(row)])));
+        let found = failures(&prepared);
+        assert_eq!(found.len(), 1);
+        let d = found[0]
+            .diagnostics(prepared.source())
+            .unwrap()
+            .pop()
+            .unwrap();
+        reached.insert(check(
+            d,
+            "phase_boundary",
+            None,
+            &["rows[0].filter"],
+            vec![
+                ("identifier", text(identifier)),
+                ("row", text("first")),
+                ("available_phase", text(available)),
+                ("required_phase", text(required)),
+            ],
+        ));
+    }
     let columns: Vec<String> = vec!["ID".into(), "VALUE".into()];
     let paths: Vec<String> = vec![
         "columns.ID.derivation.compute".into(),
