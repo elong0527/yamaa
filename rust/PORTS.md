@@ -279,8 +279,12 @@ directory, checks the declared path and byte capacity before effects, coordinate
 native writers through a nonblocking directory lock, and stages complete bytes in
 a private owned directory beneath that parent. The private directory descriptor
 binds the checked candidate to the final rename even if its parent entry is
-replaced. A prior artifact survives errors before replacement;
-the incomplete candidate is removed. Existing hard-link aliases keep their prior
+replaced. Staging names equal to the target basename are skipped before creation.
+A prior artifact survives errors before replacement. Explicit cleanup checks
+candidate and staging identities before removal; unconfirmed or replaced entries
+are preserved. A cleanup failure retains the original operation error, cleanup
+cause and captured staging location instead of claiming that no residue remains.
+Existing hard-link aliases keep their prior
 bytes because publication replaces the directory entry.
 
 The private R bridge can save an owned build result directly through this native

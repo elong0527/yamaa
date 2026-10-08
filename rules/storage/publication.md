@@ -170,6 +170,13 @@ removes its temporary file, so a failure produces neither an accepted artifact
 nor residue. A reader observes either the artifact that was there before or the
 complete new one, and never a prefix of the new one.
 
+If external interference or a filesystem failure prevents temporary cleanup,
+the failure preserves the original operation error and reports the cleanup
+failure and staging location. It does not claim that no residue remains.
+Cleanup does not remove an entry whose ownership is unconfirmed or whose
+observed identity has changed. The failed publication still produces no accepted
+artifact and leaves the target untouched.
+
 <a id="req-0755"></a>
 
 **REQ-0755.** Publication happens once, after the whole artifact is complete:

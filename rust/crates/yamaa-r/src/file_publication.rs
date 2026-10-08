@@ -50,9 +50,7 @@ mod platform {
                 yamaa_engine::specification_output::SaveError::FailedBuild => {
                     "cannot save a failed build".into()
                 }
-                yamaa_engine::specification_output::SaveError::Publish(error) => {
-                    error.message().into()
-                }
+                yamaa_engine::specification_output::SaveError::Publish(error) => error.message(),
             })
     }
     pub(super) fn create(declared: Raw, target: Raw) -> std::result::Result<Robj, String> {
