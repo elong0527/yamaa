@@ -275,9 +275,11 @@ facade, specification/inheritance filesystem preparation or atomic publication.
 
 `yamaa-adapters::file_publication::Publisher` implements the engine artifact port
 for one absolute file explicitly selected by its caller. It retains that parent
-directory, checks the declared path and byte capacity before effects, writes and
-flushes a complete exclusive candidate, then replaces the target with one
-descriptor-relative rename. A prior artifact survives errors before replacement;
+directory, checks the declared path and byte capacity before effects, coordinates
+native writers through a nonblocking directory lock, and stages complete bytes in
+a private owned directory beneath that parent. The private directory descriptor
+binds the checked candidate to the final rename even if its parent entry is
+replaced. A prior artifact survives errors before replacement;
 the incomplete candidate is removed. Existing hard-link aliases keep their prior
 bytes because publication replaces the directory entry.
 
