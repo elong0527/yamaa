@@ -1018,6 +1018,50 @@ stopifnot(identical(list.files(directory,all.files=TRUE,no..=TRUE),"target.csv")
 unlink(directory,recursive=TRUE)
 cat("native file publication explicit authority, raw transport and registered handles passed\n")
 
+source(file.path(root,"public-output-truth.R"),local=TRUE)
+for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"static/")]) {
+  directory <- tempfile("public-domain-");dir.create(directory)
+  stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
+  case <- file.path(directory,case_name)
+  entry <- file.path(case,if(case_name=="schema-inheritance") "spec_study.yaml" else "spec.yaml")
+  built <- yamaa_domain(entry)
+  check_issue_frame(built$issues,issue_frame_truth[[case_name]])
+  stopifnot(is.null(built$verification_log),is.null(built$warning_log))
+  expected <- public_output_truth[[case_name]]
+  if(is.null(expected)) {
+    stopifnot(is.null(built$output),inherits(tryCatch(built$save(),error=identity),"yamaa_domain_error"))
+  } else {
+    stopifnot(is.data.frame(built$output),identical(as.list(built$output),expected))
+    output_name <- switch(case_name,"schema-lookup"="adsl.csv","schema-window-functions"="advs.csv","adlb.csv")
+    for(attempt in seq_len(2L)) {
+      stopifnot(identical(built$save(),TRUE),identical(rawfile(file.path(case,output_name)),rawfile(file.path(case,"expected",output_name))))
+    }
+    stopifnot(identical(as.list(built$output),expected))
+  }
+  unlink(directory,recursive=TRUE)
+  cat(case_name,"public domain typed output, complete issues and exact saved bytes passed\n")
+}
+directory <- tempfile("public-check-");dir.create(directory)
+entry <- file.path(directory,"spec.yaml")
+writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
+             "output: {path: absent/output.csv, columns: [ID]}","columns:",
+             "  - {name: ID, type: int, derivation: {source: SRC.ID}}"),entry)
+stopifnot(nrow(yamaa_check(entry)$issues)==0L)
+failed <- yamaa_domain(entry)
+stopifnot(is.null(failed$output),identical(failed$issues$condition,"resource_path_missing"),inherits(tryCatch(failed$save(),error=identity),"yamaa_domain_error"))
+writeBin(charToRaw("ID\n-9223372036854775808\n9223372036854775807\n"),file.path(directory,"input.csv"))
+built <- yamaa_domain(entry)
+stopifnot(identical(as.character(built$output$ID),c("-9223372036854775808","9223372036854775807")),identical(is.na(built$output$ID),c(FALSE,FALSE)))
+writeLines("[changed",entry); writeLines("changed",file.path(directory,"input.csv"))
+stopifnot(identical(built$save(),FALSE),identical(built$issues$condition,"engine_rejected"))
+dir.create(file.path(directory,"absent"))
+stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(file.path(directory,"absent/output.csv")),charToRaw("ID\n-9223372036854775808\n9223372036854775807\n")))
+refused <- yamaa_domain("absent.yaml",environment="absent-environment.yaml")
+stopifnot(is.null(refused$output),identical(refused$issues$condition,"unsupported_operation"),identical(refused$issues,yamaa_check("absent.yaml",environment="absent-environment.yaml")$issues))
+stopifnot(inherits(tryCatch(yamaa_domain(NULL),error=identity),"error"))
+unlink(directory,recursive=TRUE)
+cat("public check without study data, full-range integers, retained save retry and environment refusal passed\n")
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from yamaa.application import PreparedWorkflow
-from yamaa.domain import DomainRun, _run_domain
+from yamaa._reference_domain import DomainRun, _run_domain
 from yamaa.functions.evaluator import function_dispatcher
 from yamaa.functions.execution import activate_workflow_functions
 

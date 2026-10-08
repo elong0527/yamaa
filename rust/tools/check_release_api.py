@@ -70,9 +70,9 @@ def discover(root: Path) -> dict[str, list[str]]:
             if match:
                 declarations.append(match[1])
                 continue
-            match = re.fullmatch(r'S3method\(([A-Za-z0-9_.]+),\s*([A-Za-z0-9_.]+)\)', line)
+            match = re.fullmatch(r'S3method\(([A-Za-z0-9_.]+|"\["|"\[\["|"\$"),\s*([A-Za-z0-9_.]+)\)', line)
             if match:
-                declarations.append('S3:' + match[1] + '.' + match[2])
+                declarations.append('S3:' + match[1].strip('"') + '.' + match[2])
                 continue
             raise ValueError(f'unsupported namespace declaration: {path}: {line}')
         sources[path.relative_to(root).as_posix()] = sorted(declarations)

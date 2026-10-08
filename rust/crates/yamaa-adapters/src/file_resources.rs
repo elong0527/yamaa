@@ -87,6 +87,23 @@ pub struct Resources {
     reads: usize,
 }
 impl Resources {
+    /// Only native entry configuration may add roots, before entry/model capture.
+    /// Keep the selected primary descriptor and captured configuration immutable.
+    pub(crate) fn with_configuration_roots(mut self, roots: &[String]) -> Result<Self, Error> {
+        if self.roots.len() != 1
+            || self.roots.len().saturating_add(roots.len()) > MAX_ROOTS
+            || self
+                .by_path
+                .keys()
+                .any(|path| path.last().map(String::as_str) != Some("yamaa-project.yaml"))
+        {
+            return Err(Error::InvalidRoot);
+        }
+        for written in roots {
+            self.roots.push(selected_root(written)?);
+        }
+        Ok(self)
+    }
     /// The first root is the project root; later roots retain fallback order.
     pub fn new(root: &str, base: &str, data_roots: &[String]) -> Result<Self, Error> {
         if data_roots.len() >= MAX_ROOTS {
@@ -94,31 +111,7 @@ impl Resources {
         }
         let mut roots = Vec::new();
         for written in std::iter::once(root).chain(data_roots.iter().map(String::as_str)) {
-            bounded(written)?;
-            let path = std::fs::canonicalize(written).map_err(|_| Error::InvalidRoot)?;
-            let canonical = directory_segments(&path).ok_or(Error::InvalidRoot)?;
-            let before = fs::lstat(&path).map_err(|_| Error::InvalidRoot)?;
-            let descriptor = fs::open(
-                &path,
-                OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-                Mode::empty(),
-            )
-            .map_err(|_| Error::InvalidRoot)?;
-            let after = fs::fstat(&descriptor).map_err(|_| Error::InvalidRoot)?;
-            if kind(&after) != FileType::Directory || identity(&before) != identity(&after) {
-                return Err(Error::InvalidRoot);
-            }
-            let mut spellings = vec![canonical.clone()];
-            if let Some(spelling) = directory_segments(Path::new(written)) {
-                if !spellings.contains(&spelling) {
-                    spellings.push(spelling);
-                }
-            }
-            roots.push(Root {
-                descriptor,
-                canonical,
-                spellings,
-            });
+            roots.push(selected_root(written)?);
         }
         bounded(base)?;
         let path = std::fs::canonicalize(base).map_err(|_| Error::InvalidBase)?;
@@ -156,6 +149,22 @@ impl Resources {
     }
     pub fn resolve(&self, written: &str) -> Result<String, Error> {
         Ok(path_text(&self.open(written)?.key))
+    }
+    /// Publication names the declaration's first anchor, including absent targets.
+    /// This is lexical authority only; the publisher checks its held parent at save.
+    pub(crate) fn publication_target(&self, written: &str) -> Result<String, Error> {
+        if matches!(
+            written.rsplit(['/', '\\']).next(),
+            None | Some("" | "." | "..")
+        ) {
+            return Err(Error::InvalidPath);
+        }
+        let anchor = self
+            .anchors(&self.base, written)?
+            .into_iter()
+            .next()
+            .ok_or(Error::OutsideRoots)?;
+        Ok(path_text(&anchor.key))
     }
     pub fn capture_from(
         &mut self,
@@ -484,6 +493,34 @@ impl Resources {
             key: anchor.key,
         })
     }
+}
+
+fn selected_root(written: &str) -> Result<Root, Error> {
+    bounded(written)?;
+    let path = std::fs::canonicalize(written).map_err(|_| Error::InvalidRoot)?;
+    let canonical = directory_segments(&path).ok_or(Error::InvalidRoot)?;
+    let before = fs::lstat(&path).map_err(|_| Error::InvalidRoot)?;
+    let descriptor = fs::open(
+        &path,
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(|_| Error::InvalidRoot)?;
+    let after = fs::fstat(&descriptor).map_err(|_| Error::InvalidRoot)?;
+    if kind(&after) != FileType::Directory || identity(&before) != identity(&after) {
+        return Err(Error::InvalidRoot);
+    }
+    let mut spellings = vec![canonical.clone()];
+    if let Some(spelling) = directory_segments(Path::new(written)) {
+        if !spellings.contains(&spelling) {
+            spellings.push(spelling);
+        }
+    }
+    Ok(Root {
+        descriptor,
+        canonical,
+        spellings,
+    })
 }
 
 impl yamaa_engine::specification_run::SourcePort for Resources {

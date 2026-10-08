@@ -1,5 +1,6 @@
 //! Optional Python installation probe; this is not an execution backend.
 use pyo3::prelude::*;
+mod domain_entry;
 #[cfg(unix)]
 mod file_specification;
 mod function_callback;
@@ -252,6 +253,13 @@ fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 
 #[pymodule]
 fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_class::<domain_entry::Domain>()?;
+    module.add(
+        "DomainError",
+        module.py().get_type::<domain_entry::DomainError>(),
+    )?;
+    module.add_function(wrap_pyfunction!(domain_entry::_domain_file, module)?)?;
+    module.add_function(wrap_pyfunction!(domain_entry::_check_file, module)?)?;
     #[cfg(unix)]
     {
         module.add_class::<file_specification::Specification>()?;

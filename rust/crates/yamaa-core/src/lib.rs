@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 extern crate alloc;
+pub mod application_issue;
 
 pub mod aggregate_parser;
 pub mod bound_expression;

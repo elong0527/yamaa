@@ -15,7 +15,7 @@ mod grammar;
 #[path = "diagnostic_numeric.rs"]
 mod numeric;
 
-/// A normative failure's public vocabulary, defined once for each semantic cause.
+/// A cause's canonical public vocabulary, including explicit application refusals.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Definition {
     pub phase: &'static str,
@@ -48,6 +48,8 @@ macro_rules! conditions {
 }
 
 conditions! {
+    ApplicationUnsupported => ("planning", "unsupported_operation", None),
+    ApplicationRejected => ("engine", "engine_rejected", None),
     NumericUnknownField => ("validation", "unknown_field", Some("REQ-0443")),
     NumericInputType => ("validation", "incompatible_input_type", Some("REQ-0444")),
     RoundingDigitsType => ("validation", "incompatible_input_type", Some("REQ-0418")),

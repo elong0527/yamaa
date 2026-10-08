@@ -16,6 +16,27 @@ spec.loader.exec_module(stage)
 
 
 class IssueFrameTruth(unittest.TestCase):
+    def test_public_output_projection_uses_literal_reference_types_and_exact_float_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "expected").mkdir()
+            report = {"artifacts": [{"columns": ["I", "F", "D", "S"], "types": ["int", "float", "date", "str"]}],
+                      "tables": [{"stage": "derived", "columns": ["I", "F", "D", "S"], "rows": [
+                          [{"type": "int", "value": "-9223372036854775808"}, {"type": "float", "value": "8000000000000000"},
+                           {"type": "date", "value": "1969-12-31"}, {"type": "str", "value": "\u00e9\U0001f642"}],
+                          [{"type": "missing", "value": None}] * 4]}]}
+            (root / "expected/case.json").write_text(json.dumps(report))
+            (root / "expected/failed.json").write_text('{"artifacts":[]}')
+            with patch.object(stage, "CASES", ("case", "failed")):
+                stage.stage_public_output_truth(root)
+            actual = (root / "public-output-truth.R").read_text()
+            self.assertIn('"I"=structure(c("-9223372036854775808",NA_character_),class=\'yamaa_int64_vector\')', actual)
+            self.assertIn('as.raw(c(0,0,0,0,0,0,0,128))', actual)
+            self.assertIn('"D"=structure(as.double(c(-1,NA_real_)),class=\'Date\')', actual)
+            self.assertIn('"S"=c("\\u00e9\\U0001f642",NA_character_)', actual)
+            self.assertIn('"failed"=NULL', actual)
+            self.assertTrue(actual.isascii())
+
     def test_literal_projection_preserves_nulls_lists_full_integers_and_unicode(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

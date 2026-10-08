@@ -3,6 +3,7 @@
 import argparse
 import csv
 import json
+import datetime
 import shutil
 from pathlib import Path
 
@@ -151,6 +152,53 @@ def stage_issue_frame_truth(destination: Path):
     )
 
 
+def stage_public_output_truth(destination: Path):
+    """Literal typed R expectations from committed original report observations."""
+    def text(value):
+        quoted = json.dumps(value, ensure_ascii=False)
+        return "".join(char if ord(char) < 128 else
+                       (f"\\u{ord(char):04x}" if ord(char) <= 0xffff else f"\\U{ord(char):08x}")
+                       for char in quoted)
+    entries = []
+    for name in CASES:
+        report = json.loads((destination / "expected" / (name + ".json")).read_text())
+        if not report["artifacts"]:
+            entries.append(text(name) + "=NULL")
+            continue
+        artifact = report["artifacts"][0]
+        table = next(table for table in report["tables"] if table["stage"] == "derived")
+        columns = []
+        for column_name, kind in zip(artifact["columns"], artifact["types"]):
+            position = table["columns"].index(column_name)
+            cells = []
+            for row in table["rows"]:
+                scalar = row[position]
+                if scalar["type"] == "missing":
+                    cells.append("NA_character_" if kind in ("str", "int") else "NA_real_")
+                elif kind in ("str", "int"):
+                    cells.append(text(scalar["value"]))
+                elif kind == "float":
+                    raw = bytes.fromhex(scalar["value"])[::-1]
+                    cells.append("readBin(as.raw(c(" + ",".join(str(byte) for byte in raw) + ")), 'double', n=1L, size=8L, endian='little')")
+                elif kind == "date":
+                    cells.append(str((datetime.date.fromisoformat(scalar["value"]) - datetime.date(1970, 1, 1)).days))
+                elif kind == "datetime":
+                    cells.append(str(int((datetime.datetime.fromisoformat(scalar["value"]) - datetime.datetime(1970, 1, 1)).total_seconds())))
+                else:
+                    raise ValueError("unclassified public output type")
+            literal = "c(" + ",".join(cells) + ")" if cells else ("character()" if kind in ("str", "int") else "double()")
+            if kind == "int":
+                literal = "structure(" + literal + ",class='yamaa_int64_vector')"
+            elif kind == "date":
+                literal = "structure(as.double(" + literal + "),class='Date')"
+            elif kind == "datetime":
+                literal = "structure(as.double(" + literal + "),class=c('POSIXct','POSIXt'),tzone='UTC')"
+            columns.append(text(column_name) + "=" + literal)
+        entries.append(text(name) + "=list(" + ",".join(columns) + ")")
+    (destination / "public-output-truth.R").write_text(
+        "# Literal columns from committed reference report truth.\npublic_output_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
+
+
 def stage(destination: Path):
     """Keep original files separate from independently authored expected reports."""
     destination.mkdir(parents=True, exist_ok=False)
@@ -202,6 +250,7 @@ def stage(destination: Path):
             encoding="utf-8",
         )
     stage_issue_frame_truth(destination)
+    stage_public_output_truth(destination)
 
 
 if __name__ == "__main__":

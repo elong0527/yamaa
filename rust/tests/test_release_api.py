@@ -57,12 +57,12 @@ class ReleaseApiInventory(unittest.TestCase):
             root = Path(directory)
             namespace = root / 'R/yamaa/NAMESPACE'
             namespace.parent.mkdir(parents=True)
-            namespace.write_text('export(yamaa_domain)\nS3method(as.character,yamaa_int64)\n')
+            namespace.write_text('export(yamaa_domain)\nS3method(as.character,yamaa_int64)\nS3method("[",yamaa_int64_vector)\n')
             stub = root / 'rust/crates/yamaa-python/yamaa_native.pyi'
             stub.parent.mkdir(parents=True)
             stub.write_text('VERSION: str\nDEFAULT = ...\nclass _Result:\n    ok: bool\n    def save(self): ...\nasync def inspect(): ...\n')
             actual = module.discover(root)
-            self.assertEqual(actual[namespace.relative_to(root).as_posix()], ['S3:as.character.yamaa_int64', 'yamaa_domain'])
+            self.assertEqual(actual[namespace.relative_to(root).as_posix()], ['S3:[.yamaa_int64_vector', 'S3:as.character.yamaa_int64', 'yamaa_domain'])
             self.assertEqual(actual[stub.relative_to(root).as_posix()], ['DEFAULT', 'VERSION', '_Result', '_Result.ok', '_Result.save', 'inspect'])
             stub.write_text('if True:\n    def conditional(): ...\n')
             with self.assertRaisesRegex(ValueError, 'conditional stub declarations'):

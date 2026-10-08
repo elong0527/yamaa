@@ -20,6 +20,7 @@ pub fn installation_resource() -> &'static str {
 
 pub mod arrow_table;
 mod arrow_temporal;
+pub mod public_table;
 pub mod table_transport;
 
 pub mod scalar_bytes;
@@ -55,6 +56,10 @@ pub mod specification_report;
 
 pub mod typed_csv;
 
+#[cfg(unix)]
+pub mod file_application;
+#[cfg(unix)]
+pub mod file_configuration;
 #[cfg(unix)]
 pub mod file_preparation;
 #[cfg(unix)]

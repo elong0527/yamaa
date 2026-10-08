@@ -4,9 +4,12 @@
   "sources": {
     "python/src/yamaa/__init__.py": {
       "names": [
+        "DomainError",
         "DomainRun",
         "DomainRunError",
         "__version__",
+        "check",
+        "domain",
         "generate_study_document",
         "yamaa_domain"
       ],
@@ -19,17 +22,6 @@
           "rationale": "Retain installed package version metadata; release API inventory still needs explicit sign-off."
         }
       }
-    },
-    "python/src/yamaa/domain.py": {
-      "names": [
-        "DomainRun",
-        "DomainRunError",
-        "yamaa_domain"
-      ],
-      "disposition": "replace",
-      "issue": "#1751",
-      "rationale": "Replace legacy domain/result entry points with domain/check and the specified result contract; migrate generate_study_document to define under #1758.",
-      "overrides": {}
     },
     "python/src/yamaa/expressions/__init__.py": {
       "names": [
@@ -615,10 +607,15 @@
     },
     "rust/crates/yamaa-python/yamaa_native.pyi": {
       "names": [
+        "DomainError",
         "_BuildResult",
         "_BuildResult.observations",
         "_BuildResult.output",
         "_BuildResult.save",
+        "_DomainResult",
+        "_DomainResult.issues",
+        "_DomainResult.output",
+        "_DomainResult.save",
         "_ReferenceCatalog",
         "_ReferenceCatalog.analyze",
         "_Schema",
@@ -631,8 +628,10 @@
         "_Specification.failure_report",
         "_Specification.report",
         "_Specification.source",
+        "_check_file",
         "_compile_reference_catalog",
         "_compile_schema",
+        "_domain_file",
         "_prepare_document",
         "_prepare_inherited_specification",
         "_prepare_specification",
@@ -704,7 +703,10 @@
       "names": [
         "S3:Ops.yamaa_int64",
         "S3:Ops.yamaa_utf8",
+        "S3:[.yamaa_int64_vector",
+        "S3:[.yamaa_utf8_vector",
         "S3:as.character.yamaa_int64",
+        "S3:as.character.yamaa_int64_vector",
         "S3:as.character.yamaa_utf8",
         "S3:as.double.yamaa_int64",
         "S3:as.integer.yamaa_int64",
@@ -712,6 +714,7 @@
         "S3:format.yamaa_utf8",
         "S3:is.na.yamaa_int64",
         "S3:is.na.yamaa_utf8",
+        "S3:is.na.yamaa_utf8_vector",
         "S3:length.yamaa_utf8",
         "S3:print.yamaa_int64",
         "S3:print.yamaa_utf8",
@@ -742,11 +745,60 @@
         "table_snapshot",
         "traverse_inheritance",
         "utf8_bytes",
-        "utf8_scalar"
+        "utf8_scalar",
+        "yamaa_check",
+        "yamaa_domain"
       ],
       "disposition": "remove_public",
       "issue": "#1751",
       "rationale": "Fold native distribution into yamaa and remove standalone component probes after qualification consumers migrate. Private handle methods are inventoried but are not release promises.",
+      "overrides": {
+        "S3:[.yamaa_int64_vector": {
+          "disposition": "retain_candidate",
+          "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."
+        },
+        "S3:[.yamaa_utf8_vector": {
+          "disposition": "retain_candidate",
+          "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."
+        },
+        "S3:as.character.yamaa_int64_vector": {
+          "disposition": "retain_candidate",
+          "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."
+        },
+        "S3:is.na.yamaa_utf8_vector": {
+          "disposition": "retain_candidate",
+          "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."
+        },
+        "yamaa_check": {
+          "disposition": "retain_candidate",
+          "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."
+        },
+        "yamaa_domain": {
+          "disposition": "retain_candidate",
+          "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."
+        }
+      }
+    },
+    "python/src/yamaa/_reference_domain.py": {
+      "names": [
+        "DomainRun",
+        "DomainRunError",
+        "yamaa_domain"
+      ],
+      "disposition": "internal",
+      "issue": "#1751",
+      "rationale": "Private retained reference implementation used only by unqualified legacy and reference-assessment consumers; public domain/check never fall back to it.",
+      "overrides": {}
+    },
+    "python/src/yamaa/_domain.py": {
+      "disposition": "retain_candidate",
+      "issue": "#1751",
+      "rationale": "Bounded Rust-owned public domain/check candidate. Environment, logs, full benchmark coverage and package consolidation remain unqualified.",
+      "names": [
+        "DomainError",
+        "check",
+        "domain"
+      ],
       "overrides": {}
     }
   }
