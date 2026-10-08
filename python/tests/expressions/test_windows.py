@@ -273,6 +273,94 @@ def test_a_window_filter_excludes_ties_from_the_baseline_search() -> None:
     )
 
 
+def test_a_row_dated_exactly_on_its_reference_is_a_baseline_candidate() -> None:
+    # REQ-1127: the reference date is an *inclusive* upper bound, so a row
+    # whose date equals its reference is eligible, not skipped.
+    rows = dated(("2025-01-06", "2025-01-06"))
+
+    assert _value(baseline_flag(partition(rows, 0), "ADT", "TRTSDT")) == "Y"
+
+
+def test_the_latest_date_wins_regardless_of_row_position() -> None:
+    # REQ-0341: baseline_flag locates the baseline row by date, not by a
+    # declared order, so the partition order must not decide the flag.
+    rows = dated(
+        ("2025-01-06", "2025-01-10"),
+        ("2025-01-02", "2025-01-10"),
+    )
+
+    flags = [
+        _value(baseline_flag(partition(rows, index), "ADT", "TRTSDT"))
+        for index in range(2)
+    ]
+
+    assert flags == ["Y", MISSING]
+
+
+def test_a_tie_counts_a_row_dated_on_its_reference() -> None:
+    # The tied row's date equals its own reference: still "at or before", so
+    # the tie stands and the baseline stays ambiguous.
+    rows = dated(
+        ("2025-01-06", "2025-01-10"),
+        ("2025-01-06", "2025-01-06"),
+    )
+
+    condition = _condition(baseline_flag(partition(rows, 0), "ADT", "TRTSDT"))
+
+    assert condition.condition.condition == "ambiguous_baseline"
+    assert condition.condition.context["match_count"] == 2
+
+
+def test_a_tied_row_after_its_own_reference_is_not_a_tie() -> None:
+    # A row past its own reference is not a baseline candidate at all, so its
+    # matching date cannot make the baseline ambiguous.
+    rows = dated(
+        ("2025-01-06", "2025-01-10"),
+        ("2025-01-06", "2025-01-02"),
+    )
+
+    assert _value(baseline_flag(partition(rows, 0), "ADT", "TRTSDT")) == "Y"
+
+
+def test_a_three_way_tie_reports_all_three_matches() -> None:
+    rows = dated(
+        ("2025-01-06", "2025-01-10"),
+        ("2025-01-06", "2025-01-10"),
+        ("2025-01-06", "2025-01-10"),
+    )
+
+    condition = _condition(baseline_flag(partition(rows, 0), "ADT", "TRTSDT"))
+
+    assert condition.condition.condition == "ambiguous_baseline"
+    assert condition.condition.context["match_count"] == 3
+
+
+def test_ineligible_rows_do_not_stop_the_baseline_scan() -> None:
+    # Eligibility is per-row: a filter-excluded row, a missing date, and a
+    # post-reference date are each skipped without ending the search.
+    rows = dated(
+        ("2025-01-20", "2025-01-10"),
+        (MISSING, "2025-01-10"),
+        ("2025-01-06", "2025-01-10"),
+    )
+
+    assert _value(baseline_flag(partition(rows, 2), "ADT", "TRTSDT")) == "Y"
+    assert (
+        _value(baseline_flag(partition(rows, 2, [False, True, True]), "ADT", "TRTSDT"))
+        == "Y"
+    )
+
+
+def test_incompatible_date_and_reference_types_fail_as_a_condition() -> None:
+    # REQ-0323: values that are not mutually comparable fail as a diagnostic,
+    # they do not raise.
+    rows = [{"ADT": 5, "TRTSDT": DateValue.parse("2025-01-10")}]
+
+    condition = _condition(baseline_flag(partition(rows, 0), "ADT", "TRTSDT"))
+
+    assert condition.condition.condition == "incompatible_input_type"
+
+
 # --- dispatch ------------------------------------------------------------
 
 
