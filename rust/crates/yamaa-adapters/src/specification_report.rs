@@ -338,10 +338,14 @@ pub enum CompleteError<E> {
 pub struct BuildResult {
     prepared: yamaa_engine::specification_output::PreparedOutput<Value>,
     table: Option<Vec<u8>>,
+    issues: Vec<crate::issue_rows::Issue>,
 }
 impl BuildResult {
     pub fn output(&self) -> Option<&[u8]> {
         self.table.as_deref()
+    }
+    pub fn issues(&self) -> &[crate::issue_rows::Issue] {
+        &self.issues
     }
     /// Build-phase observations exclude later save requests and their artifacts.
     pub fn observations(&self) -> Value {
@@ -401,7 +405,22 @@ pub fn build_result<E>(
             })
         })
         .transpose()?;
-    Ok(BuildResult { prepared, table })
+    let issues = prepared.prepared_report()["diagnostics"]
+        .as_array()
+        .ok_or(Error::InvalidObservation)?
+        .iter()
+        .cloned()
+        .map(crate::issue_rows::Issue::from_diagnostic)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| Error::InvalidObservation)?;
+    if !crate::issue_rows::within_limit(&issues, crate::specification_check::MAX_ISSUE_BYTES) {
+        return Err(Error::OutputLimit);
+    }
+    Ok(BuildResult {
+        prepared,
+        table,
+        issues,
+    })
 }
 impl<E> From<Error> for CompleteError<E> {
     fn from(error: Error) -> Self {

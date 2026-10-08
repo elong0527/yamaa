@@ -110,6 +110,47 @@ def stage_decode_replay(destination: Path):
             writer.writerow(dict(record, expected=json.dumps(expected, sort_keys=True, separators=(",", ":"))))
 
 
+def stage_issue_frame_truth(destination: Path):
+    """Project committed report truth to literal R column expectations, never candidate output."""
+    reports = {
+        name: json.loads((destination / "expected" / (name + ".json")).read_text())["diagnostics"]
+        for name in CASES
+    }
+    with (destination / "static-verification-checks.tsv").open(encoding="utf-8") as stream:
+        for case in csv.DictReader(stream, delimiter="\t"):
+            reports["static/" + case["case"]] = json.loads(case["expected"])
+
+    def text(value):
+        # JSON's surrogate-pair escapes are not R string escapes. Emit code points.
+        quoted = json.dumps(value, ensure_ascii=False)
+        return "".join(
+            char if ord(char) < 128 else
+            (f"\\u{ord(char):04x}" if ord(char) <= 0xffff else f"\\U{ord(char):08x}")
+            for char in quoted
+        )
+
+    def strings(values):
+        return "c(" + ",".join("NA_character_" if v is None else text(v) for v in values) + ")" if values else "character()"
+
+    entries = []
+    for name, diagnostics in reports.items():
+        columns = []
+        for field in ("phase", "condition", "requirement", "spec_paths", "context"):
+            values = [row[field] for row in diagnostics]
+            if field == "spec_paths":
+                literal = "list(" + ",".join(strings(paths) for paths in values) + ")"
+            else:
+                if field == "context":
+                    values = [json.dumps(v, ensure_ascii=False, sort_keys=True, separators=(",", ":")) if isinstance(v, dict) else v for v in values]
+                literal = strings(values)
+            columns.append(field + "=" + literal)
+        entries.append(text(name) + "=list(" + ",".join(columns) + ")")
+    (destination / "issue-frame-truth.R").write_text(
+        "# Literal projection of committed expected diagnostics; no candidate execution.\nissue_frame_truth <- list(\n" + ",\n".join(entries) + "\n)\n",
+        encoding="ascii",
+    )
+
+
 def stage(destination: Path):
     """Keep original files separate from independently authored expected reports."""
     destination.mkdir(parents=True, exist_ok=False)
@@ -160,6 +201,7 @@ def stage(destination: Path):
             ),
             encoding="utf-8",
         )
+    stage_issue_frame_truth(destination)
 
 
 if __name__ == "__main__":

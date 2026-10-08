@@ -230,4 +230,14 @@ fn check_specification_issues(handle: Robj) -> List {
     })
 }
 
-extendr_module! {mod specification_service;fn prepare_specification;fn specification_source;fn execute_specification_csv;fn specification_failure_report;fn specification_report;fn check_specification_issues;}
+#[extendr]
+fn check_specification_issue_frame(handle: Robj) -> List {
+    boundary(|| {
+        let run = resolve(&handle)?;
+        let issues = yamaa_adapters::specification_check::issue_rows(&run)
+            .map_err(|error| error.message())?;
+        crate::issue_frame::frame(&issues)
+    })
+}
+
+extendr_module! {mod specification_service;fn prepare_specification;fn specification_source;fn execute_specification_csv;fn specification_failure_report;fn specification_report;fn check_specification_issues;fn check_specification_issue_frame;}

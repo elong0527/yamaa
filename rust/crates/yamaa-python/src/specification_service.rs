@@ -15,6 +15,11 @@ pub struct Specification {
 }
 #[pymethods]
 impl Specification {
+    fn check_issue_rows(&self) -> PyResult<Vec<crate::specification_result::IssueRow>> {
+        yamaa_adapters::specification_check::issue_rows(&self.inner)
+            .map(|issues| crate::specification_result::issue_rows(&issues))
+            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.message()))
+    }
     /// Core-owned known declaration findings; no source callback is accepted.
     fn check_issues(&self) -> PyResult<String> {
         yamaa_adapters::specification_check::issues(&self.inner)

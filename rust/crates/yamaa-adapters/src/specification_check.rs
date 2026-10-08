@@ -25,12 +25,27 @@ pub fn issues(run: &PreparedRun) -> Result<String, Error> {
     encode(run, MAX_ISSUE_BYTES)
 }
 
+pub fn issue_rows(run: &PreparedRun) -> Result<Vec<crate::issue_rows::Issue>, Error> {
+    let rows = run
+        .check_diagnostics()
+        .into_iter()
+        .map(|finding| {
+            crate::issue_rows::Issue::from_diagnostic(
+                portable_diagnostic(finding).ok_or(Error::InvalidContext)?,
+            )
+            .map_err(|_| Error::InvalidContext)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if !crate::issue_rows::within_limit(&rows, MAX_ISSUE_BYTES) {
+        return Err(Error::Limit);
+    }
+    Ok(rows)
+}
+
 fn encode(run: &PreparedRun, maximum: usize) -> Result<String, Error> {
     let mut rows = Vec::new();
-    for finding in run.check_diagnostics() {
-        let mut row = portable_diagnostic(finding).ok_or(Error::InvalidContext)?;
-        row["context"] = serde_json::Value::String(row["context"].to_string());
-        rows.push(row);
+    for finding in issue_rows(run)? {
+        rows.push(finding.as_value());
     }
     let mut output = Buffer {
         bytes: Vec::new(),

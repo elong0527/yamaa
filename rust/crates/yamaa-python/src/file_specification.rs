@@ -19,6 +19,11 @@ impl Specification {
 }
 #[pymethods]
 impl Specification {
+    fn check_issue_rows(&self) -> PyResult<Vec<crate::specification_result::IssueRow>> {
+        yamaa_adapters::specification_check::issue_rows(self.get()?.run())
+            .map(|issues| crate::specification_result::issue_rows(&issues))
+            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.message()))
+    }
     fn source(&self) -> PyResult<(String, String)> {
         let state = self.get()?;
         let source = state.run().source();

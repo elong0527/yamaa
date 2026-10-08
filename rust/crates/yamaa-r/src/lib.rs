@@ -5,6 +5,7 @@ mod file_resources;
 mod file_specification;
 mod function_callback;
 mod inheritance_callback;
+mod issue_frame;
 mod scalars;
 mod specification_inheritance;
 mod specification_result;

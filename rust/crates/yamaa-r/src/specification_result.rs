@@ -236,6 +236,10 @@ fn build_observations(handle: Robj) -> List {
     boundary(|| Ok(r!(resolve(&handle)?.observations().to_string())))
 }
 #[extendr]
+fn build_issues(handle: Robj) -> List {
+    boundary(|| crate::issue_frame::frame(resolve(&handle)?.issues()))
+}
+#[extendr]
 fn build_save(handle: Robj, publish: Function) -> List {
     boundary(|| {
         resolve(&handle)?
@@ -249,4 +253,4 @@ fn build_save(handle: Robj, publish: Function) -> List {
             })
     })
 }
-extendr_module! {mod specification_result; fn specification_build; fn build_output; fn build_observations; fn build_save;}
+extendr_module! {mod specification_result; fn specification_build; fn build_output; fn build_observations; fn build_issues; fn build_save;}

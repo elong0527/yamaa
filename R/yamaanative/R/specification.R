@@ -244,6 +244,16 @@ specification_report <- function(handle, capture, publish, example,
   if (!is.null(result$error)) stop(result$error,call.=FALSE)
   result$value
 }
+.build_issues <- function(handle) {
+  result <- .Call(wrap__build_issues,handle)
+  if (!is.null(result$error)) stop(result$error,call.=FALSE)
+  result$value
+}
+.check_specification_issue_frame <- function(handle) {
+  result <- .Call(wrap__check_specification_issue_frame,handle)
+  if (!is.null(result$error)) stop(result$error,call.=FALSE)
+  result$value
+}
 .build_save <- function(handle,publish) {
   if (!is.function(publish)) stop("publish must be a function",call.=FALSE)
   force(publish)
