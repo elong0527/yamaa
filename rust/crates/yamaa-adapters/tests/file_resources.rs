@@ -222,7 +222,7 @@ fn authored_absolute_root_aliases_and_nested_roots_keep_their_selected_authority
     fs::write(study.path("project/spec/a"), b"selected").unwrap();
     std::os::unix::fs::symlink(study.path("project"), study.path("alias")).unwrap();
     let mut resources = Resources::new(
-        &study.text("alias"),
+        &format!("{}/./", study.text("alias")),
         &study.text("project/spec"),
         &[study.text("project/spec")],
     )

@@ -450,7 +450,9 @@ fn identity(status: &fs::Stat) -> Identity {
     )
 }
 fn directory_segments(path: &Path) -> Option<Segments> {
-    rooted_segments(path.to_str()?)
+    // Match host directory selection: normalized root aliases retain their authority.
+    let normalized: std::path::PathBuf = path.components().collect();
+    rooted_segments(normalized.to_str()?)
 }
 fn rooted_segments(path: &str) -> Option<Segments> {
     let (marker, rest) = if let Some(rest) = path.strip_prefix('/') {

@@ -831,7 +831,7 @@ outside <- tempfile("outside-native-root-"); writeBin(charToRaw("outside"),outsi
 stopifnot(file.symlink(outside,file.path(directory,"spec","link")))
 actual <- tryCatch(ports$capture("SRC","link",8L),error=identity)
 stopifnot(inherits(actual,"error"),conditionMessage(actual)=="resource path contains a symbolic link")
-actual <- tryCatch(ports$capture("SRC",outside,8L),error=identity)
+actual <- tryCatch(ports$capture("SRC",normalizePath(outside,winslash="/",mustWork=TRUE),8L),error=identity)
 stopifnot(inherits(actual,"error"),conditionMessage(actual)=="resource path outside approved roots")
 expired <- unserialize(serialize(ports$handle,NULL))
 reply <- .Call(get("wrap__file_resource_reads",envir=asNamespace("yamaanative")),expired)
