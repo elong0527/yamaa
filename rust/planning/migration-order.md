@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-08 against main `be2811868fb7336f230dfca7e6c625c7b44e8d4d`
+Reconciled 2026-10-08 against main `d8da923bf63ed5bc1123149a02839c03b6bb4100`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -63,6 +63,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1807 | Private native file preparation, captured parent graph and lexical views, cached original builds and direct native saves. |
 | #1808 | Shared row-column checkpoints and direct grouped MEAN/COUNT with independent complete reports. |
 | #1809 | Converted-column and direct-record row filters, grouped defaults, ordered phase findings and admission before study ports. |
+| #1810 | Owned five-field public issue projection, with native JSON text context and direct typed R frames. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -346,6 +347,27 @@ bound the escaped JSON-text payload. Rebase onto #1809 combines the result layer
 with the qualified filters and requires fresh final-head hosted qualification
 and full review; the earlier installed proof is not a claim for that combined head.
 This exposes private result conversion, not the public domain/check entry points.
+
+#1810 merged as `d8da923bf63ed5bc1123149a02839c03b6bb4100` after all 13
+checks, full final-head review and fresh downloaded package auditing. Native run
+37778880613 passed all six jobs on attempt 1. Each Python package form passes
+23 supplemental suites and 58 original-document methods; both R source packages
+pass all 17 scripts with strict Status: OK. The 89-contract/40-suite catalog and
+945-row assisted inventory retain their prior qualification levels.
+
+The public frontend candidate now uses Rust-owned preparation, checking, builds,
+output conversion and explicit saves, with issues-only check results. Its first
+installed local proof covers both Python forms and all 17 strict R scripts,
+including 17 original public builds. The subsequent package-consolidation
+candidate installs one `yamaa` distribution per host, with private Python
+`yamaa._native` and direct R conversion. It includes bounded oversized-path
+issue handling, lossless R integer vectors and an explicit raw-vector
+representation for NUL-containing strings. Final-head package qualification and
+review are required before this combined candidate merges; these representations
+remain candidates for the final release API. Environment activation and declared
+logs remain unsupported, with no fallback from public domain/check to reference
+semantics. The retained reference helpers continue to support independent
+assessment while their release dispositions remain open.
 
 The next delivery frontier is the public domain/check entry points and one
 installed package per host, followed by cohort conformance through that surface.

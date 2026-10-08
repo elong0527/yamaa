@@ -1062,7 +1062,7 @@ stopifnot(inherits(tryCatch(yamaa_domain(NULL),error=identity),"error"))
 for(path in c(strrep("x",65537L),strrep("\u00e9",32769L))) {
   refused <- yamaa_domain(path)
   stopifnot(is.null(refused$output),identical(refused$issues$condition,"engine_rejected"),
-            identical(refused$issues$ctx,'{"code":"resource_path","stage":"prepare"}'),
+            identical(refused$issues$context,'{"code":"resource_path","stage":"prepare"}'),
             identical(yamaa_check(path)$issues,refused$issues),
             identical(yamaa_domain(path,environment=path)$issues$condition,"unsupported_operation"))
 }

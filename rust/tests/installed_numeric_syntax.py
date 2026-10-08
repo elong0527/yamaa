@@ -172,7 +172,7 @@ class NumericSyntax(unittest.TestCase):
         self.assertTrue((package / "py.typed").is_file())
         self.assertIn(
             "def analyze_numeric(request: str) -> str:",
-            (package / "__init__.pyi").read_text(encoding="utf-8"),
+            (package / "_native.pyi").read_text(encoding="utf-8"),
         )
 
     def test_admission_planning_lowering_capture_one_service(self):
