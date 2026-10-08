@@ -164,6 +164,34 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   }
   stopifnot(ports$reads()==before_reads)
   cat(case_name,"native file publication complete reports, exact bytes and retained save gates passed\n")
+  # Preparation, checking and build require no R semantic model or source callback.
+  file_handle <- get(".prepare_file_specification",envir=asNamespace("yamaanative"))(case,case,specification)
+  file_reads <- get(".file_specification_reads",envir=asNamespace("yamaanative"))
+  initial_reads <- if(case_name=="schema-inheritance") 3L else 1L
+  stopifnot(file_reads(file_handle)==initial_reads)
+  file_check <- get(".file_specification_check",envir=asNamespace("yamaanative"))
+  stopifnot(identical(file_check(file_handle),get(".specification_check_issues",envir=asNamespace("yamaanative"))(handle)),file_reads(file_handle)==initial_reads)
+  file_expected <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
+  file_expected <- sub('"runtime":"python"','"runtime":"r"',file_expected,fixed=TRUE)
+  file_expected <- sub('fixture-runtime',as.character(getRversion()),file_expected,fixed=TRUE)
+  file_expected <- sub('fixture-engine',engine_info()$core_version,file_expected,fixed=TRUE)
+  for(created in c(1L,0L)) {
+    if(created==0L) file_expected <- gsub('"snapshots_created":1','"snapshots_created":0',file_expected,fixed=TRUE)
+    file_result <- get(".file_specification_build",envir=asNamespace("yamaanative"))(file_handle,case_name,specification)
+    file_unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',file_expected)
+    stopifnot(identical(build_observations(file_result),file_unsaved),file_reads(file_handle)==initial_reads+length(inputs))
+    if(startsWith(case_name,"negative-")) {
+      actual <- tryCatch(publisher$save(file_result),error=identity)
+      stopifnot(inherits(actual,"error"),conditionMessage(actual)=="cannot save a failed build",!file.exists(target))
+    } else {
+      for(j in seq_len(2L)) stopifnot(identical(publisher$save(file_result),file_expected))
+      stopifnot(identical(rawfile(target),rawfile(file.path(case,"expected",target_name))))
+    }
+    stopifnot(file_reads(file_handle)==initial_reads+length(inputs))
+  }
+  expired_file <- unserialize(serialize(file_handle,NULL))
+  stopifnot(inherits(tryCatch(file_check(expired_file),error=identity),"error"),inherits(tryCatch(file_check(handle),error=identity),"error"))
+  cat(case_name,"native file preparation complete reports, cached build and direct saves without host ports passed\n")
   unlink(directory,recursive=TRUE)
   cat(case_name,"complete original report and cached source capture passed\n")
   expired <- unserialize(serialize(handle,NULL))
@@ -829,6 +857,43 @@ for(i in seq_len(nrow(static_truth))) {
   for(j in seq_len(2L)) stopifnot(identical(check_issues(handle),static_truth$expected[[i]]))
 }
 cat("static verification check complete issues without study authority passed\n")
+
+# File preparation retains complete early diagnostics and cross-directory authority.
+directory <- tempfile("native-file-preparation-");dir.create(directory)
+directory <- normalizePath(directory,winslash="/",mustWork=TRUE)
+dir.create(file.path(directory,"entry"));dir.create(file.path(directory,"parent"))
+entry_path <- file.path(directory,"entry","spec.yaml")
+valid <- "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
+prepare_file <- get(".prepare_file_specification",envir=asNamespace("yamaanative"))
+file_check <- get(".file_specification_check",envir=asNamespace("yamaanative"))
+file_reads <- get(".file_specification_reads",envir=asNamespace("yamaanative"))
+file_build <- get(".file_specification_build",envir=asNamespace("yamaanative"))
+writeBin(charToRaw(paste0(sub("'1.0'","'99.0'",valid,fixed=TRUE),"parents: absent.yaml\n")),entry_path)
+actual <- tryCatch(prepare_file(directory,file.path(directory,"entry"),"spec.yaml"),error=identity)
+expected <- paste0('{"outcome":{"diagnostics":[{"condition":"schema_version_mismatch","context":{"actual":"99.0","entry":"',entry_path,'","expected":"1.0","source":"',entry_path,'"},"phase":"validation","requirement":"REQ-0245","spec_paths":["schema_version"]}],"status":"invalid"},"protocol":"specification/prototype"}')
+stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),expected))
+writeBin(charToRaw(paste0(valid,"parents: absent.yaml\n")),entry_path)
+actual <- tryCatch(prepare_file(directory,file.path(directory,"entry"),"spec.yaml"),error=identity)
+expected <- paste0('{"outcome":{"diagnostics":[{"condition":"parent_not_found","context":{"path":"absent.yaml","source":"',entry_path,'"},"phase":"validation","requirement":"REQ-0654","spec_paths":["parents"]}],"status":"invalid"},"protocol":"specification/prototype"}')
+stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),expected))
+writeBin(charToRaw(valid),file.path(directory,"parent","base.yaml"))
+writeBin(charToRaw("schema_version: '1.0'\nparents: [../parent/base.yaml, ../parent/./base.yaml]\n"),entry_path)
+handle <- prepare_file(directory,file.path(directory,"entry"),"spec.yaml")
+stopifnot(file_reads(handle)==2L,identical(file_check(handle),"[]"),file_reads(handle)==2L)
+stopifnot(identical(get(".file_specification_source",envir=asNamespace("yamaanative"))(handle),list(name="SRC",path="../parent/input.csv")))
+writeBin(charToRaw("[changed"),entry_path);writeBin(charToRaw("[changed"),file.path(directory,"parent","base.yaml"))
+writeBin(charToRaw("ID\n1\n"),file.path(directory,"parent","input.csv"))
+result <- file_build(handle,"file-view")
+held_output <- build_output(result)
+stopifnot(identical(table_snapshot(held_output),'{"protocol":"table/1","columns":[["ID","int"]],"row_count":"1","chunks":["1"],"rows":[[{"int":"1"}]]}'),file_reads(handle)==3L)
+writeBin(charToRaw("ID\n2\n"),file.path(directory,"parent","input.csv"))
+actual <- tryCatch(file_build(handle,"file-view"),error=identity)
+stopifnot(inherits(actual,"error"),conditionMessage(actual)=="captured resource content changed",identical(build_output(result),held_output),file_reads(handle)==3L)
+for(roots in list(rep(directory,64L),NA_character_,1L,structure(directory,class="roots")))
+  stopifnot(inherits(tryCatch(prepare_file(directory,directory,"spec.yaml",roots),error=identity),"error"))
+stopifnot(inherits(tryCatch(file_check(result),error=identity),"error"))
+unlink(directory,recursive=TRUE)
+cat("native file preparation complete early findings, lexical views, retained model and native resource failures passed\n")
 
 # Byte transport keeps bounded captures, authority and registered handle lifetimes.
 directory <- tempfile("native-resource-policy-"); dir.create(directory)

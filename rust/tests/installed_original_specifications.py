@@ -82,6 +82,109 @@ class OriginalSpecifications(unittest.TestCase):
         guard.start()
         self.addCleanup(guard.stop)
 
+    @unittest.skipIf(os.name == "nt", "native file transport is qualified on Unix")
+    def test_native_file_preparation_builds_all_original_reports_without_host_ports(self):
+        outputs = {"schema-lookup": "adsl.csv", "schema-window-functions": "advs.csv", "adam-adlb-ordered-sum": "adlb.csv", "schema-inheritance": "adlb.csv"}
+        for name in CASES:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                case = (ROOT / "cases" / name).resolve()
+                entry = specification_name(name)
+                specification = yamaa_native._prepare_file_specification(str(case), str(case), entry, [])
+                before = 3 if name == "schema-inheritance" else 1
+                self.assertEqual(specification.capture_reads(), before)
+                self.assertEqual(json.loads(specification.check_issues()), json.loads(prepare(name).check_issues()))
+                self.assertEqual(specification.capture_reads(), before)
+                metadata = (platform.python_version(), yamaa_native.engine_info()["core_version"], name, entry, ".")
+                expected = json.loads((ROOT / "expected" / (name + ".json")).read_text())
+                expected.update(runtime="python", runtime_version=metadata[0], engine_version=metadata[1])
+                captures = sum(source["snapshots_created"] or 0 for source in expected["source_reads"])
+                for created in (1, 0):
+                    for source in expected["source_reads"]:
+                        if source["snapshots_created"] is not None:
+                            source["snapshots_created"] = created
+                    result = specification.build(metadata)
+                    unsaved = dict(expected, artifacts=[])
+                    self.assertEqual(json.loads(result.observations()), unsaved)
+                    self.assertEqual(specification.capture_reads(), before + captures)
+                    target = Path(directory) / outputs.get(name, "failed.csv")
+                    if name.startswith("negative-"):
+                        self.assertIsNone(result.output())
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save_file("failed.csv", str(target))
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save_file("failed.csv", str(Path(directory) / "absent" / "failed.csv"))
+                        self.assertFalse(target.exists())
+                    else:
+                        artifact = expected["artifacts"][0]
+                        derived = next(table for table in expected["tables"] if table["stage"] == "derived")
+                        projection = [derived["columns"].index(column) for column in artifact["columns"]]
+                        snapshot = json.loads(yamaa_native.table_snapshot(result.output()))
+                        self.assertEqual(snapshot["columns"], list(map(list, zip(artifact["columns"], artifact["types"]))))
+                        self.assertEqual(snapshot["row_count"], str(artifact["row_count"]))
+                        def scalar(value):
+                            kind, content = value["type"], value["value"]
+                            if kind in ("date", "datetime"):
+                                return {kind: {"text": content, "precision": "day" if kind == "date" else "second"}}
+                            return {kind: content}
+                        self.assertEqual(snapshot["rows"], [[scalar(row[column]) for column in projection] for row in derived["rows"]])
+                        csv_expected = (case / "expected" / outputs[name]).read_bytes()
+                        for _ in range(2):
+                            self.assertEqual(json.loads(result.save_file(outputs[name], str(target))), expected)
+                            self.assertEqual(target.read_bytes(), csv_expected)
+                        self.assertEqual(specification.capture_reads(), before + captures)
+                    self.assertEqual(list(Path(directory).glob(".yamaa-output-*")), [])
+
+    @unittest.skipIf(os.name == "nt", "native file transport is qualified on Unix")
+    def test_native_file_preparation_retains_complete_early_findings_and_path_authority(self):
+        valid = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            entry = root / "spec.yaml"
+            entry.write_text(valid.replace("'1.0'", "'99.0'") + "parents: absent.yaml\n")
+            with self.assertRaises(ValueError) as caught:
+                yamaa_native._prepare_file_specification(str(root), str(root), "spec.yaml", [])
+            self.assertEqual(json.loads(str(caught.exception)), {"protocol": "specification/prototype", "outcome": {"status": "invalid", "diagnostics": [{"phase": "validation", "condition": "schema_version_mismatch", "requirement": "REQ-0245", "spec_paths": ["schema_version"], "context": {"expected": "1.0", "actual": "99.0", "source": str(entry), "entry": str(entry)}}]}})
+            entry.write_text(valid + "parents: absent.yaml\n")
+            with self.assertRaises(ValueError) as caught:
+                yamaa_native._prepare_file_specification(str(root), str(root), "spec.yaml", [])
+            self.assertEqual(json.loads(str(caught.exception)), {"protocol": "specification/prototype", "outcome": {"status": "invalid", "diagnostics": [{"phase": "validation", "condition": "parent_not_found", "requirement": "REQ-0654", "spec_paths": ["parents"], "context": {"path": "absent.yaml", "source": str(entry)}}]}})
+            entry.write_text(valid)
+            (root / "link.yaml").symlink_to(entry)
+            with self.assertRaisesRegex(ValueError, "symbolic link"):
+                yamaa_native._prepare_file_specification(str(root), str(root), "link.yaml", [])
+            with self.assertRaises(ValueError):
+                yamaa_native._prepare_file_specification(str(root), str(root), "spec.yaml", [str(root)] * 64)
+            with self.assertRaises(TypeError):
+                yamaa_native._prepare_file_specification(str(root), str(root), "spec.yaml", [object()])
+
+    @unittest.skipIf(os.name == "nt", "native file transport is qualified on Unix")
+    def test_native_file_preparation_cross_directory_parent_rebases_and_holds_model(self):
+        valid = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "entry").mkdir(); (root / "parent").mkdir()
+            (root / "parent/base.yaml").write_text(valid)
+            (root / "entry/spec.yaml").write_text("schema_version: '1.0'\nparents: [../parent/base.yaml, ../parent/./base.yaml]\n")
+            specification = yamaa_native._prepare_file_specification(str(root), str(root / "entry"), "spec.yaml", [])
+            self.assertEqual(specification.source(), ("SRC", "../parent/input.csv"))
+            self.assertEqual(specification.capture_reads(), 2)
+            self.assertEqual(specification.check_issues(), "[]")
+            (root / "entry/spec.yaml").write_text("[changed")
+            (root / "parent/base.yaml").write_text("[changed")
+            (root / "parent/input.csv").write_bytes(b"ID\n1\n")
+            result = specification.build(("fixture-runtime", "fixture-engine", "file-view", "spec.yaml", "."))
+            held_output = result.output()
+            snapshot = json.loads(yamaa_native.table_snapshot(held_output))
+            self.assertEqual(snapshot["columns"], [["ID", "int"]])
+            self.assertEqual(snapshot["row_count"], "1")
+            self.assertEqual(snapshot["rows"], [[{"int": "1"}]])
+            self.assertEqual(specification.capture_reads(), 3)
+            (root / "parent/input.csv").write_bytes(b"ID\n2\n")
+            with self.assertRaisesRegex(ValueError, "captured resource content changed"):
+                specification.build(("fixture-runtime", "fixture-engine", "file-view", "spec.yaml", "."))
+            self.assertEqual(result.output(), held_output)
+            self.assertEqual(specification.capture_reads(), 3)
+
     def test_core_preflight_preserves_independent_findings_before_ports(self):
         def no_port(*_):
             self.fail("preflight failure reached a host port")

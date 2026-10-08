@@ -176,10 +176,38 @@ impl specification_report::ArtifactPort for Publisher<'_, '_> {
 }
 #[pyclass(frozen, module = "yamaa_native", name = "_BuildResult")]
 pub struct BuildResult {
-    inner: specification_report::BuildResult,
+    pub(super) inner: specification_report::BuildResult,
+}
+#[cfg(unix)]
+struct FileTarget<'a> {
+    declared: &'a str,
+    target: &'a str,
+}
+#[cfg(unix)]
+impl specification_report::ArtifactPort for FileTarget<'_> {
+    type Error = yamaa_adapters::file_publication::Error;
+    fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), Self::Error> {
+        yamaa_adapters::file_publication::Publisher::new(self.declared, self.target)?
+            .publish(path, content)
+    }
 }
 #[pymethods]
 impl BuildResult {
+    #[cfg(unix)]
+    fn save_file(&self, declared: &str, target: &str) -> PyResult<String> {
+        let mut publisher = FileTarget { declared, target };
+        self.inner
+            .save(&mut publisher)
+            .map(|report| report.to_string())
+            .map_err(|error| match error {
+                yamaa_engine::specification_output::SaveError::FailedBuild => {
+                    pyo3::exceptions::PyValueError::new_err("cannot save a failed build")
+                }
+                yamaa_engine::specification_output::SaveError::Publish(error) => {
+                    pyo3::exceptions::PyValueError::new_err(error.message())
+                }
+            })
+    }
     fn output<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyBytes>> {
         self.inner.output().map(|bytes| PyBytes::new(py, bytes))
     }

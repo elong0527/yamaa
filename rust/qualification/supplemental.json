@@ -1629,6 +1629,10 @@
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/file_publication.md",
       "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/file_preparation.md",
+      "role": "documentation"
     }
   ]
 }

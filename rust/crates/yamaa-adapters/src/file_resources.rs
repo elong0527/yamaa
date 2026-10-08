@@ -168,7 +168,15 @@ impl Resources {
     /// Keep the same selected roots and captures for data declared by this entry.
     pub fn select_entry_base(&mut self, identity: &str) -> Result<(), Error> {
         let base = file_base(identity)?;
-        self.open(identity)?;
+        // This is a canonical identity returned by the reader, not an authored
+        // path. Selected physical root names can contain a literal backslash on
+        // Unix. Keep canonical containment and descriptor/link checks intact.
+        let path = identity.strip_prefix('/').ok_or(Error::InvalidPath)?;
+        let anchor = self.relative_anchor(&[String::new()], path)?;
+        self.open_anchor(anchor).map_err(|error| match error {
+            WalkError::NoEntry => Error::Missing,
+            WalkError::Failure(error) => error,
+        })?;
         self.base = base;
         Ok(())
     }

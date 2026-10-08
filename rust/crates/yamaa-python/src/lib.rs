@@ -1,5 +1,7 @@
 //! Optional Python installation probe; this is not an execution backend.
 use pyo3::prelude::*;
+#[cfg(unix)]
+mod file_specification;
 mod function_callback;
 mod reference_catalog;
 mod schema_service;
@@ -250,6 +252,14 @@ fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 
 #[pymodule]
 fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    #[cfg(unix)]
+    {
+        module.add_class::<file_specification::Specification>()?;
+        module.add_function(wrap_pyfunction!(
+            file_specification::_prepare_file_specification,
+            module
+        )?)?;
+    }
     module.add_function(wrap_pyfunction!(
         specification_inheritance::_prepare_document,
         module

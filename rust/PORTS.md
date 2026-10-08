@@ -8,13 +8,13 @@ and codec interfaces are native traits; adapters translate values and errors.
 
 | Port | Owner | Current implementations | Failures |
 | --- | --- | --- | --- |
-| `specification_run::SourcePort` | engine | Python/R metadata and capture bridges; descriptor-backed Python resource adapter; Unix Rust/R study-source adapter; native fakes | Known inspection findings in declaration order; original opaque error; invalid snapshot counter |
+| `specification_run::SourcePort` | engine | Python/R metadata and capture bridges; descriptor-backed Python resource adapter; Unix Rust file lifecycle in both hosts; native fakes | Known inspection findings in declaration order; original opaque error; invalid snapshot counter |
 | `specification_run::SourceDecoder` | engine | Adapter CSV/Parquet/Arrow decoder; engine test fake | Original decoder error; byte/cell capacity limits |
 | `specification_output::ArtifactEncoder` | engine | Adapter CSV/Parquet encoders; native test fake | Original codec error; checked output byte limit |
 | `specification_output::OutputReport` | engine | Portable JSON report formatter; native test fake | Observation or report-budget failure before publication |
-| `specification_output::ArtifactPort` | engine | Python/R publication bridges; Unix explicit-target Rust/R publisher; native test fake | Original opaque publication error, without retry |
+| `specification_output::ArtifactPort` | engine | Python/R publication bridges; Unix explicit-target Rust/Python/R publisher; native test fake | Original opaque publication error, without retry |
 | `TableAccess` | core | Immutable Arrow snapshots, core normalized CSV tables and engine output tables; test fakes | Bounds or original opaque cell-access error |
-| `inheritance::SourcePort` | engine | Existing inheritance bridge | Source failure or traversal resource limit |
+| `inheritance::SourcePort` | engine | Existing inheritance bridge; Unix native captured-file port | Source failure or traversal resource limit |
 | `function_invocation::FunctionPort` and `dataset::FunctionBindings` | engine | Python/R native callback bridges | Original host exception, rejected representation or typed invocation failure |
 
 ## Current lifecycle
@@ -106,7 +106,7 @@ the capture callback or borrows a source/result buffer. Installed tests compare
 all six complete reports and exact saved bytes, and check failed-save rejection,
 opaque publication errors/interruptions, repeated saves and expired R handles.
 These internal results supply the build/save boundary for the public API;
-host data-frame/issue/log properties and file-path entry points remain to connect.
+host data-frame/issue/log properties and the public file-path facade remain to connect.
 
 Successful response preparation retains the engine's accepted typed execution.
 Publication does not infer acceptance from serialized JSON or decode its own IPC
@@ -242,7 +242,7 @@ preserving their qualified request timing. Seven independently authored complete
 reports match actual reference-file failures, including multiple failures; installed
 hosts pin original error/interrupt identity, malformed replies and repeated builds.
 Python exercises descriptor-backed metadata inspection without reference semantic
-imports. The Unix R study-source adapter supplies the same metadata/capture port over real CSV and Parquet files; entry/layer/environment/codelist filesystem preparation, environment/function preflight and the public facade remain open. Existing reference APIs keep their names and behavior until cutover.
+imports. The Unix file lifecycle supplies native entry/layer preparation and the same metadata/capture port to both hosts; environment/codelist filesystem preparation, environment/function preflight and the public facade remain open. Existing reference APIs keep their names and behavior until cutover.
 
 
 ## Native Unix file resources
@@ -267,8 +267,8 @@ The [qualification scope](crates/yamaa-adapters/tests/fixtures/native_file_resou
 pins real CSV/Parquet input, complete independent reports, cached counters, direct
 byte equality and registered handle lifetime in installed R without Python. The
 existing approved-root/link/fallback behavior remains pending #1751's separate
-path-policy approval. This Unix implementation does not provide the public file
-facade, specification/inheritance filesystem preparation or atomic publication.
+path-policy approval. The shared file-preparation and explicit publication adapters compose this reader;
+Windows native IO and the public file facade remain open.
 
 
 ## Explicit-target native publication
@@ -292,3 +292,22 @@ port without an R publication callback. The [qualification scope](crates/yamaa-a
 covers complete independent CSV reports, retained Parquet bytes, repeated saves,
 failed-build rejection, prior-artifact preservation and registered handle lifetime.
 Public save integration and Windows native publication remain open.
+
+
+## Shared native file preparation
+
+`file_preparation::FileSpecification` owns a prepared model and retained approved-root
+resources. Both private bindings marshal paths and metadata only. The shared service
+captures entry and parent YAML, selects the shipped schema and preparation lifecycle,
+retains parent provenance, lexically rebases inherited paths and compiles before
+study authority. Checks use the retained compiled model without reading study data.
+Build repeats metadata inspection and cached snapshot verification, and returns an
+owned result for explicit native save. Opaque native resource failures remain boundary
+errors; the two closed portable resource causes use complete failed observations.
+
+The [qualification scope](crates/yamaa-adapters/tests/fixtures/file_preparation.md)
+covers seventeen complete original reports in both installed Unix hosts, independent
+early findings, cached counters, exact saved CSV and retained failed-save gates. R
+runs without Python and uses registered handles. The public facade, Windows native
+file transport and complete environment/function/workflow/submission semantics remain
+open. No reference-assisted qualification level or path authorization is promoted.
