@@ -252,12 +252,16 @@ backs the private registered R file-resource bridge. Approved root descriptors s
 held for the adapter lifetime; individual components open without following links,
 and every parent/file identity is checked again before accepting the file. Only
 an absent entry allows a relative fallback. Observed permission and wrong-kind
-failures are terminal. First captures check size before allocation, read bounded
+failures are terminal; permissions and generic IO remain opaque unreadable errors.
+The architecture guard admits only the pinned Unix filesystem dependency in this
+adapter, retaining pure core/engine boundaries. First captures check size before allocation, read bounded
 chunks and compare a fresh read directly. Reuse verifies all retained aliases;
 limits and changes never create a snapshot. Declaring-file views share the same
 selected roots and byte store; every accepted base/path spelling is retained even
 when two spellings resolve to one key. Metadata resolution does not capture bytes.
-The adapter interprets no study data.
+Physical cache hits require a current device/inode witness and valid retained
+aliases. Stale physical entries cannot poison a never-captured path, while old
+path keys retain their snapshot and fail closed. The adapter interprets no study data.
 
 The [qualification scope](crates/yamaa-adapters/tests/fixtures/native_file_resources.md)
 pins real CSV/Parquet input, complete independent reports, cached counters, direct

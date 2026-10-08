@@ -84,6 +84,7 @@ fn cached_growth_and_shrink_are_changes_and_refusal_does_not_create_a_snapshot()
     assert!(resources.capture("a", 2).unwrap().1);
     fs::write(&name, b"123").unwrap();
     assert_eq!(resources.capture("a", 100), Err(Error::Changed));
+    assert_eq!(resources.capture("a", 2), Err(Error::Changed));
     fs::write(&name, b"1").unwrap();
     assert_eq!(resources.capture("a", 100), Err(Error::Changed));
     assert_eq!(resources.capture_reads(), 1);
@@ -253,11 +254,23 @@ fn permission_failures_are_terminal_before_any_later_fallback_is_read() {
     let mut resources = study.resources();
     let permissions = fs::metadata(&earlier).unwrap().permissions();
     fs::set_permissions(&earlier, fs::Permissions::from_mode(0o0)).unwrap();
+    if fs::File::open(&earlier).is_ok() {
+        fs::set_permissions(&earlier, permissions).unwrap();
+        eprintln!("permission checks bypassed by this process; DAC case not exercised");
+        return;
+    }
     let inspected = resources.inspect("blocked");
     let captured = resources.capture("blocked", 32);
     fs::set_permissions(&earlier, permissions).unwrap();
-    assert_eq!(inspected, Err(Error::Missing));
-    assert_eq!(captured, Err(Error::Missing));
+    assert_eq!(
+        <Resources as yamaa_engine::specification_run::SourcePort>::resource_failure(
+            &resources,
+            inspected.as_ref().unwrap_err()
+        ),
+        None
+    );
+    assert_eq!(inspected, Err(Error::Unreadable));
+    assert_eq!(captured, Err(Error::Unreadable));
     assert_eq!(resources.capture_reads(), 0);
     assert_eq!(
         resources.capture("blocked", 32).unwrap().0.as_ref(),
@@ -277,12 +290,59 @@ fn unsearchable_directory_does_not_fall_back_to_a_different_file() {
     let mut resources = study.resources();
     let permissions = fs::metadata(&earlier).unwrap().permissions();
     fs::set_permissions(&earlier, fs::Permissions::from_mode(0o400)).unwrap();
+    if fs::metadata(earlier.join("blocked")).is_ok() {
+        fs::set_permissions(&earlier, permissions).unwrap();
+        eprintln!("permission checks bypassed by this process; DAC case not exercised");
+        return;
+    }
     let inspected = resources.inspect("private/blocked");
     let captured = resources.capture("private/blocked", 32);
     fs::set_permissions(&earlier, permissions).unwrap();
-    assert_eq!(inspected, Err(Error::Missing));
-    assert_eq!(captured, Err(Error::Missing));
+    assert_eq!(
+        <Resources as yamaa_engine::specification_run::SourcePort>::resource_failure(
+            &resources,
+            inspected.as_ref().unwrap_err()
+        ),
+        None
+    );
+    assert_eq!(inspected, Err(Error::Unreadable));
+    assert_eq!(captured, Err(Error::Unreadable));
     assert_eq!(resources.capture_reads(), 0);
+}
+
+#[test]
+fn an_unlinked_snapshot_does_not_poison_a_new_path_to_the_remaining_file() {
+    let study = Study::new();
+    fs::write(study.path("project/spec/a"), b"original").unwrap();
+    fs::hard_link(study.path("project/spec/a"), study.path("project/spec/c")).unwrap();
+    let mut resources = study.resources();
+    let (first, _) = resources.capture("a", 32).unwrap();
+    fs::remove_file(study.path("project/spec/a")).unwrap();
+    let (next, created) = resources.capture("c", 32).unwrap();
+    assert!(created);
+    assert_eq!(next.as_ref(), b"original");
+    assert_eq!(first.as_ref(), b"original");
+    assert_eq!(resources.capture_reads(), 2);
+    assert_eq!(resources.capture("a", 32), Err(Error::Missing));
+    assert!(!resources.capture("c", 32).unwrap().1);
+}
+
+#[test]
+fn a_changed_snapshot_stays_failed_for_its_path_while_a_new_path_captures_fresh_bytes() {
+    let study = Study::new();
+    fs::write(study.path("project/spec/a"), b"original").unwrap();
+    fs::hard_link(study.path("project/spec/a"), study.path("project/spec/c")).unwrap();
+    let mut resources = study.resources();
+    let (first, _) = resources.capture("a", 32).unwrap();
+    fs::write(study.path("project/spec/a"), b"changed!").unwrap();
+    assert_eq!(resources.capture("a", 32), Err(Error::Changed));
+    let (next, created) = resources.capture("c", 32).unwrap();
+    assert!(created);
+    assert_eq!(next.as_ref(), b"changed!");
+    assert_eq!(first.as_ref(), b"original");
+    assert_eq!(resources.capture_reads(), 2);
+    assert_eq!(resources.capture("a", 32), Err(Error::Changed));
+    assert!(!resources.capture("c", 32).unwrap().1);
 }
 
 #[test]

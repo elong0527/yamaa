@@ -18,6 +18,7 @@ const MAX_CAPTURED_BYTES: usize = 67_108_864;
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
     Missing,
+    Unreadable,
     NotRegularFile,
     InvalidRoot,
     InvalidBase,
@@ -31,6 +32,7 @@ impl Error {
     pub fn message(&self) -> &'static str {
         match self {
             Self::Missing => "resource path missing",
+            Self::Unreadable => "resource path is not readable",
             Self::NotRegularFile => "resource path is not a regular file",
             Self::InvalidRoot => "invalid approved resource root",
             Self::InvalidBase => "invalid resource base directory",
@@ -177,12 +179,29 @@ impl Resources {
         maximum: usize,
     ) -> Result<(Arc<[u8]>, bool), Error> {
         let mut opened = self.open_at(&base, written)?;
+        let length = opened.file.metadata().map_err(|_| Error::Unreadable)?.len();
+        if !self.by_path.contains_key(&opened.key) && length > maximum as u64 {
+            return Err(Error::Limit);
+        }
         let physical = (opened.identity.0, opened.identity.1);
-        let accepted = self
-            .by_path
-            .get(&opened.key)
-            .or_else(|| self.by_identity.get(&physical))
-            .copied();
+        let accepted = if let Some(&index) = self.by_path.get(&opened.key) {
+            Some(index)
+        } else if let Some(&index) = self.by_identity.get(&physical) {
+            // Numeric inode identities may be reused after unlink/replacement.
+            // Only a current physical witness and fully valid old aliases allow
+            // reuse. Previously captured path keys always retain their snapshot.
+            if length == self.snapshots[index].bytes.len() as u64
+                && self.physical_witness(index, physical)
+                && self.verify(index).is_ok()
+            {
+                Some(index)
+            } else {
+                self.by_identity.remove(&physical);
+                None
+            }
+        } else {
+            None
+        };
         if !self.by_path.contains_key(&opened.key) && self.by_path.len() >= MAX_SNAPSHOTS {
             return Err(Error::Limit);
         }
@@ -258,6 +277,16 @@ impl Resources {
             }
         }
         Ok(())
+    }
+    fn physical_witness(&self, index: usize, physical: (i128, i128)) -> bool {
+        self.snapshots[index]
+            .paths
+            .iter()
+            .any(|(key, written, base)| {
+                self.open_at(base, written).is_ok_and(|opened| {
+                    opened.key == *key && (opened.identity.0, opened.identity.1) == physical
+                })
+            })
     }
     fn anchors(&self, base: &[String], written: &str) -> Result<Vec<Anchor>, Error> {
         bounded(written)?;
@@ -379,7 +408,7 @@ impl Resources {
                     if matches!(error, rustix::io::Errno::NOENT | rustix::io::Errno::NOTDIR) {
                         WalkError::NoEntry
                     } else {
-                        WalkError::Failure(Error::Missing)
+                        WalkError::Failure(Error::Unreadable)
                     }
                 })?;
             if kind(&initial) == FileType::Symlink {
@@ -406,11 +435,13 @@ impl Resources {
             let descriptor =
                 fs::openat(parent, name.as_str(), flags, Mode::empty()).map_err(|_| {
                     match fs::statat(parent, name.as_str(), AtFlags::SYMLINK_NOFOLLOW) {
-                        Ok(current) if identity(&current) == identity(&initial) => Error::Missing,
+                        Ok(current) if identity(&current) == identity(&initial) => {
+                            Error::Unreadable
+                        }
                         _ => Error::Changed,
                     }
                 })?;
-            let status = fs::fstat(&descriptor).map_err(|_| Error::Missing)?;
+            let status = fs::fstat(&descriptor).map_err(|_| Error::Unreadable)?;
             if identity(&initial) != identity(&status) {
                 return Err(Error::Changed.into());
             }
@@ -515,7 +546,7 @@ fn rooted_segments(path: &str) -> Option<Segments> {
     Some(result)
 }
 fn read_bounded(file: &mut File, maximum: usize) -> Result<Vec<u8>, Error> {
-    if file.metadata().map_err(|_| Error::Missing)?.len() > maximum as u64 {
+    if file.metadata().map_err(|_| Error::Unreadable)?.len() > maximum as u64 {
         return Err(Error::Limit);
     }
     let mut bytes = Vec::new();
@@ -527,7 +558,7 @@ fn read_bounded(file: &mut File, maximum: usize) -> Result<Vec<u8>, Error> {
             .min(buffer.len());
         let count = file
             .read(&mut buffer[..remaining])
-            .map_err(|_| Error::Missing)?;
+            .map_err(|_| Error::Unreadable)?;
         if count == 0 {
             return Ok(bytes);
         }
@@ -553,4 +584,36 @@ fn file_base(identity: &str) -> Result<Segments, Error> {
     }
     segments.pop();
     Ok(segments)
+}
+
+#[cfg(test)]
+mod identity_cache_tests {
+    use super::*;
+    #[test]
+    fn reused_numeric_identity_without_a_current_physical_witness_is_a_fresh_capture() {
+        struct Directory(std::path::PathBuf);
+        impl Drop for Directory {
+            fn drop(&mut self) {
+                std::fs::remove_dir_all(&self.0).unwrap();
+            }
+        }
+        let dir = Directory(
+            std::env::temp_dir().join(format!("yamaa-stale-inode-{}", std::process::id())),
+        );
+        std::fs::create_dir(&dir.0).unwrap();
+        std::fs::write(dir.0.join("a"), b"same bytes").unwrap();
+        std::fs::write(dir.0.join("c"), b"same bytes").unwrap();
+        let root = dir.0.to_str().unwrap();
+        let mut resources = Resources::new(root, root, &[]).unwrap();
+        resources.capture("a", 32).unwrap();
+        let opened = resources.open("c").unwrap();
+        // Deterministically model a reused device/inode cache key. Equality of
+        // bytes at a surviving old spelling cannot establish this new identity.
+        resources
+            .by_identity
+            .insert((opened.identity.0, opened.identity.1), 0);
+        assert!(resources.capture("c", 32).unwrap().1);
+        assert_eq!(resources.capture_reads(), 2);
+        assert!(!resources.capture("a", 32).unwrap().1);
+    }
 }
