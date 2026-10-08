@@ -25,12 +25,15 @@ The existing path, root, snapshot and byte limits remain in force.
 Publication retains the selected root and parent handles. A nonblocking named
 mutex keyed by the direct physical directory identity coordinates native writers
 across processes and sessions; it grants no filesystem authority. Private staging
-directories use a protected owner-rights DACL inherited by their children. The
+directories use a protected DACL granting only the effective token user access, inherited by their children. The
 candidate is created exclusively, written, flushed and synchronized through its
-held handle. [FILE_RENAME_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info)
+held handle. [NtSetInformationFile](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntsetinformationfile) with a counted [FILE_RENAME_INFORMATION](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)
 replaces one child of the held parent by renaming the held source. Name changes
 cannot redirect the source or parent handle. Fallible cleanup preserves observed
-foreign entries and retains both operation and cleanup errors. Successful
+foreign entries and retains both operation and cleanup errors. Published candidates deliberately retain access restricted to the publishing user,
+matching the Unix candidate mode 0600. Replacement does not preserve an old
+target ACL or inherit broader parent-directory grants; private staging ACLs are
+not a final support promise for arbitrary security policies. Successful
 replacement keeps its successful-save result even if later cleanup fails.
 
 Unsafe SDK calls are confined to the private `windows_file` module, with owned

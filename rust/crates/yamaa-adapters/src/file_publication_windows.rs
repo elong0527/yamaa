@@ -190,7 +190,7 @@ impl Publisher {
         &mut self,
         declared: &str,
         content: &[u8],
-        checkpoint: impl FnOnce(&str) -> Result<(), Error>,
+        checkpoint: impl FnOnce(&mut Pending<'_>) -> Result<(), Error>,
     ) -> Result<(), Error> {
         if declared != self.declared {
             return Err(Error::PathMismatch);
@@ -212,8 +212,11 @@ impl Publisher {
                 return Err(Error::Changed);
             }
             self.check_target()?;
-            checkpoint(&temporary.name)?;
-            self.parent.replace(file, &self.name)?;
+            checkpoint(&mut temporary)?;
+            self.parent.replace(
+                temporary.candidate.as_ref().ok_or(Error::Changed)?,
+                &self.name,
+            )?;
             temporary.candidate.take();
             Ok(())
         })();
@@ -401,7 +404,10 @@ mod tests {
             "output.csv/..",
             "output.csv:stream",
         ] {
-            assert!(Publisher::new("output.csv", study.0.join(target).to_str().unwrap()).is_err());
+            // PathBuf::join normalizes dot components under a verbatim Windows root.
+            // Preserve the caller spelling so this actually probes refused file intent.
+            let written = format!("{}\\{target}", study.0.display());
+            assert!(Publisher::new("output.csv", &written).is_err(), "{written}");
         }
         assert_eq!(std::fs::read(study.0.join("output.csv")).unwrap(), b"old");
         assert_eq!(study.names(), ["output.csv"]);
@@ -439,7 +445,12 @@ mod tests {
         let study = Study::new();
         std::fs::write(study.0.join("output.csv"), b"old").unwrap();
         let mut publisher = study.publisher("output.csv");
-        let result = publisher.publish_with_checkpoint("output.csv", b"checked", |name| {
+        let result = publisher.publish_with_checkpoint("output.csv", b"checked", |temporary| {
+            // Windows refuses renaming a directory while a descendant file is open.
+            // Inject an operation failure after closing the candidate, then substitute
+            // its staging name to exercise the remaining held-directory cleanup guard.
+            temporary.candidate.take();
+            let name = &temporary.name;
             std::fs::rename(study.0.join(name), study.0.join("moved-stage")).unwrap();
             std::fs::create_dir(study.0.join(name)).unwrap();
             std::fs::write(study.0.join(name).join("foreign"), b"retained").unwrap();

@@ -252,33 +252,128 @@ fn require_kind(file: &File, required: Kind) -> io::Result<()> {
 
 use std::os::windows::io::OwnedHandle;
 use windows_sys::{
-    Wdk::Storage::FileSystem::{FILE_CREATE, FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE},
+    Wdk::Storage::FileSystem::{
+        FileRenameInformation, NtSetInformationFile, FILE_CREATE, FILE_DIRECTORY_FILE,
+        FILE_NON_DIRECTORY_FILE, FILE_RENAME_INFORMATION,
+    },
     Win32::{
-        Foundation::{LocalFree, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT},
+        Foundation::{
+            LocalFree, ERROR_INSUFFICIENT_BUFFER, ERROR_NO_TOKEN, WAIT_ABANDONED, WAIT_OBJECT_0,
+            WAIT_TIMEOUT,
+        },
         Security::{
             Authorization::{
-                ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+                ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
+                SDDL_REVISION_1,
             },
-            PSECURITY_DESCRIPTOR,
+            GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER,
         },
         Storage::FileSystem::{
-            FileDispositionInfo, FileRenameInfo, SetFileInformationByHandle, DELETE,
-            FILE_DISPOSITION_INFO, FILE_RENAME_INFO, FILE_WRITE_DATA,
+            FileDispositionInfo, SetFileInformationByHandle, DELETE, FILE_DISPOSITION_INFO,
+            FILE_WRITE_DATA,
         },
-        System::Threading::{CreateMutexW, ReleaseMutex, WaitForSingleObject},
+        System::Threading::{
+            CreateMutexW, GetCurrentProcess, GetCurrentThread, OpenProcessToken, OpenThreadToken,
+            ReleaseMutex, WaitForSingleObject,
+        },
     },
 };
 
-struct PrivateSecurity(PSECURITY_DESCRIPTOR);
+struct LocalAllocation(*mut core::ffi::c_void);
+impl Drop for LocalAllocation {
+    fn drop(&mut self) {
+        // SAFETY: the SDK allocated this buffer with LocalAlloc; this owner frees it once.
+        unsafe {
+            LocalFree(self.0);
+        }
+    }
+}
+
+/// Use the effective user, rather than the token's possibly group-valued default owner.
+/// An impersonating thread never falls back after an access/anonymous-token failure.
+fn effective_user_sid() -> io::Result<String> {
+    let mut raw = ptr::null_mut();
+    // SAFETY: pseudo-thread handle is valid and the writable output lives through the call.
+    let ok = unsafe { OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, 1, &mut raw) };
+    if ok == 0 {
+        let error = io::Error::last_os_error();
+        if error.raw_os_error() != Some(ERROR_NO_TOKEN as i32) {
+            return Err(error);
+        }
+        // SAFETY: with no thread token, query the process token; no privileges are changed.
+        if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    // SAFETY: successful Open*Token transferred one owned, non-null token handle.
+    let token = unsafe { OwnedHandle::from_raw_handle(raw) };
+    let mut bytes = 0;
+    // SAFETY: NULL/zero queries only the required size into this live output slot.
+    let ok = unsafe {
+        GetTokenInformation(
+            token.as_raw_handle(),
+            TokenUser,
+            ptr::null_mut(),
+            0,
+            &mut bytes,
+        )
+    };
+    let error = io::Error::last_os_error();
+    if ok != 0 || error.raw_os_error() != Some(ERROR_INSUFFICIENT_BUFFER as i32) {
+        return Err(error);
+    }
+    if bytes < size_of::<TOKEN_USER>() as u32 || bytes > 65_536 {
+        return Err(io::Error::other("invalid token user buffer size"));
+    }
+    let mut buffer = vec![0usize; (bytes as usize).div_ceil(size_of::<usize>())];
+    let capacity = bytes;
+    // SAFETY: usize storage has TOKEN_USER alignment and at least capacity writable bytes.
+    // The token and resulting SID-containing buffer remain alive through SID conversion.
+    if unsafe {
+        GetTokenInformation(
+            token.as_raw_handle(),
+            TokenUser,
+            buffer.as_mut_ptr().cast(),
+            capacity,
+            &mut bytes,
+        )
+    } == 0
+    {
+        return Err(io::Error::last_os_error());
+    }
+    if bytes < size_of::<TOKEN_USER>() as u32 || bytes > capacity {
+        return Err(io::Error::other("invalid returned token user size"));
+    }
+    // SAFETY: successful TokenUser query initialized this aligned TOKEN_USER header.
+    let sid = unsafe { (*buffer.as_ptr().cast::<TOKEN_USER>()).User.Sid };
+    let mut text = ptr::null_mut();
+    // SAFETY: the SDK-produced SID points into the still-held TokenUser buffer.
+    if unsafe { ConvertSidToStringSidW(sid, &mut text) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let _allocation = LocalAllocation(text.cast());
+    let mut length = 0;
+    // SAFETY: successful conversion guarantees an allocated NUL-terminated UTF-16 SID.
+    // Its standard numeric spelling is bounded by Windows' maximum SID subauthority count.
+    while unsafe { *text.add(length) } != 0 {
+        length += 1;
+    }
+    // SAFETY: these length UTF-16 units precede the SDK-guaranteed terminator.
+    String::from_utf16(unsafe { std::slice::from_raw_parts(text, length) })
+        .map_err(|_| io::Error::other("invalid token user SID spelling"))
+}
+struct PrivateSecurity(LocalAllocation);
 impl PrivateSecurity {
     fn new() -> io::Result<Self> {
-        // Protected owner-rights DACL, inherited by stage children.
-        let sddl: Vec<u16> = "D:P(A;OICI;FA;;;OW)"
+        let sid = effective_user_sid()?;
+        // Protected, inheritable full access for the effective user only. Set the owner
+        // explicitly too; an administrator-group default owner must not exclude this user.
+        let sddl: Vec<u16> = format!("O:{sid}D:P(A;OICI;FA;;;{sid})")
             .encode_utf16()
             .chain(Some(0))
             .collect();
         let mut descriptor = ptr::null_mut();
-        // SAFETY: terminated constant string and writable output pointer live through the call.
+        // SAFETY: terminated SDK-formatted SID/SDDL and writable output live through the call.
         let ok = unsafe {
             ConvertStringSecurityDescriptorToSecurityDescriptorW(
                 sddl.as_ptr(),
@@ -290,15 +385,7 @@ impl PrivateSecurity {
         if ok == 0 {
             return Err(io::Error::last_os_error());
         }
-        Ok(Self(descriptor))
-    }
-}
-impl Drop for PrivateSecurity {
-    fn drop(&mut self) {
-        // SAFETY: successful SDDL conversion owns this LocalAlloc allocation exactly once.
-        unsafe {
-            LocalFree(self.0);
-        }
+        Ok(Self(LocalAllocation(descriptor)))
     }
 }
 impl Directory {
@@ -309,7 +396,7 @@ impl Directory {
             FILE_READ_ATTRIBUTES | FILE_TRAVERSE | SYNCHRONIZE | DELETE,
             FILE_CREATE,
             FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
-            security.0,
+            security.0 .0,
         )?;
         // FILE_CREATE plus FILE_DIRECTORY_FILE grants one newly created directory
         // handle. Return that ownership before fallible metadata checks so callers
@@ -333,14 +420,14 @@ impl Directory {
     /// Rename the held source to one validated child of this held directory.
     pub fn replace(&self, source: &File, name: &str) -> io::Result<()> {
         let name = child_name(name)?;
-        let offset = std::mem::offset_of!(FILE_RENAME_INFO, FileName);
-        let bytes = offset + name.len() * size_of::<u16>();
+        let bytes = size_of::<FILE_RENAME_INFORMATION>() + name.len() * size_of::<u16>();
         let mut buffer = vec![0usize; bytes.div_ceil(size_of::<usize>())];
-        let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFO>();
-        // SAFETY: usize storage supplies SDK alignment and the full header plus counted
-        // UTF-16 tail, initialized to zero. Both handles and buffers outlive the call.
-        // The source handle owns DELETE access. No full path or stream syntax is admitted.
-        let ok = unsafe {
+        let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFORMATION>();
+        let mut iosb = IO_STATUS_BLOCK::default();
+        // SAFETY: usize storage supplies SDK alignment and the entire header plus counted
+        // UTF-16 tail, initialized to zero. The synchronous source handle owns DELETE access.
+        // The held destination directory and all buffers outlive the call; one child only.
+        let code = unsafe {
             (*info).Anonymous.ReplaceIfExists = true;
             (*info).RootDirectory = self.0.as_raw_handle();
             (*info).FileNameLength = (name.len() * 2) as u32;
@@ -349,15 +436,19 @@ impl Directory {
                 ptr::addr_of_mut!((*info).FileName).cast(),
                 name.len(),
             );
-            SetFileInformationByHandle(
+            NtSetInformationFile(
                 source.as_raw_handle(),
-                FileRenameInfo,
+                &mut iosb,
                 info.cast(),
                 bytes as u32,
+                FileRenameInformation,
             )
         };
-        if ok == 0 {
-            Err(io::Error::last_os_error())
+        if code < 0 {
+            // SAFETY: status conversion borrows no buffers and changes no state.
+            Err(io::Error::from_raw_os_error(
+                unsafe { RtlNtStatusToDosError(code) } as i32,
+            ))
         } else {
             Ok(())
         }
@@ -579,6 +670,122 @@ mod tests {
             nested.inspect("unicode-\u{03bc}.csv").unwrap().identity,
             status(&file).unwrap().identity
         );
+    }
+    #[test]
+    fn private_staging_grants_the_effective_user_reopened_access() {
+        let sandbox = Sandbox::new();
+        let directory = sandbox.root();
+        let private = directory.create_private_directory("private-stage").unwrap();
+        let file = private.create_file("candidate.part").unwrap();
+        let reopened = directory.directory("private-stage").unwrap();
+        assert_eq!(reopened.identity().unwrap(), private.identity().unwrap());
+        assert_eq!(
+            status(&reopened.read_file("candidate.part").unwrap())
+                .unwrap()
+                .identity,
+            status(&file).unwrap().identity
+        );
+        drop(file);
+        drop(reopened);
+        drop(private);
+    }
+    #[test]
+    fn publication_keeps_private_permissions_instead_of_inheriting_other_users() {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::{
+            Security::{
+                Authorization::{
+                    ConvertSecurityDescriptorToStringSecurityDescriptorW, GetSecurityInfo,
+                    SE_FILE_OBJECT,
+                },
+                SetFileSecurityW, DACL_SECURITY_INFORMATION,
+            },
+            Storage::FileSystem::READ_CONTROL,
+        };
+        fn dacl(path: &Path) -> String {
+            let file = OpenOptions::new()
+                .access_mode(READ_CONTROL)
+                .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+                .open(path)
+                .unwrap();
+            let mut descriptor = ptr::null_mut();
+            // SAFETY: the owned fixture handle grants READ_CONTROL; output slots stay live.
+            let code = unsafe {
+                GetSecurityInfo(
+                    file.as_raw_handle(),
+                    SE_FILE_OBJECT,
+                    DACL_SECURITY_INFORMATION,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    &mut descriptor,
+                )
+            };
+            assert_eq!(code, 0);
+            let _descriptor = LocalAllocation(descriptor);
+            let mut text = ptr::null_mut();
+            // SAFETY: SDK-produced descriptor stays owned until the converted text is copied.
+            assert_ne!(
+                unsafe {
+                    ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                        descriptor,
+                        SDDL_REVISION_1,
+                        DACL_SECURITY_INFORMATION,
+                        &mut text,
+                        ptr::null_mut(),
+                    )
+                },
+                0
+            );
+            let _text = LocalAllocation(text.cast());
+            let mut length = 0;
+            // SAFETY: conversion guarantees NUL-terminated UTF-16 text in its allocation.
+            while unsafe { *text.add(length) } != 0 {
+                length += 1;
+            }
+            // SAFETY: length addresses only the initialized text preceding its terminator.
+            String::from_utf16(unsafe { std::slice::from_raw_parts(text, length) }).unwrap()
+        }
+        let sandbox = Sandbox::new();
+        let sid = effective_user_sid().unwrap();
+        let sddl: Vec<u16> = format!("O:{sid}D:P(A;OICI;FA;;;{sid})(A;OICI;FR;;;BU)")
+            .encode_utf16()
+            .chain(Some(0))
+            .collect();
+        let mut descriptor = ptr::null_mut();
+        // SAFETY: terminated fixture SDDL and writable output live through the SDK call.
+        assert_ne!(
+            unsafe {
+                ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    sddl.as_ptr(),
+                    SDDL_REVISION_1,
+                    &mut descriptor,
+                    ptr::null_mut(),
+                )
+            },
+            0
+        );
+        let _descriptor = LocalAllocation(descriptor);
+        let path: Vec<u16> = sandbox.0.as_os_str().encode_wide().chain(Some(0)).collect();
+        // SAFETY: fixture-owned path is terminated and descriptor remains live.
+        assert_ne!(
+            unsafe { SetFileSecurityW(path.as_ptr(), DACL_SECURITY_INFORMATION, descriptor) },
+            0
+        );
+        assert!(dacl(&sandbox.0).contains(";;;BU)"));
+        let target = sandbox.0.join("output.csv");
+        std::fs::write(&target, b"previous").unwrap();
+        assert!(dacl(&target).contains(";;;BU)"));
+        let mut publisher =
+            crate::file_publication::Publisher::new("output.csv", target.to_str().unwrap())
+                .unwrap();
+        publisher.publish("output.csv", b"checked").unwrap();
+        let published = dacl(&target);
+        assert!(!published.contains(";;;BU)"), "{published}");
+        assert!(published.contains(&sid), "{published}");
+        assert_eq!(std::fs::read(target).unwrap(), b"checked");
     }
     #[test]
     fn physical_identity_matches_hardlinks_and_changes_on_replacement() {
