@@ -3416,7 +3416,7 @@ fn row_reductions_match_complete_independent_reports_and_exact_csv() {
     replay_source_selection_truth(
         include_str!("fixtures/row_reductions.tsv"),
         "row-reduction",
-        23,
+        25,
     );
 }
 #[test]

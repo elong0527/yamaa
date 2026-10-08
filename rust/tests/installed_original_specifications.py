@@ -509,7 +509,7 @@ class OriginalSpecifications(unittest.TestCase):
         self._source_selection_reports("original-not-missing.tsv", "column-check", 10)
 
     def test_row_reductions_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("row-reductions.tsv", "row-reduction", 23)
+        self._source_selection_reports("row-reductions.tsv", "row-reduction", 25)
 
     def test_row_column_checks_complete_reports_and_exact_csv(self):
         self._source_selection_reports("row-column-checks.tsv", "row-column", 48)
