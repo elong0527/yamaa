@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-07 against main `fc7eca7fdd96d828ce5234d1d4204b098f301988`
+Reconciled 2026-10-08 against main `a6bcd5dbae458fec96998d5f257042b216463d2b`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -50,6 +50,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1790 | Original scalar column literals and column/row conversion recovery wrappers. |
 | #1791 | Portable window/lookup/predicate findings and three unchanged negative corpus reports. |
 | #1792 | Pure core declared CSV source typing and closed Parquet metadata admission. |
+| #1793 | Bounded Python file capture and classified host source replies with retained exception/condition identity. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -99,21 +100,30 @@ members, plus all 52 independent Parquet binaries in every source archive, match
 directly. Its 67-contract/39-suite catalog and 75 reached canonical causes retain
 private-route qualification, with the 945-row assisted inventory unchanged.
 
-The next serial candidate connects explicit classified source replies in both
-native bridges and bounded actual file capture in Python. Eight complete
-independently authored source-port reports preserve first/later failure and cached
-prefix counters. The Python reader bounds capture and verification, and lazy
-exports permit importing file IO without the reference parser/planner/evaluator.
-Installed actual-file tests cover complete failures/save gates, successful lookup
-reports, exact CSV and save after input removal. Local qualification passes 664
-Rust tests, strict Clippy, 44 tooling tests, 4,805 reference Python tests (94
-platform/optional skips), and all 23 supplemental suites in direct/source-rebuilt
-Python forms (39 original-document, four file-resource and four schema methods).
-R passes strict Status: OK with all 17 scripts. Five native Python, nine R and five
-host-wheel changed members match directly. The 68-contract/40-suite catalog awaits
-its main-based PR, full review and final-head hosted qualification. Whole-project
-resource preflight, actual R filesystem ports, path-policy approval and public
-frontend/API gates remain open.
+#1793 merged as `a6bcd5dbae458fec96998d5f257042b216463d2b` after all 13
+checks, full final-head review and downloaded installed-artifact auditing. Native
+run 37706393083 passed all six jobs on attempt 1, including portable math. Six
+Python forms pass 23 supplemental suites, 39 original-document, four actual-file
+and four schema methods each; both R source forms pass all 17 scripts with strict
+Status: OK. Exact host/native source bytes and all 52 Parquet binaries match.
+Its 68-contract/40-suite catalog and unchanged 945-row assisted inventory retain
+private-route qualification. Python capture and verification are bounded; the
+existing approved-root/link policy remains pending explicit path approval.
+
+The next serial candidate inspects every declared source before the first study
+capture. Core orders inspection, collects known missing/nonregular failures,
+stops on opaque errors or interrupts and refuses changed capture accounting.
+Seven independently authored complete reports match actual reference Python
+metadata failures; their reads/tables stay empty and retained save stays blocked.
+Actual Python filesystem tests forbid reference semantic imports and study reads.
+Local qualification at `57fba5dd8d36b40b05db986f227525274026c20b` passes 670
+Rust tests, strict Clippy, 44 tooling tests, both Python forms with all 23 suites
+(42 original-document, six actual-file and four schema methods), strict R Status:
+OK with 17 scripts, and direct changed-source archive comparisons. Its
+69-contract/40-suite catalog awaits main-based hosted qualification, full review
+and final-head artifact auditing. Existing explicit-byte callbacks may omit
+inspection and preserve their qualified timing. R filesystem adapters,
+environment/function preflight and the public facade remain open.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance
