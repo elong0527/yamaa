@@ -79,6 +79,20 @@ pub(super) fn resolve(value: &Robj) -> std::result::Result<Arc<BuildResult>, Str
         .with(|values| values.borrow().get(&id).and_then(Weak::upgrade))
         .ok_or_else(|| "unknown build result handle".into())
 }
+pub(super) fn store(result: BuildResult) -> std::result::Result<Robj, String> {
+    let handle = ExternalPtr::new(Handle {
+        result: Arc::new(result),
+        identity: Cell::new(0),
+    });
+    let id = address(handle.as_robj())?;
+    handle.identity.set(id);
+    RESULTS.with(|values| {
+        values
+            .borrow_mut()
+            .insert(id, Arc::downgrade(&handle.result));
+    });
+    Ok(handle.into_robj())
+}
 pub(super) fn fields(metadata: &List) -> std::result::Result<Vec<String>, String> {
     if metadata.len() != 5 {
         return Err("invalid report metadata".into());
@@ -203,22 +217,10 @@ fn specification_build(handle: Robj, capture: Function, metadata: List, inspect:
         let fields = fields(&metadata)?;
         let run = resolve_specification(&handle)?;
         let attempt = capture_attempt(&run, capture, inspection(inspect)?);
-        let result = Arc::new(
+        store(
             specification_report::build_result(&run, &attempt, identity(&fields))
                 .map_err(|_| "unsupported or invalid build observation")?,
-        );
-        let handle = ExternalPtr::new(Handle {
-            result,
-            identity: Cell::new(0),
-        });
-        let id = address(handle.as_robj())?;
-        handle.identity.set(id);
-        RESULTS.with(|values| {
-            values
-                .borrow_mut()
-                .insert(id, Arc::downgrade(&handle.result));
-        });
-        Ok(handle.into_robj())
+        )
     })
 }
 #[extendr]

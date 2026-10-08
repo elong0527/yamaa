@@ -55,6 +55,8 @@ pub mod specification_report;
 pub mod typed_csv;
 
 #[cfg(unix)]
+pub mod file_preparation;
+#[cfg(unix)]
 pub mod file_publication;
 #[cfg(unix)]
 pub mod file_resources;

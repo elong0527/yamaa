@@ -2,6 +2,7 @@
 use extendr_api::prelude::*;
 mod file_publication;
 mod file_resources;
+mod file_specification;
 mod function_callback;
 mod inheritance_callback;
 mod scalars;
@@ -280,6 +281,7 @@ extendr_module! {
     use function_callback;
     use file_publication;
 use file_resources;
+use file_specification;
     use inheritance_callback;
     fn engine_info;
     fn analyze_dependencies;
