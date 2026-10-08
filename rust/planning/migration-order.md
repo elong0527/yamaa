@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-08 against main `1ebbfbf66712cc40e2a5e1ad0374094a6073ce46`
+Reconciled 2026-10-08 against main `14da05fa76b3f93249641094294c1255337f2483`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -60,6 +60,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1802 | Shared five-field static verification declaration issues, with no study-data authority. |
 | #1803 | Bounded Unix native file sources, retained roots/aliases and snapshots, terminal opaque IO and registered R transport. |
 | #1805 | Native explicit-target publication, retained private staging, parent writer coordination and explicit failed-cleanup diagnostics. |
+| #1807 | Private native file preparation, captured parent graph and lexical views, cached original builds and direct native saves. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -241,45 +242,49 @@ cleanup failure without claiming that no residue remains. Eight integration and
 five unit cases cover these behaviors. Successful replacement remains the commit
 point and cannot subsequently be reported as a failed save.
 
-Private Unix file preparation captures entry/parent YAML and invokes shipped
-schema and compiled preparation without host semantic callbacks. Runtime
-`0362b3a966ef2b14b3624bf5b2ded5c938a094dc` passes 734 Rust tests/81
-targets, strict Clippy, the dependency guard, 45 tooling tests, both installed
-23-suite Python forms (53 original-document methods), all 17 strict R scripts and
-direct source-byte auditing (eight Python and thirteen R changed members plus
-52 Parquet fixtures). Rebase onto merged publication main preserves its complete
-committed tree before this documentation reconciliation. New assertions that
-confused Arrow IPC bytes with saved CSV were corrected against independent logical
-table truth; saved CSV still matches the original fixtures. Captured YAML stays
-immutable; study snapshots are rechecked and opaque parent IO stops fallback.
-Final main-based hosted qualification, full review and artifact auditing remain
-required. Approved roots and authored-link restrictions await explicit path-policy
-approval.
+Private Unix file preparation merged in [PR #1807](https://github.com/elong0527/yamaa/pull/1807)
+as `14da05fa76b3f93249641094294c1255337f2483` after all 13 checks,
+clean full 17-file review and fresh downloaded-artifact auditing. Native run
+37761823305 passed all six jobs on attempt 1. All six installed Python forms
+pass 23 suites (53 original-document, six file and four schema methods), with
+three Unix-only methods skipped on Windows. Both R forms pass all 17 scripts,
+strict Status: OK and seventeen original file-preparation reports. The unchanged
+85-contract/40-suite catalog, all 52 Parquet fixtures and source archive bytes
+match the exact tested merge. The grammar installation timeout passed an
+unchanged-head rerun before merge. [Final evidence](https://github.com/elong0527/yamaa/pull/1807#issuecomment-6058074040).
 
-The bounded row-template column-check candidate
-`b8e02bc6ce40737a61fd56dcb7f64035446b13ac` passes 735 Rust tests/81
-targets, strict Clippy, 45 tooling tests, both installed 23-suite Python forms
-(54 original methods), all 17 strict R scripts and source-byte auditing. Its
-catalog has 86 contracts across 40 suites. Forty-eight complete reports and exact
-successful CSV bytes match independent truth and actual reference execution with
-candidate imports forbidden. R's first run exposed JSON escape spelling;
-literal UTF-8 reauthoring preserves every decoded expected value and all other
-fixture fields. Both row and non-row plans share immutable column groups and
-existing engine checkpoints. Serial PR, final hosted qualification and review
-remain pending.
+Preparation captures entry/parent YAML and invokes the shipped schema and core
+compiler without host semantic callbacks. Captured YAML stays immutable; study
+snapshots are rechecked and opaque parent IO stops fallback. Local runtime proof
+passed 734 Rust tests/81 targets, strict Clippy, the dependency guard, 45 tooling
+tests, both installed Python forms and all 17 strict R scripts. Earlier assertions
+confused Arrow IPC bytes with CSV; independent logical table truth corrected the
+assertions while saved CSV retained original bytes. Approved roots and authored
+link restrictions remain; the requested read-policy change awaits explicit approval.
 
-Grouped row MEAN/COUNT candidate `3c509890c52fc8fb167a1df3a690377cc621cc2b`
-passes 736 Rust tests/81 targets, strict Clippy, 45 tooling tests, both installed
-23-suite Python forms (55 original methods), all 17 strict R scripts and direct
-source-byte auditing. Its catalog has 87 contracts across 40 suites. Twenty
-successful complete reports with exact CSV and three scope failures match
-independently enumerated truth and actual reference execution. It reuses existing
-engine reductions for direct grouped driver fields and the driver's record star,
-including ordered float bits, missing/empty groups and record versus value counts.
-Serial PR, final hosted qualification and review remain pending. Broader row and
-aggregate expressions, warning severity, predicate gaps, environment/workflow
-admission and the public facade remain open. The packaging-lock policy proposal
-is awaiting maintainer approval; AGENTS.md remains unchanged.
+The combined row compiler candidate `935c04e54abed919618146e3f675a3f9646483f3`
+passes 736 Rust tests/81 targets, strict Clippy, the dependency guard, 45 tooling
+tests, both installed 23-suite Python forms (55 original-document methods), all
+17 strict R scripts and direct source-byte auditing of seven changed Python and
+eight R archive members plus 52 Parquet fixtures. Rebase onto merged file
+preparation preserves its entire committed tree before this documentation update.
+Its catalog has 87 contracts across 40 suites. Final main-based hosted
+qualification, full review and fresh downloaded-artifact auditing remain required.
+
+Forty-eight row-column-check reports preserve declaration order, conversion
+failure timing, later keys, multiple templates and existing engine checkpoints.
+Twenty-five grouped MEAN/COUNT reports include twenty-two exact CSV successes,
+three scope failures and two combined presence-check cases. Every complete report
+matches independently enumerated truth and actual reference execution with native
+imports forbidden. Literal UTF-8 truth preserves every decoded expected value;
+no candidate observations write expected results. Both row and non-row plans share
+immutable column groups. Direct grouped driver reductions use existing engine
+services, preserving ordered float bits, missing/empty groups and record versus
+present-value counts. The 945-row assisted inventory remains unchanged.
+
+Broader rows and aggregate expressions, warning severity, predicate gaps,
+environment/workflow admission and the public facade remain open. The packaging
+lock policy proposal awaits maintainer approval; AGENTS.md remains unchanged.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance
