@@ -286,6 +286,7 @@ What changed:
 | BMI | Num | Derived | BMI = WEIGHTKG / (HEIGHTCM/100)**2, rounded to 1 decimal |
 
 ```yaml
+columns:
   - name: BMI
     type: float
     label: Body Mass Index (kg/m2)
@@ -326,6 +327,7 @@ Excel:
 ```yaml
 keys: [STUDYID, USUBJID, AESEQ]
 
+columns:
   - name: TRTSDTM
     type: datetime
     derivation: ADSL.TRTSDTM         # <- no merge statement anywhere

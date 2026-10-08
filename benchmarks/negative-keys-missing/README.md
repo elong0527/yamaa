@@ -42,8 +42,9 @@ its window can be placed from its study day. Move one column's derivation into
 it and leave the rest where they are:
 
 ```yaml
-- name: AVAL
-  type: float
+columns:
+  - name: AVAL
+    type: float
 
 rows:
   - id: windowed
