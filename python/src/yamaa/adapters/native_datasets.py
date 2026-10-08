@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import json
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
 
 import polars as pl
@@ -256,7 +257,7 @@ def _execute(
         """Capture syntax on first use while preserving source-independent admission."""
         nonlocal aggregate_analyzer
         if aggregate_analyzer is None:
-            import yamaa_native
+            yamaa_native = import_module("yamaa._native")
 
             aggregate_analyzer = bind_aggregate_analyzer(yamaa_native)
         return aggregate_analyzer(text)
@@ -265,7 +266,7 @@ def _execute(
         """Capture syntax on first use while preserving source-independent admission."""
         nonlocal numeric_analyzer
         if numeric_analyzer is None:
-            import yamaa_native
+            yamaa_native = import_module("yamaa._native")
 
             numeric_analyzer = bind_numeric_analyzer(yamaa_native)
         return numeric_analyzer(text)
@@ -274,7 +275,7 @@ def _execute(
         """Refuse an older syntax service before any activation or source effects."""
         nonlocal predicate_analyzer
         if predicate_analyzer is None:
-            import yamaa_native
+            yamaa_native = import_module("yamaa._native")
 
             if not callable(getattr(yamaa_native, "analyze_predicate", None)):
                 raise UnsupportedPlanningError(
@@ -307,7 +308,7 @@ def _execute(
             ExecutionUnsupported(features=error.features, handler_counts=())
         )
 
-    import yamaa_native
+    yamaa_native = import_module("yamaa._native")
 
     if aggregate_analyzer is None:
         aggregate_analyzer = bind_aggregate_analyzer(yamaa_native)

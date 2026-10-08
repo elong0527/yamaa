@@ -8,7 +8,7 @@ from pathlib import Path
 import polars as pl
 import pyarrow as pa
 import yamaa
-import yamaa_native
+from yamaa import _native as yamaa_native
 from yamaa.adapters.native_tables import ipc_from_polars, polars_from_ipc
 
 ROOT = Path(__file__).with_name("tables")

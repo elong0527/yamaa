@@ -6,7 +6,7 @@ use pyo3::{
 use std::sync::{Mutex, MutexGuard};
 use yamaa_adapters::{file_preparation::FileSpecification, file_resources::Resources};
 
-#[pyclass(frozen, module = "yamaa_native", name = "_FileSpecification")]
+#[pyclass(frozen, module = "yamaa._native", name = "_FileSpecification")]
 pub struct Specification {
     inner: Mutex<FileSpecification>,
 }

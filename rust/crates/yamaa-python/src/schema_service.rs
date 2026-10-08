@@ -3,7 +3,7 @@ use pyo3::{prelude::*, types::PyString};
 use yamaa_adapters::inheritance_transport;
 use yamaa_adapters::schema_transport::{self, CompiledSchema, TransportError};
 
-#[pyclass(frozen, module = "yamaa_native", name = "_Schema")]
+#[pyclass(frozen, module = "yamaa._native", name = "_Schema")]
 pub struct Schema {
     inner: CompiledSchema,
 }

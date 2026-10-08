@@ -66,7 +66,7 @@ def field_orders(schema_root: str | Path) -> dict[str, tuple[str, ...]]:
 
 def discover_schema_root(path: str | Path) -> Path:
     """The schema bundle the engine would use for the file at `path`."""
-    from yamaa.domain import _discover_schema_root
+    from yamaa._reference_domain import _discover_schema_root
 
     return _discover_schema_root(Path(path).resolve())
 

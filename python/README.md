@@ -1,9 +1,32 @@
 # yamaa Python
 
-The Python package currently provides general CDISC ODM helpers. It uses
-Pydantic for public data contracts and Polars for tabular data operations.
-The package supports Python 3.12 and newer; CI exercises Python 3.12 and 3.14
-on Linux, macOS, and Windows, including the committed conformance suite.
+The migration candidate bundles the Python facade and shared Rust engine in one
+`yamaa` distribution. Native file builds use `yamaa.domain` and static checks use
+`yamaa.check`; their result views are copied into Polars data frames.
+
+```python
+import yamaa
+
+result = yamaa.domain("spec.yaml")
+result.output
+result.issues
+result.save()
+
+checked = yamaa.check("spec.yaml")
+checked.issues
+```
+
+The current bounded frontend qualifies seventeen original specifications. A failed
+build has no output and its save raises `yamaa.DomainError`. Operational save
+failures return `False` and remain in issues. Checks read no study data and run no
+project code. Context is JSON text and output integers retain their full signed
+64-bit range. Public date/datetime columns retain their ordinary Polars types.
+
+Environment activation, declared logs, complete language coverage, Windows native
+file IO and the final release API remain unqualified. The existing approved-root
+path policy is preserved pending the separately requested policy change. Legacy
+reference helpers remain for migration assessment and are never a fallback from
+the public native frontend. ODM helpers below remain available.
 
 ## Install and test
 

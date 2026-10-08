@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import installed_aggregate_planning as a
 import installed_references as r
-import yamaa_native
+from yamaa import _native as yamaa_native
 from yamaa.adapters import _native_dataset_plan
 from yamaa.adapters._native_aggregate_syntax import (
     NativeAggregateLimitError,
@@ -136,7 +136,7 @@ class AggregateSyntax(unittest.TestCase):
         """The source-rebuilt wheel must retain the same public typing surface."""
         package = Path(yamaa_native.__file__).parent
         self.assertTrue((package / "py.typed").is_file())
-        stub = (package / "__init__.pyi").read_text(encoding="utf-8")
+        stub = (package / "_native.pyi").read_text(encoding="utf-8")
         self.assertIn("def analyze_aggregate(request: str) -> str:", stub)
 
     def test_limits_and_no_execution_claim(self):

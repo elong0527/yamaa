@@ -16,6 +16,11 @@ pub struct Issue {
 pub struct InvalidIssue;
 
 impl Issue {
+    pub fn from_core(diagnostic: yamaa_core::diagnostic::Diagnostic) -> Result<Self, InvalidIssue> {
+        let value = crate::specification_diagnostics::portable_diagnostic(diagnostic)
+            .ok_or(InvalidIssue)?;
+        Self::from_diagnostic(value)
+    }
     /// Accept only the complete portable diagnostic shape, not a prototype envelope.
     pub fn from_diagnostic(value: Value) -> Result<Self, InvalidIssue> {
         let object = value.as_object().ok_or(InvalidIssue)?;

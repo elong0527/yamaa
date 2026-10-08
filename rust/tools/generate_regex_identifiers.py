@@ -13,7 +13,8 @@ TARGET = CORE / "src/regex/identifier_data.rs"
 LICENSE = CORE / "unicode/LICENSE.txt"
 LICENSE_COPIES = [
     CORE.parent / "yamaa-python/LICENSE-UNICODE.txt",
-    CORE.parents[2] / "R/yamaanative/inst/LICENSE-UNICODE.txt",
+    CORE.parents[2] / "R/yamaa/inst/LICENSE-UNICODE.txt",
+    CORE.parents[2] / "python/LICENSE-UNICODE.txt",
 ]
 
 

@@ -9,7 +9,7 @@ pub fn reference_capabilities() -> &'static str {
 }
 
 /// An immutable catalog owned by Python and independent of the request's buffers.
-#[pyclass(frozen, module = "yamaa_native", name = "_ReferenceCatalog")]
+#[pyclass(frozen, module = "yamaa._native", name = "_ReferenceCatalog")]
 pub struct ReferenceCatalog {
     inner: CompiledCatalog,
 }

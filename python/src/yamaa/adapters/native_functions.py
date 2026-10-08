@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from importlib import import_module
 
 from yamaa.models.values import DateTimeValue, DateValue
 
@@ -15,14 +16,14 @@ def invoke_function(request: str, callback: Callable[..., object]) -> str:
     owned core temporals; other results retain native exact-type admission.
     Artifact activation and dataset/backend dispatch are separate capabilities.
     """
-    import yamaa_native
+    yamaa_native = import_module("yamaa._native")
 
     return yamaa_native.invoke_function(request, adapt_callback(callback))
 
 
 def adapt_callback(callback: Callable[..., object]) -> Callable[..., object]:
     """Capture one callable and preserve designated temporal result representations."""
-    import yamaa_native
+    yamaa_native = import_module("yamaa._native")
 
     if not callable(callback):
         raise TypeError("callback must be callable")

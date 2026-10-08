@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import yamaa
-import yamaa_native
+from yamaa import _native as yamaa_native
 from yamaa.adapters import native_specification
 from yamaa.adapters._native_schema_interpreter import NativeSchemaInterpreter
 from yamaa.adapters._native_schema_wire import (

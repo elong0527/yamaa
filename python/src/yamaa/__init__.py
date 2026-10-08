@@ -5,13 +5,16 @@ from importlib.metadata import version as _distribution_version
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from yamaa.domain import DomainRun, DomainRunError, yamaa_domain
+    from yamaa._reference_domain import DomainRun, DomainRunError, yamaa_domain
     from yamaa.submission import generate_study_document
 
 _EXPORTS = {
-    "DomainRun": ("yamaa.domain", "DomainRun"),
-    "DomainRunError": ("yamaa.domain", "DomainRunError"),
-    "yamaa_domain": ("yamaa.domain", "yamaa_domain"),
+    "domain": ("yamaa._domain", "domain"),
+    "check": ("yamaa._domain", "check"),
+    "DomainError": ("yamaa._domain", "DomainError"),
+    "DomainRun": ("yamaa._reference_domain", "DomainRun"),
+    "DomainRunError": ("yamaa._reference_domain", "DomainRunError"),
+    "yamaa_domain": ("yamaa._reference_domain", "yamaa_domain"),
     "generate_study_document": ("yamaa.submission", "generate_study_document"),
 }
 
@@ -33,9 +36,12 @@ def __dir__() -> list[str]:
 __version__ = _distribution_version("yamaa")
 
 __all__ = [
+    "DomainError",
     "DomainRun",
     "DomainRunError",
     "__version__",
+    "check",
+    "domain",
     "generate_study_document",
     "yamaa_domain",
 ]

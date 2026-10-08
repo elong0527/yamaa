@@ -1,11 +1,13 @@
 //! Optional R installation probe; all R interactions occur on the calling thread.
 use extendr_api::prelude::*;
+mod domain_entry;
 mod file_publication;
 mod file_resources;
 mod file_specification;
 mod function_callback;
 mod inheritance_callback;
 mod issue_frame;
+mod public_table;
 mod scalars;
 mod specification_inheritance;
 mod specification_result;
@@ -274,7 +276,8 @@ fn engine_info() -> List {
 }
 
 extendr_module! {
-    mod yamaanative;
+    mod yamaa;
+    use domain_entry;
     use scalars;
     use specification_service;
     use specification_result;

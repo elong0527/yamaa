@@ -7,6 +7,7 @@ and modeling; captured native services own YAML and schema interpretation.
 from __future__ import annotations
 
 import re
+from importlib import import_module
 from pathlib import Path
 
 from yamaa.adapters._native_schema_findings import admission_error
@@ -32,7 +33,7 @@ def load_schema_bundle(
 ) -> SchemaBundle:
     """Capture the native service before reading a confined YAML source closure."""
     if native is None:
-        import yamaa_native as native
+        native = import_module("yamaa._native")
     compile_schema = getattr(native, "_compile_schema", None)
     if not callable(compile_schema):
         raise TypeError("native _compile_schema must be callable")

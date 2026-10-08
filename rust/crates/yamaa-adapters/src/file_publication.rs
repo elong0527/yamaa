@@ -65,6 +65,89 @@ pub struct Publisher {
     name: String,
     declared: String,
 }
+/// Retain the selected physical root; an authored output cannot add authority.
+pub(crate) struct AnchoredTarget {
+    root: OwnedFd,
+    remainder: Vec<String>,
+    target: String,
+}
+impl AnchoredTarget {
+    pub(crate) fn new(root: OwnedFd, remainder: Vec<String>, target: String) -> Self {
+        Self {
+            root,
+            remainder,
+            target,
+        }
+    }
+    pub(crate) fn publisher(&self, declared: &str) -> Result<Publisher, Error> {
+        if declared.len() > MAX_PATH_BYTES || self.target.len() > MAX_PATH_BYTES {
+            return Err(Error::Limit);
+        }
+        if declared.is_empty() || declared.contains('\0') || self.remainder.is_empty() {
+            return Err(Error::InvalidTarget);
+        }
+        let (name, parents) = self.remainder.split_last().ok_or(Error::InvalidTarget)?;
+        if self
+            .remainder
+            .iter()
+            .any(|s| s.is_empty() || s == "." || s == ".." || s.contains(['/', '\0']))
+        {
+            return Err(Error::InvalidTarget);
+        }
+        let mut directories = Vec::new();
+        let mut witnesses = Vec::new();
+        for name in parents {
+            let parent = directories.last().unwrap_or(&self.root);
+            let initial = fs::statat(parent, name.as_str(), AtFlags::SYMLINK_NOFOLLOW)
+                .map_err(|_| Error::InvalidTarget)?;
+            if kind(&initial) != FileType::Directory {
+                return Err(Error::InvalidTarget);
+            }
+            let opened = fs::openat(
+                parent,
+                name.as_str(),
+                OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+                Mode::empty(),
+            )
+            .map_err(|_| Error::InvalidTarget)?;
+            if identity(&fs::fstat(&opened)?) != identity(&initial) {
+                return Err(Error::Changed);
+            }
+            witnesses.push(identity(&initial));
+            directories.push(opened);
+        }
+        // Check the complete parent chain before handing the final descriptor
+        // to publication. Replacement names never redirect this held authority.
+        for (index, expected) in witnesses.iter().enumerate() {
+            let parent = if index == 0 {
+                &self.root
+            } else {
+                &directories[index - 1]
+            };
+            let observed = fs::statat(parent, parents[index].as_str(), AtFlags::SYMLINK_NOFOLLOW)
+                .map_err(|_| Error::Changed)?;
+            if identity(&observed) != *expected {
+                return Err(Error::Changed);
+            }
+        }
+        let parent = directories
+            .pop()
+            .map(Ok)
+            .unwrap_or_else(|| self.root.try_clone())
+            .map_err(Error::Io)?;
+        let publisher = Publisher {
+            parent,
+            parent_path: Path::new(&self.target)
+                .parent()
+                .ok_or(Error::InvalidTarget)?
+                .into(),
+            name: name.clone(),
+            declared: declared.into(),
+        };
+        publisher.check_target()?;
+        Ok(publisher)
+    }
+}
 impl Publisher {
     /// The caller names the absolute target; declarations grant no write authority.
     pub fn new(declared: &str, target: &str) -> Result<Self, Error> {

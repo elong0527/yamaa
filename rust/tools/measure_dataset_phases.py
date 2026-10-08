@@ -59,7 +59,7 @@ def sample(root, case_name, mode):
         from yamaa.functions.execution import execute_with_project_functions
         from yamaa.runtime import execute_with_source_provider
     else:
-        import yamaa_native
+        from yamaa import _native as yamaa_native
         from yamaa.adapters import native_datasets
         from yamaa.adapters.native_datasets import (
             execute_with_project_functions,
@@ -68,7 +68,7 @@ def sample(root, case_name, mode):
     seconds["package_imports"] = (time.perf_counter_ns() - started) / 1e9
     origins = {"yamaa": str(Path(yamaa.__file__).resolve())}
     if mode != "reference":
-        origins["yamaa_native"] = str(Path(yamaa_native.__file__).resolve())
+        origins["yamaa._native"] = str(Path(yamaa_native.__file__).resolve())
     if any(Path(origin).is_relative_to(root.resolve()) for origin in origins.values()):
         raise RuntimeError(
             "measurement requires installed packages outside the fixture checkout"
@@ -173,7 +173,7 @@ def sample(root, case_name, mode):
         "output_rows": result.table.frame.height,
         "installed_versions": {
             name: version(name)
-            for name in ("yamaa", "yamaa-native", "polars", "pyarrow")
+            for name in ("yamaa", "polars", "pyarrow")
         },
         "module_origins": origins,
     }

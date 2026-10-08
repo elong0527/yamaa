@@ -7,14 +7,14 @@ on:
     paths:
       - 'python/**'
       - 'benchmarks/**'
-      - 'rust/crates/yamaa-adapters/tests/fixtures/**'
+      - 'rust/**'
       - 'yaml/**'
       - '.github/workflows/python.yml'
   pull_request:
     paths:
       - 'python/**'
       - 'benchmarks/**'
-      - 'rust/crates/yamaa-adapters/tests/fixtures/**'
+      - 'rust/**'
       - 'yaml/**'
       - '.github/workflows/python.yml'
 
@@ -24,6 +24,9 @@ concurrency:
 
 permissions:
   contents: read
+
+env:
+  RUSTUP_TOOLCHAIN: 1.90.0
 
 defaults:
   run:
@@ -36,7 +39,7 @@ jobs:
     # filesystem.
     name: package-tests (${{ matrix.os }}, ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -63,6 +66,15 @@ jobs:
 
       - name: Install uv
         run: python -m pip install uv==0.11.6
+
+      - name: Install Rust for the bundled extension
+        run: rustup toolchain install 1.90.0 --profile minimal
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: rust
+          shared-key: package-python-${{ matrix.os }}
 
       - name: Create locked environment
         run: uv sync --project python --extra test --locked --no-editable

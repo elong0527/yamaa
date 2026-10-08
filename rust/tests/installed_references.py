@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import yamaa_native
+from yamaa import _native as yamaa_native
 from yamaa.adapters import native_datasets
 from yamaa.adapters._native_aggregate_syntax import bind_aggregate_analyzer
 from yamaa.adapters._native_dependencies import (

@@ -10,7 +10,7 @@ import threading
 import unittest
 from pathlib import Path
 
-import yamaa_native
+from yamaa import _native as yamaa_native
 
 
 def scalar(token):

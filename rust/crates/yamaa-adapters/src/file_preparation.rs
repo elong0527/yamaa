@@ -73,6 +73,12 @@ impl FileSpecification {
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }
+    pub(crate) fn publication_target(
+        &self,
+    ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {
+        self.resources
+            .publication_target(self.run.compiled().output_path())
+    }
     pub fn build(&mut self) -> CapturedAttempt<ResourceError> {
         self.run.execute_with_port(&mut self.resources)
     }

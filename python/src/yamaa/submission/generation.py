@@ -35,7 +35,7 @@ def generate_study_document(
     Dataset-JSON reads already-published datasets under their producer
     contracts. No specification is re-executed by document generation.
     """
-    from yamaa.domain import _discover_schema_root
+    from yamaa._reference_domain import _discover_schema_root
 
     entry = Path(define_path).resolve()
     approved = approve_roots(

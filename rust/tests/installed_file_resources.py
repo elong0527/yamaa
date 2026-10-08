@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import yamaa_native
+from yamaa import _native as yamaa_native
 
 ROOT = Path(__file__).with_name("specification-original")
 
@@ -22,7 +22,7 @@ class FileResources(unittest.TestCase):
 
         def reject(name, *args, **kwargs):
             if name.startswith((
-                "yamaa.domain", "yamaa.runtime", "yamaa.planning", "yamaa.expressions",
+                "yamaa.domain", "yamaa._reference_domain", "yamaa.runtime", "yamaa.planning", "yamaa.expressions",
                 "yamaa.verification", "yamaa.submission", "yamaa.specification",
                 "yamaa.io.artifact", "yamaa.io.source", "yamaa.io.csv", "yamaa.io.parquet",
             )) or name.split(".")[0] in {"yaml", "yaml12", "pyarrow", "polars"}:

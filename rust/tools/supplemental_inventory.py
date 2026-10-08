@@ -101,7 +101,7 @@ def load_catalog(root, catalog_path):
     }
     discovered_suites = {
         p.relative_to(root).as_posix()
-        for pattern in ("rust/tests/installed_*.py", "R/yamaanative/tests/*.R")
+        for pattern in ("rust/tests/installed_*.py", "R/yamaa/tests/*.R")
         for p in root.glob(pattern)
     }
     for label, expected, actual in (
@@ -122,8 +122,9 @@ def installed_metadata(runtime, staged_root):
 import importlib.metadata as metadata
 import json, platform
 from pathlib import Path
-import yamaa, yamaa_native
-for module, name in ((yamaa, "yamaa"), (yamaa_native, "yamaa-native")):
+import yamaa
+from yamaa import _native as yamaa_native
+for module, name in ((yamaa, "yamaa"), (yamaa_native, "yamaa")):
     distribution = metadata.distribution(name)
     if distribution.files is None or not any(
         distribution.locate_file(f).resolve() == Path(module.__file__).resolve()
@@ -133,7 +134,7 @@ for module, name in ((yamaa, "yamaa"), (yamaa_native, "yamaa-native")):
 print(json.dumps({
     "runtime_version": platform.python_version(),
     "host_package_version": metadata.version("yamaa"),
-    "binding_package_version": metadata.version("yamaa-native"),
+    "binding_package_version": metadata.version("yamaa"),
     "core_version": yamaa_native.engine_info()["core_version"],
     "package_location": str(Path(yamaa_native.__file__).resolve()),
 }))
@@ -144,9 +145,9 @@ print(json.dumps({
             )
         )
     code = """
-suppressPackageStartupMessages(library(yamaanative))
-writeLines(c(as.character(getRversion()), as.character(packageVersion("yamaanative")),
-             engine_info()$core_version, normalizePath(find.package("yamaanative"))))
+suppressPackageStartupMessages(library(yamaa))
+writeLines(c(as.character(getRversion()), as.character(packageVersion("yamaa")),
+             engine_info()$core_version, normalizePath(find.package("yamaa"))))
 """
     lines = subprocess.check_output(
         ["Rscript", "--vanilla", "-e", code], cwd=staged_root, text=True

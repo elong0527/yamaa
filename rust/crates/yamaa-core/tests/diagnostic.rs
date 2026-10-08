@@ -35,6 +35,37 @@ impl NumericResolver for Bindings {
 #[test]
 fn every_registered_cause_is_reached_with_its_normative_mapping() {
     let mut reached = BTreeSet::new();
+    for (finding, phase, condition, context) in [
+        (
+            yamaa_core::application_issue::unsupported("environment", Some("environment")),
+            "planning",
+            "unsupported_operation",
+            [("operation", "environment")].as_slice(),
+        ),
+        (
+            yamaa_core::application_issue::rejected("capture", "changed"),
+            "engine",
+            "engine_rejected",
+            [("code", "changed"), ("stage", "capture")].as_slice(),
+        ),
+    ] {
+        let definition = finding.definition();
+        assert_eq!(
+            (
+                definition.phase,
+                definition.condition,
+                definition.requirement
+            ),
+            (phase, condition, None)
+        );
+        for &(name, value) in context {
+            assert_eq!(
+                finding.context[name],
+                ContextValue::Scalar(Value::Str(value.into()))
+            );
+        }
+        reached.insert(finding.code);
+    }
     for (expression, phase, condition, requirement) in [
         ("MISSING", "validation", "unknown_field", "REQ-0443"),
         ("TEXT", "validation", "incompatible_input_type", "REQ-0444"),

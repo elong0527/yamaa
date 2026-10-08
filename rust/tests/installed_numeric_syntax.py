@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import installed_references as r
-import yamaa_native
+from yamaa import _native as yamaa_native
 from yamaa.adapters import _native_dataset_plan
 from yamaa.adapters._native_numeric_syntax import (
     NativeNumericLimitError,
@@ -172,7 +172,7 @@ class NumericSyntax(unittest.TestCase):
         self.assertTrue((package / "py.typed").is_file())
         self.assertIn(
             "def analyze_numeric(request: str) -> str:",
-            (package / "__init__.pyi").read_text(encoding="utf-8"),
+            (package / "_native.pyi").read_text(encoding="utf-8"),
         )
 
     def test_admission_planning_lowering_capture_one_service(self):

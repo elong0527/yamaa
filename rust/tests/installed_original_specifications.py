@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import yamaa_native
+from yamaa import _native as yamaa_native
 
 ROOT = Path(__file__).with_name("specification-original")
 CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter", "negative-paired-dates", "negative-not-missing-age", "negative-implausible-age", "negative-invalid-sex", "negative-sex-code", "negative-matches-bad-pattern")
@@ -1391,6 +1391,142 @@ class ParquetOriginalOutput(unittest.TestCase):
         logical = [json.dumps(projection)]
         logical.extend(json.dumps([row[name] for name in projection], default=lambda value: value.isoformat()) for row in rows)
         self.assertEqual(report["artifacts"][0]["records"], logical)
+
+
+class PublicDomains(unittest.TestCase):
+    def setUp(self):
+        original = builtins.__import__
+        blocked = ("yamaa._reference_domain", "yamaa.runtime", "yamaa.planning",
+                   "yamaa.expressions", "yamaa.specification", "yamaa.schema",
+                   "yamaa.verification", "yamaa.functions", "yamaa.models")
+        def reject(name, *args, **kwargs):
+            if name in {"yaml", "yaml12", "pydantic"} or any(name == p or name.startswith(p + ".") for p in blocked):
+                raise AssertionError("reference semantic import: " + name)
+            return original(name, *args, **kwargs)
+        guard = patch("builtins.__import__", side_effect=reject)
+        guard.start()
+        self.addCleanup(guard.stop)
+
+    @unittest.skipIf(os.name == "nt", "native file transport is qualified on Unix")
+    def test_public_domain_all_original_issues_outputs_and_saved_bytes(self):
+        import datetime
+        import shutil
+        import struct
+        import polars as pl
+        import yamaa
+        self.assertTrue(callable(yamaa.domain))
+        for name in CASES:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                case = Path(directory) / "case"
+                shutil.copytree(ROOT / "cases" / name, case)
+                entry = case / specification_name(name)
+                expected = json.loads((ROOT / "expected" / (name + ".json")).read_text())
+                result = yamaa.domain(entry)
+                expected_rows = [(r["phase"], r["condition"], r["requirement"], r["spec_paths"],
+                                  json.dumps(r["context"],ensure_ascii=False,sort_keys=True,separators=(",", ":")))
+                                 for r in expected["diagnostics"]]
+                self.assertEqual(result.issues.rows(), expected_rows)
+                self.assertEqual(result.issues.schema, {"phase":pl.String,"condition":pl.String,"requirement":pl.String,"spec_paths":pl.List(pl.String),"context":pl.String})
+                self.assertIsNone(result.verification_log)
+                self.assertIsNone(result.warning_log)
+                if not expected["artifacts"]:
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.DomainError):
+                        result.save()
+                    continue
+                artifact = expected["artifacts"][0]
+                derived = next(t for t in expected["tables"] if t["stage"] == "derived")
+                projection = [derived["columns"].index(c) for c in artifact["columns"]]
+                def scalar(value):
+                    kind, data = value["type"], value["value"]
+                    if kind == "missing": return None
+                    if kind == "int": return int(data)
+                    if kind == "float": return struct.unpack(">d",bytes.fromhex(data))[0]
+                    if kind == "date": return datetime.date.fromisoformat(data)
+                    if kind == "datetime": return datetime.datetime.fromisoformat(data)
+                    return data
+                rows = [tuple(scalar(row[column]) for column in projection) for row in derived["rows"]]
+                self.assertEqual(result.output.columns,artifact["columns"])
+                self.assertEqual(result.output.rows(),rows)
+                expected_types = {"str":pl.String,"int":pl.Int64,"float":pl.Float64,"date":pl.Date}
+                for column, kind in zip(artifact["columns"],artifact["types"]):
+                    self.assertEqual(result.output.schema[column],expected_types[kind])
+                output_name = {"schema-lookup":"adsl.csv", "schema-window-functions":"advs.csv", "schema-inheritance":"adlb.csv", "adam-adlb-ordered-sum":"adlb.csv"}[name]
+                saved = case / output_name
+                original = (case / "expected" / output_name).read_bytes()
+                for _ in range(2):
+                    self.assertTrue(result.save())
+                    self.assertEqual(saved.read_bytes(),original)
+                self.assertEqual(result.output.rows(),rows)
+
+    @unittest.skipIf(os.name == "nt", "native file transport is qualified on Unix")
+    def test_public_check_without_study_and_save_retry(self):
+        import yamaa
+        source = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: absent/output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            entry=root / "spec.yaml"
+            entry.write_text(source)
+            self.assertTrue(yamaa.check(entry).issues.is_empty())
+            failed=yamaa.domain(entry)
+            self.assertIsNone(failed.output)
+            self.assertEqual(failed.issues["condition"].to_list(),["resource_path_missing"])
+            with self.assertRaises(yamaa.DomainError): failed.save()
+            (root / "input.csv").write_bytes(b"ID\n-9223372036854775808\n9223372036854775807\n")
+            built=yamaa.domain(entry)
+            self.assertEqual(built.output["ID"].to_list(),[-(2**63),2**63-1])
+            (root / "input.csv").write_bytes(b"changed")
+            entry.write_bytes(b"[changed")
+            self.assertFalse(built.save())
+            self.assertEqual(built.issues["condition"].to_list(),["engine_rejected"])
+            (root / "absent").mkdir()
+            self.assertTrue(built.save())
+            self.assertTrue(built.issues.is_empty())
+            self.assertEqual((root / "absent/output.csv").read_bytes(),b"ID\n-9223372036854775808\n9223372036854775807\n")
+        for late in (False, True):
+            for existing in (False, True):
+                with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external:
+                    root, outside = Path(directory), Path(external)
+                    entry = root / "spec.yaml"
+                    entry.write_text(source.replace("absent/output.csv", "link/output.csv"))
+                    (root / "input.csv").write_bytes(b"ID\n1\n")
+                    target = outside / "output.csv"
+                    if existing: target.write_bytes(b"retained")
+                    link = root / "link"
+                    if late: link.mkdir()
+                    else: link.symlink_to(outside, target_is_directory=True)
+                    built = yamaa.domain(entry)
+                    self.assertEqual(built.output["ID"].to_list(), [1])
+                    if late:
+                        link.rmdir()
+                        link.symlink_to(outside, target_is_directory=True)
+                    self.assertFalse(built.save())
+                    self.assertEqual(json.loads(built.issues["context"][0]), {"code": "invalid_target", "stage": "output"})
+                    self.assertEqual(sorted(p.name for p in outside.iterdir()), ["output.csv"] if existing else [])
+                    if existing: self.assertEqual(target.read_bytes(), b"retained")
+                    link.unlink(); link.mkdir()
+                    self.assertTrue(built.save())
+                    self.assertTrue(built.issues.is_empty())
+                    self.assertEqual((link / "output.csv").read_bytes(), b"ID\n1\n")
+
+    def test_public_environment_refusal_and_argument_types(self):
+        import yamaa
+        result=yamaa.domain("absent.yaml",environment="absent-environment.yaml")
+        self.assertIsNone(result.output)
+        self.assertEqual(result.issues["condition"].to_list(),["unsupported_operation"])
+        self.assertEqual(yamaa.check("absent.yaml",environment="absent-environment.yaml").issues.rows(),result.issues.rows())
+        for path in ("x" * 65537, "\u00e9" * 32769):
+            refused = yamaa.domain(path)
+            self.assertIsNone(refused.output)
+            condition = "unsupported_operation" if os.name == "nt" else "engine_rejected"
+            context = {"operation": "native_file_transport"} if os.name == "nt" else {"code": "resource_path", "stage": "prepare"}
+            self.assertEqual(refused.issues["condition"].to_list(), [condition])
+            self.assertEqual(json.loads(refused.issues["context"][0]), context)
+            self.assertEqual(yamaa.check(path).issues.rows(), refused.issues.rows())
+            self.assertEqual(yamaa.domain(path, environment=path).issues["condition"].to_list(), ["unsupported_operation"])
+        with self.assertRaises(yamaa.DomainError): result.save()
+        for function in (yamaa.domain,yamaa.check):
+            with self.assertRaises(TypeError): function(None)
 
 
 if __name__ == "__main__":

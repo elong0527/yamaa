@@ -174,7 +174,7 @@ impl specification_report::ArtifactPort for Publisher<'_, '_> {
         Ok(())
     }
 }
-#[pyclass(frozen, module = "yamaa_native", name = "_BuildResult")]
+#[pyclass(frozen, module = "yamaa._native", name = "_BuildResult")]
 pub struct BuildResult {
     pub(super) inner: specification_report::BuildResult,
 }

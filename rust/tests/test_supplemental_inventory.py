@@ -92,7 +92,7 @@ class SupplementalEvidence(unittest.TestCase):
             module.load_catalog(self.root, self.catalog_path)
 
     def test_unknown_suite_cannot_disappear_from_inventory(self):
-        self.write("R/yamaanative/tests/new.R", "stopifnot(TRUE)\n")
+        self.write("R/yamaa/tests/new.R", "stopifnot(TRUE)\n")
         with self.assertRaisesRegex(ValueError, "suites differ"):
             module.load_catalog(self.root, self.catalog_path)
 

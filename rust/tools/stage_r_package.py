@@ -12,7 +12,7 @@ REPOSITORY = WORKSPACE.parent
 def stage(destination: Path):
     """Copy shared sources and independent installed-test truth into a new archive tree."""
     # copytree rejects an existing destination, protecting previous builds.
-    shutil.copytree(REPOSITORY / "R/yamaanative", destination)
+    shutil.copytree(REPOSITORY / "R/yamaa", destination)
     rust = destination / "src/rust"
     rust.mkdir()
     for name in ("Cargo.toml", "rust-toolchain.toml"):
