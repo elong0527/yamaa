@@ -3424,8 +3424,28 @@ fn original_column_matches_match_complete_reports_and_exact_csv() {
     replay_source_selection_truth(
         include_str!("fixtures/original_column_matches.tsv"),
         "column-matches",
-        14,
+        15,
     );
+}
+#[test]
+fn deferred_column_findings_stop_later_payload_compilation_but_keep_vocabulary_admission() {
+    use yamaa_adapters::specification_run::{Error, PreparedRun};
+    use yamaa_core::specification::PrepareError;
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let raw = |first: &str, severity: &str| {
+        format!(
+        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: unread.csv}}\noutput: {{path: result.csv, columns: [ID, V]}}\ncolumns:\n  - {{name: ID, type: str, label: ID, derivation: SRC.ID}}\n  - name: V\n    type: str\n    label: V\n    derivation: SRC.V\n    verifications:\n      - {first}\n      - matches: {{pattern: 'a{{1000001}}', severity: {severity}}}\n"
+    )
+    };
+    for first in ["matches: {pattern: '('}", "allowed_values: {values: []}"] {
+        let document = prepare(&schema, raw(first, "error").as_bytes());
+        PreparedRun::prepare(document).expect("the earlier finding remains deferred");
+        let document = prepare(&schema, raw(first, "warning").as_bytes());
+        assert!(matches!(PreparedRun::prepare(document),
+            Err(Error::Prepare(PrepareError::Unsupported(items)))
+                if items.iter().any(|item| item.operation == "verification_severity"
+                    && item.path == "columns.V.verifications[1].matches")));
+    }
 }
 fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
     use yamaa_adapters::{

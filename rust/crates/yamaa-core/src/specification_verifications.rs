@@ -182,6 +182,7 @@ impl Verifications {
         let mut predicates = BTreeMap::new();
         let mut column_checks = BTreeMap::new();
         let mut regex_budget = crate::regex::CompileBudget::new(Default::default());
+        let mut column_finding_seen = false;
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
             let path = format!("{prefix}[{index}].{op}");
@@ -230,18 +231,22 @@ impl Verifications {
                     }
                 }
             }
-            if let Some(column) = column {
-                column_checks.insert(
-                    index,
-                    column_checks::prepare(
-                        d,
-                        op,
-                        payload,
-                        &path,
-                        output.columns()[column].kind,
-                        &mut regex_budget,
-                    )?,
+            if let Some(column) = column.filter(|_| !column_finding_seen) {
+                let check = column_checks::prepare(
+                    d,
+                    op,
+                    payload,
+                    &path,
+                    output.columns()[column].kind,
+                    &mut regex_budget,
+                )?;
+                // Keep scanning operation/field/severity vocabulary above, but
+                // later payload compilation cannot hide this deferred finding.
+                column_finding_seen = matches!(
+                    check,
+                    Check::InvalidDiagnostic(_) | Check::InvalidDeclaration { .. }
                 );
+                column_checks.insert(index, check);
             }
             // The current dataset engine's count bounds are signed 64-bit. Do
             // not lose arbitrary-width authored bounds through a narrowing cast.

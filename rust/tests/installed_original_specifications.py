@@ -406,7 +406,7 @@ class OriginalSpecifications(unittest.TestCase):
         self._source_selection_reports("original-not-missing.tsv", "column-check", 10)
 
     def test_original_column_matches_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("original-column-matches.tsv", "column-matches", 14)
+        self._source_selection_reports("original-column-matches.tsv", "column-matches", 15)
 
     def test_original_column_values_complete_reports_and_exact_csv(self):
         self._source_selection_reports("original-column-values.tsv", "column-value", 20)

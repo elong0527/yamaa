@@ -727,7 +727,7 @@ cat("original column not missing complete reports, cached reads and exact saved 
 source_selection_truth("original-column-values.tsv","column-value",20L)
 cat("original column values complete reports, cached reads and exact saved CSV passed\n")
 
-source_selection_truth("original-column-matches.tsv","column-matches",14L)
+source_selection_truth("original-column-matches.tsv","column-matches",15L)
 cat("original column matches complete reports, cached reads and exact saved CSV passed\n")
 
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
