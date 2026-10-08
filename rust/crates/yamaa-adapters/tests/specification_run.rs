@@ -3412,6 +3412,14 @@ fn original_column_not_missing_matches_complete_reports_and_exact_csv() {
     );
 }
 #[test]
+fn row_reductions_match_complete_independent_reports_and_exact_csv() {
+    replay_source_selection_truth(
+        include_str!("fixtures/row_reductions.tsv"),
+        "row-reduction",
+        23,
+    );
+}
+#[test]
 fn row_column_checks_match_complete_independent_reports_and_exact_csv() {
     replay_source_selection_truth(
         include_str!("fixtures/row_column_checks.tsv"),
