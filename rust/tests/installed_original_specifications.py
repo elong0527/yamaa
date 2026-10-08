@@ -412,7 +412,7 @@ class OriginalSpecifications(unittest.TestCase):
         self._source_selection_reports("original-assertions.tsv", "assert", 17)
 
     def _source_selection_reports(self, filename, prefix, cases):
-        with (ROOT / filename).open(encoding="ascii") as stream:
+        with (ROOT / filename).open(encoding="utf-8") as stream:
             records = list(csv.DictReader(stream, delimiter="\t"))
         self.assertEqual(len(records), cases)
         for record in records:
