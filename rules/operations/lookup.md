@@ -608,7 +608,7 @@ declares no key pairs: the group is the match.
 
 <a id="req-0143"></a>
 
-**REQ-0143.** `key` and `lookup_key` name the fields a lookup matched on
+**REQ-0143.** `key` and `intermediate_key` name the fields a lookup matched on
 and the values it matched them with; `keys` names the output row the
 failure belongs to. An unmatched key and an unhandled multiple match
 report the match the same way, and neither renames the other's fields.

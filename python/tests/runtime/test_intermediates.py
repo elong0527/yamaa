@@ -184,8 +184,8 @@ def test_a_declared_key_with_no_record_is_fatal_and_names_the_key() -> None:
 
 def test_an_unhandled_multiple_match_names_the_key_it_matched_on() -> None:
     # REQ-0143: one vocabulary for every record lookup failure, so a multiple
-    # match names its match under `key` and `lookup_key` the way an unmatched
-    # key does and leaves `keys` to the offending output row.
+    # match names its match under `key` and `intermediate_key` the way an
+    # unmatched key does and leaves `keys` to the offending output row.
     outcome = selector(declared()).select("REFRANGE", {"SUBJECT": "S1"})
 
     assert outcome.condition is not None
