@@ -66,6 +66,27 @@ fn standalone_retains_entry_and_checks_without_study_capture() {
     assert!(prepared.build().result.is_ok());
     assert_eq!(prepared.capture_reads(), 2);
 }
+
+#[test]
+fn canonical_entry_identity_retains_a_selected_root_with_a_backslash_name() {
+    let study = Study::new();
+    let root = study.0.join("named\\root");
+    fs::create_dir(&root).unwrap();
+    fs::write(root.join("spec.yaml"), VALID).unwrap();
+    fs::write(root.join("input.csv"), b"ID\n1\n").unwrap();
+    let resources = Resources::new(root.to_str().unwrap(), root.to_str().unwrap(), &[]).unwrap();
+    let mut prepared = FileSpecification::prepare(resources, "spec.yaml").unwrap();
+    assert_eq!(
+        prepared.run().document().source().identity,
+        fs::canonicalize(root.join("spec.yaml"))
+            .unwrap()
+            .to_str()
+            .unwrap()
+    );
+    assert_eq!(prepared.capture_reads(), 1);
+    assert!(prepared.build().result.is_ok());
+    assert_eq!(prepared.capture_reads(), 2);
+}
 #[test]
 fn entry_version_finding_precedes_parent_and_study_authority() {
     let study = Study::new();
