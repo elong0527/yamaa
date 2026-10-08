@@ -71,7 +71,7 @@ struct Opened {
 }
 struct Snapshot {
     bytes: Arc<[u8]>,
-    paths: Vec<(Segments, String)>,
+    paths: Vec<(Segments, String, Segments)>,
 }
 
 pub struct Resources {
@@ -81,6 +81,7 @@ pub struct Resources {
     by_path: BTreeMap<Segments, usize>,
     by_identity: BTreeMap<(i128, i128), usize>,
     captured_bytes: usize,
+    aliases: usize,
     reads: usize,
 }
 impl Resources {
@@ -130,6 +131,7 @@ impl Resources {
             by_path: BTreeMap::new(),
             by_identity: BTreeMap::new(),
             captured_bytes: 0,
+            aliases: 0,
             reads: 0,
         })
     }
@@ -142,7 +144,39 @@ impl Resources {
     }
     /// Capture bounded immutable content, verify it and retain its authority witnesses.
     pub fn capture(&mut self, written: &str, maximum: usize) -> Result<(Arc<[u8]>, bool), Error> {
-        let mut opened = self.open(written)?;
+        self.capture_at(self.base.clone(), written, maximum)
+    }
+    /// A declaring identity comes from this reader's canonical regular-file resolution.
+    pub fn resolve_from(&self, declaring: &str, written: &str) -> Result<String, Error> {
+        let base = file_base(declaring)?;
+        let opened = self.open_at(&base, written)?;
+        Ok(path_text(&opened.key))
+    }
+    pub fn resolve(&self, written: &str) -> Result<String, Error> {
+        Ok(path_text(&self.open(written)?.key))
+    }
+    pub fn capture_from(
+        &mut self,
+        declaring: &str,
+        written: &str,
+        maximum: usize,
+    ) -> Result<(Arc<[u8]>, bool), Error> {
+        self.capture_at(file_base(declaring)?, written, maximum)
+    }
+    /// Keep the same selected roots and captures for data declared by this entry.
+    pub fn select_entry_base(&mut self, identity: &str) -> Result<(), Error> {
+        let base = file_base(identity)?;
+        self.open(identity)?;
+        self.base = base;
+        Ok(())
+    }
+    fn capture_at(
+        &mut self,
+        base: Segments,
+        written: &str,
+        maximum: usize,
+    ) -> Result<(Arc<[u8]>, bool), Error> {
+        let mut opened = self.open_at(&base, written)?;
         let physical = (opened.identity.0, opened.identity.1);
         let accepted = self
             .by_path
@@ -153,6 +187,13 @@ impl Resources {
             return Err(Error::Limit);
         }
         if let Some(index) = accepted {
+            let known_alias = self.snapshots[index]
+                .paths
+                .iter()
+                .any(|(key, path, from)| key == &opened.key && path == written && from == &base);
+            if !known_alias && self.aliases >= MAX_SNAPSHOTS {
+                return Err(Error::Limit);
+            }
             if self.snapshots[index].bytes.len() > maximum {
                 return Err(Error::Limit);
             }
@@ -165,22 +206,23 @@ impl Resources {
                 return Err(Error::Changed);
             }
             self.verify(index)?;
-            if !self.by_path.contains_key(&opened.key) {
+            if !known_alias {
                 self.snapshots[index]
                     .paths
-                    .push((opened.key.clone(), written.into()));
-                self.by_path.insert(opened.key, index);
+                    .push((opened.key.clone(), written.into(), base));
+                self.aliases += 1;
             }
+            self.by_path.insert(opened.key, index);
             return Ok((bytes, false));
         }
-        if self.snapshots.len() >= MAX_SNAPSHOTS {
+        if self.snapshots.len() >= MAX_SNAPSHOTS || self.aliases >= MAX_SNAPSHOTS {
             return Err(Error::Limit);
         }
         let available = MAX_CAPTURED_BYTES
             .checked_sub(self.captured_bytes)
             .ok_or(Error::Limit)?;
         let content = read_bounded(&mut opened.file, maximum.min(available))?;
-        let mut current = self.open(written).map_err(|_| Error::Changed)?;
+        let mut current = self.open_at(&base, written).map_err(|_| Error::Changed)?;
         if current.key != opened.key
             || read_bounded(&mut current.file, content.len())
                 .map_err(|_| Error::Changed)?
@@ -191,11 +233,12 @@ impl Resources {
         }
         self.captured_bytes += content.len();
         self.reads += 1;
+        self.aliases += 1;
         let bytes: Arc<[u8]> = content.into();
         let index = self.snapshots.len();
         self.snapshots.push(Snapshot {
             bytes: Arc::clone(&bytes),
-            paths: vec![(opened.key.clone(), written.into())],
+            paths: vec![(opened.key.clone(), written.into(), base)],
         });
         self.by_identity.insert(physical, index);
         self.by_path.insert(opened.key, index);
@@ -203,8 +246,8 @@ impl Resources {
     }
     fn verify(&self, index: usize) -> Result<(), Error> {
         let snapshot = &self.snapshots[index];
-        for (key, written) in &snapshot.paths {
-            let mut opened = self.open(written).map_err(|_| Error::Changed)?;
+        for (key, written, base) in &snapshot.paths {
+            let mut opened = self.open_at(base, written).map_err(|_| Error::Changed)?;
             if &opened.key != key
                 || read_bounded(&mut opened.file, snapshot.bytes.len())
                     .map_err(|_| Error::Changed)?
@@ -216,7 +259,7 @@ impl Resources {
         }
         Ok(())
     }
-    fn anchors(&self, written: &str) -> Result<Vec<Anchor>, Error> {
+    fn anchors(&self, base: &[String], written: &str) -> Result<Vec<Anchor>, Error> {
         bounded(written)?;
         if written.contains('\\') || written.contains('\0') {
             return Err(Error::InvalidPath);
@@ -253,11 +296,8 @@ impl Resources {
             return Ok(vec![self.anchor(root, segments[depth..].to_vec())?]);
         }
         let mut anchors = Vec::new();
-        let inside = self
-            .roots
-            .iter()
-            .any(|r| self.base.starts_with(&r.canonical));
-        match self.relative_anchor(&self.base, written) {
+        let inside = self.roots.iter().any(|r| base.starts_with(&r.canonical));
+        match self.relative_anchor(base, written) {
             Ok(anchor) => anchors.push(anchor),
             Err(error) if inside => return Err(error),
             Err(_) => {}
@@ -315,7 +355,10 @@ impl Resources {
         })
     }
     fn open(&self, written: &str) -> Result<Opened, Error> {
-        for anchor in self.anchors(written)? {
+        self.open_at(&self.base, written)
+    }
+    fn open_at(&self, base: &[String], written: &str) -> Result<Opened, Error> {
+        for anchor in self.anchors(base, written)? {
             match self.open_anchor(anchor) {
                 Err(WalkError::NoEntry) => continue,
                 Err(WalkError::Failure(error)) => return Err(error),
@@ -493,4 +536,21 @@ fn read_bounded(file: &mut File, maximum: usize) -> Result<Vec<u8>, Error> {
         }
         bytes.extend_from_slice(&buffer[..count]);
     }
+}
+
+fn path_text(segments: &[String]) -> String {
+    format!("{}/{}", segments[0], segments[1..].join("/"))
+}
+fn file_base(identity: &str) -> Result<Segments, Error> {
+    bounded(identity)?;
+    let mut segments = rooted_segments(identity).ok_or(Error::InvalidPath)?;
+    if segments.len() <= 1
+        || segments[1..]
+            .iter()
+            .any(|s| s.is_empty() || s == "." || s == "..")
+    {
+        return Err(Error::InvalidPath);
+    }
+    segments.pop();
+    Ok(segments)
 }

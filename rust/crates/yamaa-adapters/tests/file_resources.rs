@@ -284,3 +284,98 @@ fn unsearchable_directory_does_not_fall_back_to_a_different_file() {
     assert_eq!(captured, Err(Error::Missing));
     assert_eq!(resources.capture_reads(), 0);
 }
+
+#[test]
+fn different_written_paths_to_the_same_key_are_each_retained_and_verified() {
+    let study = Study::new();
+    fs::write(study.path("project/a"), b"retained").unwrap();
+    let mut resources = study.resources();
+    let (first, _) = resources.capture("../a", 32).unwrap();
+    let (again, created) = resources.capture("a", 32).unwrap();
+    assert!(!created && std::sync::Arc::ptr_eq(&first, &again));
+    fs::write(study.path("project/spec/a"), b"shadowed").unwrap();
+    assert_eq!(resources.capture("../a", 32), Err(Error::Changed));
+    assert_eq!(first.as_ref(), b"retained");
+    assert_eq!(resources.capture_reads(), 1);
+}
+
+#[test]
+fn declaring_file_views_resolve_metadata_and_share_held_bytes_before_selecting_data_base() {
+    let study = Study::new();
+    fs::write(study.path("project/spec/entry.yaml"), b"entry").unwrap();
+    fs::write(study.path("project/data/parent.yaml"), b"parent").unwrap();
+    fs::write(study.path("project/data/source.csv"), b"source").unwrap();
+    let mut resources = study.resources();
+    let entry = resources.resolve("entry.yaml").unwrap();
+    let parent = resources
+        .resolve_from(&entry, "../data/parent.yaml")
+        .unwrap();
+    assert_eq!(
+        parent,
+        fs::canonicalize(study.path("project/data/parent.yaml"))
+            .unwrap()
+            .to_str()
+            .unwrap()
+    );
+    assert_eq!(resources.capture_reads(), 0);
+    let (first, created) = resources
+        .capture_from(&entry, "../data/parent.yaml", 6)
+        .unwrap();
+    assert!(created && first.as_ref() == b"parent");
+    let (again, created) = resources.capture_from(&parent, "parent.yaml", 6).unwrap();
+    assert!(!created && std::sync::Arc::ptr_eq(&first, &again));
+    assert_eq!(resources.capture_reads(), 1);
+    resources.select_entry_base(&parent).unwrap();
+    assert_eq!(
+        resources.capture("source.csv", 6).unwrap().0.as_ref(),
+        b"source"
+    );
+    assert_eq!(resources.capture_reads(), 2);
+}
+
+#[test]
+fn every_declaring_base_and_written_alias_is_verified_when_one_fallback_changes() {
+    let study = Study::new();
+    fs::write(study.path("project/data/layer.yaml"), b"layer").unwrap();
+    fs::write(study.path("project/a"), b"retained").unwrap();
+    let mut resources = study.resources();
+    let layer = resources.resolve("../data/layer.yaml").unwrap();
+    let (first, created) = resources.capture_from(&layer, "../a", 8).unwrap();
+    assert!(created);
+    let (again, created) = resources.capture("a", 8).unwrap();
+    assert!(!created && std::sync::Arc::ptr_eq(&first, &again));
+    fs::write(study.path("project/spec/a"), b"shadowed").unwrap();
+    assert_eq!(
+        resources.capture_from(&layer, "../a", 8),
+        Err(Error::Changed)
+    );
+    assert_eq!(first.as_ref(), b"retained");
+    assert_eq!(resources.capture_reads(), 1);
+}
+
+#[test]
+fn declaring_file_views_keep_approved_roots_and_terminal_link_failures() {
+    let study = Study::new();
+    fs::write(study.path("project/spec/entry.yaml"), b"entry").unwrap();
+    fs::write(study.path("outside/secret"), b"outside").unwrap();
+    std::os::unix::fs::symlink(
+        study.path("outside/secret"),
+        study.path("project/data/link"),
+    )
+    .unwrap();
+    let mut resources = study.resources();
+    let entry = resources.resolve("entry.yaml").unwrap();
+    assert_eq!(
+        resources.capture_from(&entry, "../../outside/secret", 8),
+        Err(Error::OutsideRoots)
+    );
+    assert_eq!(
+        resources.resolve_from(&entry, "../data/link"),
+        Err(Error::Symlink)
+    );
+    assert_eq!(
+        resources.capture_from("relative.yaml", "entry.yaml", 8),
+        Err(Error::InvalidPath)
+    );
+    assert_eq!(resources.capture_reads(), 0);
+}

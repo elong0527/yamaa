@@ -817,6 +817,14 @@ first <- ports$capture("SRC","../data/source",8L)
 stopifnot(identical(first,list(charToRaw("retained"),TRUE)),ports$reads()==1L)
 first[[1L]][[1L]] <- as.raw(0L)
 stopifnot(identical(ports$capture("SRC","../data/source",8L),list(charToRaw("retained"),FALSE)),ports$reads()==1L)
+# Both spellings of one canonical key remain authority witnesses.
+stopifnot(identical(ports$capture("SRC","data/source",8L),list(charToRaw("retained"),FALSE)))
+dir.create(file.path(directory,"spec","data"))
+writeBin(charToRaw("shadowed"),file.path(directory,"spec","data","source"))
+actual <- tryCatch(ports$capture("SRC","../data/source",8L),error=identity)
+stopifnot(inherits(actual,"error"),conditionMessage(actual)=="captured resource content changed",ports$reads()==1L)
+unlink(file.path(directory,"spec","data"),recursive=TRUE)
+stopifnot(identical(ports$capture("SRC","../data/source",8L),list(charToRaw("retained"),FALSE)))
 for(maximum in list(-1L,NA_integer_,Inf,1.5,TRUE,"8",structure(8L,class="ceiling"),1e100,1+0i)) {
   stopifnot(inherits(tryCatch(ports$capture("SRC","../data/source",maximum),error=identity),"error"))
 }
