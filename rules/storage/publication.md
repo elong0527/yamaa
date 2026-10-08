@@ -141,18 +141,27 @@ specification output profile and fails under [REQ-0760](#req-0760).
 
 **REQ-0752.** An artifact becomes visible in one step. An implementation:
 
-1. writes the complete artifact into a temporary regular file in the same
-   directory as the target;
+1. writes the complete artifact into a temporary regular file in the target's
+   directory or a private staging directory beneath it;
 2. flushes and closes that file, so its bytes reach the filesystem, not a
    buffer; and
 3. atomically replaces the target with it.
 
 <a id="req-0753"></a>
 
-**REQ-0753.** The temporary file is regular and is in the target's own
-directory. The replacement stays within one filesystem and remains
-atomic. The name is not fixed and must not collide with the target or with
-another run's temporary file.
+**REQ-0753.** The temporary file is regular and stays in the target's own
+filesystem. It is in the target's directory or a private staging directory
+beneath it. A private staging directory belongs to the publishing user and
+grants no access to other users. The publisher retains its directory descriptor
+so replacement of its entry in the target's parent cannot substitute the checked
+candidate. Temporary names or their private namespaces do not collide with the
+target or another run's candidate. The final replacement remains atomic.
+
+Native publishers coordinate writes through an exclusive selected-parent
+directory lock. A lock refusal leaves the target untouched. An explicit save
+intentionally replaces the current target; it is not a conditional update against
+the target that existed when the publisher was created. The last successful
+replacement supplies the visible artifact.
 
 <a id="req-0754"></a>
 
@@ -160,6 +169,13 @@ another run's temporary file.
 removes its temporary file, so a failure produces neither an accepted artifact
 nor residue. A reader observes either the artifact that was there before or the
 complete new one, and never a prefix of the new one.
+
+If external interference or a filesystem failure prevents temporary cleanup,
+the failure preserves the original operation error and reports the cleanup
+failure and staging location. It does not claim that no residue remains.
+Cleanup does not remove an entry whose ownership is unconfirmed or whose
+observed identity has changed. The failed publication still produces no accepted
+artifact and leaves the target untouched.
 
 <a id="req-0755"></a>
 

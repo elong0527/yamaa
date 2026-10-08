@@ -12,7 +12,7 @@ and codec interfaces are native traits; adapters translate values and errors.
 | `specification_run::SourceDecoder` | engine | Adapter CSV/Parquet/Arrow decoder; engine test fake | Original decoder error; byte/cell capacity limits |
 | `specification_output::ArtifactEncoder` | engine | Adapter CSV/Parquet encoders; native test fake | Original codec error; checked output byte limit |
 | `specification_output::OutputReport` | engine | Portable JSON report formatter; native test fake | Observation or report-budget failure before publication |
-| `specification_output::ArtifactPort` | engine | Python/R atomic publication bridges; native test fake | Original opaque publication error, without retry |
+| `specification_output::ArtifactPort` | engine | Python/R publication bridges; Unix explicit-target Rust/R publisher; native test fake | Original opaque publication error, without retry |
 | `TableAccess` | core | Immutable Arrow snapshots, core normalized CSV tables and engine output tables; test fakes | Bounds or original opaque cell-access error |
 | `inheritance::SourcePort` | engine | Existing inheritance bridge | Source failure or traversal resource limit |
 | `function_invocation::FunctionPort` and `dataset::FunctionBindings` | engine | Python/R native callback bridges | Original host exception, rejected representation or typed invocation failure |
@@ -269,3 +269,26 @@ byte equality and registered handle lifetime in installed R without Python. The
 existing approved-root/link/fallback behavior remains pending #1751's separate
 path-policy approval. This Unix implementation does not provide the public file
 facade, specification/inheritance filesystem preparation or atomic publication.
+
+
+## Explicit-target native publication
+
+`yamaa-adapters::file_publication::Publisher` implements the engine artifact port
+for one absolute file explicitly selected by its caller. It retains that parent
+directory, checks the declared path and byte capacity before effects, coordinates
+native writers through a nonblocking directory lock, and stages complete bytes in
+a private owned directory beneath that parent. The private directory descriptor
+binds the checked candidate to the final rename even if its parent entry is
+replaced. Staging names equal to the target basename are skipped before creation.
+A prior artifact survives errors before replacement. Explicit cleanup checks
+candidate and staging identities before removal; unconfirmed or replaced entries
+are preserved. A cleanup failure retains the original operation error, cleanup
+cause and captured staging location instead of claiming that no residue remains.
+Existing hard-link aliases keep their prior
+bytes because publication replaces the directory entry.
+
+The private R bridge can save an owned build result directly through this native
+port without an R publication callback. The [qualification scope](crates/yamaa-adapters/tests/fixtures/file_publication.md)
+covers complete independent CSV reports, retained Parquet bytes, repeated saves,
+failed-build rejection, prior-artifact preservation and registered handle lifetime.
+Public save integration and Windows native publication remain open.

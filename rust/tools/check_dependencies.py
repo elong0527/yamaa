@@ -53,7 +53,7 @@ def violations(metadata):
             if dependency["name"] == "rustix" and (
                 name != "yamaa-adapters" or dependency.get("target") != "cfg(unix)"
                 or dependency.get("kind") is not None or dependency.get("req") != "=1.1.5"
-                or dependency.get("features") != ["fs"]
+                or dependency.get("features") != ["fs", "process"]
             ):
                 errors.append("rustix is restricted to the pinned Unix filesystem adapter")
     return errors
