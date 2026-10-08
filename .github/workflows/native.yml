@@ -68,28 +68,38 @@ jobs:
           rustup toolchain install 1.90.0 --profile minimal --component rustfmt,clippy
           python -m pip install maturin==1.9.6 uv==0.11.6
       - name: Check shared crates and dependency direction
+        id: shared_crates
         working-directory: rust
         run: |
-          cargo fmt --all --check
-          cargo clippy -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
-          cargo test
-          cargo test -p yamaa-core -p yamaa-engine -p yamaa-adapters --release
-          python tools/generate_regex_identifiers.py
-          python tools/generate_schema_printable.py
-          python tools/generate_shipped_schema.py
-          python tools/check_float_text.py
-          python tools/check_sqrt.py
-          python tools/check_rounding.py
-          python tools/assess_math.py --output "${RUNNER_TEMP}/math-assessment.json"
-          uv run --project ../python --locked --no-editable python tools/check_numeric_grammar.py
-          uv run --project ../python --locked --no-editable python tools/check_aggregate_grammar.py
-          uv run --project ../python --locked --no-editable python tools/check_numeric_syntax.py
-          uv run --project ../python --locked --no-editable python tools/check_predicate_syntax.py
-          uv run --project ../python --locked --no-editable python tools/check_regex.py
-          uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-reference-assessment.json"
-          python tools/check_dependencies.py
-          python tools/check_diagnostics.py
-          python -m unittest discover -s tests -p 'test_*.py'
+          (
+            cargo fmt --all --check
+            cargo clippy -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
+            cargo test
+            cargo test -p yamaa-core -p yamaa-engine -p yamaa-adapters --release
+            python tools/generate_regex_identifiers.py
+            python tools/generate_schema_printable.py
+            python tools/generate_shipped_schema.py
+            python tools/check_float_text.py
+            python tools/check_sqrt.py
+            python tools/check_rounding.py
+            python tools/assess_math.py --output "${RUNNER_TEMP}/math-assessment.json"
+            uv run --project ../python --locked --no-editable python tools/check_numeric_grammar.py
+            uv run --project ../python --locked --no-editable python tools/check_aggregate_grammar.py
+            uv run --project ../python --locked --no-editable python tools/check_numeric_syntax.py
+            uv run --project ../python --locked --no-editable python tools/check_predicate_syntax.py
+            uv run --project ../python --locked --no-editable python tools/check_regex.py
+            uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-reference-assessment.json"
+            python tools/check_dependencies.py
+            python tools/check_diagnostics.py
+            python -m unittest discover -s tests -p 'test_*.py'
+          ) 2>&1 | tee "${RUNNER_TEMP}/shared-crates-check.log"
+      - name: Preserve shared crate diagnostics before independent assessments
+        if: ${{ always() && (steps.shared_crates.outcome == 'success' || steps.shared_crates.outcome == 'failure') }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: shared-crates-check-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/shared-crates-check.log
+          if-no-files-found: error
       - name: Preserve Python 3.12 numerical assessment coverage
         working-directory: rust
         # The native build matrix uses 3.14, but portable-math-exact still

@@ -29,6 +29,25 @@ impl Study {
     fn text(&self, name: &str) -> String {
         self.path(name).to_str().unwrap().into()
     }
+    fn resource_key(&self, name: &str) -> String {
+        let path = fs::canonicalize(self.path(name))
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        #[cfg(windows)]
+        {
+            // Expected protocol identities use local-drive paths and forward
+            // separators, independently of the native extended-path spelling.
+            path.strip_prefix(r"\\?\")
+                .unwrap_or(&path)
+                .replace('\\', "/")
+        }
+        #[cfg(unix)]
+        {
+            path
+        }
+    }
     fn resources(&self) -> Resources {
         Resources::new(
             &self.text("project"),
@@ -377,13 +396,7 @@ fn declaring_file_views_resolve_metadata_and_share_held_bytes_before_selecting_d
     let parent = resources
         .resolve_from(&entry, "../data/parent.yaml")
         .unwrap();
-    assert_eq!(
-        parent,
-        fs::canonicalize(study.path("project/data/parent.yaml"))
-            .unwrap()
-            .to_str()
-            .unwrap()
-    );
+    assert_eq!(parent, study.resource_key("project/data/parent.yaml"));
     assert_eq!(resources.capture_reads(), 0);
     let (first, created) = resources
         .capture_from(&entry, "../data/parent.yaml", 6)
