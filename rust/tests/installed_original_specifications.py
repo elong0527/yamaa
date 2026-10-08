@@ -1496,7 +1496,7 @@ class PublicDomains(unittest.TestCase):
             condition = "unsupported_operation" if os.name == "nt" else "engine_rejected"
             context = {"operation": "native_file_transport"} if os.name == "nt" else {"code": "resource_path", "stage": "prepare"}
             self.assertEqual(refused.issues["condition"].to_list(), [condition])
-            self.assertEqual(json.loads(refused.issues["ctx"][0]), context)
+            self.assertEqual(json.loads(refused.issues["context"][0]), context)
             self.assertEqual(yamaa.check(path).issues.rows(), refused.issues.rows())
             self.assertEqual(yamaa.domain(path, environment=path).issues["condition"].to_list(), ["unsupported_operation"])
         with self.assertRaises(yamaa.DomainError): result.save()
