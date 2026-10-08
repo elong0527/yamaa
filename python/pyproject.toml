@@ -37,6 +37,11 @@ bindings = "pyo3"
 module-name = "yamaa._native"
 manifest-path = "../rust/crates/yamaa-python/Cargo.toml"
 python-source = "src"
+# A source archive must rebuild the extension rather than carry editable binaries.
+exclude = [
+  {path = "src/yamaa/_native*.pyd", format = "sdist"},
+  {path = "src/yamaa/_native*.so", format = "sdist"},
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

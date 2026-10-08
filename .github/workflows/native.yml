@@ -81,12 +81,12 @@ jobs:
           python tools/check_sqrt.py
           python tools/check_rounding.py
           python tools/assess_math.py --output "${RUNNER_TEMP}/math-assessment.json"
-          uv run --project ../python --locked python tools/check_numeric_grammar.py
-          uv run --project ../python --locked python tools/check_aggregate_grammar.py
-          uv run --project ../python --locked python tools/check_numeric_syntax.py
-          uv run --project ../python --locked python tools/check_predicate_syntax.py
-          uv run --project ../python --locked python tools/check_regex.py
-          uv run --project ../python --locked python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-reference-assessment.json"
+          uv run --project ../python --locked --no-editable python tools/check_numeric_grammar.py
+          uv run --project ../python --locked --no-editable python tools/check_aggregate_grammar.py
+          uv run --project ../python --locked --no-editable python tools/check_numeric_syntax.py
+          uv run --project ../python --locked --no-editable python tools/check_predicate_syntax.py
+          uv run --project ../python --locked --no-editable python tools/check_regex.py
+          uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-reference-assessment.json"
           python tools/check_dependencies.py
           python tools/check_diagnostics.py
           python -m unittest discover -s tests -p 'test_*.py'
@@ -99,7 +99,7 @@ jobs:
       - name: Assess decimal rounding independently
         if: always()
         working-directory: rust
-        run: uv run --project ../python --locked python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
+        run: uv run --project ../python --locked --no-editable python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
       - name: Preserve candidate math assessment (not parity qualification)
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
