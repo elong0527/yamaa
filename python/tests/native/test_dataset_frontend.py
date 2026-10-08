@@ -564,7 +564,7 @@ def native_syntax_double(monkeypatch):
     """Facade tests need no native installation; installed suites qualify Rust ownership."""
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: pytest.fail("unadmitted execution"),
             dataset_capabilities=lambda: json.dumps(
@@ -601,7 +601,7 @@ def test_older_reference_features_refuse_intermediate_queries_before_io(
             "features": ["binding", "output_validation", "qualified_validation"],
         }
     )
-    monkeypatch.setitem(sys.modules, "yamaa_native", native)
+    monkeypatch.setitem(sys.modules, "yamaa._native", native)
     result = execute_with_source_provider(
         specification, lambda _: pytest.fail("source read")
     )
@@ -631,7 +631,7 @@ def test_missing_dependency_service_is_unsupported_before_io(
     delattr(native, service)
     if analyzer != "absent":
         setattr(native, service, analyzer)
-    monkeypatch.setitem(sys.modules, "yamaa_native", native)
+    monkeypatch.setitem(sys.modules, "yamaa._native", native)
     result = execute_with_source_provider(
         specification, lambda _: pytest.fail("source read")
     )
@@ -661,7 +661,7 @@ def test_qualified_reference_capability_is_checked_before_io(
     native.reference_capabilities = (
         (lambda: json.dumps(capability)) if isinstance(capability, dict) else capability
     )
-    monkeypatch.setitem(sys.modules, "yamaa_native", native)
+    monkeypatch.setitem(sys.modules, "yamaa._native", native)
     result = execute_with_source_provider(
         specification, lambda _: pytest.fail("source read")
     )
@@ -805,7 +805,7 @@ def test_invalid_aggregate_grammar_is_validation_before_sources(specification):
 
 def test_missing_native_entrypoint_precedes_sources(specification, monkeypatch):
     """An old installed native package cannot trigger IO before failing."""
-    monkeypatch.setitem(sys.modules, "yamaa_native", _native_module())
+    monkeypatch.setitem(sys.modules, "yamaa._native", _native_module())
     effects = []
     with pytest.raises(AttributeError):
         execute_with_source_provider(specification, lambda _: effects.append("read"))
@@ -905,7 +905,7 @@ def test_filter_capability_refusal_precedes_source_provider(
     native = _native_module(execute_dataset=lambda *_: pytest.fail("execution"))
     if metadata is not None:
         native.dataset_capabilities = lambda: json.dumps(metadata)
-    monkeypatch.setitem(sys.modules, "yamaa_native", native)
+    monkeypatch.setitem(sys.modules, "yamaa._native", native)
     result = execute_with_source_provider(
         Specification.model_validate(doc), lambda _: pytest.fail("source read")
     )
@@ -921,7 +921,7 @@ def test_filter_capability_allows_source_provider(specification, monkeypatch):
     doc["rows"][0]["filter"] = "AVAL > 0"
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: pytest.fail("execution"),
             dataset_capabilities=lambda: (
@@ -1025,7 +1025,7 @@ def test_predicate_check_capability_is_required_before_provider(
     doc["verifications"].append({"assert": {"require": "TRUE"}})
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: pytest.fail("native execution"),
             dataset_capabilities=lambda: (
@@ -1137,7 +1137,7 @@ def test_old_native_package_refuses_key_grain_before_provider(tmp_path, monkeypa
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             dataset_capabilities=lambda: json.dumps(
@@ -1245,7 +1245,7 @@ def test_old_native_package_refuses_numbering_before_provider(tmp_path, monkeypa
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             dataset_capabilities=lambda: json.dumps(
@@ -1297,7 +1297,7 @@ def test_old_native_package_refuses_window_filter_before_provider(
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             dataset_capabilities=lambda: json.dumps(
@@ -1378,7 +1378,7 @@ def test_old_native_package_refuses_value_windows_before_provider(
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             dataset_capabilities=lambda: json.dumps(
@@ -1442,7 +1442,7 @@ def test_baseline_admission_precedes_provider(tmp_path, monkeypatch, scenario):
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             dataset_capabilities=lambda: json.dumps(
@@ -1509,7 +1509,7 @@ def test_old_native_package_refuses_root_filter_before_provider(tmp_path, monkey
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             dataset_capabilities=lambda: json.dumps(
@@ -1606,7 +1606,7 @@ def test_old_native_package_refuses_source_filter_before_provider(
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             dataset_capabilities=lambda: json.dumps(
@@ -1721,7 +1721,7 @@ def test_old_native_package_refuses_source_selection_before_provider(
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             dataset_capabilities=lambda: json.dumps(
@@ -1874,7 +1874,7 @@ def test_old_native_package_refuses_named_intermediates_before_provider(
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             execute_dataset_sources=lambda *_: effects.append("execute"),
@@ -1983,7 +1983,7 @@ def test_old_native_package_refuses_multi_source_before_provider(tmp_path, monke
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             dataset_capabilities=lambda: json.dumps(
@@ -2007,7 +2007,7 @@ def test_mixed_lookup_key_types_remain_unsupported_after_schema_binding(
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             execute_dataset_sources=lambda *_: effects.append("execute_multiple"),
@@ -2127,7 +2127,7 @@ def test_old_native_package_refuses_computation_before_provider(tmp_path, monkey
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             dataset_capabilities=lambda: json.dumps(
@@ -2198,7 +2198,7 @@ def test_old_native_package_refuses_conversion_handlers_before_provider(
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             dataset_capabilities=lambda: json.dumps(
@@ -2268,7 +2268,7 @@ def test_old_native_package_refuses_row_lookups_before_provider(monkeypatch):
     effects = []
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         _native_module(
             execute_dataset=lambda *_: effects.append("execute"),
             dataset_capabilities=lambda: json.dumps(

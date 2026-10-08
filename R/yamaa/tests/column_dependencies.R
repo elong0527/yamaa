@@ -1,5 +1,5 @@
-library(yamaanative)
-truth <- read.delim(system.file("column_dependencies.tsv", package = "yamaanative"),
+library(yamaa)
+truth <- read.delim(system.file("column_dependencies.tsv", package = "yamaa"),
   sep = "\t", quote = "", comment.char = "", colClasses = "character",
   fileEncoding = "UTF-8", check.names = FALSE)
 indices_json <- function(text) if (text %in% c("-", "_")) "[]" else paste0("[", text, "]")

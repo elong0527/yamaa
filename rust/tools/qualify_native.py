@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 import yamaa
-import yamaa_native
+from yamaa import _native as yamaa_native
 from pydantic import TypeAdapter
 from yamaa.adapters.conformance import execute_example, write_report
 from yamaa.adapters.qualification import (
@@ -76,7 +76,7 @@ def main(argv=None):
         args.native_artifact_prefix.rstrip("/") + "/" + native_files[0].name
     )
     host_version = installed_artifact(yamaa, "yamaa")
-    native_version = installed_artifact(yamaa_native, "yamaa-native")
+    native_version = installed_artifact(yamaa_native, "yamaa")
     info = yamaa_native.engine_info()
     required = TypeAdapter(tuple[tuple[str, Host, Backend, Level], ...]).validate_json(
         (args.gates / "required.json").read_text()

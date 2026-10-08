@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import installed_references as r
-import yamaa_native
+from yamaa import _native as yamaa_native
 from yamaa.runtime.executor import execute_with_source_provider
 
 

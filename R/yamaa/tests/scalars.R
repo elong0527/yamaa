@@ -1,4 +1,4 @@
-library(yamaanative)
+library(yamaa)
 reject <- function(expr, pattern = NULL) {
   error <- tryCatch(force(expr), error = identity)
   stopifnot(inherits(error, "error"))

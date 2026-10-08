@@ -14,6 +14,9 @@ permissions:
   contents: read
   issues: read
 
+env:
+  RUSTUP_TOOLCHAIN: 1.90.0
+
 jobs:
   validate:
     # R021 fixes path resolution, so the same fixtures must decide the same
@@ -24,7 +27,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,6 +38,15 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
+
+      - name: Install Rust for the bundled extension
+        run: rustup toolchain install 1.90.0 --profile minimal
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: rust
+          shared-key: repository-validation
 
       - name: Install dependencies
         run: |

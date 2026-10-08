@@ -1,5 +1,5 @@
-library(yamaanative)
-truth <- read.delim(system.file("regex_transport.tsv", package = "yamaanative"),
+library(yamaa)
+truth <- read.delim(system.file("regex_transport.tsv", package = "yamaa"),
   sep = "\t", quote = "", comment.char = "", colClasses = "character",
   fileEncoding = "UTF-8", check.names = FALSE)
 stopifnot(nrow(truth) == 38L)

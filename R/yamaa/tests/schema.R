@@ -1,7 +1,7 @@
-library(yamaanative)
+library(yamaa)
 # The same independently authored complete JSON truth is replayed by both hosts.
 truth <- do.call(rbind, lapply(c("schema_model.tsv", "schema_transport.tsv", "schema_windows.tsv", "schema_composition.tsv", "schema_layer_admission.tsv", "schema_inheritance_dependencies.tsv"), function(name) {
-  cases <- read.delim(system.file(name, package = "yamaanative"),
+  cases <- read.delim(system.file(name, package = "yamaa"),
     sep = "\t", quote = "", comment.char = "", colClasses = "character",
     fileEncoding = "UTF-8", check.names = FALSE)
   expected_rows <- if (name %in% c("schema_model.tsv", "schema_layer_admission.tsv")) 8L else 6L

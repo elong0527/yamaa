@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import polars as pl
 import yamaa
-import yamaa_native
+from yamaa import _native as yamaa_native
 from yamaa.adapters.native_datasets import (
     NativeActivationCache,
     execute_with_project_functions,

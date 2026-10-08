@@ -1,5 +1,5 @@
-library(yamaanative)
-truth <- read.delim(system.file("predicate_syntax.tsv", package = "yamaanative"),
+library(yamaa)
+truth <- read.delim(system.file("predicate_syntax.tsv", package = "yamaa"),
   sep = "\t", quote = "", comment.char = "", colClasses = "character",
   fileEncoding = "UTF-8", check.names = FALSE)
 for (i in seq_len(nrow(truth))) {

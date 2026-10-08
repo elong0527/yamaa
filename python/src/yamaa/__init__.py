@@ -36,12 +36,12 @@ def __dir__() -> list[str]:
 __version__ = _distribution_version("yamaa")
 
 __all__ = [
-    "domain",
-    "check",
     "DomainError",
     "DomainRun",
     "DomainRunError",
     "__version__",
+    "check",
+    "domain",
     "generate_study_document",
     "yamaa_domain",
 ]

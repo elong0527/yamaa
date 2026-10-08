@@ -56,7 +56,7 @@ def discover(root: Path) -> dict[str, list[str]]:
             raise ValueError(f"dynamic __all__: {path}")
         if seen:
             sources[path.relative_to(root).as_posix()] = sorted(declarations)
-    path = root / 'rust/crates/yamaa-python/yamaa_native.pyi'
+    path = root / 'python/src/yamaa/_native.pyi'
     if path.is_file():
         tree = ast.parse(path.read_text(encoding="utf-8"))
         sources[path.relative_to(root).as_posix()] = sorted(stub_names(tree.body))

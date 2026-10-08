@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from importlib import import_module
 
 import polars as pl
 import pyarrow as pa
@@ -19,7 +20,7 @@ def ipc_from_polars(frame: pl.DataFrame, schema: pa.Schema) -> bytes:
     Host frames are already materialized; serialization precedes the native byte
     budget. Use native byte APIs when accepting untrusted external streams.
     """
-    import yamaa_native
+    yamaa_native = import_module("yamaa._native")
 
     table = frame.to_arrow()
     if table.column_names != schema.names:
@@ -93,7 +94,7 @@ def polars_from_ipc(request: bytes) -> pl.DataFrame:
     Preserve the canonical Arrow schema separately for ipc_from_polars: Polars
     changes its physical representation and can merge input chunks.
     """
-    import yamaa_native
+    yamaa_native = import_module("yamaa._native")
 
     owned = yamaa_native.table_round_trip(request)
     table = pa.ipc.open_stream(owned).read_all()

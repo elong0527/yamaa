@@ -190,22 +190,23 @@ numeric request. The full workflow, table and callback gates remain open.
 
 ## Packaging decision
 
-The optional `yamaa-native` wheel uses Maturin; `python/` retains its existing
-Hatch build. Import the probe with `import yamaa_native`. Installing it does not
-change `yamaa` backend selection or conformance coverage.
+Python uses a mixed Maturin build in `python/`: one `yamaa` wheel includes the
+facade and private `yamaa._native` extension. Build it from `python/` with
+`maturin build --release --sdist`. A source archive owns all four required Rust
+crates and the Python package. The public domain/check candidate never selects
+or falls back to the retained reference implementation.
 
-The optional R package is `yamaanative`, alongside `cdiscbuilder`. It has its own
-`DESCRIPTION`, registered native routine, help page, and source installation.
-Its source archive embeds the workspace via `tools/stage_r_package.py`, so there
-is one maintained copy of the Rust code. Build the staged package, not the
-incomplete source template in `R/yamaanative` directly. The installed package
-does not need the repository, Cargo, Python, or R's legacy package dependencies.
+R installs as `yamaa`. Its archive embeds the shared workspace through
+`tools/stage_r_package.py`; stage `R/yamaa` before building the template. Installed
+runtime tests need no repository, Cargo or Python. The legacy `cdiscbuilder`
+sources remain only for migration assessment until the full release surface
+qualifies. Environment/functions, logs and full benchmark coverage remain open.
 
 The bootstrap resource is embedded in the binary and tested after installation
 outside the checkout. This tests packaging only, not discovery of study resources.
 
 Both installed hosts additionally expose `scalar_round_trip` for the versioned
-`scalar/1` envelope documented in [the R package README](../R/yamaanative/README.md#scalar-transport-probe).
+`scalar/1` envelope documented in [the R package README](../R/yamaa/README.md#scalar-transport-probe).
 The adapter decodes a strict JSON envelope into an actual core value and encodes
 owned text, preserving full i64, exact finite binary64 bits, Unicode/escaped NUL,
 missing versus empty text, booleans and temporal collected precision. Nonfinite
@@ -235,7 +236,7 @@ recovery, process aborts and allocation failure remain unqualified.
 
 The installed `evaluate_numeric` API now composes core compilation and the engine
 numeric lifecycle through a strict `numeric/1` adapter protocol. See the
-[request/outcome contract](../R/yamaanative/README.md#numeric-application-prototype).
+[request/outcome contract](../R/yamaa/README.md#numeric-application-prototype).
 It reuses the scalar codec for bindings, completed values and diagnostic context;
 diagnostic-only wide integers have a distinct decimal representation. Grammar,
 unsupported-function, resource-limit and runtime failure outcomes stay separate.
@@ -281,13 +282,12 @@ python -m unittest discover -s tests -p 'test_*.py'
 From the repository root, with a new empty output directory:
 
 ```sh
-uv tool run --from maturin==1.9.6 maturin build \
-  --manifest-path rust/crates/yamaa-python/Cargo.toml --release --sdist \
-  --out /tmp/yamaa-dist
-python rust/tools/stage_r_package.py /tmp/yamaa-stage/yamaanative
+(cd python && uv tool run --from maturin==1.9.6 maturin build \
+  --release --sdist --out /tmp/yamaa-dist)
+python rust/tools/stage_r_package.py /tmp/yamaa-stage/yamaa
 cd /tmp/yamaa-dist
-R CMD build --no-build-vignettes --no-manual /tmp/yamaa-stage/yamaanative
-R CMD INSTALL --library=/path/to/empty/R-library yamaanative_*.tar.gz
+R CMD build --no-build-vignettes --no-manual /tmp/yamaa-stage/yamaa
+R CMD INSTALL --library=/path/to/empty/R-library yamaa_*.tar.gz
 ```
 
 Use `cargo +1.90.0` or `RUSTUP_TOOLCHAIN=1.90.0` when launching a build from

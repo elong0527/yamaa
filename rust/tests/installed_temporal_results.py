@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 import yamaa
-import yamaa_native
+from yamaa import _native as yamaa_native
 from installed_functions import parameter, request
 from yamaa.adapters.native_functions import invoke_function
 from yamaa.functions.invocation import BoundFunction

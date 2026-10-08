@@ -1,4 +1,4 @@
-useDynLib(yamaanative, .registration = TRUE)
+useDynLib(yamaa, .registration = TRUE)
 export(yamaa_domain)
 export(yamaa_check)
 S3method(as.character,yamaa_int64_vector)

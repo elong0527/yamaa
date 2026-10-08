@@ -287,7 +287,8 @@ UNICODE_DATA_AND_NOTICES = {
     "rust/crates/yamaa-core/unicode/18.0.0/DerivedCoreProperties.txt",
     "rust/crates/yamaa-core/unicode/LICENSE.txt",
     "rust/crates/yamaa-python/LICENSE-UNICODE.txt",
-    "R/yamaanative/inst/LICENSE-UNICODE.txt",
+    "R/yamaa/inst/LICENSE-UNICODE.txt",
+    "python/LICENSE-UNICODE.txt",
 }
 ASCII_SOURCE_IGNORED_PARTS = {
     ".git",

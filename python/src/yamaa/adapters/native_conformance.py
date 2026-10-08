@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from importlib import import_module
 from pathlib import Path
 
 from yamaa.adapters._native_project_functions import activate_project
@@ -58,7 +59,7 @@ def execute_native_example(name, entry, schema_root, destination):
         )
 
     try:
-        import yamaa_native
+        yamaa_native = import_module("yamaa._native")
 
         core_version = yamaa_native.engine_info()["core_version"]
         try:

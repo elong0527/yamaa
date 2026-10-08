@@ -1,5 +1,5 @@
 # Independent canonical source traces and complete expected owned documents.
-library(yamaanative)
+library(yamaa)
 schema <- "{\"protocol\":\"schema/1\",\"schema\":{\"entry\":0,\"modules\":[{\"document\":{\"nodes\":[{\"kind\":\"text\",\"value\":\"version\"},{\"kind\":\"text\",\"value\":\"1.0\"},{\"kind\":\"text\",\"value\":\"root_class\"},{\"kind\":\"text\",\"value\":\"schema_version\"},{\"kind\":\"text\",\"value\":\"type\"},{\"kind\":\"text\",\"value\":\"str\"},{\"entries\":[[4,5]],\"kind\":\"mapping\"},{\"entries\":[[3,6]],\"kind\":\"mapping\"},{\"kind\":\"text\",\"value\":\"parents\"},{\"kind\":\"text\",\"value\":\"type\"},{\"kind\":\"text\",\"value\":\"str\"},{\"kind\":\"text\",\"value\":\"list[str]\"},{\"items\":[10,11],\"kind\":\"sequence\"},{\"entries\":[[9,12]],\"kind\":\"mapping\"},{\"entries\":[[8,13]],\"kind\":\"mapping\"},{\"items\":[7,14],\"kind\":\"sequence\"},{\"entries\":[[0,1],[2,15]],\"kind\":\"mapping\"}],\"root\":16},\"name\":\"schema.yaml\"}],\"root_class\":\"root_class\"}}"
 request <- "{\"document\":{\"nodes\":[{\"kind\":\"text\",\"value\":\"schema_version\"},{\"kind\":\"text\",\"value\":\"1.0\"},{\"kind\":\"text\",\"value\":\"parents\"},{\"kind\":\"text\",\"value\":\"a\"},{\"items\":[3],\"kind\":\"sequence\"},{\"entries\":[[0,1],[2,4]],\"kind\":\"mapping\"}],\"root\":5},\"entry\":{\"display_path\":\"/entry\",\"identity\":\"/entry\"},\"protocol\":\"inheritance/1\"}"
 empty <- "{\"document\":{\"nodes\":[{\"kind\":\"text\",\"value\":\"schema_version\"},{\"kind\":\"text\",\"value\":\"1.0\"},{\"kind\":\"text\",\"value\":\"parents\"},{\"items\":[],\"kind\":\"sequence\"},{\"entries\":[[0,1],[2,3]],\"kind\":\"mapping\"}],\"root\":4},\"entry\":{\"display_path\":\"/entry\",\"identity\":\"/entry\"},\"protocol\":\"inheritance/1\"}"
@@ -67,7 +67,7 @@ cat("Installed R inheritance traces, ownership, reentrancy and original conditio
 
 # Complete graph outcomes and source traces are independently authored and
 # replayed unchanged by Rust and both installed host services.
-load_truth <- function(name) read.delim(system.file(name, package = "yamaanative"),
+load_truth <- function(name) read.delim(system.file(name, package = "yamaa"),
   sep = "\t", quote = "", comment.char = "", colClasses = "character",
   fileEncoding = "UTF-8", check.names = FALSE)
 truth <- load_truth("inheritance_traversal.tsv")

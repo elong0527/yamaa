@@ -58,7 +58,7 @@ class ReleaseApiInventory(unittest.TestCase):
             namespace = root / 'R/yamaa/NAMESPACE'
             namespace.parent.mkdir(parents=True)
             namespace.write_text('export(yamaa_domain)\nS3method(as.character,yamaa_int64)\nS3method("[",yamaa_int64_vector)\n')
-            stub = root / 'rust/crates/yamaa-python/yamaa_native.pyi'
+            stub = root / 'python/src/yamaa/_native.pyi'
             stub.parent.mkdir(parents=True)
             stub.write_text('VERSION: str\nDEFAULT = ...\nclass _Result:\n    ok: bool\n    def save(self): ...\nasync def inspect(): ...\n')
             actual = module.discover(root)

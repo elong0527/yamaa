@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import installed_project_functions as project_functions
 import installed_references as r
-import yamaa_native
+from yamaa import _native as yamaa_native
 from yamaa.adapters import _native_dataset_plan, _native_predicate_plan
 from yamaa.adapters._native_predicate_syntax import (
     NativePredicateLimitError,

@@ -1,5 +1,5 @@
-library(yamaanative)
-read_truth <- function(name) read.delim(system.file(name, package = "yamaanative"),
+library(yamaa)
+read_truth <- function(name) read.delim(system.file(name, package = "yamaa"),
   sep = "\t", quote = "", comment.char = "", colClasses = "character",
   fileEncoding = "UTF-8", check.names = FALSE)
 truth <- rbind(read_truth("reference_binding.tsv"), read_truth("reference_scope.tsv"),

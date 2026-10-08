@@ -11,7 +11,7 @@ use yamaa_core::{
 
 /// An owned temporal or an invalid representation, never a generic object box.
 /// No public constructor, subclassing, fields or mutation are exposed to Python.
-#[pyclass(frozen, module = "yamaa_native", name = "_TemporalResult")]
+#[pyclass(frozen, module = "yamaa._native", name = "_TemporalResult")]
 pub struct TemporalResult {
     value: Option<Temporal>,
 }

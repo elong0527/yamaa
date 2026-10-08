@@ -605,7 +605,64 @@
       "rationale": "Remove public semantic implementation and extension surfaces after replacement qualification; preserve reference baseline until transition.",
       "overrides": {}
     },
-    "rust/crates/yamaa-python/yamaa_native.pyi": {
+    "R/cdiscbuilder/NAMESPACE": {
+      "names": [
+        "add_days",
+        "add_seq",
+        "build_adam_dataset",
+        "calc_rfendtc",
+        "calculate_study_day",
+        "check_submission_column",
+        "create_sdtm_datasets",
+        "epoch_of",
+        "extract_metadata_summary",
+        "extract_value",
+        "get_bmi",
+        "get_earliest_informed_consent_date",
+        "get_first_dose_date",
+        "get_last_dose_date",
+        "get_last_participation_date",
+        "join_visit",
+        "load_study_document",
+        "parse_odm_to_long_df",
+        "process_domain",
+        "topological_sort",
+        "validate_study_terminology",
+        "validate_submission_metadata"
+      ],
+      "disposition": "remove_public",
+      "issue": "#1751",
+      "rationale": "Replace legacy R package with yamaa; #1751 explicitly does not require backward compatibility. Removal requires replacement fixture/API qualification, not an alias of legacy semantics.",
+      "overrides": {
+        "parse_odm_to_long_df": {
+          "disposition": "decision_required",
+          "rationale": "Record whether the legacy ODM helper is removed or translated to a retained helper; equivalence to read_odm is not established."
+        }
+      }
+    },
+    "python/src/yamaa/_reference_domain.py": {
+      "names": [
+        "DomainRun",
+        "DomainRunError",
+        "yamaa_domain"
+      ],
+      "disposition": "internal",
+      "issue": "#1751",
+      "rationale": "Private retained reference implementation used only by unqualified legacy and reference-assessment consumers; public domain/check never fall back to it.",
+      "overrides": {}
+    },
+    "python/src/yamaa/_domain.py": {
+      "disposition": "retain_candidate",
+      "issue": "#1751",
+      "rationale": "Rust-owned public domain/check candidate in the combined yamaa package. Environment, logs, full benchmark coverage and final release API remain unqualified.",
+      "names": [
+        "DomainError",
+        "check",
+        "domain"
+      ],
+      "overrides": {}
+    },
+    "python/src/yamaa/_native.pyi": {
       "names": [
         "DomainError",
         "_BuildResult",
@@ -664,42 +721,7 @@
       "rationale": "Fold native distribution into yamaa and remove standalone component probes after qualification consumers migrate. Private handle methods are inventoried but are not release promises.",
       "overrides": {}
     },
-    "R/cdiscbuilder/NAMESPACE": {
-      "names": [
-        "add_days",
-        "add_seq",
-        "build_adam_dataset",
-        "calc_rfendtc",
-        "calculate_study_day",
-        "check_submission_column",
-        "create_sdtm_datasets",
-        "epoch_of",
-        "extract_metadata_summary",
-        "extract_value",
-        "get_bmi",
-        "get_earliest_informed_consent_date",
-        "get_first_dose_date",
-        "get_last_dose_date",
-        "get_last_participation_date",
-        "join_visit",
-        "load_study_document",
-        "parse_odm_to_long_df",
-        "process_domain",
-        "topological_sort",
-        "validate_study_terminology",
-        "validate_submission_metadata"
-      ],
-      "disposition": "remove_public",
-      "issue": "#1751",
-      "rationale": "Replace legacy R package with yamaa; #1751 explicitly does not require backward compatibility. Removal requires replacement fixture/API qualification, not an alias of legacy semantics.",
-      "overrides": {
-        "parse_odm_to_long_df": {
-          "disposition": "decision_required",
-          "rationale": "Record whether the legacy ODM helper is removed or translated to a retained helper; equivalence to read_odm is not established."
-        }
-      }
-    },
-    "R/yamaanative/NAMESPACE": {
+    "R/yamaa/NAMESPACE": {
       "names": [
         "S3:Ops.yamaa_int64",
         "S3:Ops.yamaa_utf8",
@@ -751,7 +773,7 @@
       ],
       "disposition": "remove_public",
       "issue": "#1751",
-      "rationale": "Fold native distribution into yamaa and remove standalone component probes after qualification consumers migrate. Private handle methods are inventoried but are not release promises.",
+      "rationale": "The yamaa package includes the public domain/check candidate; qualification interfaces remain pending removal from the release surface. Full migration coverage and the final public API remain unqualified.",
       "overrides": {
         "S3:[.yamaa_int64_vector": {
           "disposition": "retain_candidate",
@@ -778,28 +800,6 @@
           "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."
         }
       }
-    },
-    "python/src/yamaa/_reference_domain.py": {
-      "names": [
-        "DomainRun",
-        "DomainRunError",
-        "yamaa_domain"
-      ],
-      "disposition": "internal",
-      "issue": "#1751",
-      "rationale": "Private retained reference implementation used only by unqualified legacy and reference-assessment consumers; public domain/check never fall back to it.",
-      "overrides": {}
-    },
-    "python/src/yamaa/_domain.py": {
-      "disposition": "retain_candidate",
-      "issue": "#1751",
-      "rationale": "Bounded Rust-owned public domain/check candidate. Environment, logs, full benchmark coverage and package consolidation remain unqualified.",
-      "names": [
-        "DomainError",
-        "check",
-        "domain"
-      ],
-      "overrides": {}
     }
   }
 }

@@ -44,7 +44,9 @@ fn resolve(handle: &Robj) -> std::result::Result<Rc<RefCell<State>>, String> {
         .ok_or_else(|| "unknown domain result handle".into())
 }
 fn text(bytes: &Raw) -> std::result::Result<&str, String> {
-    if bytes.len() > 65536 {
+    // The R facade retains at most 65537 Unicode characters. Let the shared
+    // application classify an oversized path as an issue before file access.
+    if bytes.len() > 65537 * 4 {
         return Err("path argument byte limit".into());
     }
     std::str::from_utf8(bytes.as_slice()).map_err(|_| "invalid path argument UTF-8".into())

@@ -3,9 +3,22 @@
   if (!is.null(reply$error)) stop(reply$error, call. = FALSE)
   reply$value
 }
+.domain_path_bytes <- function(value) {
+  if (!is.character(value) || length(value) != 1L || is.na(value) ||
+      !is.null(attributes(value))) {
+    stop("expected one unclassed non-missing character scalar", call. = FALSE)
+  }
+  if (identical(Encoding(value), "bytes")) {
+    stop("byte-marked R text has no declared Unicode encoding", call. = FALSE)
+  }
+  # Keep conversion bounded. An oversized prefix still exceeds the native
+  # 65536-byte path limit and is rejected as an issue before any file access.
+  # Every admitted path is passed in full, including its declared encoding.
+  .scalar_text_bytes(substr(value, 1L, 65537L))
+}
 .domain_arguments <- function(specification, environment) {
-  list(.specification_text_bytes(specification, 65536),
-       if (is.null(environment)) NULL else .specification_text_bytes(environment, 65536),
+  list(.domain_path_bytes(specification),
+       if (is.null(environment)) NULL else .domain_path_bytes(environment),
        charToRaw(as.character(getRversion())))
 }
 

@@ -2,13 +2,18 @@ from collections.abc import Callable
 from typing import Literal
 
 class DomainError(Exception): ...
+
 class _DomainResult:
     def output(self) -> bytes | None: ...
     def issues(self) -> list[tuple[str, str, str | None, list[str], str]]: ...
     def save(self) -> bool: ...
-def _domain_file(specification: str, environment: str | None = None) -> _DomainResult: ...
-def _check_file(specification: str, environment: str | None = None) -> list[tuple[str, str, str | None, list[str], str]]: ...
 
+def _domain_file(
+    specification: str, environment: str | None = None
+) -> _DomainResult: ...
+def _check_file(
+    specification: str, environment: str | None = None
+) -> list[tuple[str, str, str | None, list[str], str]]: ...
 def engine_info() -> dict[str, str | bool]: ...
 def analyze_aggregate(request: str) -> str: ...
 def analyze_numeric(request: str) -> str: ...
@@ -65,32 +70,57 @@ def _compile_reference_catalog(
 ) -> tuple[_ReferenceCatalog | None, str]: ...
 def analyze_references(request: str) -> str: ...
 def reference_capabilities() -> str: ...
-def decode_yaml(source: bytes) -> str:
-    """Decode retained ASCII source into lossless yaml/1 JSON through shared Rust."""
-    ...
+
+# Decode retained ASCII source into lossless yaml/1 JSON through shared Rust.
+def decode_yaml(source: bytes) -> str: ...
 
 # Internal bounded original-YAML compiler. Source capture remains explicit host IO.
 class _Specification:
     def check_issues(self) -> str: ...
     def build(
-        self, capture: Callable[[str, str, int], tuple[bytes, bool] | tuple[Literal["missing", "not_regular_file"], BaseException]],
+        self,
+        capture: Callable[
+            [str, str, int],
+            tuple[bytes, bool]
+            | tuple[Literal["missing", "not_regular_file"], BaseException],
+        ],
         metadata: tuple[str, str, str, str, str],
-        inspect: Callable[[str, str], None | tuple[Literal["missing", "not_regular_file"], BaseException]] | None = None,
+        inspect: Callable[
+            [str, str],
+            None | tuple[Literal["missing", "not_regular_file"], BaseException],
+        ]
+        | None = None,
     ) -> _BuildResult: ...
     def source(self) -> tuple[str, str]: ...
     def execute_csv(self, source: bytes) -> tuple[bytes | None, str]: ...
     def report(
         self,
-        capture: Callable[[str, str, int], tuple[bytes, bool] | tuple[Literal["missing", "not_regular_file"], BaseException]],
+        capture: Callable[
+            [str, str, int],
+            tuple[bytes, bool]
+            | tuple[Literal["missing", "not_regular_file"], BaseException],
+        ],
         publish: Callable[[str, bytes], None],
         metadata: tuple[str, str, str, str, str],
-        inspect: Callable[[str, str], None | tuple[Literal["missing", "not_regular_file"], BaseException]] | None = None,
+        inspect: Callable[
+            [str, str],
+            None | tuple[Literal["missing", "not_regular_file"], BaseException],
+        ]
+        | None = None,
     ) -> str: ...
     def failure_report(
         self,
-        capture: Callable[[str, str, int], tuple[bytes, bool] | tuple[Literal["missing", "not_regular_file"], BaseException]],
+        capture: Callable[
+            [str, str, int],
+            tuple[bytes, bool]
+            | tuple[Literal["missing", "not_regular_file"], BaseException],
+        ],
         metadata: tuple[str, str, str, str, str],
-        inspect: Callable[[str, str], None | tuple[Literal["missing", "not_regular_file"], BaseException]] | None = None,
+        inspect: Callable[
+            [str, str],
+            None | tuple[Literal["missing", "not_regular_file"], BaseException],
+        ]
+        | None = None,
     ) -> str: ...
 
 def _prepare_specification(
@@ -103,14 +133,17 @@ class _BuildResult:
     def save(self, publish: Callable[[str, bytes], None]) -> str: ...
 
 def _prepare_document(
-    identity: str, source: bytes,
+    identity: str,
+    source: bytes,
     canonicalize: Callable[[str, str], tuple[str, str] | None],
     capture: Callable[[str, str, int], bytes | None],
     rebase: Callable[[str, str, str, int], str],
 ) -> _Specification: ...
-
 def _prepare_inherited_specification(
-    modules: list[tuple[str, bytes]], entry: int, identity: str, source: bytes,
+    modules: list[tuple[str, bytes]],
+    entry: int,
+    identity: str,
+    source: bytes,
     canonicalize: Callable[[str, str], tuple[str, str] | None],
     capture: Callable[[str, str, int], bytes | None],
     rebase: Callable[[str, str, str, int], str],

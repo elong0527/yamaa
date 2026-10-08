@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import yamaa_native
+from yamaa import _native as yamaa_native
 from pydantic import ValidationError
 from yamaa.adapters.conformance import (
     ExampleReport,

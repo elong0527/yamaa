@@ -9,7 +9,7 @@ use yamaa_adapters::{
     specification_source::{CapturedSchema, Limits, Source},
 };
 
-#[pyclass(frozen, module = "yamaa_native", name = "_Specification")]
+#[pyclass(frozen, module = "yamaa._native", name = "_Specification")]
 pub struct Specification {
     inner: PreparedRun,
 }

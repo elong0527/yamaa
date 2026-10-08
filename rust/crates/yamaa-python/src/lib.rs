@@ -252,7 +252,7 @@ fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 }
 
 #[pymodule]
-fn yamaa_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<domain_entry::Domain>()?;
     module.add(
         "DomainError",

@@ -6,7 +6,7 @@ use yamaa_adapters::issue_rows::Issue;
 
 pyo3::create_exception!(yamaa, DomainError, PyException);
 
-#[pyclass(frozen, module = "yamaa_native", name = "_DomainResult")]
+#[pyclass(frozen, module = "yamaa._native", name = "_DomainResult")]
 pub struct Domain {
     #[cfg(unix)]
     inner: Option<Mutex<yamaa_adapters::file_application::Domain>>,

@@ -24,7 +24,7 @@ if run.result.status == "success":
     csv_bytes = render_artifact(run.result.artifact)
 ```
 
-Install both the ordinary Python package and the optional `yamaa-native` package.
+Install the `yamaa` package, which includes the private `yamaa._native` extension.
 The example renders bytes in memory; this API never publishes files. A caller
 supplies approved source access through the existing `ProjectResources` port.
 Arbitrary hand-constructed models that bypass schema/YAML validation are outside

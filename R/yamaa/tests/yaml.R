@@ -1,7 +1,7 @@
-library(yamaanative)
+library(yamaa)
 # Raw source bytes (hex encoding, not a digest) and expected JSON are shared
 # independent truth. Base R suffices: no host YAML or JSON parser participates.
-truth <- read.delim(system.file("yaml_transport.tsv", package = "yamaanative"),
+truth <- read.delim(system.file("yaml_transport.tsv", package = "yamaa"),
   sep = "\t", quote = "", comment.char = "", colClasses = "character",
   fileEncoding = "UTF-8", check.names = FALSE)
 before <- loadedNamespaces()

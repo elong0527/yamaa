@@ -1,6 +1,6 @@
-library(yamaanative)
+library(yamaa)
 unicode_notice <- readLines(
-  system.file("LICENSE-UNICODE.txt", package = "yamaanative", mustWork = TRUE),
+  system.file("LICENSE-UNICODE.txt", package = "yamaa", mustWork = TRUE),
   encoding = "UTF-8", warn = FALSE
 )
 stopifnot(
@@ -21,7 +21,7 @@ stopifnot(
 # stay as lossless envelopes; no ordinary R numeric vector carries an i64.
 check_vectors <- function(fixture, invoke) {
   vectors <- read.delim(
-    system.file(fixture, package = "yamaanative"),
+    system.file(fixture, package = "yamaa"),
     sep = "\t", quote = "", comment.char = "", stringsAsFactors = FALSE,
     fileEncoding = "UTF-8", check.names = FALSE
   )
@@ -83,11 +83,11 @@ invisible(gc())
 stopifnot(grepl('"status":"value"', owned_numeric, fixed = TRUE))
 
 # Raw IPC keeps full i64 and temporal precision without an R Arrow dependency.
-table_truth <- read.delim(system.file("tables", "expected.tsv", package = "yamaanative"),
+table_truth <- read.delim(system.file("tables", "expected.tsv", package = "yamaa"),
                           sep = "\t", quote = "", comment.char = "",
                           colClasses = "character", fileEncoding = "UTF-8")
 for (case in c("mixed", "empty", "schema_only", "zero_columns")) {
-  path <- system.file("tables", paste0(case, ".arrow"), package = "yamaanative")
+  path <- system.file("tables", paste0(case, ".arrow"), package = "yamaa")
   request <- readBin(path, "raw", n = file.info(path)$size)
   truth <- table_truth$expected[table_truth$id == case]
   stopifnot(identical(table_snapshot(request), truth))
@@ -120,7 +120,7 @@ json_apis <- list(
 bad_utf8 <- list(c(255L), c(192L, 128L), c(237L, 160L, 128L),
                  c(244L, 144L, 128L, 128L), c(226L, 130L))
 for (api in json_apis) {
-  symbol <- get(api$symbol, envir = asNamespace("yamaanative"))
+  symbol <- get(api$symbol, envir = asNamespace("yamaa"))
   valid <- paste0(api$prefix, "caf\u00e9", api$suffix)
   expected <- api$call(valid)
   latin1 <- rawToChar(c(charToRaw(api$prefix), charToRaw("caf"),

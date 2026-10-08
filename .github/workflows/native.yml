@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'rust/**'
-      - 'R/yamaanative/**'
+      - 'R/yamaa/**'
       - 'python/**'
       - 'benchmarks/**'
       - 'yaml/**'
@@ -13,7 +13,7 @@ on:
   pull_request:
     paths:
       - 'rust/**'
-      - 'R/yamaanative/**'
+      - 'R/yamaa/**'
       - 'python/**'
       - 'benchmarks/**'
       - 'yaml/**'
@@ -124,13 +124,14 @@ jobs:
       - name: Build wheel and source archive
         run: |
           echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
-          maturin build --manifest-path rust/crates/yamaa-python/Cargo.toml --release --sdist --out "${RUNNER_TEMP}/native-dist"
-          uv build --project python --wheel --out-dir "${RUNNER_TEMP}/reference-dist"
+          (cd python && maturin build --release --sdist --out "${RUNNER_TEMP}/native-dist")
+          mkdir -p "${RUNNER_TEMP}/reference-dist"
+          cp "${RUNNER_TEMP}"/native-dist/*.whl "${RUNNER_TEMP}/reference-dist/"
           uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/table-requirements.txt"
       - name: Install and test wheel outside checkout
         working-directory: ${{ runner.temp }}
         run: |
-          python -m pip install --no-deps -r table-requirements.txt reference-dist/*.whl native-dist/*.whl
+          python -m pip install --no-deps -r table-requirements.txt native-dist/*.whl
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_python.py" installed_python.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/scalar_transport.tsv" scalar_transport.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/numeric_transport.tsv" numeric_transport.tsv
@@ -230,14 +231,14 @@ jobs:
           # Keep independent schema probes usable with only the native wheel.
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_schema.py SchemaService.test_independent_truth_without_python_interpreter SchemaService.test_prepared_snapshot_owns_metadata_and_uses_the_same_results SchemaService.test_host_types_and_closed_transport
           # The separate reference comparison needs the actual Python facade.
-          uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with reference-dist/*.whl --with native-dist/*.whl python -E -s installed_schema.py
+          uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with native-dist/*.whl python -E -s installed_schema.py
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_yaml.py
-          uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with reference-dist/*.whl --with native-dist/*.whl python -E -s installed_schema_loading.py
-          uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with reference-dist/*.whl --with native-dist/*.whl python -E -s installed_inheritance.py
+          uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with native-dist/*.whl python -E -s installed_schema_loading.py
+          uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with native-dist/*.whl python -E -s installed_inheritance.py
       - name: Rebuild and test from source archive outside checkout
         working-directory: ${{ runner.temp }}
         run: |
-          python -m pip uninstall -y yamaa-native
+          python -m pip uninstall -y yamaa
           python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz
           python -I conformance-suite/qualify_native.py \
             --fixtures conformance-suite/benchmarks --schema conformance-suite/yaml \
@@ -332,35 +333,35 @@ jobs:
         working-directory: rust
         run: cargo clippy -p yamaa-r -- -D warnings
       - name: Stage standalone R package
-        run: python rust/tools/stage_r_package.py "${RUNNER_TEMP}/native-stage/yamaanative"
+        run: python rust/tools/stage_r_package.py "${RUNNER_TEMP}/native-stage/yamaa"
       - name: Build, install, and test outside checkout
         working-directory: ${{ runner.temp }}
         run: |
           mkdir -p native-r-library
-          R CMD build --no-build-vignettes --no-manual native-stage/yamaanative
-          R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaanative_0.1.0.tar.gz
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/installation.R" installation.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/scalars.R" scalars.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/functions.R" functions.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/datasets.R" datasets.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/dataset_callbacks.R" dataset_callbacks.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/dependencies.R" dependencies.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/column_dependencies.R" column_dependencies.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/references.R" references.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/aggregate_syntax.R" aggregate_syntax.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/numeric_syntax.R" numeric_syntax.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/regex.R" regex.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/predicate_syntax.R" predicate_syntax.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/predicate_execution.R" predicate_execution.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/schema.R" schema.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/original_specifications.R" original_specifications.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/inheritance.R" inheritance.R
-          cp "${GITHUB_WORKSPACE}/R/yamaanative/tests/yaml.R" yaml.R
+          R CMD build --no-build-vignettes --no-manual native-stage/yamaa
+          R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.2.0.tar.gz
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/scalars.R" scalars.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/functions.R" functions.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/datasets.R" datasets.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/dataset_callbacks.R" dataset_callbacks.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/dependencies.R" dependencies.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/column_dependencies.R" column_dependencies.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/references.R" references.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/aggregate_syntax.R" aggregate_syntax.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/numeric_syntax.R" numeric_syntax.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/regex.R" regex.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/predicate_syntax.R" predicate_syntax.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/predicate_execution.R" predicate_execution.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/schema.R" schema.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/original_specifications.R" original_specifications.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/inheritance.R" inheritance.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/yaml.R" yaml.R
           R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
             --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
             --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
             --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
-            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaanative_0.1.0.tar.gz" \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.2.0.tar.gz" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Check R source package outside checkout
         working-directory: ${{ runner.temp }}
@@ -370,8 +371,8 @@ jobs:
           mkdir native-r-check
           cd native-r-check
           git -C "${GITHUB_WORKSPACE}" rev-parse HEAD > source-revision.txt
-          R CMD check --no-manual ../yamaanative_0.1.0.tar.gz
-          python -c 'from pathlib import Path; lines = Path("yamaanative.Rcheck/00check.log").read_text().splitlines(); assert "Status: OK" in lines, "R package check has unresolved findings"'
+          R CMD check --no-manual ../yamaa_0.2.0.tar.gz
+          python -c 'from pathlib import Path; lines = Path("yamaa.Rcheck/00check.log").read_text().splitlines(); assert "Status: OK" in lines, "R package check has unresolved findings"'
       - name: Preserve R package check
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -379,9 +380,9 @@ jobs:
           name: native-r-check-${{ matrix.os }}
           path: |
             ${{ runner.temp }}/native-r-check/source-revision.txt
-            ${{ runner.temp }}/native-r-check/yamaanative.Rcheck/00check.log
-            ${{ runner.temp }}/native-r-check/yamaanative.Rcheck/00install.out
-            ${{ runner.temp }}/native-r-check/yamaanative.Rcheck/tests/*.Rout*
+            ${{ runner.temp }}/native-r-check/yamaa.Rcheck/00check.log
+            ${{ runner.temp }}/native-r-check/yamaa.Rcheck/00install.out
+            ${{ runner.temp }}/native-r-check/yamaa.Rcheck/tests/*.Rout*
           if-no-files-found: error
       - name: Preserve R supplemental qualification
         if: always()
@@ -394,4 +395,4 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: native-r-${{ matrix.os }}
-          path: ${{ runner.temp }}/yamaanative_0.1.0.tar.gz
+          path: ${{ runner.temp }}/yamaa_0.2.0.tar.gz

@@ -6,7 +6,7 @@ import threading
 import unittest
 from pathlib import Path
 
-import yamaa_native
+from yamaa import _native as yamaa_native
 from yamaa.adapters._native_schema_wire import encode_tree
 
 SCHEMA = json.dumps(

@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import installed_aggregate_planning as a
 import installed_references as r
-import yamaa_native
+from yamaa import _native as yamaa_native
 from yamaa.adapters import _native_dataset_plan
 from yamaa.adapters._native_aggregate_syntax import (
     NativeAggregateLimitError,

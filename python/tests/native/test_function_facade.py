@@ -27,7 +27,7 @@ def native(monkeypatch):
 
     monkeypatch.setitem(
         sys.modules,
-        "yamaa_native",
+        "yamaa._native",
         SimpleNamespace(invoke_function=invoke, _temporal_result=factory),
     )
     return calls, factories
@@ -116,7 +116,7 @@ def test_callback_exceptions_are_not_swallowed(native, error):
 def test_old_native_api_fails_before_callback(monkeypatch):
     """An incompatible installed native version cannot execute callback effects."""
     effects = []
-    monkeypatch.setitem(sys.modules, "yamaa_native", SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "yamaa._native", SimpleNamespace())
     with pytest.raises(AttributeError):
         invoke_function("request", lambda: effects.append(1))
     assert effects == []

@@ -276,7 +276,7 @@ fn engine_info() -> List {
 }
 
 extendr_module! {
-    mod yamaanative;
+    mod yamaa;
     use domain_entry;
     use scalars;
     use specification_service;

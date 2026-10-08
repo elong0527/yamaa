@@ -1,4 +1,4 @@
-library(yamaanative)
+library(yamaa)
 
 # JSON construction for independent test inputs; no installed JSON dependency.
 jquote <- function(x) {
@@ -84,7 +84,7 @@ host_value <- function(token) {
 }
 
 # Replay the existing shared independent truth with real R callbacks and trace.
-cases <- read.delim(system.file("function_invocation.tsv", package = "yamaanative"),
+cases <- read.delim(system.file("function_invocation.tsv", package = "yamaa"),
                     sep = "\t", quote = "", comment.char = "", colClasses = "character",
                     fileEncoding = "UTF-8", check.names = FALSE)
 stopifnot(nrow(cases) == 42L)
@@ -319,7 +319,7 @@ stopifnot(inherits(failure, "error"), effects == 1L,
 stopifnot(identical(invoke_function(base_req, function() 1L), value_outcome(wire("int:1"))))
 
 # Direct internal dispatch cannot bypass raw payload validation or crash recovery.
-symbol <- get("wrap__invoke_function", envir = asNamespace("yamaanative"))
+symbol <- get("wrap__invoke_function", envir = asNamespace("yamaa"))
 for (dispatch in list(function(...) list(), function(...) list(99L, NULL, NULL),
                       function(...) list(0L, 1L, "unchecked text"))) {
   stopifnot(identical(.Call(symbol, charToRaw(base_req), dispatch)$error, "internal function transport failure"))

@@ -3,8 +3,8 @@
 from os import PathLike, fspath
 
 import polars as pl
-from yamaa_native import DomainError, _check_file, _domain_file
 
+from yamaa._native import DomainError, _check_file, _domain_file
 from yamaa._native_results import issues_frame
 
 
@@ -37,9 +37,15 @@ class Domain:
 
 
 def domain(
-    specification: str | PathLike[str], *, environment: str | PathLike[str] | None = None
+    specification: str | PathLike[str],
+    *,
+    environment: str | PathLike[str] | None = None,
 ) -> Domain:
-    return Domain(_domain_file(fspath(specification), None if environment is None else fspath(environment)))
+    return Domain(
+        _domain_file(
+            fspath(specification), None if environment is None else fspath(environment)
+        )
+    )
 
 
 class Check:
@@ -52,10 +58,16 @@ class Check:
 
 
 def check(
-    specification: str | PathLike[str], *, environment: str | PathLike[str] | None = None
+    specification: str | PathLike[str],
+    *,
+    environment: str | PathLike[str] | None = None,
 ) -> Check:
     """Return native preparation and static issues without reading study data."""
-    return Check(_check_file(fspath(specification), None if environment is None else fspath(environment)))
+    return Check(
+        _check_file(
+            fspath(specification), None if environment is None else fspath(environment)
+        )
+    )
 
 
-__all__ = ["DomainError", "domain", "check"]
+__all__ = ["DomainError", "check", "domain"]

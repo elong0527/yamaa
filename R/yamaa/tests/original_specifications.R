@@ -7,8 +7,8 @@ rm_path <- Sys.which("rm")
 if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm")))
 Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
-library(yamaanative)
-root <- system.file("specification-original", package="yamaanative", mustWork=TRUE)
+library(yamaa)
+root <- system.file("specification-original", package="yamaa", mustWork=TRUE)
 source(file.path(root,"issue-frame-truth.R"),local=TRUE)
 check_issue_frame <- function(actual,expected) {
   stopifnot(is.data.frame(actual),identical(names(actual),c("phase","condition","requirement","spec_paths","context")))
@@ -19,7 +19,7 @@ rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
 module_names <- c("schema.yaml",sort(setdiff(list.files(file.path(root,"schema"),pattern="[.]yaml$"),"schema.yaml")))
 modules <- setNames(lapply(file.path(root,"schema",module_names),rawfile),module_names)
 # Both hosts receive already-resolved context from the captured Rust schema.
-prepare_entry <- get(".prepare_document",envir=asNamespace("yamaanative"))
+prepare_entry <- get(".prepare_document",envir=asNamespace("yamaa"))
 no_port <- function(...) stop("invalid entry reached source authority")
 preflight_truth <- read.delim(file.path(root,"preflight.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
 stopifnot(nrow(preflight_truth)==5L)
@@ -46,7 +46,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   case <- file.path(root,"cases",case_name)
   specification <- if(case_name=="schema-inheritance") "spec_study.yaml" else "spec.yaml"
   if(case_name=="schema-inheritance") {
-    inherited_prepare <- get(".prepare_document",envir=asNamespace("yamaanative"))
+    inherited_prepare <- get(".prepare_document",envir=asNamespace("yamaa"))
     parent_reads <- character(); parent_resolutions <- character()
     canonicalize <- function(declaring,written) {
       parent_resolutions <<- c(parent_resolutions,written)
@@ -68,7 +68,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
     stopifnot(identical(parent_reads,c("spec_organization.yaml","spec_compound.yaml")),identical(parent_resolutions,c("spec_organization.yaml","spec_compound.yaml","spec_organization.yaml")))
   } else {
     no_parent <- function(...) stop("standalone preparation invoked a parent port")
-    handle <- get(".prepare_document",envir=asNamespace("yamaanative"))(
+    handle <- get(".prepare_document",envir=asNamespace("yamaa"))(
       specification,rawfile(file.path(case,specification)),no_parent,no_parent,no_parent)
   }
   gc()
@@ -110,14 +110,14 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   stopifnot(state$reads==length(inputs),identical(state$requests,rep(names(inputs),2L)))
   stopifnot(published==if(case_name %in% c("adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup")) 2L else 0L)
   # Result construction does not publish; later saves retain bytes and never read.
-  build <- get(".specification_build",envir=asNamespace("yamaanative"))
-  build_output <- get(".build_output",envir=asNamespace("yamaanative"))
-  build_observations <- get(".build_observations",envir=asNamespace("yamaanative"))
-  build_save <- get(".build_save",envir=asNamespace("yamaanative"))
+  build <- get(".specification_build",envir=asNamespace("yamaa"))
+  build_output <- get(".build_output",envir=asNamespace("yamaa"))
+  build_observations <- get(".build_observations",envir=asNamespace("yamaa"))
+  build_save <- get(".build_save",envir=asNamespace("yamaa"))
   before <- published
   result <- build(handle,capture,case_name,specification)
   requests_after_build <- state$requests
-  build_issues <- get(".build_issues",envir=asNamespace("yamaanative"))
+  build_issues <- get(".build_issues",envir=asNamespace("yamaa"))
   for(i in seq_len(2L)) check_issue_frame(build_issues(result),issue_frame_truth[[case_name]])
   copied_issues <- build_issues(result)
   if(nrow(copied_issues)) copied_issues$phase[[1L]] <- "caller mutation"
@@ -151,7 +151,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   stopifnot(inherits(tryCatch(build_issues(handle),error=identity),"error"))
   stopifnot(inherits(tryCatch(specification_source(result),error=identity),"error"))
   # Exercise native filesystem transport over every unchanged original input.
-  ports <- get(".file_resources_ports",envir=asNamespace("yamaanative"))(case,case)
+  ports <- get(".file_resources_ports",envir=asNamespace("yamaa"))(case,case)
   native_expected <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
   native_expected <- sub('"runtime":"python"','"runtime":"r"',native_expected,fixed=TRUE)
   native_expected <- sub('fixture-runtime',as.character(getRversion()),native_expected,fixed=TRUE)
@@ -166,7 +166,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   # Save held successful bytes through native explicit-target publication.
   target_name <- if(case_name=="schema-lookup") "adsl.csv" else if(case_name=="schema-window-functions") "advs.csv" else "adlb.csv"
   target <- file.path(directory,target_name)
-  publisher <- get(".file_publisher_port",envir=asNamespace("yamaanative"))(target,target_name)
+  publisher <- get(".file_publisher_port",envir=asNamespace("yamaa"))(target,target_name)
   native_result <- build(handle,ports$capture,case_name,specification,inspect=ports$inspect)
   before_reads <- ports$reads()
   if(startsWith(case_name,"negative-")) {
@@ -179,19 +179,19 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   stopifnot(ports$reads()==before_reads)
   cat(case_name,"native file publication complete reports, exact bytes and retained save gates passed\n")
   # Preparation, checking and build require no R semantic model or source callback.
-  file_handle <- get(".prepare_file_specification",envir=asNamespace("yamaanative"))(case,case,specification)
-  file_reads <- get(".file_specification_reads",envir=asNamespace("yamaanative"))
+  file_handle <- get(".prepare_file_specification",envir=asNamespace("yamaa"))(case,case,specification)
+  file_reads <- get(".file_specification_reads",envir=asNamespace("yamaa"))
   initial_reads <- if(case_name=="schema-inheritance") 3L else 1L
   stopifnot(file_reads(file_handle)==initial_reads)
-  file_check <- get(".file_specification_check",envir=asNamespace("yamaanative"))
-  stopifnot(identical(file_check(file_handle),get(".specification_check_issues",envir=asNamespace("yamaanative"))(handle)),file_reads(file_handle)==initial_reads)
+  file_check <- get(".file_specification_check",envir=asNamespace("yamaa"))
+  stopifnot(identical(file_check(file_handle),get(".specification_check_issues",envir=asNamespace("yamaa"))(handle)),file_reads(file_handle)==initial_reads)
   file_expected <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
   file_expected <- sub('"runtime":"python"','"runtime":"r"',file_expected,fixed=TRUE)
   file_expected <- sub('fixture-runtime',as.character(getRversion()),file_expected,fixed=TRUE)
   file_expected <- sub('fixture-engine',engine_info()$core_version,file_expected,fixed=TRUE)
   for(created in c(1L,0L)) {
     if(created==0L) file_expected <- gsub('"snapshots_created":1','"snapshots_created":0',file_expected,fixed=TRUE)
-    file_result <- get(".file_specification_build",envir=asNamespace("yamaanative"))(file_handle,case_name,specification)
+    file_result <- get(".file_specification_build",envir=asNamespace("yamaa"))(file_handle,case_name,specification)
     file_unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',file_expected)
     stopifnot(identical(build_observations(file_result),file_unsaved),file_reads(file_handle)==initial_reads+length(inputs))
     if(startsWith(case_name,"negative-")) {
@@ -212,7 +212,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   stopifnot(inherits(tryCatch(specification_source(expired),error=identity),"error"))
 }
 # Replay existing complete graph failure truth through the raw-YAML entry point.
-inherited_prepare <- get(".prepare_document",envir=asNamespace("yamaanative"))
+inherited_prepare <- get(".prepare_document",envir=asNamespace("yamaa"))
 replay <- read.delim(file.path(root,"inheritance-replay.tsv"),sep="\t",quote="",comment.char="",colClasses="character",check.names=FALSE,fileEncoding="UTF-8")
 stopifnot(length(unique(replay$case))==7L)
 for(name in unique(replay$case)) {
@@ -267,7 +267,7 @@ for(i in seq_len(nrow(preparation_truth))) {
 }
 cat("inherited layer, composition and dependency issue records passed\n")
 # The inherited preparation callbacks retain exact R errors and interrupts.
-inherited_prepare <- get(".prepare_document",envir=asNamespace("yamaanative"))
+inherited_prepare <- get(".prepare_document",envir=asNamespace("yamaa"))
 inherit_case <- file.path(root,"cases","schema-inheritance")
 inherit_entry <- normalizePath(file.path(inherit_case,"spec_study.yaml"),winslash="/")
 inherit_source <- rawfile(inherit_entry)
@@ -295,7 +295,7 @@ case <- file.path(root,"cases",case_name)
 handle <- prepare_entry("spec.yaml",rawfile(file.path(case,"spec.yaml")),no_port,no_port,no_port)
 # The registered prototype single-buffer routine is not a public R wrapper.
 # Its error envelope must still distinguish missing secondary inputs.
-source_count <- .Call(get("wrap__execute_specification_csv",envir=asNamespace("yamaanative")),handle,rawfile(file.path(case,"input/dm.csv")))
+source_count <- .Call(get("wrap__execute_specification_csv",envir=asNamespace("yamaa")),handle,rawfile(file.path(case,"input/dm.csv")))
 stopifnot(identical(source_count$error,'{"outcome":{"code":"source_count","stage":"bind","status":"rejected"},"protocol":"specification/prototype"}'))
 # Explicit resource replies preserve the common port's complete observations.
 capture_truth <- read.delim(file.path(root,"source-capture.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
@@ -385,7 +385,7 @@ for(i in seq_len(nrow(inspection_truth))) {
       if(causes[[name]]=="not_regular_file") dir.create(path)
     } else writeBin(charToRaw("bytes that must remain unread"),path)
   }
-  ports <- get(".file_resources_ports",envir=asNamespace("yamaanative"))(directory,directory)
+  ports <- get(".file_resources_ports",envir=asNamespace("yamaa"))(directory,directory)
   for(j in seq_len(2L)) {
     result <- build(handle,ports$capture,"schema-lookup",inspect=ports$inspect)
     stopifnot(identical(build_observations(result),expected),is.null(build_output(result)),ports$reads()==0L)
@@ -530,7 +530,7 @@ stopifnot(identical(parquet_requests,"input/lb.csv"),length(parquet_saved)==2L,
 cat("native Parquet output construction and explicit save passed\n")
 
 directory <- tempfile("native-parquet-published-");dir.create(directory)
-publisher <- get(".file_publisher_port",envir=asNamespace("yamaanative"))(file.path(directory,"adlb.parquet"),"adlb.parquet")
+publisher <- get(".file_publisher_port",envir=asNamespace("yamaa"))(file.path(directory,"adlb.parquet"),"adlb.parquet")
 for(j in seq_len(2L)) {
   actual <- publisher$save(parquet_result)
   stopifnot(identical(rawfile(file.path(directory,"adlb.parquet")),parquet_saved[[1L]]),
@@ -584,7 +584,7 @@ directory <- tempfile("native-parquet-source-"); dir.create(directory)
 dir.create(file.path(directory,"input"))
 stopifnot(file.copy(file.path(root,"pq","ordered-sum.parquet"),file.path(directory,"input","lb.parquet")))
 handle <- prepare_entry("spec.yaml",charToRaw(source),no_port,no_port,no_port)
-ports <- get(".file_resources_ports",envir=asNamespace("yamaanative"))(directory,directory)
+ports <- get(".file_resources_ports",envir=asNamespace("yamaa"))(directory,directory)
 native_expected <- expected
 for(created in c(1L,0L)) {
   if(created==0L) native_expected <- gsub('"snapshots_created":1','"snapshots_created":0',native_expected,fixed=TRUE)
@@ -635,7 +635,7 @@ for(test in cases) {
   stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"),identical(requests,"input.parquet"))
   directory <- tempfile("native-parquet-failure-"); dir.create(directory)
   stopifnot(file.copy(file.path(root,"pq",paste0(test[[1L]],".parquet")),file.path(directory,"input.parquet")))
-  ports <- get(".file_resources_ports",envir=asNamespace("yamaanative"))(directory,directory)
+  ports <- get(".file_resources_ports",envir=asNamespace("yamaa"))(directory,directory)
   native_expected <- expected
   for(created in c(1L,0L)) {
     if(created==0L) native_expected <- gsub('"snapshots_created":1','"snapshots_created":0',native_expected,fixed=TRUE)
@@ -884,11 +884,11 @@ cat("original column matches complete reports, cached reads and exact saved CSV 
 
 static_truth <- read.delim(file.path(root,"static-verification-checks.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="UTF-8",check.names=FALSE)
 stopifnot(nrow(static_truth)==15L)
-check_issues <- get(".specification_check_issues",envir=asNamespace("yamaanative"))
+check_issues <- get(".specification_check_issues",envir=asNamespace("yamaa"))
 for(i in seq_len(nrow(static_truth))) {
   handle <- prepare_entry("spec.yaml",hex_raw(static_truth$source_hex[[i]]),no_port,no_port,no_port)
   for(j in seq_len(2L)) stopifnot(identical(check_issues(handle),static_truth$expected[[i]]))
-  frame <- get(".check_specification_issue_frame",envir=asNamespace("yamaanative"))
+  frame <- get(".check_specification_issue_frame",envir=asNamespace("yamaa"))
   for(j in seq_len(2L)) check_issue_frame(frame(handle),issue_frame_truth[[paste0("static/",static_truth$case[[i]])]])
 }
 cat("static verification check complete issues without study authority passed\n")
@@ -900,10 +900,10 @@ directory <- normalizePath(directory,winslash="/",mustWork=TRUE)
 dir.create(file.path(directory,"entry"));dir.create(file.path(directory,"parent"))
 entry_path <- file.path(directory,"entry","spec.yaml")
 valid <- "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
-prepare_file <- get(".prepare_file_specification",envir=asNamespace("yamaanative"))
-file_check <- get(".file_specification_check",envir=asNamespace("yamaanative"))
-file_reads <- get(".file_specification_reads",envir=asNamespace("yamaanative"))
-file_build <- get(".file_specification_build",envir=asNamespace("yamaanative"))
+prepare_file <- get(".prepare_file_specification",envir=asNamespace("yamaa"))
+file_check <- get(".file_specification_check",envir=asNamespace("yamaa"))
+file_reads <- get(".file_specification_reads",envir=asNamespace("yamaa"))
+file_build <- get(".file_specification_build",envir=asNamespace("yamaa"))
 writeBin(charToRaw(paste0(sub("'1.0'","'99.0'",valid,fixed=TRUE),"parents: absent.yaml\n")),entry_path)
 actual <- tryCatch(prepare_file(directory,file.path(directory,"entry"),"spec.yaml"),error=identity)
 expected <- paste0('{"outcome":{"diagnostics":[{"condition":"schema_version_mismatch","context":{"actual":"99.0","entry":"',entry_path,'","expected":"1.0","source":"',entry_path,'"},"phase":"validation","requirement":"REQ-0245","spec_paths":["schema_version"]}],"status":"invalid"},"protocol":"specification/prototype"}')
@@ -916,7 +916,7 @@ writeBin(charToRaw(valid),file.path(directory,"parent","base.yaml"))
 writeBin(charToRaw("schema_version: '1.0'\nparents: [../parent/base.yaml, ../parent/./base.yaml]\n"),entry_path)
 handle <- prepare_file(directory,file.path(directory,"entry"),"spec.yaml")
 stopifnot(file_reads(handle)==2L,identical(file_check(handle),"[]"),file_reads(handle)==2L)
-stopifnot(identical(get(".file_specification_source",envir=asNamespace("yamaanative"))(handle),list(name="SRC",path="../parent/input.csv")))
+stopifnot(identical(get(".file_specification_source",envir=asNamespace("yamaa"))(handle),list(name="SRC",path="../parent/input.csv")))
 writeBin(charToRaw("[changed"),entry_path);writeBin(charToRaw("[changed"),file.path(directory,"parent","base.yaml"))
 writeBin(charToRaw("ID\n1\n"),file.path(directory,"parent","input.csv"))
 result <- file_build(handle,"file-view")
@@ -935,7 +935,7 @@ cat("native file preparation complete early findings, lexical views, retained mo
 directory <- tempfile("native-resource-policy-"); dir.create(directory)
 dir.create(file.path(directory,"spec")); dir.create(file.path(directory,"data"))
 writeBin(charToRaw("retained"),file.path(directory,"data","source"))
-file_ports <- get(".file_resources_ports",envir=asNamespace("yamaanative"))
+file_ports <- get(".file_resources_ports",envir=asNamespace("yamaa"))
 ports <- file_ports(directory,file.path(directory,"spec"))
 stopifnot(is.null(ports$inspect("SRC","../data/source")),ports$reads()==0L)
 actual <- tryCatch(ports$capture("SRC","../data/source",7L),error=identity)
@@ -969,7 +969,7 @@ stopifnot(inherits(actual,"error"),conditionMessage(actual)=="resource path cont
 actual <- tryCatch(ports$capture("SRC",normalizePath(outside,winslash="/",mustWork=TRUE),8L),error=identity)
 stopifnot(inherits(actual,"error"),conditionMessage(actual)=="resource path outside approved roots")
 expired <- unserialize(serialize(ports$handle,NULL))
-reply <- .Call(get("wrap__file_resource_reads",envir=asNamespace("yamaanative")),expired)
+reply <- .Call(get("wrap__file_resource_reads",envir=asNamespace("yamaa")),expired)
 stopifnot(!is.null(reply$error))
 gc()
 stopifnot(ports$reads()==1L)
@@ -999,7 +999,7 @@ cat("native file byte ceilings, snapshot mutation, link authority and registered
 directory <- tempfile("native-publication-policy-");dir.create(directory)
 target <- file.path(directory,"target.csv")
 writeBin(charToRaw("retained"),target)
-file_publisher <- get(".file_publisher_port",envir=asNamespace("yamaanative"))
+file_publisher <- get(".file_publisher_port",envir=asNamespace("yamaa"))
 for(name in c("new.csv","target.csv")) for(suffix in c("/","/.","/..")) {
   actual <- tryCatch(file_publisher(paste0(file.path(directory,name),suffix),"declared.csv"),error=identity)
   stopifnot(inherits(actual,"error"),conditionMessage(actual)=="invalid explicit publication target",identical(rawfile(target),charToRaw("retained")),identical(list.files(directory,all.files=TRUE,no..=TRUE),"target.csv"))
@@ -1012,7 +1012,7 @@ for(content in list("new",1L,structure(charToRaw("new"),class="content"))) {
 }
 stopifnot(identical(publication$publish("declared.csv",charToRaw("complete")),TRUE),identical(rawfile(target),charToRaw("complete")))
 expired <- unserialize(serialize(publication$handle,NULL))
-reply <- .Call(get("wrap__publish_file_artifact",envir=asNamespace("yamaanative")),expired,charToRaw("declared.csv"),charToRaw("must not write"))
+reply <- .Call(get("wrap__publish_file_artifact",envir=asNamespace("yamaa")),expired,charToRaw("declared.csv"),charToRaw("must not write"))
 stopifnot(!is.null(reply$error),identical(rawfile(target),charToRaw("complete")))
 stopifnot(identical(list.files(directory,all.files=TRUE,no..=TRUE),"target.csv"))
 unlink(directory,recursive=TRUE)
@@ -1059,6 +1059,13 @@ stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(
 refused <- yamaa_domain("absent.yaml",environment="absent-environment.yaml")
 stopifnot(is.null(refused$output),identical(refused$issues$condition,"unsupported_operation"),identical(refused$issues,yamaa_check("absent.yaml",environment="absent-environment.yaml")$issues))
 stopifnot(inherits(tryCatch(yamaa_domain(NULL),error=identity),"error"))
+for(path in c(strrep("x",65537L),strrep("\u00e9",32769L))) {
+  refused <- yamaa_domain(path)
+  stopifnot(is.null(refused$output),identical(refused$issues$condition,"engine_rejected"),
+            identical(refused$issues$ctx,'{"code":"resource_path","stage":"prepare"}'),
+            identical(yamaa_check(path)$issues,refused$issues),
+            identical(yamaa_domain(path,environment=path)$issues$condition,"unsupported_operation"))
+}
 unlink(directory,recursive=TRUE)
 cat("public check without study data, full-range integers, retained save retry and environment refusal passed\n")
 

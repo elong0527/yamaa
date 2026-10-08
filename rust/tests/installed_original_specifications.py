@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import yamaa_native
+from yamaa import _native as yamaa_native
 
 ROOT = Path(__file__).with_name("specification-original")
 CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter", "negative-paired-dates", "negative-not-missing-age", "negative-implausible-age", "negative-invalid-sex", "negative-sex-code", "negative-matches-bad-pattern")
@@ -1490,6 +1490,13 @@ class PublicDomains(unittest.TestCase):
         self.assertIsNone(result.output)
         self.assertEqual(result.issues["condition"].to_list(),["unsupported_operation"])
         self.assertEqual(yamaa.check("absent.yaml",environment="absent-environment.yaml").issues.rows(),result.issues.rows())
+        for path in ("x" * 65537, "\u00e9" * 32769):
+            refused = yamaa.domain(path)
+            self.assertIsNone(refused.output)
+            self.assertEqual(refused.issues["condition"].to_list(), ["engine_rejected"])
+            self.assertEqual(json.loads(refused.issues["ctx"][0]), {"code": "resource_path", "stage": "prepare"})
+            self.assertEqual(yamaa.check(path).issues.rows(), refused.issues.rows())
+            self.assertEqual(yamaa.domain(path, environment=path).issues["condition"].to_list(), ["unsupported_operation"])
         with self.assertRaises(yamaa.DomainError): result.save()
         for function in (yamaa.domain,yamaa.check):
             with self.assertRaises(TypeError): function(None)

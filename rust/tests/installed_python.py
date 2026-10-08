@@ -6,13 +6,13 @@ import unittest
 from importlib.metadata import distribution
 from pathlib import Path
 
-import yamaa_native
+from yamaa import _native as yamaa_native
 
 
 class InstallationTests(unittest.TestCase):
     def test_unicode_data_notice_is_installed(self):
         """The notice accompanies both direct and independently rebuilt wheels."""
-        package = distribution("yamaa-native")
+        package = distribution("yamaa")
         notices = [p for p in package.files if p.name == "LICENSE-UNICODE.txt"]
         self.assertEqual(len(notices), 1)
         notice = package.locate_file(notices[0]).read_text(encoding="utf-8")

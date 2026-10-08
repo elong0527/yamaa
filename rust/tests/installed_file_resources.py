@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import yamaa_native
+from yamaa import _native as yamaa_native
 
 ROOT = Path(__file__).with_name("specification-original")
 

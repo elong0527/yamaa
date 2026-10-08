@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import installed_datasets
 import installed_project_functions
-import yamaa_native
+from yamaa import _native as yamaa_native
 
 
 class InstalledProfile(unittest.TestCase):

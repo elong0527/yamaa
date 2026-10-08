@@ -1,9 +1,9 @@
-library(yamaanative)
-truth <- read.delim(system.file("datasets", "callbacks.tsv", package = "yamaanative"),
+library(yamaa)
+truth <- read.delim(system.file("datasets", "callbacks.tsv", package = "yamaa"),
                     sep = "\t", quote = "", comment.char = "", colClasses = "character",
                     fileEncoding = "UTF-8", check.names = FALSE)
 for (i in seq_len(nrow(truth))) {
-  source <- readBin(system.file("datasets", truth$input[i], package = "yamaanative"),
+  source <- readBin(system.file("datasets", truth$input[i], package = "yamaa"),
                     "raw", n = 8L * 1024L * 1024L)
   for (attempt in 1:2) {
     trace <- character()
@@ -31,7 +31,7 @@ for (i in seq_len(nrow(truth))) {
   }
 }
 request <- truth$request[1L]
-source <- readBin(system.file("datasets", truth$input[1L], package = "yamaanative"), "raw", n = 8192L)
+source <- readBin(system.file("datasets", truth$input[1L], package = "yamaa"), "raw", n = 8192L)
 for (callbacks in list(list(), list(NULL), rep(list(function(...) 1L), 65L))) {
   stopifnot(inherits(tryCatch(execute_dataset_functions(request, charToRaw("bad IPC"), list(), callbacks), error = identity), "error"))
 }

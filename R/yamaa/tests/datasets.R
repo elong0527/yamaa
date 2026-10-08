@@ -1,12 +1,12 @@
-library(yamaanative)
-truth <- read.delim(system.file("datasets", "expected.tsv", package = "yamaanative"),
+library(yamaa)
+truth <- read.delim(system.file("datasets", "expected.tsv", package = "yamaa"),
                     sep = "\t", quote = "", comment.char = "", colClasses = "character",
                     fileEncoding = "UTF-8", check.names = FALSE)
 for (i in seq_len(nrow(truth))) {
-  source <- readBin(system.file("datasets", truth$input[i], package = "yamaanative"),
+  source <- readBin(system.file("datasets", truth$input[i], package = "yamaa"),
                     "raw", n = 8L * 1024L * 1024L)
   names <- if (truth$secondary[i] != "-") strsplit(truth$secondary[i], ";", fixed = TRUE)[[1L]] else character()
-  secondary <- lapply(names, function(name) readBin(system.file("datasets", name, package = "yamaanative"), "raw", n = 8L * 1024L * 1024L))
+  secondary <- lapply(names, function(name) readBin(system.file("datasets", name, package = "yamaa"), "raw", n = 8L * 1024L * 1024L))
   actual <- if (length(secondary)) execute_dataset_sources(truth$request[i], source, secondary) else execute_dataset(truth$request[i], source)
   rm(secondary)
   source[] <- as.raw(0)
@@ -21,8 +21,8 @@ for (i in seq_len(nrow(truth))) {
     stopifnot(is.null(actual$table))
   }
 }
-request <- paste(readLines(system.file("datasets", "adlb-plan.json", package = "yamaanative")), collapse = "\n")
-source <- readBin(system.file("datasets", "adlb.arrow", package = "yamaanative"), "raw", n = 8192L)
+request <- paste(readLines(system.file("datasets", "adlb-plan.json", package = "yamaa")), collapse = "\n")
+source <- readBin(system.file("datasets", "adlb.arrow", package = "yamaa"), "raw", n = 8192L)
 for (invalid in list(NA_character_, character(), c("a", "b"), 1, structure(request, class = "wrapped"))) {
   stopifnot(inherits(tryCatch(execute_dataset(invalid, source), error = identity), "error"))
 }
@@ -30,7 +30,7 @@ stopifnot(inherits(tryCatch(execute_dataset(request, "bytes"), error = identity)
 invalid <- rawToChar(as.raw(c(0xc0, 0xaf)))
 Encoding(invalid) <- "UTF-8"
 stopifnot(inherits(tryCatch(execute_dataset(invalid, source), error = identity), "error"))
-result <- .Call(yamaanative:::wrap__execute_dataset, as.raw(c(0xc0, 0xaf)), source)
+result <- .Call(yamaa:::wrap__execute_dataset, as.raw(c(0xc0, 0xaf)), source)
 stopifnot(identical(result$error, "invalid UTF-8 JSON request"), is.null(result$value))
 invalid_plan <- sub('"source": 0', '"source": 999', request, fixed = TRUE)
 error <- tryCatch(execute_dataset(invalid_plan, charToRaw("invalid IPC")), error = identity)
@@ -46,8 +46,8 @@ stopifnot(identical(dataset_capabilities(),
 # Secondary snapshots are an explicit bounded list; legacy calls cannot omit them.
 lookup <- which(truth$case == "lookup_values")
 request <- truth$request[lookup]
-source <- readBin(system.file("datasets", truth$input[lookup], package = "yamaanative"), "raw", n = 8192L)
-right <- readBin(system.file("datasets", truth$secondary[lookup], package = "yamaanative"), "raw", n = 8192L)
+source <- readBin(system.file("datasets", truth$input[lookup], package = "yamaa"), "raw", n = 8192L)
+right <- readBin(system.file("datasets", truth$secondary[lookup], package = "yamaa"), "raw", n = 8192L)
 for (invalid in list("bytes", list("bytes"), rep(list(raw()), 8L))) {
   stopifnot(inherits(tryCatch(execute_dataset_sources(request, source, invalid), error = identity), "error"))
 }

@@ -7,7 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 [lib]
-name = "yamaa_native"
+name = "_native"
 crate-type = ["cdylib"]
 test = false
 doctest = false

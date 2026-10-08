@@ -1,20 +1,36 @@
-# Optional native installation probe
+# yamaa R
 
-`decode_yaml(raw_source)` exposes the experimental shared
-[YAML byte decoder](../../rust/YAML_DECODING.md). It returns an ordered
-schema-compatible document arena with exact integer strings and float bits,
-or source diagnostics and explicit resource refusals. It does not use R's
-YAML/numeric conversion or provide a complete current-schema workflow frontend.
+The migration candidate installs as `yamaa` and runs the same shared Rust domain
+and check lifecycle as the Python facade.
 
-This is a source template. Stage the shared Rust workspace before building:
+```r
+library(yamaa)
 
-```sh
-python rust/tools/stage_r_package.py /tmp/yamaa-stage/yamaanative
+result <- yamaa_domain("spec.yaml")
+result$output
+result$issues
+result$save()
+yamaa_check("spec.yaml")$issues
 ```
 
-Then run `R CMD build /tmp/yamaa-stage/yamaanative` from a temporary output
-directory. See [`rust/README.md`](../../rust/README.md) for prerequisites,
-installation tests, and the deliberately limited capability of this package.
+The bounded frontend qualifies seventeen original specifications. Failed-build
+saves signal `yamaa_domain_error`; operational save failures return FALSE and
+remain in issues. Output integer columns use lossless canonical decimal vectors
+with class `yamaa_int64_vector`, preserving INT64_MIN separately from NA. Ordinary
+text is character; text containing NUL uses raw values in `yamaa_utf8_vector`.
+Dates use Date and datetimes use POSIXct with UTC. Checks read no study data or
+project code. The existing approved-root path policy remains in effect.
+
+Environment activation, declared logs, complete benchmark coverage and the final
+release surface remain unqualified. Component interfaces below are retained for
+migration qualification; their presence is not a final release API promise.
+
+Stage the shared sources before building this repository template:
+
+```sh
+python rust/tools/stage_r_package.py /tmp/yamaa-stage/yamaa
+R CMD build /tmp/yamaa-stage/yamaa
+```
 
 ## Scalar transport probe
 
