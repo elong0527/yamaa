@@ -115,10 +115,22 @@ class OriginalSpecifications(unittest.TestCase):
                             result.save_file("failed.csv", str(Path(directory) / "absent" / "failed.csv"))
                         self.assertFalse(target.exists())
                     else:
-                        self.assertEqual(result.output(), (case / "expected" / outputs[name]).read_bytes())
+                        artifact = expected["artifacts"][0]
+                        derived = next(table for table in expected["tables"] if table["stage"] == "derived")
+                        projection = [derived["columns"].index(column) for column in artifact["columns"]]
+                        snapshot = json.loads(yamaa_native.table_snapshot(result.output()))
+                        self.assertEqual(snapshot["columns"], list(map(list, zip(artifact["columns"], artifact["types"]))))
+                        self.assertEqual(snapshot["row_count"], str(artifact["row_count"]))
+                        def scalar(value):
+                            kind, content = value["type"], value["value"]
+                            if kind in ("date", "datetime"):
+                                return {kind: {"text": content, "precision": "day" if kind == "date" else "second"}}
+                            return {kind: content}
+                        self.assertEqual(snapshot["rows"], [[scalar(row[column]) for column in projection] for row in derived["rows"]])
+                        csv_expected = (case / "expected" / outputs[name]).read_bytes()
                         for _ in range(2):
                             self.assertEqual(json.loads(result.save_file(outputs[name], str(target))), expected)
-                            self.assertEqual(target.read_bytes(), result.output())
+                            self.assertEqual(target.read_bytes(), csv_expected)
                         self.assertEqual(specification.capture_reads(), before + captures)
                     self.assertEqual(list(Path(directory).glob(".yamaa-output-*.part")), [])
 
@@ -161,12 +173,16 @@ class OriginalSpecifications(unittest.TestCase):
             (root / "parent/base.yaml").write_text("[changed")
             (root / "parent/input.csv").write_bytes(b"ID\n1\n")
             result = specification.build(("fixture-runtime", "fixture-engine", "file-view", "spec.yaml", "."))
-            self.assertEqual(result.output(), b"ID\n1\n")
+            held_output = result.output()
+            snapshot = json.loads(yamaa_native.table_snapshot(held_output))
+            self.assertEqual(snapshot["columns"], [["ID", "int"]])
+            self.assertEqual(snapshot["row_count"], "1")
+            self.assertEqual(snapshot["rows"], [[{"int": "1"}]])
             self.assertEqual(specification.capture_reads(), 3)
             (root / "parent/input.csv").write_bytes(b"ID\n2\n")
             with self.assertRaisesRegex(ValueError, "captured resource content changed"):
                 specification.build(("fixture-runtime", "fixture-engine", "file-view", "spec.yaml", "."))
-            self.assertEqual(result.output(), b"ID\n1\n")
+            self.assertEqual(result.output(), held_output)
             self.assertEqual(specification.capture_reads(), 3)
 
     def test_core_preflight_preserves_independent_findings_before_ports(self):
