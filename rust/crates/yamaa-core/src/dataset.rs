@@ -157,6 +157,14 @@ pub struct RowTemplate {
 pub enum Check {
     /// Presence of the owning completed column, before later derivations.
     NotMissing,
+    /// Already converted, present permitted values for the owning column.
+    AllowedValues(Vec<Value>),
+    Range {
+        min: Option<Value>,
+        max: Option<Value>,
+    },
+    /// Unicode scalar count, rather than encoded bytes or grapheme clusters.
+    MaxLength(usize),
     /// A core-owned declaration finding deferred until dataset verification.
     InvalidDiagnostic(crate::diagnostic::Diagnostic),
     /// A compiler finding evaluated in declaration order after output keys.
@@ -564,7 +572,10 @@ impl DatasetPlan {
                 return Err(PlanError::DuplicateVerificationPath);
             }
             match &verification.check {
-                Check::NotMissing => return Err(PlanError::InvalidColumns),
+                Check::NotMissing
+                | Check::AllowedValues(_)
+                | Check::Range { .. }
+                | Check::MaxLength(_) => return Err(PlanError::InvalidColumns),
                 Check::InvalidDiagnostic(_) => {}
                 Check::InvalidDeclaration { .. } => {}
                 Check::PredicateDeclaration(predicate) => predicate
@@ -645,11 +656,18 @@ impl DatasetPlan {
                 if !matches!(
                     verification.check,
                     Check::NotMissing
+                        | Check::AllowedValues(_)
+                        | Check::Range { .. }
+                        | Check::MaxLength(_)
                         | Check::InvalidDeclaration { .. }
                         | Check::InvalidDiagnostic(_)
                 ) {
                     return Err(PlanError::InvalidColumns);
                 }
+                crate::dataset_checks::validate(
+                    &verification.check,
+                    self.output.columns()[group.column].kind,
+                )?;
             }
         }
         self.column_verifications = groups;

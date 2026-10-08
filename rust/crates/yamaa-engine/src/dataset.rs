@@ -984,7 +984,10 @@ impl Executor<'_> {
         observer(ExecutionPhase::Verification);
         for verification in self.plan.verifications() {
             let record = match &verification.check {
-                Check::NotMissing => unreachable!("column-only check is rejected at admission"),
+                Check::NotMissing
+                | Check::AllowedValues(_)
+                | Check::Range { .. }
+                | Check::MaxLength(_) => unreachable!("column-only check is rejected at admission"),
                 Check::InvalidDiagnostic(diagnostic) => {
                     return Err(Box::new(ExecutionError::VerificationDiagnostic {
                         diagnostic: diagnostic.clone(),
@@ -1140,14 +1143,32 @@ impl Executor<'_> {
                                 records: core::mem::take(records),
                             }))
                         }
-                        Check::NotMissing => {
-                            budget.work(candidates.len(), 1)?;
-                            let result = yamaa_core::dataset_checks::not_missing(
+                        Check::NotMissing
+                        | Check::AllowedValues(_)
+                        | Check::Range { .. }
+                        | Check::MaxLength(_) => {
+                            let width = match &verification.check {
+                                Check::AllowedValues(accepted) => accepted.len(),
+                                Check::Range { .. } => 2,
+                                _ => 1,
+                            };
+                            budget.work(candidates.len(), width)?;
+                            if matches!(verification.check, Check::MaxLength(_)) {
+                                for row in candidates {
+                                    if let Value::Str(text) = &row.values[group.column] {
+                                        budget.scalar_text(text.len())?;
+                                    }
+                                }
+                            }
+                            let offending = yamaa_core::dataset_checks::column_offenders(
+                                &verification.check,
                                 candidates.iter().map(|row| &row.values[group.column]),
                             );
-                            let definition = yamaa_core::dataset_checks::not_missing_definition();
+                            let definition =
+                                yamaa_core::dataset_checks::column_definition(&verification.check)
+                                    .expect("admitted column check");
                             let mut offending_rows = Vec::new();
-                            for position in result.offending_rows {
+                            for position in offending {
                                 offending_rows.push(
                                     failure_identity(
                                         &candidates[position],

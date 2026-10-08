@@ -116,6 +116,86 @@ fn column_verification_admission_preserves_declared_order_and_closed_phase() {
     );
 }
 
+#[test]
+fn column_value_admission_requires_converted_values_and_valid_types_and_bounds() {
+    use yamaa_core::dataset::ColumnVerifications;
+    let make = |kind, check| {
+        let table = schema(&[("V", kind)]);
+        DatasetPlan::new(
+            table.clone(),
+            table,
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![assign(0, Expression::Source(0))],
+                filter: None,
+            }],
+            vec![],
+            vec![0],
+            vec![],
+        )
+        .unwrap()
+        .with_column_verifications(vec![ColumnVerifications {
+            column: 0,
+            checks: vec![verification(check)],
+        }])
+    };
+    for check in [
+        Check::AllowedValues(vec![]),
+        Check::AllowedValues(vec![Value::Missing]),
+        Check::AllowedValues(vec![Value::float(1.0)]),
+    ] {
+        assert_eq!(make(ColumnType::Int, check), Err(PlanError::InvalidColumns));
+    }
+    assert!(make(
+        ColumnType::Int,
+        Check::AllowedValues(vec![Value::Int(i64::MIN), Value::Int(i64::MAX)])
+    )
+    .is_ok());
+    for (kind, check) in [
+        (
+            ColumnType::Str,
+            Check::Range {
+                min: Some(Value::Int(1)),
+                max: None,
+            },
+        ),
+        (
+            ColumnType::Int,
+            Check::Range {
+                min: None,
+                max: None,
+            },
+        ),
+        (
+            ColumnType::Int,
+            Check::Range {
+                min: Some(Value::Int(2)),
+                max: Some(Value::Int(1)),
+            },
+        ),
+        (
+            ColumnType::Int,
+            Check::Range {
+                min: Some(Value::Str("1".into())),
+                max: None,
+            },
+        ),
+        (ColumnType::Int, Check::MaxLength(1)),
+        (ColumnType::Str, Check::MaxLength(0)),
+    ] {
+        assert_eq!(make(kind, check), Err(PlanError::InvalidBounds));
+    }
+    assert!(make(
+        ColumnType::Int,
+        Check::Range {
+            min: Some(Value::float(0.5)),
+            max: Some(Value::Int(2))
+        }
+    )
+    .is_ok());
+    assert!(make(ColumnType::Str, Check::MaxLength(1)).is_ok());
+}
+
 /// Admission rejects latent invalid paths even for an empty source snapshot.
 #[test]
 fn plan_admission_checks_every_template_and_dependency() {

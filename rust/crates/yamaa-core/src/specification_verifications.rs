@@ -180,15 +180,24 @@ impl Verifications {
         }
         let mut extra = Vec::new();
         let mut predicates = BTreeMap::new();
+        let mut column_checks = BTreeMap::new();
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
             let path = format!("{prefix}[{index}].{op}");
-            if column.is_some() && op != "not_missing" {
+            if column.is_some()
+                && !matches!(
+                    op,
+                    "not_missing" | "allowed_values" | "range" | "max_length"
+                )
+            {
                 reject(&mut extra, op, path);
                 continue;
             }
             let allowed: &[&str] = match op {
                 "not_missing" if column.is_some() => &["id", "severity"],
+                "allowed_values" if column.is_some() => &["values", "id", "severity"],
+                "range" if column.is_some() => &["min", "max", "id", "severity"],
+                "max_length" if column.is_some() => &["max", "id", "severity"],
                 "unique" | "all_or_none" => &["columns", "id", "severity"],
                 "row_count" => &["min", "max", "id", "severity"],
                 "assert" => &["when", "require", "id", "severity"],
@@ -218,6 +227,12 @@ impl Verifications {
                             .insert((index, name), predicate(d, payload, name, &path, output)?);
                     }
                 }
+            }
+            if let Some(column) = column {
+                column_checks.insert(
+                    index,
+                    column_checks::prepare(d, op, payload, &path, output.columns()[column].kind)?,
+                );
             }
             // The current dataset engine's count bounds are signed 64-bit. Do
             // not lose arbitrary-width authored bounds through a narrowing cast.
@@ -283,8 +298,18 @@ impl Verifications {
             } else {
                 None
             };
-            let check = if op == "not_missing" {
-                Check::NotMissing
+            let check = if column.is_some() {
+                let check = column_checks.remove(&index).ok_or(PrepareError::Internal)?;
+                if let Check::InvalidDeclaration {
+                    condition,
+                    requirement,
+                    reason,
+                } = check
+                {
+                    result.deferred = invalid(path, condition, requirement, reason);
+                    break;
+                }
+                check
             } else if op == "unique" || op == "all_or_none" {
                 let values = if matches!(d.nodes()[payload], N::Sequence(_)) {
                     sequence(d, payload)?

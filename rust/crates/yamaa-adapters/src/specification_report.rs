@@ -484,12 +484,18 @@ fn check_observations(
                 }
                 "duplicate_key" => json!({"duplicate_count":failed}),
                 "assert_failed" | "all_or_none_failed" => json!({"failure_count":failed}),
-                "not_missing_failed" => {
+                "not_missing_failed"
+                | "allowed_values_failed"
+                | "range_failed"
+                | "length_failed" => {
                     let column = run
                         .compiled()
                         .verification_target(path)
                         .ok_or(Error::InvalidObservation)?;
-                    let diagnostic = yamaa_core::dataset_checks::not_missing_diagnostic(
+                    let diagnostic = yamaa_core::dataset_checks::column_diagnostic(
+                        run.compiled()
+                            .column_check(path)
+                            .ok_or(Error::InvalidObservation)?,
                         path.into(),
                         column.into(),
                         failed,
@@ -517,9 +523,13 @@ fn check_observations(
             detail["log_context"] = log_context;
         }
         if !output_phase {
-            let check = condition
-                .strip_suffix("_failed")
-                .ok_or(Error::InvalidObservation)?;
+            let check = if condition == "length_failed" {
+                "max_length"
+            } else {
+                condition
+                    .strip_suffix("_failed")
+                    .ok_or(Error::InvalidObservation)?
+            };
             observations.push(json!({"specification":id.specification,"spec_path":path,"check":check,"target":run.compiled().verification_target(path),"requirement":record["requirement"],"verification_id":run.compiled().verification_identity(path),"severity":"error","evaluated_count":count(record,"evaluated_count")?,"failure":detail}));
         }
     }

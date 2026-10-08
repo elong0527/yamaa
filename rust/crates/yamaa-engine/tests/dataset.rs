@@ -164,6 +164,80 @@ fn column_checks_wait_for_the_declared_prefix_and_retain_prior_records() {
     );
 }
 
+#[test]
+fn permitted_value_work_is_admitted_before_comparison_and_retains_the_prior_check() {
+    use yamaa_engine::dataset::{ColumnVerifications, Resource};
+    let source = table(
+        &[("ID", ColumnType::Int), ("V", ColumnType::Int)],
+        vec![vec![Value::Int(1), Value::Int(10)]],
+    );
+    let make = |wide| {
+        let groups = if wide {
+            vec![
+                ColumnVerifications {
+                    column: 0,
+                    checks: vec![Verification {
+                        path: "columns.ID.verifications[0].not_missing".into(),
+                        check: Check::NotMissing,
+                    }],
+                },
+                ColumnVerifications {
+                    column: 1,
+                    checks: vec![Verification {
+                        path: "columns.V.verifications[0].allowed_values".into(),
+                        check: Check::AllowedValues((0..5001).map(Value::Int).collect()),
+                    }],
+                },
+            ]
+        } else {
+            vec![]
+        };
+        DatasetPlan::new(
+            source.schema.clone(),
+            source.schema.clone(),
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![
+                    assign(0, Expression::Source(0)),
+                    assign(1, Expression::Source(1)),
+                ],
+                filter: None,
+            }],
+            vec![],
+            vec![0],
+            vec![],
+        )
+        .unwrap()
+        .with_column_verifications(groups)
+        .unwrap()
+    };
+    let low = Limits {
+        work_cells: 100,
+        ..limits()
+    };
+    assert!(make(false).execute(&source, low).is_ok());
+    source.reads.borrow_mut().clear();
+    let attempt = make(true).execute_observed(&source, low);
+    assert!(matches!(
+        *attempt.result.unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::WorkCells,
+            ..
+        }
+    ));
+    assert_eq!(*source.reads.borrow(), [(0, 0), (0, 1)]);
+    assert_eq!(attempt.retained_verifications.len(), 1);
+    assert_eq!(attempt.retained_verifications[0].failed_count, 0);
+    assert_eq!(
+        make(true)
+            .execute(&source, limits())
+            .unwrap()
+            .verifications
+            .len(),
+        2
+    );
+}
+
 /// COUNT uses its owning group and preserves failures and cumulative work admission.
 #[test]
 fn grouped_count_avoids_unused_fields_and_withholds_output_on_read_failure() {

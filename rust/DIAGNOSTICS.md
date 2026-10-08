@@ -1,5 +1,11 @@
 # Portable diagnostic foundation
 
+Allowed-value, finite-range and Unicode-length checks now own REQ-0376, REQ-0377
+and REQ-0378 through the same pure completed-value service. Their core projection
+retains column and failure count, plus the authored maximum for length. The engine
+admits potential comparison work and text scanning before evaluation; a capacity
+refusal keeps earlier completed records and stays distinct from semantic failure.
+
 Column presence checks now reach `VerificationNotMissingFailed` through the pure
 completed-value service. Core owns REQ-0375 and its column/failure-count context;
 the report adapter adds observed keys and the authored verification ID. Completed

@@ -31,6 +31,8 @@ mod preflight_diagnostics;
 #[path = "specification_sources.rs"]
 mod source_expressions;
 pub use source_expressions::SourceFinding;
+#[path = "specification_column_checks.rs"]
+mod column_checks;
 #[path = "specification_rows.rs"]
 mod rows;
 #[path = "specification_verifications.rs"]
@@ -1090,6 +1092,13 @@ impl PreparedSpecification {
             .iter()
             .position(|group| group.checks.iter().any(|check| check.path == path))
             .map(|column| self.output.columns()[column].name.as_str())
+    }
+    pub fn column_check(&self, path: &str) -> Option<&crate::dataset::Check> {
+        self.column_verifications
+            .iter()
+            .flat_map(|group| &group.checks)
+            .find(|check| check.path == path)
+            .map(|verification| &verification.check)
     }
     pub fn output_path(&self) -> &str {
         &self.output_path

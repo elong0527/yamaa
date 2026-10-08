@@ -1,5 +1,16 @@
 # Original-specification compiler slice
 
+The implicit key-grain compiler also admits error-severity allowed_values, finite
+numeric range and max_length checks. Permitted literals convert once to the
+declared column kind; missing data bypasses these three checks. Range comparison
+preserves exact mixed integer/binary64 ordering, including the signed-64-bit edge.
+Length counts Unicode scalars. Empty or invalid declarations defer to the owning
+column phase, after its conversion, and preserve earlier records. Twenty complete
+independent reports and the unchanged negative-invalid-sex and
+negative-implausible-age documents pin the new scope. Wider/nonfinite declaration
+literals, matches, warning severity and row-template column checks remain explicit
+unsupported or resource boundaries.
+
 Error-severity `not_missing` checks on implicit key-grain columns now compile into
 the immutable core plan. Column checks wait until every key and their declared
 column prefix are complete, including for empty output. All checks on one column
@@ -8,7 +19,7 @@ to that point and retains the evaluated prefix. IDs have separate namespaces for
 each column and for dataset checks. Prior records survive unrelated later failures
 without rereading sources or admitting an output artifact. Ten independent full
 reports and the unchanged negative-not-missing-age document pin these semantics.
-Other column families, warning severity and column checks in row templates remain
+Matches checks, warning severity and column checks in row templates remain
 Unsupported before study capture in this bounded compiler slice.
 
 This internal entry point advances #1739 without changing the default runtime.
