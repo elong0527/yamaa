@@ -843,6 +843,16 @@ cat("original all or none complete reports, cached reads and exact saved CSV pas
 source_selection_truth("original-not-missing.tsv","column-check",10L)
 cat("original column not missing complete reports, cached reads and exact saved CSV passed\n")
 
+row_filter_admission <- read.delim(file.path(root,"row-filter-admission.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(row_filter_admission)==2L)
+for(i in seq_len(nrow(row_filter_admission))) {
+  hex <- row_filter_admission$source_hex[[i]]
+  starts <- seq.int(1L,nchar(hex),by=2L)
+  bytes <- as.raw(strtoi(substring(hex,starts,starts+1L),base=16L))
+  failure <- tryCatch(prepare_entry("spec.yaml",bytes,no_port,no_port,no_port),error=identity)
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),row_filter_admission$expected[[i]]))
+}
+cat("row-filter unsupported admission before all ports passed\n")
 source_selection_truth("row-filters.tsv","row-filter",26L)
 cat("row-template filters complete reports, cached reads and exact saved CSV passed\n")
 

@@ -171,14 +171,26 @@ impl Rows {
                     .filter(|&id| !matches!(d.nodes()[id], N::Null))
                     .map(|id| {
                         let expression = text(d, id)?;
-                        Ok((
-                            String::from(expression),
-                            predicate_compiler::compile(
-                                expression,
-                                &format!("rows[{index}].filter"),
-                                Default::default(),
-                            ),
-                        ))
+                        let path = format!("rows[{index}].filter");
+                        let compiled =
+                            predicate_compiler::compile(expression, &path, Default::default());
+                        match &compiled {
+                            Ok(_)
+                            | Err(predicate_compiler::Error::Parse(
+                                crate::predicate_parser::ParseError::Grammar { .. },
+                            )) => {}
+                            Err(predicate_compiler::Error::UnsupportedLiteral { .. }) => {
+                                return Err(unsupported("predicate_literal", &path))
+                            }
+                            Err(predicate_compiler::Error::Parse(
+                                crate::predicate_parser::ParseError::UnsupportedRegex { .. },
+                            )) => return Err(unsupported("predicate_regex", &path)),
+                            Err(predicate_compiler::Error::Internal) => {
+                                return Err(PrepareError::Internal)
+                            }
+                            Err(_) => return Err(PrepareError::Limit("predicate_compilation")),
+                        }
+                        Ok((String::from(expression), compiled))
                     })
                     .transpose()
             })

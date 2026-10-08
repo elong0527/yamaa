@@ -576,6 +576,53 @@ fn wide_row_recovery_is_unsupported_at_its_authored_path_before_binding() {
 }
 
 #[test]
+fn row_filter_unsupported_carriers_reject_during_preparation_including_dead_branches() {
+    use Tree::*;
+    for filter in [
+        "FALSE AND ID = 9223372036854775808",
+        "TRUE OR ID = -9223372036854775809",
+    ] {
+        let rows = List(vec![Map(vec![
+            ("id", Text("first")),
+            ("filter", Text(filter)),
+            (
+                "derivations",
+                Map(vec![
+                    (
+                        "ID",
+                        Map(vec![(
+                            "value",
+                            Map(vec![("source", Map(vec![("variable", Text("SRC.ID"))]))]),
+                        )]),
+                    ),
+                    (
+                        "VALUE",
+                        Map(vec![(
+                            "value",
+                            Map(vec![("literal", Scalar(N::Integer("2".into())))]),
+                        )]),
+                    ),
+                ]),
+            ),
+        ])]);
+        let document = operation_document_with_rows(
+            "literal",
+            Scalar(N::Integer("2".into())),
+            "input.csv",
+            None,
+            Some(rows),
+        );
+        let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&document)
+        else {
+            panic!("unsupported predicate carrier must reject before a study port can be supplied");
+        };
+        assert_eq!(features.len(), 1);
+        assert_eq!(features[0].operation, "predicate_literal");
+        assert_eq!(features[0].path, "rows[0].filter");
+    }
+}
+
+#[test]
 fn row_filters_charge_the_whole_document_before_predicate_parsing() {
     use Tree::*;
     let rows = List(
