@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-08 against main `9aeaf4a84dbfc025adc885f7b988685341bb0eac`
+Reconciled 2026-10-08 against main `e0c9131426e628ea229369beeadb89d5be6307d3`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -57,6 +57,8 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1799 | Original column presence checks and unchanged missing-age failure. |
 | #1800 | Original allowed values, range and length checks with unchanged age/sex failures. |
 | #1801 | Original portable column matches, complete vocabulary admission and reachable declaration-prefix compilation. |
+| #1802 | Shared five-field static verification declaration issues, with no study-data authority. |
+| #1803 | Bounded Unix native file sources, retained roots/aliases and snapshots, terminal opaque IO and registered R transport. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -191,42 +193,74 @@ precedes payload compilation; IDs and column payloads then compile in declaratio
 order through the first finding. Compound truth pins earlier invalid-pattern or
 repeated-ID findings ahead of unreachable limits. [Final evidence](https://github.com/elong0527/yamaa/pull/1801#issuecomment-6053562885).
 
-The next prepared checker exposes known verification declaration findings from the
-immutable compiled model without a study-data capability. Both private bindings
-receive the same five fields, with context already encoded as JSON text. Fifteen
-complete issue payloads pin ordered column/dataset findings, escaped Unicode,
-held/data-dependent checks and an earlier pattern finding before a later limit.
-Eight additional registered causes cover all compiled declaration findings,
-including empty verification IDs. This query leaves build failure timing intact.
-Immutable runtime `ffbda0104e66989b0f3f8476ef036317a905bfa9` passes
-694 Rust tests/78 targets, strict Clippy, 44 tooling tests, both installed Python
-forms (23 suites, 50 original-document methods) and all 17 strict R scripts without
-Python on PATH. Fifteen changed native Python and eighteen R members plus all
-52 Parquet fixtures match directly. Its 85-contract/40-suite catalog and 92 reached
-causes await final-head hosted qualification, full review and artifact auditing.
+The shared static checker merged in [PR #1802](https://github.com/elong0527/yamaa/pull/1802)
+as `e4336771d4f15b12bd81a7e11da4f8938e726eca` after all 13 checks,
+clean full 24-file text review and fresh artifact auditing. Native run 37736446149
+passed all six jobs on attempt 1. Six installed Python forms pass 23 suites,
+including 50 original-document methods; both R forms pass all 17 strict scripts
+without Python on PATH. Fifteen independently enumerated issue payloads pin
+ordered declaration findings, Unicode, data-dependent checks, early patterns and
+empty IDs. Known findings use the same Rust five-field encoder and JSON text
+context in both private bindings. Complete static compilation and the public
+facade remain open. Its catalog contains 85 contracts across 40 suites, with
+92 reached causes. [Final evidence](https://github.com/elong0527/yamaa/pull/1802#issuecomment-6054202655).
 
-Two following IO candidates are locally qualified on the checker foundation.
-Unix source resources retain directory descriptors, preserve approved-root and
-fallback rules, and compare immutable captured bytes directly. Runtime
-`a205914c1717fbfc8f830413721076a7c625a30c` passes 705 Rust tests,
-strict Clippy/tooling, both 23-suite Python forms and all 17 strict R scripts.
-R replays all seventeen unchanged original reports twice through real file ports,
-seven zero-read metadata failures and complete Parquet success/failure truth without
-Python. Five native Python and nine R changed archive members plus 52 Parquet
-fixtures match directly. Normalized selected root aliases and terminal permission
-failures have reproduced regression tests.
+Native file sources merged in [PR #1803](https://github.com/elong0527/yamaa/pull/1803)
+as `e0c9131426e628ea229369beeadb89d5be6307d3` after all 13 checks,
+clean full 13-file review and fresh artifact auditing. Native run 37743077349
+passed all six jobs on attempt 1. All six Python forms pass 23 suites, with
+50 original-document, six actual-file and four schema methods; both R forms
+pass all 17 strict scripts. Changed source members and 52 independent Parquet
+containers match directly. The exact-head local proof passes 712 Rust tests,
+79 targets, strict Clippy, the dependency guard and 45 tooling tests. The adapter
+preserves approved roots and fallback rules, bounds capture before allocation,
+retains every accepted alias and requires a current physical witness before cache
+reuse. Real-file replay compares all seventeen original reports, zero-read
+metadata failures, complete Parquet failures and exact successful CSV bytes.
+Permission and generic IO remain opaque terminal failures. [Final evidence](https://github.com/elong0527/yamaa/pull/1803#issuecomment-6055549656).
 
-Explicit-target native publication saves held R build results directly through the
-engine artifact port. Runtime `4ee18a6dc36dc6ce33e562deb348ed0e99cc8c69`
-passes 710 Rust tests/80 targets, strict Clippy/tooling, both 23-suite Python forms
-and all 17 strict R scripts. All seventeen original results retain complete reports,
-exact successful CSV bytes, held Parquet bytes, cached counters and failed-save
-gates. Four native Python and nine R changed archive members plus 52 Parquet
-fixtures match directly. These IO candidates still require serial main-based PRs,
-fresh hosted checks, full reviews and downloaded-artifact auditing. They do not
-qualify public file APIs, Windows native IO or inventory promotion. Warning
-severity, row-template column checks, predicate gaps, path/API decisions and other
-frontend work remain open.
+[PR #1805](https://github.com/elong0527/yamaa/pull/1805) remains open for
+explicit-target native publication. A full review exposed a real temporary-entry
+race after earlier local qualification. Independent regressions reproduced both
+publication of substituted candidate bytes and failure to respect an exclusive
+parent lock. The corrected implementation retains a private staging-directory
+descriptor and coordinates native writers through a nonblocking directory lock.
+REQ-0752/0753 explicitly permit its protected namespace and explain intentional
+replacement rather than constructor-time compare-and-swap. Revised immutable
+head `99e3bd7dd17f3d63094d550eee200f0086374148` passes 725 Rust tests,
+80 targets, strict Clippy, 45 tooling tests, both installed 23-suite Python forms
+and all 17 strict R scripts. Five Python and ten R changed members plus 52
+Parquet fixtures match directly. Eight integration cases and five unit cases cover the corrections. A subsequent
+full review exposed target/staging-name collision and hidden cleanup errors. A
+collision regression failed before correction; generated names equal to the target
+are now skipped before creation. Explicit failure cleanup preserves the operation
+error, cleanup cause and captured staging location, and refuses unconfirmed or
+observed substituted entries. REQ-0754 reports cleanup prevented by external
+interference or filesystem failure without claiming that no residue remains. Fresh full 15-file review, all hosted
+checks and final downloaded artifact auditing remain required before merge.
+
+Private Unix file preparation captures entry/parent YAML and invokes shipped
+schema and compiled preparation without host semantic callbacks. Its prior
+protected-staging foundation passed 730 Rust tests, strict Clippy, 45 tooling
+tests, both installed 23-suite Python forms (53 original-document methods), all
+17 strict R scripts and direct source-byte auditing. New assertions that confused
+Arrow IPC table bytes with saved CSV were corrected against independent logical
+table truth; successful save bytes still match the original CSV. The candidate is
+rebased on the revised publication runtime and requires fresh exact-head proof
+and a serial main-based PR before acceptance. Captured YAML stays immutable;
+study snapshots are rechecked and opaque parent IO stops fallback. Approved-root
+and authored-link restrictions remain pending explicit path-policy approval.
+
+A separate bounded row-template candidate attaches the same immutable column
+verification groups as non-row plans. Forty-eight complete independently authored
+reports and successful CSV bytes match actual reference execution while candidate
+native imports are forbidden. Rust and both installed Python forms passed; the
+first strict R run found JSON escape spelling different from its literal UTF-8
+output. Reauthoring with literal UTF-8 preserves every decoded expected value and
+all non-report fixture fields; the complete focused R replay now passes. The
+candidate still needs fresh full qualification on the revised IO foundation,
+review and hosted artifact auditing. Warning severity, broader row expressions,
+predicate gaps, environment/workflow admission and the public facade remain open.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance
