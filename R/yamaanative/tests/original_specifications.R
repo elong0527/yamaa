@@ -36,7 +36,7 @@ for(i in seq_len(nrow(decode_truth))) {
   failure <- tryCatch(prepare_entry("source.yaml",bytes,no_port,no_port,no_port),error=identity)
   stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),decode_truth$expected[[i]]))
 }
-for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup","negative-formula-flag","negative-row-aggregate","negative-row-no-prior","negative-source-missing-field","negative-source-trivial-filter","negative-paired-dates")) {
+for(case_name in c("negative-zero-division","negative-integer-overflow","adam-adlb-ordered-sum","schema-window-functions","schema-inheritance","schema-lookup","negative-formula-flag","negative-row-aggregate","negative-row-no-prior","negative-source-missing-field","negative-source-trivial-filter","negative-paired-dates","negative-not-missing-age")) {
   case <- file.path(root,"cases",case_name)
   specification <- if(case_name=="schema-inheritance") "spec_study.yaml" else "spec.yaml"
   if(case_name=="schema-inheritance") {
@@ -66,7 +66,7 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
       specification,rawfile(file.path(case,specification)),no_parent,no_parent,no_parent)
   }
   gc()
-  inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else if(case_name %in% c("schema-window-functions","negative-row-no-prior")) c(VS="input/vs.csv") else if(case_name %in% c("negative-source-missing-field","negative-source-trivial-filter")) c(ODM="input/odm.csv") else if(case_name=="negative-paired-dates") c(DM="input/dm.csv") else c(LB="input/lb.csv")
+  inputs <- if(case_name=="schema-lookup") c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv") else if(case_name %in% c("schema-window-functions","negative-row-no-prior")) c(VS="input/vs.csv") else if(case_name %in% c("negative-source-missing-field","negative-source-trivial-filter")) c(ODM="input/odm.csv") else if(case_name %in% c("negative-paired-dates","negative-not-missing-age")) c(DM="input/dm.csv") else c(LB="input/lb.csv")
   stopifnot(identical(specification_source(handle),list(name=names(inputs)[[1L]],path=unname(inputs[[1L]]))))
   state <- new.env(parent=emptyenv()); state$reads <- 0L; state$requests <- character(); state$content <- list()
   capture <- function(name,path,maximum) {
@@ -720,6 +720,9 @@ cat("original assertions complete reports, cached reads and exact saved CSV pass
 
 source_selection_truth("original-all-or-none.tsv","all-or-none",11L)
 cat("original all or none complete reports, cached reads and exact saved CSV passed\n")
+
+source_selection_truth("original-not-missing.tsv","column-check",10L)
+cat("original column not missing complete reports, cached reads and exact saved CSV passed\n")
 
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)

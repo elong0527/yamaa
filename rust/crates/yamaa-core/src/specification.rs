@@ -256,6 +256,7 @@ pub struct PreparedSpecification {
     declarations: Vec<Declaration>,
     rows: Option<rows::Rows>,
     verifications: verifications::Verifications,
+    column_verifications: Vec<verifications::Verifications>,
 }
 
 /// Preserve omitted versus explicit-null recovery at every declaration.
@@ -902,12 +903,17 @@ impl PreparedSpecification {
                 declarations: Vec::new(),
                 rows: Some(rows),
                 verifications,
+                column_verifications: Vec::new(),
             });
         }
         let mut declarations = Vec::new();
+        let mut column_verifications = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
             let prefix = format!("columns.{}", output.columns()[column].name);
-            optional_features(d, id, &["verifications", "submission"], &prefix, &mut extra);
+            optional_features(d, id, &["submission"], &prefix, &mut extra);
+            column_verifications.push(verifications::Verifications::prepare_column(
+                d, &output, id, column,
+            )?);
             let derivation = d
                 .field(id, "derivation")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -1042,6 +1048,7 @@ impl PreparedSpecification {
             declarations,
             rows: None,
             verifications,
+            column_verifications,
         })
     }
     pub fn source(&self) -> &SourceDeclaration {
@@ -1068,11 +1075,21 @@ impl PreparedSpecification {
         &self.verifications.checks
     }
     pub fn verification_identity(&self, path: &str) -> Option<&str> {
-        self.verifications
-            .checks
+        core::iter::once(&self.verifications)
+            .chain(&self.column_verifications)
+            .find_map(|group| {
+                group
+                    .checks
+                    .iter()
+                    .position(|c| c.path == path)
+                    .and_then(|index| group.identities[index].as_deref())
+            })
+    }
+    pub fn verification_target(&self, path: &str) -> Option<&str> {
+        self.column_verifications
             .iter()
-            .position(|c| c.path == path)
-            .and_then(|index| self.verifications.identities[index].as_deref())
+            .position(|group| group.checks.iter().any(|check| check.path == path))
+            .map(|column| self.output.columns()[column].name.as_str())
     }
     pub fn output_path(&self) -> &str {
         &self.output_path
@@ -1433,6 +1450,19 @@ impl PreparedSpecification {
             self.keys.clone(),
             self.verifications.checks.clone(),
         )
+        .and_then(|plan| {
+            plan.with_column_verifications(
+                self.column_verifications
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, group)| !group.checks.is_empty())
+                    .map(|(column, group)| crate::dataset::ColumnVerifications {
+                        column,
+                        checks: group.checks.clone(),
+                    })
+                    .collect(),
+            )
+        })
         .and_then(|plan| {
             plan.with_conversion_handlers(
                 self.declarations

@@ -1,0 +1,165 @@
+{
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "backend": "rust",
+  "runtime_version": "fixture-runtime",
+  "engine_version": "fixture-engine",
+  "example": "negative-not-missing-age",
+  "outcome": "failure",
+  "artifacts": [],
+  "diagnostics": [
+    {
+      "phase": "verification",
+      "condition": "not_missing_failed",
+      "spec_paths": [
+        "columns.AGE.verifications[0].not_missing"
+      ],
+      "requirement": "REQ-0375",
+      "context": {
+        "column": "AGE",
+        "failure_count": 1,
+        "keys": [
+          {
+            "STUDYID": "PILOT7",
+            "USUBJID": "P7-812"
+          }
+        ]
+      }
+    }
+  ],
+  "unsupported": [],
+  "handler_counts": [],
+  "nodes": [
+    {
+      "specification": "spec.yaml",
+      "outcome": "failure",
+      "diagnostics": [
+        {
+          "phase": "verification",
+          "condition": "not_missing_failed",
+          "spec_paths": [
+            "columns.AGE.verifications[0].not_missing"
+          ],
+          "requirement": "REQ-0375",
+          "context": {
+            "column": "AGE",
+            "failure_count": 1,
+            "keys": [
+              {
+                "STUDYID": "PILOT7",
+                "USUBJID": "P7-812"
+              }
+            ]
+          }
+        }
+      ],
+      "unsupported": [],
+      "handler_counts": []
+    }
+  ],
+  "tables": [
+    {
+      "specification": "spec.yaml",
+      "stage": "source",
+      "name": "DM",
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "AGE"
+      ],
+      "types": [
+        "str",
+        "str",
+        "str"
+      ],
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "PILOT7"
+          },
+          {
+            "type": "str",
+            "value": "P7-811"
+          },
+          {
+            "type": "str",
+            "value": "54"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "PILOT7"
+          },
+          {
+            "type": "str",
+            "value": "P7-812"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ]
+      ]
+    }
+  ],
+  "verifications": [
+    {
+      "specification": "spec.yaml",
+      "spec_path": "columns.AGE.verifications[0].not_missing",
+      "check": "not_missing",
+      "target": "AGE",
+      "requirement": "REQ-0375",
+      "verification_id": null,
+      "severity": "error",
+      "evaluated_count": 2,
+      "failure": {
+        "phase": "verification",
+        "condition": "not_missing_failed",
+        "spec_paths": [
+          "columns.AGE.verifications[0].not_missing"
+        ],
+        "requirement": "REQ-0375",
+        "context": {
+          "column": "AGE",
+          "failure_count": 1,
+          "keys": [
+            {
+              "STUDYID": "PILOT7",
+              "USUBJID": "P7-812"
+            }
+          ]
+        },
+        "severity": "error",
+        "offending_keys": [
+          {
+            "STUDYID": "PILOT7",
+            "USUBJID": "P7-812"
+          }
+        ],
+        "log_context": {
+          "column": "AGE",
+          "failure_count": 1,
+          "keys": [
+            {
+              "STUDYID": "PILOT7",
+              "USUBJID": "P7-812"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "callbacks": [],
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "path": "input/dm.csv",
+      "outcome": "captured",
+      "condition": null,
+      "snapshots_created": 1
+    }
+  ],
+  "error": null
+}

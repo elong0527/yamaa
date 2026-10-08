@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-08 against main `37c16057313b5fd5e5f0ab2de818ed124e6d0d81`
+Reconciled 2026-10-08 against main `514c0725f9f66a376dec9db2f15fde6d0e254ce7`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -53,6 +53,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1793 | Bounded Python file capture and classified host source replies with retained exception/condition identity. |
 | #1794 | Declaration-order metadata inspection before every study capture, with complete zero-read failures. |
 | #1795 | Driver source filters and ordered first_available with complete original source failures. |
+| #1798 | Original dataset assertions and all_or_none with complete reports and unchanged paired-date failure. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -136,26 +137,37 @@ match. Both unchanged negative source benchmarks qualify privately, bringing the
 original corpus to eleven. Filtered keys, source ordering, secondary/intermediate
 selection and existing predicate diagnostic gaps remain open.
 
-The next serial compiler candidate admits original error-severity dataset assertions
-and all_or_none checks. Seventeen independent assertion reports pin inactive/empty
-validation, deferred grammar/unknown-field findings and when-before-require sample
-precedence. Eleven independent all_or_none reports pin repeated names, distinct-name
-admission, missingness, short diagnostic keys and full retained check logs. Six
-successful cases preserve exact CSV bytes; the unchanged negative-paired-dates
-report separately pins declared date source cells. Both hosts replay complete
-new/cached reports and save gates, bringing the locally qualified original corpus
-to twelve. All 28 complete reports and the original paired-date truth were authored
-independently and checked against actual reference execution.
+#1798 merged as `514c0725f9f66a376dec9db2f15fde6d0e254ce7` after all 13
+checks, clean full final-head review and downloaded installed-artifact auditing.
+Native run 37717106416 passed all six jobs on attempt 1. Six Python forms pass
+23 supplemental suites, 46 original-document, six actual-file and four schema
+methods; both R source forms pass all 17 strict scripts with Status: OK and Python
+absent from PATH. Its 76-contract/40-suite catalog, exact changed archive members,
+all 52 Parquet fixtures and unchanged 945-row assisted inventory match. Twenty-eight
+independent complete assertion/all_or_none reports preserve six exact successful
+CSV cases. The unchanged negative-paired-dates document qualifies privately,
+bringing the original corpus to twelve. [Final evidence](https://github.com/elong0527/yamaa/pull/1798#issuecomment-6051139650).
+Warning severity, column checks and special predicate gaps remain open.
 
-Local immutable runtime `13c9db9d8aa4dd8fe6d711eb91640104ade9bcd1` passes
-681 Rust tests, strict Clippy, 44 tooling tests, both Python forms with 23 suites
-(46 original-document, six actual-file and four schema methods), and all 17 strict
-R scripts with Status: OK. R replay stays inside the Python-free guard. Nineteen
-changed native Python and twenty R archive members plus all 52 Parquet fixtures
-match directly. Its 76-contract/40-suite catalog and 78 reached canonical causes
-await final main-based review, hosted qualification and downloaded artifact auditing.
-Warning severity, column checks and special predicate diagnostic gaps remain open;
-no assisted inventory tuple or public frontend gate is promoted here.
+The next prepared compiler candidate admits error-severity column not_missing.
+Checks follow declared column order after every key is complete; all checks on one
+column finish before its failure gate. Completed records survive later conversion
+failures, and a later declaration finding retains earlier failed records without
+changing its primary diagnostic. Ten independently authored complete reports pin
+empty output, missing keys, separate ID namespaces, prefix retention and four exact
+CSV successes. The unchanged negative-not-missing-age report brings the locally
+qualified original corpus to thirteen. Broader column families and row-template
+column checks remain Unsupported before study capture.
+
+Local immutable runtime `d39bdabebd582bc93d953dbe81a4cd67421fde95` passes
+684 Rust tests across 78 targets, strict Clippy, 44 tooling tests, both installed
+Python forms with 23 suites (47 original-document, six actual-file and four schema
+methods), and all 17 strict R scripts with Status: OK. R replay stays inside the
+Python-free guard. Sixteen changed native Python and seventeen R archive members,
+plus all 52 Parquet fixtures, match directly. Its 78-contract/40-suite catalog and
+79 reached canonical causes await final main-based review, hosted qualification
+and downloaded artifact auditing. No assisted inventory tuple or public frontend
+gate is promoted by this prepared candidate.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance

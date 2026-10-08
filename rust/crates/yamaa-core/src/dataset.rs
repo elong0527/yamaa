@@ -155,6 +155,8 @@ pub struct RowTemplate {
 /// Error-severity dataset checks supported by this closed application slice.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Check {
+    /// Presence of the owning completed column, before later derivations.
+    NotMissing,
     /// A core-owned declaration finding deferred until dataset verification.
     InvalidDiagnostic(crate::diagnostic::Diagnostic),
     /// A compiler finding evaluated in declaration order after output keys.
@@ -183,6 +185,13 @@ pub enum Check {
 pub struct Verification {
     pub path: String,
     pub check: Check,
+}
+
+/// Checks for one declared column, in authored order and its own ID namespace.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ColumnVerifications {
+    pub column: usize,
+    pub checks: Vec<Verification>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -221,6 +230,7 @@ pub struct DatasetPlan {
     columns: Vec<Assignment>,
     keys: Vec<usize>,
     verifications: Vec<Verification>,
+    column_verifications: Vec<ColumnVerifications>,
     conversion_handlers: Vec<ConversionHandler>,
     conversion_sites: BTreeMap<String, usize>,
 }
@@ -554,6 +564,7 @@ impl DatasetPlan {
                 return Err(PlanError::DuplicateVerificationPath);
             }
             match &verification.check {
+                Check::NotMissing => return Err(PlanError::InvalidColumns),
                 Check::InvalidDiagnostic(_) => {}
                 Check::InvalidDeclaration { .. } => {}
                 Check::PredicateDeclaration(predicate) => predicate
@@ -597,6 +608,7 @@ impl DatasetPlan {
             columns,
             keys,
             verifications,
+            column_verifications: Vec::new(),
             conversion_handlers: Vec::new(),
             conversion_sites: BTreeMap::new(),
         })
@@ -604,6 +616,50 @@ impl DatasetPlan {
 }
 
 impl DatasetPlan {
+    /// Admit ordered column checks before any snapshot or value access.
+    pub fn with_column_verifications(
+        mut self,
+        groups: Vec<ColumnVerifications>,
+    ) -> Result<Self, PlanError> {
+        let mut paths = alloc::collections::BTreeSet::new();
+        for (index, group) in groups.iter().enumerate() {
+            if group.column >= self.output.columns().len()
+                || groups[..index]
+                    .iter()
+                    .any(|previous| previous.column >= group.column)
+            {
+                return Err(PlanError::InvalidColumns);
+            }
+            for verification in &group.checks {
+                if verification.path.is_empty() {
+                    return Err(PlanError::EmptyPath);
+                }
+                if !paths.insert(&verification.path)
+                    || self
+                        .verifications
+                        .iter()
+                        .any(|check| check.path == verification.path)
+                {
+                    return Err(PlanError::DuplicateVerificationPath);
+                }
+                if !matches!(
+                    verification.check,
+                    Check::NotMissing
+                        | Check::InvalidDeclaration { .. }
+                        | Check::InvalidDiagnostic(_)
+                ) {
+                    return Err(PlanError::InvalidColumns);
+                }
+            }
+        }
+        self.column_verifications = groups;
+        Ok(self)
+    }
+
+    /// Borrow checks in declared column order, independently of dependency order.
+    pub fn column_verifications(&self) -> &[ColumnVerifications] {
+        &self.column_verifications
+    }
     /// Borrow admitted source without exposing mutation.
     pub fn source(&self) -> &TableSchema {
         &self.source

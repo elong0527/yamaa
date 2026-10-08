@@ -10,6 +10,7 @@ pub mod column_dependencies;
 pub mod conversion;
 pub mod csv_source;
 pub mod dataset;
+pub mod dataset_checks;
 mod decimal_rounding;
 pub mod dependency_analysis;
 pub mod diagnostic;

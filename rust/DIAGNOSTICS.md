@@ -1,5 +1,12 @@
 # Portable diagnostic foundation
 
+Column presence checks now reach `VerificationNotMissingFailed` through the pure
+completed-value service. Core owns REQ-0375 and its column/failure-count context;
+the report adapter adds observed keys and the authored verification ID. Completed
+column records remain attached to an attempted run when a later conversion or
+other error stops derivation. A later declaration error preserves earlier failed
+records while retaining its own primary diagnostic.
+
 The #1753 slices move numeric evaluation, arithmetic/reduction, completed-result
 conversion, classified resource, original-document preflight, output-declaration
 numeric/aggregate grammar, binding/dependency, CSV profile, window and

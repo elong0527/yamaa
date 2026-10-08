@@ -138,14 +138,43 @@ fn operation(d: &Document, id: usize) -> Result<(&str, usize), PrepareError> {
 }
 impl Verifications {
     pub(super) fn prepare(d: &Document, output: &TableSchema) -> Result<Self, PrepareError> {
-        let mut result = Self::default();
+        let result = Self::default();
         let Some(id) = d
             .field(d.root(), "verifications")
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
         else {
             return Ok(result);
         };
-        let entries = sequence(d, id)?;
+        Self::prepare_entries(d, output, sequence(d, id)?, "verifications", None)
+    }
+    pub(super) fn prepare_column(
+        d: &Document,
+        output: &TableSchema,
+        id: usize,
+        column: usize,
+    ) -> Result<Self, PrepareError> {
+        let Some(entries) = d
+            .field(id, "verifications")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        else {
+            return Ok(Self::default());
+        };
+        Self::prepare_entries(
+            d,
+            output,
+            sequence(d, entries)?,
+            &format!("columns.{}.verifications", output.columns()[column].name),
+            Some(column),
+        )
+    }
+    fn prepare_entries(
+        d: &Document,
+        output: &TableSchema,
+        entries: &[usize],
+        prefix: &str,
+        column: Option<usize>,
+    ) -> Result<Self, PrepareError> {
+        let mut result = Self::default();
         if entries.len() > 16 {
             return Err(PrepareError::Limit("verifications"));
         }
@@ -153,8 +182,13 @@ impl Verifications {
         let mut predicates = BTreeMap::new();
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
-            let path = format!("verifications[{index}].{op}");
+            let path = format!("{prefix}[{index}].{op}");
+            if column.is_some() && op != "not_missing" {
+                reject(&mut extra, op, path);
+                continue;
+            }
             let allowed: &[&str] = match op {
+                "not_missing" if column.is_some() => &["id", "severity"],
                 "unique" | "all_or_none" => &["columns", "id", "severity"],
                 "row_count" => &["min", "max", "id", "severity"],
                 "assert" => &["when", "require", "id", "severity"],
@@ -212,7 +246,7 @@ impl Verifications {
         let mut ids = BTreeMap::<String, String>::new();
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
-            let path = format!("verifications[{index}].{op}");
+            let path = format!("{prefix}[{index}].{op}");
             let invalid = |path: String, condition, requirement, reason: String| {
                 Some(DeclarationFinding::Reason {
                     path,
@@ -249,7 +283,9 @@ impl Verifications {
             } else {
                 None
             };
-            let check = if op == "unique" || op == "all_or_none" {
+            let check = if op == "not_missing" {
+                Check::NotMissing
+            } else if op == "unique" || op == "all_or_none" {
                 let values = if matches!(d.nodes()[payload], N::Sequence(_)) {
                     sequence(d, payload)?
                 } else {

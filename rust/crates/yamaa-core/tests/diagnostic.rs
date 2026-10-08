@@ -149,6 +149,42 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(binding::lookup_reached());
     reached.extend(binding::source_filter_reached());
     reached.extend(binding::verification_reached());
+    let result = yamaa_core::dataset_checks::not_missing(&[
+        Value::Int(0),
+        Value::Missing,
+        Value::Str(String::new()),
+        Value::Missing,
+    ]);
+    assert_eq!(result.offending_rows, [1, 3]);
+    let diagnostic = result
+        .diagnostic("columns.V.verifications[0].not_missing".into(), "V".into())
+        .unwrap();
+    assert_eq!(
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().requirement
+        ),
+        ("verification", "not_missing_failed", Some("REQ-0375"))
+    );
+    assert_eq!(
+        diagnostic.spec_paths,
+        ["columns.V.verifications[0].not_missing"]
+    );
+    assert_eq!(
+        diagnostic.context["column"],
+        ContextValue::Scalar(Value::Str("V".into()))
+    );
+    assert_eq!(
+        diagnostic.context["failure_count"],
+        ContextValue::Integer("2".into())
+    );
+    assert!(
+        yamaa_core::dataset_checks::not_missing(&[Value::Int(0), Value::Str(String::new())])
+            .diagnostic("unused".into(), "V".into())
+            .is_none()
+    );
+    reached.insert(diagnostic.code);
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());
     reached.extend(parquet::reached());
