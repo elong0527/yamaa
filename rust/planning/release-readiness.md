@@ -2,8 +2,8 @@
 
 This is the finite blocker register for [#1742](https://github.com/elong0527/yamaa/issues/1742).
 It records evidence and decisions still needed, not approval to release or switch
-backends. The support matrix below records #1791 at
-`1c06fc5c8c0e2f72283d11a52db8426baa2db701`, including merged diagnostics, strict
+backends. The support matrix below records #1792 at
+`fc7eca7fdd96d828ce5234d1d4204b098f301988`, including merged diagnostics, strict
 R packaging and held Parquet input/output foundations. Pending PRs and local prototypes do not
 satisfy installed public-API gates. Follow [the delivery order](migration-order.md).
 
@@ -48,13 +48,13 @@ inventory acceptance box merely because the declared-name check passes.
 
 ## Installed evidence and support decisions
 
-[Run 37698133822](https://github.com/elong0527/yamaa/actions/runs/37698133822)
-and [its final installed-artifact audit](https://github.com/elong0527/yamaa/pull/1791#issuecomment-6048861143)
+[Run 37702319587](https://github.com/elong0527/yamaa/actions/runs/37702319587)
+and [its final installed-artifact audit](https://github.com/elong0527/yamaa/pull/1792#issuecomment-6049397223)
 qualify the following prototype package combinations at that exact revision.
 All 13 checks passed, and all native jobs passed attempt 1. Six Python forms pass
-22 supplemental suites, 36 original-document methods and four schema methods
+22 supplemental suites, 37 original-document methods and four schema methods
 each; both R forms pass all 17 scripts with strict `Status: OK`. Exact packaged
-source bytes, the 66-contract/39-suite catalog and the unchanged 945-row assisted
+source bytes, the 67-contract/39-suite catalog and the unchanged 945-row assisted
 inventory were audited against the tested merge and its exact base/head parents.
 
 | Host | Observed system | Package forms exercised | Evidence limit |
@@ -118,7 +118,7 @@ numbers identify the implementation/test or decision owner.
 | B08 | Terminology and submission. | #1757, #1758 | Cross-source uniqueness and bound list verification; new define API and all three submission cases preserve independently expected fixed-time XML/JSON bytes before retiring old formats. |
 | B09 | Remaining language/compiler families. Component support is not full-language compilation. | #1585, #1752, #1754 | Qualify handlers, row-output dependencies, predicates/flags/first-available, correlated/keyed aggregates and lookups, full verification scopes, strings/regex/temporal/ODM and submission/value metadata from the executable inventory. |
 | B10 | Source/output codecs and filesystem publication. The private original-document route reads CSV/Parquet and writes bounded CSV/Parquet through callbacks; #1785's installed codec audit passed. Actual filesystem publication and producer workflows remain unqualified. | #1755, #1585 | Exact CSV, logical Parquet/ordinal/type contracts, producer re-ingestion, non-regular/missing/changed resources, atomic publication and publication-failure behavior through actual file ports. |
-| B11 | Complete diagnostics and failure timing. Core owns preflight, output-declaration, numeric/aggregate grammar, binding/dependency, CSV profile, window/lookup and predicate grammar findings; #1790 qualifies original scalar literals and conversion wrappers; schema kinds are portable after #1789; #1772/#1773 merged captured schema and classified source observations. Remaining diagnostic families, production file-port integration and five assisted-route mismatches remain open. | #1753, #1739 | Preserve normative phase, order, requirement, authored path/context and full source/check/handler ledgers; resolve all five known gaps against independent truth without masking them. |
+| B11 | Complete diagnostics and failure timing. Core owns preflight, output-declaration, numeric/aggregate grammar, binding/dependency, CSV profile/declared typing, closed Parquet metadata, window/lookup and predicate grammar findings; #1790 qualifies original scalar literals and conversion wrappers; schema kinds are portable after #1789; #1772/#1773 merged captured schema and classified source observations. Remaining diagnostic families, production file-port integration and five assisted-route mismatches remain open. | #1753, #1739 | Preserve normative phase, order, requirement, authored path/context and full source/check/handler ledgers; resolve all five known gaps against independent truth without masking them. |
 | B12 | Numerical policy and downstream bytes. #1740 now proposes one behavior per locked release, with no public policy/backend selector; the choice and production policy remain unratified. | #1740 | Ratified one-policy-per-release behavior, implementation in every affected scope, and reviewed disposition for every observable numerical/artifact difference. |
 | B13 | Transitive dependency reproducibility. Cargo.lock is ignored and omitted from the staged R source package. | #1742 | Approved no-content-hashing-compatible build process, clean independent resolution/build evidence and retained exact versions/features. Exact direct dependency pins alone do not settle this. |
 | B14 | Packaging checksum exceptions. Current AGENTS.md permits only python/uv.lock. | #1757, #1742 | Explicit approval before any additional lock/checksum exception; preserve held-byte resource comparison and prohibit runtime provenance digests. Study locks and Cargo reproducibility are distinct decisions. |

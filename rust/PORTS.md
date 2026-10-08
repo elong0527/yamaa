@@ -208,9 +208,31 @@ condition, validation phase, REQ-0785 and authored dataset/path context; the
 report adapter preserves prior requests and refuses publication for the failed
 build. It never obtains a classification from an exception message.
 
-Ports default to no classification, so existing Python/R callback exceptions and
-interruptions remain opaque. Resource limits, malformed accounting and internal
-failures are not language findings. This mapping changes neither filesystem
-authority nor resolution order. Production filesystem adapters, preflight file
-checks before study reads, additional IO causes, and public host integration
-remain required; the callback prototypes do not gain file authority here.
+Ports default to no classification. Both installed host bridges additionally
+admit an explicit closed failure reply: `("missing", original_error)` or
+`("not_regular_file", original_error)` in Python, and the corresponding list of
+kind and original condition in R. The bridges retain the payload and pass the
+typed cause to the core; they do not infer causes from messages or class names.
+Thrown errors, interrupts and returned interrupt conditions retain their original
+host identity. Resource limits, malformed accounting and internal failures remain
+boundary errors. This mapping changes neither filesystem authority nor resolution
+order. Preflight file checks before study reads, additional IO causes and public
+frontend integration remain required.
+
+Python's existing descriptor-anchored `ProjectResources.capture` accepts an
+optional trusted byte ceiling. It checks file size before reading and stops at
+one byte beyond that ceiling if the file grows. Refusal is an opaque resource
+policy error, creates no snapshot and adds no cached alias to verification.
+Bounded reads use small chunks rather than allocating the entire ceiling.
+Verification compares at most the retained length plus one byte, directly, so
+an extended file cannot force an unbounded read. Approved roots, link checks,
+relative-path fallback and default capture behavior retain their existing rules.
+The internal Python `SourceCapture` adapter connects that resource reader to the
+shared build port, verifies held bytes before every decode and explicitly returns
+only the two represented filesystem causes. Package, IO and specification exports
+load lazily so importing this adapter does not load the reference parser, planner,
+evaluator or table codecs. Installed qualification exercises actual missing and
+non-regular files at the first and later source request, cached counters, complete
+failed reports and retained save gates. This is a requested-source capture path;
+whole-project preflight, the R filesystem implementation and the public facade
+remain open. Existing reference APIs keep their names and behavior until cutover.

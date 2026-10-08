@@ -10,6 +10,23 @@ use yamaa_adapters::{
     specification_report::{self, BuildResult, Identity},
     specification_run::{CapturedAttempt, PreparedRun, SourcePort},
 };
+use yamaa_core::resource::ResourceFailure;
+
+pub(super) struct CaptureError {
+    failure: Option<ResourceFailure>,
+    // Retain the host condition without deriving a cause from its class/message.
+    _payload: Option<Robj>,
+    _message: String,
+}
+impl From<&str> for CaptureError {
+    fn from(message: &str) -> Self {
+        Self {
+            failure: None,
+            _payload: None,
+            _message: message.into(),
+        }
+    }
+}
 
 thread_local! {static RESULTS:RefCell<BTreeMap<usize,Weak<BuildResult>>>=const{RefCell::new(BTreeMap::new())};}
 struct Handle {
@@ -61,7 +78,10 @@ struct Port {
     reads: usize,
 }
 impl SourcePort for Port {
-    type Error = String;
+    type Error = CaptureError;
+    fn resource_failure(&self, error: &CaptureError) -> Option<ResourceFailure> {
+        error.failure
+    }
     fn capture_reads(&self) -> usize {
         self.reads
     }
@@ -69,7 +89,7 @@ impl SourcePort for Port {
         &mut self,
         source: &yamaa_engine::specification::SourceDeclaration,
         maximum: usize,
-    ) -> std::result::Result<Arc<[u8]>, String> {
+    ) -> std::result::Result<Arc<[u8]>, CaptureError> {
         let result = self
             .capture
             .call(pairlist!(
@@ -83,6 +103,22 @@ impl SourcePort for Port {
             .filter(|v| v.len() == 2)
             .ok_or("invalid capture response")?;
         let content = result.elt(0).map_err(|_| "missing capture content")?;
+        if let Some(kind) = content.as_str() {
+            let failure = match kind {
+                "missing" => ResourceFailure::Missing,
+                "not_regular_file" => ResourceFailure::NotRegularFile,
+                _ => return Err("invalid capture failure kind".into()),
+            };
+            let payload = result.elt(1).map_err(|_| "missing capture error")?;
+            if !payload.inherits("condition") {
+                return Err("capture error must be a condition".into());
+            }
+            return Err(CaptureError {
+                failure: Some(failure),
+                _payload: Some(payload),
+                _message: String::new(),
+            });
+        }
         let content = content
             .as_raw()
             .ok_or("capture content must be raw bytes")?;
@@ -98,7 +134,10 @@ impl SourcePort for Port {
         Ok(Arc::from(content.as_slice()))
     }
 }
-pub(super) fn capture_attempt(run: &PreparedRun, capture: Function) -> CapturedAttempt<String> {
+pub(super) fn capture_attempt(
+    run: &PreparedRun,
+    capture: Function,
+) -> CapturedAttempt<CaptureError> {
     run.execute_with_port(&mut Port { capture, reads: 0 })
 }
 pub(super) struct Publisher(pub(super) Function);

@@ -2925,8 +2925,8 @@ fn classified_capture_failures_retain_complete_reports_without_publication() {
     let bytes: Arc<[u8]> = std::fs::read(case.join("input/dm.csv")).unwrap().into();
     let metadata = || Identity {
         runtime: "python",
-        runtime_version: "test",
-        engine_version: "test",
+        runtime_version: "fixture-runtime",
+        engine_version: "fixture-engine",
         example: "schema-lookup",
         specification: "spec.yaml",
         base_directory: ".",
@@ -2977,7 +2977,25 @@ fn classified_capture_failures_retain_complete_reports_without_publication() {
                     reads.push(json!({"base_directory":".","path":"input/dm.csv","outcome":"captured","condition":null,"snapshots_created":usize::from(!cached)}));
                 }
                 reads.push(json!({"base_directory":".","path":path,"outcome":"failure","condition":condition,"snapshots_created":0}));
-                let expected = json!({"report_version":"0.3.0-draft","runtime":"python","backend":"rust","runtime_version":"test","engine_version":"test","example":"schema-lookup","outcome":"failure","artifacts":[],"diagnostics":diagnostics,"unsupported":[],"handler_counts":[],"nodes":[{"specification":"spec.yaml","outcome":"failure","diagnostics":diagnostics,"unsupported":[],"handler_counts":[]}],"tables":[],"verifications":[],"callbacks":[],"source_reads":reads,"error":null});
+                let expected = json!({"report_version":"0.3.0-draft","runtime":"python","backend":"rust","runtime_version":"fixture-runtime","engine_version":"fixture-engine","example":"schema-lookup","outcome":"failure","artifacts":[],"diagnostics":diagnostics,"unsupported":[],"handler_counts":[],"nodes":[{"specification":"spec.yaml","outcome":"failure","diagnostics":diagnostics,"unsupported":[],"handler_counts":[]}],"tables":[],"verifications":[],"callbacks":[],"source_reads":reads,"error":null});
+                let kind = match cause {
+                    ResourceFailure::Missing => "missing",
+                    ResourceFailure::NotRegularFile => "not_regular_file",
+                };
+                let row = include_str!("fixtures/source_capture.tsv")
+                    .lines()
+                    .skip(1)
+                    .map(|line| line.split('\t').collect::<Vec<_>>())
+                    .find(|row| {
+                        row[0] == kind
+                            && row[1] == fail_at.to_string()
+                            && row[2] == usize::from(cached).to_string()
+                    })
+                    .expect("independent capture truth missing");
+                assert_eq!(
+                    expected,
+                    serde_json::from_str::<serde_json::Value>(row[3]).unwrap()
+                );
                 let result =
                     specification_report::build_result(&run, &attempt, metadata()).unwrap();
                 assert_eq!(result.observations(), expected);

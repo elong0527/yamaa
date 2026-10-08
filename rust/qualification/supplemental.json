@@ -677,6 +677,18 @@
         "rust/tests/installed_original_specifications.py",
         "R/yamaanative/tests/original_specifications.R"
       ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_capture.tsv",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R",
+        "rust/tests/installed_file_resources.py"
+      ]
     }
   ],
   "suites": [
@@ -951,6 +963,13 @@
       "runtime": "r",
       "path": "R/yamaanative/tests/original_specifications.R",
       "staged_path": "original_specifications.R",
+      "level": "compile"
+    },
+    {
+      "id": "python/file-resources",
+      "runtime": "python",
+      "path": "rust/tests/installed_file_resources.py",
+      "staged_path": "installed_file_resources.py",
       "level": "compile"
     }
   ],
@@ -1381,6 +1400,10 @@
     },
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/source_typing.md",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_capture.md",
       "role": "documentation"
     }
   ]

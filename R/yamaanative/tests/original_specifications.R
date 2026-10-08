@@ -227,6 +227,52 @@ handle <- prepare_entry("spec.yaml",rawfile(file.path(case,"spec.yaml")),no_port
 # Its error envelope must still distinguish missing secondary inputs.
 source_count <- .Call(get("wrap__execute_specification_csv",envir=asNamespace("yamaanative")),handle,rawfile(file.path(case,"input/dm.csv")))
 stopifnot(identical(source_count$error,'{"outcome":{"code":"source_count","stage":"bind","status":"rejected"},"protocol":"specification/prototype"}'))
+# Explicit resource replies preserve the common port's complete observations.
+capture_truth <- read.delim(file.path(root,"source-capture.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(capture_truth)==8L)
+for(i in seq_len(nrow(capture_truth))) {
+  row <- capture_truth[i,,drop=FALSE]
+  fail_at <- as.integer(row$fail_at[[1L]])
+  cached <- identical(row$cached[[1L]],"1")
+  failure <- structure(list(message="opaque filesystem detail",call=NULL,payload=new.env()),class=c("port_test_error","error","condition"))
+  requests <- character()
+  capture <- function(name,path,maximum) {
+    index <- length(requests)
+    requests <<- c(requests,name)
+    if(index==fail_at) return(list(row$kind[[1L]],failure))
+    content <- rawfile(file.path(case,path))
+    stopifnot(length(content)<=maximum)
+    list(content,!cached)
+  }
+  expected <- row$expected[[1L]]
+  expected <- sub('"runtime":"python"','"runtime":"r"',expected,fixed=TRUE)
+  expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
+  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  result <- build(handle,capture,case_name)
+  expected_requests <- c("DM","AE")[seq_len(fail_at+1L)]
+  stopifnot(identical(requests,expected_requests),identical(build_observations(result),expected),is.null(build_output(result)))
+  requests <- character()
+  stopifnot(identical(specification_failure_report(handle,capture,case_name),expected),identical(requests,expected_requests))
+  requests <- character()
+  stopifnot(identical(specification_report(handle,capture,function(...) stop("failed capture published"),case_name),expected),identical(requests,expected_requests))
+  rm(capture,failure); gc()
+  for(j in seq_len(2L)) {
+    actual <- tryCatch(build_save(result,function(...) stop("failed result reached publisher")),error=identity)
+    stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),"cannot save a failed build"))
+  }
+  stopifnot(identical(build_observations(result),expected))
+}
+cat("classified source replies complete failed reports, cached counters and retained save gates passed\n")
+for(reply in list(list("unknown",simpleError("opaque")),list("missing",FALSE),list("not_regular_file",new.env()),list("missing"))) {
+  calls <- 0L
+  capture <- function(...) {calls <<- calls+1L;reply}
+  actual <- tryCatch(build(handle,capture,case_name),error=identity)
+  stopifnot(inherits(actual,"error"),calls==1L)
+}
+failure <- structure(list(message="returned interrupt",call=NULL,payload=new.env()),class=c("port_test_interrupt","interrupt","condition"))
+actual <- tryCatch(build(handle,function(...) list("missing",failure),case_name),error=identity,interrupt=identity)
+stopifnot(identical(actual,failure))
+cat("source reply transport validation and original returned interrupt passed\n")
 # The same condition object (including private payload identity) must cross the
 # native call; neither errors nor interrupts may be converted into text or retried.
 for(kind in c("error","interrupt")) {
