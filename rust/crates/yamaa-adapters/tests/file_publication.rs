@@ -126,6 +126,18 @@ fn permission_failure_preserves_the_prior_artifact_and_allows_explicit_retry() {
     let mut publisher = directory.publisher();
     let permissions = fs::metadata(&directory.0).unwrap().permissions();
     fs::set_permissions(&directory.0, fs::Permissions::from_mode(0o500)).unwrap();
+    let probe = directory.0.join("dac-probe");
+    if let Ok(file) = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe)
+    {
+        drop(file);
+        fs::set_permissions(&directory.0, permissions).unwrap();
+        fs::remove_file(probe).unwrap();
+        eprintln!("process bypasses DAC; publication permission case not exercised");
+        return;
+    }
     let result = publisher.publish("declared.csv", b"new");
     fs::set_permissions(&directory.0, permissions).unwrap();
     assert!(matches!(result, Err(Error::Io(_))));

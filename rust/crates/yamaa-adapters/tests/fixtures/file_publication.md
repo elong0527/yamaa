@@ -1,5 +1,7 @@
 # Native explicit-target file publication
 
+The permission-failure test probes whether the process can bypass directory DAC, restores permissions and reports that bypass explicitly. Nonprivileged runs retain the prior artifact on an actual write failure and permit a later explicit retry.
+
 The Unix publisher receives an absolute file target explicitly selected by its caller and one declared path that requests must match. It opens and retains the selected parent directory, rejects an existing link or non-regular target, bounds paths and complete content before publication, writes a new exclusive temporary file in that directory, flushes its complete bytes, rechecks the entry and replaces the target with one descriptor-relative rename. Errors before replacement clean up the candidate and retain the prior artifact. No fallible publication step follows successful replacement.
 
 Five native tests cover repeated complete/empty/UTF-8 writes, unchanged hard-link aliases of the previous file, path mismatch and capacity refusal before effects, link/directory refusal, selected-parent identity after renaming, and an observed permission failure followed by an explicit retry. The publisher implements the existing engine artifact port and interprets no table data.
