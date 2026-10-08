@@ -106,6 +106,7 @@ impl Budget {
         self.work(product(product(entries, depth * 2 + 1)?, max_bytes.max(1))?)
     }
     pub(crate) fn function(&mut self, def: &Definition) -> Result<(), Limit> {
+        let start_nodes = self.nodes;
         self.nodes(1)?;
         self.text(&def.name)?;
         self.text(&def.function)?;
@@ -172,8 +173,12 @@ impl Budget {
                 .max()
                 .unwrap_or(1),
         )?;
-        // Coverage tags held in the global set include generated parameter suffixes.
-        self.ordered(self.nodes, max_name.max(32))?;
+        // Coverage belongs to this function; previous definitions are not revisited.
+        // Generated tags add a bounded prefix to the longest parameter name.
+        let tag_bytes = max_name.checked_add(32).ok_or(Limit {
+            resource: Resource::Work,
+        })?;
+        self.ordered(self.nodes - start_nodes, tag_bytes)?;
         Ok(())
     }
     pub(crate) fn functions(&mut self, functions: &[Definition]) -> Result<(), Limit> {

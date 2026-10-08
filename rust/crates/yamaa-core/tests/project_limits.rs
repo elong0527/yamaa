@@ -175,3 +175,30 @@ fn environment_duplicate_function_lookup_is_bounded_before_static_findings() {
         }))
     );
 }
+
+#[test]
+fn many_small_functions_pay_only_their_own_coverage_work_within_a_shared_budget() {
+    use yamaa_core::project_environment::{LockKind, LockReference};
+    let functions: Vec<_> = (0..200)
+        .map(|i| {
+            let mut def = definition();
+            def.name = format!("function_{i}");
+            def
+        })
+        .collect();
+    for function in &functions {
+        assert!(Function::admit(Language::Python, function.clone()).is_ok());
+    }
+    let draft = Draft {
+        language: Some(Language::Python),
+        lock: Some(LockReference {
+            written: "uv.lock".into(),
+            kind: LockKind::Uv,
+        }),
+        functions: Some(functions),
+        codelists: vec![],
+        has_study: false,
+        submissions: vec![],
+    };
+    assert!(Environment::admit(Language::Python, draft).is_ok());
+}
