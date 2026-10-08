@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-08 against main `a9d27c06ac9ba266cff59fe6190ed77c7fda01ca`
+Reconciled 2026-10-08 against main `37c16057313b5fd5e5f0ab2de818ed124e6d0d81`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -52,6 +52,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1792 | Pure core declared CSV source typing and closed Parquet metadata admission. |
 | #1793 | Bounded Python file capture and classified host source replies with retained exception/condition identity. |
 | #1794 | Declaration-order metadata inspection before every study capture, with complete zero-read failures. |
+| #1795 | Driver source filters and ordered first_available with complete original source failures. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -123,24 +124,38 @@ Python's actual filesystem adapter opts in. Existing explicit-byte callbacks may
 omit inspection and retain their qualified timing. Actual R filesystem adapters,
 environment/function preflight and public frontend/API qualification remain open.
 
-The next serial compiler candidate admits driver-backed source filters and ordered
-`first_available` selection through the existing core predicate/binding and engine
-collection services. All names bind before evaluation, including skipped operands;
-selection stops at the first present raw value, converts once and records no
-handler count for missing fallback. Twenty-four independently authored complete
-reports pin eleven exact successful CSV cases and thirteen failures. Complete
-unchanged negative-source-missing-field and negative-source-trivial-filter reports
-match in both hosts, bringing the locally qualified private corpus to eleven.
-Local runtime `e099c6a2517a1330f1e3732f2eebb25dec99347d` passes 676 Rust tests,
-strict Clippy, 44 tooling tests, both Python forms with all 23 supplemental suites
-(44 original-document, six actual-file and four schema methods) and strict R
-Status: OK with all 17 scripts. Twenty-two Python and twenty-three R changed
-archive members plus all 52 Parquet fixtures match directly. The
-73-contract/40-suite catalog and 77 reached canonical causes await full main-based
-review, final-head hosted qualification and downloaded artifact auditing. Source
-ordering, filtered key assignments, secondary/named-intermediate selection,
-row-template selection and existing predicate parity gaps remain open. No
-assisted inventory row is promoted by these local results.
+#1795 merged as `37c16057313b5fd5e5f0ab2de818ed124e6d0d81` after all 13
+checks, clean full final-head review and downloaded installed-artifact auditing.
+Native run 37713778588 passed all six jobs on attempt 1. Six Python forms pass
+23 supplemental suites, 44 original-document, six actual-file and four schema
+methods; both R source forms pass 17 strict scripts with Status: OK. The full
+27-file review caught and verified an R guard correction: all 24 selection cases
+run with Python absent from PATH. Its 73-contract/40-suite catalog, exact changed
+archive members, all 52 Parquet fixtures and unchanged 945-row assisted inventory
+match. Both unchanged negative source benchmarks qualify privately, bringing the
+original corpus to eleven. Filtered keys, source ordering, secondary/intermediate
+selection and existing predicate diagnostic gaps remain open.
+
+The next serial compiler candidate admits original error-severity dataset assertions
+and all_or_none checks. Seventeen independent assertion reports pin inactive/empty
+validation, deferred grammar/unknown-field findings and when-before-require sample
+precedence. Eleven independent all_or_none reports pin repeated names, distinct-name
+admission, missingness, short diagnostic keys and full retained check logs. Six
+successful cases preserve exact CSV bytes; the unchanged negative-paired-dates
+report separately pins declared date source cells. Both hosts replay complete
+new/cached reports and save gates, bringing the locally qualified original corpus
+to twelve. All 28 complete reports and the original paired-date truth were authored
+independently and checked against actual reference execution.
+
+Local immutable runtime `13c9db9d8aa4dd8fe6d711eb91640104ade9bcd1` passes
+681 Rust tests, strict Clippy, 44 tooling tests, both Python forms with 23 suites
+(46 original-document, six actual-file and four schema methods), and all 17 strict
+R scripts with Status: OK. R replay stays inside the Python-free guard. Nineteen
+changed native Python and twenty R archive members plus all 52 Parquet fixtures
+match directly. Its 76-contract/40-suite catalog and 78 reached canonical causes
+await final main-based review, hosted qualification and downloaded artifact auditing.
+Warning severity, column checks and special predicate diagnostic gaps remain open;
+no assisted inventory tuple or public frontend gate is promoted here.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance
