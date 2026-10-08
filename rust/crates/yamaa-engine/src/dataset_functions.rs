@@ -2,7 +2,9 @@
 use super::*;
 use crate::{
     dataset_predicate::Read,
-    function_invocation::{Argument, FunctionPort, HostError, InvocationPlan},
+    function_invocation::{
+        Argument, FunctionPort, HostError, InvocationPlan, ProjectInvocationPlan,
+    },
 };
 
 /// Caller-owned activated functions. Metadata inspection must not execute project code.
@@ -14,6 +16,10 @@ pub trait FunctionBindings {
     type Error;
     /// Borrow immutable resolved metadata; return None for an unavailable slot.
     fn signature(&self, slot: usize) -> Option<&InvocationPlan>;
+    /// Borrow an activated versionless package signature without host effects.
+    fn project_signature(&self, _slot: usize) -> Option<&ProjectInvocationPlan> {
+        None
+    }
     /// Invoke the selected already-bound callback with declaration-order host arguments.
     fn call(
         &mut self,
@@ -63,8 +69,77 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     handlers: &mut HandlerCounter,
     bindings: &mut dyn FunctionBindings<Error = T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    let supplied = supplied(
+        function.arguments(),
+        table,
+        candidate,
+        &context,
+        budget,
+        handlers,
+    )?;
+    let result = crate::function_invocation::invoke(
+        function.signature(),
+        &supplied,
+        &mut Selected {
+            bindings,
+            slot: function.slot(),
+        },
+    );
+    match result {
+        Ok(value) => retain_result(value, budget),
+        Err(error) => Err(Box::new(ExecutionError::Function {
+            path: context.assignment.path.clone(),
+            identity: failure_identity(candidate, context.plan.keys(), context.row, budget)?,
+            error,
+        })),
+    }
+}
+
+pub(super) fn evaluate_project<T: TableAccess + ?Sized>(
+    function: &BoundProjectFunction,
+    table: &T,
+    candidate: &Candidate,
+    context: Context<'_>,
+    budget: &mut Budget,
+    handlers: &mut HandlerCounter,
+    bindings: &mut dyn FunctionBindings<Error = T::Error>,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    let supplied = supplied(
+        function.arguments(),
+        table,
+        candidate,
+        &context,
+        budget,
+        handlers,
+    )?;
+    let result = crate::function_invocation::invoke_project(
+        function.signature(),
+        &supplied,
+        &mut Selected {
+            bindings,
+            slot: function.slot(),
+        },
+    );
+    match result {
+        Ok(value) => retain_result(value, budget),
+        Err(error) => Err(Box::new(ExecutionError::ProjectFunction {
+            path: context.assignment.path.clone(),
+            identity: failure_identity(candidate, context.plan.keys(), context.row, budget)?,
+            error,
+        })),
+    }
+}
+
+fn supplied<T: TableAccess + ?Sized>(
+    arguments: &[FunctionArgument],
+    table: &T,
+    candidate: &Candidate,
+    context: &Context<'_>,
+    budget: &mut Budget,
+    handlers: &mut HandlerCounter,
+) -> Result<BTreeMap<String, Value>, Box<ExecutionError<T::Error>>> {
     let mut supplied = BTreeMap::new();
-    for argument in function.arguments() {
+    for argument in arguments {
         budget.work(1, 1)?;
         if let FunctionInput::Collect { column, identifier } = &argument.input {
             budget.work(candidate.members.len(), 1)?;
@@ -110,25 +185,12 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     }
     // This charges a potential call; missing-value short circuit never executes host code.
     budget.work(1, 1)?;
-    let result = crate::function_invocation::invoke(
-        function.signature(),
-        &supplied,
-        &mut Selected {
-            bindings,
-            slot: function.slot(),
-        },
-    );
-    match result {
-        Ok(value) => {
-            if let Value::Str(text) = &value {
-                budget.scalar_text(text.len())?;
-            }
-            Ok(value)
-        }
-        Err(error) => Err(Box::new(ExecutionError::Function {
-            path: context.assignment.path.clone(),
-            identity: failure_identity(candidate, context.plan.keys(), context.row, budget)?,
-            error,
-        })),
+    Ok(supplied)
+}
+
+fn retain_result<E>(value: Value, budget: &mut Budget) -> Result<Value, Box<ExecutionError<E>>> {
+    if let Value::Str(text) = &value {
+        budget.scalar_text(text.len())?;
     }
+    Ok(value)
 }
