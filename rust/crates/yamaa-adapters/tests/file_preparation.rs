@@ -160,6 +160,33 @@ fn selected_read_roots_and_no_link_authority_remain_enforced() {
     };
     assert_eq!(error.into_message(), "resource path outside approved roots");
 }
+
+#[test]
+fn unreadable_parent_is_unavailable_without_fallback_or_study_capture() {
+    use std::os::unix::fs::PermissionsExt;
+    let study = Study::new();
+    let parent = study.0.join("entry/blocked.yaml");
+    fs::write(&parent, VALID).unwrap();
+    fs::write(study.0.join("blocked.yaml"), VALID).unwrap();
+    let permissions = fs::metadata(&parent).unwrap().permissions();
+    fs::set_permissions(&parent, fs::Permissions::from_mode(0o0)).unwrap();
+    if fs::File::open(&parent).is_ok() {
+        fs::set_permissions(&parent, permissions).unwrap();
+        eprintln!("process bypasses DAC; unreadable-parent case not exercised");
+        return;
+    }
+    let result = study.prepare(&format!("{VALID}parents: blocked.yaml\n"));
+    fs::set_permissions(&parent, permissions).unwrap();
+    let error = match result {
+        Ok(_) => panic!("unreadable parent accepted through fallback"),
+        Err(error) => error,
+    };
+    let actual: Value = serde_json::from_str(&error.into_message()).unwrap();
+    assert_eq!(
+        actual,
+        json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"blocked.yaml","source":study.text("entry/spec.yaml")}}]}})
+    );
+}
 #[test]
 fn all_original_file_builds_preserve_full_reports_and_cached_counters() {
     use yamaa_adapters::specification_report::{self, Identity};

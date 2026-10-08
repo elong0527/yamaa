@@ -103,7 +103,9 @@ struct Parents<'a> {
 }
 fn available(error: ResourceError) -> SourceError<ResourceError> {
     match error {
-        ResourceError::Missing | ResourceError::NotRegularFile => SourceError::Unavailable,
+        ResourceError::Missing | ResourceError::Unreadable | ResourceError::NotRegularFile => {
+            SourceError::Unavailable
+        }
         error => SourceError::Raised(error),
     }
 }
