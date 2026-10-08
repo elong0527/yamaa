@@ -178,6 +178,21 @@ impl specification_report::ArtifactPort for Publisher<'_, '_> {
 pub struct BuildResult {
     pub(super) inner: specification_report::BuildResult,
 }
+pub(super) type IssueRow = (String, String, Option<String>, Vec<String>, String);
+pub(super) fn issue_rows(issues: &[yamaa_adapters::issue_rows::Issue]) -> Vec<IssueRow> {
+    issues
+        .iter()
+        .map(|issue| {
+            (
+                issue.phase.clone(),
+                issue.condition.clone(),
+                issue.requirement.clone(),
+                issue.spec_paths.clone(),
+                issue.context.clone(),
+            )
+        })
+        .collect()
+}
 #[cfg(unix)]
 struct FileTarget<'a> {
     declared: &'a str,
@@ -193,6 +208,9 @@ impl specification_report::ArtifactPort for FileTarget<'_> {
 }
 #[pymethods]
 impl BuildResult {
+    fn issues(&self) -> Vec<IssueRow> {
+        issue_rows(self.inner.issues())
+    }
     #[cfg(unix)]
     fn save_file(&self, declared: &str, target: &str) -> PyResult<String> {
         let mut publisher = FileTarget { declared, target };

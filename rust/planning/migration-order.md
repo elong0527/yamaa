@@ -1,6 +1,6 @@
 # Shared Rust migration implementation order
 
-Reconciled 2026-10-08 against main `a805f49c7306e75c22e1be507990774b25c628f2`
+Reconciled 2026-10-08 against main `be2811868fb7336f230dfca7e6c625c7b44e8d4d`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
 This is a delivery plan, not a language change or a qualification claim.
 
@@ -62,6 +62,7 @@ Subsequent reviewed and installed-package-qualified slices have merged:
 | #1805 | Native explicit-target publication, retained private staging, parent writer coordination and explicit failed-cleanup diagnostics. |
 | #1807 | Private native file preparation, captured parent graph and lexical views, cached original builds and direct native saves. |
 | #1808 | Shared row-column checkpoints and direct grouped MEAN/COUNT with independent complete reports. |
+| #1809 | Converted-column and direct-record row filters, grouped defaults, ordered phase findings and admission before study ports. |
 
 All six original cohort documents now pass the private installed entry points in
 both hosts, with exact complete reports and publication bytes. This does not yet
@@ -289,8 +290,18 @@ imports forbidden. Immutable column groups attach to existing checkpoints;
 direct grouped driver reductions use existing engine services. Candidate
 observations never write expected truth.
 
-The row-filter candidate `b484d3780de29a7c1a64bb1d052ffc7763a965a7`
-passes 741 Rust tests across 89 all-target executions, strict Clippy, the
+Row filters merged in [PR #1809](https://github.com/elong0527/yamaa/pull/1809)
+as `be2811868fb7336f230dfca7e6c625c7b44e8d4d` after all thirteen
+checks, clean full review of thirteen non-TSV files and fresh downloaded-artifact
+auditing. Native run 37771696617 passed all six jobs on attempt 1. Six installed
+Python forms pass 23 suites and 57 original-document methods, retaining three
+Unix-only skips on Windows. Both strict R forms pass all 17 scripts, including
+complete filter and admission witnesses. Source bytes, all 52 Parquet inputs,
+the 89-contract/40-suite catalog and unchanged assisted inventory match the exact
+tested merge. [Final evidence](https://github.com/elong0527/yamaa/pull/1809#issuecomment-6059504755).
+
+Prior immutable candidate `b484d3780de29a7c1a64bb1d052ffc7763a965a7`
+passed 741 Rust tests across 89 all-target executions, strict Clippy, the
 dependency guard, 45 tooling tests, both installed 23-suite Python forms (57
 original-document methods), all 17 strict R scripts and direct source-byte
 auditing of ten Python and eleven R changed members plus 52 Parquet fixtures.
@@ -299,10 +310,10 @@ reference-test files; runtime and expected truth remain equal before the plan
 update. A subsequent ordering regression pins group-reference findings before
 filter findings; all twenty-seven independent reports pass reference execution
 and focused Rust replay. The final runtime therefore differs from that earlier
-full local proof and requires fresh hosted package qualification. Its 89-contract/40-suite catalog includes twenty-seven independently
+full local proof; the final hosted qualification above covers that final runtime.
+Its 89-contract/40-suite catalog includes twenty-seven independently
 reference-qualified complete filter reports and two complete native unsupported
-admission envelopes. Final hosted qualification, full review and fresh
-artifact auditing remain required.
+admission envelopes.
 
 Filters read converted candidate columns and direct ungrouped driver fields,
 with true retaining rows and false/unknown dropping them. Grouped filters read
@@ -321,12 +332,31 @@ expressions, warning severity, predicate gaps, environment/workflow admission an
 release gates remain open. The packaging-lock policy proposal awaits maintainer
 approval; AGENTS.md remains unchanged.
 
-The current delivery frontier is reviewed declaring-file path rules, production
-file ports and resource preflight, and the bounded public facade and conformance
-frontend. Schema findings retain standalone and inherited preparation context;
+The owned issue-table candidate at `ce702250226dd957266fcd18d3b1bca883322c61`
+passed 738 Rust tests/89 target executions, strict Clippy, the dependency guard,
+46 tooling tests, both installed Python forms (23 suites, 56 original methods),
+all 17 strict R scripts and direct source-byte auditing. Seven native Python
+members, thirteen R members, the pure Python materializer and 52 Parquet fixtures
+match the immutable packages. Rust owns all five issue fields and JSON text
+context. Both hosts preserve empty frames, nullable requirements, ordered paths,
+Unicode, full-range integer context and caller mutation independence. Seventeen
+unchanged original reports and fifteen static payloads provide independent
+expectations; neither host parses diagnostic context. Serialization budgets also
+bound the escaped JSON-text payload. Rebase onto #1809 combines the result layer
+with the qualified filters and requires fresh final-head hosted qualification
+and full review; the earlier installed proof is not a claim for that combined head.
+This exposes private result conversion, not the public domain/check entry points.
+
+The next delivery frontier is the public domain/check entry points and one
+installed package per host, followed by cohort conformance through that surface.
+Existing root, link, configuration and fallback policy stays in place while the
+separate declaring-file path-policy approval is pending. Windows native file IO,
+environment/functions, workflow and submission remain distinct unfinished work.
+Schema findings retain standalone and inherited preparation context;
 classified capture failures retain owned failed-build reports. Actual file-port
-integration and complete failure-family coverage remain required. The three public
-representation decisions below remain open. Do not substitute another round of
+integration and complete failure-family coverage remain required. Public
+representation decisions below remain separate from this private result layer.
+Do not substitute another round of
 component-only evidence for the remaining original-YAML frontend gates.
 
 ## Serial delivery order

@@ -3,6 +3,7 @@
 import builtins
 import csv
 import gc
+import importlib
 import json
 import os
 import platform
@@ -539,6 +540,40 @@ class OriginalSpecifications(unittest.TestCase):
                 handle = yamaa_native._prepare_document("spec.yaml", bytes.fromhex(row["source_hex"]), no_port, no_port, no_port)
                 for _ in range(2):
                     self.assertEqual(handle.check_issues(), row["expected"])
+                    expected = json.loads(row["expected"])
+                    self.assertEqual(handle.check_issue_rows(), [
+                        (issue["phase"],issue["condition"],issue["requirement"],issue["spec_paths"],issue["context"])
+                        for issue in expected
+                    ])
+
+    def test_owned_build_issue_rows_retain_complete_original_truth_without_more_reads(self):
+        result_view = importlib.import_module("yamaa._native_results")
+        for name in CASES:
+            with self.subTest(case=name):
+                handle = prepare(name)
+                case = ROOT / "cases" / name
+                state = {"reads": 0}
+                def capture(dataset, path, maximum):
+                    content = (case / path).read_bytes()
+                    self.assertLessEqual(len(content), maximum)
+                    state["reads"] += 1
+                    return content, True
+                result = handle.build(capture, (platform.python_version(),yamaa_native.engine_info()["core_version"],name,specification_name(name),"."))
+                reads = state["reads"]
+                diagnostics = json.loads((ROOT / "expected" / (name + ".json")).read_text())["diagnostics"]
+                expected = [(d["phase"],d["condition"],d["requirement"],d["spec_paths"],json.dumps(d["context"],ensure_ascii=False,sort_keys=True,separators=(",", ":"))) for d in diagnostics]
+                for _ in range(2):
+                    self.assertEqual(result.issues(), expected)
+                    frame = result_view.issues_frame(result.issues())
+                    self.assertEqual(frame.schema, result_view.ISSUE_SCHEMA)
+                    self.assertEqual(frame.rows(), expected)
+                    self.assertEqual(frame.columns, ["phase","condition","requirement","spec_paths","context"])
+                copy = result.issues()
+                if copy:
+                    copy[0][3].append("caller mutation")
+                self.assertEqual(result.issues(), expected)
+                self.assertEqual(state["reads"], reads)
+                self.assertEqual(json.loads(result.observations())["diagnostics"], diagnostics)
 
     def test_original_column_matches_complete_reports_and_exact_csv(self):
         self._source_selection_reports("original-column-matches.tsv", "column-matches", 16)

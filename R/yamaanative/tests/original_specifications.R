@@ -9,6 +9,12 @@ Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaanative)
 root <- system.file("specification-original", package="yamaanative", mustWork=TRUE)
+source(file.path(root,"issue-frame-truth.R"),local=TRUE)
+check_issue_frame <- function(actual,expected) {
+  stopifnot(is.data.frame(actual),identical(names(actual),c("phase","condition","requirement","spec_paths","context")))
+  stopifnot(nrow(actual)==length(expected$phase),identical(lapply(actual,identity),expected))
+  stopifnot(all(vapply(actual[c("phase","condition","requirement","context")],is.character,logical(1))),is.list(actual$spec_paths))
+}
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
 module_names <- c("schema.yaml",sort(setdiff(list.files(file.path(root,"schema"),pattern="[.]yaml$"),"schema.yaml")))
 modules <- setNames(lapply(file.path(root,"schema",module_names),rawfile),module_names)
@@ -111,6 +117,11 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
   before <- published
   result <- build(handle,capture,case_name,specification)
   requests_after_build <- state$requests
+  build_issues <- get(".build_issues",envir=asNamespace("yamaanative"))
+  for(i in seq_len(2L)) check_issue_frame(build_issues(result),issue_frame_truth[[case_name]])
+  copied_issues <- build_issues(result)
+  if(nrow(copied_issues)) copied_issues$phase[[1L]] <- "caller mutation"
+  check_issue_frame(build_issues(result),issue_frame_truth[[case_name]])
   unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',expected)
   stopifnot(identical(build_observations(result),unsaved),published==before)
   if(startsWith(case_name,"negative-")) {
@@ -132,9 +143,12 @@ for(case_name in c("negative-zero-division","negative-integer-overflow","adam-ad
     stopifnot(published==before+2L)
   }
   stopifnot(identical(state$requests,requests_after_build))
+  cat(case_name,"owned build issue data frame exact fields, context and cached independence passed\n")
   expired_result <- unserialize(serialize(result,NULL))
   stopifnot(inherits(tryCatch(build_output(expired_result),error=identity),"error"))
+  stopifnot(inherits(tryCatch(build_issues(expired_result),error=identity),"error"))
   stopifnot(inherits(tryCatch(build_output(handle),error=identity),"error"))
+  stopifnot(inherits(tryCatch(build_issues(handle),error=identity),"error"))
   stopifnot(inherits(tryCatch(specification_source(result),error=identity),"error"))
   # Exercise native filesystem transport over every unchanged original input.
   ports <- get(".file_resources_ports",envir=asNamespace("yamaanative"))(case,case)
@@ -874,8 +888,11 @@ check_issues <- get(".specification_check_issues",envir=asNamespace("yamaanative
 for(i in seq_len(nrow(static_truth))) {
   handle <- prepare_entry("spec.yaml",hex_raw(static_truth$source_hex[[i]]),no_port,no_port,no_port)
   for(j in seq_len(2L)) stopifnot(identical(check_issues(handle),static_truth$expected[[i]]))
+  frame <- get(".check_specification_issue_frame",envir=asNamespace("yamaanative"))
+  for(j in seq_len(2L)) check_issue_frame(frame(handle),issue_frame_truth[[paste0("static/",static_truth$case[[i]])]])
 }
 cat("static verification check complete issues without study authority passed\n")
+cat("static check issue data frames match fifteen independent payloads without study authority passed\n")
 
 # File preparation retains complete early diagnostics and cross-directory authority.
 directory <- tempfile("native-file-preparation-");dir.create(directory)
