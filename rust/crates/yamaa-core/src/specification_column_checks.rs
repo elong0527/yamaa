@@ -12,6 +12,7 @@ pub(super) fn prepare(
     payload: usize,
     path: &str,
     kind: ColumnType,
+    regex_budget: &mut crate::regex::CompileBudget,
 ) -> Result<Check, PrepareError> {
     let invalid = |requirement, reason: String| Check::InvalidDeclaration {
         condition: "invalid_declaration",
@@ -33,6 +34,34 @@ pub(super) fn prepare(
     };
     match op {
         "not_missing" => Ok(Check::NotMissing),
+        "matches" => {
+            let pattern = text(d, field(d, payload, "pattern")?)?;
+            if kind != ColumnType::Str {
+                return Ok(wrong_type());
+            }
+            match crate::regex::Pattern::compile_with_budget(
+                pattern,
+                Default::default(),
+                regex_budget,
+            ) {
+                Ok(pattern) => Ok(Check::Matches(pattern)),
+                Err(crate::regex::CompileError::Invalid { .. }) => Ok(Check::InvalidDiagnostic(
+                    crate::dataset_checks::invalid_pattern_diagnostic(
+                        format!("{path}.pattern"),
+                        pattern.into(),
+                    ),
+                )),
+                Err(crate::regex::CompileError::Limit { .. }) => {
+                    Err(PrepareError::Limit("verification_pattern"))
+                }
+                Err(crate::regex::CompileError::Unsupported { .. }) => {
+                    Err(PrepareError::Unsupported(vec![UnsupportedFeature {
+                        operation: "verification_pattern".into(),
+                        path: format!("{path}.pattern"),
+                    }]))
+                }
+            }
+        }
         "allowed_values" => {
             let entries = sequence(d, field(d, payload, "values")?)?;
             if entries.len() > 64 {

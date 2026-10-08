@@ -161,26 +161,46 @@ independent complete presence reports retain four exact CSV successes, and the
 unchanged negative-not-missing-age document brings the private original corpus to
 thirteen. [Final evidence](https://github.com/elong0527/yamaa/pull/1799#issuecomment-6051580788).
 
-The next prepared compiler candidate admits error-severity column allowed_values,
-range and max_length at the same ordered checkpoint. Missing values pass; allowed
-literals convert once to the declared kind, mixed integer/float bounds compare
-exactly, and text length counts Unicode scalars. Twenty independently authored
-complete reports preserve deferred declaration findings, completed prefix records,
-cached captures and six exact successful CSV cases. UTF-8 fixture readers compare
-Rust's canonical report text in both installed hosts. The unchanged
-negative-implausible-age and negative-invalid-sex reports bring the locally
-qualified original corpus to fifteen. Matches, warnings and row-template column
-checks remain Unsupported before study capture.
+The original allowed_values/range/max_length slice merged in [PR #1800](https://github.com/elong0527/yamaa/pull/1800)
+at `6b3b17adc551e8a4320d9fdedc79daa8302c81fa` after all 13 checks,
+a clean full 22-text-file review and fresh installed-artifact auditing. Native run
+37723089374 passed all six jobs on attempt 1. Six Python forms pass 23 suites
+(48 original-document, six actual-file and four schema methods); both R forms
+pass 17 strict scripts with Status: OK and Python absent from PATH. Its
+81-contract/40-suite catalog, 82 reached canonical causes, changed archive members,
+all 52 Parquet fixtures and unchanged 945-row assisted inventory match. Twenty
+independent complete reports preserve six exact successful CSV cases. The unchanged
+negative-implausible-age and negative-invalid-sex documents bring the private
+original corpus to fifteen. [Final evidence](https://github.com/elong0527/yamaa/pull/1800#issuecomment-6052082750).
 
-Local immutable runtime `808e331ac7e0dafef1cdc5897e9b939069ce6833` passes
-687 Rust tests across 78 targets, strict Clippy, 44 tooling tests, both installed
-Python forms with 23 suites (48 original-document, six actual-file and four schema
-methods), and all 17 strict R scripts with Status: OK. R replay stays inside the
-Python-free guard. Sixteen changed native Python and seventeen R archive members,
-plus all 52 Parquet fixtures, match directly. Its 81-contract/40-suite catalog and
-82 reached canonical causes await final main-based review, hosted qualification
-and downloaded artifact auditing. No assisted inventory tuple or public frontend
-gate is promoted by this prepared candidate.
+The next prepared compiler candidate admits error-severity column matches with
+portable patterns compiled once and searched against present strings at the
+owning column's existing checkpoint. Missing values pass; invalid syntax remains
+a deferred REQ-0827 finding with only the authored pattern and pattern path.
+Earlier conversion failures and completed verification records retain reference
+order. Pattern compilation shares capture-width work/storage across a column's
+declarations, and matching shares cumulative subject bytes, work and state cells
+with predicates across the whole attempt. Refusals retain the completed prefix;
+the next attempt gets fresh counters.
+
+Sixteen independently authored complete reports cover search, missing/empty input,
+Unicode, lookahead, backreferences, deferred syntax/type findings and later
+conversion failures, with six exact successful CSV artifacts. Compound cases retain
+an earlier invalid pattern or repeated ID before a later compilation limit. The
+complete group vocabulary is admitted first; IDs and column payloads then compile
+in declaration order only through the reachable prefix. Independently
+authored full reports for unchanged negative-sex-code and
+negative-matches-bad-pattern bring the locally qualified original corpus to
+seventeen. Local immutable runtime `121d78c7743009e17716f49438e34d331a1792de`
+passes 691 Rust tests across 78 targets, strict Clippy, 44 tooling tests, both
+installed Python forms with 23 suites (49 original-document, six actual-file and
+four schema methods), and all 17 strict R scripts with Status: OK and Python
+absent from PATH. Seventeen changed native Python and eighteen R archive members,
+plus all 52 Parquet fixtures, match directly. Its 84-contract/40-suite catalog and
+84 reached canonical causes await final main-based review, hosted qualification
+and downloaded artifact auditing. Warning severity, row-template column checks,
+known predicate gaps and production R file ports remain open. No assisted
+inventory tuple or public frontend gate is promoted by this prepared candidate.
 
 The current delivery frontier is reviewed declaring-file path rules, production
 file ports and resource preflight, and the bounded public facade and conformance

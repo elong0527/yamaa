@@ -73,6 +73,7 @@ pub(crate) fn validate(check: &Check, kind: ColumnType) -> Result<(), PlanError>
         Check::MaxLength(max) if kind != ColumnType::Str || *max == 0 => {
             return Err(PlanError::InvalidBounds)
         }
+        Check::Matches(_) if kind != ColumnType::Str => return Err(PlanError::InvalidColumns),
         _ => {}
     }
     Ok(())
@@ -84,12 +85,42 @@ fn column_code(check: &Check) -> Option<ConditionCode> {
         Check::AllowedValues(_) => ConditionCode::VerificationAllowedValuesFailed,
         Check::Range { .. } => ConditionCode::VerificationRangeFailed,
         Check::MaxLength(_) => ConditionCode::VerificationMaxLengthFailed,
+        Check::Matches(_) => ConditionCode::VerificationMatchesFailed,
         _ => return None,
     })
 }
 
 pub fn column_definition(check: &Check) -> Option<Definition> {
     column_code(check).map(ConditionCode::definition)
+}
+
+/// Missing values pass; matching shares the caller's cumulative regex budget.
+pub fn matches_offenders<'a>(
+    pattern: &crate::regex::Pattern,
+    values: impl IntoIterator<Item = &'a Value>,
+    limits: crate::regex::MatchLimits,
+    budget: &mut crate::predicate::Budget,
+) -> Result<Vec<usize>, crate::predicate::LimitError> {
+    let mut offenders = Vec::new();
+    for (index, value) in values.into_iter().enumerate() {
+        if let Value::Str(text) = value {
+            if budget.search_pattern(pattern, text, limits)?.is_none() {
+                offenders.push(index);
+            }
+        }
+    }
+    Ok(offenders)
+}
+
+/// Pattern syntax findings retain only the authored pattern, without parser geometry.
+pub fn invalid_pattern_diagnostic(path: String, pattern: String) -> Diagnostic {
+    Diagnostic {
+        code: ConditionCode::RegexInvalidPattern,
+        spec_paths: vec![path],
+        context: [("pattern".into(), ContextValue::Scalar(Value::Str(pattern)))].into(),
+        source_span: None,
+        operand_route: None,
+    }
 }
 
 /// Inputs and permitted values are already converted to the declared column kind.

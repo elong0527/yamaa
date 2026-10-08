@@ -1,0 +1,165 @@
+{
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "backend": "rust",
+  "runtime_version": "fixture-runtime",
+  "engine_version": "fixture-engine",
+  "example": "negative-sex-code",
+  "outcome": "failure",
+  "artifacts": [],
+  "diagnostics": [
+    {
+      "phase": "verification",
+      "condition": "matches_failed",
+      "spec_paths": [
+        "columns.SEX.verifications[0].matches"
+      ],
+      "requirement": "REQ-0379",
+      "context": {
+        "column": "SEX",
+        "failure_count": 1,
+        "keys": [
+          {
+            "STUDYID": "PILOT7",
+            "USUBJID": "P7-952"
+          }
+        ]
+      }
+    }
+  ],
+  "unsupported": [],
+  "handler_counts": [],
+  "nodes": [
+    {
+      "specification": "spec.yaml",
+      "outcome": "failure",
+      "diagnostics": [
+        {
+          "phase": "verification",
+          "condition": "matches_failed",
+          "spec_paths": [
+            "columns.SEX.verifications[0].matches"
+          ],
+          "requirement": "REQ-0379",
+          "context": {
+            "column": "SEX",
+            "failure_count": 1,
+            "keys": [
+              {
+                "STUDYID": "PILOT7",
+                "USUBJID": "P7-952"
+              }
+            ]
+          }
+        }
+      ],
+      "unsupported": [],
+      "handler_counts": []
+    }
+  ],
+  "tables": [
+    {
+      "specification": "spec.yaml",
+      "stage": "source",
+      "name": "DM",
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "SEX"
+      ],
+      "types": [
+        "str",
+        "str",
+        "str"
+      ],
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "PILOT7"
+          },
+          {
+            "type": "str",
+            "value": "P7-951"
+          },
+          {
+            "type": "str",
+            "value": "M"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "PILOT7"
+          },
+          {
+            "type": "str",
+            "value": "P7-952"
+          },
+          {
+            "type": "str",
+            "value": "X"
+          }
+        ]
+      ]
+    }
+  ],
+  "verifications": [
+    {
+      "specification": "spec.yaml",
+      "spec_path": "columns.SEX.verifications[0].matches",
+      "check": "matches",
+      "target": "SEX",
+      "requirement": "REQ-0379",
+      "verification_id": null,
+      "severity": "error",
+      "evaluated_count": 2,
+      "failure": {
+        "phase": "verification",
+        "condition": "matches_failed",
+        "spec_paths": [
+          "columns.SEX.verifications[0].matches"
+        ],
+        "requirement": "REQ-0379",
+        "context": {
+          "column": "SEX",
+          "failure_count": 1,
+          "keys": [
+            {
+              "STUDYID": "PILOT7",
+              "USUBJID": "P7-952"
+            }
+          ]
+        },
+        "severity": "error",
+        "offending_keys": [
+          {
+            "STUDYID": "PILOT7",
+            "USUBJID": "P7-952"
+          }
+        ],
+        "log_context": {
+          "column": "SEX",
+          "failure_count": 1,
+          "keys": [
+            {
+              "STUDYID": "PILOT7",
+              "USUBJID": "P7-952"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "callbacks": [],
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "path": "input/dm.csv",
+      "outcome": "captured",
+      "condition": null,
+      "snapshots_created": 1
+    }
+  ],
+  "error": null
+}

@@ -487,7 +487,8 @@ fn check_observations(
                 "not_missing_failed"
                 | "allowed_values_failed"
                 | "range_failed"
-                | "length_failed" => {
+                | "length_failed"
+                | "matches_failed" => {
                     let column = run
                         .compiled()
                         .verification_target(path)

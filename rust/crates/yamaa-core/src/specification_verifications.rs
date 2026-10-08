@@ -179,15 +179,13 @@ impl Verifications {
             return Err(PrepareError::Limit("verifications"));
         }
         let mut extra = Vec::new();
-        let mut predicates = BTreeMap::new();
-        let mut column_checks = BTreeMap::new();
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
             let path = format!("{prefix}[{index}].{op}");
             if column.is_some()
                 && !matches!(
                     op,
-                    "not_missing" | "allowed_values" | "range" | "max_length"
+                    "not_missing" | "allowed_values" | "range" | "max_length" | "matches"
                 )
             {
                 reject(&mut extra, op, path);
@@ -198,6 +196,7 @@ impl Verifications {
                 "allowed_values" if column.is_some() => &["values", "id", "severity"],
                 "range" if column.is_some() => &["min", "max", "id", "severity"],
                 "max_length" if column.is_some() => &["max", "id", "severity"],
+                "matches" if column.is_some() => &["pattern", "id", "severity"],
                 "unique" | "all_or_none" => &["columns", "id", "severity"],
                 "row_count" => &["min", "max", "id", "severity"],
                 "assert" => &["when", "require", "id", "severity"],
@@ -220,20 +219,6 @@ impl Verifications {
                     reject(&mut extra, "verification_severity", path.clone());
                 }
             }
-            if op == "assert" {
-                for name in ["when", "require"] {
-                    if name == "require" || d.field(payload, name).is_some() {
-                        predicates
-                            .insert((index, name), predicate(d, payload, name, &path, output)?);
-                    }
-                }
-            }
-            if let Some(column) = column {
-                column_checks.insert(
-                    index,
-                    column_checks::prepare(d, op, payload, &path, output.columns()[column].kind)?,
-                );
-            }
             // The current dataset engine's count bounds are signed 64-bit. Do
             // not lose arbitrary-width authored bounds through a narrowing cast.
             for name in if op == "row_count" {
@@ -252,6 +237,23 @@ impl Verifications {
         }
         if !extra.is_empty() {
             return Err(PrepareError::Unsupported(extra));
+        }
+        let mut predicates = BTreeMap::new();
+        let mut regex_budget = crate::regex::CompileBudget::new(Default::default());
+        // Admit the complete operation/field/severity vocabulary before any
+        // payload compiler can refuse on policy. Later vocabulary still matters
+        // even when an earlier declaration finding makes its payload unreachable.
+        for (index, &id) in entries.iter().enumerate() {
+            let (op, payload) = operation(d, id)?;
+            let path = format!("{prefix}[{index}].{op}");
+            if op == "assert" {
+                for name in ["when", "require"] {
+                    if name == "require" || d.field(payload, name).is_some() {
+                        predicates
+                            .insert((index, name), predicate(d, payload, name, &path, output)?);
+                    }
+                }
+            }
         }
         let mut quote_budget = crate::schema::ValidationBudget::new(Default::default());
         let mut quote = |value: &str| {
@@ -298,8 +300,21 @@ impl Verifications {
             } else {
                 None
             };
-            let check = if column.is_some() {
-                let check = column_checks.remove(&index).ok_or(PrepareError::Internal)?;
+            let check = if let Some(column) = column {
+                // IDs and each payload are prepared in declaration order. A
+                // deferred finding ends the prefix before any later compiler.
+                let check = column_checks::prepare(
+                    d,
+                    op,
+                    payload,
+                    &path,
+                    output.columns()[column].kind,
+                    &mut regex_budget,
+                )?;
+                if let Check::InvalidDiagnostic(diagnostic) = check {
+                    result.deferred = Some(DeclarationFinding::Diagnostic(diagnostic));
+                    break;
+                }
                 if let Check::InvalidDeclaration {
                     condition,
                     requirement,

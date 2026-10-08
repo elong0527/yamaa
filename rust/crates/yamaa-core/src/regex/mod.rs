@@ -1,5 +1,5 @@
 //! Bounded, host-independent R022 pattern compilation and matching.
-//! No native binding or dataset capability is enabled by this internal core.
+//! Shared by schema constraints, predicates and completed-string column checks.
 
 use alloc::{string::String, vec, vec::Vec};
 mod identifier_data;

@@ -987,7 +987,8 @@ impl Executor<'_> {
                 Check::NotMissing
                 | Check::AllowedValues(_)
                 | Check::Range { .. }
-                | Check::MaxLength(_) => unreachable!("column-only check is rejected at admission"),
+                | Check::MaxLength(_)
+                | Check::Matches(_) => unreachable!("column-only check is rejected at admission"),
                 Check::InvalidDiagnostic(diagnostic) => {
                     return Err(Box::new(ExecutionError::VerificationDiagnostic {
                         diagnostic: diagnostic.clone(),
@@ -1146,7 +1147,8 @@ impl Executor<'_> {
                         Check::NotMissing
                         | Check::AllowedValues(_)
                         | Check::Range { .. }
-                        | Check::MaxLength(_) => {
+                        | Check::MaxLength(_)
+                        | Check::Matches(_) => {
                             let width = match &verification.check {
                                 Check::AllowedValues(accepted) => accepted.len(),
                                 Check::Range { .. } => 2,
@@ -1160,10 +1162,21 @@ impl Executor<'_> {
                                     }
                                 }
                             }
-                            let offending = yamaa_core::dataset_checks::column_offenders(
-                                &verification.check,
-                                candidates.iter().map(|row| &row.values[group.column]),
-                            );
+                            let values = candidates.iter().map(|row| &row.values[group.column]);
+                            let offending = if let Check::Matches(pattern) = &verification.check {
+                                yamaa_core::dataset_checks::matches_offenders(
+                                    pattern,
+                                    values,
+                                    Default::default(),
+                                    budget.predicate(),
+                                )
+                                .map_err(|error| Box::new(predicate_limit(error)))?
+                            } else {
+                                yamaa_core::dataset_checks::column_offenders(
+                                    &verification.check,
+                                    values,
+                                )
+                            };
                             let definition =
                                 yamaa_core::dataset_checks::column_definition(&verification.check)
                                     .expect("admitted column check");

@@ -253,6 +253,72 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         .is_none());
         reached.insert(diagnostic.code);
     }
+    let pattern = yamaa_core::regex::Pattern::compile("b", Default::default()).unwrap();
+    // A caller explicitly grants matching resources, independently of ordinary visits.
+    let mut budget = yamaa_core::predicate::Budget::new(yamaa_core::predicate::Usage {
+        regex: yamaa_core::regex::MatchUsage {
+            subject_bytes: 100,
+            work: 1000,
+            state_cells: 1000,
+        },
+        ..Default::default()
+    });
+    let rows = yamaa_core::dataset_checks::matches_offenders(
+        &pattern,
+        &[
+            Value::Str("abc".into()),
+            Value::Missing,
+            Value::Str("xxx".into()),
+        ],
+        Default::default(),
+        &mut budget,
+    )
+    .unwrap();
+    assert_eq!(rows, [2]);
+    let diagnostic = yamaa_core::dataset_checks::column_diagnostic(
+        &yamaa_core::dataset::Check::Matches(pattern),
+        "columns.V.verifications[0].matches".into(),
+        "V".into(),
+        rows.len(),
+    )
+    .unwrap();
+    assert_eq!(
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().requirement
+        ),
+        ("verification", "matches_failed", Some("REQ-0379"))
+    );
+    assert_eq!(diagnostic.context.len(), 2);
+    assert_eq!(
+        diagnostic.context["failure_count"],
+        ContextValue::Integer("1".into())
+    );
+    reached.insert(diagnostic.code);
+    assert!(matches!(
+        yamaa_core::regex::Pattern::compile("(", Default::default()),
+        Err(yamaa_core::regex::CompileError::Invalid { .. })
+    ));
+    let diagnostic = yamaa_core::dataset_checks::invalid_pattern_diagnostic(
+        "columns.V.verifications[0].matches.pattern".into(),
+        "(".into(),
+    );
+    assert_eq!(
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().requirement
+        ),
+        ("validation", "invalid_regex", Some("REQ-0827"))
+    );
+    assert_eq!(diagnostic.context.len(), 1);
+    assert_eq!(
+        diagnostic.context["pattern"],
+        ContextValue::Scalar(Value::Str("(".into()))
+    );
+    assert_eq!(diagnostic.source_span, None);
+    reached.insert(diagnostic.code);
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());
     reached.extend(parquet::reached());
@@ -261,6 +327,43 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         CONDITIONS.len(),
         reached.len(),
         "registry causes are unique"
+    );
+}
+
+#[test]
+fn column_pattern_searches_share_a_nonrefundable_subject_budget() {
+    use yamaa_core::{dataset_checks::matches_offenders, predicate, regex};
+    let pattern = regex::Pattern::compile("z", Default::default()).unwrap();
+    let usage = predicate::Usage {
+        regex: regex::MatchUsage {
+            subject_bytes: 4,
+            work: 1000,
+            state_cells: 1000,
+        },
+        ..Default::default()
+    };
+    let mut budget = predicate::Budget::new(usage);
+    let values = [Value::Str("é".into()), Value::Missing];
+    for _ in 0..2 {
+        assert_eq!(
+            matches_offenders(&pattern, &values, Default::default(), &mut budget).unwrap(),
+            [0]
+        );
+    }
+    let error = matches_offenders(&pattern, &values, Default::default(), &mut budget).unwrap_err();
+    assert_eq!(error.resource, predicate::Resource::RegexSubjectBytes);
+    assert_eq!(error.limit, 4);
+    assert_eq!(budget.used().regex.subject_bytes, 4);
+    assert!(matches_offenders(&pattern, &values, Default::default(), &mut budget).is_err());
+    assert_eq!(
+        matches_offenders(
+            &pattern,
+            &values,
+            Default::default(),
+            &mut predicate::Budget::new(usage)
+        )
+        .unwrap(),
+        [0]
     );
 }
 
