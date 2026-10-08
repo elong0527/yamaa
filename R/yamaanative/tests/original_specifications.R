@@ -853,7 +853,7 @@ for(i in seq_len(nrow(row_filter_admission))) {
   stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),row_filter_admission$expected[[i]]))
 }
 cat("row-filter unsupported admission before all ports passed\n")
-source_selection_truth("row-filters.tsv","row-filter",26L)
+source_selection_truth("row-filters.tsv","row-filter",27L)
 cat("row-template filters complete reports, cached reads and exact saved CSV passed\n")
 
 source_selection_truth("row-reductions.tsv","row-reduction",25L)

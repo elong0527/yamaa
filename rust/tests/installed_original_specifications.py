@@ -520,7 +520,7 @@ class OriginalSpecifications(unittest.TestCase):
             self.assertEqual(json.loads(str(caught.exception)), json.loads(row["expected"]))
 
     def test_row_filters_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("row-filters.tsv", "row-filter", 26)
+        self._source_selection_reports("row-filters.tsv", "row-filter", 27)
 
     def test_row_reductions_complete_reports_and_exact_csv(self):
         self._source_selection_reports("row-reductions.tsv", "row-reduction", 25)

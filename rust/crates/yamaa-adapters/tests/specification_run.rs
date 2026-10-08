@@ -3435,7 +3435,7 @@ fn row_filter_unsupported_admission_matches_complete_envelopes_before_ports() {
 
 #[test]
 fn row_filters_match_complete_independent_reports_and_exact_csv() {
-    replay_source_selection_truth(include_str!("fixtures/row_filters.tsv"), "row-filter", 26);
+    replay_source_selection_truth(include_str!("fixtures/row_filters.tsv"), "row-filter", 27);
 }
 #[test]
 fn row_reductions_match_complete_independent_reports_and_exact_csv() {

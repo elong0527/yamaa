@@ -503,6 +503,22 @@ impl Rows {
         let mut templates = Vec::new();
         for (index, template) in self.templates.iter().enumerate() {
             let filter_path = format!("rows[{index}].filter");
+            let mode = match &template.groups {
+                None => RowMode::Records,
+                Some(groups) => RowMode::Groups(
+                    groups
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(position, name)| {
+                            resolve(
+                                name,
+                                &format!("rows[{index}].group_by[{position}]"),
+                                &mut findings,
+                            )
+                        })
+                        .collect(),
+                ),
+            };
             let predicate = match &template.filter {
                 Some((
                     text,
@@ -545,22 +561,6 @@ impl Rows {
                     });
                 }
             }
-            let mode = match &template.groups {
-                None => RowMode::Records,
-                Some(groups) => RowMode::Groups(
-                    groups
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(position, name)| {
-                            resolve(
-                                name,
-                                &format!("rows[{index}].group_by[{position}]"),
-                                &mut findings,
-                            )
-                        })
-                        .collect(),
-                ),
-            };
             let group_names = template
                 .groups
                 .as_ref()

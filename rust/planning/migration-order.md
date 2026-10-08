@@ -295,8 +295,11 @@ dependency guard, 45 tooling tests, both installed 23-suite Python forms (57
 original-document methods), all 17 strict R scripts and direct source-byte
 auditing of ten Python and eleven R changed members plus 52 Parquet fixtures.
 Rebase onto merged main adds only the seven inspected upstream documentation and
-reference-test files; runtime and expected truth remain equal before this plan
-update. Its 89-contract/40-suite catalog includes twenty-six independently
+reference-test files; runtime and expected truth remain equal before the plan
+update. A subsequent ordering regression pins group-reference findings before
+filter findings; all twenty-seven independent reports pass reference execution
+and focused Rust replay. The final runtime therefore differs from that earlier
+full local proof and requires fresh hosted package qualification. Its 89-contract/40-suite catalog includes twenty-seven independently
 reference-qualified complete filter reports and two complete native unsupported
 admission envelopes. Final hosted qualification, full review and fresh
 artifact auditing remain required.
