@@ -1,0 +1,207 @@
+{
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "backend": "rust",
+  "runtime_version": "fixture-runtime",
+  "engine_version": "fixture-engine",
+  "example": "negative-implausible-age",
+  "outcome": "failure",
+  "artifacts": [],
+  "diagnostics": [
+    {
+      "phase": "verification",
+      "condition": "range_failed",
+      "spec_paths": [
+        "columns.AGE.verifications[0].range"
+      ],
+      "requirement": "REQ-0377",
+      "context": {
+        "column": "AGE",
+        "failure_count": 1,
+        "keys": [
+          {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-102"
+          }
+        ]
+      }
+    }
+  ],
+  "unsupported": [],
+  "handler_counts": [],
+  "nodes": [
+    {
+      "specification": "spec.yaml",
+      "outcome": "failure",
+      "diagnostics": [
+        {
+          "phase": "verification",
+          "condition": "range_failed",
+          "spec_paths": [
+            "columns.AGE.verifications[0].range"
+          ],
+          "requirement": "REQ-0377",
+          "context": {
+            "column": "AGE",
+            "failure_count": 1,
+            "keys": [
+              {
+                "STUDYID": "YAMAA-01",
+                "USUBJID": "YAMAA-01-102"
+              }
+            ]
+          }
+        }
+      ],
+      "unsupported": [],
+      "handler_counts": []
+    }
+  ],
+  "tables": [
+    {
+      "specification": "spec.yaml",
+      "stage": "source",
+      "name": "DM",
+      "columns": [
+        "STUDYID",
+        "USUBJID",
+        "AGE"
+      ],
+      "types": [
+        "str",
+        "str",
+        "str"
+      ],
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-101"
+          },
+          {
+            "type": "str",
+            "value": "64"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-102"
+          },
+          {
+            "type": "str",
+            "value": "214"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-103"
+          },
+          {
+            "type": "str",
+            "value": "18"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-104"
+          },
+          {
+            "type": "str",
+            "value": "100"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "YAMAA-01"
+          },
+          {
+            "type": "str",
+            "value": "YAMAA-01-105"
+          },
+          {
+            "type": "missing",
+            "value": null
+          }
+        ]
+      ]
+    }
+  ],
+  "verifications": [
+    {
+      "specification": "spec.yaml",
+      "spec_path": "columns.AGE.verifications[0].range",
+      "check": "range",
+      "target": "AGE",
+      "requirement": "REQ-0377",
+      "verification_id": null,
+      "severity": "error",
+      "evaluated_count": 5,
+      "failure": {
+        "phase": "verification",
+        "condition": "range_failed",
+        "spec_paths": [
+          "columns.AGE.verifications[0].range"
+        ],
+        "requirement": "REQ-0377",
+        "context": {
+          "column": "AGE",
+          "failure_count": 1,
+          "keys": [
+            {
+              "STUDYID": "YAMAA-01",
+              "USUBJID": "YAMAA-01-102"
+            }
+          ]
+        },
+        "severity": "error",
+        "offending_keys": [
+          {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-102"
+          }
+        ],
+        "log_context": {
+          "column": "AGE",
+          "failure_count": 1,
+          "keys": [
+            {
+              "STUDYID": "YAMAA-01",
+              "USUBJID": "YAMAA-01-102"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "callbacks": [],
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "path": "input/dm.csv",
+      "outcome": "captured",
+      "condition": null,
+      "snapshots_created": 1
+    }
+  ],
+  "error": null
+}

@@ -185,6 +185,74 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
             .is_none()
     );
     reached.insert(diagnostic.code);
+    for (check, values, offending, condition, requirement) in [
+        (
+            yamaa_core::dataset::Check::AllowedValues(vec![Value::Int(1)]),
+            vec![Value::Int(1), Value::Missing, Value::Int(2)],
+            vec![2],
+            "allowed_values_failed",
+            "REQ-0376",
+        ),
+        (
+            yamaa_core::dataset::Check::Range {
+                min: Some(Value::float(9223372036854775808.0)),
+                max: None,
+            },
+            vec![Value::Int(i64::MAX), Value::Missing],
+            vec![0],
+            "range_failed",
+            "REQ-0377",
+        ),
+        (
+            yamaa_core::dataset::Check::MaxLength(2),
+            vec![
+                Value::Str("é🙂".into()),
+                Value::Str("é🙂x".into()),
+                Value::Missing,
+            ],
+            vec![1],
+            "length_failed",
+            "REQ-0378",
+        ),
+    ] {
+        let rows = yamaa_core::dataset_checks::column_offenders(&check, &values);
+        assert_eq!(rows, offending);
+        let diagnostic = yamaa_core::dataset_checks::column_diagnostic(
+            &check,
+            "columns.V.verifications[0]".into(),
+            "V".into(),
+            rows.len(),
+        )
+        .unwrap();
+        assert_eq!(
+            (
+                diagnostic.definition().phase,
+                diagnostic.definition().condition,
+                diagnostic.definition().requirement
+            ),
+            ("verification", condition, Some(requirement))
+        );
+        assert_eq!(diagnostic.spec_paths, ["columns.V.verifications[0]"]);
+        assert_eq!(
+            diagnostic.context["column"],
+            ContextValue::Scalar(Value::Str("V".into()))
+        );
+        assert_eq!(
+            diagnostic.context["failure_count"],
+            ContextValue::Integer("1".into())
+        );
+        if condition == "length_failed" {
+            assert_eq!(diagnostic.context["max"], ContextValue::Integer("2".into()));
+        }
+        assert!(yamaa_core::dataset_checks::column_diagnostic(
+            &check,
+            "unused".into(),
+            "V".into(),
+            0
+        )
+        .is_none());
+        reached.insert(diagnostic.code);
+    }
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());
     reached.extend(parquet::reached());

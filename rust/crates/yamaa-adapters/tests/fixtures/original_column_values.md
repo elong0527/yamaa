@@ -1,0 +1,7 @@
+# Original column value reports
+
+`original_column_values.tsv` contains twenty independently authored complete reports for raw YAML and captured CSV bytes. The author enumerated every field and six successful exact CSV artifacts, then compared the truth with actual reference Python execution before running the candidate. Candidate observations never write expected truth. Only backend and runtime/engine versions are normalized for that reference comparison.
+
+Allowed-value cases pin one-time declaration conversion, missing values, empty lists, invalid or missing permitted literals, column conversion before declaration validation and retained records through a later conversion error. Range cases pin inclusive finite bounds, mixed integer/float comparison, missing values, empty or reversed bounds and invalid column type on empty output. Length cases pin Unicode scalar counts with an accented character and emoji, missing values, a zero bound and invalid column type even on empty output.
+
+Rust and installed Python/R replay complete fresh/cached reports, exact CSV saves and failed-save gates. Invalid declarations keep the completed key-check prefix and assert no column-check record. The bounded slice admits error severity, finite range bounds, signed-64-bit literals and at most 64 permitted values per check. Other column families, warning severity, wider literals and row-template column checks remain Unsupported or explicit resource refusals before study capture.
