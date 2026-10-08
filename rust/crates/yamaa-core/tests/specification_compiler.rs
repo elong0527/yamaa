@@ -574,3 +574,71 @@ fn wide_row_recovery_is_unsupported_at_its_authored_path_before_binding() {
     assert_eq!(features[0].operation, "wide_integer_literal");
     assert_eq!(features[0].path, "rows[0].derivations.VALUE.unconvertible");
 }
+
+#[test]
+fn source_filters_charge_compilation_before_admission_and_reject_unimplemented_literals() {
+    let document = operation_document(
+        "source",
+        Tree::Map(vec![
+            ("variable", Tree::Text("SRC.ID")),
+            ("filter", Tree::Text("SRC.ID = 1")),
+        ]),
+        "input.csv",
+    );
+    assert!(matches!(
+        PreparedSpecification::prepare_with_limits(
+            &document,
+            CompilationLimits {
+                numeric_bytes: 0,
+                ..Default::default()
+            }
+        ),
+        Err(PrepareError::Limit("numeric_bytes"))
+    ));
+    let document = operation_document(
+        "source",
+        Tree::Map(vec![
+            ("variable", Tree::Text("SRC.ID")),
+            ("filter", Tree::Text("SRC.ID = 9223372036854775808")),
+        ]),
+        "input.csv",
+    );
+    let Err(PrepareError::Unsupported(findings)) = PreparedSpecification::prepare(&document) else {
+        panic!("unimplemented literal must reject before ingestion");
+    };
+    assert!(findings
+        .iter()
+        .any(|finding| finding.operation == "predicate_literal"));
+}
+
+#[test]
+fn selection_metadata_and_filters_are_bounded_before_owned_compilation() {
+    let payload = Tree::Map(vec![(
+        "sources",
+        Tree::List(vec![Tree::Map(vec![
+            ("variable", Tree::Text("SRC.ID")),
+            ("filter", Tree::Text("SRC.ID =")),
+        ])]),
+    )]);
+    let document = operation_document("first_available", payload, "input.csv");
+    for (limits, name) in [
+        (
+            CompilationLimits {
+                source_operands: 0,
+                ..Default::default()
+            },
+            "source_operands",
+        ),
+        (
+            CompilationLimits {
+                numeric_bytes: 0,
+                ..Default::default()
+            },
+            "numeric_bytes",
+        ),
+    ] {
+        assert!(
+            matches!(PreparedSpecification::prepare_with_limits(&document,limits),Err(PrepareError::Limit(resource)) if resource==name)
+        );
+    }
+}

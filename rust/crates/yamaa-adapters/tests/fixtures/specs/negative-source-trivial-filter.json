@@ -1,0 +1,241 @@
+{
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "backend": "rust",
+  "runtime_version": "fixture-runtime",
+  "engine_version": "fixture-engine",
+  "example": "negative-source-trivial-filter",
+  "outcome": "failure",
+  "artifacts": [],
+  "diagnostics": [
+    {
+      "phase": "validation",
+      "condition": "prohibited_construct",
+      "spec_paths": [
+        "columns.ACTARM.derivation.source.filter"
+      ],
+      "requirement": "REQ-0148",
+      "context": {
+        "identifier": "ARM"
+      }
+    }
+  ],
+  "unsupported": [],
+  "handler_counts": [],
+  "nodes": [
+    {
+      "specification": "spec.yaml",
+      "outcome": "failure",
+      "diagnostics": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "spec_paths": [
+            "columns.ACTARM.derivation.source.filter"
+          ],
+          "requirement": "REQ-0148",
+          "context": {
+            "identifier": "ARM"
+          }
+        }
+      ],
+      "unsupported": [],
+      "handler_counts": []
+    }
+  ],
+  "tables": [
+    {
+      "specification": "spec.yaml",
+      "stage": "source",
+      "name": "ODM",
+      "columns": [
+        "StudyOID",
+        "MetaDataVersionOID",
+        "SubjectKey",
+        "StudyEventOID",
+        "StudyEventRepeatKey",
+        "ItemGroupOID",
+        "ItemGroupRepeatKey",
+        "ItemOID",
+        "Value"
+      ],
+      "types": [
+        "str",
+        "str",
+        "str",
+        "str",
+        "str",
+        "str",
+        "str",
+        "str",
+        "str"
+      ],
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "STUDY01"
+          },
+          {
+            "type": "str",
+            "value": "MDV.1"
+          },
+          {
+            "type": "str",
+            "value": "001"
+          },
+          {
+            "type": "str",
+            "value": "SCREENING"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "IG.DM"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "IT.DM.SEX"
+          },
+          {
+            "type": "str",
+            "value": "Male"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "STUDY01"
+          },
+          {
+            "type": "str",
+            "value": "MDV.1"
+          },
+          {
+            "type": "str",
+            "value": "001"
+          },
+          {
+            "type": "str",
+            "value": "SCREENING"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "IG.DM"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "IT.DM.AGE"
+          },
+          {
+            "type": "str",
+            "value": "34"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "STUDY01"
+          },
+          {
+            "type": "str",
+            "value": "MDV.1"
+          },
+          {
+            "type": "str",
+            "value": "002"
+          },
+          {
+            "type": "str",
+            "value": "SCREENING"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "IG.DM"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "IT.DM.SEX"
+          },
+          {
+            "type": "str",
+            "value": "Female"
+          }
+        ],
+        [
+          {
+            "type": "str",
+            "value": "STUDY01"
+          },
+          {
+            "type": "str",
+            "value": "MDV.1"
+          },
+          {
+            "type": "str",
+            "value": "002"
+          },
+          {
+            "type": "str",
+            "value": "SCREENING"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "IG.DM"
+          },
+          {
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "type": "str",
+            "value": "IT.DM.AGE"
+          },
+          {
+            "type": "str",
+            "value": "28"
+          }
+        ]
+      ]
+    }
+  ],
+  "verifications": [],
+  "callbacks": [],
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "path": "input/odm.csv",
+      "outcome": "captured",
+      "condition": null,
+      "snapshots_created": 1
+    }
+  ],
+  "error": null
+}

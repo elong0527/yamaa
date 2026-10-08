@@ -179,3 +179,94 @@ fn invalid_verifications_are_rejected() {
         );
     }
 }
+
+#[test]
+fn first_available_admits_every_operand_before_any_source_access() {
+    use yamaa_core::dataset::{FirstAvailable, SelectionRead, SelectionSource};
+    let source = schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]);
+    let output = source.clone();
+    let make = |sources| {
+        DatasetPlan::new(
+            source.clone(),
+            output.clone(),
+            vec![RowTemplate {
+                mode: RowMode::Keys,
+                assignments: vec![assign(0, Expression::Source(0))],
+                filter: None,
+            }],
+            vec![assign(
+                1,
+                Expression::FirstAvailable(Box::new(FirstAvailable::new(sources, Value::Int(99)))),
+            )],
+            vec![0],
+            vec![],
+        )
+    };
+    let valid = SelectionSource {
+        path: "columns.V.derivation.first_available.sources[0]".into(),
+        read: SelectionRead::Column(0),
+    };
+    assert!(make(vec![valid.clone()]).is_ok());
+    assert!(make(vec![]).is_ok());
+    for (read, error) in [
+        (SelectionRead::Column(1), PlanError::UnavailableColumn),
+        (
+            SelectionRead::Collect {
+                column: 2,
+                identifier: "SRC.V".into(),
+                filter: None,
+            },
+            PlanError::InvalidSource,
+        ),
+    ] {
+        assert_eq!(
+            make(vec![
+                valid.clone(),
+                SelectionSource {
+                    path: "later".into(),
+                    read
+                }
+            ]),
+            Err(error)
+        );
+    }
+    assert_eq!(
+        make(vec![SelectionSource {
+            path: String::new(),
+            read: SelectionRead::Column(0)
+        }]),
+        Err(PlanError::EmptyPath)
+    );
+    let selection =
+        Expression::FirstAvailable(Box::new(FirstAvailable::new(vec![], Value::Int(1))));
+    assert_eq!(
+        DatasetPlan::new(
+            source.clone(),
+            output.clone(),
+            vec![RowTemplate {
+                mode: RowMode::Keys,
+                assignments: vec![assign(0, selection.clone())],
+                filter: None
+            }],
+            vec![assign(1, Expression::Literal(Value::Int(2)))],
+            vec![0],
+            vec![]
+        ),
+        Err(PlanError::InvalidKeyMode)
+    );
+    assert_eq!(
+        DatasetPlan::new(
+            source,
+            output,
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![assign(0, Expression::Source(0))],
+                filter: None
+            }],
+            vec![assign(1, selection)],
+            vec![0],
+            vec![]
+        ),
+        Err(PlanError::InvalidKeyMode)
+    );
+}

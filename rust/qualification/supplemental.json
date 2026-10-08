@@ -701,6 +701,48 @@
         "R/yamaanative/tests/original_specifications.R",
         "rust/tests/installed_file_resources.py"
       ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_filters.tsv",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-source-missing-field.json",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/first_available.tsv",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/negative-source-trivial-filter.json",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaanative/tests/original_specifications.R"
+      ]
     }
   ],
   "suites": [
@@ -1420,6 +1462,14 @@
     },
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/source_inspection.md",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_filters.md",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/first_available.md",
       "role": "documentation"
     }
   ]

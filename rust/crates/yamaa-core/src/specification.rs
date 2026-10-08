@@ -28,6 +28,9 @@ use lookup_diagnostics::ReferenceCause;
 mod output_diagnostics;
 #[path = "specification_preflight_diagnostics.rs"]
 mod preflight_diagnostics;
+#[path = "specification_sources.rs"]
+mod source_expressions;
+pub use source_expressions::SourceFinding;
 #[path = "specification_rows.rs"]
 mod rows;
 #[path = "specification_verifications.rs"]
@@ -61,6 +64,7 @@ pub struct CompilationLimits {
     pub source_fields: usize,
     pub model_text_bytes: usize,
     pub numeric_bytes: usize,
+    pub source_operands: usize,
 }
 impl Default for CompilationLimits {
     fn default() -> Self {
@@ -72,6 +76,7 @@ impl Default for CompilationLimits {
             source_fields: 64,
             model_text_bytes: 262_144,
             numeric_bytes: 65_536,
+            source_operands: 64,
         }
     }
 }
@@ -139,6 +144,7 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    Source(SourceFinding),
     Window(WindowFinding),
     Lookup(LookupFinding),
     QualifiedReference {
@@ -222,7 +228,8 @@ impl SourceDeclaration {
 enum Operation {
     Literal(crate::value::Value),
     Window(alloc::boxed::Box<windows::Declaration>),
-    Source(String),
+    Source(alloc::boxed::Box<source_expressions::Declaration>),
+    FirstAvailable(alloc::boxed::Box<source_expressions::FirstAvailable>),
     Compute(CompiledNumeric),
     /// Reference planning emits formula diagnostics after source ingestion.
     InvalidNumeric {
@@ -621,7 +628,29 @@ impl PreparedSpecification {
                 .and_then(|id| d.field(id, "value"))
                 .and_then(|id| d.field(id, "compute"))
                 .and_then(|id| d.field(id, "expr"));
-            if let Some(id) = expr {
+            let value = d
+                .field(column, "derivation")
+                .and_then(|id| d.field(id, "value"));
+            let operands = value
+                .and_then(|id| d.field(id, "first_available"))
+                .and_then(|id| d.field(id, "sources"))
+                .map(|id| sequence(d, id))
+                .transpose()?
+                .unwrap_or(&[]);
+            if operands.len() > limits.source_operands {
+                return Err(PrepareError::Limit("source_operands"));
+            }
+            let filter = d
+                .field(column, "derivation")
+                .and_then(|id| d.field(id, "value"))
+                .and_then(|id| d.field(id, "source"))
+                .and_then(|id| d.field(id, "filter"))
+                .filter(|&id| !matches!(d.nodes()[id], N::Null));
+            let selection_filters = operands
+                .iter()
+                .filter_map(|&id| d.field(id, "filter"))
+                .filter(|&id| !matches!(d.nodes()[id], N::Null));
+            for id in expr.into_iter().chain(filter).chain(selection_filters) {
                 numeric_bytes = numeric_bytes
                     .checked_add(text(d, id)?.len())
                     .filter(|&n| n <= limits.numeric_bytes)
@@ -874,20 +903,62 @@ impl PreparedSpecification {
             let operation = match op {
                 "literal" => Some(Operation::Literal(literal(d, payload, &path)?)),
                 "source" => {
-                    // The expression payload is admitted by captured schema, not the model.
-                    for &(name, _) in mapping(d, payload)? {
-                        let name = text(d, name)?;
-                        if name != "variable" {
-                            reject(&mut extra, name, format!("{path}.{name}"));
-                        }
-                    }
-                    let reference = text(d, field(d, payload, "variable")?)?;
-                    if reference.split_once('.').is_some_and(|(relation, _)| {
-                        relation != driver && !intermediates.contains(relation)
-                    }) {
+                    let source = source_expressions::Declaration::prepare(
+                        d,
+                        payload,
+                        &path,
+                        &mut extra,
+                        &intermediates,
+                    )?;
+                    if source
+                        .variable
+                        .split_once('.')
+                        .is_some_and(|(relation, _)| {
+                            relation != driver && !intermediates.contains(relation)
+                        })
+                    {
                         reject(&mut extra, "secondary_source_expression", path.clone());
                     }
-                    Some(Operation::Source(reference.into()))
+                    if keys.contains(&column)
+                        && source.has_filter()
+                        && source
+                            .variable
+                            .split_once('.')
+                            .is_some_and(|(name, _)| name == driver)
+                    {
+                        reject(&mut extra, "filtered_key_source", path.clone());
+                    }
+                    Some(Operation::Source(alloc::boxed::Box::new(source)))
+                }
+                "first_available" => {
+                    let selection = source_expressions::FirstAvailable::prepare(
+                        d,
+                        payload,
+                        &path,
+                        &mut extra,
+                        &intermediates,
+                    )?;
+                    if keys.contains(&column) {
+                        reject(&mut extra, "selection_key_source", path.clone());
+                    }
+                    for (index, source) in selection.sources.iter().enumerate() {
+                        if let Some((relation, _)) = source.variable.split_once('.') {
+                            if intermediates.contains(relation) {
+                                reject(
+                                    &mut extra,
+                                    "selection_intermediate_source",
+                                    format!("{path}.sources[{index}]"),
+                                );
+                            } else if relation != driver {
+                                reject(
+                                    &mut extra,
+                                    "secondary_source_expression",
+                                    format!("{path}.sources[{index}]"),
+                                );
+                            }
+                        }
+                    }
+                    Some(Operation::FirstAvailable(alloc::boxed::Box::new(selection)))
                 }
                 "row_number"
                 | "rank"
@@ -1135,7 +1206,15 @@ impl PreparedSpecification {
                     });
                     None
                 }
-                Operation::Source(name) => {
+                Operation::Source(declaration) => {
+                    let name = &declaration.variable;
+                    let filter = declaration.bind_filter(
+                        path,
+                        self.source(),
+                        source,
+                        &self.intermediates,
+                        &mut findings,
+                    )?;
                     if let Some((index, field)) = self.intermediates.reference(name) {
                         if let Some(item) = &intermediates[index] {
                             edges.extend(item.keys.iter().map(|key| key.output_column));
@@ -1164,13 +1243,13 @@ impl PreparedSpecification {
                     } else {
                         bind(name, &mut findings)?.map(|binding| match binding {
                             reference_binding::Binding::Dataset { field, .. } => {
-                                if self.keys.contains(&column) {
+                                if self.keys.contains(&column) && !declaration.has_filter() {
                                     Expression::Source(field)
                                 } else {
                                     Expression::Collect {
                                         column: field,
                                         identifier: name.clone(),
-                                        filter: None,
+                                        filter,
                                         selection: None,
                                     }
                                 }
@@ -1181,6 +1260,60 @@ impl PreparedSpecification {
                             }
                         })
                     }
+                }
+                Operation::FirstAvailable(selection) => {
+                    let mut operands = Vec::new();
+                    for (index, operand) in selection.sources.iter().enumerate() {
+                        let operand_path = format!("{path}.sources[{index}]");
+                        let filter = operand.bind_filter(
+                            &operand_path,
+                            self.source(),
+                            source,
+                            &self.intermediates,
+                            &mut findings,
+                        )?;
+                        let name = &operand.variable;
+                        if !name.contains('.') {
+                            if let Some(finding) = catalog
+                                .validate_output(name, None, None, &[0])
+                                .map_err(BindError::Catalog)?
+                            {
+                                findings.push(BindFinding::OutputReference {
+                                    path: operand_path,
+                                    name: name.clone(),
+                                    finding,
+                                });
+                                continue;
+                            }
+                        }
+                        let Some(binding) = catalog.bind(name).map_err(BindError::Catalog)? else {
+                            findings.push(BindFinding::UnknownReference {
+                                path: operand_path,
+                                name: name.clone(),
+                            });
+                            continue;
+                        };
+                        let read = match binding {
+                            reference_binding::Binding::Dataset { field, .. } => {
+                                crate::dataset::SelectionRead::Collect {
+                                    column: field,
+                                    identifier: name.clone(),
+                                    filter: filter.map(alloc::boxed::Box::new),
+                                }
+                            }
+                            reference_binding::Binding::Output { column, .. } => {
+                                edges.push(column);
+                                crate::dataset::SelectionRead::Column(column)
+                            }
+                        };
+                        operands.push(crate::dataset::SelectionSource {
+                            path: operand_path,
+                            read,
+                        });
+                    }
+                    Some(Expression::FirstAvailable(alloc::boxed::Box::new(
+                        crate::dataset::FirstAvailable::new(operands, selection.missing.clone()),
+                    )))
                 }
                 Operation::Compute(compiled) => {
                     // The reference emits expression-local qualification findings first,

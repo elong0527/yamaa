@@ -14,7 +14,7 @@ from unittest.mock import patch
 import yamaa_native
 
 ROOT = Path(__file__).with_name("specification-original")
-CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior")
+CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter")
 
 
 def modules():
@@ -393,6 +393,51 @@ class OriginalSpecifications(unittest.TestCase):
             self.assertEqual(json.loads(result.observations()), expected)
             self.assertIsNotNone(result.output())
 
+    def test_original_filtered_sources_complete_reports_and_exact_csv(self):
+        self._source_selection_reports("source-filters.tsv", "source-filter", 13)
+
+    def test_original_first_available_complete_reports_and_exact_csv(self):
+        self._source_selection_reports("first-available.tsv", "first-available", 11)
+
+    def _source_selection_reports(self, filename, prefix, cases):
+        with (ROOT / filename).open(encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), cases)
+        for record in records:
+            with self.subTest(case=record["case"]):
+                raw = bytes.fromhex(record["source_hex"])
+                def no_parent(*_):
+                    self.fail("standalone filtered source reached parent authority")
+                spec = yamaa_native._prepare_document("spec.yaml", raw, no_parent, no_parent, no_parent)
+                content = bytes.fromhex(record["input_hex"])
+                expected = json.loads(record["expected"])
+                metadata = ("fixture-runtime", "fixture-engine", prefix + "-" + record["case"], "spec.yaml", ".")
+                calls = []
+                def capture(name, path, maximum):
+                    self.assertEqual((name, path), ("SRC", "source.csv"))
+                    self.assertLessEqual(len(content), maximum)
+                    calls.append(path)
+                    return content, len(calls) == 1
+                for created in (1, 0):
+                    expected["source_reads"][0]["snapshots_created"] = created
+                    result = spec.build(capture, metadata)
+                    unsaved = dict(expected, artifacts=[])
+                    self.assertEqual(json.loads(result.observations()), unsaved)
+                    if not record["artifact_hex"]:
+                        self.assertIsNone(result.output())
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save(lambda *_: self.fail("failed source filter published"))
+                    else:
+                        published = []
+                        def publish(path, actual):
+                            self.assertEqual(path, "result.csv")
+                            self.assertEqual(actual, bytes.fromhex(record["artifact_hex"]))
+                            published.append(actual)
+                        for _ in range(2):
+                            self.assertEqual(json.loads(result.save(publish)), expected)
+                        self.assertEqual(len(published), 2)
+                self.assertEqual(calls, ["source.csv", "source.csv"])
+
     def test_capture_failure_reply_validates_transport_and_preserves_interrupts(self):
         spec = prepare("schema-lookup")
         metadata = ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", ".")
@@ -604,7 +649,7 @@ class OriginalSpecifications(unittest.TestCase):
         for name in CASES:
             with self.subTest(name=name):
                 specification = prepare(name)
-                sources = {"DM":"input/dm.csv", "AE":"input/ae.csv", "MEDDRA":"input/meddict.csv"} if name == "schema-lookup" else ({"VS":"input/vs.csv"} if name in ("schema-window-functions", "negative-row-no-prior") else {"LB":"input/lb.csv"})
+                sources = {"DM":"input/dm.csv", "AE":"input/ae.csv", "MEDDRA":"input/meddict.csv"} if name == "schema-lookup" else ({"VS":"input/vs.csv"} if name in ("schema-window-functions", "negative-row-no-prior") else ({"ODM":"input/odm.csv"} if name in ("negative-source-missing-field", "negative-source-trivial-filter") else {"LB":"input/lb.csv"}))
                 self.assertEqual(specification.source(), next(iter(sources.items())))
                 state = {"requests": [], "reads": 0, "bytes": {}}
 

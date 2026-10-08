@@ -1056,6 +1056,8 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
         "negative-formula-flag",
         "negative-row-aggregate",
         "negative-row-no-prior",
+        "negative-source-missing-field",
+        "negative-source-trivial-filter",
     ] {
         let case = root.join("benchmarks").join(name);
         let run = PreparedRun::prepare(prepare(
@@ -3363,4 +3365,111 @@ fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
         failures[0].failure = None;
         assert!(specification_report::build_result(&run, &attempt, metadata()).is_err());
     }
+}
+
+#[test]
+fn original_source_filters_match_complete_reports_and_exact_csv() {
+    replay_source_selection_truth(
+        include_str!("fixtures/source_filters.tsv"),
+        "source-filter",
+        13,
+    );
+}
+#[test]
+fn original_first_available_matches_complete_reports_and_exact_csv() {
+    replay_source_selection_truth(
+        include_str!("fixtures/first_available.tsv"),
+        "first-available",
+        11,
+    );
+}
+fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
+    use yamaa_adapters::{
+        specification_report::{self, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_engine::specification::SourceDeclaration;
+    struct Port {
+        content: Arc<[u8]>,
+        reads: usize,
+        expected: Vec<u8>,
+        saves: usize,
+    }
+    impl SourcePort for Port {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+            assert_eq!((&*source.name, &*source.path), ("SRC", "source.csv"));
+            assert!(self.content.len() <= maximum);
+            self.reads += 1;
+            Ok(Arc::clone(&self.content))
+        }
+    }
+    impl specification_report::ArtifactPort for Port {
+        type Error = ();
+        fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
+            assert!(!self.expected.is_empty(), "failed filter result published");
+            assert_eq!(path, "result.csv");
+            assert_eq!(bytes, self.expected);
+            self.saves += 1;
+            Ok(())
+        }
+    }
+    fn bytes(hex: &str) -> Vec<u8> {
+        (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+            .collect()
+    }
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let mut count = 0;
+    for line in truth.lines().skip(1) {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        assert_eq!(fields.len(), 5);
+        let raw = bytes(fields[1]);
+        let run = PreparedRun::prepare(prepare(&schema, &raw)).unwrap();
+        let mut port = Port {
+            content: bytes(fields[2]).into(),
+            reads: 0,
+            expected: bytes(fields[4]),
+            saves: 0,
+        };
+        let attempt = run.execute_with_port(&mut port);
+        let example = format!("{prefix}-{}", fields[0]);
+        let result = specification_report::build_result(
+            &run,
+            &attempt,
+            Identity {
+                runtime: "python",
+                runtime_version: "fixture-runtime",
+                engine_version: "fixture-engine",
+                example: &example,
+                specification: "spec.yaml",
+                base_directory: ".",
+            },
+        )
+        .unwrap();
+        let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
+        let mut unsaved = expected.clone();
+        unsaved["artifacts"] = serde_json::json!([]);
+        assert_eq!(result.observations(), unsaved, "{}", fields[0]);
+        if port.expected.is_empty() {
+            assert!(result.output().is_none());
+            assert!(matches!(
+                result.save(&mut port),
+                Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+            ));
+        } else {
+            assert!(result.output().is_some());
+            for _ in 0..2 {
+                assert_eq!(*result.save(&mut port).unwrap(), expected);
+            }
+            assert_eq!(port.saves, 2);
+        }
+        assert_eq!(port.reads, 1);
+        count += 1;
+    }
+    assert_eq!(count, cases);
 }

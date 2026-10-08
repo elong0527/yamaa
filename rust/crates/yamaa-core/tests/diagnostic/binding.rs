@@ -591,3 +591,47 @@ pub(super) fn lookup_reached() -> BTreeSet<ConditionCode> {
     }
     reached
 }
+
+pub(super) fn source_filter_reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    for (variable, predicate, condition, requirement, values) in [
+        (
+            "SRC.V",
+            "ID = 1",
+            "unknown_field",
+            "REQ-0132",
+            vec![("identifier", text("ID")), ("dataset", text("SRC"))],
+        ),
+        (
+            "ID",
+            "SRC.V =",
+            "prohibited_construct",
+            "REQ-0148",
+            vec![("identifier", text("ID"))],
+        ),
+    ] {
+        let prepared = compile(
+            Map(vec![(
+                "value",
+                Map(vec![(
+                    "source",
+                    Map(vec![
+                        ("variable", Text(variable)),
+                        ("filter", Text(predicate)),
+                    ]),
+                )]),
+            )]),
+            None,
+        );
+        let findings = failures(&prepared);
+        assert_eq!(findings.len(), 1);
+        reached.insert(check(
+            findings[0].diagnostics(&source()).unwrap().remove(0),
+            condition,
+            Some(requirement),
+            &["columns.VALUE.derivation.source.filter"],
+            values,
+        ));
+    }
+    reached
+}

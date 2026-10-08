@@ -143,3 +143,15 @@ unsupported stored type and raw temporal-value findings. Existing independent
 Parquet files and complete failed reports remain unchanged, including source
 collection and failed save gates. Physical decoding, compression, text validation
 and Arrow construction retain their separate codec/resource boundaries.
+
+
+Driver source filters now bind through the core original-document compiler.
+REQ-0132 rejects bare/wrong-dataset predicate identifiers; REQ-0148 rejects filters
+over single output/intermediate values before inapplicable predicate parsing.
+Both causes use the shared diagnostic registry. Missing stored fields and ordinary
+predicate grammar use their existing canonical causes after complete ingestion.
+Thirteen independent complete reports and three exact CSV outputs pin scope, null/empty
+selection, raw distinct-reading behavior and scalar-filter precedence. The unchanged
+`negative-source-missing-field` document has independently verified complete truth.
+Filtered key assignments and secondary source expressions remain unsupported before
+study effects; the existing predicate requirement/context gaps remain unqualified.

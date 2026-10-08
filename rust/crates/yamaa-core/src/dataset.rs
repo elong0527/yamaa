@@ -18,6 +18,9 @@ mod intermediates;
 pub use intermediates::{Intermediate, SourceSchemas};
 #[path = "dataset_lookup.rs"]
 mod lookup;
+#[path = "dataset_selection.rs"]
+mod selection;
+pub use selection::{FirstAvailable, SelectionRead, SelectionSource};
 #[path = "dataset_windows.rs"]
 mod windows;
 pub use windows::{OrderTerm, Window, WindowKind};
@@ -32,6 +35,8 @@ pub enum Expression {
     Function(BoundFunction),
     /// Column-phase windows over completed key-grain output rows.
     Window(Window),
+    /// First present raw operand in authored order, followed by one output conversion.
+    FirstAvailable(alloc::boxed::Box<FirstAvailable>),
     Source(usize),
     /// Read one record from a secondary source on completed output match values.
     Lookup(Lookup),
@@ -267,6 +272,7 @@ fn validate_assignment(
                 }
             })?,
         Expression::Function(function) => function.validate(source, available, mode)?,
+        Expression::FirstAvailable(selection) => selection.validate(source, available, mode)?,
         Expression::Intermediate { index, column } => {
             if !matches!(mode, RowMode::Keys) {
                 return Err(PlanError::InvalidIntermediate);
@@ -464,7 +470,8 @@ impl DatasetPlan {
                     && (!keys.contains(&assignment.column)
                         || matches!(
                             assignment.expression,
-                            Expression::Collect { .. }
+                            Expression::FirstAvailable(_)
+                                | Expression::Collect { .. }
                                 | Expression::Window(_)
                                 | Expression::Lookup(_)
                                 | Expression::RowLookup(_)
