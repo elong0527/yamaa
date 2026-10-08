@@ -189,6 +189,32 @@ fn child_name(name: &str) -> io::Result<Vec<u16>> {
     }
     Ok(name)
 }
+/// Published names must remain usable by ordinary Win32 file tools.
+pub(crate) fn validate_publication_name(name: &str) -> io::Result<()> {
+    child_name(name)?;
+    let stem = name.split('.').next().unwrap_or("").trim_end_matches(' ');
+    let device = ["CON", "PRN", "AUX", "NUL"]
+        .iter()
+        .any(|reserved| stem.eq_ignore_ascii_case(reserved))
+        || (stem.get(..3).is_some_and(|prefix| {
+            prefix.eq_ignore_ascii_case("COM") || prefix.eq_ignore_ascii_case("LPT")
+        }) && matches!(
+            stem.get(3..),
+            Some("1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³")
+        ));
+    if device
+        || name.ends_with(['.', ' '])
+        || name
+            .chars()
+            .any(|c| c <= '\u{1f}' || matches!(c, '<' | '>' | '"' | '|' | '?' | '*'))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "publication name is not representable through Win32 paths",
+        ));
+    }
+    Ok(())
+}
 pub fn status(file: &File) -> io::Result<Status> {
     let mut attrs = FILE_ATTRIBUTE_TAG_INFO::default();
     let mut id = FILE_ID_INFO::default();
@@ -419,6 +445,7 @@ impl Directory {
     }
     /// Rename the held source to one validated child of this held directory.
     pub fn replace(&self, source: &File, name: &str) -> io::Result<()> {
+        validate_publication_name(name)?;
         let name = child_name(name)?;
         let bytes = size_of::<FILE_RENAME_INFORMATION>() + name.len() * size_of::<u16>();
         let mut buffer = vec![0usize; bytes.div_ceil(size_of::<usize>())];
@@ -643,6 +670,68 @@ mod tests {
             root.inspect(&"x".repeat(32768)).unwrap_err().kind(),
             io::ErrorKind::InvalidInput
         );
+    }
+    #[test]
+    fn refused_publication_names_leave_the_owned_candidate_and_target_unchanged() {
+        use std::io::Write;
+        let sandbox = Sandbox::new();
+        let root = sandbox.root();
+        std::fs::write(sandbox.0.join("output.csv"), b"old").unwrap();
+        let mut candidate = root.create_file("candidate.part").unwrap();
+        candidate.write_all(b"new").unwrap();
+        for name in [
+            "out.csv.",
+            "out.csv ",
+            "CON",
+            "con.csv",
+            "PRN",
+            "aux.txt",
+            "NUL.tar.gz",
+            "COM1",
+            "com9.csv",
+            "LPT1",
+            "lpt9.csv",
+            "COM¹.csv",
+            "lpt²",
+            "COM³",
+            "NUL .csv",
+            "bad<char",
+            "bad>char",
+            "bad\"char",
+            "bad|char",
+            "bad?char",
+            "bad*char",
+            "bad\u{1f}char",
+            "../escape",
+            "output.csv:stream",
+        ] {
+            assert_eq!(
+                root.replace(&candidate, name).unwrap_err().kind(),
+                io::ErrorKind::InvalidInput,
+                "{name:?}"
+            );
+            assert_eq!(
+                root.inspect("candidate.part").unwrap().identity,
+                status(&candidate).unwrap().identity
+            );
+            assert_eq!(std::fs::read(sandbox.0.join("output.csv")).unwrap(), b"old");
+            assert_eq!(std::fs::read_dir(&sandbox.0).unwrap().count(), 2);
+        }
+        for name in [
+            "COM0.csv",
+            "COM10.csv",
+            "LPT0.csv",
+            "LPT10.csv",
+            "console.csv",
+            ".hidden",
+            "mu-μ.csv",
+        ] {
+            validate_publication_name(name).unwrap();
+        }
+        root.replace(&candidate, "mu-μ.csv").unwrap();
+        drop(candidate);
+        assert_eq!(std::fs::read(sandbox.0.join("mu-μ.csv")).unwrap(), b"new");
+        assert!(!sandbox.0.join("candidate.part").exists());
     }
     #[test]
     fn owned_handles_read_exact_bytes_distinguish_kinds_and_preserve_missing() {

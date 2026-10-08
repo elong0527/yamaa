@@ -77,6 +77,7 @@ impl AnchoredTarget {
             return Err(Error::InvalidTarget);
         }
         let (name, parents) = self.remainder.split_last().ok_or(Error::InvalidTarget)?;
+        windows_file::validate_publication_name(name).map_err(|_| Error::InvalidTarget)?;
         if self
             .remainder
             .iter()
@@ -156,6 +157,7 @@ impl Publisher {
             .and_then(|n| n.to_str())
             .ok_or(Error::InvalidTarget)?
             .to_owned();
+        windows_file::validate_publication_name(&name).map_err(|_| Error::InvalidTarget)?;
         let parent_path = std::fs::canonicalize(target.parent().ok_or(Error::InvalidTarget)?)
             .map_err(|_| Error::InvalidTarget)?;
         let parent = Directory::open(&parent_path).map_err(|_| Error::InvalidTarget)?;
@@ -408,6 +410,40 @@ mod tests {
             // Preserve the caller spelling so this actually probes refused file intent.
             let written = format!("{}\\{target}", study.0.display());
             assert!(Publisher::new("output.csv", &written).is_err(), "{written}");
+        }
+        assert_eq!(std::fs::read(study.0.join("output.csv")).unwrap(), b"old");
+        assert_eq!(study.names(), ["output.csv"]);
+    }
+    #[test]
+    fn explicit_and_anchored_publication_refuse_win32_names_before_staging() {
+        let study = Study::new();
+        std::fs::write(study.0.join("output.csv"), b"old").unwrap();
+        for name in [
+            "output.csv.",
+            "output.csv ",
+            "CON.csv",
+            "nul",
+            "com9.txt",
+            "LPT².csv",
+            "bad|name",
+        ] {
+            let written = format!("{}\\{name}", study.0.display());
+            assert!(
+                matches!(
+                    Publisher::new("output.csv", &written),
+                    Err(Error::InvalidTarget)
+                ),
+                "{name:?}"
+            );
+            let anchored = AnchoredTarget::new(
+                Directory::open(&study.0).unwrap(),
+                vec![name.into()],
+                written,
+            );
+            assert!(
+                matches!(anchored.publisher("output.csv"), Err(Error::InvalidTarget)),
+                "{name:?}"
+            );
         }
         assert_eq!(std::fs::read(study.0.join("output.csv")).unwrap(), b"old");
         assert_eq!(study.names(), ["output.csv"]);

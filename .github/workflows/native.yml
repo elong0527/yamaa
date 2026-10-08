@@ -72,6 +72,7 @@ jobs:
         working-directory: rust
         run: |
           (
+            set -e
             cargo fmt --all --check
             cargo clippy -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
             cargo test
