@@ -1689,6 +1689,14 @@
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/row_filters.md",
       "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/environment-candidate/schema_environment.yaml",
+      "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/environment-candidate/schema_shared.yaml",
+      "role": "input"
     }
   ]
 }
