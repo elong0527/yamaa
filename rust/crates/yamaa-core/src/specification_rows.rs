@@ -17,10 +17,16 @@ enum RowOperation {
         error: crate::aggregate_parser::GrammarFailure,
     },
     Literal(Value),
-    Sum {
+    Reduction {
         name: String,
         expression: String,
+        reducer: RowReducer,
     },
+}
+#[derive(Debug)]
+enum RowReducer {
+    Numeric(NumericReducer),
+    Count { records: bool },
 }
 #[derive(Debug)]
 struct RowDeclaration {
@@ -105,20 +111,28 @@ fn declaration(
                 }
             };
             let ParsedKind::Reduction {
-                reducer: Reducer::Sum,
-                operand,
-                ..
+                reducer, operand, ..
             } = parsed.nodes()[parsed.root()].kind
             else {
                 return Err(unsupported("aggregate_expression", &path));
             };
-            if !matches!(parsed.nodes()[operand].kind, ParsedKind::Identifier) {
-                return Err(unsupported("aggregate_argument", &path));
-            }
+            let reducer = match (reducer, &parsed.nodes()[operand].kind) {
+                (Reducer::Sum, ParsedKind::Identifier) => RowReducer::Numeric(NumericReducer::Sum),
+                (Reducer::Mean, ParsedKind::Identifier) => {
+                    RowReducer::Numeric(NumericReducer::Mean)
+                }
+                (Reducer::Count, ParsedKind::Identifier) => RowReducer::Count { records: false },
+                (Reducer::Count, ParsedKind::Star) => RowReducer::Count { records: true },
+                (Reducer::Sum | Reducer::Mean | Reducer::Count, _) => {
+                    return Err(unsupported("aggregate_argument", &path));
+                }
+                _ => return Err(unsupported("aggregate_expression", &path)),
+            };
             let span = parsed.nodes()[operand].span;
-            RowOperation::Sum {
+            RowOperation::Reduction {
                 name: expression[span.start..span.end].into(),
                 expression: expression.into(),
+                reducer,
             }
         }
         _ => return Err(unsupported(op, &path)),
@@ -230,7 +244,7 @@ impl Rows {
         let mut lowered_columns = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
             let prefix = format!("columns.{}", output.columns()[column].name);
-            for name in ["verifications", "submission", "metadata"] {
+            for name in ["submission", "metadata"] {
                 if present(d, id, name) {
                     return Err(unsupported(name, &format!("{prefix}.{name}")));
                 }
@@ -355,9 +369,10 @@ impl Rows {
                         None
                     }
                 }
-                RowOperation::Sum {
+                RowOperation::Reduction {
                     name: operand,
                     expression,
+                    reducer,
                 } => {
                     let relation = operand.split_once('.').map(|(relation, _)| relation);
                     if relation != Some(name) {
@@ -369,14 +384,23 @@ impl Rows {
                             relation: relation.map(String::from),
                         });
                         None
+                    } else if matches!(reducer, RowReducer::Count { records: true }) {
+                        Some(Expression::Count {
+                            column: None,
+                            text: expression.clone(),
+                        })
                     } else {
-                        resolve(operand, &declaration.path, findings).map(|column| {
-                            Expression::Reduce {
+                        resolve(operand, &declaration.path, findings).map(|column| match reducer {
+                            RowReducer::Numeric(reducer) => Expression::Reduce {
                                 identifier: Some(operand.clone()),
                                 column,
-                                reducer: NumericReducer::Sum,
+                                reducer: *reducer,
                                 text: expression.clone(),
-                            }
+                            },
+                            RowReducer::Count { .. } => Expression::Count {
+                                column: Some(column),
+                                text: expression.clone(),
+                            },
                         })
                     }
                 }

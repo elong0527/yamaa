@@ -508,6 +508,12 @@ class OriginalSpecifications(unittest.TestCase):
     def test_original_column_not_missing_complete_reports_and_exact_csv(self):
         self._source_selection_reports("original-not-missing.tsv", "column-check", 10)
 
+    def test_row_reductions_complete_reports_and_exact_csv(self):
+        self._source_selection_reports("row-reductions.tsv", "row-reduction", 25)
+
+    def test_row_column_checks_complete_reports_and_exact_csv(self):
+        self._source_selection_reports("row-column-checks.tsv", "row-column", 48)
+
     def test_static_verification_check_issues_need_no_study_authority(self):
         with (ROOT / "static-verification-checks.tsv").open(encoding="utf-8") as stream:
             cases = list(csv.DictReader(stream, delimiter="\t"))
