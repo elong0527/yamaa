@@ -287,6 +287,9 @@ class OriginalSpecifications(unittest.TestCase):
     def test_core_predicate_preserves_independent_complete_failed_report(self):
         self._assert_independent_failed_reports("predicate-diagnostics.tsv", "predicate", 1, 1, b"ID,V\n1,2\n")
 
+    def test_core_source_typing_preserves_independent_complete_failed_reports(self):
+        self._assert_independent_failed_reports("source-typing.tsv", "typing", 4, 4)
+
     def test_original_column_literals_preserve_reference_reports_and_exact_csv(self):
         self._assert_independent_scalar_reports("column-literals.tsv", "literal", 4)
 

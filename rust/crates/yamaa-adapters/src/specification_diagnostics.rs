@@ -18,9 +18,6 @@ fn diagnostic(
 ) -> Value {
     json!({"phase":phase,"condition":condition,"requirement":requirement,"spec_paths":paths,"context":context})
 }
-fn validation(condition: &str, requirement: Option<&str>, path: String, context: Value) -> Value {
-    diagnostic("validation", condition, requirement, vec![path], context)
-}
 fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> {
     let BindError::Invalid(findings) = error else {
         return None;
@@ -92,64 +89,14 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
         Error::Prepare(PrepareError::Invalid(errors)) => errors.iter().map(preparing).collect(),
         Error::Bind(error) => binding(error, source?),
         Error::ParquetSource(error) => {
-            use crate::parquet_source::Error as P;
             let source = source?;
-            let (condition, requirement, extra) = match error {
-                P::Malformed => ("source_parquet_invalid", "REQ-1038", json!({})),
-                P::EmptyName { field } => (
-                    "source_field_name_empty",
-                    "REQ-1039",
-                    json!({"field":field}),
-                ),
-                P::DuplicateName { field } => (
-                    "source_field_name_duplicate",
-                    "REQ-1039",
-                    json!({"field":field}),
-                ),
-                P::Unsupported { field, stored_type } => (
-                    "source_field_type_unsupported",
-                    "REQ-1040",
-                    json!({"field":field,"stored_type":stored_type}),
-                ),
-                P::Value { field, row, value } => (
-                    "source_field_value_invalid",
-                    "REQ-1041",
-                    json!({"field":field,"row":row,"value":value}),
-                ),
-                _ => return None,
-            };
-            let mut context = json!({"dataset":source.name,"path":source.path});
-            context.as_object_mut()?.extend(extra.as_object()?.clone());
-            Some(vec![diagnostic(
-                "ingest",
-                condition,
-                Some(requirement),
-                vec![format!("input.{}.path", source.name)],
-                context,
-            )])
+            Some(vec![portable_diagnostic(
+                error.diagnostic(&source.name, &source.path)?,
+            )?])
         }
-        Error::TypedSource(crate::typed_csv::Error::UnknownField { field }) => {
-            let source = source?;
-            Some(vec![validation(
-                "unknown_field",
-                Some("REQ-0532"),
-                format!("input.{}.types.{field}", source.name),
-                json!({"dataset":source.name,"field":field}),
-            )])
-        }
-        Error::TypedSource(crate::typed_csv::Error::FieldParse {
-            field,
-            target,
-            value,
-        }) => {
-            let source = source?;
-            Some(vec![diagnostic(
-                "ingest",
-                "field_parse_failed",
-                Some("REQ-0536"),
-                vec![format!("input.{}.types.{field}", source.name)],
-                json!({"dataset":source.name,"field":field,"type":type_name(*target),"value":value}),
-            )])
+
+        Error::TypedSource(crate::typed_csv::Error::Typing(error)) => {
+            Some(vec![portable_diagnostic(error.diagnostic(&source?.name)?)?])
         }
 
         Error::Source(TextTableError::Csv(error)) => {

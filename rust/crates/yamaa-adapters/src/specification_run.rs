@@ -162,10 +162,10 @@ impl application::SourceDecoder for SourceDecoder {
         matches!(
             error,
             Error::Source(TextTableError::Csv(csv_source::Error::Profile { .. }))
-                | Error::TypedSource(
-                    crate::typed_csv::Error::UnknownField { .. }
-                        | crate::typed_csv::Error::FieldParse { .. }
-                )
+                | Error::TypedSource(crate::typed_csv::Error::Typing(
+                    yamaa_core::typed_csv::Error::UnknownField { .. }
+                        | yamaa_core::typed_csv::Error::FieldParse { .. }
+                ))
                 | Error::ParquetSource(
                     crate::parquet_source::Error::Malformed
                         | crate::parquet_source::Error::EmptyName { .. }

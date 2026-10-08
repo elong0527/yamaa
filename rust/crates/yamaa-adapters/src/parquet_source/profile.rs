@@ -1,128 +1,108 @@
-//! Closed physical/logical source mapping after complete container decoding.
-//! Callers must not use these profile findings to mask unreadable page data.
+//! Represent physical codec metadata; closed source type admission is core-owned.
 use arrow_schema::{DataType, Schema, TimeUnit as ArrowUnit};
+pub(super) use core_profile::{temporal, Error};
 use parquet::{
     basic::{ConvertedType, LogicalType, TimeUnit, Type as Physical},
     schema::types::{ColumnDescriptor, SchemaDescriptor},
 };
-use std::collections::BTreeSet;
-use yamaa_core::{
-    table::{Column, TableSchema},
-    value::ColumnType,
-};
+use yamaa_core::{parquet_source as core_profile, table::TableSchema, value::ColumnType};
 
-#[derive(Debug, PartialEq)]
-pub(super) enum Error {
-    Invalid,
-    EmptyName {
-        field: usize,
-    },
-    DuplicateName {
-        field: String,
-    },
-    Unsupported {
-        field: String,
-        stored_type: String,
-    },
-    Value {
-        field: String,
-        row: usize,
-        value: i64,
-    },
+fn physical(stored: &ColumnDescriptor) -> core_profile::Physical {
+    use core_profile::Physical as P;
+    match stored.physical_type() {
+        Physical::BYTE_ARRAY => P::ByteArray,
+        Physical::INT32 => P::Int32,
+        Physical::INT64 => P::Int64,
+        Physical::DOUBLE => P::Double,
+        _ => P::Other,
+    }
 }
-
-/// Do not infer integers, timestamps, nested fields or dictionaries from values.
-/// Legacy converted UTF8/DATE annotations denote the same closed logical pair.
+fn logical(stored: &ColumnDescriptor) -> core_profile::Logical {
+    use core_profile::{Logical as L, Unit};
+    match stored.logical_type_ref() {
+        None => L::None,
+        Some(LogicalType::String) => L::String,
+        Some(LogicalType::Date) => L::Date,
+        Some(LogicalType::Timestamp(t)) => L::Timestamp {
+            unit: if t.unit == TimeUnit::MICROS {
+                Unit::Microsecond
+            } else if t.unit == TimeUnit::MILLIS {
+                Unit::Millisecond
+            } else {
+                Unit::Nanosecond
+            },
+            utc: t.is_adjusted_to_u_t_c,
+        },
+        _ => L::Other,
+    }
+}
+fn converted(stored: &ColumnDescriptor) -> core_profile::Converted {
+    use core_profile::Converted as C;
+    match stored.converted_type() {
+        ConvertedType::NONE => C::None,
+        ConvertedType::UTF8 => C::Utf8,
+        ConvertedType::DATE => C::Date,
+        _ => C::Other,
+    }
+}
+fn representation(arrow: &DataType) -> core_profile::Representation {
+    use core_profile::{Representation as R, Unit};
+    match arrow {
+        DataType::Utf8 | DataType::LargeUtf8 => R::Text,
+        DataType::Int64 => R::Int64,
+        DataType::Float64 => R::Float64,
+        DataType::Date32 => R::Date32,
+        DataType::Timestamp(unit, timezone) => R::Timestamp {
+            unit: match unit {
+                ArrowUnit::Second => Unit::Second,
+                ArrowUnit::Millisecond => Unit::Millisecond,
+                ArrowUnit::Microsecond => Unit::Microsecond,
+                ArrowUnit::Nanosecond => Unit::Nanosecond,
+            },
+            timezone: timezone.is_some(),
+        },
+        _ => R::Other,
+    }
+}
 pub(super) fn column_type(stored: &ColumnDescriptor, arrow: &DataType) -> Option<ColumnType> {
-    let logical = stored.logical_type_ref();
-    let converted = stored.converted_type();
-    let string = matches!(logical, Some(LogicalType::String))
-        || (logical.is_none() && converted == ConvertedType::UTF8);
-    let date = matches!(logical, Some(LogicalType::Date))
-        || (logical.is_none() && converted == ConvertedType::DATE);
-    let none = logical.is_none() && converted == ConvertedType::NONE;
-    let timestamp = matches!(logical, Some(LogicalType::Timestamp(t))
-        if !t.is_adjusted_to_u_t_c && t.unit == TimeUnit::MICROS);
-    match (stored.physical_type(), arrow) {
-        (Physical::BYTE_ARRAY, DataType::Utf8 | DataType::LargeUtf8) if string => {
-            Some(ColumnType::Str)
-        }
-        (Physical::INT64, DataType::Int64) if none => Some(ColumnType::Int),
-        (Physical::DOUBLE, DataType::Float64) if none => Some(ColumnType::Float),
-        (Physical::INT32, DataType::Date32) if date => Some(ColumnType::Date),
-        (Physical::INT64, DataType::Timestamp(ArrowUnit::Microsecond, None)) if timestamp => {
-            Some(ColumnType::DateTime)
-        }
-        _ => None,
-    }
+    core_profile::column_type(
+        physical(stored),
+        logical(stored),
+        converted(stored),
+        representation(arrow),
+    )
 }
-
-/// Pin zero-fields/alignment/name/type precedence in authored field order.
 pub(super) fn columns(arrow: &Schema, stored: &SchemaDescriptor) -> Result<TableSchema, Error> {
-    if arrow.fields().is_empty() {
-        return Err(Error::Invalid);
-    }
-    let unsupported = |field: &arrow_schema::Field| Error::Unsupported {
-        field: field.name().clone(),
-        stored_type: super::type_name::field_type(field),
-    };
-    if stored.root_schema().get_fields().len() != arrow.fields().len() {
-        return Err(Error::Invalid);
-    }
-    let mut names = BTreeSet::new();
-    let mut columns = Vec::with_capacity(arrow.fields().len());
     let mut leaf = 0;
-    for (index, field) in arrow.fields().iter().enumerate() {
-        if field.name().is_empty() {
-            return Err(Error::EmptyName { field: index + 1 });
-        }
-        if !names.insert(field.name()) {
-            return Err(Error::DuplicateName {
-                field: field.name().clone(),
-            });
-        }
+    let fields = arrow.fields().iter().enumerate().map(|(index, field)| {
         let first = leaf;
         while leaf < stored.num_columns() && stored.get_column_root_idx(leaf) == index {
             leaf += 1;
         }
-        // A nested root can own several leaves. Admission belongs to its own
-        // top-level field, never an earlier supported field or a later leaf.
-        let kind = (leaf - first == 1)
-            .then(|| stored.column(first))
-            .filter(|column| column.max_rep_level() == 0 && column.path().string() == *field.name())
-            .and_then(|column| column_type(&column, field.data_type()))
-            .ok_or_else(|| unsupported(field))?;
-        columns.push(Column {
+        let descriptor = (leaf - first == 1).then(|| stored.column(first));
+        core_profile::Field {
             name: field.name().clone(),
-            kind,
-        });
-    }
-    TableSchema::new(columns).map_err(|_| Error::Invalid)
-}
-
-/// Check raw storage integers before any date conversion, rounding, or host
-/// representation. Return raw values and one-based source rows in diagnostics.
-pub(super) fn temporal(kind: ColumnType, value: i64, field: &str, row: usize) -> Result<(), Error> {
-    const MIN_DAY: i64 = -719_162;
-    const MAX_DAY: i64 = 2_932_896;
-    let valid = match kind {
-        ColumnType::Date => (MIN_DAY..=MAX_DAY).contains(&value),
-        ColumnType::DateTime => {
-            (MIN_DAY * 86_400 * 1_000_000..=(MAX_DAY * 86_400 + 86_399) * 1_000_000)
-                .contains(&value)
-                && value % 1_000_000 == 0
+            leaves: leaf - first,
+            path: descriptor
+                .as_ref()
+                .map_or_else(String::new, |column| column.path().string()),
+            repetition: descriptor
+                .as_ref()
+                .map_or(0, |column| column.max_rep_level()),
+            physical: descriptor
+                .as_ref()
+                .map_or(core_profile::Physical::Other, |column| physical(column)),
+            logical: descriptor
+                .as_ref()
+                .map_or(core_profile::Logical::Other, |column| logical(column)),
+            converted: descriptor
+                .as_ref()
+                .map_or(core_profile::Converted::Other, |column| converted(column)),
+            representation: representation(field.data_type()),
+            stored_type: super::type_name::field_type(field),
         }
-        _ => true,
-    };
-    if valid {
-        Ok(())
-    } else {
-        Err(Error::Value {
-            field: field.to_owned(),
-            row,
-            value,
-        })
-    }
+    });
+    core_profile::columns(fields, stored.root_schema().get_fields().len())
 }
 
 #[cfg(test)]

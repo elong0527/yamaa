@@ -27,7 +27,10 @@ results. Arbitrary-width integers remain Unsupported before source effects;
 recursive expressions and other handler families remain Unsupported.
 
 Preparation scans unsupported vocabulary before study capture. Typed CSV admission
-then precedes formula diagnostics and source-schema binding. Numeric execution
+in core then precedes formula diagnostics and source-schema binding.
+The source typing service owns declaration admission, field resolution, conversion
+order and typed ingestion diagnostics; the physical adapter checks resource bounds
+and constructs Arrow storage around that service. Numeric execution
 preserves written evaluation order. Unique and row_count checks run after output
 keys. A later invalid check declaration retains completed verification records;
 it overrides earlier check data failures, while derivation and key failures take

@@ -21,6 +21,7 @@ pub mod match_value;
 pub mod numeric;
 pub mod numeric_compiler;
 pub mod numeric_parser;
+pub mod parquet_source;
 pub mod predicate;
 pub mod predicate_compiler;
 pub mod predicate_parser;
@@ -30,6 +31,7 @@ pub mod resource;
 pub mod schema;
 pub mod specification;
 pub mod temporal;
+pub mod typed_csv;
 pub mod value;
 
 /// Version of the shared core compiled into a native installation.

@@ -51,6 +51,35 @@ pub enum Error {
     Table(TableError),
 }
 
+impl Error {
+    /// Translate physical errors to the common core-owned source finding.
+    pub fn diagnostic(
+        &self,
+        dataset: &str,
+        path: &str,
+    ) -> Option<yamaa_core::diagnostic::Diagnostic> {
+        use yamaa_core::parquet_source::Error as P;
+        let finding = match self {
+            Self::Malformed => P::Invalid,
+            Self::EmptyName { field } => P::EmptyName { field: *field },
+            Self::DuplicateName { field } => P::DuplicateName {
+                field: field.clone(),
+            },
+            Self::Unsupported { field, stored_type } => P::Unsupported {
+                field: field.clone(),
+                stored_type: stored_type.clone(),
+            },
+            Self::Value { field, row, value } => P::Value {
+                field: field.clone(),
+                row: *row,
+                value: *value,
+            },
+            Self::Limit | Self::Unavailable { .. } | Self::Table(_) => return None,
+        };
+        Some(finding.diagnostic(dataset, path))
+    }
+}
+
 impl From<reader::Error> for Error {
     fn from(error: reader::Error) -> Self {
         match error {

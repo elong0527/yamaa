@@ -715,6 +715,16 @@ fn core_predicate_matches_independent_complete_failed_report() {
     );
 }
 
+#[test]
+fn core_source_typing_matches_independent_complete_failed_reports() {
+    independent_failed_reports(
+        include_str!("fixtures/source_typing.tsv"),
+        "typing",
+        (4, 4),
+        b"",
+    );
+}
+
 fn independent_failed_reports(
     fixture: &str,
     prefix: &str,
