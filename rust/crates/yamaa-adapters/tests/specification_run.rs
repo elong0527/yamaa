@@ -3424,7 +3424,7 @@ fn original_column_matches_match_complete_reports_and_exact_csv() {
     replay_source_selection_truth(
         include_str!("fixtures/original_column_matches.tsv"),
         "column-matches",
-        15,
+        16,
     );
 }
 #[test]
@@ -3445,6 +3445,21 @@ fn deferred_column_findings_stop_later_payload_compilation_but_keep_vocabulary_a
             Err(Error::Prepare(PrepareError::Unsupported(items)))
                 if items.iter().any(|item| item.operation == "verification_severity"
                     && item.path == "columns.V.verifications[1].matches")));
+    }
+    for (first, later_severity, index) in [
+        (
+            "matches: {pattern: 'a{1000001}', severity: warning}",
+            "error",
+            0,
+        ),
+        ("matches: {pattern: 'a{1000001}'}", "warning", 1),
+    ] {
+        let document = prepare(&schema, raw(first, later_severity).as_bytes());
+        let expected = format!("columns.V.verifications[{index}].matches");
+        assert!(matches!(PreparedRun::prepare(document),
+            Err(Error::Prepare(PrepareError::Unsupported(items)))
+                if items.iter().any(|item| item.operation == "verification_severity"
+                    && item.path == expected)));
     }
 }
 fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
