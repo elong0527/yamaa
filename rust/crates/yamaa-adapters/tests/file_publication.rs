@@ -79,6 +79,25 @@ fn paths_and_capacity_are_checked_before_any_target_change() {
     ));
 }
 #[test]
+fn directory_suffixes_are_not_normalized_into_file_targets() {
+    let directory = Directory::new();
+    fs::write(directory.target(), b"old").unwrap();
+    for name in ["new.csv", "output.csv"] {
+        for suffix in ["/", "/.", "/.."] {
+            let target = format!("{}{suffix}", directory.0.join(name).display());
+            assert!(
+                matches!(
+                    Publisher::new("declared.csv", &target),
+                    Err(Error::InvalidTarget)
+                ),
+                "directory spelling was accepted: {target}"
+            );
+            assert_eq!(fs::read(directory.target()).unwrap(), b"old");
+            assert_eq!(directory.names(), vec!["output.csv"]);
+        }
+    }
+}
+#[test]
 fn a_new_link_or_directory_is_refused_without_following_or_replacing_it() {
     let directory = Directory::new();
     let mut publisher = directory.publisher();

@@ -899,6 +899,10 @@ directory <- tempfile("native-publication-policy-");dir.create(directory)
 target <- file.path(directory,"target.csv")
 writeBin(charToRaw("retained"),target)
 file_publisher <- get(".file_publisher_port",envir=asNamespace("yamaanative"))
+for(name in c("new.csv","target.csv")) for(suffix in c("/","/.","/..")) {
+  actual <- tryCatch(file_publisher(paste0(file.path(directory,name),suffix),"declared.csv"),error=identity)
+  stopifnot(inherits(actual,"error"),conditionMessage(actual)=="invalid explicit publication target",identical(rawfile(target),charToRaw("retained")),identical(list.files(directory,all.files=TRUE,no..=TRUE),"target.csv"))
+}
 publication <- file_publisher(target,"declared.csv")
 actual <- tryCatch(publication$publish("other.csv",charToRaw("new")),error=identity)
 stopifnot(inherits(actual,"error"),conditionMessage(actual)=="publication path does not match explicit target",identical(rawfile(target),charToRaw("retained")))

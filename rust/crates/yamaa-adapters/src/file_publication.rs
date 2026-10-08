@@ -56,6 +56,10 @@ impl Publisher {
         if declared.is_empty() || declared.contains('\0') || target.contains('\0') {
             return Err(Error::InvalidTarget);
         }
+        // Path components discard trailing slashes and dots; retain file intent.
+        if matches!(target.rsplit('/').next(), None | Some("" | "." | "..")) {
+            return Err(Error::InvalidTarget);
+        }
         let target = Path::new(target);
         if !target.is_absolute() {
             return Err(Error::InvalidTarget);
