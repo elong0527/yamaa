@@ -166,3 +166,19 @@ document now reaches its complete REQ-0148 failure through the same core compile
 Key-phase, row-template, secondary and named-intermediate selection operands
 remain outside this bounded slice. The compiler charges all operand/filter
 metadata before owned compilation, with a separate trusted source-operand policy.
+
+
+Original error-severity dataset assertions compile output-column predicates in
+core. Unknown names and ordinary grammar findings are deferred to declaration
+order after derivation and output keys, retaining the completed check prefix.
+All output references are admitted, including names behind inactive guards.
+Predicate sample validation precedes actual-row evaluation, even for empty
+output or an inactive when clause. A valid when declaration remains a checkpoint
+before a later require finding, preserving incompatible-type precedence.
+
+Seventeen independent complete reports cover success, failed checks, null and
+inactive guards, empty output, unknown/qualified fields, grammar, sample types
+and duplicate identities. Three successful cases retain exact CSV bytes. Both
+assertion predicates share the compiler's aggregate text budget before owned
+compilation. Warning severity, column verifications, nontext predicates and the
+existing special predicate requirement/context gaps remain unsupported.

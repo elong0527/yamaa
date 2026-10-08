@@ -715,6 +715,9 @@ cat("original source filters complete reports, cached reads and exact saved CSV 
 source_selection_truth("first-available.tsv","first-available",11L)
 cat("original first available complete reports, cached reads and exact saved CSV passed\n")
 
+source_selection_truth("original-assertions.tsv","assert",17L)
+cat("original assertions complete reports, cached reads and exact saved CSV passed\n")
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

@@ -399,6 +399,9 @@ class OriginalSpecifications(unittest.TestCase):
     def test_original_first_available_complete_reports_and_exact_csv(self):
         self._source_selection_reports("first-available.tsv", "first-available", 11)
 
+    def test_original_assertions_complete_reports_and_exact_csv(self):
+        self._source_selection_reports("original-assertions.tsv", "assert", 17)
+
     def _source_selection_reports(self, filename, prefix, cases):
         with (ROOT / filename).open(encoding="ascii") as stream:
             records = list(csv.DictReader(stream, delimiter="\t"))

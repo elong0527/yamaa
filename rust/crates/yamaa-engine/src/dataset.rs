@@ -146,6 +146,10 @@ pub struct ExecutionAttempt<E> {
 
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError<E> {
+    VerificationDiagnostic {
+        diagnostic: yamaa_core::diagnostic::Diagnostic,
+        records: Vec<CheckRecord>,
+    },
     /// Callback registry does not match a declared signature; detected before table access.
     FunctionBinding {
         slot: usize,
@@ -940,6 +944,12 @@ impl Executor<'_> {
         let mut records = Vec::new();
         for verification in self.plan.verifications() {
             let record = match &verification.check {
+                Check::InvalidDiagnostic(diagnostic) => {
+                    return Err(Box::new(ExecutionError::VerificationDiagnostic {
+                        diagnostic: diagnostic.clone(),
+                        records,
+                    }));
+                }
                 Check::InvalidDeclaration {
                     condition,
                     requirement,

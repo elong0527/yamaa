@@ -155,3 +155,14 @@ selection, raw distinct-reading behavior and scalar-filter precedence. The uncha
 `negative-source-missing-field` document has independently verified complete truth.
 Filtered key assignments and secondary source expressions remain unsupported before
 study effects; the existing predicate requirement/context gaps remain unqualified.
+
+
+Original dataset assertion declarations now retain deferred core diagnostics
+through the common engine and report projection. REQ-0405 names the first
+lexicographically ordered unknown output reference; ordinary grammar retains
+REQ-0188 and its original reason/character spelling. Valid when samples execute
+before a later require declaration finding. Completed verification records survive
+both declaration and sample failures. Seventeen independently authored complete
+reports preserve these phase boundaries, failed-check key context and publication
+rejection, including empty output and inactive guards. The special ESCAPE,
+regex and temporal predicate parity gaps remain unqualified.

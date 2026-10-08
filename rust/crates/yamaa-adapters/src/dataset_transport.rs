@@ -1209,6 +1209,16 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             diagnostic: arithmetic(error, path),
             identity: keys.map(identity),
         },
+        ExecutionError::VerificationDiagnostic {
+            diagnostic,
+            records: completed,
+        } => Outcome::Condition {
+            matched_key: None,
+            partition: None,
+            identity: None,
+            diagnostic: Box::new(diagnostic.into()),
+            verifications: Some(records(completed)),
+        },
         ExecutionError::VerificationDeclaration {
             path,
             condition,

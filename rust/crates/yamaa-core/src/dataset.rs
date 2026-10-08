@@ -155,6 +155,8 @@ pub struct RowTemplate {
 /// Error-severity dataset checks supported by this closed application slice.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Check {
+    /// A core-owned declaration finding deferred until dataset verification.
+    InvalidDiagnostic(crate::diagnostic::Diagnostic),
     /// A compiler finding evaluated in declaration order after output keys.
     InvalidDeclaration {
         condition: &'static str,
@@ -550,6 +552,7 @@ impl DatasetPlan {
                 return Err(PlanError::DuplicateVerificationPath);
             }
             match &verification.check {
+                Check::InvalidDiagnostic(_) => {}
                 Check::InvalidDeclaration { .. } => {}
                 Check::PredicateDeclaration(predicate) => predicate
                     .validate(0, &vec![true; width], true)
