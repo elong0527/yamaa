@@ -320,3 +320,332 @@ fn class_admission_cannot_bypass_versioned_environment_or_open_function_fields()
         ]
     );
 }
+
+#[test]
+fn captured_function_decodes_directly_to_an_admitted_versionless_core_plan() {
+    use yamaa_core::{
+        project_function::{Case, Definition, Function, Language, Parameter},
+        project_function_document,
+        temporal::{Date, DatePrecision},
+        value::{ColumnType, Value, ValueType},
+    };
+    let schema =
+        CapturedSchema::admit_root(modules(), 0, "function_definition_class", Limits::default())
+            .unwrap();
+    let text="function: project.identity\ndescription: Return the date.\nparams: [{name: x, type: date}]\nreturns: date\ntests:\n  - {id: leap-day, covers: [normal, boundary], args: {x: {date: '2024-02-29'}}, result: {date: '2024-02-29'}}\n  - {id: missing-x, covers: [short-circuit-missing:x], args: {x: null}, result: null}\n";
+    let captured = schema
+        .prepare_class(source("functions/identity.yaml", text))
+        .unwrap();
+    let document = &captured.normalized().document;
+    let decoded = project_function_document::decode(document, document.root(), "identity").unwrap();
+    let date = Value::Date(Date::new(2024, 2, 29, DatePrecision::Day).unwrap());
+    assert_eq!(
+        decoded,
+        Definition {
+            name: "identity".into(),
+            function: "project.identity".into(),
+            description: "Return the date.".into(),
+            params: vec![Parameter {
+                name: "x".into(),
+                kind: ValueType::Date,
+                required: true,
+                default: None,
+                accepts_missing: false
+            }],
+            returns: ColumnType::Date,
+            may_return_missing: false,
+            comparison_decimals: 4,
+            tests: vec![
+                Case {
+                    id: "leap-day".into(),
+                    covers: vec!["normal".into(), "boundary".into()],
+                    args: vec![("x".into(), date.clone())],
+                    result: date
+                },
+                Case {
+                    id: "missing-x".into(),
+                    covers: vec!["short-circuit-missing:x".into()],
+                    args: vec![("x".into(), Value::Missing)],
+                    result: Value::Missing
+                },
+            ],
+        }
+    );
+    let function = Function::admit(Language::Python, decoded).unwrap();
+    let plan = function.invocation_plan().unwrap();
+    assert_eq!(plan.identity().name, "identity");
+    assert_eq!(plan.identity().call, "project.identity");
+    assert_eq!(plan.signature().parameters()[0].host_name, "x");
+    assert_eq!(captured.source().bytes, text.as_bytes());
+}
+
+#[test]
+fn scalar_decoder_keeps_exact_int_float_boolean_nul_and_temporal_defaults() {
+    use yamaa_core::{
+        project_function_document,
+        temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+        value::Value,
+    };
+    let schema =
+        CapturedSchema::admit_root(modules(), 0, "function_definition_class", Limits::default())
+            .unwrap();
+    let text="function: project.identity\ndescription: Exact defaults.\nparams:\n  - {name: integer, type: int, required: false, default: -9223372036854775808}\n  - {name: float, type: float, required: false, default: -0.0}\n  - {name: boolean, type: bool, required: false, default: false}\n  - {name: text, type: str, required: false, default: \"a\\0b\\u96ea\"}\n  - {name: date, type: date, required: false, default: {date: '2024-02-29'}}\n  - {name: datetime, type: datetime, required: false, default: {datetime: '2024-02-29T08:30'}}\n  - {name: missing, type: str, required: false, default: null, accepts_missing: true}\nreturns: str\ntests: []\n";
+    let captured = schema.prepare_class(source("function.yaml", text)).unwrap();
+    let doc = &captured.normalized().document;
+    let decoded = project_function_document::decode(doc, doc.root(), "defaults").unwrap();
+    let date = Date::new(2024, 2, 29, DatePrecision::Day).unwrap();
+    assert_eq!(
+        decoded
+            .params
+            .iter()
+            .map(|p| p.default.clone())
+            .collect::<Vec<_>>(),
+        vec![
+            Some(Value::Int(i64::MIN)),
+            Some(Value::float(-0.0)),
+            Some(Value::Bool(false)),
+            Some(Value::Str("a\0b\u{96ea}".into())),
+            Some(Value::Date(date)),
+            Some(Value::DateTime(
+                DateTime::new(date, 8, 30, 0, DateTimePrecision::Second).unwrap()
+            )),
+            Some(Value::Missing),
+        ]
+    );
+    let Some(Value::Float(float)) = decoded.params[1].default else {
+        panic!("float type must remain exact");
+    };
+    assert_eq!(float.get().to_bits(), 0x8000_0000_0000_0000);
+}
+
+#[test]
+fn every_invalid_scalar_retains_its_node_without_exposing_a_partial_model() {
+    use yamaa_core::project_function_document::{self, Kind};
+    let schema =
+        CapturedSchema::admit_root(modules(), 0, "function_definition_class", Limits::default())
+            .unwrap();
+    let text="function: project.identity\ndescription: Invalid leaves.\nparams: [{name: x, type: int, required: false, default: 9223372036854775808}]\nreturns: date\ntests:\n  - {id: invalid, covers: [normal, boundary], args: {x: -9223372036854775809}, result: {date: '2023-02-29'}}\n  - {id: invalid-time, covers: [boundary], args: {x: 1}, result: {datetime: '2024-01-01T08:30Z'}}\n";
+    let captured = schema.prepare_class(source("function.yaml", text)).unwrap();
+    let doc = &captured.normalized().document;
+    let errors = project_function_document::decode(doc, doc.root(), "invalid").unwrap_err();
+    assert_eq!(
+        errors
+            .iter()
+            .map(|f| (f.path.as_str(), f.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            ("params[0].default", Kind::IntegerRange),
+            ("tests[0].args.x", Kind::IntegerRange),
+            ("tests[0].result", Kind::InvalidDate),
+            ("tests[1].result", Kind::InvalidDateTime),
+        ]
+    );
+    assert_eq!(
+        doc.nodes()[errors[0].node],
+        N::Integer("9223372036854775808".into())
+    );
+    assert_eq!(
+        doc.nodes()[errors[1].node],
+        N::Integer("-9223372036854775809".into())
+    );
+    assert_eq!(captured.source().bytes, text.as_bytes());
+}
+
+#[test]
+fn codelist_source_decodes_directly_with_source_standard_and_unread_external_href() {
+    use yamaa_core::{
+        project_terminology::{
+            Catalogue, Codelist, DataType, External, Item, Source as TerminologySource, Standard,
+        },
+        project_terminology_document,
+        value::Value,
+    };
+    let schema =
+        CapturedSchema::admit_root(modules(), 0, "codelist_source_class", Limits::default())
+            .unwrap();
+    let text="standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2023-12-15'}\ncodelists:\n  - {id: SEX, name: Sex, items: [{value: F, decode: Female, rank: 1}, {value: M, decode: Male, rank: 2}]}\n  - {id: DICT, name: Dictionary, external: {dictionary: MedDRA, version: '27.0', href: '../unread/dictionary'}}\n";
+    let captured = schema.prepare_class(source("ct.yaml", text)).unwrap();
+    let doc = &captured.normalized().document;
+    let source = project_terminology_document::decode(doc, doc.root()).unwrap();
+    let expected = TerminologySource {
+        standard: Some(Standard {
+            name: "CDISC/NCI".into(),
+            publishing_set: "SDTM".into(),
+            version: "2023-12-15".into(),
+        }),
+        codelists: vec![
+            Codelist {
+                id: "SEX".into(),
+                name: "Sex".into(),
+                data_type: DataType::Text,
+                extensible: false,
+                alias: None,
+                format_name: None,
+                items: Some(vec![
+                    Item {
+                        value: Value::Str("F".into()),
+                        decode: Some("Female".into()),
+                        rank: Some(1),
+                        alias: None,
+                        extended: false,
+                    },
+                    Item {
+                        value: Value::Str("M".into()),
+                        decode: Some("Male".into()),
+                        rank: Some(2),
+                        alias: None,
+                        extended: false,
+                    },
+                ]),
+                external: None,
+            },
+            Codelist {
+                id: "DICT".into(),
+                name: "Dictionary".into(),
+                data_type: DataType::Text,
+                extensible: false,
+                alias: None,
+                format_name: None,
+                items: None,
+                external: Some(External {
+                    dictionary: "MedDRA".into(),
+                    version: "27.0".into(),
+                    href: Some("../unread/dictionary".into()),
+                }),
+            },
+        ],
+    };
+    assert_eq!(source, expected);
+    assert!(Catalogue::admit(vec![source]).is_ok());
+    assert_eq!(captured.source().bytes, text.as_bytes());
+}
+
+#[test]
+fn source_decoder_retains_every_wide_value_and_rank_failure() {
+    use yamaa_core::{project_function_document::Kind, project_terminology_document};
+    let schema =
+        CapturedSchema::admit_root(modules(), 0, "codelist_source_class", Limits::default())
+            .unwrap();
+    let text="codelists:\n  - {id: BIG, name: Big, data_type: integer, items: [{value: 9223372036854775808, rank: -9223372036854775809}, {value: -9223372036854775809}]}\n";
+    let captured = schema.prepare_class(source("ct.yaml", text)).unwrap();
+    let doc = &captured.normalized().document;
+    let errors = project_terminology_document::decode(doc, doc.root()).unwrap_err();
+    assert_eq!(
+        errors
+            .iter()
+            .map(|finding| (finding.path.as_str(), finding.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            ("codelists[0].items[0].value", Kind::IntegerRange),
+            ("codelists[0].items[0].rank", Kind::IntegerRange),
+            ("codelists[0].items[1].value", Kind::IntegerRange),
+        ]
+    );
+}
+
+#[test]
+fn environment_decoder_keeps_inline_path_order_and_unread_submission_metadata() {
+    use yamaa_core::{
+        project_environment::Submission,
+        project_environment_document::{self, Declaration},
+        project_function::Language,
+    };
+    let schema = environment_schema(Limits::default());
+    let text="schema_version: '1.0'\nlanguage: python\nlock: ../uv.lock\nfunctions:\n  first: functions/first.yaml\n  second: {function: project.constant, description: Constant, params: [], returns: int, tests: []}\ncodelists:\n  - ../terminology.yaml\n  - standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2024-03-29'}\n    codelists: [{id: EXTERNAL, name: External, external: {dictionary: Dict, version: '1', href: '../not-read.xml'}}]\nstudy: {id: Study01, name: Study, description: Study, protocol_name: Protocol}\nadam: {standard: {name: ADaMIG, version: '1.3', status: Final}, specs: [adam/adsl.yaml], define: ../data/adam/define.xml, documents: [{id: adrg, kind: supplemental, link: 'docs/adrg.pdf', title: Guide}]}\n";
+    let captured = schema
+        .prepare_structural(source("environment.yaml", text))
+        .unwrap();
+    let document = &captured.normalized().document;
+    let result = project_environment_document::decode(document, document.root()).unwrap();
+    assert_eq!(result.language, Some(Language::Python));
+    assert_eq!(result.lock.as_deref(), Some("../uv.lock"));
+    let functions = result.functions.unwrap();
+    assert_eq!(
+        functions
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect::<Vec<_>>(),
+        ["first", "second"]
+    );
+    assert_eq!(
+        functions[0].declaration,
+        Declaration::Path("functions/first.yaml".into())
+    );
+    let Declaration::Inline(def) = &functions[1].declaration else {
+        panic!("inline definition")
+    };
+    assert_eq!(def.name, "second");
+    assert_eq!(def.function, "project.constant");
+    assert_eq!(def.comparison_decimals, 4);
+    assert_eq!(
+        result.codelists[0].declaration,
+        Declaration::Path("../terminology.yaml".into())
+    );
+    let Declaration::Inline(ct) = &result.codelists[1].declaration else {
+        panic!("inline source")
+    };
+    assert_eq!(ct.standard.as_ref().unwrap().version, "2024-03-29");
+    assert_eq!(
+        ct.codelists[0].external.as_ref().unwrap().href.as_deref(),
+        Some("../not-read.xml")
+    );
+    assert_eq!(result.study, document.field(document.root(), "study"));
+    assert_eq!(
+        result.submissions,
+        vec![(
+            Submission::Adam,
+            document.field(document.root(), "adam").unwrap()
+        )]
+    );
+    assert_eq!(captured.source().bytes, text.as_bytes());
+}
+
+#[test]
+fn environment_decoder_preserves_absent_versus_present_empty_functions() {
+    use yamaa_core::project_environment_document;
+    let schema = environment_schema(Limits::default());
+    for (text, present) in [
+        ("schema_version: '1.0'\n", false),
+        ("schema_version: '1.0'\nfunctions: {}\n", true),
+    ] {
+        let captured = schema
+            .prepare_structural(source("environment.yaml", text))
+            .unwrap();
+        let document = &captured.normalized().document;
+        let result = project_environment_document::decode(document, document.root()).unwrap();
+        assert_eq!(result.functions.is_some(), present);
+        assert!(result.functions.into_iter().flatten().next().is_none());
+        assert!(result.language.is_none() && result.lock.is_none() && result.study.is_none());
+        assert!(result.codelists.is_empty() && result.submissions.is_empty());
+    }
+}
+
+#[test]
+fn environment_decoder_collects_every_independent_inline_scalar_failure() {
+    use yamaa_core::{project_environment_document, project_function_document::Kind};
+    let text="schema_version: '1.0'\nfunctions:\n  first: {function: project.a, description: A, params: [], returns: int, tests: [{id: wide, covers: [normal], args: {}, result: 9223372036854775808}]}\n  second: {function: project.b, description: B, params: [], returns: date, tests: [{id: bad-date, covers: [normal], args: {}, result: {date: '2024-02-30'}}]}\ncodelists: [{codelists: [{id: WIDE, name: Wide, data_type: integer, items: [{value: 9223372036854775808, rank: 9223372036854775808}]}]}]\n";
+    let captured = environment_schema(Limits::default())
+        .prepare_structural(source("environment.yaml", text))
+        .unwrap();
+    let document = &captured.normalized().document;
+    let findings = project_environment_document::decode(document, document.root()).unwrap_err();
+    assert_eq!(
+        findings
+            .iter()
+            .map(|f| (f.path.as_str(), f.kind))
+            .collect::<Vec<_>>(),
+        [
+            ("functions.first.tests[0].result", Kind::IntegerRange),
+            ("functions.second.tests[0].result", Kind::InvalidDate),
+            (
+                "codelists[0].codelists[0].items[0].value",
+                Kind::IntegerRange
+            ),
+            (
+                "codelists[0].codelists[0].items[0].rank",
+                Kind::IntegerRange
+            ),
+        ]
+    );
+    assert!(findings.iter().all(|f| f.node < document.nodes().len()));
+}

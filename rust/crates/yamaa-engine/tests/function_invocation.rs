@@ -279,3 +279,106 @@ fn typed_port_retains_temporal_precision_and_needs_no_send_bound() {
     assert_eq!(result.collected_precision(), DatePrecision::Year);
     assert_eq!(calls.get(), 1);
 }
+
+#[test]
+fn versionless_invocation_defaults_missing_types_and_repeated_effects_share_one_service() {
+    let id = ProjectFunctionIdentity {
+        name: "identity".into(),
+        call: "program.identity".into(),
+    };
+    let plan = ProjectInvocationPlan::new(
+        id.clone(),
+        vec![Parameter {
+            name: "x".into(),
+            host_name: "x".into(),
+            kind: ValueType::Int,
+            accepts_missing: false,
+            presence: Presence::Optional(Value::Int(i64::MAX)),
+        }],
+        ColumnType::Int,
+        false,
+    )
+    .unwrap();
+    let mut port = Port {
+        action: "echo:x",
+        trace: vec![],
+        calls: 0,
+    };
+    for expected_calls in 1..=2 {
+        assert_eq!(
+            invoke_project(&plan, &BTreeMap::new(), &mut port),
+            Ok(Value::Int(i64::MAX))
+        );
+        assert_eq!(port.calls, expected_calls);
+    }
+    assert_eq!(
+        port.trace,
+        vec!["x=int:9223372036854775807", "x=int:9223372036854775807"]
+    );
+    assert_eq!(
+        invoke_project(
+            &plan,
+            &BTreeMap::from([("x".into(), Value::Missing)]),
+            &mut port
+        ),
+        Ok(Value::Missing)
+    );
+    assert_eq!(port.calls, 2);
+    let error = invoke_project(
+        &plan,
+        &BTreeMap::from([("x".into(), Value::float(1.0))]),
+        &mut port,
+    )
+    .unwrap_err();
+    assert_eq!(error.identity, id);
+    assert_eq!(
+        error.kind,
+        FailureKind::ArgumentType {
+            parameter: "x".into(),
+            expected: ValueType::Int,
+            actual: ValueType::Float
+        }
+    );
+    assert_eq!(port.calls, 2);
+}
+
+#[test]
+fn versionless_failures_keep_opaque_host_payload_and_exact_result_rules() {
+    let id = ProjectFunctionIdentity {
+        name: "constant".into(),
+        call: "program.constant".into(),
+    };
+    let plan = ProjectInvocationPlan::new(id.clone(), vec![], ColumnType::Int, false).unwrap();
+    let mut port = Port {
+        action: "raise",
+        trace: vec![],
+        calls: 0,
+    };
+    let failure = invoke_project(&plan, &BTreeMap::new(), &mut port).unwrap_err();
+    assert_eq!(failure.identity, id);
+    assert_eq!(
+        failure.kind,
+        FailureKind::CallFailed(Payload("ValueError:boom".into()))
+    );
+    assert_eq!(port.calls, 1);
+    for (action, kind) in [
+        ("bool:true", FailureKind::BooleanResult),
+        ("missing", FailureKind::UndeclaredMissing),
+        (
+            "float:1.0",
+            FailureKind::ResultType {
+                expected: ColumnType::Int,
+                actual: ValueType::Float,
+            },
+        ),
+    ] {
+        let mut port = Port {
+            action,
+            trace: vec![],
+            calls: 0,
+        };
+        let failure = invoke_project(&plan, &BTreeMap::new(), &mut port).unwrap_err();
+        assert_eq!(failure.kind, kind);
+        assert_eq!(port.calls, 1);
+    }
+}
