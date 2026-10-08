@@ -27,6 +27,21 @@ impl Study {
     fn text(&self, name: &str) -> String {
         self.0.join(name).to_str().unwrap().into()
     }
+    fn resource_key(&self, name: &str) -> String {
+        let path = self.text(name);
+        #[cfg(windows)]
+        {
+            // Protocol identities use a local-drive path with forward separators,
+            // rather than the Windows extended-path spelling used for native IO.
+            path.strip_prefix(r"\\?\")
+                .unwrap_or(&path)
+                .replace('\\', "/")
+        }
+        #[cfg(unix)]
+        {
+            path
+        }
+    }
     fn prepare(&self, source: &str) -> Result<FileSpecification, Error> {
         fs::write(self.0.join("entry/spec.yaml"), source).unwrap();
         FileSpecification::prepare(
@@ -101,7 +116,7 @@ fn entry_version_finding_precedes_parent_and_study_authority() {
     .unwrap();
     assert_eq!(
         actual,
-        json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0245","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":study.text("entry/spec.yaml"),"entry":study.text("entry/spec.yaml")}}]}})
+        json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0245","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":study.resource_key("entry/spec.yaml"),"entry":study.resource_key("entry/spec.yaml")}}]}})
     );
 }
 #[test]
@@ -111,7 +126,7 @@ fn missing_parent_retains_complete_authored_reference_finding() {
         serde_json::from_str(&failure(&study, &format!("{VALID}parents: absent.yaml\n"))).unwrap();
     assert_eq!(
         actual,
-        json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"absent.yaml","source":study.text("entry/spec.yaml")}}]}})
+        json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"absent.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
     );
 }
 #[test]
@@ -129,7 +144,7 @@ fn invalid_parent_preserves_complete_layer_context() {
     .unwrap();
     assert_eq!(
         actual,
-        json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"pattern_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":study.text("parent/base.yaml"),"entry":study.text("entry/spec.yaml")}}]}})
+        json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"pattern_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":study.resource_key("parent/base.yaml"),"entry":study.resource_key("entry/spec.yaml")}}]}})
     );
 }
 #[test]
@@ -208,7 +223,7 @@ fn unreadable_parent_is_unavailable_without_fallback_or_study_capture() {
     let actual: Value = serde_json::from_str(&error.into_message()).unwrap();
     assert_eq!(
         actual,
-        json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"blocked.yaml","source":study.text("entry/spec.yaml")}}]}})
+        json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"blocked.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
     );
 }
 #[test]
