@@ -17,6 +17,11 @@ pub trait SourcePort {
     fn resource_failure(&self, _error: &Self::Error) -> Option<ResourceFailure> {
         None
     }
+    /// Inspect location and file kind without reading study bytes or creating a
+    /// snapshot. Existing explicit byte callbacks opt out through this default.
+    fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
+        Ok(())
+    }
     fn capture_reads(&self) -> usize;
     fn capture(
         &mut self,
@@ -72,8 +77,16 @@ pub enum PortError<C, D> {
     /// The host boundary interrupted the attempt before a final result was stored.
     Incomplete,
     Capture(C),
+    Inspect(Vec<InspectionFailure<C>>),
     Run(RunError<D>),
     CaptureAccounting,
+}
+
+#[derive(Debug)]
+pub struct InspectionFailure<E> {
+    pub source: SourceDeclaration,
+    pub failure: Option<ResourceFailure>,
+    pub error: E,
 }
 
 /// The exact captured bytes and decoded table remain available after failure.
@@ -171,6 +184,33 @@ pub fn execute_with_port_into<P: SourcePort, D: SourceDecoder>(
 ) {
     *attempt = CapturedAttempt::new(prepared.source());
     attempt.sources.clear();
+    let mut inspections = Vec::new();
+    for declaration in prepared.sources() {
+        let before = port.capture_reads();
+        let inspected = port.inspect(declaration);
+        if port.capture_reads() != before {
+            attempt.result = Err(PortError::CaptureAccounting);
+            return;
+        }
+        if let Err(error) = inspected {
+            let failure = port.resource_failure(&error);
+            inspections.push(InspectionFailure {
+                source: declaration.clone(),
+                failure,
+                error,
+            });
+            // Known validation causes collect in declaration order; opaque host
+            // errors and interruptions terminate before any later authority.
+            if failure.is_none() {
+                attempt.result = Err(PortError::Inspect(inspections));
+                return;
+            }
+        }
+    }
+    if !inspections.is_empty() {
+        attempt.result = Err(PortError::Inspect(inspections));
+        return;
+    }
     let mut bytes_left = limits.source_bytes;
     let mut errors = Vec::new();
     for (index, declaration) in prepared.sources().iter().enumerate() {

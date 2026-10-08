@@ -779,6 +779,174 @@ mod source_collection {
             },
         )
     }
+    #[derive(Debug)]
+    struct InspectError {
+        cause: Option<yamaa_core::resource::ResourceFailure>,
+        payload: Rc<()>,
+    }
+    struct Inspection {
+        capture: Capture,
+        inspected: Vec<String>,
+        failures: Vec<(String, Option<yamaa_core::resource::ResourceFailure>)>,
+        counter_change: bool,
+        panic_at: Option<String>,
+    }
+    impl SourcePort for Inspection {
+        type Error = InspectError;
+        fn resource_failure(
+            &self,
+            error: &InspectError,
+        ) -> Option<yamaa_core::resource::ResourceFailure> {
+            error.cause
+        }
+        fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), InspectError> {
+            self.capture.trace.borrow_mut().push("inspect");
+            self.inspected.push(source.name.clone());
+            assert_ne!(
+                self.panic_at.as_deref(),
+                Some(source.name.as_str()),
+                "injected inspection interruption"
+            );
+            if self.counter_change {
+                self.capture.reads += 1;
+            }
+            if let Some((_, cause)) = self.failures.iter().find(|(name, _)| name == &source.name) {
+                return Err(InspectError {
+                    cause: *cause,
+                    payload: Rc::clone(&self.capture.payload),
+                });
+            }
+            Ok(())
+        }
+        fn capture_reads(&self) -> usize {
+            self.capture.capture_reads()
+        }
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            limit: usize,
+        ) -> Result<Arc<[u8]>, InspectError> {
+            self.capture
+                .capture(source, limit)
+                .map_err(|error| InspectError {
+                    cause: None,
+                    payload: error.0,
+                })
+        }
+    }
+    fn inspection() -> (Inspection, Decode) {
+        let (capture, decoder) = ports();
+        (
+            Inspection {
+                capture,
+                inspected: vec![],
+                failures: vec![],
+                counter_change: false,
+                panic_at: None,
+            },
+            decoder,
+        )
+    }
+    #[test]
+    fn every_source_is_inspected_before_capture_on_each_reused_build() {
+        let prepared = prepared();
+        let (mut port, mut decoder) = inspection();
+        let mut attempt = CapturedAttempt::new(prepared.source());
+        for created in [1, 0] {
+            port.capture.trace.borrow_mut().clear();
+            port.inspected.clear();
+            run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+            assert_eq!(port.inspected, ["SRC", "SECOND", "THIRD"]);
+            assert_eq!(
+                &port.capture.trace.borrow()[..9],
+                [
+                    "inspect", "inspect", "inspect", "capture", "decode", "capture", "decode",
+                    "capture", "decode"
+                ]
+            );
+            assert!(attempt
+                .sources
+                .iter()
+                .all(|source| source.read.snapshots_created == Some(created)));
+            assert!(attempt.result.as_ref().unwrap().result.is_ok());
+        }
+        assert_eq!(port.capture.reads, 3);
+    }
+    #[test]
+    fn classified_inspection_findings_collect_without_any_study_effect() {
+        use yamaa_core::resource::ResourceFailure::{Missing, NotRegularFile};
+        let prepared = prepared();
+        let (mut port, mut decoder) = inspection();
+        port.failures = vec![
+            ("SRC".into(), Some(Missing)),
+            ("THIRD".into(), Some(NotRegularFile)),
+        ];
+        let mut attempt = CapturedAttempt::new(prepared.source());
+        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        assert!(attempt.sources.is_empty());
+        let Err(PortError::Inspect(errors)) = &attempt.result else {
+            panic!("inspection findings");
+        };
+        assert_eq!(
+            errors
+                .iter()
+                .map(|e| (&*e.source.name, e.failure))
+                .collect::<Vec<_>>(),
+            [("SRC", Some(Missing)), ("THIRD", Some(NotRegularFile))]
+        );
+        assert!(errors
+            .iter()
+            .all(|e| Rc::ptr_eq(&e.error.payload, &port.capture.payload)));
+        assert_eq!(port.inspected, ["SRC", "SECOND", "THIRD"]);
+        assert_eq!(*decoder.trace.borrow(), ["inspect", "inspect", "inspect"]);
+        assert!(port.capture.requests.is_empty());
+        assert_eq!(port.capture.reads, 0);
+    }
+    #[test]
+    fn opaque_inspection_failure_stops_later_authority_and_keeps_original_payload() {
+        use yamaa_core::resource::ResourceFailure::Missing;
+        let prepared = prepared();
+        let (mut port, mut decoder) = inspection();
+        port.failures = vec![("SRC".into(), Some(Missing)), ("SECOND".into(), None)];
+        let mut attempt = CapturedAttempt::new(prepared.source());
+        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        let Err(PortError::Inspect(errors)) = &attempt.result else {
+            panic!("opaque inspection failure");
+        };
+        assert_eq!(errors.len(), 2);
+        assert_eq!(errors[1].failure, None);
+        assert!(Rc::ptr_eq(&errors[1].error.payload, &port.capture.payload));
+        assert_eq!(port.inspected, ["SRC", "SECOND"]);
+        assert!(attempt.sources.is_empty() && port.capture.requests.is_empty());
+        assert_eq!(port.capture.reads, 0);
+    }
+    #[test]
+    fn inspecting_cannot_increment_capture_accounting() {
+        let prepared = prepared();
+        let (mut port, mut decoder) = inspection();
+        port.counter_change = true;
+        let mut attempt = CapturedAttempt::new(prepared.source());
+        run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        assert!(matches!(attempt.result, Err(PortError::CaptureAccounting)));
+        assert_eq!(port.inspected, ["SRC"]);
+        assert!(attempt.sources.is_empty() && port.capture.requests.is_empty());
+        assert_eq!(*decoder.trace.borrow(), ["inspect"]);
+    }
+    #[test]
+    fn inspection_panic_retains_an_incomplete_attempt_without_inventing_reads() {
+        let prepared = prepared();
+        let (mut port, mut decoder) = inspection();
+        port.panic_at = Some("SECOND".into());
+        let mut attempt = CapturedAttempt::new(prepared.source());
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+        }))
+        .is_err());
+        assert!(matches!(attempt.result, Err(PortError::Incomplete)));
+        assert_eq!(port.inspected, ["SRC", "SECOND"]);
+        assert!(attempt.sources.is_empty() && port.capture.requests.is_empty());
+        assert_eq!(port.capture.reads, 0);
+    }
     #[test]
     fn ordered_collection_caches_snapshots_but_repeats_execution() {
         let prepared = prepared();

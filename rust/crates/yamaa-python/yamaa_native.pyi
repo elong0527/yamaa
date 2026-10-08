@@ -66,6 +66,7 @@ class _Specification:
     def build(
         self, capture: Callable[[str, str, int], tuple[bytes, bool] | tuple[Literal["missing", "not_regular_file"], BaseException]],
         metadata: tuple[str, str, str, str, str],
+        inspect: Callable[[str, str], None | tuple[Literal["missing", "not_regular_file"], BaseException]] | None = None,
     ) -> _BuildResult: ...
     def source(self) -> tuple[str, str]: ...
     def execute_csv(self, source: bytes) -> tuple[bytes | None, str]: ...
@@ -74,11 +75,13 @@ class _Specification:
         capture: Callable[[str, str, int], tuple[bytes, bool] | tuple[Literal["missing", "not_regular_file"], BaseException]],
         publish: Callable[[str, bytes], None],
         metadata: tuple[str, str, str, str, str],
+        inspect: Callable[[str, str], None | tuple[Literal["missing", "not_regular_file"], BaseException]] | None = None,
     ) -> str: ...
     def failure_report(
         self,
         capture: Callable[[str, str, int], tuple[bytes, bool] | tuple[Literal["missing", "not_regular_file"], BaseException]],
         metadata: tuple[str, str, str, str, str],
+        inspect: Callable[[str, str], None | tuple[Literal["missing", "not_regular_file"], BaseException]] | None = None,
     ) -> str: ...
 
 def _prepare_specification(

@@ -182,7 +182,7 @@ pub enum BindFinding {
         diagnostics: Vec<column_dependencies::Diagnostic>,
     },
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceDeclaration {
     pub name: String,
     pub path: String,

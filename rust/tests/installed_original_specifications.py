@@ -291,6 +291,108 @@ class OriginalSpecifications(unittest.TestCase):
                         result.save(lambda *_: self.fail("failed result reached publisher"))
                 self.assertEqual(json.loads(result.observations()), expected)
 
+    def test_metadata_inspection_retains_complete_zero_read_failures(self):
+        with (ROOT / "source-inspection.tsv").open(encoding="ascii") as stream:
+            records = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(records), 7)
+        metadata = ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", ".")
+        paths = {"DM": "input/dm.csv", "AE": "input/ae.csv", "MEDDRA": "input/meddict.csv"}
+        for record in records:
+            with self.subTest(case=record["case"]):
+                spec = prepare("schema-lookup")
+                failures = json.loads(record["failures"])
+                failure = OSError("private filesystem payload")
+                failure.payload = object()
+                inspections = []
+                def inspect(name, path):
+                    self.assertEqual(path, paths[name])
+                    inspections.append(name)
+                    if name in failures:
+                        return failures[name], failure
+                    return None
+                def capture(*_):
+                    self.fail("metadata failure reached study capture")
+                expected = json.loads(record["expected"])
+                for operation in (
+                    lambda: spec.build(capture, metadata, inspect=inspect),
+                    lambda: spec.failure_report(capture, metadata, inspect=inspect),
+                    lambda: spec.report(capture, lambda *_: self.fail("inspection failure published"), metadata, inspect=inspect),
+                ):
+                    inspections.clear()
+                    result = operation()
+                    actual = result.observations() if hasattr(result, "observations") else result
+                    self.assertEqual(json.loads(actual), expected)
+                    self.assertEqual(inspections, list(paths))
+                    if hasattr(result, "output"):
+                        self.assertIsNone(result.output())
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save(lambda *_: self.fail("inspection failure saved"))
+                        self.assertEqual(json.loads(result.observations()), expected)
+
+    def test_inspection_stops_opaque_errors_and_preserves_interrupt_identity(self):
+        spec = prepare("schema-lookup")
+        metadata = ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", ".")
+        def capture(*_):
+            self.fail("inspection error reached capture")
+        for failure in (OSError("opaque inspection"), KeyboardInterrupt("inspection interrupt"), SystemExit("inspection exit")):
+            for returned in (False, True):
+                if returned and isinstance(failure, OSError):
+                    continue  # Explicit known errors are classified; thrown errors are opaque.
+                calls = []
+                def inspect(name, path):
+                    calls.append((name, path))
+                    if name == "DM":
+                        return "missing", OSError("earlier known cause")
+                    if returned:
+                        return "missing", failure
+                    raise failure
+                for operation in (
+                    lambda: spec.build(capture, metadata, inspect=inspect),
+                    lambda: spec.failure_report(capture, metadata, inspect=inspect),
+                    lambda: spec.report(capture, lambda *_: self.fail("inspection error published"), metadata, inspect=inspect),
+                ):
+                    calls.clear()
+                    with self.assertRaises(type(failure)) as caught:
+                        operation()
+                    self.assertIs(caught.exception, failure)
+                    self.assertEqual(calls, [("DM", "input/dm.csv"), ("AE", "input/ae.csv")])
+        for inspector in (False, object(), "missing"):
+            with self.assertRaisesRegex(TypeError, "inspect must be callable"):
+                spec.build(capture, metadata, inspect=inspector)
+        for reply in (True, (b"bytes", False), ("unknown", OSError("opaque")), ("missing", object()), ("missing",)):
+            calls = []
+            def inspect(*args):
+                calls.append(args)
+                return reply
+            with self.assertRaises((TypeError, ValueError)):
+                spec.build(capture, metadata, inspect=inspect)
+            self.assertEqual(len(calls), 1)
+
+    def test_successful_inspection_precedes_capture_on_each_build(self):
+        spec = prepare("schema-lookup")
+        metadata = ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", ".")
+        expected = json.loads((ROOT / "expected/schema-lookup.json").read_text())
+        expected.update(runtime_version="fixture-runtime", engine_version="fixture-engine", artifacts=[])
+        seen = set()
+        events = []
+        def inspect(name, path):
+            events.append(("inspect", name))
+        def capture(name, path, maximum):
+            events.append(("capture", name))
+            content = (ROOT / "cases/schema-lookup" / path).read_bytes()
+            self.assertLessEqual(len(content), maximum)
+            created = name not in seen
+            seen.add(name)
+            return content, created
+        for created in (1, 0):
+            events.clear()
+            result = spec.build(capture, metadata, inspect=inspect)
+            self.assertEqual(events, [(kind, name) for kind in ("inspect", "capture") for name in ("DM", "AE", "MEDDRA")])
+            for read in expected["source_reads"]:
+                read["snapshots_created"] = created
+            self.assertEqual(json.loads(result.observations()), expected)
+            self.assertIsNotNone(result.output())
+
     def test_capture_failure_reply_validates_transport_and_preserves_interrupts(self):
         spec = prepare("schema-lookup")
         metadata = ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", ".")

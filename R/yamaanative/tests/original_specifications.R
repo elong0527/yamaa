@@ -273,6 +273,85 @@ failure <- structure(list(message="returned interrupt",call=NULL,payload=new.env
 actual <- tryCatch(build(handle,function(...) list("missing",failure),case_name),error=identity,interrupt=identity)
 stopifnot(identical(actual,failure))
 cat("source reply transport validation and original returned interrupt passed\n")
+
+# Metadata inspection collects known causes before any byte capture.
+inspection_truth <- read.delim(file.path(root,"source-inspection.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(inspection_truth)==7L)
+inspection_cases <- list(missing_first=c(DM="missing"),missing_later=c(AE="missing"),directory_first=c(DM="not_regular_file"),directory_later=c(AE="not_regular_file"),mixed=c(DM="missing",AE="not_regular_file"),reverse_mixed=c(DM="not_regular_file",AE="missing"),all_missing=c(DM="missing",AE="missing",MEDDRA="missing"))
+for(i in seq_len(nrow(inspection_truth))) {
+  row <- inspection_truth[i,,drop=FALSE]
+  causes <- inspection_cases[[row$case[[1L]]]]
+  failure <- structure(list(message="private inspection payload",call=NULL,payload=new.env()),class=c("inspection_test_error","error","condition"))
+  requests <- character()
+  inspect <- function(name,path) {
+    requests <<- c(requests,name)
+    stopifnot(identical(path,unname(c(DM="input/dm.csv",AE="input/ae.csv",MEDDRA="input/meddict.csv")[[name]])))
+    if(name %in% names(causes)) return(list(unname(causes[[name]]),failure))
+    NULL
+  }
+  capture <- function(...) stop("metadata failure reached study capture")
+  expected <- row$expected[[1L]]
+  expected <- sub('"runtime":"python"','"runtime":"r"',expected,fixed=TRUE)
+  expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
+  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  for(j in seq_len(2L)) {
+    requests <- character()
+    result <- build(handle,capture,"schema-lookup",inspect=inspect)
+    stopifnot(identical(requests,c("DM","AE","MEDDRA")),identical(build_observations(result),expected),is.null(build_output(result)))
+    actual <- tryCatch(build_save(result,function(...) stop("inspection failure published")),error=identity)
+    stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),"cannot save a failed build"))
+  }
+  requests <- character()
+  stopifnot(identical(specification_failure_report(handle,capture,"schema-lookup",inspect=inspect),expected),identical(requests,c("DM","AE","MEDDRA")))
+  requests <- character()
+  stopifnot(identical(specification_report(handle,capture,function(...) stop("inspection failure published"),"schema-lookup",inspect=inspect),expected),identical(requests,c("DM","AE","MEDDRA")))
+}
+cat("metadata inspection complete zero-read reports and retained save gates passed\n")
+for(kind in c("error","interrupt")) {
+  failure <- structure(list(message="original inspection condition",call=NULL,payload=new.env()),class=c("inspection_test_condition",kind,"condition"))
+  for(returned in c(FALSE,TRUE)) {
+    if(returned && kind=="error") next
+    requests <- character()
+    inspect <- function(name,path) {
+      requests <<- c(requests,name)
+      if(name=="DM") return(list("missing",simpleError("earlier known cause")))
+      if(returned) return(list("missing",failure))
+      stop(failure)
+    }
+    for(operation in list(function() build(handle,no_port,"schema-lookup",inspect=inspect),function() specification_failure_report(handle,no_port,"schema-lookup",inspect=inspect),function() specification_report(handle,no_port,no_port,"schema-lookup",inspect=inspect))) {
+      requests <- character()
+      actual <- tryCatch(operation(),error=identity,interrupt=identity)
+      stopifnot(identical(actual,failure),identical(requests,c("DM","AE")))
+    }
+  }
+}
+for(inspect in list(FALSE,new.env(),"missing")) {
+  actual <- tryCatch(build(handle,no_port,"schema-lookup",inspect=inspect),error=identity)
+  stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),"inspect must be a function"))
+}
+for(reply in list(TRUE,list(raw(0),FALSE),list("unknown",simpleError("opaque")),list("missing",new.env()),list("missing"))) {
+  calls <- 0L
+  inspect <- function(...) {calls <<- calls+1L;reply}
+  actual <- tryCatch(build(handle,no_port,"schema-lookup",inspect=inspect),error=identity)
+  stopifnot(inherits(actual,"error"),calls==1L)
+}
+cat("inspection original error and interrupt identity and closed reply validation passed\n")
+# Success repeats all metadata checks before any cached source is captured.
+events <- character(); seen <- character()
+inspect <- function(name,path) {events <<- c(events,paste0("inspect:",name));NULL}
+capture <- function(name,path,maximum) {
+  events <<- c(events,paste0("capture:",name))
+  content <- rawfile(file.path(case,path));stopifnot(length(content)<=maximum)
+  created <- !(name %in% seen);seen <<- unique(c(seen,name))
+  list(content,created)
+}
+for(j in seq_len(2L)) {
+  events <- character()
+  result <- build(handle,capture,"schema-lookup",inspect=inspect)
+  stopifnot(identical(events,c("inspect:DM","inspect:AE","inspect:MEDDRA","capture:DM","capture:AE","capture:MEDDRA")),!is.null(build_output(result)))
+}
+cat("successful inspection repeats before cached captures passed\n")
+
 # The same condition object (including private payload identity) must cross the
 # native call; neither errors nor interrupts may be converted into text or retried.
 for(kind in c("error","interrupt")) {

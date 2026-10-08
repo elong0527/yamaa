@@ -28,6 +28,39 @@ impl From<&str> for CaptureError {
     }
 }
 
+fn failure_reply(value: &Robj) -> std::result::Result<CaptureError, &'static str> {
+    let result = value
+        .as_list()
+        .filter(|value| value.len() == 2)
+        .ok_or("invalid resource failure reply")?;
+    let kind = result.elt(0).map_err(|_| "missing failure kind")?;
+    let failure = match kind.as_str().ok_or("invalid failure kind")? {
+        "missing" => ResourceFailure::Missing,
+        "not_regular_file" => ResourceFailure::NotRegularFile,
+        _ => return Err("invalid capture failure kind"),
+    };
+    let payload = result.elt(1).map_err(|_| "missing capture error")?;
+    if !payload.inherits("condition") {
+        return Err("capture error must be a condition");
+    }
+    Ok(CaptureError {
+        failure: (!payload.inherits("interrupt")).then_some(failure),
+        _payload: Some(payload),
+        _message: String::new(),
+    })
+}
+
+pub(super) fn inspection(value: Robj) -> std::result::Result<Option<Function>, String> {
+    if value.is_null() {
+        Ok(None)
+    } else {
+        value
+            .as_function()
+            .map(Some)
+            .ok_or_else(|| "inspect must be a function".into())
+    }
+}
+
 thread_local! {static RESULTS:RefCell<BTreeMap<usize,Weak<BuildResult>>>=const{RefCell::new(BTreeMap::new())};}
 struct Handle {
     result: Arc<BuildResult>,
@@ -75,12 +108,30 @@ pub(super) fn identity(fields: &[String]) -> Identity<'_> {
 }
 struct Port {
     capture: Function,
+    inspect: Option<Function>,
     reads: usize,
 }
 impl SourcePort for Port {
     type Error = CaptureError;
     fn resource_failure(&self, error: &CaptureError) -> Option<ResourceFailure> {
         error.failure
+    }
+    fn inspect(
+        &mut self,
+        source: &yamaa_engine::specification::SourceDeclaration,
+    ) -> std::result::Result<(), CaptureError> {
+        if let Some(inspect) = &self.inspect {
+            let result = inspect
+                .call(pairlist!(
+                    name = source.name.as_str(),
+                    path = source.path.as_str()
+                ))
+                .map_err(|_| "source inspection callback failed")?;
+            if !result.is_null() {
+                return Err(failure_reply(&result)?);
+            }
+        }
+        Ok(())
     }
     fn capture_reads(&self) -> usize {
         self.reads
@@ -103,21 +154,8 @@ impl SourcePort for Port {
             .filter(|v| v.len() == 2)
             .ok_or("invalid capture response")?;
         let content = result.elt(0).map_err(|_| "missing capture content")?;
-        if let Some(kind) = content.as_str() {
-            let failure = match kind {
-                "missing" => ResourceFailure::Missing,
-                "not_regular_file" => ResourceFailure::NotRegularFile,
-                _ => return Err("invalid capture failure kind".into()),
-            };
-            let payload = result.elt(1).map_err(|_| "missing capture error")?;
-            if !payload.inherits("condition") {
-                return Err("capture error must be a condition".into());
-            }
-            return Err(CaptureError {
-                failure: Some(failure),
-                _payload: Some(payload),
-                _message: String::new(),
-            });
+        if content.as_str().is_some() {
+            return Err(failure_reply(result.as_robj())?);
         }
         let content = content
             .as_raw()
@@ -137,8 +175,13 @@ impl SourcePort for Port {
 pub(super) fn capture_attempt(
     run: &PreparedRun,
     capture: Function,
+    inspect: Option<Function>,
 ) -> CapturedAttempt<CaptureError> {
-    run.execute_with_port(&mut Port { capture, reads: 0 })
+    run.execute_with_port(&mut Port {
+        capture,
+        inspect,
+        reads: 0,
+    })
 }
 pub(super) struct Publisher(pub(super) Function);
 impl specification_report::ArtifactPort for Publisher {
@@ -155,11 +198,11 @@ impl specification_report::ArtifactPort for Publisher {
     }
 }
 #[extendr]
-fn specification_build(handle: Robj, capture: Function, metadata: List) -> List {
+fn specification_build(handle: Robj, capture: Function, metadata: List, inspect: Robj) -> List {
     boundary(|| {
         let fields = fields(&metadata)?;
         let run = resolve_specification(&handle)?;
-        let attempt = capture_attempt(&run, capture);
+        let attempt = capture_attempt(&run, capture, inspection(inspect)?);
         let result = Arc::new(
             specification_report::build_result(&run, &attempt, identity(&fields))
                 .map_err(|_| "unsupported or invalid build observation")?,

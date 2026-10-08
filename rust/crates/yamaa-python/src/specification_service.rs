@@ -22,31 +22,37 @@ impl Specification {
     }
     /// Experimental complete failure observations using an explicit resource callback.
     /// Metadata: runtime version, engine version, example, relative spec, relative base.
+    #[pyo3(signature = (capture, metadata, inspect=None))]
     fn failure_report(
         &self,
         py: Python<'_>,
         capture: &Bound<'_, PyAny>,
         metadata: &Bound<'_, PyTuple>,
+        inspect: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<String> {
-        self.observed_report(py, capture, None, metadata)
+        self.observed_report(py, capture, None, metadata, inspect)
     }
     /// Execute once and publish through an explicit host callback after shared checks.
+    #[pyo3(signature = (capture, publish, metadata, inspect=None))]
     fn report(
         &self,
         py: Python<'_>,
         capture: &Bound<'_, PyAny>,
         publish: &Bound<'_, PyAny>,
         metadata: &Bound<'_, PyTuple>,
+        inspect: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<String> {
-        self.observed_report(py, capture, Some(publish), metadata)
+        self.observed_report(py, capture, Some(publish), metadata, inspect)
     }
     /// Execute and retain the admitted output without publication.
+    #[pyo3(signature = (capture, metadata, inspect=None))]
     fn build(
         &self,
         capture: &Bound<'_, PyAny>,
         metadata: &Bound<'_, PyTuple>,
+        inspect: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<crate::specification_result::BuildResult> {
-        crate::specification_result::build(&self.inner, capture, metadata)
+        crate::specification_result::build(&self.inner, capture, metadata, inspect)
     }
     /// Decode and bind owned captured CSV bytes; no reference interpreter is imported.
     fn execute_csv<'py>(
@@ -158,6 +164,7 @@ impl Specification {
         capture: &Bound<'_, PyAny>,
         publisher: Option<&Bound<'_, PyAny>>,
         metadata: &Bound<'_, PyTuple>,
+        inspect: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<String> {
         use crate::specification_result::{capture_attempt, fields, identity, Publisher};
         use yamaa_adapters::specification_report;
@@ -167,7 +174,7 @@ impl Specification {
             ));
         }
         let fields = fields(metadata)?;
-        let attempt = capture_attempt(&self.inner, capture)?;
+        let attempt = capture_attempt(&self.inner, capture, inspect)?;
         if let Some(callback) = publisher {
             specification_report::complete(
                 &self.inner,

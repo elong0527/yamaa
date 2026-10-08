@@ -13,6 +13,21 @@ class SourceCapture:
     def __init__(self, resources: ProjectResources) -> None:
         self.resources = resources
 
+    def inspect(
+        self, name: str, path: str
+    ) -> tuple[Literal["missing", "not_regular_file"], ResourceFailure] | None:
+        """Validate path and regular-file status without reading study bytes."""
+        try:
+            self.resources.validate(path)
+        except ResourceFailure as error:
+            if error.phase == "validation":
+                if error.condition == "resource_path_missing":
+                    return "missing", error
+                if error.condition == "resource_path_not_regular_file":
+                    return "not_regular_file", error
+            raise
+        return None
+
     def __call__(
         self, name: str, path: str, maximum: int
     ) -> (
