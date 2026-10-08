@@ -695,12 +695,13 @@ mod tests {
         use windows_sys::Win32::{
             Security::{
                 Authorization::{
-                    ConvertSecurityDescriptorToStringSecurityDescriptorW, GetSecurityInfo,
-                    SE_FILE_OBJECT,
+                    ConvertSecurityDescriptorToStringSecurityDescriptorW, ConvertStringSidToSidW,
+                    GetSecurityInfo, SE_FILE_OBJECT,
                 },
-                SetFileSecurityW, DACL_SECURITY_INFORMATION,
+                EqualSid, GetAce, SetFileSecurityW, ACCESS_ALLOWED_ACE, ACE_HEADER,
+                DACL_SECURITY_INFORMATION,
             },
-            Storage::FileSystem::READ_CONTROL,
+            Storage::FileSystem::{FILE_ALL_ACCESS, READ_CONTROL},
         };
         fn dacl(path: &Path) -> String {
             let file = OpenOptions::new()
@@ -748,6 +749,59 @@ mod tests {
             // SAFETY: length addresses only the initialized text preceding its terminator.
             String::from_utf16(unsafe { std::slice::from_raw_parts(text, length) }).unwrap()
         }
+        fn assert_only_user(path: &Path, sid: &str) {
+            let file = OpenOptions::new()
+                .access_mode(READ_CONTROL)
+                .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+                .open(path)
+                .unwrap();
+            let mut descriptor = ptr::null_mut();
+            let mut acl = ptr::null_mut();
+            // SAFETY: the live file grants READ_CONTROL and writable outputs stay live.
+            assert_eq!(
+                unsafe {
+                    GetSecurityInfo(
+                        file.as_raw_handle(),
+                        SE_FILE_OBJECT,
+                        DACL_SECURITY_INFORMATION,
+                        ptr::null_mut(),
+                        ptr::null_mut(),
+                        &mut acl,
+                        ptr::null_mut(),
+                        &mut descriptor,
+                    )
+                },
+                0
+            );
+            let _descriptor = LocalAllocation(descriptor);
+            assert!(!acl.is_null(), "a NULL DACL would allow every user");
+            // SAFETY: the SDK returned a valid ACL within the still-owned descriptor.
+            assert_eq!(unsafe { (*acl).AceCount }, 1, "exactly one user grant");
+            let mut ace = ptr::null_mut();
+            // SAFETY: the valid ACL has one entry; GetAce returns its held descriptor address.
+            assert_ne!(unsafe { GetAce(acl, 0, &mut ace) }, 0);
+            assert!(!ace.is_null());
+            // SAFETY: GetAce returned a valid initialized ACE_HEADER.
+            let header = unsafe { &*ace.cast::<ACE_HEADER>() };
+            assert_eq!(header.AceType, 0, "ACCESS_ALLOWED_ACE_TYPE");
+            assert!(header.AceSize as usize >= size_of::<ACCESS_ALLOWED_ACE>());
+            // SAFETY: the type and full fixed header size were checked before this cast.
+            let grant = unsafe { &*ace.cast::<ACCESS_ALLOWED_ACE>() };
+            assert_eq!(grant.Mask, FILE_ALL_ACCESS);
+            let text: Vec<u16> = sid.encode_utf16().chain(Some(0)).collect();
+            let mut expected = ptr::null_mut();
+            // SAFETY: the terminated numeric user SID is valid, and output stays live.
+            assert_ne!(
+                unsafe { ConvertStringSidToSidW(text.as_ptr(), &mut expected) },
+                0
+            );
+            let _expected = LocalAllocation(expected);
+            // SAFETY: the valid allowed ACE's SID tail and parsed expected SID stay owned.
+            assert_ne!(
+                unsafe { EqualSid(ptr::addr_of!(grant.SidStart).cast_mut().cast(), expected) },
+                0
+            );
+        }
         let sandbox = Sandbox::new();
         let sid = effective_user_sid().unwrap();
         let sddl: Vec<u16> = format!("O:{sid}D:P(A;OICI;FA;;;{sid})(A;OICI;FR;;;BU)")
@@ -784,7 +838,8 @@ mod tests {
         publisher.publish("output.csv", b"checked").unwrap();
         let published = dacl(&target);
         assert!(!published.contains(";;;BU)"), "{published}");
-        assert!(published.contains(&sid), "{published}");
+        // SDDL may render a well-known user with an alias such as LA. Compare identities.
+        assert_only_user(&target, &sid);
         assert_eq!(std::fs::read(target).unwrap(), b"checked");
     }
     #[test]
