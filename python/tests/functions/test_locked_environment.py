@@ -514,6 +514,62 @@ def test_editable_paths_outside_the_registered_project_do_not_claim_modules(
     assert m._installed_providers(("project_bmi",)) == {}
 
 
+def test_missing_editable_path_does_not_obstruct_other_called_package_metadata(
+    tmp_path, monkeypatch
+):
+    dist, _ = editable_metadata(tmp_path, "Unrelated-Editable", "unused_programs")
+    path = next(entry for entry in dist.files if entry.suffix == ".pth")
+    Path(path.locate()).unlink()
+    monkeypatch.setattr(
+        m.metadata, "packages_distributions", lambda: {"project_bmi": ["project-bmi"]}
+    )
+    monkeypatch.setattr(m.metadata, "distributions", lambda: iter([dist]))
+    trace = []
+
+    def version(name):
+        trace.append(name)
+        return {"yamaa": "0.2.0", "project-bmi": "1.2"}[name]
+
+    assert (
+        m.verify_versions(
+            lock(("yamaa", "0.2.0", None), ("project-bmi", "1.2", None)),
+            ["project_bmi.calculate"],
+            installed_version=version,
+        )
+        == ()
+    )
+    assert trace == ["project-bmi", "yamaa"]
+    assert "unused_programs" not in sys.modules
+    assert "project_bmi" not in sys.modules
+
+
+@pytest.mark.parametrize(
+    "original",
+    [
+        PermissionError("path denied"),
+        OSError("path unreadable"),
+        KeyboardInterrupt("stop"),
+    ],
+)
+def test_editable_path_read_errors_and_interrupts_retain_original_identity(
+    tmp_path, monkeypatch, original
+):
+    dist, _ = editable_metadata(tmp_path, "Clinical-Programs", "project_bmi")
+    monkeypatch.setattr(m.metadata, "packages_distributions", dict)
+    monkeypatch.setattr(m.metadata, "distributions", lambda: iter([dist]))
+    real_open = Path.open
+
+    def open_path(path, *args, **kwargs):
+        if path.suffix == ".pth":
+            raise original
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", open_path)
+    with pytest.raises(type(original)) as caught:
+        m._installed_providers(("project_bmi",))
+    assert caught.value is original
+
+
 def test_distribution_with_stdlib_root_name_is_version_checked_before_exemption():
     trace = []
     result = verify(

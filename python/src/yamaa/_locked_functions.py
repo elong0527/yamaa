@@ -90,8 +90,13 @@ def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
             if entry.suffix != ".pth":
                 continue
             installed = Path(entry.locate())
-            with installed.open("rb") as stream:
-                held = stream.read(16_385)
+            try:
+                with installed.open("rb") as stream:
+                    held = stream.read(16_385)
+            except FileNotFoundError:
+                # RECORD can outlive an editable path file. Its absence cannot
+                # identify a provider or obstruct other called distributions.
+                continue
             if len(held) > 16_384:
                 raise InvalidLock("editable path metadata byte limit")
             remaining_metadata -= len(held)
