@@ -73,8 +73,11 @@
   }
   target <- lookup(parts[[1L]], parts[[2L]])
   if (!is.function(target)) stop("installed member is not callable", call. = FALSE)
-  actual <- formals(target)
-  if (is.primitive(target)) actual <- formals(args(target))
+  signature <- if (is.primitive(target)) args(target) else target
+  if (!is.function(signature)) {
+    stop("installed callable has no concrete call signature", call. = FALSE)
+  }
+  actual <- formals(signature)
   names <- names(actual)
   if (anyDuplicated(parameters) || "..." %in% names ||
       !setequal(names, parameters)) {

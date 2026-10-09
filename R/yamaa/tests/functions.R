@@ -399,8 +399,15 @@ for (original in list(
 stopifnot(identical(.yamaa_resolve_locked_function("base::identity", "x"), base::identity))
 # Primitive function formals use R's builtin args metadata.
 stopifnot(identical(.yamaa_resolve_locked_function("base::is.na", "x"), base::is.na))
+# Special primitives expose no closed signature; an empty declaration cannot
+# authorize them as zero-argument callables.
+for (call in c("base::if", "base::return")) {
+  caught <- tryCatch(.yamaa_resolve_locked_function(call, character()), error=function(e)e)
+  stopifnot(inherits(caught, "error"), identical(conditionMessage(caught),
+            "installed callable has no concrete call signature"))
+}
 # Actual package-not-found condition has a missing-installation finding.
-result <- .yamaa_verify_locked_versions(list(yamaa="0.2.0",yamaaPackageNeverInstalled1757="1.0"),
+result <- .yamaa_verify_locked_versions(list(yamaa=as.character(utils::packageVersion("yamaa")),yamaaPackageNeverInstalled1757="1.0"),
                                       "yamaaPackageNeverInstalled1757::run", base_packages=character())
 stopifnot(identical(result,list(list(package="yamaaPackageNeverInstalled1757",reason="package_not_installed",expected="1.0",actual=NULL))))
 original <- structure(list(message="metadata interrupt",call=NULL),class=c("interrupt","condition"))
