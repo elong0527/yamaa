@@ -13,6 +13,7 @@ from yamaa.odm.context import (
     MultipleMatchSelection,
     RuntimeContext,
 )
+from yamaa.odm.errors import ODMError
 from yamaa.odm.parquet import write_odm_parquet
 from yamaa.odm.readers import iter_odm_records, read_odm
 from yamaa.odm.schema import ODM_ITEM_SCHEMA, ClinicalItemRow, ParquetWriteResult
@@ -27,6 +28,7 @@ __all__ = [
     "ClinicalItemRow",
     "DatasetBinding",
     "MultipleMatchSelection",
+    "ODMError",
     "ParquetWriteResult",
     "RuntimeContext",
     "build_binding_plan",
