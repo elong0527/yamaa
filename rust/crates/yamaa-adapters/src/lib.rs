@@ -78,3 +78,7 @@ pub mod project_source;
 pub mod project_lock;
 
 pub mod project_environment_diagnostics;
+
+pub mod project_source_decoder;
+
+pub mod project_function_diagnostics;

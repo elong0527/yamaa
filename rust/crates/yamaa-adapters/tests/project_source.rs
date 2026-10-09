@@ -101,6 +101,47 @@ fn root() -> Source {
     source("study/environment.yaml","schema_version: '1.0'\nlanguage: python\nlock: project.lock\nfunctions:\n  first: functions/constant.yaml\n  inline: {function: project.constant, description: Constant, params: [], returns: int, tests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 7}]}\ncodelists: [ct/sex.yaml]\nstudy: {id: Study, name: Study, description: Study, protocol_name: Protocol}\nadam: {standard: {name: ADaMIG, version: '1.3', status: Final}, specs: [specs/adsl.yaml], define: data/define.xml, documents: [{id: guide, kind: supplemental, link: docs/adrg.pdf, title: Guide}]}\n")
 }
 #[test]
+fn owned_environment_parts_preserve_original_allocations_and_capture_evidence() {
+    let mut port = Port::new();
+    let prepared = project_source::prepare(
+        schema(),
+        root(),
+        Language::Python,
+        &mut port,
+        Limits::default(),
+    )
+    .unwrap();
+    let root_bytes = prepared.root.source().bytes.as_ptr();
+    let lock_bytes = prepared.lock.as_ref().unwrap().source.bytes.as_ptr();
+    let cases = prepared.environment.draft().functions.as_ref().unwrap()[0]
+        .tests
+        .as_ptr();
+    let captures = prepared.captures.as_ptr();
+    let count = port.trace.len();
+    let (environment, provenance) = prepared.into_owned().into_parts();
+    assert_eq!(provenance.root().source().bytes.as_ptr(), root_bytes);
+    assert_eq!(provenance.lock().unwrap().source.bytes.as_ptr(), lock_bytes);
+    assert_eq!(
+        environment.functions()[0].definition().tests.as_ptr(),
+        cases
+    );
+    assert_eq!(provenance.captures().as_ptr(), captures);
+    assert_eq!(provenance.origins().functions, ["first", "inline"]);
+    assert_eq!(environment.lock().unwrap().written, "project.lock");
+    assert_eq!(
+        environment
+            .catalogue()
+            .get("SEX")
+            .unwrap()
+            .items
+            .as_ref()
+            .unwrap()[0]
+            .value,
+        Value::Str("F".into())
+    );
+    assert_eq!(port.trace.len(), count);
+}
+#[test]
 fn held_dependency_capture_is_ordered_typed_and_repeated_without_study_or_code_ports() {
     let schema = schema();
     let mut port = Port::new();

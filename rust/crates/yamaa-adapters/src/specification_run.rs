@@ -160,7 +160,7 @@ fn run_error(error: application::RunError<Error>, prepared: &PreparedSpecificati
     }
 }
 
-struct SourceDecoder;
+pub(crate) struct SourceDecoder;
 impl application::SourceDecoder for SourceDecoder {
     type Error = Error;
     type Table = dataset_transport::Snapshot;

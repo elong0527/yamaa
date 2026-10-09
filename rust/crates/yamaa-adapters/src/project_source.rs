@@ -122,6 +122,29 @@ pub struct OwnedEnvironment {
     lock: Option<LockCapture>,
     environment: yamaa_core::project_environment::ExecutionEnvironment,
 }
+/// Captured origins and exact bytes move separately from the engine's execution
+/// capability. This contains no replacement definitions or activation state.
+#[derive(Debug)]
+pub struct CapturedEnvironment {
+    origins: SourceOrigins,
+    root: CapturedDocument,
+    captures: Vec<DocumentCapture>,
+    lock: Option<LockCapture>,
+}
+impl CapturedEnvironment {
+    pub fn origins(&self) -> &SourceOrigins {
+        &self.origins
+    }
+    pub fn root(&self) -> &CapturedDocument {
+        &self.root
+    }
+    pub fn captures(&self) -> &[DocumentCapture] {
+        &self.captures
+    }
+    pub fn lock(&self) -> Option<&LockCapture> {
+        self.lock.as_ref()
+    }
+}
 impl PreparedEnvironment {
     pub fn into_owned(self) -> OwnedEnvironment {
         OwnedEnvironment {
@@ -134,6 +157,23 @@ impl PreparedEnvironment {
     }
 }
 impl OwnedEnvironment {
+    /// Transfer both checked metadata and provenance without copying or reading.
+    pub fn into_parts(
+        self,
+    ) -> (
+        yamaa_core::project_environment::ExecutionEnvironment,
+        CapturedEnvironment,
+    ) {
+        (
+            self.environment,
+            CapturedEnvironment {
+                origins: self.origins,
+                root: self.root,
+                captures: self.captures,
+                lock: self.lock,
+            },
+        )
+    }
     pub fn origins(&self) -> &SourceOrigins {
         &self.origins
     }
