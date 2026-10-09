@@ -447,6 +447,34 @@ def test_cut_accepts_infinite_breaks() -> None:
 
 
 @pytest.mark.parametrize(
+    "payload",
+    [
+        {"source": "AGE", "breaks": [10**400], "labels": ["a", "b"]},
+        {"source": "AGE", "breaks": [-(10**400)], "labels": ["a", "b"]},
+        {
+            "source": "AGE",
+            "breaks": [18, 10**400],
+            "labels": ["a", "b", "c"],
+        },
+    ],
+)
+def test_cut_refuses_breaks_outside_binary64_range(
+    payload: dict[str, object],
+) -> None:
+    """An integer past float range is a structured condition, not OverflowError."""
+    result = _evaluate({"cut": payload}, {"AGE": 30})
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+    assert result.condition.requirement == "REQ-0321"
+    assert result.condition.context == {
+        "operation": "cut",
+        "expected": "breaks representable as binary64",
+    }
+    assert result.condition.path_suffix is None
+
+
+@pytest.mark.parametrize(
     "operation",
     ["first_available", "greatest", "least", "cut"],
 )

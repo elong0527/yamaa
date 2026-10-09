@@ -328,7 +328,14 @@ def _cut(payload: object, resolver: Resolver) -> EvaluationResult:
         type(value) is bool or not isinstance(value, (int, float)) for value in breaks
     ):
         return _invalid_payload("cut", "numeric breaks")
-    thresholds = [float(value) for value in breaks]
+    try:
+        thresholds = [float(value) for value in breaks]
+    except OverflowError:
+        # An integer beyond binary64 range is numeric and ordered, but the
+        # cut runs on binary64 thresholds; rejecting it here keeps the
+        # failure a structured validation condition like the NaN rejection
+        # below instead of an unhandled host OverflowError.
+        return _invalid_payload("cut", "breaks representable as binary64")
     if any(math.isnan(threshold) for threshold in thresholds):
         # NaN is unordered: it defeats the ascending check below and makes
         # bisect return an implementation-defined label. Infinite breaks are
