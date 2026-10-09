@@ -17,11 +17,11 @@ discontinuation, or withdrawal of consent (`DSDECOD`, `DSDTC`).
 
 **Variables:**
 
-- `DETERFL` is a derivation step, not an output column: it is `Y` on an
-  assessment dated after the subject's earliest assessment whose score
-  has fallen at least 10 points below that earliest (baseline) score;
-  blank otherwise, including on the baseline assessment itself. The
-  earliest flagged assessment per subject feeds the event logic below.
+- `DETERFL` is `Y` on an assessment dated after the subject's earliest
+  assessment whose score has fallen at least 10 points below that
+  earliest (baseline) score; blank otherwise, including on the baseline
+  assessment itself. It is computed only to find the earliest flagged
+  assessment per subject and is not an output column.
 - `STARTDT` is the randomization date, the origin from which the time
   to deterioration is counted.
 - `ADT` is the analysis date: the deterioration date when a flagged
