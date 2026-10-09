@@ -6,6 +6,51 @@ use std::collections::BTreeMap;
 const MAX_BYTES: usize = 16_777_216;
 const MAX_RECORDS: usize = 65_536;
 const MAX_TEXT: usize = 2_048;
+
+/// Closed facts from installed host metadata. Version comparison belongs to the
+/// host packaging tool; shared projection never reparses or compares versions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reason {
+    DistributionNotIdentified,
+    VersionNotLocked,
+    AmbiguousLockVersion,
+    InvalidLockedVersion,
+    PackageNotInstalled,
+    InvalidInstalledVersion,
+    VersionMismatch,
+}
+impl Reason {
+    pub fn parse(value: &str) -> Option<Self> {
+        Some(match value {
+            "distribution_not_identified" => Self::DistributionNotIdentified,
+            "version_not_locked" => Self::VersionNotLocked,
+            "ambiguous_lock_version" => Self::AmbiguousLockVersion,
+            "invalid_locked_version" => Self::InvalidLockedVersion,
+            "package_not_installed" => Self::PackageNotInstalled,
+            "invalid_installed_version" => Self::InvalidInstalledVersion,
+            "version_mismatch" => Self::VersionMismatch,
+            _ => return None,
+        })
+    }
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::DistributionNotIdentified => "distribution_not_identified",
+            Self::VersionNotLocked => "version_not_locked",
+            Self::AmbiguousLockVersion => "ambiguous_lock_version",
+            Self::InvalidLockedVersion => "invalid_locked_version",
+            Self::PackageNotInstalled => "package_not_installed",
+            Self::InvalidInstalledVersion => "invalid_installed_version",
+            Self::VersionMismatch => "version_mismatch",
+        }
+    }
+}
+#[derive(Debug, PartialEq, Eq)]
+pub struct Finding {
+    pub package: String,
+    pub reason: Reason,
+    pub expected: Vec<String>,
+    pub actual: Option<String>,
+}
 #[derive(Debug)]
 pub enum Error {
     Limit(&'static str),

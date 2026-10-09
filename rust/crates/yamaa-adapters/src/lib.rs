@@ -65,6 +65,8 @@ pub mod file_application;
 pub mod file_configuration;
 #[cfg(any(unix, windows))]
 pub mod file_preparation;
+#[cfg(any(unix, windows))]
+pub mod file_project;
 #[cfg(unix)]
 pub mod file_publication;
 #[cfg(windows)]
@@ -76,10 +78,13 @@ pub mod file_resources;
 pub mod project_source;
 
 pub mod project_lock;
+pub mod project_lock_diagnostics;
 
 pub mod project_environment_diagnostics;
 
 pub mod project_source_decoder;
+
+pub mod project_run;
 
 pub mod project_function_diagnostics;
 
