@@ -689,3 +689,134 @@ fn repeated_owned_failure_identities_are_charged_and_whole_exhaustion_has_no_par
         assert!(!port.trace.iter().any(|event| event == "study.read"));
     }
 }
+
+#[test]
+fn borrowed_compiler_selection_activates_only_held_definitions_and_repeats_cases() {
+    use yamaa_engine::project_activation::activate_references;
+    let environment = [
+        function("first"),
+        function("second"),
+        function("third"),
+        function("fourth"),
+    ];
+    let selected = [&environment[1], &environment[3]];
+    let mut port = Port::new();
+    port.bind_failure = Some("first".into());
+    for _ in 0..2 {
+        let activated =
+            activate_references(Language::Python, &lock(), &selected, &mut port).unwrap();
+        assert_eq!(
+            activated
+                .iter()
+                .map(|f| f.plan.identity().name.as_str())
+                .collect::<Vec<_>>(),
+            ["second", "fourth"]
+        );
+        assert!(activated.iter().all(|f| f.cases.len() == 3));
+        assert_eq!(activated[0].cases[0].actual, Value::Int(7));
+        assert_eq!(activated[1].cases[1].actual, Value::Int(i64::MIN));
+        assert_eq!(activated[1].cases[2].actual, Value::Missing);
+    }
+    let once = [
+        "lock:yamaa+called-packages",
+        "bind:second",
+        "bind:fourth",
+        "call:second:7",
+        "call:second:-9223372036854775808",
+        "call:fourth:7",
+        "call:fourth:-9223372036854775808",
+    ];
+    assert_eq!(
+        port.trace,
+        once.into_iter()
+            .chain(once)
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    );
+    port.trace.clear();
+    port.bind_failure = Some("second".into());
+    let error = activate_references(Language::Python, &lock(), &selected, &mut port).unwrap_err();
+    assert_eq!(
+        error,
+        Failure::Bindings(vec![yamaa_engine::project_activation::BindingFailure {
+            function: 0,
+            error: Payload("bad-signature")
+        }])
+    );
+    assert_eq!(
+        port.trace,
+        ["lock:yamaa+called-packages", "bind:second", "bind:fourth"]
+    );
+}
+
+#[test]
+fn borrowed_selection_keeps_empty_duplicate_and_quota_gates_before_ports() {
+    use yamaa_engine::project_activation::{
+        activate_references, activate_references_with_limits, Limits, Resource,
+    };
+    let environment = [function("first"), function("second")];
+    let mut port = Port::new();
+    port.lock_failure = true;
+    assert!(
+        activate_references(Language::Python, &lock(), &[], &mut port)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(port.trace.is_empty());
+    assert_eq!(
+        activate_references(
+            Language::Python,
+            &lock(),
+            &[&environment[0], &environment[0]],
+            &mut port
+        )
+        .unwrap_err(),
+        Failure::DuplicateSelection { function: 1 }
+    );
+    assert!(port.trace.is_empty());
+    assert_eq!(
+        activate_references_with_limits(
+            Language::Python,
+            &lock(),
+            &[&environment[0], &environment[1]],
+            &mut port,
+            Limits {
+                functions: 1,
+                ..Limits::default()
+            }
+        )
+        .unwrap_err(),
+        Failure::Limit(Resource::Functions)
+    );
+    assert!(port.trace.is_empty());
+    assert_eq!(
+        activate_references_with_limits(
+            Language::Python,
+            &lock(),
+            &[&environment[1]],
+            &mut port,
+            Limits {
+                cases: 2,
+                ..Limits::default()
+            }
+        )
+        .unwrap_err(),
+        Failure::Limit(Resource::Cases)
+    );
+    assert!(port.trace.is_empty());
+    assert_eq!(
+        activate_references_with_limits(
+            Language::Python,
+            &lock(),
+            &[&environment[1]],
+            &mut port,
+            Limits {
+                metadata_text_bytes: 0,
+                ..Limits::default()
+            }
+        )
+        .unwrap_err(),
+        Failure::Limit(Resource::MetadataText)
+    );
+    assert!(port.trace.is_empty());
+}

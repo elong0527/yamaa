@@ -29,7 +29,39 @@ pub fn check(document: &SpecificationDocument) -> Result<CheckedSpecification, P
     })
 }
 
+/// Compile calls against the one admitted environment without activating code.
+pub fn check_with_project(
+    document: &SpecificationDocument,
+    functions: &[yamaa_core::project_function::Function],
+) -> Result<CheckedSpecification, PrepareError> {
+    Ok(CheckedSpecification {
+        compiled: PreparedSpecification::prepare_with_project(document, functions)?,
+    })
+}
+
 impl CheckedSpecification {
+    /// Execute with caller-held activated handles; metadata admission precedes
+    /// every study inspection, capture and decode in the shared service.
+    pub fn build_with_functions_into<P: SourcePort, D: SourceDecoder>(
+        &self,
+        port: &mut P,
+        decoder: &mut D,
+        functions: &mut dyn crate::dataset::FunctionBindings<
+            Error = <D::Table as yamaa_core::table::TableAccess>::Error,
+        >,
+        limits: Limits,
+        attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+    ) {
+        specification_run::execute_with_functions_into(
+            &self.compiled,
+            port,
+            decoder,
+            functions,
+            limits,
+            attempt,
+        );
+    }
+
     /// Borrow the core-owned plan for provenance/reporting and explicit probes.
     pub fn compiled(&self) -> &PreparedSpecification {
         &self.compiled

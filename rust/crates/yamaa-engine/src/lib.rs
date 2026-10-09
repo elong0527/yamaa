@@ -40,3 +40,5 @@ pub mod specification_output;
 pub mod specification_run;
 
 pub mod project_activation;
+
+pub mod project_domain;

@@ -155,6 +155,10 @@ pub struct Catalogue {
     sources: Vec<Source>,
 }
 impl Catalogue {
+    /// Transfer the globally admitted environment's original source ownership.
+    pub(crate) fn from_admitted(sources: Vec<Source>) -> Self {
+        Self { sources }
+    }
     pub fn admit(sources: Vec<Source>) -> Result<Self, AdmissionError<Finding>> {
         Self::admit_with_limits(sources, Limits::default())
     }

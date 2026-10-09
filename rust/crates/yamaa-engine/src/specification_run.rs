@@ -1,7 +1,7 @@
 //! Capture, decode, bind and execute a prepared specification through native ports.
 //! Filesystem access, codecs and host exception containment belong to adapters.
 use crate::dataset::{self, DatasetExecution, ExecutionAttempt};
-use alloc::{sync::Arc, vec, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
 use yamaa_core::{
     resource::ResourceFailure,
     specification::{BindError, PreparedSpecification, SourceDeclaration},
@@ -182,8 +182,40 @@ pub fn execute_with_port_into<P: SourcePort, D: SourceDecoder>(
     limits: Limits,
     attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
 ) {
+    execute_with_functions_into(
+        prepared,
+        port,
+        decoder,
+        &mut dataset::unavailable_functions(),
+        limits,
+        attempt,
+    );
+}
+
+/// Capture and run with already activated functions while retaining the original
+/// host payload type shared by table and callable ports. This never activates code.
+pub fn execute_with_functions_into<P: SourcePort, D: SourceDecoder>(
+    prepared: &PreparedSpecification,
+    port: &mut P,
+    decoder: &mut D,
+    functions: &mut dyn dataset::FunctionBindings<Error = <D::Table as TableAccess>::Error>,
+    limits: Limits,
+    attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+) {
     *attempt = CapturedAttempt::new(prepared.source());
     attempt.sources.clear();
+    if let Some(calls) = prepared.project_calls() {
+        for (slot, plan) in calls.plans().iter().enumerate() {
+            if functions.project_signature(slot) != Some(plan) {
+                attempt.result = Ok(ExecutionAttempt {
+                    result: Err(Box::new(dataset::ExecutionError::FunctionBinding { slot })),
+                    handler_counts: Vec::new(),
+                    retained_verifications: Vec::new(),
+                });
+                return;
+            }
+        }
+    }
     let mut inspections = Vec::new();
     for declaration in prepared.sources() {
         let before = port.capture_reads();
@@ -303,5 +335,6 @@ pub fn execute_with_port_into<P: SourcePort, D: SourceDecoder>(
                 as &dyn TableAccess<Error = <D::Table as TableAccess>::Error>
         })
         .collect::<Vec<_>>();
-    attempt.result = Ok(plan.execute_observed_sources(primary, &secondary, limits.execution));
+    attempt.result =
+        Ok(plan.execute_observed_functions(primary, &secondary, functions, limits.execution));
 }
