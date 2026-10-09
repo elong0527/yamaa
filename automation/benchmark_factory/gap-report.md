@@ -107,6 +107,18 @@ with the derivation below and the admiral function as grounding.
    with the existing golden: existing values do not move. *Status:
    chosen as the factory's first maintenance pilot; see
    work-item issue #1609.*
+
+   > REVIEWED 2026-10-09 (benchmark-maintenance run) -- candidate
+   > COMPLETED. `3ce91b5d` ("Enhance adam-adlb-shift-criteria with
+   > CRIT2/CRIT2FL; extend factory for maintenance") implemented the
+   > second criterion pair as the factory's first maintenance pilot;
+   > work item #1609 closed 2026-10-03. Current spec carries CRIT2
+   > ("Result less than LLN") and CRIT2FL (Y where AVAL < ANRLO) in
+   > the output columns, README, and golden (17 rows: 11 N, 3 Y, 3
+   > empty); pre-existing CRIT1/CRIT1FL values unchanged, lifecycle
+   > reset to draft, and Harbor prompts (brief/conventions/full)
+   > updated in the same pilot. Drift and `factory.sh validate`
+   > verified clean 2026-10-09.
 2. **`adam-adlb-lymphocytes`** -- verify against
    `derive_param_wbc_abs()` ("lab differentials converted to
    absolute values"); if it matches, generalize the benchmark to
