@@ -48,6 +48,7 @@ tasks:
   - adam-adlbc-window-chain-python
   - adam-adoe-study-eye-python
   - adam-adqs-missed-visit-locf-python
+  - adam-adqs-multi-scale-scoring-python
   - adam-adqs-subscale-score-python
   - adam-adrs-best-response-python
   - adam-adrs-composite-response-python
