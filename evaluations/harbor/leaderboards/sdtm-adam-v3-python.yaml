@@ -79,6 +79,7 @@ tasks:
   - adam-adtte-first-ae-python
   - adam-adtte-os-python
   - adam-adtte-pfs-python
+  - adam-adtte-pro-deterioration-python
   - adam-advs-bmi-python
   - adam-advs-bsa-python
   - adam-advs-carryforward-python

@@ -81,6 +81,7 @@ tasks:
   - adam-adtte-first-ae-conventions-python
   - adam-adtte-os-conventions-python
   - adam-adtte-pfs-conventions-python
+  - adam-adtte-pro-deterioration-conventions-python
   - adam-advs-bmi-conventions-python
   - adam-advs-bsa-conventions-python
   - adam-advs-carryforward-conventions-python
