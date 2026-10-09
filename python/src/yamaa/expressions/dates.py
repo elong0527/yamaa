@@ -778,7 +778,11 @@ def whole_units(
         if bounds == "inclusive":
             return days + 1
         if bounds == "between":
-            return days - 1
+            # REQ-0598: `between` counts neither endpoint, so a zero-length
+            # range holds no day strictly between the two dates. The bare
+            # `days - 1` arithmetic would report -1 for identical dates,
+            # which also breaks REQ-0597's negation symmetry there.
+            return max(days - 1, 0)
         return days
     if unit == "week":
         # REQ-0594: whole seven-day blocks, with any remainder discarded.

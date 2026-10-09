@@ -453,6 +453,21 @@ def test_an_earlier_end_negates_the_bounded_day_count(bounds: str) -> None:
     assert forward > 0
 
 
+@pytest.mark.parametrize(
+    ("bounds", "expected"),
+    [("exclusive", 0), ("inclusive", 1), ("between", 0)],
+)
+def test_identical_dates_count_endpoints_not_negative_days(
+    bounds: str, expected: int
+) -> None:
+    # REQ-0598: `between` counts neither endpoint, so no day lies strictly
+    # between two identical dates; the bare `days - 1` arithmetic must not
+    # report -1 there (which would also break REQ-0597's negation symmetry).
+    assert (
+        whole_units(date("2025-01-01"), date("2025-01-01"), "day", bounds) == expected
+    )
+
+
 def test_a_february_29_anniversary_falls_on_february_28_in_a_common_year() -> None:
     # REQ-0596: the case an age computation meets every leap year.
     assert whole_units(date("2024-02-29"), date("2025-02-28"), "year") == 1
