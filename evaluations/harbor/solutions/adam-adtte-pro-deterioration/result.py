@@ -36,9 +36,9 @@ ds = pl.read_csv("/app/input/ds.csv", infer_schema=False, null_values="").with_c
     pl.col("DSDTC").str.to_date(strict=False),
 )
 
-# Flag deteriorations: the baseline is the earliest assessment, and an
-# assessment deteriorates when it is dated after the baseline and its score
-# is at least 10 points below the baseline score.
+# Flag deteriorations as an internal step: the baseline is the earliest
+# assessment, and an assessment deteriorates when it is dated after the
+# baseline and its score is at least 10 points below the baseline score.
 qs_flagged = (
     qs.sort(["STUDYID", "USUBJID", "ADT", "QSSEQ"], nulls_last=True)
     .with_columns(
@@ -66,10 +66,15 @@ deter = (
     .select("STUDYID", "USUBJID", DETERDT="ADT", DETERSEQ="QSSEQ")
 )
 
-# The first censoring reason per subject: progression, discontinuation, or
-# withdrawal are censoring reasons, never events.
+# The first censoring reason per subject. Only progression,
+# discontinuation, and withdrawal count; any other DS record is ignored.
 reason = (
-    ds.sort(["STUDYID", "USUBJID", "DSDTC", "DSSEQ"])
+    ds.filter(
+        pl.col("DSDECOD").is_in(
+            ["DISEASE PROGRESSION", "STUDY DISCONTINUATION", "WITHDRAWAL OF CONSENT"]
+        )
+    )
+    .sort(["STUDYID", "USUBJID", "DSDTC", "DSSEQ"])
     .unique(["STUDYID", "USUBJID"], keep="first", maintain_order=True)
     .select("STUDYID", "USUBJID", CENSORRSNDT="DSDTC", CENSORRSN="DSDECOD")
 )
@@ -92,13 +97,25 @@ adtte = (
     .join(censor_qs, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
     .with_columns(STARTDT=pl.col("RANDDT"))
     .with_columns(
-        # Deterioration wins over death on the same date.
-        EVENTDT=pl.when(
-            pl.col("DETERDT").is_not_null()
-            & (pl.col("DTHDT").is_null() | (pl.col("DETERDT") <= pl.col("DTHDT")))
-        )
+        # Deterioration wins over death on the same date. Neither counts
+        # when it falls after the first censoring reason: progression,
+        # discontinuation, and withdrawal are censoring reasons, never
+        # events, though a same-day deterioration or death still counts.
+        DETER_EVENT=pl.col("DETERDT").is_not_null()
+        & (pl.col("DTHDT").is_null() | (pl.col("DETERDT") <= pl.col("DTHDT")))
+        & (
+            pl.col("CENSORRSNDT").is_null()
+            | (pl.col("DETERDT") <= pl.col("CENSORRSNDT"))
+        ),
+        DEATH_EVENT=pl.col("DTHDT").is_not_null()
+        & (
+            pl.col("CENSORRSNDT").is_null() | (pl.col("DTHDT") <= pl.col("CENSORRSNDT"))
+        ),
+    )
+    .with_columns(
+        EVENTDT=pl.when(pl.col("DETER_EVENT"))
         .then(pl.col("DETERDT"))
-        .when(pl.col("DTHDT").is_not_null())
+        .when(pl.col("DEATH_EVENT"))
         .then(pl.col("DTHDT"))
         .otherwise(None),
         CENSORDT=pl.col("LASTQSLE").fill_null(pl.col("STARTDT")),
@@ -109,41 +126,29 @@ adtte = (
             lambda s: whole_months(s["STARTDT"], s["ADT"]), return_dtype=pl.Int64
         ),
         CNSR=pl.when(pl.col("EVENTDT").is_not_null()).then(0).otherwise(1),
-        EVNTDESC=pl.when(
-            pl.col("DETERDT").is_not_null()
-            & (pl.col("DTHDT").is_null() | (pl.col("DETERDT") <= pl.col("DTHDT")))
-        )
+        EVNTDESC=pl.when(pl.col("DETER_EVENT"))
         .then(pl.lit("PRO DETERIORATION"))
-        .when(pl.col("DTHDT").is_not_null())
+        .when(pl.col("DEATH_EVENT"))
         .then(pl.lit("DEATH"))
         .otherwise(pl.lit("CENSORED")),
         CNSDTDSC=pl.when(pl.col("EVENTDT").is_not_null())
         .then(None)
         .otherwise(pl.col("CENSORRSN").fill_null(pl.lit("STUDY COMPLETION"))),
-        SRCDOM=pl.when(
-            pl.col("DETERDT").is_not_null()
-            & (pl.col("DTHDT").is_null() | (pl.col("DETERDT") <= pl.col("DTHDT")))
-        )
+        SRCDOM=pl.when(pl.col("DETER_EVENT"))
         .then(pl.lit("QS"))
-        .when(pl.col("DTHDT").is_not_null())
+        .when(pl.col("DEATH_EVENT"))
         .then(pl.lit("ADSL"))
         .when(pl.col("LASTQSLE").is_null())
         .then(pl.lit("ADSL"))
         .otherwise(pl.lit("QS")),
-        SRCVAR=pl.when(
-            pl.col("DETERDT").is_not_null()
-            & (pl.col("DTHDT").is_null() | (pl.col("DETERDT") <= pl.col("DTHDT")))
-        )
+        SRCVAR=pl.when(pl.col("DETER_EVENT"))
         .then(pl.lit("ADT"))
-        .when(pl.col("DTHDT").is_not_null())
+        .when(pl.col("DEATH_EVENT"))
         .then(pl.lit("DTHDT"))
         .when(pl.col("LASTQSLE").is_null())
         .then(pl.lit("RANDDT"))
         .otherwise(pl.lit("ADT")),
-        SRCSEQ=pl.when(
-            pl.col("DETERDT").is_not_null()
-            & (pl.col("DTHDT").is_null() | (pl.col("DETERDT") <= pl.col("DTHDT")))
-        )
+        SRCSEQ=pl.when(pl.col("DETER_EVENT"))
         .then(pl.col("DETERSEQ"))
         .when(pl.col("EVENTDT").is_null() & pl.col("LASTQSLE").is_not_null())
         .then(pl.col("LASTQSSEQ"))
@@ -170,5 +175,4 @@ adtte = (
 )
 
 Path("/app/output").mkdir(parents=True, exist_ok=True)
-qs_flagged.write_csv("/app/output/qs_flagged.csv", null_value="")
 adtte.write_csv("/app/output/adtte.csv", null_value="")

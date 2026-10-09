@@ -2,13 +2,15 @@ schema_version: "1.0"
 domain: ADTTE
 keys: [STUDYID, USUBJID, PARAMCD]
 
-# QSF is built by spec_qs.yaml in the same run, so the deterioration flags
-# the entry reads are exactly the ones the producer derived.
+# Single-spec benchmark: the deterioration flag is derived in the
+# intermediates below (BASELINE/FIRSTDETER), not in a separate producer
+# spec. The flag is a derivation step of the ADTTE build, the same way
+# adam-adtte-pfs derives its progression picks in intermediates.
 input:
   ADSL: {path: input/adsl.csv, types: {RANDDT: date, DTHDT: date}}
-  QSF:
-    path: qs_flagged.csv
-    schema: spec_qs.yaml
+  QS:
+    path: input/qs.csv
+    types: {QSSEQ: int, ADT: date, AVAL: int}
   DS:
     path: input/ds.csv
     types: {DSDTC: date, DSSEQ: int}
@@ -21,22 +23,44 @@ output:
             EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
 
 intermediates:
-  # The first flagged deterioration assessment. Ordered by date, then
-  # sequence, so one record wins whatever the input order.
-  - id: FIRSTDETER
-    dataset: QSF
+  # The baseline assessment: the earliest dated assessment per subject.
+  # The deterioration search below runs strictly after it, so the baseline
+  # record itself can never flag even though its own change from baseline
+  # is zero.
+  - id: BASELINE
+    dataset: QS
     key: [STUDYID, USUBJID]
-    filter: "QSF.DETERFL = 'Y'"
-    order_by: [QSF.ADT, QSF.QSSEQ]
+    filter: "QS.ADT IS NOT NULL"
+    order_by: [QS.ADT, QS.QSSEQ]
     keep: first
     no_match: null
 
+  # The first deteriorated assessment: dated after the baseline assessment
+  # with a score at least 10 points below the baseline score. The cutoff is
+  # read from BASELINE per donor record, so the flag logic lives here
+  # instead of in a separate flagged dataset. Ordered by date, then
+  # sequence, so one record wins whatever the input order.
+  - id: FIRSTDETER
+    dataset: QS
+    key: [STUDYID, USUBJID]
+    filter: "QS.ADT IS NOT NULL AND QS.ADT > QS.BASELINEDT
+      AND QS.AVAL <= QS.CUTOFF"
+    order_by: [QS.ADT, QS.QSSEQ]
+    keep: first
+    no_match: null
+    derivations:
+      BASELINEDT: BASELINE.ADT
+      CUTOFF: {compute: {expr: "BASELINE.AVAL - 10"}}
+
   # The first censoring reason: progression, discontinuation, or
   # withdrawal. Only the earliest counts; later ones do not move the
-  # censor date.
+  # censor date. A DS record naming anything else is not a censoring
+  # reason and is ignored here.
   - id: FIRSTDS
     dataset: DS
     key: [STUDYID, USUBJID]
+    filter: "DS.DSDECOD IN ('DISEASE PROGRESSION',
+      'STUDY DISCONTINUATION', 'WITHDRAWAL OF CONSENT')"
     order_by: [DS.DSDTC, DS.DSSEQ]
     keep: first
     no_match: null
@@ -77,21 +101,9 @@ columns:
     label: Death Date
     derivation: ADSL.DTHDT
 
-  # The event is the earlier of deterioration and death; a deterioration
-  # and a death on the same date count as deterioration.
-  - name: EVENTDT
-    type: date
-    label: Event Date
-    derivation:
-      case:
-        - when: "DETERDT IS NOT NULL AND (DEATHDT IS NULL
-            OR DETERDT <= DEATHDT)"
-          then: DETERDT
-        - when: "DEATHDT IS NOT NULL"
-          then: DEATHDT
-
   # The censoring reason's date and description, when a reason was
-  # recorded; empty for subjects with no reason on file.
+  # recorded; empty for subjects with no reason on file. Declared before
+  # EVENTDT because the event logic below reads the reason date.
   - name: CENSORRSNDT
     type: date
     label: Censoring Reason Date
@@ -102,6 +114,25 @@ columns:
     label: Censoring Reason
     derivation: FIRSTDS.DSDECOD
 
+  # The event is the earlier of deterioration and death; a deterioration
+  # and a death on the same date count as deterioration. Neither counts
+  # when it falls after the first censoring reason: progression,
+  # discontinuation, and withdrawal are censoring reasons, never events.
+  # A deterioration or death dated the same day as the censoring reason
+  # still counts as the event.
+  - name: EVENTDT
+    type: date
+    label: Event Date
+    derivation:
+      case:
+        - when: "DETERDT IS NOT NULL AND (DEATHDT IS NULL
+            OR DETERDT <= DEATHDT) AND (CENSORRSNDT IS NULL
+            OR DETERDT <= CENSORRSNDT)"
+          then: DETERDT
+        - when: "DEATHDT IS NOT NULL AND (CENSORRSNDT IS NULL
+            OR DEATHDT <= CENSORRSNDT)"
+          then: DEATHDT
+
   # The last assessment dated on or before the censoring reason. A
   # missing reason date admits no assessment, so the match is empty then
   # and the subject falls back to randomization below.
@@ -110,10 +141,10 @@ columns:
     label: Last Assessment On Or Before Censoring
     derivation:
       aggregate:
-        filter: "QSF.ADT IS NOT NULL"
-        group_by: [QSF.STUDYID, QSF.USUBJID]
+        filter: "QS.ADT IS NOT NULL"
+        group_by: [QS.STUDYID, QS.USUBJID]
         between: {value: CENSORRSNDT, lower: ADT}
-        expr: "MAX(QSF.ADT)"
+        expr: "MAX(QS.ADT)"
 
   # The sequence of that assessment: the latest sequence among the
   # records sharing the censoring date.
@@ -122,10 +153,10 @@ columns:
     label: Sequence of Last Assessment On Or Before Censoring
     derivation:
       aggregate:
-        filter: "QSF.ADT IS NOT NULL"
-        group_by: [QSF.STUDYID, QSF.USUBJID]
+        filter: "QS.ADT IS NOT NULL"
+        group_by: [QS.STUDYID, QS.USUBJID]
         between: {value: LASTQSLE, lower: ADT, upper: ADT}
-        expr: "MAX(QSF.QSSEQ)"
+        expr: "MAX(QS.QSSEQ)"
 
   # With no usable assessment the subject is censored at randomization.
   - name: CENSORDT
@@ -161,16 +192,19 @@ columns:
         - otherwise: {literal: 1}
 
   # A deterioration and a censoring reason on the same date count as a
-  # deterioration: the event always wins over censoring.
+  # deterioration: the event always wins over censoring, but only when the
+  # event is not dated after the censoring reason.
   - name: EVNTDESC
     type: str
     label: Event or Censoring Description
     derivation:
       case:
         - when: "DETERDT IS NOT NULL AND (DEATHDT IS NULL
-            OR DETERDT <= DEATHDT)"
+            OR DETERDT <= DEATHDT) AND (CENSORRSNDT IS NULL
+            OR DETERDT <= CENSORRSNDT)"
           then: {literal: PRO DETERIORATION}
-        - when: "DEATHDT IS NOT NULL"
+        - when: "DEATHDT IS NOT NULL AND (CENSORRSNDT IS NULL
+            OR DEATHDT <= CENSORRSNDT)"
           then: {literal: DEATH}
         - otherwise: {literal: CENSORED}
 
@@ -190,9 +224,12 @@ columns:
     label: Source Data
     derivation:
       case:
-        - when: "EVNTDESC = 'PRO DETERIORATION'"
+        - when: "DETERDT IS NOT NULL AND (DEATHDT IS NULL
+            OR DETERDT <= DEATHDT) AND (CENSORRSNDT IS NULL
+            OR DETERDT <= CENSORRSNDT)"
           then: {literal: QS}
-        - when: "EVNTDESC = 'DEATH'"
+        - when: "DEATHDT IS NOT NULL AND (CENSORRSNDT IS NULL
+            OR DEATHDT <= CENSORRSNDT)"
           then: {literal: ADSL}
         - when: "LASTQSLE IS NULL"
           then: {literal: ADSL}
@@ -203,9 +240,12 @@ columns:
     label: Source Variable
     derivation:
       case:
-        - when: "EVNTDESC = 'PRO DETERIORATION'"
+        - when: "DETERDT IS NOT NULL AND (DEATHDT IS NULL
+            OR DETERDT <= DEATHDT) AND (CENSORRSNDT IS NULL
+            OR DETERDT <= CENSORRSNDT)"
           then: {literal: ADT}
-        - when: "EVNTDESC = 'DEATH'"
+        - when: "DEATHDT IS NOT NULL AND (CENSORRSNDT IS NULL
+            OR DEATHDT <= CENSORRSNDT)"
           then: {literal: DTHDT}
         - when: "LASTQSLE IS NULL"
           then: {literal: RANDDT}
@@ -216,7 +256,9 @@ columns:
     label: Source Sequence Number
     derivation:
       case:
-        - when: "EVNTDESC = 'PRO DETERIORATION'"
+        - when: "DETERDT IS NOT NULL AND (DEATHDT IS NULL
+            OR DETERDT <= DEATHDT) AND (CENSORRSNDT IS NULL
+            OR DETERDT <= CENSORRSNDT)"
           then: FIRSTDETER.QSSEQ
         - when: "EVNTDESC = 'CENSORED' AND LASTQSLE IS NOT NULL"
           then: LASTQSSEQ

@@ -17,17 +17,20 @@ discontinuation, or withdrawal of consent (`DSDECOD`, `DSDTC`).
 
 **Variables:**
 
-- `DETERFL` is `Y` on an assessment dated after the subject's earliest
-  assessment whose score has fallen at least 10 points below that
-  earliest (baseline) score; blank otherwise, including on the baseline
-  assessment itself.
+- `DETERFL` is a derivation step, not an output column: it is `Y` on an
+  assessment dated after the subject's earliest assessment whose score
+  has fallen at least 10 points below that earliest (baseline) score;
+  blank otherwise, including on the baseline assessment itself. The
+  earliest flagged assessment per subject feeds the event logic below.
 - `STARTDT` is the randomization date, the origin from which the time
   to deterioration is counted.
 - `ADT` is the analysis date: the deterioration date when a flagged
-  assessment exists, else the death date when the subject died. A
-  deterioration and a death on the same date count as deterioration.
-  With neither, `ADT` is the last assessment dated on or before the
-  first censoring reason, or randomization when no assessment qualifies.
+  assessment exists and is not dated after the first censoring reason,
+  else the death date when the subject died and the death is not dated
+  after the first censoring reason. A deterioration and a death on the
+  same date count as deterioration. With neither, `ADT` is the last
+  assessment dated on or before the first censoring reason, or
+  randomization when no assessment qualifies.
 - `AVAL` is the number of whole calendar months from `STARTDT` to
   `ADT`.
 - `CNSR` is `0` when the subject has a deterioration or death event

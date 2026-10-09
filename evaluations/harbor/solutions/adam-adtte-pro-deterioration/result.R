@@ -35,9 +35,9 @@ ds <- read_csv(
   )
 )
 
-# Flag deteriorations: the baseline is the earliest assessment, and an
-# assessment deteriorates when it is dated after the baseline and its score
-# is at least 10 points below the baseline score.
+# Flag deteriorations as an internal step: the baseline is the earliest
+# assessment, and an assessment deteriorates when it is dated after the
+# baseline and its score is at least 10 points below the baseline score.
 qs_flagged <- qs |>
   arrange(STUDYID, USUBJID, ADT, QSSEQ) |>
   group_by(STUDYID, USUBJID) |>
@@ -61,9 +61,14 @@ deter <- qs_flagged |>
   distinct(STUDYID, USUBJID, .keep_all = TRUE) |>
   select(STUDYID, USUBJID, DETERDT = ADT, DETERSEQ = QSSEQ)
 
-# The first censoring reason per subject: progression, discontinuation, or
-# withdrawal are censoring reasons, never events.
+# The first censoring reason per subject. Only progression,
+# discontinuation, and withdrawal count; any other DS record is ignored.
 reason <- ds |>
+  filter(
+    DSDECOD %in% c(
+      "DISEASE PROGRESSION", "STUDY DISCONTINUATION", "WITHDRAWAL OF CONSENT"
+    )
+  ) |>
   arrange(STUDYID, USUBJID, DSDTC, DSSEQ) |>
   distinct(STUDYID, USUBJID, .keep_all = TRUE) |>
   select(STUDYID, USUBJID, CENSORRSNDT = DSDTC, CENSORRSN = DSDECOD)
@@ -86,10 +91,17 @@ adtte <- adsl |>
   left_join(censor_qs, by = c("STUDYID", "USUBJID")) |>
   mutate(
     STARTDT = RANDDT,
-    # Deterioration wins over death on the same date.
+    # Deterioration wins over death on the same date. Neither counts when
+    # it falls after the first censoring reason: progression,
+    # discontinuation, and withdrawal are censoring reasons, never events,
+    # though a same-day deterioration or death still counts.
+    DETER_EVENT = !is.na(DETERDT) & (is.na(DTHDT) | DETERDT <= DTHDT) &
+      (is.na(CENSORRSNDT) | DETERDT <= CENSORRSNDT),
+    DEATH_EVENT = !is.na(DTHDT) &
+      (is.na(CENSORRSNDT) | DTHDT <= CENSORRSNDT),
     EVENTDT = case_when(
-      !is.na(DETERDT) & (is.na(DTHDT) | DETERDT <= DTHDT) ~ DETERDT,
-      !is.na(DTHDT) ~ DTHDT,
+      DETER_EVENT ~ DETERDT,
+      DEATH_EVENT ~ DTHDT,
       .default = as.Date(NA)
     ),
     CENSORDT = coalesce(LASTQSLE, STARTDT),
@@ -97,8 +109,8 @@ adtte <- adsl |>
     AVAL = whole_months(STARTDT, ADT),
     CNSR = if_else(!is.na(EVENTDT), 0L, 1L),
     EVNTDESC = case_when(
-      !is.na(DETERDT) & (is.na(DTHDT) | DETERDT <= DTHDT) ~ "PRO DETERIORATION",
-      !is.na(DTHDT) ~ "DEATH",
+      DETER_EVENT ~ "PRO DETERIORATION",
+      DEATH_EVENT ~ "DEATH",
       .default = "CENSORED"
     ),
     CNSDTDSC = case_when(
@@ -106,19 +118,19 @@ adtte <- adsl |>
       .default = coalesce(CENSORRSN, "STUDY COMPLETION")
     ),
     SRCDOM = case_when(
-      !is.na(DETERDT) & (is.na(DTHDT) | DETERDT <= DTHDT) ~ "QS",
-      !is.na(DTHDT) ~ "ADSL",
+      DETER_EVENT ~ "QS",
+      DEATH_EVENT ~ "ADSL",
       is.na(LASTQSLE) ~ "ADSL",
       .default = "QS"
     ),
     SRCVAR = case_when(
-      !is.na(DETERDT) & (is.na(DTHDT) | DETERDT <= DTHDT) ~ "ADT",
-      !is.na(DTHDT) ~ "DTHDT",
+      DETER_EVENT ~ "ADT",
+      DEATH_EVENT ~ "DTHDT",
       is.na(LASTQSLE) ~ "RANDDT",
       .default = "ADT"
     ),
     SRCSEQ = case_when(
-      !is.na(DETERDT) & (is.na(DTHDT) | DETERDT <= DTHDT) ~ DETERSEQ,
+      DETER_EVENT ~ DETERSEQ,
       is.na(EVENTDT) & !is.na(LASTQSLE) ~ LASTQSSEQ,
       .default = NA_integer_
     ),
@@ -132,5 +144,4 @@ adtte <- adsl |>
   arrange(USUBJID)
 
 dir.create("/app/output", showWarnings = FALSE)
-write_csv(qs_flagged, "/app/output/qs_flagged.csv", na = "")
 write_csv(adtte, "/app/output/adtte.csv", na = "")
