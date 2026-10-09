@@ -7,12 +7,15 @@ use yamaa_core::schema::{
 
 const MAX_BYTES: usize = 16_777_216;
 #[derive(Debug)]
-pub(super) enum Error {
+pub(crate) enum Error {
     Limit,
     InvalidContext,
 }
-struct Budget(usize);
+pub(crate) struct Budget(usize);
 impl Budget {
+    pub(crate) fn new() -> Self {
+        Self(128)
+    }
     fn charge(&mut self, bytes: usize) -> Result<(), Error> {
         self.0 = self
             .0
@@ -128,7 +131,21 @@ pub(super) fn schema_findings(
     findings: &[SchemaDiagnostic],
     source_context: &[(&str, &str)],
 ) -> Result<Vec<Value>, Error> {
-    let mut budget = Budget(128);
+    schema_findings_with_budget(
+        schema,
+        document,
+        findings,
+        source_context,
+        &mut Budget::new(),
+    )
+}
+pub(super) fn schema_findings_with_budget(
+    schema: &SchemaStructure,
+    document: Option<&Document>,
+    findings: &[SchemaDiagnostic],
+    source_context: &[(&str, &str)],
+    budget: &mut Budget,
+) -> Result<Vec<Value>, Error> {
     findings.iter().map(|finding| {
         budget.charge(128)?;
         let path = budget.text(&finding.path)?;
@@ -138,7 +155,7 @@ pub(super) fn schema_findings(
         for (name, value) in &finding.context {
             budget.text(name)?;
             budget.charge(2)?;
-            let value = context(schema, document, value, &mut budget)?;
+            let value = context(schema, document, value, budget)?;
             if resolved.insert((*name).into(), value).is_some() { return Err(Error::InvalidContext); }
         }
         for (name, value) in source_context {

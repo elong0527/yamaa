@@ -62,3 +62,5 @@ pub mod project_limits;
 pub mod project_terminology;
 
 pub mod project_terminology_document;
+
+pub mod project_environment_diagnostics;

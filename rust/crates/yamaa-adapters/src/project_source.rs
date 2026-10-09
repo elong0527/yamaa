@@ -274,13 +274,31 @@ pub fn prepare<P: CapturePort>(
         .document(&root)
         .map_err(|code| Failure::Root(Error::Limit(code)))?;
     let document = &root.normalized().document;
-    let declarations = match project_environment_document::decode(document, document.root()) {
+    let declarations = match project_environment_document::decode_with_limits(
+        document,
+        document.root(),
+        project_environment_document::DiagnosticLimits {
+            findings: limits.semantic.findings,
+            text_bytes: limits.semantic.text_bytes,
+        },
+    ) {
         Ok(declarations) => declarations,
-        Err(findings) => {
+        Err(project_environment_document::Error::Findings(findings)) => {
             return Err(Failure::RootScalar {
                 root: Box::new(root),
                 findings,
             })
+        }
+        Err(project_environment_document::Error::Limit(resource)) => {
+            let code = match resource {
+                project_environment_document::DiagnosticResource::Findings => {
+                    "environment_diagnostic_count"
+                }
+                project_environment_document::DiagnosticResource::TextBytes => {
+                    "environment_diagnostic_text"
+                }
+            };
+            return Err(Failure::Root(Error::Limit(code)));
         }
     };
     // Bound declared capture attempts, including failed host replies, before any

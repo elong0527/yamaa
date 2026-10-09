@@ -628,7 +628,11 @@ fn environment_decoder_collects_every_independent_inline_scalar_failure() {
         .prepare_structural(source("environment.yaml", text))
         .unwrap();
     let document = &captured.normalized().document;
-    let findings = project_environment_document::decode(document, document.root()).unwrap_err();
+    let project_environment_document::Error::Findings(findings) =
+        project_environment_document::decode(document, document.root()).unwrap_err()
+    else {
+        panic!("complete scalar findings");
+    };
     assert_eq!(
         findings
             .iter()
@@ -648,4 +652,69 @@ fn environment_decoder_collects_every_independent_inline_scalar_failure() {
         ]
     );
     assert!(findings.iter().all(|f| f.node < document.nodes().len()));
+    use project_environment_document::{DiagnosticLimits, DiagnosticResource, Error};
+    let exact = DiagnosticLimits {
+        findings: 4,
+        text_bytes: 142,
+    };
+    assert!(
+        matches!(project_environment_document::decode_with_limits(document, document.root(), exact), Err(Error::Findings(values)) if values == findings)
+    );
+    assert_eq!(
+        project_environment_document::decode_with_limits(
+            document,
+            document.root(),
+            DiagnosticLimits {
+                text_bytes: 141,
+                ..exact
+            }
+        ),
+        Err(Error::Limit(DiagnosticResource::TextBytes))
+    );
+    assert_eq!(
+        project_environment_document::decode_with_limits(
+            document,
+            document.root(),
+            DiagnosticLimits {
+                findings: 3,
+                ..exact
+            }
+        ),
+        Err(Error::Limit(DiagnosticResource::Findings))
+    );
+    let projected =
+        yamaa_core::project_environment_diagnostics::scalar_diagnostics(document, &findings)
+            .unwrap();
+    assert_eq!(projected.len(), 4);
+    for finding in &projected {
+        assert_eq!(
+            (
+                finding.definition().phase,
+                finding.definition().condition,
+                finding.definition().requirement
+            ),
+            (
+                "validation",
+                "project_environment_invalid",
+                Some("REQ-0695")
+            )
+        );
+    }
+    use yamaa_core::diagnostic::ContextValue;
+    assert_eq!(
+        projected[0].context["value"],
+        ContextValue::Integer("9223372036854775808".into())
+    );
+    assert_eq!(
+        projected[1].context["value"],
+        ContextValue::Scalar(yamaa_core::value::Value::Str("2024-02-30".into()))
+    );
+    assert_eq!(
+        projected[2].context["value"],
+        ContextValue::Integer("9223372036854775808".into())
+    );
+    assert_eq!(
+        projected[3].context["value"],
+        ContextValue::Integer("9223372036854775808".into())
+    );
 }
