@@ -195,6 +195,145 @@ fn row_function_cycles_report_authored_paths_without_column_forward_rules() {
 }
 
 #[test]
+fn transitive_nonlocal_defaults_report_one_issue_per_column_with_all_overriding_rows() {
+    use yamaa_core::diagnostic::ContextValue;
+    let spec = specification_with_rows(
+        vec![
+            (
+                "A",
+                "int",
+                Tree::map(vec![(
+                    "aggregate",
+                    Tree::map(vec![("expr", Tree::text("SUM(SRC.ID)"))]),
+                )]),
+            ),
+            ("B", "int", call("id", vec![("x", Tree::text("A"))])),
+            ("C", "int", call("id", vec![("x", Tree::text("B"))])),
+        ],
+        vec![
+            row("first", vec![("C", literal(1)), ("B", literal(2))], None),
+            row("second", vec![("B", literal(3)), ("C", literal(4))], None),
+        ],
+    );
+    let Err(PrepareError::Invalid(findings)) =
+        PreparedSpecification::prepare_with_project(&spec, &[function("id")])
+    else {
+        panic!("duplicate defaults")
+    };
+    assert_eq!(findings.len(), 2);
+    for (finding, column) in findings.iter().zip(["B", "C"]) {
+        let diagnostic = finding.diagnostic();
+        assert_eq!(
+            diagnostic.spec_paths,
+            [format!("columns.{column}.derivation")]
+        );
+        assert_eq!(diagnostic.definition().condition, "duplicate_derivation");
+        assert_eq!(diagnostic.definition().requirement, Some("REQ-1260"));
+        assert_eq!(
+            diagnostic.context["rows"],
+            ContextValue::Sequence(vec![
+                ContextValue::Scalar(Value::Str("first".into())),
+                ContextValue::Scalar(Value::Str("second".into())),
+            ])
+        );
+    }
+}
+
+#[test]
+fn inherited_cycles_are_reported_once_while_distinct_row_override_cycles_keep_their_paths() {
+    for local_override in [false, true] {
+        let mut rows = vec![
+            row(
+                "first",
+                vec![("D", call("id", vec![("x", Tree::text("A"))]))],
+                None,
+            ),
+            row(
+                "second",
+                vec![("D", call("id", vec![("x", Tree::text("A"))]))],
+                None,
+            ),
+        ];
+        if local_override {
+            rows.push(row(
+                "local",
+                vec![
+                    ("A", call("id", vec![("x", Tree::text("B"))])),
+                    ("D", call("id", vec![("x", Tree::text("A"))])),
+                ],
+                None,
+            ));
+        }
+        let spec = specification_with_rows(
+            vec![
+                ("A", "int", call("id", vec![("x", Tree::text("B"))])),
+                ("B", "int", call("id", vec![("x", Tree::text("A"))])),
+                ("D", "int", literal(0)),
+            ],
+            rows,
+        );
+        let prepared =
+            PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
+        let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
+            panic!("cycles")
+        };
+        let diagnostics = findings
+            .iter()
+            .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(diagnostics.len(), if local_override { 2 } else { 1 });
+        assert_eq!(diagnostics[0].definition().condition, "dependency_cycle");
+        assert_eq!(
+            diagnostics[0].spec_paths,
+            [
+                "columns.A.derivation.function",
+                "columns.B.derivation.function"
+            ]
+        );
+        if local_override {
+            assert_eq!(diagnostics[1].definition().condition, "dependency_cycle");
+            assert_eq!(
+                diagnostics[1].spec_paths,
+                [
+                    "rows[2].derivations.A.function",
+                    "columns.B.derivation.function"
+                ]
+            );
+        }
+    }
+}
+
+#[test]
+fn grouped_nonlocal_default_context_is_bounded_before_owned_row_labels_are_copied() {
+    let names = (0..21).map(|n| format!("C{n}")).collect::<Vec<_>>();
+    let mut columns = vec![(
+        "A",
+        "int",
+        Tree::map(vec![(
+            "aggregate",
+            Tree::map(vec![("expr", Tree::text("SUM(SRC.ID)"))]),
+        )]),
+    )];
+    columns.extend(names.iter().map(|name| {
+        (
+            name.as_str(),
+            "int",
+            call("id", vec![("x", Tree::text("A"))]),
+        )
+    }));
+    let overrides = names
+        .iter()
+        .map(|name| (name.as_str(), literal(1)))
+        .collect();
+    let id = "r".repeat(200_000);
+    let spec = specification_with_rows(columns, vec![row(&id, overrides, None)]);
+    assert!(matches!(
+        PreparedSpecification::prepare_with_project(&spec, &[function("id")]),
+        Err(PrepareError::Limit("row_default_context"))
+    ));
+}
+
+#[test]
 fn grouped_function_arguments_keep_record_reads_and_complete_scope_and_type_findings() {
     let spec = specification_with_rows(
         vec![("A", "int", literal(0))],

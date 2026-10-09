@@ -265,7 +265,7 @@ fn select_defaults(
     for column in filter_defaults {
         selected[column] = local[column];
     }
-    let mut findings = Vec::new();
+    let mut overridden: BTreeMap<usize, Vec<&str>> = BTreeMap::new();
     for &row in rows {
         for &(name, declaration) in mapping(d, field(d, row, "derivations")?)? {
             let name = text(d, name)?;
@@ -277,10 +277,10 @@ fn select_defaults(
             if local[column] {
                 selected[column] = true;
             } else {
-                findings.push(PreflightFinding::DuplicateRowDefault {
-                    column: name.into(),
-                    rows: alloc::vec![text(d, field(d, row, "id")?)?.into()],
-                });
+                overridden
+                    .entry(column)
+                    .or_default()
+                    .push(text(d, field(d, row, "id")?)?);
             }
             let (_, reads) = default_reads(d, declaration, output, project)?;
             for read in reads {
@@ -306,6 +306,29 @@ fn select_defaults(
             break;
         }
     }
+    // Charge the complete retained and projected context before the first copy.
+    // Grouping preserves authored row order and emits columns in declaration order.
+    let mut context_bytes = 0usize;
+    for (&column, rows) in &overridden {
+        let bytes = rows
+            .iter()
+            .try_fold(output.columns()[column].name.len(), |n, row| {
+                n.checked_add(row.len())
+                    .ok_or(PrepareError::Limit("row_default_context"))
+            })?;
+        context_bytes = bytes
+            .checked_mul(4)
+            .and_then(|n| context_bytes.checked_add(n))
+            .filter(|&n| n <= 16_777_216)
+            .ok_or(PrepareError::Limit("row_default_context"))?;
+    }
+    let findings = overridden
+        .into_iter()
+        .map(|(column, rows)| PreflightFinding::DuplicateRowDefault {
+            column: output.columns()[column].name.clone(),
+            rows: rows.into_iter().map(String::from).collect(),
+        })
+        .collect::<Vec<_>>();
     if !findings.is_empty() {
         return Err(PrepareError::Invalid(findings));
     }
@@ -1001,17 +1024,30 @@ impl Rows {
             let analyzed = crate::dependency_analysis::analyze(&graph, Default::default())
                 .map_err(|_| BindError::Internal)?;
             if let Some(cycle) = analyzed.cycle {
-                let mut paths = alloc::vec![String::new(); output.columns().len()];
+                let mut paths = alloc::vec![""; output.columns().len()];
                 for declaration in &template.declarations {
-                    paths[declaration.column] = declaration.path.clone();
+                    paths[declaration.column] = declaration.path.as_str();
                 }
-                findings.push(BindFinding::Dependencies {
-                    columns: output.columns().iter().map(|c| c.name.clone()).collect(),
-                    paths,
-                    diagnostics: alloc::vec![column_dependencies::Diagnostic::Cycle {
-                        columns: cycle
-                    }],
+                let repeated = findings.iter().any(|finding| {
+                    let BindFinding::Dependencies { paths: prior_paths, diagnostics, .. } = finding else {
+                        return false;
+                    };
+                    diagnostics.iter().any(|diagnostic| {
+                        matches!(diagnostic, column_dependencies::Diagnostic::Cycle { columns }
+                            if columns == &cycle && cycle.iter().all(|&column| {
+                                prior_paths.get(column).map(String::as_str) == paths.get(column).copied()
+                            }))
+                    })
                 });
+                if !repeated {
+                    findings.push(BindFinding::Dependencies {
+                        columns: output.columns().iter().map(|c| c.name.clone()).collect(),
+                        paths: paths.into_iter().map(String::from).collect(),
+                        diagnostics: alloc::vec![column_dependencies::Diagnostic::Cycle {
+                            columns: cycle
+                        }],
+                    });
+                }
             }
             let assignments = analyzed
                 .order
