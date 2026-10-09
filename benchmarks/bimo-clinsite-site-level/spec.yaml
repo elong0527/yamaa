@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: CLINSITE
 keys: [STUDYID, SITEID]
 input:
-  SUBJ: input/subjects.csv
+  SUBJ: input/adsl.csv
 
 output:
   path: clinsite.csv

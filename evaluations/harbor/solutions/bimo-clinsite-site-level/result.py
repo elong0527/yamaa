@@ -8,7 +8,7 @@ from pathlib import Path
 
 import polars as pl
 
-subj = pl.read_csv("/app/input/subjects.csv", infer_schema=False, null_values="")
+subj = pl.read_csv("/app/input/adsl.csv", infer_schema=False, null_values="")
 
 clinsite = (
     # One record per site; the site key stays text so leading zeros survive.

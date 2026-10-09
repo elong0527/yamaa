@@ -8,7 +8,7 @@ library(dplyr, warn.conflicts = FALSE)
 library(readr)
 
 subj <- read_csv(
-  "/app/input/subjects.csv",
+  "/app/input/adsl.csv",
   col_types = cols(.default = col_character())
 )
 
