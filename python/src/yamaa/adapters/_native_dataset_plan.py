@@ -115,7 +115,14 @@ def admit(
         if feature not in unsupported:
             unsupported.append(feature)
 
-    primary = primary_source(specification)
+    if not specification.input:
+        # A schema-valid specification may declare no inputs, but the native
+        # bridge lowers through one driver dataset; reject the shape before
+        # primary_source's iterator selection escapes a bare StopIteration.
+        reject("no_primary_source", "input")
+        primary = None
+    else:
+        primary = primary_source(specification)
     if len(specification.input) > 8 or (
         len(specification.input) > 1
         and not specification.rows
