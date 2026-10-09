@@ -39,6 +39,16 @@ pub fn check_with_project(
     })
 }
 
+/// Compile against complete admitted environment metadata without host or study ports.
+pub fn check_with_environment(
+    document: &SpecificationDocument,
+    environment: &yamaa_core::project_environment::ExecutionEnvironment,
+) -> Result<CheckedSpecification, PrepareError> {
+    Ok(CheckedSpecification {
+        compiled: PreparedSpecification::prepare_with_environment(document, environment)?,
+    })
+}
+
 impl CheckedSpecification {
     /// Execute with caller-held activated handles; metadata admission precedes
     /// every study inspection, capture and decode in the shared service.

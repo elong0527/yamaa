@@ -485,6 +485,7 @@ impl Rows {
         driver: &str,
         limits: CompilationLimits,
         project: Option<&functions::Prepared>,
+        column_terminology: bool,
     ) -> Result<Self, PrepareError> {
         let root = d.root();
         let raw_rows = sequence(d, field(d, root, "rows")?)?;
@@ -663,7 +664,7 @@ impl Rows {
         for (column, &id) in columns.iter().enumerate() {
             let prefix = format!("columns.{}", output.columns()[column].name);
             for name in ["submission", "metadata"] {
-                if present(d, id, name) {
+                if present(d, id, name) && (name != "submission" || !column_terminology) {
                     return Err(unsupported(name, &format!("{prefix}.{name}")));
                 }
             }

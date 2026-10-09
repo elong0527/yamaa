@@ -27,7 +27,7 @@ pub fn check<'a>(
     environment: &'a ExecutionEnvironment,
 ) -> Result<CheckedProject<'a>, PrepareError> {
     Ok(CheckedProject {
-        checked: domain::check_with_project(document, environment.functions())?,
+        checked: domain::check_with_environment(document, environment)?,
         environment,
     })
 }
@@ -79,7 +79,7 @@ pub fn check_owned(
     document: &SpecificationDocument,
     environment: ExecutionEnvironment,
 ) -> Result<CheckedOwnedProject, Box<RejectedOwnedProject>> {
-    match domain::check_with_project(document, environment.functions()) {
+    match domain::check_with_environment(document, &environment) {
         Ok(checked) => Ok(CheckedOwnedProject {
             checked,
             environment,

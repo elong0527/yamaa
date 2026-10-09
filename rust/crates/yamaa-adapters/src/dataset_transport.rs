@@ -508,7 +508,7 @@ pub(crate) fn retained_verification_outcome(
     response: &DatasetResponse,
 ) -> Result<serde_json::Value, Error> {
     serde_json::to_value(Outcome::Success {
-        verifications: records(response.retained_verifications.clone()),
+        verifications: records(response.retained_verifications.clone())?,
     })
     .map_err(|_| Error::Internal)
 }
@@ -997,17 +997,26 @@ fn identity(row: RowIdentity) -> Identity {
     }
 }
 /// Preserve every completed check in declaration order, including successful checks.
-fn records(records: Vec<CheckRecord>) -> Vec<Record> {
+fn legacy_records(records: &[CheckRecord]) -> Result<(), Error> {
+    if records.iter().any(|record| record.codelist.is_some()) {
+        return Err(Error::UnsupportedProtocol);
+    }
+    Ok(())
+}
+fn records(records: Vec<CheckRecord>) -> Result<Vec<Record>, Error> {
+    legacy_records(&records)?;
     records
         .into_iter()
-        .map(|record| Record {
-            spec_path: record.path,
-            condition: record.condition,
-            requirement: record.requirement,
-            evaluated_count: record.evaluated_count.to_string(),
-            failed_count: record.failed_count.to_string(),
-            output_rows: record.output_rows.to_string(),
-            offending_rows: record.offending_rows.into_iter().map(identity).collect(),
+        .map(|record| {
+            Ok(Record {
+                spec_path: record.path,
+                condition: record.condition,
+                requirement: record.requirement,
+                evaluated_count: record.evaluated_count.to_string(),
+                failed_count: record.failed_count.to_string(),
+                output_rows: record.output_rows.to_string(),
+                offending_rows: record.offending_rows.into_iter().map(identity).collect(),
+            })
         })
         .collect()
 }
@@ -1168,11 +1177,11 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
         },
         ExecutionError::KeyFailures(found) => Outcome::Failure {
             phase: "output",
-            verifications: records(found),
+            verifications: records(found)?,
         },
         ExecutionError::VerificationFailures(found) => Outcome::Failure {
             phase: "verification",
-            verifications: records(found),
+            verifications: records(found)?,
         },
         ExecutionError::Conversion {
             path,
@@ -1231,7 +1240,7 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             partition: None,
             identity: None,
             diagnostic: Box::new(diagnostic.into()),
-            verifications: Some(records(completed)),
+            verifications: Some(records(completed)?),
         },
         ExecutionError::VerificationDeclaration {
             path,
@@ -1244,7 +1253,7 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             partition: None,
             identity: None,
             diagnostic: crate::numeric_transport::declaration(path, condition, requirement, reason),
-            verifications: Some(records(completed)),
+            verifications: Some(records(completed)?),
         },
         ExecutionError::VerificationPredicate {
             error,
@@ -1254,7 +1263,7 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             partition: None,
             diagnostic: crate::numeric_transport::predicate(error)?,
             identity: None,
-            verifications: Some(records(completed)),
+            verifications: Some(records(completed)?),
         },
         ExecutionError::SchemaMismatch => return Err(Error::InvalidRequest),
         // Admitted references and normalized owned Arrow values make other semantic
@@ -1267,11 +1276,13 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
 pub(crate) fn response(
     attempt: dataset::ExecutionAttempt<CallbackError>,
 ) -> Result<DatasetResponse, Error> {
+    legacy_records(&attempt.retained_verifications)?;
     let (table, outcome, execution) = match attempt.result {
         Ok(result) => {
+            legacy_records(&result.verifications)?;
             let table = Some(encode_dataset(&result.dataset).map_err(Error::Table)?);
             let outcome = Outcome::Success {
-                verifications: records(result.verifications.clone()),
+                verifications: records(result.verifications.clone())?,
             };
             (table, outcome, Some(result))
         }
@@ -1306,4 +1317,66 @@ pub(crate) fn response(
         execution,
         retained_verifications: attempt.retained_verifications,
     })
+}
+
+#[cfg(test)]
+mod codelist_protocol_tests {
+    use super::*;
+    use yamaa_core::value::Value;
+    use yamaa_engine::dataset::CodelistObservation;
+
+    #[test]
+    fn legacy_response_refuses_codelist_values_in_failed_or_retained_checks() {
+        let record = CheckRecord {
+            path: "columns.SEX.submission.codelist".into(),
+            condition: "allowed_values_failed",
+            requirement: "REQ-0957",
+            evaluated_count: 2,
+            failed_count: 1,
+            output_rows: 2,
+            offending_rows: vec![RowIdentity {
+                position: 1,
+                values: vec![Value::Int(i64::MAX)],
+            }],
+            codelist: Some(CodelistObservation {
+                id: "SEX".into(),
+                values: vec![Value::Str("x\0🙂".into())],
+            }),
+        };
+        let failed = response(dataset::ExecutionAttempt {
+            result: Err(Box::new(ExecutionError::VerificationFailures(vec![
+                record.clone()
+            ]))),
+            handler_counts: vec![],
+            retained_verifications: vec![],
+        });
+        assert!(matches!(failed, Err(Error::UnsupportedProtocol)));
+        let retained = response(dataset::ExecutionAttempt {
+            result: Err(Box::new(ExecutionError::SchemaMismatch)),
+            handler_counts: vec![],
+            retained_verifications: vec![record.clone()],
+        });
+        assert!(matches!(retained, Err(Error::UnsupportedProtocol)));
+        let legacy = CheckRecord {
+            codelist: None,
+            requirement: "REQ-0376",
+            ..record
+        };
+        let response = response(dataset::ExecutionAttempt {
+            result: Err(Box::new(ExecutionError::VerificationFailures(vec![legacy]))),
+            handler_counts: vec![],
+            retained_verifications: vec![],
+        })
+        .unwrap();
+        let envelope: serde_json::Value = serde_json::from_str(&response.outcome).unwrap();
+        assert_eq!(envelope["protocol"], "dataset/1");
+        assert_eq!(
+            envelope["outcome"]["verifications"][0]["requirement"],
+            "REQ-0376"
+        );
+        assert_eq!(
+            envelope["outcome"]["verifications"][0]["offending_rows"][0]["keys"][0],
+            serde_json::json!({"int": i64::MAX.to_string()})
+        );
+    }
 }

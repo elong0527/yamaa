@@ -72,7 +72,7 @@ impl Budget {
     fn nodes(&mut self, count: usize) -> Result<(), Limit> {
         add(&mut self.nodes, count, self.limits.nodes, Resource::Nodes)
     }
-    fn work(&mut self, count: usize) -> Result<(), Limit> {
+    pub(crate) fn work(&mut self, count: usize) -> Result<(), Limit> {
         add(&mut self.work, count, self.limits.work, Resource::Work)
     }
     pub(crate) fn findings(&mut self, count: usize) -> Result<(), Limit> {

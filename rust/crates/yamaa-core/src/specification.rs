@@ -43,6 +43,8 @@ pub use windows::WindowFinding;
 #[path = "specification_functions.rs"]
 mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
+#[path = "specification_terminology.rs"]
+mod terminology;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UnsupportedFeature {
@@ -88,6 +90,7 @@ impl Default for CompilationLimits {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PreflightFinding {
     ProjectFunction(FunctionFinding),
+    ProjectCodelist(alloc::boxed::Box<crate::project_codelist_binding::Finding>),
     RowPhase {
         path: String,
         identifier: String,
@@ -618,7 +621,7 @@ impl PreparedSpecification {
         spec: &SpecificationDocument,
         limits: CompilationLimits,
     ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, limits, None)
+        Self::prepare_implementation(spec, limits, None, None, Default::default())
     }
     /// Prepare calls against statically admitted environment definitions. No
     /// project imports, lock verification, test invocation or study reads occur.
@@ -626,12 +629,46 @@ impl PreparedSpecification {
         spec: &SpecificationDocument,
         functions: &[crate::project_function::Function],
     ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, CompilationLimits::default(), Some(functions))
+        Self::prepare_implementation(
+            spec,
+            CompilationLimits::default(),
+            Some(functions),
+            None,
+            Default::default(),
+        )
+    }
+    /// Compile project calls and fixed terminology against the same admitted metadata.
+    pub fn prepare_with_environment(
+        spec: &SpecificationDocument,
+        environment: &crate::project_environment::ExecutionEnvironment,
+    ) -> Result<Self, PrepareError> {
+        Self::prepare_with_environment_limits(
+            spec,
+            environment,
+            CompilationLimits::default(),
+            Default::default(),
+        )
+    }
+    pub fn prepare_with_environment_limits(
+        spec: &SpecificationDocument,
+        environment: &crate::project_environment::ExecutionEnvironment,
+        limits: CompilationLimits,
+        terminology_limits: crate::project_limits::Limits,
+    ) -> Result<Self, PrepareError> {
+        Self::prepare_implementation(
+            spec,
+            limits,
+            Some(environment.functions()),
+            Some(environment.catalogue()),
+            terminology_limits,
+        )
     }
     fn prepare_implementation(
         spec: &SpecificationDocument,
         limits: CompilationLimits,
         functions: Option<&[crate::project_function::Function]>,
+        catalogue: Option<&crate::project_terminology::Catalogue>,
+        terminology_limits: crate::project_limits::Limits,
     ) -> Result<Self, PrepareError> {
         let d = spec.document();
         let root = d.root();
@@ -777,6 +814,13 @@ impl PreparedSpecification {
         for &column in sequence(d, field(d, root, "columns")?)? {
             let name = text(d, field(d, column, "name")?)?;
             metadata_features(d, column, &format!("columns.{name}"), true, &mut extra)?;
+            terminology::submission_features(
+                d,
+                column,
+                &format!("columns.{name}"),
+                catalogue.is_some(),
+                &mut extra,
+            )?;
         }
         let inputs = mapping(d, field(d, root, "input")?)?;
         let mut source_findings = Vec::new();
@@ -939,7 +983,14 @@ impl PreparedSpecification {
             if !extra.is_empty() {
                 return Err(PrepareError::Unsupported(extra));
             }
-            let rows = rows::Rows::prepare(d, &output, driver, limits, project.as_ref())?;
+            let rows = rows::Rows::prepare(
+                d,
+                &output,
+                driver,
+                limits,
+                project.as_ref(),
+                catalogue.is_some(),
+            )?;
             let project = match project {
                 Some(project) => {
                     let uses = rows.call_uses(&project.calls)?;
@@ -951,13 +1002,23 @@ impl PreparedSpecification {
                 }
                 None => None,
             };
-            let column_verifications = columns
+            let mut column_verifications = columns
                 .iter()
                 .enumerate()
                 .map(|(column, &id)| {
                     verifications::Verifications::prepare_column(d, &output, id, column)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
+            if let Some(catalogue) = catalogue {
+                terminology::apply(
+                    d,
+                    columns,
+                    &output,
+                    catalogue,
+                    terminology_limits,
+                    &mut column_verifications,
+                )?;
+            }
             return Ok(Self {
                 project_calls: project.map(|p| p.calls),
                 sources,
@@ -977,7 +1038,7 @@ impl PreparedSpecification {
         let mut column_verifications = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
             let prefix = format!("columns.{}", output.columns()[column].name);
-            optional_features(d, id, &["submission"], &prefix, &mut extra);
+
             column_verifications.push(verifications::Verifications::prepare_column(
                 d, &output, id, column,
             )?);
@@ -1109,6 +1170,16 @@ impl PreparedSpecification {
         }
         if !extra.is_empty() {
             return Err(PrepareError::Unsupported(extra));
+        }
+        if let Some(catalogue) = catalogue {
+            terminology::apply(
+                d,
+                columns,
+                &output,
+                catalogue,
+                terminology_limits,
+                &mut column_verifications,
+            )?;
         }
         Ok(Self {
             project_calls: project.map(|p| p.calls),

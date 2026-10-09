@@ -55,6 +55,20 @@ pub(crate) fn validate(check: &Check, kind: ColumnType) -> Result<(), PlanError>
                 return Err(PlanError::InvalidColumns);
             }
         }
+        Check::Codelist { id, values } => {
+            if id.is_empty()
+                || values.iter().any(|value| match (kind, value) {
+                    (ColumnType::Str, Value::Str(_))
+                    | (ColumnType::Int, Value::Int(_))
+                    | (ColumnType::Float, Value::Int(_) | Value::Float(_)) => false,
+                    // Preserve the existing admitted integer-codelist profile.
+                    (ColumnType::Int, Value::Float(value)) => value.get() % 1.0 != 0.0,
+                    _ => true,
+                })
+            {
+                return Err(PlanError::InvalidColumns);
+            }
+        }
         Check::Range { min, max } => {
             if !matches!(kind, ColumnType::Int | ColumnType::Float)
                 || (min.is_none() && max.is_none())
@@ -83,6 +97,7 @@ fn column_code(check: &Check) -> Option<ConditionCode> {
     Some(match check {
         Check::NotMissing => ConditionCode::VerificationNotMissingFailed,
         Check::AllowedValues(_) => ConditionCode::VerificationAllowedValuesFailed,
+        Check::Codelist { .. } => ConditionCode::VerificationCodelistFailed,
         Check::Range { .. } => ConditionCode::VerificationRangeFailed,
         Check::MaxLength(_) => ConditionCode::VerificationMaxLengthFailed,
         Check::Matches(_) => ConditionCode::VerificationMatchesFailed,
@@ -163,6 +178,9 @@ pub fn column_offenders<'a>(
                 Check::NotMissing => matches!(value, Value::Missing),
                 _ if matches!(value, Value::Missing) => false,
                 Check::AllowedValues(accepted) => !accepted.contains(value),
+                Check::Codelist { values, .. } => !values
+                    .iter()
+                    .any(|code| compare_present(value, code) == Ok(core::cmp::Ordering::Equal)),
                 Check::Range { min, max } => {
                     min.as_ref().is_some_and(|min| {
                         compare_present(value, min) == Ok(core::cmp::Ordering::Less)
@@ -200,6 +218,12 @@ pub fn column_diagnostic(
     .into();
     if let Check::MaxLength(max) = check {
         context.insert("max".into(), ContextValue::Integer(max.to_string()));
+    }
+    if let Check::Codelist { id, .. } = check {
+        context.insert(
+            "codelist".into(),
+            ContextValue::Scalar(Value::Str(id.clone())),
+        );
     }
     Some(Diagnostic {
         code,

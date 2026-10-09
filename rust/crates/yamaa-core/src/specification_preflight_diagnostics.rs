@@ -28,6 +28,7 @@ impl PreflightFinding {
     pub fn diagnostic(&self) -> Diagnostic {
         let (code, paths, context): (C, Vec<String>, Context) = match self {
             Self::ProjectFunction(finding) => return finding.diagnostic(),
+            Self::ProjectCodelist(finding) => return finding.diagnostic(),
             Self::RowPhase {
                 path,
                 identifier,
