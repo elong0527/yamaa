@@ -1,6 +1,7 @@
 """Independent metadata, normal binding and editable-provider boundary contracts."""
 
 import sys
+import tomllib
 from importlib import metadata
 from pathlib import Path
 
@@ -211,11 +212,16 @@ def test_marker_and_identity_quotas_reject_before_installed_version_reads():
 
 def test_existing_repository_uv_lock_identifies_yamaa_and_a_called_distribution():
     raw = (Path(__file__).resolve().parents[2] / "uv.lock").read_bytes()
+    versions = {
+        record["name"]: record["version"]
+        for record in tomllib.loads(raw.decode("utf-8"))["package"]
+        if record["name"] in {"yamaa", "packaging"}
+    }
     trace = []
     result = verify(
         raw,
         ["packaging.version.Version"],
-        {"yamaa": "0.2.0", "packaging": "26.3"},
+        versions,
         {"packaging": ["packaging"]},
         trace,
     )
@@ -319,6 +325,59 @@ def test_bound_methods_and_callable_objects_inspect_actual_bound_formals(
     for target in [bound.method, bound]:
         installed_callable.target = target
         assert m.resolve_callable("yamaa_locked_test_module.target", ["x"]) is target
+
+
+def test_opaque_cached_callable_is_a_binding_failure_without_running_target(
+    installed_callable,
+):
+    from functools import cache
+
+    observed = []
+
+    @cache
+    def target(x):
+        observed.append(x)
+        return x
+
+    installed_callable.target = target
+    with pytest.raises(m.InvalidBinding) as caught:
+        m.resolve_callable("yamaa_locked_test_module.target", ["x"])
+    assert caught.value.call == "yamaa_locked_test_module.target"
+    assert isinstance(caught.value.__cause__, (ValueError, TypeError))
+    assert observed == []
+
+
+@pytest.mark.parametrize("original", [ValueError("opaque"), TypeError("invalid")])
+def test_unavailable_signature_retains_the_original_binding_failure_cause(
+    installed_callable, monkeypatch, original
+):
+    installed_callable.target = lambda x: x
+
+    def fail(_):
+        raise original
+
+    monkeypatch.setattr(m, "_concrete_signature", fail)
+    with pytest.raises(m.InvalidBinding) as caught:
+        m.resolve_callable("yamaa_locked_test_module.target", ["x"])
+    assert caught.value.__cause__ is original
+
+
+@pytest.mark.parametrize(
+    "original",
+    [RuntimeError("original introspection failure"), KeyboardInterrupt("stop")],
+)
+def test_other_introspection_errors_and_interrupts_retain_identity(
+    installed_callable, monkeypatch, original
+):
+    installed_callable.target = lambda x: x
+
+    def fail(_):
+        raise original
+
+    monkeypatch.setattr(m, "_concrete_signature", fail)
+    with pytest.raises(type(original)) as caught:
+        m.resolve_callable("yamaa_locked_test_module.target", ["x"])
+    assert caught.value is original
 
 
 @pytest.mark.parametrize(

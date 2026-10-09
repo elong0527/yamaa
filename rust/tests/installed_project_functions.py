@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import unittest
 from contextlib import ExitStack
+from importlib import metadata
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -427,7 +428,11 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
     def test_actual_yamaa_versions_repeat_without_importing_called_code(self):
         from yamaa import _locked_functions as host
 
-        raw = b'version = 1\n[[package]]\nname = "yamaa"\nversion = "0.2.0"\n'
+        installed_version = metadata.version("yamaa")
+        raw = (
+            'version = 1\n[[package]]\nname = "yamaa"\n'
+            f'version = "{installed_version}"\n'
+        ).encode()
         with patch.object(
             host.importlib,
             "import_module",
@@ -437,10 +442,17 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                 self.assertEqual(
                     host.verify_versions(raw, ["yamaa._native.engine_info"]), ()
                 )
-            wrong = raw.replace(b'"0.2.0"', b'"9.0"')
+            wrong = raw.replace(
+                f'version = "{installed_version}"'.encode(),
+                b'version = "999999.0"',
+            )
             self.assertEqual(
                 host.verify_versions(wrong, ["yamaa._native.engine_info"]),
-                (host.Finding("yamaa", "version_mismatch", ("9.0",), "0.2.0"),),
+                (
+                    host.Finding(
+                        "yamaa", "version_mismatch", ("999999.0",), installed_version
+                    ),
+                ),
             )
         bound = host.resolve_callable("yamaa._native.engine_info", [])
         self.assertIs(bound, yamaa_native.engine_info)
@@ -504,9 +516,10 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                 installed.returncode, 0, installed.stdout + installed.stderr
             )
             raw = (
-                b'version = 1\n[[package]]\nname = "yamaa"\nversion = "0.2.0"\n'
-                b'[[package]]\nname = "yamaa-lock-witness-programs"\nversion = "1.2"\n'
-            )
+                'version = 1\n[[package]]\nname = "yamaa"\n'
+                f'version = "{metadata.version("yamaa")}"\n'
+                '[[package]]\nname = "yamaa-lock-witness-programs"\nversion = "1.2"\n'
+            ).encode()
             self.assertNotIn(module, sys.modules)
             with patch.object(sys, "path", [str(target), *sys.path]):
                 try:

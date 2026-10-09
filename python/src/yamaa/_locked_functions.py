@@ -333,7 +333,8 @@ def resolve_callable(call: str, parameters: Sequence[str]):
 
     This host capability neither runs test cases nor supplies defaults. The engine
     owns both, and will call this already-bound target with exact named scalars.
-    Ordinary import/introspection exceptions and interrupts keep their identity.
+    Import exceptions and interrupts keep their identity. Unavailable concrete
+    signatures are binding failures, with the original exception as their cause.
     """
     if len(call.encode("utf-8")) > _MAX_IDENTITY_BYTES or len(parameters) > _MAX_CALLS:
         raise InvalidBinding(call, "callable metadata limit")
@@ -343,7 +344,12 @@ def resolve_callable(call: str, parameters: Sequence[str]):
     target = getattr(importlib.import_module(module), name)
     if not callable(target):
         raise InvalidBinding(call, "installed member is not callable")
-    signature = _concrete_signature(target)
+    try:
+        signature = _concrete_signature(target)
+    except (ValueError, TypeError) as error:
+        raise InvalidBinding(
+            call, "installed callable has no concrete call signature"
+        ) from error
     allowed = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
     actual = {p.name for p in signature.parameters.values() if p.kind in allowed}
     unsupported = tuple(
