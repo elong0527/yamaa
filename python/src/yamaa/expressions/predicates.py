@@ -719,7 +719,7 @@ def _evaluate(node: Mapping[str, Any], resolver: Resolver) -> PredicateResult:
             truth = _not(truth)
         return PredicateValue(value=truth)
     if kind == "call":
-        # REQ-1241: the one Boolean function call the grammar admits.
+        # REQ-1244: the one Boolean function call the grammar admits.
         source = _operand(node["source"], resolver)
         if isinstance(source, ConditionResult):
             return source
