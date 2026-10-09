@@ -126,6 +126,9 @@ examples:
   adam-adqs-missed-visit-locf:
     status: executable
     runtimes: ['python']
+  adam-adqs-multi-scale-scoring:
+    status: executable
+    runtimes: ['python']
   adam-adqs-subscale-score:
     status: executable
     runtimes: ['python']
