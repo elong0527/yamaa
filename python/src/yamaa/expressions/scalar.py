@@ -250,7 +250,9 @@ def _selected(
 
 def _flag(payload: object, resolver: Resolver) -> EvaluationResult:
     def handler_value_or_missing(value: object) -> EvaluationResult:
-        return ValueResult(value=MISSING if value is None else value)
+        # R008: branch values are literals, so a dict or list becomes a
+        # structured validation condition instead of a raw pydantic crash.
+        return normalize_runtime_value(value)
 
     # REQ-1256: the one-predicate flag shorthand. A bare predicate string is
     # the condition with the default values; a mapping names condition and
