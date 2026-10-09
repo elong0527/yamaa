@@ -114,7 +114,7 @@ as `core`, `codelist`, `length`, or `comment`.
 | `Variable Label` | `column.label` | |
 | `Type` (Char / Num) | `column.type` | Closed set of five: `str` `int` `float` `date` `datetime` |
 | `Length` | a `max_length` verification plus `submission.length` | It is a constraint, so it becomes an executed one. `submission.length` is what define.xml shows; on a `str` column with a `max_length` verification it is derived from `max` and need not be declared separately |
-| Significant digits / display format | *project setting* | Decimal places belong to the project, not the spec (Types and conversion) |
+| Significant digits / display format | `submission.significant_digits` / `submission.display_format` | Presentation metadata, not the stored value; emitted as SignificantDigits / def:DisplayFormat in define.xml (Types and conversion) |
 | `Controlled Terms or Format` | `mapping` / `intermediates` / `allowed_values`, plus `submission.codelist` | Translation and enforcement separate here too; `submission.codelist` names a codelist the study document declares |
 | `Origin` = Assigned | `literal: DM` | |
 | `Origin` = Collected (CRF / eDT) | `odm: ODM.IT.DM.AGE` | Reads the one record of the item among the ODM records the row was built from; `event`, `form`, `item_group`, and `filter` narrow it (Name binding) |
@@ -306,9 +306,11 @@ What changed:
 - `NULLIF(HEIGHTCM, 0)` writes the "what if height is zero" case -- almost never
   stated in an Excel spec -- **into the formula**. Division by zero is a
   failure, so it has to be stated.
-- **"rounded to 1 decimal" has no translation, on purpose.** A derivation does
-  not round; decimal places are a project rendering setting. Rounding belongs
-  to the TFL, not to the ADaM value.
+- **"rounded to 1 decimal" translates to `round_half_away_from_zero`** (with
+  `digits: 1`) -- the one rounding the language provides (REQ-1172). Use it
+  when the rounded value is what you store and validate; when only the
+  *display* is rounded (a TFL or listing), leave the stored value unrounded
+  and declare `submission.display_format` instead.
 - The `assert` verification, limited by `when`, turns "BMI is empty exactly
   when height or weight is unusable" -- normally a note to the reviewer --
   into an executable assertion.
