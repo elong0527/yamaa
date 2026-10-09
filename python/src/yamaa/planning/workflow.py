@@ -35,6 +35,20 @@ if TYPE_CHECKING:
     from yamaa.runtime.executor import ExecutionHooks, ExecutionResult
 
 
+def __getattr__(name: str) -> object:
+    # Lazy re-export: the native conformance suite patches
+    # yamaa.planning.workflow.execute_with_source_provider, so the attribute
+    # must keep resolving after both modules finish initializing. Importing
+    # eagerly at module level would re-enter the partially initialized
+    # yamaa.runtime.executor (the circular import this module was split to
+    # avoid); deferring to first attribute access keeps that cycle broken.
+    if name == "execute_with_source_provider":
+        from yamaa.runtime.executor import execute_with_source_provider
+
+        return execute_with_source_provider
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 class _FrozenModel(BaseModel):
     model_config = ConfigDict(
         strict=True,
