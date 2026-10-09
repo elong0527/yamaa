@@ -44,6 +44,9 @@ pub mod regex;
 pub mod reduction;
 pub mod table;
 
+pub mod project_call_binding;
+pub mod project_call_document;
+pub mod project_calls;
 pub mod project_environment;
 
 pub mod project_environment_document;

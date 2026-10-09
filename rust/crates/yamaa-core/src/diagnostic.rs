@@ -48,6 +48,8 @@ macro_rules! conditions {
 }
 
 conditions! {
+    UnknownProjectFunction => ("validation", "unknown_project_function", Some("REQ-0698")),
+    InvalidFunctionArgument => ("validation", "invalid_function_argument", Some("REQ-0700")),
     ApplicationUnsupported => ("planning", "unsupported_operation", None),
     ApplicationRejected => ("engine", "engine_rejected", None),
     NumericUnknownField => ("validation", "unknown_field", Some("REQ-0443")),

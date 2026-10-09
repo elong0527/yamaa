@@ -40,6 +40,9 @@ mod verifications;
 #[path = "specification_windows.rs"]
 mod windows;
 pub use windows::WindowFinding;
+#[path = "specification_functions.rs"]
+mod functions;
+pub use functions::{Cause as FunctionCause, FunctionFinding};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UnsupportedFeature {
@@ -84,6 +87,7 @@ impl Default for CompilationLimits {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PreflightFinding {
+    ProjectFunction(FunctionFinding),
     UndeclaredRowColumn {
         index: usize,
         column: String,
@@ -146,6 +150,7 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    ProjectFunction(FunctionFinding),
     Source(SourceFinding),
     Window(WindowFinding),
     Lookup(LookupFinding),
@@ -235,6 +240,7 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    ProjectFunction(usize),
     Literal(crate::value::Value),
     Window(alloc::boxed::Box<windows::Declaration>),
     Source(alloc::boxed::Box<source_expressions::Declaration>),
@@ -255,6 +261,7 @@ struct Declaration {
 /// Private admitted representation: no caller-provided typed plan or binding indices.
 #[derive(Debug)]
 pub struct PreparedSpecification {
+    project_calls: Option<crate::project_calls::ProjectCalls>,
     sources: Vec<SourceDeclaration>,
     driver: usize,
     intermediates: intermediates::Declarations,
@@ -606,6 +613,21 @@ impl PreparedSpecification {
         spec: &SpecificationDocument,
         limits: CompilationLimits,
     ) -> Result<Self, PrepareError> {
+        Self::prepare_implementation(spec, limits, None)
+    }
+    /// Prepare calls against statically admitted environment definitions. No
+    /// project imports, lock verification, test invocation or study reads occur.
+    pub fn prepare_with_project(
+        spec: &SpecificationDocument,
+        functions: &[crate::project_function::Function],
+    ) -> Result<Self, PrepareError> {
+        Self::prepare_implementation(spec, CompilationLimits::default(), Some(functions))
+    }
+    fn prepare_implementation(
+        spec: &SpecificationDocument,
+        limits: CompilationLimits,
+        functions: Option<&[crate::project_function::Function]>,
+    ) -> Result<Self, PrepareError> {
         let d = spec.document();
         let root = d.root();
         for (field_name, limit) in [("columns", limits.columns), ("keys", limits.keys)] {
@@ -867,6 +889,9 @@ impl PreparedSpecification {
             .map(|&id| text(d, id).map(String::from))
             .collect::<Result<Vec<_>, _>>()?;
         let columns = sequence(d, field(d, root, "columns")?)?;
+        let project = functions
+            .map(|functions| functions::prepare(d, columns, functions))
+            .transpose()?;
         let output = TableSchema::new(
             columns
                 .iter()
@@ -918,6 +943,7 @@ impl PreparedSpecification {
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             return Ok(Self {
+                project_calls: project.map(|p| p.calls),
                 sources,
                 driver: driver_index,
                 intermediates,
@@ -951,6 +977,12 @@ impl PreparedSpecification {
             let op = text(d, op)?;
             let path = format!("{prefix}.derivation.{op}");
             let operation = match op {
+                "function" if project.is_some() => Some(Operation::ProjectFunction(
+                    *project
+                        .as_ref()
+                        .and_then(|p| p.nodes.get(&payload))
+                        .ok_or(PrepareError::Internal)?,
+                )),
                 "literal" => Some(Operation::Literal(literal(d, payload, &path)?)),
                 "source" => {
                     let source = source_expressions::Declaration::prepare(
@@ -1063,6 +1095,7 @@ impl PreparedSpecification {
             return Err(PrepareError::Unsupported(extra));
         }
         Ok(Self {
+            project_calls: project.map(|p| p.calls),
             sources,
             driver: driver_index,
             intermediates,
@@ -1206,6 +1239,15 @@ impl PreparedSpecification {
         findings
     }
 
+    /// Selected environment indices are in declaration order, matching activation slots.
+    pub fn called_functions(&self) -> &[usize] {
+        self.project_calls
+            .as_ref()
+            .map_or(&[], |calls| calls.selected())
+    }
+    pub fn project_calls(&self) -> Option<&crate::project_calls::ProjectCalls> {
+        self.project_calls.as_ref()
+    }
     /// Bind only immutable source metadata. No cell reads or expression evaluation.
     pub fn bind(&self, source: &TableSchema) -> Result<DatasetPlan, BindError> {
         self.bind_sources(&[source])
@@ -1305,6 +1347,44 @@ impl PreparedSpecification {
                 Ok(binding)
             };
             let expression = match &declaration.operation {
+                Operation::ProjectFunction(call) => {
+                    let calls = self.project_calls.as_ref().ok_or(BindError::Internal)?;
+                    let record = self.keys.contains(&column);
+                    let context = crate::project_call_binding::Context {
+                        source_dataset: 0,
+                        source_mode: if record {
+                            crate::project_call_binding::SourceMode::Record
+                        } else {
+                            crate::project_call_binding::SourceMode::Collect
+                        },
+                        available_outputs: None,
+                        scope: crate::reference_scope::Scope {
+                            drivers: &[self.source().name.as_str()],
+                            current_driver: true,
+                            reach: if record {
+                                crate::reference_scope::Reach::Record
+                            } else {
+                                crate::reference_scope::Reach::Relation
+                            },
+                            joined: false,
+                            phase: crate::reference_scope::Phase::Column { groups: &[] },
+                        },
+                    };
+                    match crate::project_call_binding::bind(calls, *call, &catalog, context) {
+                        Ok(bound) => {
+                            edges.extend(bound.dependencies);
+                            Some(Expression::ProjectFunction(bound.function))
+                        }
+                        Err(crate::project_call_binding::Error::Findings(errors)) => {
+                            findings.extend(functions::bind_findings(calls, *call, errors)?);
+                            None
+                        }
+                        Err(crate::project_call_binding::Error::Reference(error)) => {
+                            return Err(BindError::Catalog(error))
+                        }
+                        Err(_) => return Err(BindError::Internal),
+                    }
+                }
                 Operation::Literal(value) => Some(Expression::Literal(value.clone())),
                 Operation::Window(window) => window
                     .bind(&catalog, &mut edges, &mut findings)?
