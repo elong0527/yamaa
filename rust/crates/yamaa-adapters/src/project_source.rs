@@ -112,8 +112,48 @@ pub struct PreparedEnvironment {
     pub lock: Option<LockCapture>,
     pub environment: Environment,
 }
+/// Preserve captured provenance while moving definitions into immutable shared
+/// execution metadata. Construction performs no recapture or activation.
+#[derive(Debug)]
+pub struct OwnedEnvironment {
+    origins: SourceOrigins,
+    root: CapturedDocument,
+    captures: Vec<DocumentCapture>,
+    lock: Option<LockCapture>,
+    environment: yamaa_core::project_environment::ExecutionEnvironment,
+}
+impl PreparedEnvironment {
+    pub fn into_owned(self) -> OwnedEnvironment {
+        OwnedEnvironment {
+            origins: self.origins,
+            root: self.root,
+            captures: self.captures,
+            lock: self.lock,
+            environment: self.environment.into_execution(),
+        }
+    }
+}
+impl OwnedEnvironment {
+    pub fn origins(&self) -> &SourceOrigins {
+        &self.origins
+    }
+    pub fn root(&self) -> &CapturedDocument {
+        &self.root
+    }
+    pub fn captures(&self) -> &[DocumentCapture] {
+        &self.captures
+    }
+    pub fn lock(&self) -> Option<&LockCapture> {
+        self.lock.as_ref()
+    }
+    pub fn environment(&self) -> &yamaa_core::project_environment::ExecutionEnvironment {
+        &self.environment
+    }
+}
 #[derive(Debug)]
 pub struct RejectedEnvironment<E> {
+    pub host: Language,
+    pub draft: Box<Draft>,
     pub origins: SourceOrigins,
     pub root: CapturedDocument,
     pub captures: Vec<DocumentCapture>,
@@ -424,7 +464,7 @@ pub fn prepare<P: CapturePort>(
             .map(|(kind, _)| kind)
             .collect(),
     };
-    let admission = Environment::admit_with_limits(host, draft, limits.semantic);
+    let admission = Environment::admit_retained_with_limits(host, draft, limits.semantic);
     match admission {
         Ok(environment) if failures.is_empty() => Ok(PreparedEnvironment {
             origins,
@@ -434,7 +474,11 @@ pub fn prepare<P: CapturePort>(
             environment,
         }),
         result => {
-            let admission = match result.err() {
+            let (draft, admission) = match result {
+                Ok(environment) => (Box::new(environment.into_draft()), None),
+                Err(rejected) => (rejected.draft, Some(rejected.error)),
+            };
+            let admission = match admission {
                 Some(AdmissionError::Findings(mut findings)) => {
                     // A failed capture does not make an authored reference absent.
                     if lock_was_written {
@@ -449,6 +493,8 @@ pub fn prepare<P: CapturePort>(
                 error => error,
             };
             Err(Failure::Rejected(Box::new(RejectedEnvironment {
+                host,
+                draft,
                 origins,
                 root,
                 captures,

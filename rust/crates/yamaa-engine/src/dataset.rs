@@ -11,6 +11,9 @@ pub use yamaa_core::dataset::*;
 #[path = "dataset_functions.rs"]
 mod functions;
 pub use functions::FunctionBindings;
+pub(crate) fn unavailable_functions<E>() -> impl FunctionBindings<Error = E> {
+    functions::UnavailableFunctions(core::marker::PhantomData)
+}
 #[path = "dataset_keys.rs"]
 mod key_grain;
 #[path = "dataset_lookup.rs"]

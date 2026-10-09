@@ -218,6 +218,32 @@ pub fn activate_with_limits<P: ActivationPort>(
     port: &mut P,
     limits: Limits,
 ) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
+    if functions.len() > limits.functions {
+        return Err(Failure::Limit(Resource::Functions));
+    }
+    let selected = functions.iter().collect::<Vec<_>>();
+    activate_references_with_limits(language, lock, &selected, port, limits)
+}
+
+/// Activate compiler-selected definitions borrowed from the one owned environment.
+/// Selection order defines stable dataset slots; no test collection is recopied.
+pub fn activate_references<P: ActivationPort>(
+    language: Language,
+    lock: &LockReference,
+    functions: &[&Function],
+    port: &mut P,
+) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
+    activate_references_with_limits(language, lock, functions, port, Limits::default())
+}
+
+/// Apply the same cumulative activation policy to borrowed selected definitions.
+pub fn activate_references_with_limits<P: ActivationPort>(
+    language: Language,
+    lock: &LockReference,
+    functions: &[&Function],
+    port: &mut P,
+    limits: Limits,
+) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
     if functions.is_empty() {
         return Ok(Vec::new());
     }

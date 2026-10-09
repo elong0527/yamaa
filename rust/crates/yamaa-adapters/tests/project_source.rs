@@ -9,6 +9,7 @@ use yamaa_core::{
     project_environment::{Finding, LockKind},
     project_function::Language,
     project_limits::AdmissionError,
+    value::Value,
 };
 fn source(identity: &str, bytes: &str) -> Source {
     Source {
@@ -145,6 +146,42 @@ fn held_dependency_capture_is_ordered_typed_and_repeated_without_study_or_code_p
             b"version = 1\n"
         );
         assert!(prepared.environment.draft().has_study);
+        let root_bytes = prepared.root.source().bytes.as_ptr();
+        let lock_bytes = prepared.lock.as_ref().unwrap().source.bytes.as_ptr();
+        let cases = prepared.environment.draft().functions.as_ref().unwrap()[0]
+            .tests
+            .as_ptr();
+        let items = prepared.environment.draft().codelists[0].codelists[0]
+            .items
+            .as_ref()
+            .unwrap()
+            .as_ptr();
+        let captured = port.trace.len();
+        let owned = prepared.into_owned();
+        assert_eq!(owned.root().source().bytes.as_ptr(), root_bytes);
+        assert_eq!(owned.lock().unwrap().source.bytes.as_ptr(), lock_bytes);
+        assert_eq!(
+            owned.environment().functions()[0]
+                .definition()
+                .tests
+                .as_ptr(),
+            cases
+        );
+        assert_eq!(
+            owned.environment().catalogue().sources()[0].codelists[0]
+                .items
+                .as_ref()
+                .unwrap()
+                .as_ptr(),
+            items
+        );
+        assert_eq!(owned.origins().functions, ["first", "inline"]);
+        assert_eq!(owned.origins().codelists, [0]);
+        assert_eq!(owned.captures().len(), 2);
+        assert_eq!(owned.environment().host(), Language::Python);
+        assert_eq!(owned.environment().language(), Some(Language::Python));
+        assert!(owned.environment().has_study());
+        assert_eq!(port.trace.len(), captured);
     }
     let one = [
         (Kind::Lock, "project.lock"),
@@ -228,6 +265,11 @@ fn every_capture_failure_retains_original_opaque_payload_and_declaration_context
     }
     assert_eq!(rejected.root.source().identity, "study/environment.yaml");
     assert!(rejected.captures.is_empty());
+    assert_eq!(rejected.host, Language::Python);
+    assert_eq!(rejected.draft.language, Some(Language::Python));
+    assert!(rejected.draft.lock.is_none());
+    assert_eq!(rejected.draft.functions.as_deref(), Some([].as_slice()));
+    assert!(rejected.draft.codelists.is_empty());
 }
 #[test]
 fn source_quotas_precede_ports_and_byte_exhaustion_precedes_decoding() {
@@ -303,6 +345,29 @@ fn lock_kind_is_captured_syntax_metadata_and_mismatch_does_not_import_project_co
         }]))
     );
     assert!(rejected.sources.is_empty());
+    assert_eq!(rejected.host, Language::Python);
+    assert_eq!(rejected.draft.language, Some(Language::Python));
+    assert_eq!(
+        rejected.draft.lock.as_ref().unwrap().written,
+        "project.lock"
+    );
+    assert_eq!(rejected.draft.lock.as_ref().unwrap().kind, LockKind::Renv);
+    let functions = rejected.draft.functions.as_ref().unwrap();
+    assert_eq!(
+        functions
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect::<Vec<_>>(),
+        ["first", "inline"]
+    );
+    assert_eq!(functions[0].tests[0].result, Value::Int(7));
+    assert_eq!(functions[1].tests[0].result, Value::Int(7));
+    assert_eq!(rejected.draft.codelists[0].codelists[0].id, "SEX");
+    assert!(rejected.draft.has_study);
+    assert_eq!(
+        rejected.draft.submissions,
+        [yamaa_core::project_environment::Submission::Adam]
+    );
 }
 
 #[test]

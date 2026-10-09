@@ -4,7 +4,7 @@ use crate::{
     project_function::{self, Definition, Language},
     project_terminology::{self, Source},
 };
-use alloc::{collections::BTreeSet, string::String, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeSet, string::String, vec::Vec};
 
 /// Format is obtained from captured lock syntax, never inferred from a basename.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,10 +58,58 @@ pub enum Finding {
     MissingStudy,
 }
 
+/// Retain the original typed input for diagnostic projection after rejection.
+/// The boxed draft transfers ownership without copying functions or terminology.
+#[derive(Debug)]
+pub struct RejectedDraft {
+    pub draft: Box<Draft>,
+    pub error: AdmissionError<Finding>,
+}
+
 /// The immutable snapshot remains a static result; it grants no activation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Environment {
+    host: Language,
     draft: Draft,
+}
+
+/// One immutable execution model moved from static admission. Callable tests and
+/// terminology values remain owned once, independently of the number of calls.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExecutionEnvironment {
+    host: Language,
+    language: Option<Language>,
+    lock: Option<LockReference>,
+    functions: Option<Vec<project_function::Function>>,
+    catalogue: project_terminology::Catalogue,
+    has_study: bool,
+    submissions: Vec<Submission>,
+}
+impl ExecutionEnvironment {
+    pub fn host(&self) -> Language {
+        self.host
+    }
+    pub fn language(&self) -> Option<Language> {
+        self.language
+    }
+    pub fn lock(&self) -> Option<&LockReference> {
+        self.lock.as_ref()
+    }
+    pub fn functions_present(&self) -> bool {
+        self.functions.is_some()
+    }
+    pub fn functions(&self) -> &[project_function::Function] {
+        self.functions.as_deref().unwrap_or(&[])
+    }
+    pub fn catalogue(&self) -> &project_terminology::Catalogue {
+        &self.catalogue
+    }
+    pub fn has_study(&self) -> bool {
+        self.has_study
+    }
+    pub fn submissions(&self) -> &[Submission] {
+        &self.submissions
+    }
 }
 impl Environment {
     pub fn admit(host: Language, draft: Draft) -> Result<Self, AdmissionError<Finding>> {
@@ -72,26 +120,76 @@ impl Environment {
         draft: Draft,
         limits: Limits,
     ) -> Result<Self, AdmissionError<Finding>> {
-        let mut budget = Budget::new(limits);
-        budget.findings(6).map_err(AdmissionError::Limit)?;
-        if let Some(lock) = &draft.lock {
-            budget.text(&lock.written).map_err(AdmissionError::Limit)?;
+        Self::admit_retained_with_limits(host, draft, limits).map_err(|rejected| rejected.error)
+    }
+    /// Admit once while retaining the original typed ownership on either outcome.
+    pub fn admit_retained_with_limits(
+        host: Language,
+        draft: Draft,
+        limits: Limits,
+    ) -> Result<Self, RejectedDraft> {
+        let admission = (|| {
+            let mut budget = Budget::new(limits);
+            budget.findings(6).map_err(AdmissionError::Limit)?;
+            if let Some(lock) = &draft.lock {
+                budget.text(&lock.written).map_err(AdmissionError::Limit)?;
+            }
+            if let Some(functions) = &draft.functions {
+                budget.functions(functions).map_err(AdmissionError::Limit)?;
+            }
+            budget
+                .sources(&draft.codelists)
+                .map_err(AdmissionError::Limit)?;
+            let findings = validate(host, &draft);
+            if findings.is_empty() {
+                Ok(())
+            } else {
+                Err(AdmissionError::Findings(findings))
+            }
+        })();
+        match admission {
+            Ok(()) => Ok(Self { host, draft }),
+            Err(error) => Err(RejectedDraft {
+                draft: Box::new(draft),
+                error,
+            }),
         }
-        if let Some(functions) = &draft.functions {
-            budget.functions(functions).map_err(AdmissionError::Limit)?;
-        }
-        budget
-            .sources(&draft.codelists)
-            .map_err(AdmissionError::Limit)?;
-        let findings = validate(host, &draft);
-        if findings.is_empty() {
-            Ok(Self { draft })
-        } else {
-            Err(AdmissionError::Findings(findings))
-        }
+    }
+    /// Keep admitted typed data when another source prevents aggregate success.
+    pub fn into_draft(self) -> Draft {
+        self.draft
     }
     pub fn draft(&self) -> &Draft {
         &self.draft
+    }
+    /// Static admission is the only constructor of this retained proof. Moving
+    /// its definitions preserves the checked aggregate policy and exact bytes;
+    /// this conversion grants neither code execution nor study authority.
+    pub fn into_execution(self) -> ExecutionEnvironment {
+        let Draft {
+            language,
+            lock,
+            functions,
+            codelists,
+            has_study,
+            submissions,
+        } = self.draft;
+        ExecutionEnvironment {
+            host: self.host,
+            language,
+            lock,
+            functions: functions.map(|definitions| {
+                definitions
+                    .into_iter()
+                    .map(|definition| {
+                        project_function::Function::from_admitted(self.host, definition)
+                    })
+                    .collect()
+            }),
+            catalogue: project_terminology::Catalogue::from_admitted(codelists),
+            has_study,
+            submissions,
+        }
     }
 }
 

@@ -104,6 +104,15 @@ pub struct Function {
     definition: Definition,
 }
 impl Function {
+    /// The environment has already admitted the complete definition collection
+    /// under its cumulative policy. Transfer its definitions without a second
+    /// independently budgeted admission or copying their test cases.
+    pub(crate) fn from_admitted(language: Language, definition: Definition) -> Self {
+        Self {
+            language,
+            definition,
+        }
+    }
     pub fn language(&self) -> Language {
         self.language
     }
