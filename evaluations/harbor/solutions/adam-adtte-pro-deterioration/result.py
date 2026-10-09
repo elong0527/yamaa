@@ -40,7 +40,7 @@ ds = pl.read_csv("/app/input/ds.csv", infer_schema=False, null_values="").with_c
 # assessment deteriorates when it is dated after the baseline and its score
 # is at least 10 points below the baseline score.
 qs_flagged = (
-    qs.sort(["STUDYID", "USUBJID", "ADT", "QSSEQ"])
+    qs.sort(["STUDYID", "USUBJID", "ADT", "QSSEQ"], nulls_last=True)
     .with_columns(
         BASEDT=pl.col("ADT").first().over(["STUDYID", "USUBJID"]),
         BASEVAL=pl.col("AVAL").first().over(["STUDYID", "USUBJID"]),

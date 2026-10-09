@@ -34,9 +34,9 @@ discontinuation, or withdrawal of consent (`DSDECOD`, `DSDTC`).
   and `1` otherwise.
 - `EVNTDESC` is `PRO DETERIORATION` for a deterioration event, `DEATH`
   for a death event, and `CENSORED` otherwise.
-- `CNSDTDSC` is blank for an event and holds the censoring reason
+- `CNSDTDSC` is blank for an event, holds the censoring reason
   (`DISEASE PROGRESSION`, `STUDY DISCONTINUATION`, or `WITHDRAWAL OF
-  CONSENT`) for a censored record.
+  CONSENT`) when one is available, and is `STUDY COMPLETION` otherwise.
 - `SRCDOM` is `QS` for a deterioration or a censored record with a
   supporting assessment, and `ADSL` for a death or a record censored at
   randomization.

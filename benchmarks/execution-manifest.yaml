@@ -222,6 +222,9 @@ examples:
   adam-adtte-pfs:
     status: executable
     runtimes: ['python']
+  adam-adtte-pro-deterioration:
+    status: executable
+    runtimes: ['python']
   adam-advs-windows:
     status: executable
     runtimes: ['python']
