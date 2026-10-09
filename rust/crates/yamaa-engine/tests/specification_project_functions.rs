@@ -366,11 +366,16 @@ mod project_usecase {
             if self.mode == 4 {
                 return Err(HostError::Raised(Payload(Rc::clone(&self.payload))));
             }
-            Ok(Value::Int(if self.mode == 3 && *value == 7 {
-                8
-            } else {
-                *value
-            }))
+            if (self.mode == 6 && *value == i64::MIN) || (self.mode == 8 && *value == 1) {
+                return Err(HostError::Raised(Payload(Rc::clone(&self.payload))));
+            }
+            Ok(Value::Int(
+                if (self.mode == 3 && *value == 7) || (self.mode == 5 && *value == i64::MIN) {
+                    8
+                } else {
+                    *value
+                },
+            ))
         }
     }
     fn environment(functions: Option<Vec<Definition>>) -> ExecutionEnvironment {
@@ -572,6 +577,160 @@ mod project_usecase {
                 "call:live"
             ]
             .contains(stage)));
+        }
+    }
+    #[test]
+    fn owned_observed_build_retains_activation_after_execution_failure_and_resets_on_retry() {
+        use yamaa_engine::project_activation::{LockObservation, Observations, TestOutcome};
+        let checked =
+            project_domain::check_owned(&model("id"), environment(Some(definitions()))).unwrap();
+        let trace = Rc::new(RefCell::new(vec![]));
+        let cells = Rc::new(Cell::new(0));
+        let payload = Rc::new(());
+        let mut activation = Activation {
+            trace: Rc::clone(&trace),
+            mode: 0,
+            calls: vec![],
+            payload: Rc::clone(&payload),
+        };
+        let (mut port, mut decoder) = ports(&trace, &cells);
+        let mut attempt = CapturedAttempt::new(checked.compiled().source());
+        let mut observations = Observations::default();
+        for mode in [0, 8] {
+            activation.mode = mode;
+            checked
+                .build_observed_into(
+                    &mut activation,
+                    &mut port,
+                    &mut decoder,
+                    limits(),
+                    &mut attempt,
+                    &mut observations,
+                )
+                .unwrap();
+            assert_eq!(observations.lock, LockObservation::Verified);
+            assert_eq!(observations.bindings.len(), 1);
+            assert_eq!(
+                observations
+                    .tests
+                    .iter()
+                    .map(|t| (t.function, t.case, t.outcome, t.invoked, t.actual.as_ref()))
+                    .collect::<Vec<_>>(),
+                [
+                    (0, 0, TestOutcome::Passed, true, Some(&Value::Int(7))),
+                    (0, 1, TestOutcome::Passed, true, Some(&Value::Int(i64::MIN))),
+                    (0, 2, TestOutcome::Passed, false, Some(&Value::Missing))
+                ]
+            );
+            let execution = attempt.result.as_ref().unwrap();
+            if mode == 0 {
+                assert_eq!(
+                    execution.result.as_ref().unwrap().dataset.rows(),
+                    &[vec![Value::Int(1), Value::Int(1)]]
+                );
+            } else {
+                let ExecutionError::ProjectFunction { error, .. } =
+                    execution.result.as_ref().unwrap_err().as_ref()
+                else {
+                    panic!("retained invocation failure");
+                };
+                let FailureKind::CallFailed(Payload(original)) = &error.kind else {
+                    panic!("original host payload");
+                };
+                assert!(Rc::ptr_eq(original, &payload));
+                assert_eq!(attempt.sources.len(), 1);
+                assert_eq!(
+                    attempt.sources[0].snapshot.as_deref(),
+                    Some(b"held input".as_slice())
+                );
+            }
+        }
+        assert_eq!(activation.calls, [7, i64::MIN, 1, 7, i64::MIN, 1]);
+        assert_eq!(port.reads, 1);
+        activation.mode = 1;
+        assert!(matches!(
+            checked.build_observed_into(
+                &mut activation,
+                &mut port,
+                &mut decoder,
+                limits(),
+                &mut attempt,
+                &mut observations
+            ),
+            Err(Failure::Lock(_))
+        ));
+        assert_eq!(
+            observations,
+            Observations {
+                lock: LockObservation::Rejected,
+                ..Observations::default()
+            }
+        );
+        assert!(attempt.sources.is_empty());
+        assert!(matches!(
+            attempt.result,
+            Err(yamaa_engine::specification_run::PortError::Incomplete)
+        ));
+        assert_eq!(port.reads, 1);
+    }
+    #[test]
+    fn borrowed_observed_build_keeps_earlier_passes_after_late_case_or_original_host_failure() {
+        use yamaa_engine::project_activation::{Observations, TestOutcome};
+        let environment = environment(Some(definitions()));
+        let checked = project_domain::check(&model("id"), &environment).unwrap();
+        for mode in [5, 6] {
+            let trace = Rc::new(RefCell::new(vec![]));
+            let cells = Rc::new(Cell::new(0));
+            let payload = Rc::new(());
+            let mut activation = Activation {
+                trace: Rc::clone(&trace),
+                mode,
+                calls: vec![],
+                payload: Rc::clone(&payload),
+            };
+            let (mut port, mut decoder) = ports(&trace, &cells);
+            let mut attempt = CapturedAttempt::new(checked.compiled().source());
+            let mut observations = Observations::default();
+            let Err(Failure::Tests(failures)) = checked.build_observed_into(
+                &mut activation,
+                &mut port,
+                &mut decoder,
+                limits(),
+                &mut attempt,
+                &mut observations,
+            ) else {
+                panic!("late case failure");
+            };
+            assert_eq!(failures.len(), 1);
+            if mode == 6 {
+                let TestFailure::Invocation { case: 1, error, .. } = &failures[0] else {
+                    panic!("original invocation failure");
+                };
+                let FailureKind::CallFailed(Payload(original)) = &error.kind else {
+                    panic!("original host payload");
+                };
+                assert!(Rc::ptr_eq(original, &payload));
+            }
+            assert_eq!(observations.tests[0].outcome, TestOutcome::Passed);
+            assert_eq!(observations.tests[0].actual, Some(Value::Int(7)));
+            assert_eq!(
+                observations.tests[1].outcome,
+                if mode == 5 {
+                    TestOutcome::ResultMismatch
+                } else {
+                    TestOutcome::InvocationFailed
+                }
+            );
+            assert_eq!(observations.tests[2].outcome, TestOutcome::Passed);
+            assert!(!observations.tests[2].invoked);
+            assert_eq!(activation.calls, [7, i64::MIN]);
+            assert_eq!(
+                &*trace.borrow(),
+                &["lock", "bind", "call:case", "call:case"]
+            );
+            assert!(attempt.sources.is_empty());
+            assert_eq!(port.reads, 0);
+            assert_eq!(cells.get(), 0);
         }
     }
     #[test]

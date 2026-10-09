@@ -142,6 +142,54 @@ pub struct CaseObservation {
     pub actual: Value,
     pub invoked: bool,
 }
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LockObservation {
+    #[default]
+    NotRequested,
+    Attempted,
+    Verified,
+    Rejected,
+    Interrupted,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BindingOutcome {
+    Attempted,
+    Bound,
+    Rejected,
+    Interrupted,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BindingObservation {
+    pub function: usize,
+    pub outcome: BindingOutcome,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TestOutcome {
+    Attempted,
+    Passed,
+    ResultMismatch,
+    InvocationFailed,
+    Interrupted,
+}
+#[derive(Debug, PartialEq)]
+pub struct TestObservation {
+    pub function: usize,
+    pub case: usize,
+    pub outcome: TestOutcome,
+    pub invoked: bool,
+    /// A retained-text limit can prevent copying a returned value. The observed
+    /// outcome and invocation remain recorded alongside the terminal limit.
+    pub actual: Option<Value>,
+}
+/// Indices refer to the immutable selected definitions. No host errors are copied
+/// or formatted, and unattempted bindings/cases never receive invented records.
+#[derive(Debug, Default, PartialEq)]
+pub struct Observations {
+    pub lock: LockObservation,
+    pub bindings: Vec<BindingObservation>,
+    pub tests: Vec<TestObservation>,
+}
 #[derive(Debug)]
 pub struct ActivatedFunction<H> {
     pub plan: ProjectInvocationPlan,
@@ -185,11 +233,15 @@ struct BoundPort<'a, P: ActivationPort> {
     port: &'a mut P,
     handle: &'a P::Handle,
     calls: usize,
+    observed_invocation: Option<&'a mut bool>,
 }
 impl<P: ActivationPort> FunctionPort for BoundPort<'_, P> {
     type Error = P::Error;
     fn call(&mut self, arguments: &[Argument<'_>]) -> Result<Value, HostError<Self::Error>> {
         self.calls += 1;
+        if let Some(invoked) = self.observed_invocation.as_deref_mut() {
+            *invoked = true;
+        }
         self.port.invoke(self.handle, arguments)
     }
 }
@@ -243,6 +295,31 @@ pub fn activate_references_with_limits<P: ActivationPort>(
     functions: &[&Function],
     port: &mut P,
     limits: Limits,
+) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
+    activate_observed(language, lock, functions, port, limits, None)
+}
+
+/// Retain the attempted lock, every binding and every attempted case even when
+/// later activation fails. Each call resets prior evidence before any host port.
+pub fn activate_references_observed<P: ActivationPort>(
+    language: Language,
+    lock: &LockReference,
+    functions: &[&Function],
+    port: &mut P,
+    limits: Limits,
+    observations: &mut Observations,
+) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
+    *observations = Observations::default();
+    activate_observed(language, lock, functions, port, limits, Some(observations))
+}
+
+fn activate_observed<P: ActivationPort>(
+    language: Language,
+    lock: &LockReference,
+    functions: &[&Function],
+    port: &mut P,
+    limits: Limits,
+    mut observations: Option<&mut Observations>,
 ) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
     if functions.is_empty() {
         return Ok(Vec::new());
@@ -316,18 +393,55 @@ pub fn activate_references_with_limits<P: ActivationPort>(
         .iter()
         .map(|plan| plan.identity().clone())
         .collect::<Vec<_>>();
-    port.verify_lock(language, lock, &identities)
-        .map_err(Failure::Lock)?;
+    if let Some(observations) = observations.as_deref_mut() {
+        observations.lock = LockObservation::Attempted;
+    }
+    match port.verify_lock(language, lock, &identities) {
+        Ok(()) => {
+            if let Some(observations) = observations.as_deref_mut() {
+                observations.lock = LockObservation::Verified;
+            }
+        }
+        Err(error) => {
+            if let Some(observations) = observations.as_deref_mut() {
+                observations.lock = if port.is_interrupt(&error) {
+                    LockObservation::Interrupted
+                } else {
+                    LockObservation::Rejected
+                };
+            }
+            return Err(Failure::Lock(error));
+        }
+    }
     let mut activated = Vec::with_capacity(plans.len());
     let mut binding_failures = Vec::new();
     for (function, plan) in plans.into_iter().enumerate() {
-        match port.bind(plan.identity(), plan.signature()) {
+        if let Some(observations) = observations.as_deref_mut() {
+            observations.bindings.push(BindingObservation {
+                function,
+                outcome: BindingOutcome::Attempted,
+            });
+        }
+        let bound = port.bind(plan.identity(), plan.signature());
+        let interrupted = matches!(&bound, Err(error) if port.is_interrupt(error));
+        if let Some(observations) = observations.as_deref_mut() {
+            observations
+                .bindings
+                .last_mut()
+                .expect("recorded binding")
+                .outcome = match &bound {
+                Ok(_) => BindingOutcome::Bound,
+                Err(_) if interrupted => BindingOutcome::Interrupted,
+                Err(_) => BindingOutcome::Rejected,
+            };
+        }
+        match bound {
             Ok(handle) => activated.push(ActivatedFunction {
                 plan,
                 handle,
                 cases: Vec::new(),
             }),
-            Err(error) if port.is_interrupt(&error) => {
+            Err(error) if interrupted => {
                 return Err(Failure::InterruptedBinding { function, error })
             }
             Err(error) => binding_failures.push(BindingFailure { function, error }),
@@ -340,21 +454,47 @@ pub fn activate_references_with_limits<P: ActivationPort>(
     for (function, (definition, binding)) in functions.iter().zip(&mut activated).enumerate() {
         for (case, test) in definition.definition().tests.iter().enumerate() {
             let supplied: BTreeMap<_, _> = test.args.iter().cloned().collect();
-            let mut bound = BoundPort {
-                port,
-                handle: &binding.handle,
-                calls: 0,
+            if let Some(observations) = observations.as_deref_mut() {
+                observations.tests.push(TestObservation {
+                    function,
+                    case,
+                    outcome: TestOutcome::Attempted,
+                    invoked: false,
+                    actual: None,
+                });
+            }
+            let (returned, invoked) = {
+                let mut bound = BoundPort {
+                    port,
+                    handle: &binding.handle,
+                    calls: 0,
+                    observed_invocation: observations
+                        .as_deref_mut()
+                        .and_then(|observations| observations.tests.last_mut())
+                        .map(|observation| &mut observation.invoked),
+                };
+                let returned = invoke_project(&binding.plan, &supplied, &mut bound);
+                (returned, bound.calls != 0)
             };
-            let actual = match invoke_project(&binding.plan, &supplied, &mut bound) {
+            let actual = match returned {
                 Ok(actual) => actual,
                 Err(error) => {
                     let interrupted = match &error.kind {
                         FailureKind::CallFailed(payload)
-                        | FailureKind::InvalidHostResult(payload) => {
-                            bound.port.is_interrupt(payload)
-                        }
+                        | FailureKind::InvalidHostResult(payload) => port.is_interrupt(payload),
                         _ => false,
                     };
+                    if let Some(observations) = observations.as_deref_mut() {
+                        observations
+                            .tests
+                            .last_mut()
+                            .expect("recorded case")
+                            .outcome = if interrupted {
+                            TestOutcome::Interrupted
+                        } else {
+                            TestOutcome::InvocationFailed
+                        };
+                    }
                     if interrupted {
                         return Err(Failure::InterruptedInvocation {
                             function,
@@ -382,11 +522,30 @@ pub fn activate_references_with_limits<P: ActivationPort>(
                     continue;
                 }
             };
-            if !results_match(
+            let matched = results_match(
                 &actual,
                 &test.result,
                 definition.definition().comparison_decimals,
-            ) {
+            );
+            if let Some(observations) = observations.as_deref_mut() {
+                observations
+                    .tests
+                    .last_mut()
+                    .expect("recorded case")
+                    .outcome = if matched {
+                    TestOutcome::Passed
+                } else {
+                    TestOutcome::ResultMismatch
+                };
+                retain(
+                    &mut retained_text,
+                    text_size(&actual),
+                    limits.retained_text_bytes,
+                )
+                .map_err(Failure::Limit)?;
+                observations.tests.last_mut().expect("recorded case").actual = Some(actual.clone());
+            }
+            if !matched {
                 retain(
                     &mut retained_text,
                     text_size(&actual),
@@ -422,7 +581,7 @@ pub fn activate_references_with_limits<P: ActivationPort>(
             binding.cases.push(CaseObservation {
                 id: test.id.clone(),
                 actual,
-                invoked: bound.calls != 0,
+                invoked,
             });
         }
     }

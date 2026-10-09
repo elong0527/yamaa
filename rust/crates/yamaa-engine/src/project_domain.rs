@@ -52,13 +52,38 @@ impl CheckedProject<'_> {
         D::Table: TableAccess<Error = A::Error>,
     {
         build(
-            &self.checked,
-            self.environment,
+            (&self.checked, self.environment),
             activation,
             source,
             decoder,
             limits,
             attempt,
+            None,
+        )
+    }
+
+    /// Keep activation evidence outside the host boundary and dataset attempt.
+    /// Successful cases remain observable after a later activation/build failure.
+    pub fn build_observed_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
+        &self,
+        activation: &mut A,
+        source: &mut P,
+        decoder: &mut D,
+        limits: Limits,
+        attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+        observations: &mut project_activation::Observations,
+    ) -> Result<(), Failure<A::Error>>
+    where
+        D::Table: TableAccess<Error = A::Error>,
+    {
+        build(
+            (&self.checked, self.environment),
+            activation,
+            source,
+            decoder,
+            limits,
+            attempt,
+            Some(observations),
         )
     }
 }
@@ -109,24 +134,47 @@ impl CheckedOwnedProject {
         D::Table: TableAccess<Error = A::Error>,
     {
         build(
-            &self.checked,
-            &self.environment,
+            (&self.checked, &self.environment),
             activation,
             source,
             decoder,
             limits,
             attempt,
+            None,
+        )
+    }
+
+    pub fn build_observed_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
+        &self,
+        activation: &mut A,
+        source: &mut P,
+        decoder: &mut D,
+        limits: Limits,
+        attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+        observations: &mut project_activation::Observations,
+    ) -> Result<(), Failure<A::Error>>
+    where
+        D::Table: TableAccess<Error = A::Error>,
+    {
+        build(
+            (&self.checked, &self.environment),
+            activation,
+            source,
+            decoder,
+            limits,
+            attempt,
+            Some(observations),
         )
     }
 }
 fn build<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
-    checked: &CheckedSpecification,
-    environment: &ExecutionEnvironment,
+    (checked, environment): (&CheckedSpecification, &ExecutionEnvironment),
     activation: &mut A,
     source: &mut P,
     decoder: &mut D,
     limits: Limits,
     attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+    observations: Option<&mut project_activation::Observations>,
 ) -> Result<(), Failure<A::Error>>
 where
     D::Table: TableAccess<Error = A::Error>,
@@ -134,6 +182,10 @@ where
     // A later failed activation cannot retain observations from a prior build.
     attempt.sources.clear();
     attempt.result = Err(PortError::Incomplete);
+    let observations = observations.map(|observations| {
+        *observations = project_activation::Observations::default();
+        observations
+    });
     let selected = checked.compiled().called_functions();
     if selected.is_empty() {
         checked.build_into(source, decoder, limits, attempt);
@@ -143,16 +195,23 @@ where
         .iter()
         .map(|&index| &environment.functions()[index])
         .collect::<Vec<_>>();
-    let activated = project_activation::activate_references(
-        environment
-            .language()
-            .expect("admitted called functions declare a language"),
-        environment
-            .lock()
-            .expect("admitted called functions declare a lock"),
-        &functions,
-        activation,
-    )?;
+    let language = environment
+        .language()
+        .expect("admitted called functions declare a language");
+    let lock = environment
+        .lock()
+        .expect("admitted called functions declare a lock");
+    let activated = match observations {
+        Some(observations) => project_activation::activate_references_observed(
+            language,
+            lock,
+            &functions,
+            activation,
+            project_activation::Limits::default(),
+            observations,
+        ),
+        None => project_activation::activate_references(language, lock, &functions, activation),
+    }?;
     let mut bindings = Bindings::new(&activated, activation);
     checked.build_with_functions_into(source, decoder, &mut bindings, limits, attempt);
     Ok(())

@@ -820,3 +820,404 @@ fn borrowed_selection_keeps_empty_duplicate_and_quota_gates_before_ports() {
     );
     assert!(port.trace.is_empty());
 }
+
+mod observed {
+    use super::*;
+    use yamaa_engine::project_activation::{
+        activate_references_observed, BindingObservation, BindingOutcome, Limits, LockObservation,
+        Observations, Resource, TestObservation, TestOutcome,
+    };
+    struct ObservedPort {
+        inner: Port,
+        late_failure: u8,
+        panic_stage: &'static str,
+    }
+    impl ObservedPort {
+        fn new() -> Self {
+            Self {
+                inner: Port::new(),
+                late_failure: 0,
+                panic_stage: "",
+            }
+        }
+    }
+    impl ActivationPort for ObservedPort {
+        type Handle = Handle;
+        type Error = Payload;
+        fn verify_lock(
+            &mut self,
+            language: Language,
+            lock: &LockReference,
+            functions: &[ProjectFunctionIdentity],
+        ) -> Result<(), Payload> {
+            assert_ne!(self.panic_stage, "lock", "original lock panic");
+            if self.late_failure == 4 {
+                return Err(Payload("user interrupt"));
+            }
+            self.inner.verify_lock(language, lock, functions)
+        }
+        fn bind(
+            &mut self,
+            identity: &ProjectFunctionIdentity,
+            signature: &LogicalSignature,
+        ) -> Result<Handle, Payload> {
+            if identity.name == "second" {
+                assert_ne!(self.panic_stage, "bind", "original binding panic");
+                if self.late_failure == 3 {
+                    return Err(Payload("user interrupt"));
+                }
+            }
+            self.inner.bind(identity, signature)
+        }
+        fn is_interrupt(&self, error: &Payload) -> bool {
+            self.inner.is_interrupt(error)
+        }
+        fn invoke(
+            &mut self,
+            handle: &Handle,
+            args: &[Argument<'_>],
+        ) -> Result<Value, HostError<Payload>> {
+            if handle.0 == "second" {
+                assert_ne!(self.panic_stage, "test", "original callback panic");
+                if self.late_failure == 2 {
+                    return Err(HostError::Raised(Payload("user interrupt")));
+                }
+                if self.late_failure == 1 && args[0].value == ValueRef::Int(i64::MIN) {
+                    return Ok(Value::Int(8));
+                }
+            }
+            self.inner.invoke(handle, args)
+        }
+    }
+    fn run(
+        functions: &[Function],
+        port: &mut ObservedPort,
+        limits: Limits,
+        observations: &mut Observations,
+    ) -> Result<Vec<ActivatedFunction<Handle>>, Failure<Payload>> {
+        activate_references_observed(
+            Language::Python,
+            &lock(),
+            &functions.iter().collect::<Vec<_>>(),
+            port,
+            limits,
+            observations,
+        )
+    }
+    #[test]
+    fn later_case_failure_keeps_prior_successes_and_all_short_circuit_observations() {
+        let functions = [function("first"), function("second")];
+        let mut port = ObservedPort::new();
+        port.late_failure = 1;
+        let mut observations = Observations::default();
+        assert_eq!(
+            run(&functions, &mut port, Limits::default(), &mut observations).unwrap_err(),
+            Failure::Tests(vec![TestFailure::Result {
+                function: 1,
+                case: 1,
+                actual: Value::Int(8),
+                expected: Value::Int(i64::MIN)
+            }])
+        );
+        assert_eq!(observations.lock, LockObservation::Verified);
+        assert_eq!(
+            observations.bindings,
+            vec![
+                BindingObservation {
+                    function: 0,
+                    outcome: BindingOutcome::Bound
+                },
+                BindingObservation {
+                    function: 1,
+                    outcome: BindingOutcome::Bound
+                }
+            ]
+        );
+        let expected = [
+            (0, 0, TestOutcome::Passed, true, Value::Int(7)),
+            (0, 1, TestOutcome::Passed, true, Value::Int(i64::MIN)),
+            (0, 2, TestOutcome::Passed, false, Value::Missing),
+            (1, 0, TestOutcome::Passed, true, Value::Int(7)),
+            (1, 1, TestOutcome::ResultMismatch, true, Value::Int(8)),
+            (1, 2, TestOutcome::Passed, false, Value::Missing),
+        ];
+        assert_eq!(
+            observations.tests,
+            expected
+                .into_iter()
+                .map(
+                    |(function, case, outcome, invoked, actual)| TestObservation {
+                        function,
+                        case,
+                        outcome,
+                        invoked,
+                        actual: Some(actual)
+                    }
+                )
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(port.inner.trace.len(), 6); // lock, two bindings, three successful delegations
+    }
+    #[test]
+    fn binding_failures_keep_successful_bindings_without_inventing_test_records() {
+        let functions = [function("first"), function("second"), function("third")];
+        let mut port = ObservedPort::new();
+        port.inner.bind_failure = Some("second".into());
+        let mut observations = Observations::default();
+        assert!(matches!(
+            run(&functions, &mut port, Limits::default(), &mut observations),
+            Err(Failure::Bindings(_))
+        ));
+        assert_eq!(
+            observations
+                .bindings
+                .iter()
+                .map(|b| (b.function, b.outcome))
+                .collect::<Vec<_>>(),
+            [
+                (0, BindingOutcome::Bound),
+                (1, BindingOutcome::Rejected),
+                (2, BindingOutcome::Bound)
+            ]
+        );
+        assert!(observations.tests.is_empty());
+        assert_eq!(port.inner.trace.len(), 4);
+    }
+    #[test]
+    fn original_interrupt_keeps_completed_cases_and_stops_future_observations() {
+        let functions = [function("first"), function("second")];
+        let mut port = ObservedPort::new();
+        port.late_failure = 2;
+        let mut observations = Observations::default();
+        let Err(Failure::InterruptedInvocation {
+            function: 1,
+            case: 0,
+            error,
+        }) = run(&functions, &mut port, Limits::default(), &mut observations)
+        else {
+            panic!("original interrupt");
+        };
+        assert_eq!(
+            error.kind,
+            yamaa_engine::function_invocation::FailureKind::CallFailed(Payload("user interrupt"))
+        );
+        assert_eq!(observations.tests.len(), 4);
+        assert_eq!(
+            observations.tests[3],
+            TestObservation {
+                function: 1,
+                case: 0,
+                outcome: TestOutcome::Interrupted,
+                invoked: true,
+                actual: None
+            }
+        );
+        assert!(observations.tests[..3]
+            .iter()
+            .all(|case| case.outcome == TestOutcome::Passed));
+    }
+    #[test]
+    fn ordinary_opaque_invocation_failures_collect_with_zero_invented_results() {
+        let functions = [function("first")];
+        let mut port = ObservedPort::new();
+        port.inner.raised = true;
+        let mut observations = Observations::default();
+        assert!(matches!(
+            run(&functions, &mut port, Limits::default(), &mut observations),
+            Err(Failure::Tests(_))
+        ));
+        assert_eq!(
+            observations
+                .tests
+                .iter()
+                .map(|t| (t.outcome, t.invoked, t.actual.as_ref()))
+                .collect::<Vec<_>>(),
+            [
+                (TestOutcome::InvocationFailed, true, None),
+                (TestOutcome::InvocationFailed, true, None),
+                (TestOutcome::Passed, false, Some(&Value::Missing))
+            ]
+        );
+    }
+    #[test]
+    fn lock_and_binding_interrupts_keep_original_errors_and_only_attempted_bindings() {
+        let functions = [function("first"), function("second"), function("third")];
+        for mode in [3, 4] {
+            let mut port = ObservedPort::new();
+            port.late_failure = mode;
+            let mut observations = Observations::default();
+            let failure =
+                run(&functions, &mut port, Limits::default(), &mut observations).unwrap_err();
+            if mode == 4 {
+                assert_eq!(failure, Failure::Lock(Payload("user interrupt")));
+                assert_eq!(observations.lock, LockObservation::Interrupted);
+                assert!(observations.bindings.is_empty());
+            } else {
+                assert_eq!(
+                    failure,
+                    Failure::InterruptedBinding {
+                        function: 1,
+                        error: Payload("user interrupt")
+                    }
+                );
+                assert_eq!(
+                    observations.bindings,
+                    [
+                        BindingObservation {
+                            function: 0,
+                            outcome: BindingOutcome::Bound
+                        },
+                        BindingObservation {
+                            function: 1,
+                            outcome: BindingOutcome::Interrupted
+                        }
+                    ]
+                );
+            }
+            assert!(observations.tests.is_empty());
+        }
+    }
+    #[test]
+    fn boundary_unwind_keeps_attempted_stage_and_actual_callback_entry() {
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+        let functions = [function("first"), function("second")];
+        for stage in ["lock", "bind", "test"] {
+            let mut port = ObservedPort::new();
+            port.panic_stage = stage;
+            let mut observations = Observations::default();
+            assert!(catch_unwind(AssertUnwindSafe(|| run(
+                &functions,
+                &mut port,
+                Limits::default(),
+                &mut observations
+            )))
+            .is_err());
+            match stage {
+                "lock" => {
+                    assert_eq!(observations.lock, LockObservation::Attempted);
+                    assert!(observations.bindings.is_empty());
+                    assert!(observations.tests.is_empty());
+                }
+                "bind" => {
+                    assert_eq!(observations.lock, LockObservation::Verified);
+                    assert_eq!(observations.bindings[1].outcome, BindingOutcome::Attempted);
+                    assert!(observations.tests.is_empty());
+                }
+                "test" => {
+                    assert_eq!(observations.tests.len(), 4);
+                    assert_eq!(
+                        observations.tests[3],
+                        TestObservation {
+                            function: 1,
+                            case: 0,
+                            outcome: TestOutcome::Attempted,
+                            invoked: true,
+                            actual: None
+                        }
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+    #[test]
+    fn observed_text_copies_share_the_exact_cumulative_utf8_budget() {
+        let mut definition = function("first").definition().clone();
+        definition.returns = ColumnType::Str;
+        for case in &mut definition.tests[..2] {
+            case.result = Value::Str("é".into());
+        }
+        let functions = [Function::admit(Language::Python, definition).unwrap()];
+        // IDs: 6 + 8 + 9 bytes. Two UTF-8 results, each retained in activation
+        // and observations: 2 * 2 * 2 bytes. No copies of opaque host errors.
+        let mut port = ObservedPort::new();
+        port.inner.text_result = Some("é".into());
+        let mut observations = Observations::default();
+        assert!(run(
+            &functions,
+            &mut port,
+            Limits {
+                retained_text_bytes: 31,
+                ..Limits::default()
+            },
+            &mut observations
+        )
+        .is_ok());
+        assert_eq!(observations.tests.len(), 3);
+        assert_eq!(
+            run(
+                &functions,
+                &mut port,
+                Limits {
+                    retained_text_bytes: 30,
+                    ..Limits::default()
+                },
+                &mut observations
+            )
+            .unwrap_err(),
+            Failure::Limit(Resource::RetainedText)
+        );
+        assert_eq!(
+            run(
+                &functions,
+                &mut port,
+                Limits {
+                    retained_text_bytes: 1,
+                    ..Limits::default()
+                },
+                &mut observations
+            )
+            .unwrap_err(),
+            Failure::Limit(Resource::RetainedText)
+        );
+        assert_eq!(
+            observations.tests,
+            [TestObservation {
+                function: 0,
+                case: 0,
+                outcome: TestOutcome::Passed,
+                invoked: true,
+                actual: None
+            }]
+        );
+    }
+    #[test]
+    fn repeated_lock_refusal_empty_selection_and_static_limit_clear_previous_evidence() {
+        let functions = [function("first")];
+        let mut port = ObservedPort::new();
+        let mut observations = Observations::default();
+        run(&functions, &mut port, Limits::default(), &mut observations).unwrap();
+        port.inner.lock_failure = true;
+        assert!(matches!(
+            run(&functions, &mut port, Limits::default(), &mut observations),
+            Err(Failure::Lock(_))
+        ));
+        assert_eq!(
+            observations,
+            Observations {
+                lock: LockObservation::Rejected,
+                ..Observations::default()
+            }
+        );
+        let before = port.inner.trace.len();
+        assert!(run(&[], &mut port, Limits::default(), &mut observations)
+            .unwrap()
+            .is_empty());
+        assert_eq!(observations, Observations::default());
+        assert_eq!(port.inner.trace.len(), before);
+        assert!(matches!(
+            run(
+                &functions,
+                &mut port,
+                Limits {
+                    cases: 0,
+                    ..Limits::default()
+                },
+                &mut observations
+            ),
+            Err(Failure::Limit(Resource::Cases))
+        ));
+        assert_eq!(observations, Observations::default());
+        assert_eq!(port.inner.trace.len(), before);
+    }
+}
