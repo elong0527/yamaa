@@ -119,6 +119,17 @@ Conventions used below:
   TA: oncology. Grounding: PFS censoring conventions for ADTTE
   (new-therapy cut, no-assessment fallback) and judge test vectors.
 
+- **Evaluation of the Process to Create CLINSITE define.xml: Macro Approach
+  vs. ADCLIN Spec** (Zhong, Jiang, Teng, 2025) -
+  https://pharmasug.org/proceedings/2025/SS/PharmaSUG-2025-SS-135.pdf -
+  FDA BIMO CLINSITE site-level dataset ("Clinical Site Data Elements"):
+  ARM with origin Assigned, SAFPOP derived from the number of subjects
+  treated at the site, SITEID as predecessor from ADSL.SITENUM; macro vs
+  ADaM-spec (ADCLIN) approaches to define.xml generation. TA: cross-TA
+  (regulatory submission). Grounding: variable origins and site-level
+  aggregation rules for a BIMO CLINSITE benchmark; the define.xml process
+  debate is metadata, out of scope for dataset benchmarks.
+
 ## CDISC standards
 
 - **ADaM Basic Data Structure for Time-to-Event Analyses v1.0** (CDISC, 2012) -

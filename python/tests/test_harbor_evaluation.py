@@ -92,7 +92,15 @@ def test_every_sdtm_and_adam_benchmark_has_its_prompts_with_the_evaluation():
     positive = sorted(
         p.name for p in benchmarks.iterdir() if p.name.startswith(("sdtm-", "adam-"))
     )
-    assert PROMPTED == positive
+    # Every sdtm-/adam- benchmark has its prompts; prompt directories may
+    # also cover other benchmark prefixes (e.g. bimo-), but each must name
+    # a real benchmark. The allowed prefixes stay explicit so a future
+    # negative-* benchmark with a prompt directory fails loudly instead
+    # of slipping through.
+    prompted_prefixes = ("sdtm-", "adam-", "bimo-")
+    assert all(name.startswith(prompted_prefixes) for name in PROMPTED)
+    assert set(positive) <= set(PROMPTED)
+    assert set(PROMPTED) <= {p.name for p in benchmarks.iterdir() if p.is_dir()}
     assert not list(benchmarks.glob("*/prompt.md"))
     for folder in sorted(p for p in build.PROMPTS.iterdir() if p.is_dir()):
         tiers = sorted(p.name for p in folder.iterdir())
@@ -600,6 +608,11 @@ def test_each_language_has_a_board_per_prompt_tier():
     }
     buildable = []
     for benchmark in PROMPTED:
+        # The sdtm-adam boards rank SDTM and ADaM benchmarks only, per the
+        # board headers; other prefixes (e.g. bimo-) carry prompts but are
+        # not board tasks.
+        if not benchmark.startswith(("sdtm-", "adam-")):
+            continue
         try:
             build.contract_for(ROOT / "benchmarks" / benchmark, "r")
         except build.BuildError:
