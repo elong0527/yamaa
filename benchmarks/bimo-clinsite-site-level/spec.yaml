@@ -1,0 +1,72 @@
+schema_version: "1.0"
+domain: CLINSITE
+keys: [STUDYID, SITEID]
+input:
+  SUBJ: input/subjects.csv
+
+output:
+  path: clinsite.csv
+  columns: [STUDYID, SITEID, ARM, SAFPOP, ENRLPOP]
+  order_by: [SITEID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SUBJ.STUDYID
+
+  - name: SITEID
+    type: str
+    label: Study Site Identifier
+    derivation: SUBJ.SITENUM
+
+  - name: ARM
+    type: str
+    label: Assigned Treatment Arm at the Site
+
+  - name: SAFPOP_RAW
+    type: int
+    label: Treated Subjects Count Before Zero Fill
+
+  - name: SAFPOP
+    type: int
+    label: Number of Treated Subjects at the Site
+    derivation:
+      first_available:
+        sources: [SAFPOP_RAW]
+        missing: 0
+    verifications:
+      not_missing: {}
+
+  - name: ENRLPOP
+    type: int
+    label: Number of Enrolled Subjects at the Site
+    verifications:
+      not_missing: {}
+
+rows:
+  # One record per site named by at least one subject row; a site identifier
+  # with no subject rows emits no record.
+  - id: site
+    group_by: [SUBJ.STUDYID, SUBJ.SITENUM]
+    derivations:
+      # The alphabetically first arm among the site's treated subjects; a
+      # site with no treated subjects keeps no value.
+      ARM:
+        aggregate:
+          filter: "SUBJ.SAFFL = 'Y'"
+          expr: MIN(SUBJ.ARM)
+      SAFPOP_RAW:
+        aggregate:
+          filter: "SUBJ.SAFFL = 'Y'"
+          expr: COUNT(SUBJ.USUBJID)
+      ENRLPOP:
+        aggregate:
+          expr: COUNT(SUBJ.USUBJID)
+
+verifications:
+  - unique:
+      columns: [STUDYID, SITEID]
+  - row_count:
+      min: 5
+      max: 5
