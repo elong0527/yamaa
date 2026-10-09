@@ -297,7 +297,7 @@ columns:
     # benchmark stores the unrounded computed value, so the rounding becomes
     # a submission.display_format instead of round_half_away_from_zero.
     submission:
-      display_format: 8.1
+      display_format: "8.1"
 
 verifications:
   - assert:
