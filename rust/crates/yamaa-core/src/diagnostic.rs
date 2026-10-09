@@ -102,6 +102,7 @@ conditions! {
     GroupedColumnReference => ("validation", "ungrouped_driver_field", Some("REQ-0107")),
     AggregateDriverScope => ("validation", "invalid_aggregate_context", Some("REQ-0329")),
     RowFilterPhaseBoundary => ("validation", "phase_boundary", None),
+    RowDependencyPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0069")),
     QualifiedNumericReference => ("validation", "qualified_identifier", Some("REQ-0442")),
     SourceFilterReference => ("validation", "unknown_field", Some("REQ-0132")),
     SourceFilterSingleValue => ("validation", "prohibited_construct", Some("REQ-0148")),

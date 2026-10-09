@@ -50,14 +50,16 @@ pub enum Error {
     DuplicateDefinitions(Vec<usize>),
     Findings(Vec<Finding>),
     InvalidAdmittedSignature,
+    InvalidCallUses,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct PreparedCall {
     pub located: LocatedCall,
-    slot: usize,
+    slot: Option<usize>,
 }
 impl PreparedCall {
-    pub fn slot(&self) -> usize {
+    /// A statically valid but fully overridden default has no activation slot.
+    pub fn slot(&self) -> Option<usize> {
         self.slot
     }
 }
@@ -97,7 +99,20 @@ impl ProjectCalls {
         calls: Vec<LocatedCall>,
         limits: Limits,
     ) -> Result<Self, Error> {
-        Self::admit_implementation(functions, calls, None, limits)
+        Self::admit_implementation(functions, calls, None, None, limits)
+    }
+    /// Reserve compiler-selected multiplicities after earlier complete static validation.
+    pub fn admit_with_uses(
+        functions: &[Function],
+        calls: Vec<LocatedCall>,
+        uses: &[usize],
+        limits: Limits,
+    ) -> Result<Self, Error> {
+        Self::admit_implementation(functions, calls, None, Some(uses), limits)
+    }
+    /// Transfer authored calls to another owned admission phase without cloning them.
+    pub fn into_located_calls(self) -> Vec<LocatedCall> {
+        self.calls.into_iter().map(|call| call.located).collect()
     }
     /// Known declared reference kinds participate in the same complete argument
     /// pass. Unknown bare outputs are static faults; stored fields may remain
@@ -108,14 +123,31 @@ impl ProjectCalls {
         reference_types: &BTreeMap<&str, crate::value::ValueType>,
         limits: Limits,
     ) -> Result<Self, Error> {
-        Self::admit_implementation(functions, calls, Some(reference_types), limits)
+        Self::admit_implementation(functions, calls, Some(reference_types), None, limits)
+    }
+    /// Admit each authored call once while reserving all effective row-template
+    /// copies. Zero uses still receives complete static validation, but does not
+    /// select a function for activation. Uses are compiler-selected metadata.
+    pub fn admit_with_reference_types_and_uses(
+        functions: &[Function],
+        calls: Vec<LocatedCall>,
+        reference_types: &BTreeMap<&str, crate::value::ValueType>,
+        uses: &[usize],
+        limits: Limits,
+    ) -> Result<Self, Error> {
+        Self::admit_implementation(functions, calls, Some(reference_types), Some(uses), limits)
     }
     fn admit_implementation(
         functions: &[Function],
         calls: Vec<LocatedCall>,
         reference_types: Option<&BTreeMap<&str, crate::value::ValueType>>,
+        uses: Option<&[usize]>,
         limits: Limits,
     ) -> Result<Self, Error> {
+        if uses.is_some_and(|uses| uses.len() != calls.len()) {
+            return Err(Error::InvalidCallUses);
+        }
+        let use_count = |call: usize| uses.map_or(1, |uses| uses[call]);
         let (mut definition_count, mut call_count) = (0, 0);
         charge(
             &mut definition_count,
@@ -124,6 +156,19 @@ impl ProjectCalls {
             "definitions",
         )?;
         charge(&mut call_count, calls.len(), limits.calls, "calls")?;
+        let mut bound_calls = 0;
+        for call in 0..calls.len() {
+            use_count(call)
+                .checked_add(1)
+                .ok_or(Error::Limit("bound_calls"))?;
+            charge(
+                &mut bound_calls,
+                use_count(call),
+                limits.calls,
+                "bound_calls",
+            )?;
+        }
+
         let (mut text, mut argument_count) = (0, 0);
         for function in functions {
             charge(
@@ -133,7 +178,7 @@ impl ProjectCalls {
                 "text",
             )?;
         }
-        for located in &calls {
+        for (call, located) in calls.iter().enumerate() {
             charge(&mut text, located.path.len(), limits.text_bytes, "text")?;
             charge(
                 &mut text,
@@ -150,7 +195,7 @@ impl ProjectCalls {
             for argument in &located.call.arguments {
                 charge(
                     &mut text,
-                    times(argument.name.len(), 2, "text")?,
+                    times(argument.name.len(), (1 + use_count(call)).max(2), "text")?,
                     limits.text_bytes,
                     "text",
                 )?;
@@ -160,11 +205,24 @@ impl ProjectCalls {
                 };
                 charge(
                     &mut text,
-                    times(bytes, 2, "text")?,
+                    times(bytes, 1 + use_count(call), "text")?,
                     limits.text_bytes,
                     "text",
                 )?;
             }
+        }
+        let mut bound_arguments = 0;
+        for (call, located) in calls.iter().enumerate() {
+            charge(
+                &mut bound_arguments,
+                times(
+                    located.call.arguments.len(),
+                    use_count(call),
+                    "bound_arguments",
+                )?,
+                limits.arguments,
+                "bound_arguments",
+            )?;
         }
         // Borrow names after aggregate admission; no string copies or function
         // plans are made until all anticipated per-call ownership is bounded.
@@ -201,14 +259,14 @@ impl ProjectCalls {
         }
         let mut parameters = 0;
         let mut selected = vec![false; functions.len()];
-        for located in &calls {
+        for (call, located) in calls.iter().enumerate() {
             let Some(&i) = index.get(located.call.name.as_str()) else {
                 continue;
             };
             let d = functions[i].definition();
-            // One retained unique plan plus one eventual bound-expression copy
-            // per call. Defaults and logical/host names are copied exactly.
-            let copies = if selected[i] { 1 } else { 2 };
+            // One retained unique plan plus every eventual bound-expression copy.
+            // Fully overridden defaults remain static calls without owned plans.
+            let copies = use_count(call) + usize::from(use_count(call) != 0 && !selected[i]);
             charge(
                 &mut parameters,
                 times(d.params.len(), copies, "parameters")?,
@@ -270,7 +328,11 @@ impl ProjectCalls {
                 .ok_or(Error::Limit("text"))?;
             charge(
                 &mut text,
-                times(finding_bytes, potential, "text")?,
+                times(
+                    times(finding_bytes, potential, "text")?,
+                    use_count(call).max(1),
+                    "text",
+                )?,
                 limits.text_bytes,
                 "text",
             )?;
@@ -284,11 +346,15 @@ impl ProjectCalls {
                 .ok_or(Error::Limit("work"))?;
             charge(
                 &mut work,
-                times(times(searches, d.params.len(), "work")?, max_name, "work")?,
+                times(
+                    times(times(searches, d.params.len(), "work")?, max_name, "work")?,
+                    1 + use_count(call),
+                    "work",
+                )?,
                 limits.work,
                 "work",
             )?;
-            selected[i] = true;
+            selected[i] |= use_count(call) != 0;
         }
         let mut findings = Vec::new();
         for (call, located) in calls.iter().enumerate() {
@@ -358,11 +424,12 @@ impl ProjectCalls {
             .collect::<BTreeMap<_, _>>();
         let calls = calls
             .into_iter()
-            .map(|located| {
+            .enumerate()
+            .map(|(call, located)| {
                 let i = index[located.call.name.as_str()];
                 PreparedCall {
                     located,
-                    slot: slots[&i],
+                    slot: (use_count(call) != 0).then(|| slots[&i]),
                 }
             })
             .collect();

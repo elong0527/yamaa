@@ -1,5 +1,5 @@
 //! Closed row lowering with per-template defaults and shared group-scope validation.
-//! Row-output dependencies and broader expressions remain explicit follow-up work.
+//! Broader row expressions remain explicit follow-up work.
 use super::*;
 use crate::dataset::Verification;
 use crate::{
@@ -13,6 +13,8 @@ use crate::{
 
 #[derive(Debug)]
 enum RowOperation {
+    ProjectFunction(usize),
+    Output(String),
     Source(String),
     InvalidAggregate {
         expression: String,
@@ -78,6 +80,7 @@ fn declaration(
     column: usize,
     prefix: String,
     grouped: bool,
+    project: Option<&functions::Prepared>,
 ) -> Result<RowDeclaration, PrepareError> {
     closed_fields(d, id, &["value", "unconvertible"], &prefix)?;
     let handler = literal_handler(d, id, &prefix)?;
@@ -87,13 +90,23 @@ fn declaration(
     let op = text(d, op)?;
     let path = format!("{prefix}.{op}");
     let operation = match op {
+        "function" if project.is_some() => RowOperation::ProjectFunction(
+            *project
+                .unwrap()
+                .nodes
+                .get(&payload)
+                .ok_or(PrepareError::Internal)?,
+        ),
         "source" => {
             closed_fields(d, payload, &["variable"], &path)?;
             let name = text(d, field(d, payload, "variable")?)?;
-            if !name.contains('.') {
+            if name.contains('.') {
+                RowOperation::Source(name.into())
+            } else if project.is_some() {
+                RowOperation::Output(name.into())
+            } else {
                 return Err(unsupported("row_output_reference", &path));
             }
-            RowOperation::Source(name.into())
         }
         "literal" => RowOperation::Literal(literal(d, payload, &path)?),
         "aggregate" if grouped => {
@@ -150,12 +163,246 @@ fn declaration(
         operation,
     })
 }
+/// Inspect references in supported row-local defaults without reading source data.
+/// Literal text and qualified stored fields never promote an output declaration.
+fn default_reads(
+    d: &Document,
+    declaration: usize,
+    output: &TableSchema,
+    project: Option<&functions::Prepared>,
+) -> Result<(bool, Vec<usize>), PrepareError> {
+    let value = field(d, declaration, "value")?;
+    let &[(operation, payload)] = mapping(d, value)? else {
+        return Err(PrepareError::Internal);
+    };
+    let operation = text(d, operation)?;
+    let mut reads = Vec::new();
+    let mut reference = |name: &str| {
+        if !name.contains('.') {
+            if let Some(column) = output.columns().iter().position(|c| c.name == name) {
+                reads.push(column);
+            }
+        }
+    };
+    match operation {
+        "literal" => {}
+        "source" => reference(text(d, field(d, payload, "variable")?)?),
+        "function" => {
+            if let Some(project) = project {
+                let call = project
+                    .calls
+                    .calls()
+                    .get(*project.nodes.get(&payload).ok_or(PrepareError::Internal)?)
+                    .ok_or(PrepareError::Internal)?;
+                for argument in &call.located.call.arguments {
+                    if let crate::project_call_document::Input::Reference(name) = &argument.input {
+                        reference(name);
+                    }
+                }
+            }
+        }
+        "compute" => {
+            let expression = text(d, field(d, payload, "expr")?)?;
+            match crate::numeric_parser::parse_numeric(expression, Default::default()) {
+                Ok(parsed) => {
+                    for name in parsed.identifiers() {
+                        reference(name);
+                    }
+                }
+                Err(crate::numeric_parser::ParseError::Grammar { .. }) => {}
+                Err(_) => return Err(PrepareError::Limit("numeric_parser")),
+            }
+        }
+        "aggregate" | "lookup" | "window" => return Ok((false, reads)),
+        _ => return Err(unsupported(operation, "rows")),
+    }
+    Ok((true, reads))
+}
+
+fn select_defaults(
+    d: &Document,
+    columns: &[usize],
+    output: &TableSchema,
+    rows: &[usize],
+    filter_defaults: alloc::collections::BTreeSet<usize>,
+    project: Option<&functions::Prepared>,
+) -> Result<Vec<usize>, PrepareError> {
+    let defaults = columns
+        .iter()
+        .map(|&column| {
+            d.field(column, "derivation")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                .map(|id| default_reads(d, id, output, project))
+                .transpose()
+                .map(|default| default.unwrap_or((true, Vec::new())))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let edges = defaults.iter().try_fold(0usize, |n, (_, edges)| {
+        n.checked_add(edges.len())
+            .ok_or(PrepareError::Limit("row_dependencies"))
+    })?;
+    if columns
+        .len()
+        .checked_mul(edges.max(1))
+        .is_none_or(|work| work > 67_108_864)
+    {
+        return Err(PrepareError::Limit("row_dependencies"));
+    }
+    let mut local = defaults.iter().map(|(local, _)| *local).collect::<Vec<_>>();
+    loop {
+        let mut changed = false;
+        for (column, (_, reads)) in defaults.iter().enumerate() {
+            if local[column] && reads.iter().any(|&read| !local[read]) {
+                local[column] = false;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    let mut selected = alloc::vec![false; columns.len()];
+    for column in filter_defaults {
+        selected[column] = local[column];
+    }
+    let mut findings = Vec::new();
+    for &row in rows {
+        for &(name, declaration) in mapping(d, field(d, row, "derivations")?)? {
+            let name = text(d, name)?;
+            let column = output
+                .columns()
+                .iter()
+                .position(|c| c.name == name)
+                .ok_or(PrepareError::Internal)?;
+            if local[column] {
+                selected[column] = true;
+            } else {
+                findings.push(PreflightFinding::DuplicateRowDefault {
+                    column: name.into(),
+                    rows: alloc::vec![text(d, field(d, row, "id")?)?.into()],
+                });
+            }
+            let (_, reads) = default_reads(d, declaration, output, project)?;
+            for read in reads {
+                if local[read] {
+                    selected[read] = true;
+                }
+            }
+        }
+    }
+    loop {
+        let mut changed = false;
+        for (column, (_, reads)) in defaults.iter().enumerate() {
+            if selected[column] {
+                for &read in reads {
+                    if local[read] && !selected[read] {
+                        selected[read] = true;
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    if !findings.is_empty() {
+        return Err(PrepareError::Invalid(findings));
+    }
+    Ok(selected
+        .into_iter()
+        .enumerate()
+        .filter_map(|(column, selected)| selected.then_some(column))
+        .collect())
+}
+
+/// Bound every retained row-phase finding before copying any authored context.
+fn validate_function_phases(
+    templates: &[Template],
+    project: Option<&functions::Prepared>,
+    output: &TableSchema,
+) -> Result<(), PrepareError> {
+    let Some(project) = project else {
+        return Ok(());
+    };
+    let mut sites = Vec::new();
+    let mut bytes = 0usize;
+    for template in templates {
+        for declaration in &template.declarations {
+            let RowOperation::ProjectFunction(call) = declaration.operation else {
+                continue;
+            };
+            let call = &project
+                .calls
+                .calls()
+                .get(call)
+                .ok_or(PrepareError::Internal)?
+                .located;
+            for argument in &call.call.arguments {
+                let crate::project_call_document::Input::Reference(name) = &argument.input else {
+                    continue;
+                };
+                if name.contains('.') {
+                    continue;
+                }
+                let column = output
+                    .columns()
+                    .iter()
+                    .position(|c| c.name == *name)
+                    .ok_or(PrepareError::Internal)?;
+                if template.declarations.iter().any(|d| d.column == column) {
+                    continue;
+                }
+                let cost = call
+                    .path
+                    .len()
+                    .checked_add(call.call.name.len())
+                    .and_then(|n| n.checked_add(argument.name.len().checked_mul(2)?))
+                    .and_then(|n| n.checked_add(name.len()))
+                    .and_then(|n| n.checked_add(template.id.len()))
+                    .and_then(|n| n.checked_add(128))
+                    .and_then(|n| n.checked_mul(4))
+                    .ok_or(PrepareError::Limit("function_findings"))?;
+                bytes = bytes
+                    .checked_add(cost)
+                    .filter(|&n| n <= 16_777_216)
+                    .ok_or(PrepareError::Limit("function_findings"))?;
+                if sites.len() >= 65_536 {
+                    return Err(PrepareError::Limit("function_findings"));
+                }
+                sites.push((template, call, argument, name));
+            }
+        }
+    }
+    if sites.is_empty() {
+        return Ok(());
+    }
+    Err(PrepareError::Invalid(
+        sites
+            .into_iter()
+            .map(|(template, call, argument, name)| {
+                PreflightFinding::ProjectFunction(FunctionFinding {
+                    path: format!("{}.args.{}", call.path, argument.name),
+                    function: call.call.name.clone(),
+                    argument: Some(argument.name.clone()),
+                    node: argument.node,
+                    cause: functions::Cause::RowPhase {
+                        identifier: name.clone(),
+                        row: template.id.clone(),
+                    },
+                })
+            })
+            .collect(),
+    ))
+}
+
 impl Rows {
     pub(super) fn prepare(
         d: &Document,
         output: &TableSchema,
         driver: &str,
         limits: CompilationLimits,
+        project: Option<&functions::Prepared>,
     ) -> Result<Self, PrepareError> {
         let root = d.root();
         let raw_rows = sequence(d, field(d, root, "rows")?)?;
@@ -226,29 +473,21 @@ impl Rows {
             }
         }
         let mut templates = Vec::new();
-        let mut selected = Vec::new();
-        for (column, metadata) in output.columns().iter().enumerate() {
-            if filter_defaults.contains(&column)
-                || raw_rows.iter().any(|&row| {
-                    d.field(row, "derivations")
-                        .is_some_and(|id| d.field(id, &metadata.name).is_some())
-                })
+        let selected = select_defaults(d, columns, output, raw_rows, filter_defaults, project)?;
+        for &column in &selected {
+            let metadata = &output.columns()[column];
+            if let Some(id) = d
+                .field(columns[column], "derivation")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
-                selected.push(column);
-                // Admit every written default, even when all templates override
-                // it. Actual inherited defaults are lowered in each row's scope.
-                if let Some(id) = d
-                    .field(columns[column], "derivation")
-                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                {
-                    declaration(
-                        d,
-                        id,
-                        column,
-                        format!("columns.{}.derivation", metadata.name),
-                        false,
-                    )?;
-                }
+                declaration(
+                    d,
+                    id,
+                    column,
+                    format!("columns.{}.derivation", metadata.name),
+                    false,
+                    project,
+                )?;
             }
         }
         for (index, (&row, filter)) in raw_rows.iter().zip(filters).enumerate() {
@@ -308,7 +547,14 @@ impl Rows {
                         format!("columns.{}.derivation", metadata.name),
                     )
                 };
-                declarations.push(declaration(d, id, column, prefix, groups.is_some())?);
+                declarations.push(declaration(
+                    d,
+                    id,
+                    column,
+                    prefix,
+                    groups.is_some(),
+                    project,
+                )?);
             }
             // Other datasets require lookup/join state outside this closed row language.
             if groups.is_none()
@@ -330,6 +576,7 @@ impl Rows {
                 filter,
             });
         }
+        validate_function_phases(&templates, project, output)?;
         let mut lowered_columns = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
             let prefix = format!("columns.{}", output.columns()[column].name);
@@ -351,6 +598,7 @@ impl Rows {
                     column,
                     format!("{prefix}.derivation"),
                     false,
+                    project,
                 )?);
             }
         }
@@ -359,6 +607,53 @@ impl Rows {
             columns: lowered_columns,
         })
     }
+    pub(super) fn call_uses(
+        &self,
+        calls: &crate::project_calls::ProjectCalls,
+    ) -> Result<Vec<usize>, PrepareError> {
+        let mut uses = alloc::vec![0usize; calls.calls().len()];
+        // A row label can appear in each argument finding and its projected context.
+        // Admit the cumulative copies before source binding can construct findings.
+        let mut row_context = 0usize;
+        for template in &self.templates {
+            for declaration in &template.declarations {
+                if let RowOperation::ProjectFunction(call) = declaration.operation {
+                    let arguments = calls
+                        .calls()
+                        .get(call)
+                        .ok_or(PrepareError::Internal)?
+                        .located
+                        .call
+                        .arguments
+                        .len();
+                    let cost = template
+                        .id
+                        .len()
+                        .checked_mul(arguments)
+                        .and_then(|n| n.checked_mul(4))
+                        .ok_or(PrepareError::Limit("function_row_context"))?;
+                    row_context = row_context
+                        .checked_add(cost)
+                        .filter(|&n| n <= 16_777_216)
+                        .ok_or(PrepareError::Limit("function_row_context"))?;
+                }
+            }
+        }
+        for declaration in self
+            .templates
+            .iter()
+            .flat_map(|t| &t.declarations)
+            .chain(&self.columns)
+        {
+            if let RowOperation::ProjectFunction(call) = declaration.operation {
+                let count = uses.get_mut(call).ok_or(PrepareError::Internal)?;
+                *count = count
+                    .checked_add(1)
+                    .ok_or(PrepareError::Limit("function_calls"))?;
+            }
+        }
+        Ok(uses)
+    }
     pub(super) fn bind(
         &self,
         source: &TableSchema,
@@ -366,6 +661,7 @@ impl Rows {
         output: &TableSchema,
         keys: &[usize],
         verifications: &[Verification],
+        project: Option<&crate::project_calls::ProjectCalls>,
     ) -> Result<DatasetPlan, BindError> {
         let output_fields = output
             .columns()
@@ -416,9 +712,65 @@ impl Rows {
         let assignment = |declaration: &RowDeclaration,
                           phase: Phase<'_>,
                           row: Option<&str>,
+                          available: Option<&[usize]>,
+                          edges: &mut Vec<usize>,
                           findings: &mut Vec<BindFinding>|
          -> Result<Option<Assignment>, BindError> {
             let expression = match &declaration.operation {
+                RowOperation::ProjectFunction(call) => {
+                    let project = project.ok_or(BindError::Internal)?;
+                    match crate::project_call_binding::bind(
+                        project,
+                        *call,
+                        &catalog,
+                        crate::project_call_binding::Context {
+                            source_dataset: 0,
+                            source_mode: crate::project_call_binding::SourceMode::Record,
+                            available_outputs: available,
+                            scope: Scope {
+                                drivers: &[name],
+                                current_driver: true,
+                                reach: Reach::Scalar,
+                                joined: false,
+                                phase,
+                            },
+                        },
+                    ) {
+                        Ok(bound) => {
+                            edges.extend(bound.dependencies);
+                            Some(Expression::ProjectFunction(bound.function))
+                        }
+                        Err(crate::project_call_binding::Error::Findings(errors)) => {
+                            findings.extend(functions::bind_findings(project, *call, errors, row)?);
+                            None
+                        }
+                        Err(crate::project_call_binding::Error::Reference(error)) => {
+                            return Err(BindError::Catalog(error))
+                        }
+                        Err(_) => return Err(BindError::Internal),
+                    }
+                }
+                RowOperation::Output(reference) => {
+                    if let Some(finding) = catalog
+                        .validate_output(reference, None, available, &[0])
+                        .map_err(BindError::Catalog)?
+                    {
+                        findings.push(BindFinding::OutputReference {
+                            path: declaration.path.clone(),
+                            name: reference.clone(),
+                            finding,
+                        });
+                        None
+                    } else {
+                        let Some(reference_binding::Binding::Output { column, .. }) =
+                            catalog.bind(reference).map_err(BindError::Catalog)?
+                        else {
+                            return Err(BindError::Internal);
+                        };
+                        edges.push(column);
+                        Some(Expression::Column(column))
+                    }
+                }
                 RowOperation::Literal(value) => Some(Expression::Literal(value.clone())),
                 RowOperation::InvalidAggregate { expression, error } => {
                     findings.push(BindFinding::Aggregate {
@@ -568,14 +920,45 @@ impl Rows {
             let phase = Phase::Row {
                 group_by: group_names.as_deref(),
             };
-            let mut assignments = Vec::new();
+            let available = template
+                .declarations
+                .iter()
+                .map(|d| d.column)
+                .collect::<Vec<_>>();
+            let mut graph = alloc::vec![Vec::new(); output.columns().len()];
+            let mut assignments = BTreeMap::new();
             for declaration in &template.declarations {
-                if let Some(value) =
-                    assignment(declaration, phase, Some(&template.id), &mut findings)?
-                {
-                    assignments.push(value);
+                if let Some(value) = assignment(
+                    declaration,
+                    phase,
+                    Some(&template.id),
+                    Some(&available),
+                    &mut graph[declaration.column],
+                    &mut findings,
+                )? {
+                    assignments.insert(declaration.column, value);
                 }
             }
+            let analyzed = crate::dependency_analysis::analyze(&graph, Default::default())
+                .map_err(|_| BindError::Internal)?;
+            if let Some(cycle) = analyzed.cycle {
+                let mut paths = alloc::vec![String::new(); output.columns().len()];
+                for declaration in &template.declarations {
+                    paths[declaration.column] = declaration.path.clone();
+                }
+                findings.push(BindFinding::Dependencies {
+                    columns: output.columns().iter().map(|c| c.name.clone()).collect(),
+                    paths,
+                    diagnostics: alloc::vec![column_dependencies::Diagnostic::Cycle {
+                        columns: cycle
+                    }],
+                });
+            }
+            let assignments = analyzed
+                .order
+                .into_iter()
+                .filter_map(|column| assignments.remove(&column))
+                .collect();
             let mut bindings = Vec::new();
             let before_filter = findings.len();
             if let Some(plan) = predicate {
@@ -636,17 +1019,35 @@ impl Rows {
             });
         }
         let mut columns = Vec::new();
+        let mut dependencies = alloc::vec![None; output.columns().len()];
         for declaration in &self.columns {
+            let mut edges = Vec::new();
             if let Some(value) = assignment(
                 declaration,
                 Phase::Column {
                     groups: &column_groups,
                 },
                 None,
+                None,
+                &mut edges,
                 &mut findings,
             )? {
                 columns.push(value);
             }
+            dependencies[declaration.column] = Some(edges);
+        }
+        let analyzed = column_dependencies::analyze(&dependencies, keys, true, Default::default())
+            .map_err(|_| BindError::Internal)?;
+        if !analyzed.diagnostics.is_empty() {
+            let mut paths = alloc::vec![String::new(); output.columns().len()];
+            for declaration in &self.columns {
+                paths[declaration.column] = declaration.path.clone();
+            }
+            findings.push(BindFinding::Dependencies {
+                columns: output.columns().iter().map(|c| c.name.clone()).collect(),
+                paths,
+                diagnostics: analyzed.diagnostics,
+            });
         }
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
