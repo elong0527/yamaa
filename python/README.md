@@ -755,7 +755,7 @@ its complete bytes for CSV or ordered logical data for Parquet. An unsupported r
 example they were given rather than passing quietly, because neither one
 reproduced what the example committed.
 
-`REPORT_VERSION` is `0.2.0-draft`. Reports identify host language separately
+`REPORT_VERSION` is `0.3.0-draft`. Reports identify host language separately
 from engine backend and include source/prepublication tables, per-node outcomes,
 evaluated verification records and study callback traces. Filenames use
 `<example>.<runtime>.<backend>.json`; older report versions must be regenerated.
