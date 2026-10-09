@@ -1,0 +1,222 @@
+schema_version: "1.0"
+domain: ADTTE
+keys: [STUDYID, USUBJID, PARAMCD]
+
+# QSF is built by spec_qs.yaml in the same run, so the deterioration flags
+# the entry reads are exactly the ones the producer derived.
+input:
+  ADSL: {path: input/adsl.csv, types: {RANDDT: date, DTHDT: date}}
+  QSF:
+    path: qs_flagged.csv
+    schema: spec_qs.yaml
+  DS:
+    path: input/ds.csv
+    types: {DSDTC: date, DSSEQ: int}
+
+base: ADSL
+
+output:
+  path: adtte.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR,
+            EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
+
+intermediates:
+  # The first flagged deterioration assessment. Ordered by date, then
+  # sequence, so one record wins whatever the input order.
+  - id: FIRSTDETER
+    dataset: QSF
+    key: [STUDYID, USUBJID]
+    filter: "QSF.DETERFL = 'Y'"
+    order_by: [QSF.ADT, QSF.QSSEQ]
+    keep: first
+    no_match: null
+
+  # The first censoring reason: progression, discontinuation, or
+  # withdrawal. Only the earliest counts; later ones do not move the
+  # censor date.
+  - id: FIRSTDS
+    dataset: DS
+    key: [STUDYID, USUBJID]
+    order_by: [DS.DSDTC, DS.DSSEQ]
+    keep: first
+    no_match: null
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADSL.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADSL.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: {literal: TTDGHS}
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation: {literal: Time to Deterioration in Global Health Status}
+
+  - name: STARTDT
+    type: date
+    label: Time-to-Event Origin Date
+    derivation: ADSL.RANDDT
+
+  - name: DETERDT
+    type: date
+    label: Deterioration Date
+    derivation: FIRSTDETER.ADT
+
+  - name: DEATHDT
+    type: date
+    label: Death Date
+    derivation: ADSL.DTHDT
+
+  # The event is the earlier of deterioration and death; a deterioration
+  # and a death on the same date count as deterioration.
+  - name: EVENTDT
+    type: date
+    label: Event Date
+    derivation:
+      case:
+        - when: "DETERDT IS NOT NULL AND (DEATHDT IS NULL
+            OR DETERDT <= DEATHDT)"
+          then: DETERDT
+        - when: "DEATHDT IS NOT NULL"
+          then: DEATHDT
+
+  # The censoring reason's date and description, when a reason was
+  # recorded; empty for subjects with no reason on file.
+  - name: CENSORRSNDT
+    type: date
+    label: Censoring Reason Date
+    derivation: FIRSTDS.DSDTC
+
+  - name: CENSORRSN
+    type: str
+    label: Censoring Reason
+    derivation: FIRSTDS.DSDECOD
+
+  # The last assessment dated on or before the censoring reason. A
+  # missing reason date admits no assessment, so the match is empty then
+  # and the subject falls back to randomization below.
+  - name: LASTQSLE
+    type: date
+    label: Last Assessment On Or Before Censoring
+    derivation:
+      aggregate:
+        filter: "QSF.ADT IS NOT NULL"
+        group_by: [QSF.STUDYID, QSF.USUBJID]
+        between: {value: CENSORRSNDT, lower: ADT}
+        expr: "MAX(QSF.ADT)"
+
+  # The sequence of that assessment: the latest sequence among the
+  # records sharing the censoring date.
+  - name: LASTQSSEQ
+    type: int
+    label: Sequence of Last Assessment On Or Before Censoring
+    derivation:
+      aggregate:
+        filter: "QSF.ADT IS NOT NULL"
+        group_by: [QSF.STUDYID, QSF.USUBJID]
+        between: {value: LASTQSLE, lower: ADT, upper: ADT}
+        expr: "MAX(QSF.QSSEQ)"
+
+  # With no usable assessment the subject is censored at randomization.
+  - name: CENSORDT
+    type: date
+    label: Censoring Date
+    derivation:
+      first_available:
+        sources: [LASTQSLE, STARTDT]
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation:
+      first_available:
+        sources: [EVENTDT, CENSORDT]
+
+  - name: AVAL
+    type: int
+    label: Analysis Value
+    derivation:
+      date_diff:
+        start: STARTDT
+        end: ADT
+        unit: month
+
+  - name: CNSR
+    type: int
+    label: Censor
+    derivation:
+      case:
+        - when: "EVENTDT IS NOT NULL"
+          then: {literal: 0}
+        - otherwise: {literal: 1}
+
+  # A deterioration and a censoring reason on the same date count as a
+  # deterioration: the event always wins over censoring.
+  - name: EVNTDESC
+    type: str
+    label: Event or Censoring Description
+    derivation:
+      case:
+        - when: "DETERDT IS NOT NULL AND (DEATHDT IS NULL
+            OR DETERDT <= DEATHDT)"
+          then: {literal: PRO DETERIORATION}
+        - when: "DEATHDT IS NOT NULL"
+          then: {literal: DEATH}
+        - otherwise: {literal: CENSORED}
+
+  - name: CNSDTDSC
+    type: str
+    label: Censoring Date Description
+    derivation:
+      case:
+        - when: "EVENTDT IS NOT NULL"
+          then: {literal: null}
+        - when: "CENSORRSN IS NOT NULL"
+          then: CENSORRSN
+        - otherwise: {literal: STUDY COMPLETION}
+
+  - name: SRCDOM
+    type: str
+    label: Source Data
+    derivation:
+      case:
+        - when: "EVNTDESC = 'PRO DETERIORATION'"
+          then: {literal: QS}
+        - when: "EVNTDESC = 'DEATH'"
+          then: {literal: ADSL}
+        - when: "LASTQSLE IS NULL"
+          then: {literal: ADSL}
+        - otherwise: {literal: QS}
+
+  - name: SRCVAR
+    type: str
+    label: Source Variable
+    derivation:
+      case:
+        - when: "EVNTDESC = 'PRO DETERIORATION'"
+          then: {literal: ADT}
+        - when: "EVNTDESC = 'DEATH'"
+          then: {literal: DTHDT}
+        - when: "LASTQSLE IS NULL"
+          then: {literal: RANDDT}
+        - otherwise: {literal: ADT}
+
+  - name: SRCSEQ
+    type: int
+    label: Source Sequence Number
+    derivation:
+      case:
+        - when: "EVNTDESC = 'PRO DETERIORATION'"
+          then: FIRSTDETER.QSSEQ
+        - when: "EVNTDESC = 'CENSORED' AND LASTQSLE IS NOT NULL"
+          then: LASTQSSEQ
