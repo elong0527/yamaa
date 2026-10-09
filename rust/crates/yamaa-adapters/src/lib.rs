@@ -76,6 +76,7 @@ pub mod file_resources;
 pub mod project_source;
 
 pub mod project_lock;
+pub mod project_lock_diagnostics;
 
 pub mod project_environment_diagnostics;
 
