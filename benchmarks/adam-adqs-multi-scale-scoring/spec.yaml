@@ -42,147 +42,32 @@ columns:
     type: float
     label: Numeric Item Response
 
-  # The answered item's response when the item belongs to the scale, empty
-  # otherwise. F104 belongs to two scales, so it feeds both. None of these
-  # columns are in the output.
-  - name: F1ITEM
-    type: float
-    label: Physical Functioning Item Response
-    derivation:
-      case:
-        - when: "PARAMCD IN ('F101', 'F102', 'F103', 'F104')"
-          then: ITEMRESN
-        - otherwise: {literal: null}
-
-  - name: F2ITEM
-    type: float
-    label: Role Functioning Item Response
-    derivation:
-      case:
-        - when: "PARAMCD IN ('F201', 'F202')"
-          then: ITEMRESN
-        - otherwise: {literal: null}
-
-  - name: SITEM
-    type: float
-    label: Symptom Scale Item Response
-    derivation:
-      case:
-        - when: "PARAMCD IN ('S01', 'S02', 'F104')"
-          then: ITEMRESN
-        - otherwise: {literal: null}
-
-  - name: GITEM
-    type: float
-    label: Global Health Item Response
-    derivation:
-      case:
-        - when: "PARAMCD IN ('G01', 'G02')"
-          then: ITEMRESN
-        - otherwise: {literal: null}
-
-  # Sum and count of the answered items of each scale at the subject's
-  # visit, repeated on every row of it. Score rows and non-member items
-  # add nothing to either.
-  - name: F1SUM
-    type: float
-    label: Sum of Physical Functioning Item Responses
-    derivation:
-      aggregate:
-        expr: "SUM(F1ITEM)"
-        group_by: [STUDYID, USUBJID, VISIT]
-
-  - name: F1ANS
+  # Per-scale aggregates, assigned within each score row id below: the
+  # anchor record count (the row exists when the anchor record does,
+  # answered or not), the sum of answered item responses, and the answered
+  # item count. The item rows carry nulls. None of these columns are in
+  # the output.
+  - name: SCALE_ANCHOR
     type: int
-    label: Number of Answered Physical Functioning Items
-    derivation:
-      aggregate:
-        expr: "COUNT(F1ITEM)"
-        group_by: [STUDYID, USUBJID, VISIT]
+    label: Scale Anchor Record Count
 
-  - name: F2SUM
+  - name: SCALE_SUM
     type: float
-    label: Sum of Role Functioning Item Responses
-    derivation:
-      aggregate:
-        expr: "SUM(F2ITEM)"
-        group_by: [STUDYID, USUBJID, VISIT]
+    label: Sum of Scale Item Responses
 
-  - name: F2ANS
+  - name: SCALE_ANS
     type: int
-    label: Number of Answered Role Functioning Items
-    derivation:
-      aggregate:
-        expr: "COUNT(F2ITEM)"
-        group_by: [STUDYID, USUBJID, VISIT]
-
-  - name: SSUM
-    type: float
-    label: Sum of Symptom Scale Item Responses
-    derivation:
-      aggregate:
-        expr: "SUM(SITEM)"
-        group_by: [STUDYID, USUBJID, VISIT]
-
-  - name: SANS
-    type: int
-    label: Number of Answered Symptom Scale Items
-    derivation:
-      aggregate:
-        expr: "COUNT(SITEM)"
-        group_by: [STUDYID, USUBJID, VISIT]
-
-  - name: GSUM
-    type: float
-    label: Sum of Global Health Item Responses
-    derivation:
-      aggregate:
-        expr: "SUM(GITEM)"
-        group_by: [STUDYID, USUBJID, VISIT]
-
-  - name: GANS
-    type: int
-    label: Number of Answered Global Health Items
-    derivation:
-      aggregate:
-        expr: "COUNT(GITEM)"
-        group_by: [STUDYID, USUBJID, VISIT]
+    label: Number of Answered Scale Items
 
   # The scale score is the mean answered response transformed to a 0 to 100
   # scale. The functional scales score higher for better functioning, the
   # symptom scale scores higher for worse symptoms, and the global scale
   # uses the seven-point range. A scale with too few answered items keeps
-  # an empty score. An item row keeps its response.
+  # an empty score. An item row keeps its response. Each row id below derives
+  # AVAL for its own rows.
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      case:
-        - when: "PARAMCD = 'F1SCORE' AND F1ANS >= 2"
-          then:
-            compute:
-              expr: "100 * (1 - (F1SUM / F1ANS - 1) / 3)"
-        - when: "PARAMCD = 'F1SCORE'"
-          then: {literal: null}
-        - when: "PARAMCD = 'F2SCORE' AND F2ANS >= 1"
-          then:
-            compute:
-              expr: "100 * (1 - (F2SUM / F2ANS - 1) / 3)"
-        - when: "PARAMCD = 'F2SCORE'"
-          then: {literal: null}
-        - when: "PARAMCD = 'SSCORE' AND SANS >= 2"
-          then:
-            compute:
-              expr: "100 * (SSUM / SANS - 1) / 3"
-        - when: "PARAMCD = 'SSCORE'"
-          then: {literal: null}
-        - when: "PARAMCD = 'GSCORE' AND GANS >= 1"
-          then:
-            compute:
-              expr: "100 * (GSUM / GANS - 1) / 6"
-        - when: "PARAMCD = 'GSCORE'"
-          then: {literal: null}
-        - otherwise: ITEMRESN
     verifications:
       range:
         min: 0
@@ -195,37 +80,133 @@ rows:
       PARAMCD: QS.QSTESTCD
       PARAM: QS.QSTEST
       ITEMRESN: QS.QSSTRESN
+      SCALE_ANCHOR: {literal: null}
+      SCALE_SUM: {literal: null}
+      SCALE_ANS: {literal: null}
+      AVAL: ITEMRESN
 
   # One score row per scale for each visit that has the scale's anchor
   # item record, whether or not it was answered. A visit with no anchor
   # record for a scale gets no score row for that scale.
   - id: f1score
-    filter: "QS.QSTESTCD = 'F101'"
+    group_by: [QS.STUDYID, QS.USUBJID, QS.VISIT]
+    filter: "SCALE_ANCHOR >= 1"
     derivations:
+      STUDYID: QS.STUDYID
+      USUBJID: QS.USUBJID
+      VISIT: QS.VISIT
+      SCALE_ANCHOR:
+        aggregate:
+          filter: "QS.QSTESTCD = 'F101'"
+          expr: "COUNT(QS.QSTESTCD)"
+      SCALE_SUM:
+        aggregate:
+          filter: "QS.QSTESTCD IN ('F101', 'F102', 'F103', 'F104')"
+          expr: "SUM(QS.QSSTRESN)"
+      SCALE_ANS:
+        aggregate:
+          filter: "QS.QSTESTCD IN ('F101', 'F102', 'F103', 'F104')"
+          expr: "COUNT(QS.QSSTRESN)"
       PARAMCD: {literal: F1SCORE}
       PARAM: {literal: Physical Functioning Scale Score}
       ITEMRESN: {literal: null}
+      AVAL:
+        case:
+          - when: "SCALE_ANS >= 2"
+            then:
+              compute:
+                expr: "100 * (1 - (SCALE_SUM / SCALE_ANS - 1) / 3)"
+          - otherwise: {literal: null}
 
   - id: f2score
-    filter: "QS.QSTESTCD = 'F201'"
+    group_by: [QS.STUDYID, QS.USUBJID, QS.VISIT]
+    filter: "SCALE_ANCHOR >= 1"
     derivations:
+      STUDYID: QS.STUDYID
+      USUBJID: QS.USUBJID
+      VISIT: QS.VISIT
+      SCALE_ANCHOR:
+        aggregate:
+          filter: "QS.QSTESTCD = 'F201'"
+          expr: "COUNT(QS.QSTESTCD)"
+      SCALE_SUM:
+        aggregate:
+          filter: "QS.QSTESTCD IN ('F201', 'F202')"
+          expr: "SUM(QS.QSSTRESN)"
+      SCALE_ANS:
+        aggregate:
+          filter: "QS.QSTESTCD IN ('F201', 'F202')"
+          expr: "COUNT(QS.QSSTRESN)"
       PARAMCD: {literal: F2SCORE}
       PARAM: {literal: Role Functioning Scale Score}
       ITEMRESN: {literal: null}
+      AVAL:
+        case:
+          - when: "SCALE_ANS >= 1"
+            then:
+              compute:
+                expr: "100 * (1 - (SCALE_SUM / SCALE_ANS - 1) / 3)"
+          - otherwise: {literal: null}
 
   - id: sscore
-    filter: "QS.QSTESTCD = 'S01'"
+    group_by: [QS.STUDYID, QS.USUBJID, QS.VISIT]
+    filter: "SCALE_ANCHOR >= 1"
     derivations:
+      STUDYID: QS.STUDYID
+      USUBJID: QS.USUBJID
+      VISIT: QS.VISIT
+      SCALE_ANCHOR:
+        aggregate:
+          filter: "QS.QSTESTCD = 'S01'"
+          expr: "COUNT(QS.QSTESTCD)"
+      SCALE_SUM:
+        aggregate:
+          filter: "QS.QSTESTCD IN ('S01', 'S02', 'F104')"
+          expr: "SUM(QS.QSSTRESN)"
+      SCALE_ANS:
+        aggregate:
+          filter: "QS.QSTESTCD IN ('S01', 'S02', 'F104')"
+          expr: "COUNT(QS.QSSTRESN)"
       PARAMCD: {literal: SSCORE}
       PARAM: {literal: Fatigue and Sleep Symptom Scale Score}
       ITEMRESN: {literal: null}
+      AVAL:
+        case:
+          - when: "SCALE_ANS >= 2"
+            then:
+              compute:
+                expr: "100 * (SCALE_SUM / SCALE_ANS - 1) / 3"
+          - otherwise: {literal: null}
 
   - id: gscore
-    filter: "QS.QSTESTCD = 'G01'"
+    group_by: [QS.STUDYID, QS.USUBJID, QS.VISIT]
+    filter: "SCALE_ANCHOR >= 1"
     derivations:
+      STUDYID: QS.STUDYID
+      USUBJID: QS.USUBJID
+      VISIT: QS.VISIT
+      SCALE_ANCHOR:
+        aggregate:
+          filter: "QS.QSTESTCD = 'G01'"
+          expr: "COUNT(QS.QSTESTCD)"
+      SCALE_SUM:
+        aggregate:
+          filter: "QS.QSTESTCD IN ('G01', 'G02')"
+          expr: "SUM(QS.QSSTRESN)"
+      SCALE_ANS:
+        aggregate:
+          filter: "QS.QSTESTCD IN ('G01', 'G02')"
+          expr: "COUNT(QS.QSSTRESN)"
       PARAMCD: {literal: GSCORE}
       PARAM: {literal: Global Health Scale Score}
       ITEMRESN: {literal: null}
+      AVAL:
+        case:
+          - when: "SCALE_ANS >= 1"
+            then:
+              compute:
+                expr: "100 * (SCALE_SUM / SCALE_ANS - 1) / 6"
+          - otherwise: {literal: null}
 
 verifications:
   - unique:
@@ -233,22 +214,6 @@ verifications:
   - row_count:
       min: 22
       max: 22
-  - assert:
-      id: physical-functioning-score-rests-on-two-answered-items
-      when: "PARAMCD = 'F1SCORE' AND AVAL IS NOT NULL"
-      require: "F1ANS >= 2"
-  - assert:
-      id: role-functioning-score-rests-on-one-answered-item
-      when: "PARAMCD = 'F2SCORE' AND AVAL IS NOT NULL"
-      require: "F2ANS >= 1"
-  - assert:
-      id: symptom-score-rests-on-two-answered-items
-      when: "PARAMCD = 'SSCORE' AND AVAL IS NOT NULL"
-      require: "SANS >= 2"
-  - assert:
-      id: global-health-score-rests-on-one-answered-item
-      when: "PARAMCD = 'GSCORE' AND AVAL IS NOT NULL"
-      require: "GANS >= 1"
   - assert:
       id: a-four-point-item-response-stays-within-the-answer-range
       when: "PARAMCD IN ('F101', 'F102', 'F103', 'F104', 'F201', 'F202',
