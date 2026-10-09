@@ -68,7 +68,14 @@ impl Study {
 }
 impl Drop for Study {
     fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
+        if let Err(error) = fs::remove_dir_all(&self.0) {
+            if !std::thread::panicking() {
+                panic!(
+                    "failed to remove study directory {}: {error}",
+                    self.0.display()
+                );
+            }
+        }
     }
 }
 const DOMAIN: &str = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
