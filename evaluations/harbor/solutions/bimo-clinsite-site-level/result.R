@@ -17,12 +17,15 @@ clinsite <- subj |>
   group_by(STUDYID, SITENUM) |>
   summarise(
     # The alphabetically first arm among the site's treated subjects.
+    # A blank (missing) SAFFL counts as not "Y" so it can neither enter
+    # the treated arm list nor turn the treated count missing.
     ARM = {
-      treated_arms <- ARM[SAFFL == "Y"]
+      treated <- !is.na(SAFFL) & SAFFL == "Y"
+      treated_arms <- ARM[treated]
       if (length(treated_arms)) min(treated_arms) else NA_character_
     },
     # Treated subjects, then all enrolled subjects, at the site.
-    SAFPOP = sum(SAFFL == "Y"),
+    SAFPOP = sum(!is.na(SAFFL) & SAFFL == "Y"),
     ENRLPOP = n(),
     .groups = "drop"
   ) |>
