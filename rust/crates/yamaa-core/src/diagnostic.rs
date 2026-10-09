@@ -48,6 +48,14 @@ macro_rules! conditions {
 }
 
 conditions! {
+    ProjectEnvironmentInvalid => ("validation", "project_environment_invalid", Some("REQ-0695")),
+    RunnerLanguageMismatch => ("validation", "runner_language_mismatch", Some("REQ-0696")),
+    CodelistDuplicateIdentifier => ("validation", "duplicate_define_identifier", Some("REQ-0948")),
+    CodelistInvalidShape => ("validation", "codelist_shape_invalid", Some("REQ-0947")),
+    CodelistInvalidValue => ("validation", "codelist_shape_invalid", Some("REQ-0950")),
+    CodelistDuplicateValue => ("validation", "codelist_duplicate_value", Some("REQ-0949")),
+    CodelistPartialItemField => ("validation", "codelist_partial_item_field", Some("REQ-0951")),
+    CodelistExtensionNotAdmitted => ("validation", "codelist_extension_not_admitted", Some("REQ-0952")),
     UnknownProjectFunction => ("validation", "unknown_project_function", Some("REQ-0698")),
     InvalidFunctionArgument => ("validation", "invalid_function_argument", Some("REQ-0700")),
     ApplicationUnsupported => ("planning", "unsupported_operation", None),

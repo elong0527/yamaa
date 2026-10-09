@@ -19,6 +19,8 @@ mod grammar;
 mod parquet;
 #[path = "diagnostic/preflight.rs"]
 mod preflight;
+#[path = "diagnostic/project_environment.rs"]
+mod project_environment;
 #[path = "diagnostic/project_functions.rs"]
 mod project_functions;
 impl NumericResolver for Bindings {
@@ -174,6 +176,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         reached.insert(diagnostic.code);
     }
     reached.extend(project_functions::reached());
+    reached.extend(project_environment::reached());
     reached.extend(preflight::reached());
     reached.extend(preflight::output_reached());
     reached.extend(grammar::reached());

@@ -216,3 +216,19 @@ pub use inherited::failure as inheritance_failure;
 
 #[path = "specification_schema_diagnostics.rs"]
 mod captured_schema;
+
+pub(crate) use captured_schema::{Budget as CapturedBudget, Error as CapturedProjectionError};
+/// Reuse the same held schema/input resolver with an aggregate caller-owned budget.
+pub(crate) fn captured_findings(
+    captured: &crate::specification_source::CapturedFindings,
+    source_context: &[(&str, &str)],
+    budget: &mut CapturedBudget,
+) -> Result<Vec<Value>, CapturedProjectionError> {
+    captured_schema::schema_findings_with_budget(
+        captured.schema().structure(),
+        captured.document(),
+        captured.findings(),
+        source_context,
+        budget,
+    )
+}
