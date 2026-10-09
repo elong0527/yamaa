@@ -440,3 +440,49 @@ fn invalid_inline_scalars_do_not_mask_independent_root_header_findings() {
         assert_eq!(port.reads, 0);
     }
 }
+
+#[test]
+fn configured_large_capture_counts_report_projection_limits_without_corrupt_origins() {
+    use yamaa_adapters::project_environment_diagnostics::{scalar_sources, schema_sources};
+    for written in ["bad.yaml", "ct.yaml"] {
+        let payload = Rc::new(());
+        let mut port = Port {
+            payload: Rc::clone(&payload),
+            same_identity: false,
+            reads: 0,
+            wide: false,
+            shape: false,
+        };
+        let declarations = vec![written; 129].join(", ");
+        let body = format!(
+            "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\ncodelists: [{declarations}]\n"
+        );
+        let Failure::Rejected(rejected) = project_source::prepare(
+            schema(),
+            source("study/environment.yaml", &body),
+            Language::Python,
+            &mut port,
+            Limits {
+                sources: 132,
+                ..Default::default()
+            },
+        )
+        .unwrap_err() else {
+            panic!("retained valid capture record")
+        };
+        assert_eq!(port.reads, 130);
+        if written == "bad.yaml" {
+            assert_eq!(rejected.sources.len(), 129);
+            assert_eq!(scalar_sources(&rejected), Err(ProjectionError::Limit));
+            assert_eq!(schema_sources(&rejected), Err(ProjectionError::Limit));
+            let CaptureFailure::Port(original) = &rejected.sources[0].error else {
+                panic!("original payload")
+            };
+            assert!(Rc::ptr_eq(original, &payload));
+        } else {
+            assert_eq!(rejected.captures.len(), 129);
+            assert_eq!(admission(&rejected), Err(ProjectionError::Limit));
+        }
+        assert_eq!(port.reads, 130);
+    }
+}

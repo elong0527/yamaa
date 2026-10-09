@@ -126,7 +126,7 @@ pub fn scalar_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>
     let mut budget = Budget(maximum);
     let mut issues = Vec::new();
     if rejected.sources.len() > 128 {
-        return Err(Error::InvalidOrigin);
+        return Err(Error::Limit);
     }
     for source in &rejected.sources {
         let CaptureFailure::Scalar { document, findings } = &source.error else {
@@ -209,7 +209,7 @@ pub fn schema_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>
     let mut metadata = Budget(crate::specification_check::MAX_ISSUE_BYTES);
     let mut issues = Vec::new();
     if rejected.sources.len() > 128 {
-        return Err(Error::InvalidOrigin);
+        return Err(Error::Limit);
     }
     for source in &rejected.sources {
         let CaptureFailure::Structural(SourceError::Findings(captured)) = &source.error else {
@@ -295,9 +295,11 @@ pub fn admission_with_limit<E>(
             .iter()
             .zip(functions)
             .any(|(name, function)| name != &function.name)
-        || rejected.captures.len() > 128
     {
         return Err(Error::InvalidOrigin);
+    }
+    if rejected.captures.len() > 128 {
+        return Err(Error::Limit);
     }
     let mut function_sources = BTreeMap::new();
     let mut codelist_sources = BTreeMap::new();
