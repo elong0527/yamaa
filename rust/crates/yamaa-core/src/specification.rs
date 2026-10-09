@@ -88,6 +88,11 @@ impl Default for CompilationLimits {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PreflightFinding {
     ProjectFunction(FunctionFinding),
+    RowPhase {
+        path: String,
+        identifier: String,
+        row: String,
+    },
     UndeclaredRowColumn {
         index: usize,
         column: String,

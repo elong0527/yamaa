@@ -214,7 +214,7 @@ fn default_reads(
             }
         }
         "aggregate" | "lookup" | "window" => return Ok((false, reads)),
-        _ => return Err(unsupported(operation, "rows")),
+        _ => return Ok((true, reads)),
     }
     Ok((true, reads))
 }
@@ -317,60 +317,115 @@ fn select_defaults(
 }
 
 /// Bound every retained row-phase finding before copying any authored context.
-fn validate_function_phases(
+fn validate_row_phases(
     templates: &[Template],
     project: Option<&functions::Prepared>,
     output: &TableSchema,
 ) -> Result<(), PrepareError> {
-    let Some(project) = project else {
-        return Ok(());
-    };
+    struct Site<'a> {
+        template: &'a Template,
+        declaration: &'a RowDeclaration,
+        identifier: &'a str,
+        function: Option<(
+            &'a crate::project_calls::LocatedCall,
+            &'a crate::project_call_document::Argument,
+        )>,
+    }
+    fn register<'a>(
+        site: Site<'a>,
+        output: &TableSchema,
+        sites: &mut Vec<Site<'a>>,
+        bytes: &mut usize,
+    ) -> Result<(), PrepareError> {
+        if site.identifier.contains('.') {
+            return Ok(());
+        }
+        let Some(column) = output
+            .columns()
+            .iter()
+            .position(|c| c.name == site.identifier)
+        else {
+            // Unknown bare sources retain their ordinary binding diagnostic.
+            return Ok(());
+        };
+        if site
+            .template
+            .declarations
+            .iter()
+            .any(|d| d.column == column)
+        {
+            return Ok(());
+        }
+        let mut cost = site
+            .declaration
+            .path
+            .len()
+            .checked_add(site.identifier.len())
+            .and_then(|n| n.checked_add(site.template.id.len()))
+            .and_then(|n| n.checked_add(128))
+            .ok_or(PrepareError::Limit("function_findings"))?;
+        if let Some((call, argument)) = site.function {
+            cost = cost
+                .checked_add(call.call.name.len())
+                .and_then(|n| n.checked_add(argument.name.len().checked_mul(2)?))
+                .ok_or(PrepareError::Limit("function_findings"))?;
+        }
+        let cost = cost
+            .checked_mul(4)
+            .ok_or(PrepareError::Limit("function_findings"))?;
+        *bytes = bytes
+            .checked_add(cost)
+            .filter(|&n| n <= 16_777_216)
+            .ok_or(PrepareError::Limit("function_findings"))?;
+        if sites.len() >= 65_536 {
+            return Err(PrepareError::Limit("function_findings"));
+        }
+        sites.push(site);
+        Ok(())
+    }
     let mut sites = Vec::new();
     let mut bytes = 0usize;
     for template in templates {
         for declaration in &template.declarations {
-            let RowOperation::ProjectFunction(call) = declaration.operation else {
-                continue;
-            };
-            let call = &project
-                .calls
-                .calls()
-                .get(call)
-                .ok_or(PrepareError::Internal)?
-                .located;
-            for argument in &call.call.arguments {
-                let crate::project_call_document::Input::Reference(name) = &argument.input else {
-                    continue;
-                };
-                if name.contains('.') {
-                    continue;
+            match &declaration.operation {
+                RowOperation::Output(identifier) => register(
+                    Site {
+                        template,
+                        declaration,
+                        identifier,
+                        function: None,
+                    },
+                    output,
+                    &mut sites,
+                    &mut bytes,
+                )?,
+                RowOperation::ProjectFunction(call) => {
+                    let call = &project
+                        .ok_or(PrepareError::Internal)?
+                        .calls
+                        .calls()
+                        .get(*call)
+                        .ok_or(PrepareError::Internal)?
+                        .located;
+                    for argument in &call.call.arguments {
+                        if let crate::project_call_document::Input::Reference(identifier) =
+                            &argument.input
+                        {
+                            register(
+                                Site {
+                                    template,
+                                    declaration,
+                                    identifier,
+                                    function: Some((call, argument)),
+                                },
+                                output,
+                                &mut sites,
+                                &mut bytes,
+                            )?;
+                        }
+                    }
                 }
-                let column = output
-                    .columns()
-                    .iter()
-                    .position(|c| c.name == *name)
-                    .ok_or(PrepareError::Internal)?;
-                if template.declarations.iter().any(|d| d.column == column) {
-                    continue;
-                }
-                let cost = call
-                    .path
-                    .len()
-                    .checked_add(call.call.name.len())
-                    .and_then(|n| n.checked_add(argument.name.len().checked_mul(2)?))
-                    .and_then(|n| n.checked_add(name.len()))
-                    .and_then(|n| n.checked_add(template.id.len()))
-                    .and_then(|n| n.checked_add(128))
-                    .and_then(|n| n.checked_mul(4))
-                    .ok_or(PrepareError::Limit("function_findings"))?;
-                bytes = bytes
-                    .checked_add(cost)
-                    .filter(|&n| n <= 16_777_216)
-                    .ok_or(PrepareError::Limit("function_findings"))?;
-                if sites.len() >= 65_536 {
-                    return Err(PrepareError::Limit("function_findings"));
-                }
-                sites.push((template, call, argument, name));
+                _ => {}
             }
         }
     }
@@ -380,22 +435,26 @@ fn validate_function_phases(
     Err(PrepareError::Invalid(
         sites
             .into_iter()
-            .map(|(template, call, argument, name)| {
-                PreflightFinding::ProjectFunction(FunctionFinding {
+            .map(|site| match site.function {
+                Some((call, argument)) => PreflightFinding::ProjectFunction(FunctionFinding {
                     path: format!("{}.args.{}", call.path, argument.name),
                     function: call.call.name.clone(),
                     argument: Some(argument.name.clone()),
                     node: argument.node,
                     cause: functions::Cause::RowPhase {
-                        identifier: name.clone(),
-                        row: template.id.clone(),
+                        identifier: site.identifier.into(),
+                        row: site.template.id.clone(),
                     },
-                })
+                }),
+                None => PreflightFinding::RowPhase {
+                    path: site.declaration.path.clone(),
+                    identifier: site.identifier.into(),
+                    row: site.template.id.clone(),
+                },
             })
             .collect(),
     ))
 }
-
 impl Rows {
     pub(super) fn prepare(
         d: &Document,
@@ -576,7 +635,7 @@ impl Rows {
                 filter,
             });
         }
-        validate_function_phases(&templates, project, output)?;
+        validate_row_phases(&templates, project, output)?;
         let mut lowered_columns = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
             let prefix = format!("columns.{}", output.columns()[column].name);

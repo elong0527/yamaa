@@ -467,3 +467,105 @@ fn cumulative_row_context_is_bounded_before_binding_or_activation() {
         Err(PrepareError::Limit("function_row_context"))
     ));
 }
+
+#[test]
+fn unsupported_written_defaults_keep_authored_paths_with_or_without_row_overrides() {
+    for operation in ["row_number", "rank", "locf", "first_available"] {
+        for overridden in [false, true] {
+            let spec = specification_with_rows(
+                vec![("A", "int", Tree::map(vec![(operation, Tree::map(vec![]))]))],
+                vec![row(
+                    "record",
+                    if overridden {
+                        vec![("A", literal(7))]
+                    } else {
+                        vec![]
+                    },
+                    None,
+                )],
+            );
+            let Err(PrepareError::Unsupported(features)) =
+                PreparedSpecification::prepare_with_project(&spec, &[])
+            else {
+                panic!("unsupported authored default {operation}, override={overridden}")
+            };
+            assert_eq!(
+                features,
+                [yamaa_core::specification::UnsupportedFeature {
+                    operation: operation.into(),
+                    path: format!("columns.A.derivation.{operation}")
+                }]
+            );
+        }
+    }
+}
+
+#[test]
+fn bare_row_reads_of_nonlocal_outputs_keep_complete_phase_diagnostics_without_function_context() {
+    let bare = || {
+        Tree::map(vec![(
+            "source",
+            Tree::map(vec![("variable", Tree::text("A"))]),
+        )])
+    };
+    let spec = specification_with_rows(
+        vec![
+            (
+                "A",
+                "int",
+                Tree::map(vec![(
+                    "aggregate",
+                    Tree::map(vec![("expr", Tree::text("SUM(SRC.ID)"))]),
+                )]),
+            ),
+            ("B", "int", literal(0)),
+            ("C", "int", literal(0)),
+        ],
+        vec![row("record", vec![("B", bare()), ("C", bare())], None)],
+    );
+    let Err(PrepareError::Invalid(findings)) =
+        PreparedSpecification::prepare_with_project(&spec, &[])
+    else {
+        panic!("complete bare row phase findings before lowering")
+    };
+    assert_eq!(findings.len(), 2);
+    for (finding, column) in findings.iter().zip(["B", "C"]) {
+        let diagnostic = finding.diagnostic();
+        assert_eq!(
+            (
+                diagnostic.definition().phase,
+                diagnostic.definition().condition,
+                diagnostic.definition().requirement
+            ),
+            ("validation", "phase_boundary", Some("REQ-0069"))
+        );
+        assert_eq!(
+            diagnostic.spec_paths,
+            [format!("rows[0].derivations.{column}.source")]
+        );
+        assert_eq!(
+            diagnostic.context,
+            [
+                (
+                    "available_phase".into(),
+                    ContextValue::Scalar(Value::Str("column_derivation".into()))
+                ),
+                (
+                    "identifier".into(),
+                    ContextValue::Scalar(Value::Str("A".into()))
+                ),
+                (
+                    "required_phase".into(),
+                    ContextValue::Scalar(Value::Str("row_construction".into()))
+                ),
+                (
+                    "row".into(),
+                    ContextValue::Scalar(Value::Str("record".into()))
+                )
+            ]
+            .into_iter()
+            .collect()
+        );
+        assert!(diagnostic.source_span.is_none() && diagnostic.operand_route.is_none());
+    }
+}

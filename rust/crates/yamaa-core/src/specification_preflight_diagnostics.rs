@@ -28,6 +28,20 @@ impl PreflightFinding {
     pub fn diagnostic(&self) -> Diagnostic {
         let (code, paths, context): (C, Vec<String>, Context) = match self {
             Self::ProjectFunction(finding) => return finding.diagnostic(),
+            Self::RowPhase {
+                path,
+                identifier,
+                row,
+            } => (
+                C::RowDependencyPhaseBoundary,
+                vec![path.clone()],
+                context([
+                    ("identifier", text(identifier)),
+                    ("row", text(row)),
+                    ("available_phase", text("column_derivation")),
+                    ("required_phase", text("row_construction")),
+                ]),
+            ),
             Self::UndeclaredRowColumn { index, column } => (
                 C::PreflightUndeclaredRowColumn,
                 vec![format!("rows[{index}].derivations.{column}")],
