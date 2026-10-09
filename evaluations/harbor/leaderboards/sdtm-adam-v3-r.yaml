@@ -48,6 +48,7 @@ tasks:
   - adam-adlbc-window-chain-r
   - adam-adoe-study-eye-r
   - adam-adqs-missed-visit-locf-r
+  - adam-adqs-multi-scale-scoring-r
   - adam-adqs-subscale-score-r
   - adam-adrs-best-response-r
   - adam-adrs-composite-response-r

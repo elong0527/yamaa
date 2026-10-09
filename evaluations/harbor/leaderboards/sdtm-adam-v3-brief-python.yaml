@@ -50,6 +50,7 @@ tasks:
   - adam-adlbc-window-chain-brief-python
   - adam-adoe-study-eye-brief-python
   - adam-adqs-missed-visit-locf-brief-python
+  - adam-adqs-multi-scale-scoring-brief-python
   - adam-adqs-subscale-score-brief-python
   - adam-adrs-best-response-brief-python
   - adam-adrs-composite-response-brief-python

@@ -50,6 +50,7 @@ tasks:
   - adam-adlbc-window-chain-conventions-python
   - adam-adoe-study-eye-conventions-python
   - adam-adqs-missed-visit-locf-conventions-python
+  - adam-adqs-multi-scale-scoring-conventions-python
   - adam-adqs-subscale-score-conventions-python
   - adam-adrs-best-response-conventions-python
   - adam-adrs-composite-response-conventions-python

@@ -1,0 +1,23 @@
+STUDYID,USUBJID,VISIT,PARAMCD,PARAM,AVAL
+MSQ1,MSQ1-01,BASELINE,F101,Difficulty lifting heavy objects,2
+MSQ1,MSQ1-01,BASELINE,F102,Difficulty walking a long distance,2
+MSQ1,MSQ1-01,BASELINE,F103,Difficulty walking a short distance,2
+MSQ1,MSQ1-01,BASELINE,F104,Needing to rest during the day,2
+MSQ1,MSQ1-01,BASELINE,F201,Limits in doing work or daily activities,2
+MSQ1,MSQ1-01,BASELINE,F202,Limits in pursuing hobbies or leisure activities,3
+MSQ1,MSQ1-01,BASELINE,S01,Feeling tired during the day,2
+MSQ1,MSQ1-01,BASELINE,S02,Trouble falling asleep,2
+MSQ1,MSQ1-01,BASELINE,G01,Rating of overall health,4
+MSQ1,MSQ1-01,BASELINE,G02,Rating of overall quality of life,5
+MSQ1,MSQ1-02,BASELINE,F101,Difficulty lifting heavy objects,3
+MSQ1,MSQ1-02,BASELINE,F201,Limits in doing work or daily activities,4
+MSQ1,MSQ1-02,BASELINE,S01,Feeling tired during the day,
+MSQ1,MSQ1-02,BASELINE,G01,Rating of overall health,7
+MSQ1,MSQ1-01,BASELINE,F1SCORE,Physical Functioning Scale Score,66.66666666666667
+MSQ1,MSQ1-02,BASELINE,F1SCORE,Physical Functioning Scale Score,
+MSQ1,MSQ1-01,BASELINE,F2SCORE,Role Functioning Scale Score,50
+MSQ1,MSQ1-02,BASELINE,F2SCORE,Role Functioning Scale Score,0
+MSQ1,MSQ1-01,BASELINE,SSCORE,Fatigue and Sleep Symptom Scale Score,33.333333333333336
+MSQ1,MSQ1-02,BASELINE,SSCORE,Fatigue and Sleep Symptom Scale Score,
+MSQ1,MSQ1-01,BASELINE,GSCORE,Global Health Scale Score,58.333333333333336
+MSQ1,MSQ1-02,BASELINE,GSCORE,Global Health Scale Score,100
