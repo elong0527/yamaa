@@ -34,13 +34,14 @@ env:
   RUSTUP_TOOLCHAIN: 1.90.0
 
 jobs:
-  python:
-    name: native-python (${{ matrix.os }}, ${{ matrix.python }})
+  # Each platform runs three lanes so the longest one, not their sum, sets the
+  # wall clock: `rust` checks and tests the shared crates, `dist` builds the
+  # wheel and source archive once, and `qualify` installs those uploaded bytes
+  # outside the checkout as a wheel or as a rebuild from the source archive.
+  rust:
+    name: native-rust (${{ matrix.os }}, ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
-    # Windows run 37873862331 passed shared-crate and wheel checks but reached
-    # the 45-minute limit during rebuilt-source qualification. Keep every check
-    # and allow Windows headroom for cold compilation and both package forms.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || 45 }}
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 40 || 30 }}
     strategy:
       fail-fast: false
       matrix:
@@ -61,12 +62,17 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          # Rust artifacts are OS-specific only.
-          shared-key: native-python-${{ matrix.os }}
+          # Without `workspaces` the action looks for Cargo.toml at the root,
+          # fails, and saves an empty cache under a key that never refreshes.
+          workspaces: rust
+          # Rust artifacts are OS-specific only. Pull requests restore main's
+          # cache but do not save, so they cannot evict it.
+          shared-key: native-rust-${{ matrix.os }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install build tools
         run: |
           rustup toolchain install 1.90.0 --profile minimal --component rustfmt,clippy
-          python -m pip install maturin==1.9.6 uv==0.11.6
+          python -m pip install uv==0.11.6
       - name: Check shared crates and dependency direction
         id: shared_crates
         working-directory: rust
@@ -76,7 +82,7 @@ jobs:
             cargo fmt --all --check
             cargo clippy -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
             cargo test
-            cargo test -p yamaa-core -p yamaa-engine -p yamaa-adapters --release
+            cargo test -p yamaa-core -p yamaa-engine -p yamaa-adapters --profile release-test
             python tools/generate_regex_identifiers.py
             python tools/generate_schema_printable.py
             python tools/generate_shipped_schema.py
@@ -132,17 +138,109 @@ jobs:
           name: rounding-assessment-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/rounding-assessment.json
           if-no-files-found: error
+      - name: Preserve regex reference discrepancies
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: regex-reference-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/regex-reference-assessment.json
+          if-no-files-found: error
+
+  dist:
+    name: native-dist (${{ matrix.os }}, ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+        python: ['3.14']
+    steps:
+      # The source archive carries crate fixtures, so keep their bytes exact.
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: rust
+          shared-key: native-dist-${{ matrix.os }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install build tools
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal
+          python -m pip install maturin==1.9.6
       - name: Build wheel and source archive
         run: |
-          echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
           (cd python && maturin build --release --sdist --out "${RUNNER_TEMP}/native-dist")
           mkdir -p "${RUNNER_TEMP}/reference-dist"
           cp "${RUNNER_TEMP}"/native-dist/*.whl "${RUNNER_TEMP}/reference-dist/"
+      - name: Preserve the reference host wheel
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-reference-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/reference-dist
+          if-no-files-found: error
+      - name: Preserve distributions
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-python-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/native-dist
+          if-no-files-found: error
+
+  qualify:
+    name: native-qualify (${{ matrix.os }}, ${{ matrix.python }}, ${{ matrix.form }})
+    needs: dist
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+        python: ['3.14']
+        form: [wheel, source]
+    steps:
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install build tools
+        run: |
+          python -m pip install uv==0.11.6
+          if [ "${{ matrix.form }}" = source ]; then
+            rustup toolchain install 1.90.0 --profile minimal
+          fi
+      # Qualify the uploaded bytes, so the artifact names recorded in each
+      # report identify exactly what was installed.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-python-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/native-dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-reference-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/reference-dist
+      - name: Record source revision and table requirements
+        run: |
+          echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
           uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/table-requirements.txt"
-      - name: Install and test wheel outside checkout
+      - name: Stage installed checks outside checkout
         working-directory: ${{ runner.temp }}
         run: |
-          python -m pip install --no-deps -r table-requirements.txt native-dist/*.whl
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_python.py" installed_python.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/scalar_transport.tsv" scalar_transport.tsv
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/numeric_transport.tsv" numeric_transport.tsv
@@ -218,23 +316,44 @@ jobs:
           cp -R "${GITHUB_WORKSPACE}/rust/qualification" conformance-suite/gates
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_conformance.py" conformance-suite/installed_conformance.py
           cp "${GITHUB_WORKSPACE}/rust/tools/qualify_native.py" conformance-suite/qualify_native.py
+      - name: Install the wheel
+        if: matrix.form == 'wheel'
+        working-directory: ${{ runner.temp }}
+        run: python -m pip install --no-deps -r table-requirements.txt native-dist/*.whl
+      - name: Rebuild and install from the source archive
+        if: matrix.form == 'source'
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -m pip install --no-deps -r table-requirements.txt
+          python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz
+      - name: Qualify the installed package outside checkout
+        working-directory: ${{ runner.temp }}
+        env:
+          FORM: ${{ matrix.form }}
+          ARCHIVE: ${{ matrix.form == 'wheel' && '*.whl' || '*.tar.gz' }}
+        run: |
+          archives=(native-dist/${ARCHIVE})
           python -I conformance-suite/qualify_native.py \
             --fixtures conformance-suite/benchmarks --schema conformance-suite/yaml \
-            --gates conformance-suite/gates --output qualification/wheel \
-            --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form wheel \
+            --gates conformance-suite/gates --output "qualification/${FORM}" \
+            --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form "${FORM}" \
             --reference-artifacts reference-dist --native-artifacts native-dist \
             --reference-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ matrix.python }}" \
             --native-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ matrix.python }}" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/wheel/public-reports" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
+          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/${FORM}/public-reports" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
             --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
-            --output qualification/wheel/supplemental --runtime python --staged-root "${RUNNER_TEMP}" \
-            --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form wheel \
-            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ matrix.python }}/$(basename native-dist/*.whl)" \
+            --output "qualification/${FORM}/supplemental" --runtime python --staged-root "${RUNNER_TEMP}" \
+            --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form "${FORM}" \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ matrix.python }}/$(basename "${archives[0]}")" \
             --host-artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ matrix.python }}/$(basename reference-dist/*.whl)" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
+      - name: Measure dataset phases
+        if: matrix.form == 'wheel'
+        working-directory: ${{ runner.temp }}
+        run: python -I "${GITHUB_WORKSPACE}/rust/tools/measure_dataset_phases.py" --root "${GITHUB_WORKSPACE}" --repeats 1 --output dataset-phases.json
       - name: Check regex and predicate services on the oldest advertised Python ABI
+        if: matrix.form == 'wheel'
         working-directory: ${{ runner.temp }}
         run: |
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_regex.py
@@ -246,60 +365,24 @@ jobs:
           uv run --no-project --python 3.12 --with native-dist/*.whl python -E -s installed_yaml.py
           uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with native-dist/*.whl python -E -s installed_schema_loading.py
           uv run --no-project --python 3.12 --with-requirements table-requirements.txt --with native-dist/*.whl python -E -s installed_inheritance.py
-      - name: Rebuild and test from source archive outside checkout
-        working-directory: ${{ runner.temp }}
-        run: |
-          python -m pip uninstall -y yamaa
-          python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz
-          python -I conformance-suite/qualify_native.py \
-            --fixtures conformance-suite/benchmarks --schema conformance-suite/yaml \
-            --gates conformance-suite/gates --output qualification/source \
-            --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form source \
-            --reference-artifacts reference-dist --native-artifacts native-dist \
-            --reference-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ matrix.python }}" \
-            --native-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ matrix.python }}" \
-            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/source/public-reports" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
-            --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
-            --output qualification/source/supplemental --runtime python --staged-root "${RUNNER_TEMP}" \
-            --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form source \
-            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ matrix.python }}/$(basename native-dist/*.tar.gz)" \
-            --host-artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ matrix.python }}/$(basename reference-dist/*.whl)" \
-            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Preserve native qualification reports
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: native-qualification-${{ matrix.os }}-${{ matrix.python }}
+          name: native-qualification-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.form }}
           path: ${{ runner.temp }}/qualification
           if-no-files-found: error
-      - name: Preserve the reference host wheel
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: native-reference-${{ matrix.os }}-${{ matrix.python }}
-          path: ${{ runner.temp }}/reference-dist
-          if-no-files-found: error
-      - name: Preserve distributions
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: native-python-${{ matrix.os }}-${{ matrix.python }}
-          path: ${{ runner.temp }}/native-dist
       - name: Preserve measurement smoke samples
+        if: matrix.form == 'wheel'
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: dataset-phases-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/dataset-phases.json
           if-no-files-found: error
-      - name: Preserve regex reference discrepancies
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: regex-reference-${{ matrix.os }}-${{ matrix.python }}
-          path: ${{ runner.temp }}/regex-reference-assessment.json
-          if-no-files-found: error
 
   math-portability:
     name: portable-math-exact
-    needs: python
+    needs: rust
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -333,7 +416,9 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
+          workspaces: rust
           shared-key: native-r-${{ matrix.os }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
         with:
           r-version: '4.6.1'
@@ -410,7 +495,7 @@ jobs:
 
   public-cohort:
     name: public-cohort-complete-runs
-    needs: [python, r]
+    needs: [qualify, r]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -451,7 +536,7 @@ jobs:
               fi
               python -I "${GITHUB_WORKSPACE}/rust/tools/qualify_public_cohort.py" \
                 --fixtures "${GITHUB_WORKSPACE}/benchmarks" \
-                --python-evidence "cohort-input/native-qualification-${platform}-3.14/${form}" \
+                --python-evidence "cohort-input/native-qualification-${platform}-3.14-${form}/${form}" \
                 "${r_evidence[@]}" \
                 --output "public-cohort/${platform}/${form}" --source-revision "${revision}"
             done
