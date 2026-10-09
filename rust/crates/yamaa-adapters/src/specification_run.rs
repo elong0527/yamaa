@@ -119,7 +119,7 @@ impl PreparedRun {
     }
 }
 
-fn limits() -> application::Limits {
+pub(crate) fn limits() -> application::Limits {
     application::Limits {
         source_bytes: csv_source::Limits::default().bytes,
         source_cells: dataset_transport::MAX_SOURCE_CELLS,

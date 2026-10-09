@@ -48,7 +48,10 @@ build path, preserving called-only fresh activation and complete reports. Public
 this integration. Authoritative environment/function formats and the five
 locked function benchmarks have not yet been replaced. The next branch begins
 with classified lock facts and bounded projection against held authored origins;
-that local foundation is not installed public-environment qualification.
+that local foundation also retains owned checked project runs, native metadata
+capture and original host failures through each build. Fifteen new local
+regressions cover this foundation, including approved roots and inherited source
+authorship. Installed public-environment qualification remains pending.
 
 Continue with the following acceptance gates in the
 [serial implementation order](migration-order.md):

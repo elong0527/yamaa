@@ -5,6 +5,7 @@ use crate::{
     specification_source::{InheritanceError, InheritancePort, Limits, Source},
 };
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use yamaa_engine::inheritance::{Source as Identity, SourceError};
 
 #[derive(Debug)]
@@ -33,37 +34,7 @@ pub struct FileSpecification {
 }
 impl FileSpecification {
     pub fn prepare(mut resources: Resources, written: &str) -> Result<Self, Error> {
-        let identity = resources.resolve(written).map_err(Error::Resource)?;
-        let (bytes, _) = resources
-            .capture(written, Limits::default().captured_bytes)
-            .map_err(Error::Resource)?;
-        let source = Source {
-            identity: identity.clone(),
-            bytes: bytes.to_vec(),
-        };
-        let mut parents = Parents {
-            resources: &mut resources,
-            paths: BTreeMap::new(),
-        };
-        let document = crate::shipped_schema::prepare(source, identity.clone(), &mut parents)
-            .map_err(Error::Preparation)?;
-        // Traversal may resolve a shared parent through several authored paths but
-        // read it once. Retain each successful spelling only after semantic success.
-        for parent in document.parents() {
-            let paths = parents
-                .paths
-                .get(&parent.source().identity)
-                .ok_or(Error::Resource(ResourceError::InvalidPath))?;
-            for (declaring, written) in paths {
-                parents
-                    .resources
-                    .capture_from(declaring, written, parent.source().bytes.len())
-                    .map_err(Error::Resource)?;
-            }
-        }
-        resources
-            .select_entry_base(&identity)
-            .map_err(Error::Resource)?;
+        let document = prepare_document(&mut resources, written, None)?;
         let run = PreparedRun::prepare(document).map_err(Error::Compile)?;
         Ok(Self { run, resources })
     }
@@ -82,6 +53,50 @@ impl FileSpecification {
     pub fn build(&mut self) -> CapturedAttempt<ResourceError> {
         self.run.execute_with_port(&mut self.resources)
     }
+}
+
+/// Retain one native capture/inheritance path for ordinary and project models.
+/// An explicit candidate closure does not replace the package-owned public schema.
+pub(crate) fn prepare_document(
+    resources: &mut Resources,
+    written: &str,
+    schema: Option<Arc<crate::specification_source::CapturedSchema>>,
+) -> Result<crate::specification_source::PreparedDocument, Error> {
+    let identity = resources.resolve(written).map_err(Error::Resource)?;
+    let (bytes, _) = resources
+        .capture(written, Limits::default().captured_bytes)
+        .map_err(Error::Resource)?;
+    let source = Source {
+        identity: identity.clone(),
+        bytes: bytes.to_vec(),
+    };
+    let mut parents = Parents {
+        resources,
+        paths: BTreeMap::new(),
+    };
+    let document = match schema {
+        Some(schema) => schema.prepare_document(source, identity.clone(), &mut parents),
+        None => crate::shipped_schema::prepare(source, identity.clone(), &mut parents),
+    }
+    .map_err(Error::Preparation)?;
+    // Traversal may resolve a shared parent through several authored paths but
+    // read it once. Retain each successful spelling only after semantic success.
+    for parent in document.parents() {
+        let paths = parents
+            .paths
+            .get(&parent.source().identity)
+            .ok_or(Error::Resource(ResourceError::InvalidPath))?;
+        for (declaring, written) in paths {
+            parents
+                .resources
+                .capture_from(declaring, written, parent.source().bytes.len())
+                .map_err(Error::Resource)?;
+        }
+    }
+    resources
+        .select_entry_base(&identity)
+        .map_err(Error::Resource)?;
+    Ok(document)
 }
 
 pub fn opaque_resource_failure(attempt: &CapturedAttempt<ResourceError>) -> Option<&ResourceError> {
