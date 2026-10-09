@@ -287,10 +287,10 @@ fn type_name(value: ValueType) -> &'static str {
 
 /// Retain native predicate provenance; host reports may project site-specific fields.
 pub(crate) fn predicate<E>(
-    error: yamaa_core::predicate::EvaluationError<yamaa_core::table::CellError<E>>,
+    error: &yamaa_core::predicate::EvaluationError<yamaa_core::table::CellError<E>>,
 ) -> Result<Box<Diagnostic>, crate::dataset_transport::DatasetTransportError> {
     use yamaa_core::predicate::{Condition, ErrorKind};
-    let ErrorKind::Condition(condition) = error.kind else {
+    let ErrorKind::Condition(condition) = &error.kind else {
         return Err(crate::dataset_transport::DatasetTransportError::Internal);
     };
     let mut context = Context::new();
@@ -314,13 +314,13 @@ pub(crate) fn predicate<E>(
         phase: condition.phase(),
         condition: condition.condition(),
         requirement: Some(condition.requirement()),
-        spec_paths: vec![error.spec_path],
+        spec_paths: vec![error.spec_path.clone()],
         context,
         source_span: None,
         operand_route: Some(
             error
                 .route
-                .into_iter()
+                .iter()
                 .map(|route| format!("{route:?}"))
                 .collect(),
         ),

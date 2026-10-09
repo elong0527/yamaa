@@ -50,6 +50,7 @@ pub mod shipped_schema;
 pub mod specification_source;
 
 pub mod specification_run;
+pub mod specification_run_view;
 
 pub mod specification_diagnostics;
 
@@ -85,6 +86,7 @@ pub mod project_environment_diagnostics;
 pub mod project_source_decoder;
 
 pub mod project_attempt;
+pub mod project_report;
 pub mod project_run;
 
 pub mod project_function_diagnostics;

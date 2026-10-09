@@ -1,5 +1,5 @@
 //! Encode core-owned static check findings without executing or entering a port.
-use crate::{specification_diagnostics::portable_diagnostic, specification_run::PreparedRun};
+use crate::{specification_diagnostics::portable_diagnostic, specification_run_view::RunView};
 use std::io::Write;
 
 pub const MAX_ISSUE_BYTES: usize = 16_777_216;
@@ -21,11 +21,11 @@ impl Error {
 }
 
 /// Both hosts receive context as JSON text, so neither narrows its scalar values.
-pub fn issues(run: &PreparedRun) -> Result<String, Error> {
+pub fn issues(run: &dyn RunView) -> Result<String, Error> {
     encode(run, MAX_ISSUE_BYTES)
 }
 
-pub fn issue_rows(run: &PreparedRun) -> Result<Vec<crate::issue_rows::Issue>, Error> {
+pub fn issue_rows(run: &dyn RunView) -> Result<Vec<crate::issue_rows::Issue>, Error> {
     let rows = run
         .check_diagnostics()
         .into_iter()
@@ -42,7 +42,7 @@ pub fn issue_rows(run: &PreparedRun) -> Result<Vec<crate::issue_rows::Issue>, Er
     Ok(rows)
 }
 
-fn encode(run: &PreparedRun, maximum: usize) -> Result<String, Error> {
+fn encode(run: &dyn RunView, maximum: usize) -> Result<String, Error> {
     let mut rows = Vec::new();
     for finding in issue_rows(run)? {
         rows.push(finding.as_value());
@@ -89,6 +89,7 @@ impl Write for Buffer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::specification_run::PreparedRun;
     #[test]
     fn complete_utf8_issue_payload_obeys_the_exact_byte_ceiling() {
         let schema = crate::shipped_schema::capture().unwrap();

@@ -99,6 +99,7 @@ enum Mode {
     LockFailure,
     BindFailure,
     CaseFailure,
+    CaseMismatch,
     CaseInterrupt,
     CaseUnwind,
     LiveFailure,
@@ -166,6 +167,7 @@ impl ActivationPort for Activation {
             .borrow_mut()
             .push(if *value == 1 { "live" } else { "case" });
         match (self.mode, *value) {
+            (Mode::CaseMismatch, 7) => Ok(Value::Int(8)),
             (Mode::CaseFailure, i64::MIN) | (Mode::LiveFailure, 1) => {
                 Err(HostError::Raised(self.payload(false)))
             }
@@ -509,4 +511,344 @@ fn activation_projection_refuses_partial_budget_and_forged_case_order_without_ef
     );
     assert_eq!(*host.trace.borrow(), trace);
     assert_eq!(study.capture_reads(), reads);
+}
+
+fn report_identity() -> yamaa_adapters::specification_report::Identity<'static> {
+    yamaa_adapters::specification_report::Identity {
+        runtime: "test",
+        runtime_version: "test-1",
+        engine_version: "0.1.0",
+        example: "owned-project",
+        specification: "study/domain.yaml",
+        base_directory: "study",
+    }
+}
+#[derive(Default)]
+struct Publication {
+    calls: Vec<(String, Vec<u8>)>,
+    reject: bool,
+}
+impl yamaa_engine::specification_output::ArtifactPort for Publication {
+    type Error = Rc<()>;
+    fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), Self::Error> {
+        self.calls.push((path.into(), bytes.into()));
+        if self.reject {
+            Err(Rc::new(()))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[test]
+fn complete_project_output_and_save_borrow_the_exact_attempt_without_reactivation() {
+    let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+    let (mut activation, mut study) = ports();
+    let attempt = run.execute_with_ports(&mut activation, &mut study);
+    let trace = activation.trace.borrow().clone();
+    let snapshot = attempt.dataset.sources[0]
+        .snapshot
+        .as_ref()
+        .unwrap()
+        .as_ptr();
+    let result =
+        yamaa_adapters::project_report::build_result(&run, &attempt, report_identity(), &[])
+            .unwrap();
+    let report = result.observations();
+    assert_eq!(report["outcome"], "success");
+    assert_eq!(report["artifacts"], serde_json::json!([]));
+    assert_eq!(report["diagnostics"], serde_json::json!([]));
+    assert_eq!(
+        report["source_reads"],
+        serde_json::json!([{"base_directory":"study","path":"input.csv","outcome":"captured","condition":null,"snapshots_created":1}])
+    );
+    assert_eq!(
+        report["tables"],
+        serde_json::json!([
+            {"specification":"study/domain.yaml","stage":"source","name":"SRC","columns":["ID"],"types":["int"],"rows":[[{"type":"int","value":"1"}]]},
+            {"specification":"study/domain.yaml","stage":"derived","name":"output","columns":["ID","VALUE"],"types":["int","int"],"rows":[[{"type":"int","value":"1"},{"type":"int","value":"1"}]]}
+        ])
+    );
+    assert_eq!(report["activation"]["lock"], "verified");
+    assert_eq!(report["activation"]["tests"].as_array().unwrap().len(), 3);
+    assert_eq!(
+        report["activation"]["tests"][2]["actual"],
+        serde_json::json!({"missing":null})
+    );
+    assert!(result.output().is_some());
+    assert!(result.issues().is_empty());
+    let mut publisher = Publication {
+        reject: true,
+        ..Default::default()
+    };
+    assert!(matches!(
+        result.save(&mut publisher),
+        Err(yamaa_engine::specification_output::SaveError::Publish(_))
+    ));
+    publisher.reject = false;
+    let saved = result.save(&mut publisher).unwrap();
+    assert_eq!(
+        publisher.calls,
+        [
+            ("output.csv".into(), b"ID,VALUE\n1,1\n".to_vec()),
+            ("output.csv".into(), b"ID,VALUE\n1,1\n".to_vec())
+        ]
+    );
+    assert_eq!(saved["artifacts"][0]["content"], "ID,VALUE\n1,1\n");
+    assert_eq!(saved["artifacts"][0]["row_count"], 1);
+    assert_eq!(result.observations(), report);
+    assert_eq!(*activation.trace.borrow(), trace);
+    assert_eq!(study.capture_reads(), 1);
+    assert_eq!(
+        attempt.dataset.sources[0]
+            .snapshot
+            .as_ref()
+            .unwrap()
+            .as_ptr(),
+        snapshot
+    );
+}
+
+#[test]
+fn project_reports_keep_opaque_failures_and_interrupts_original_and_failed_saves_inert() {
+    use yamaa_adapters::{
+        project_function_diagnostics::HostDetails,
+        project_report::{Classified, Error},
+    };
+    let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+    for mode in [
+        Mode::BindFailure,
+        Mode::CaseFailure,
+        Mode::LiveFailure,
+        Mode::CaseInterrupt,
+        Mode::CaseUnwind,
+    ] {
+        let (mut activation, mut study) = ports();
+        activation.mode = mode;
+        let attempt = run.execute_with_ports(&mut activation, &mut study);
+        let trace = activation.trace.borrow().clone();
+        let unclassified =
+            yamaa_adapters::project_report::build_result(&run, &attempt, report_identity(), &[]);
+        if matches!(mode, Mode::CaseInterrupt | Mode::CaseUnwind) {
+            let Error::Boundary(held) = unclassified.unwrap_err() else {
+                panic!("original boundary")
+            };
+            assert!(std::ptr::eq(held, attempt.boundary.as_ref().unwrap_err()));
+        } else {
+            let Error::Opaque(held) = unclassified.unwrap_err() else {
+                panic!("unclassified original payload")
+            };
+            assert!(Rc::ptr_eq(&held.original, &activation.original));
+            let facts = [Classified::Host {
+                failure: held,
+                details: HostDetails::Exception {
+                    class: "OriginalFailure",
+                    message: "é failure",
+                    truncated: false,
+                },
+            }];
+            let result = yamaa_adapters::project_report::build_result(
+                &run,
+                &attempt,
+                report_identity(),
+                &facts,
+            )
+            .unwrap();
+            let observed = result.observations();
+            assert_eq!(observed["outcome"], "failure");
+            assert_eq!(observed["artifacts"], serde_json::json!([]));
+            assert_eq!(result.output(), None);
+            assert_eq!(result.issues().len(), 1);
+            let expected = if matches!(mode, Mode::BindFailure) {
+                "project_environment_invalid"
+            } else if matches!(mode, Mode::CaseFailure) {
+                "function_conformance_failed"
+            } else {
+                "function_call_failed"
+            };
+            assert_eq!(result.issues()[0].condition, expected);
+            if matches!(mode, Mode::LiveFailure) {
+                assert_eq!(observed["source_reads"].as_array().unwrap().len(), 1);
+                assert_eq!(observed["activation"]["tests"].as_array().unwrap().len(), 3);
+            } else {
+                assert_eq!(observed["source_reads"], serde_json::json!([]));
+            }
+            let mut publisher = Publication::default();
+            assert!(matches!(
+                result.save(&mut publisher),
+                Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+            ));
+            assert!(publisher.calls.is_empty());
+            assert!(Rc::ptr_eq(&held.original, &activation.original));
+        }
+        assert_eq!(*activation.trace.borrow(), trace);
+        assert_eq!(
+            study.capture_reads(),
+            usize::from(matches!(mode, Mode::LiveFailure))
+        );
+    }
+}
+
+#[test]
+fn report_classifications_cannot_target_a_different_failure_or_supply_duplicates() {
+    use yamaa_adapters::{
+        project_function_diagnostics::HostDetails,
+        project_report::{Classified, Error},
+    };
+    let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+    let (mut activation, mut study) = ports();
+    activation.mode = Mode::BindFailure;
+    let attempt = run.execute_with_ports(&mut activation, &mut study);
+    let Err(BoundaryFailure::Activation(Failure::Bindings(failures))) = &attempt.boundary else {
+        panic!("binding failure")
+    };
+    let original = &failures[0].error;
+    let other = Payload {
+        original: Rc::clone(&original.original),
+        interrupt: false,
+    };
+    let details = HostDetails::Exception {
+        class: "Failure",
+        message: "same text",
+        truncated: false,
+    };
+    for facts in [
+        vec![Classified::Host {
+            failure: &other,
+            details,
+        }],
+        vec![
+            Classified::Host {
+                failure: original,
+                details,
+            },
+            Classified::Host {
+                failure: original,
+                details,
+            },
+        ],
+    ] {
+        assert!(matches!(
+            yamaa_adapters::project_report::build_result(&run, &attempt, report_identity(), &facts),
+            Err(Error::Report(
+                yamaa_adapters::specification_report::Error::InvalidObservation
+            ))
+        ));
+    }
+    assert_eq!(study.capture_reads(), 0);
+    assert_eq!(*activation.trace.borrow(), ["lock", "bind"]);
+}
+
+#[test]
+fn complete_reports_refuse_missing_or_contradictory_activation_success() {
+    use yamaa_adapters::{project_report::Error, specification_report};
+    use yamaa_engine::project_activation::BindingOutcome;
+    let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+    for change in 0..5 {
+        let (mut activation, mut study) = ports();
+        let mut attempt = run.execute_with_ports(&mut activation, &mut study);
+        let trace = activation.trace.borrow().clone();
+        match change {
+            0 => {
+                attempt.activation.tests.pop();
+            }
+            1 => attempt.activation.tests[0].actual = None,
+            2 => attempt.activation.tests[0].actual = Some(Value::Int(99)),
+            3 => attempt.activation.lock = LockObservation::Rejected,
+            _ => attempt.activation.bindings[0].outcome = BindingOutcome::Rejected,
+        }
+        assert!(matches!(
+            yamaa_adapters::project_report::build_result(&run, &attempt, report_identity(), &[]),
+            Err(Error::Report(
+                specification_report::Error::InvalidObservation
+            ))
+        ));
+        assert_eq!(*activation.trace.borrow(), trace);
+        assert_eq!(study.capture_reads(), 1);
+        assert!(attempt.dataset.result.as_ref().unwrap().result.is_ok());
+    }
+}
+
+#[test]
+fn lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports() {
+    use yamaa_adapters::{
+        project_lock::{Finding, Reason},
+        project_report::{Classified, Error},
+    };
+    let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+    let (mut activation, mut study) = ports();
+    activation.mode = Mode::LockFailure;
+    let attempt = run.execute_with_ports(&mut activation, &mut study);
+    let Err(BoundaryFailure::Activation(Failure::Lock(original))) = &attempt.boundary else {
+        panic!("original lock payload")
+    };
+    let findings = [Finding {
+        package: "project".into(),
+        reason: Reason::DistributionNotIdentified,
+        expected: vec![],
+        actual: None,
+    }];
+    let result = yamaa_adapters::project_report::build_result(
+        &run,
+        &attempt,
+        report_identity(),
+        &[Classified::Lock {
+            failure: original,
+            findings: &findings,
+        }],
+    )
+    .unwrap();
+    assert_eq!(result.issues()[0].condition, "project_environment_invalid");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&result.issues()[0].context).unwrap(),
+        serde_json::json!({"source":"study/environment.yaml","entry":"study/environment.yaml","lock_source":"held/uv.lock","lock":"../uv.lock","package":"project","reason":"distribution_not_identified","expected":[],"actual":null})
+    );
+    assert_eq!(result.observations()["source_reads"], serde_json::json!([]));
+    assert_eq!(result.observations()["activation"]["lock"], "rejected");
+    assert_eq!(*activation.trace.borrow(), ["lock"]);
+    assert_eq!(study.capture_reads(), 0);
+    assert!(Rc::ptr_eq(&original.original, &activation.original));
+    assert!(matches!(
+        yamaa_adapters::project_report::build_result(
+            &run,
+            &attempt,
+            report_identity(),
+            &[Classified::Lock {
+                failure: original,
+                findings: &[]
+            }]
+        ),
+        Err(Error::Report(_))
+    ));
+    let (mut activation, mut study) = ports();
+    activation.mode = Mode::CaseMismatch;
+    let attempt = run.execute_with_ports(&mut activation, &mut study);
+    let result =
+        yamaa_adapters::project_report::build_result(&run, &attempt, report_identity(), &[])
+            .unwrap();
+    assert_eq!(result.issues()[0].condition, "function_conformance_failed");
+    assert_eq!(result.issues()[0].spec_paths, ["functions.id.tests[0]"]);
+    let context: serde_json::Value = serde_json::from_str(&result.issues()[0].context).unwrap();
+    assert_eq!(context["expected"], 7);
+    assert_eq!(context["actual"], 8);
+    assert_eq!(
+        result.observations()["activation"]["tests"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    assert_eq!(
+        result.observations()["activation"]["tests"][1]["outcome"],
+        "passed"
+    );
+    assert_eq!(result.output(), None);
+    let mut publisher = Publication::default();
+    assert!(matches!(
+        result.save(&mut publisher),
+        Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+    ));
+    assert!(publisher.calls.is_empty());
+    assert_eq!(study.capture_reads(), 0);
+    assert_eq!(*activation.trace.borrow(), ["lock", "bind", "case", "case"]);
 }

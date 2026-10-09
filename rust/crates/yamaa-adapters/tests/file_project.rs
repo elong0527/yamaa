@@ -84,6 +84,7 @@ const DOMAIN: &str = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: i
 struct Activation {
     trace: Vec<&'static str>,
     reject: bool,
+    mismatch: bool,
 }
 impl ActivationPort for Activation {
     type Handle = ();
@@ -118,11 +119,59 @@ impl ActivationPort for Activation {
             panic!("exact named argument")
         };
         match value {
-            ValueRef::Int(n) => Ok(Value::Int(*n)),
+            ValueRef::Int(n) => Ok(Value::Int(if self.mismatch { n + 1 } else { *n })),
             ValueRef::Missing => Ok(Value::Missing),
             _ => panic!("integer or admitted missing"),
         }
     }
+}
+
+#[test]
+fn project_report_uses_held_external_function_origins_after_metadata_files_change() {
+    let study = Study::new();
+    let mut project = study.prepare(&study.text(""), &[]).unwrap();
+    let reads = project.capture_reads();
+    let mut activation = Activation {
+        mismatch: true,
+        ..Default::default()
+    };
+    let attempt = project.build(&mut activation);
+    let run = project.retained_run();
+    study.write("env/id.yaml", "changed after preparation");
+    study.write("env/environment.yaml", "changed root after preparation");
+    drop(project);
+    let result = yamaa_adapters::project_report::build_result(
+        &run,
+        &attempt,
+        yamaa_adapters::specification_report::Identity {
+            runtime: "test",
+            runtime_version: "1",
+            engine_version: "0.1.0",
+            example: "external-project",
+            specification: "domain.yaml",
+            base_directory: "entry",
+        },
+        &[],
+    )
+    .unwrap();
+    assert_eq!(result.issues().len(), 1);
+    assert_eq!(result.issues()[0].spec_paths, ["tests[0]"]);
+    let context: serde_json::Value = serde_json::from_str(&result.issues()[0].context).unwrap();
+    assert_eq!(context["source"], study.text("env/id.yaml"));
+    assert_eq!(context["entry"], study.text("env/environment.yaml"));
+    assert_eq!(context["environment_path"], "functions.id");
+    assert_eq!(context["actual"], 8);
+    assert_eq!(context["expected"], 7);
+    assert_eq!(result.observations()["source_reads"], serde_json::json!([]));
+    assert_eq!(activation.trace, ["lock", "bind", "call", "call"]);
+    assert_eq!(reads, 5);
+    assert_eq!(
+        run.captured_environment().captures()[0]
+            .document
+            .source()
+            .identity,
+        study.text("env/id.yaml")
+    );
 }
 
 #[test]

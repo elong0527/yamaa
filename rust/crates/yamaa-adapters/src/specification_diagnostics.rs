@@ -18,7 +18,7 @@ fn diagnostic(
 ) -> Value {
     json!({"phase":phase,"condition":condition,"requirement":requirement,"spec_paths":paths,"context":context})
 }
-fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> {
+pub(crate) fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> {
     let BindError::Invalid(findings) = error else {
         return None;
     };

@@ -1022,15 +1022,24 @@ fn records(records: Vec<CheckRecord>) -> Result<Vec<Record>, Error> {
 }
 /// Expose resource policy separately from semantic conversion/reduction/check failures.
 fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
-    Ok(match error {
+    match error {
         ExecutionError::Function {
             path,
             error,
             identity: keys,
-        } => Outcome::FunctionCondition {
+        } => Ok(Outcome::FunctionCondition {
             diagnostic: functions::Diagnostic::new(path, error)?,
             identity: keys.map(identity),
-        },
+        }),
+        other => semantic_failure(&other, true),
+    }
+}
+
+/// Read core-owned semantic facts without cloning or classifying any host payload.
+/// Project calls and codelist records retain their separate typed formatters.
+fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Result<Outcome, Error> {
+    Ok(match error {
+        ExecutionError::Function { .. } => return Err(Error::UnsupportedProtocol),
         ExecutionError::FunctionBinding { .. } => return Err(Error::FunctionBinding),
         // dataset/1 admits only legacy versioned declarations. Versionless
         // package calls use the owned file application rather than this wire.
@@ -1039,8 +1048,9 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             error,
             identity: keys,
         } => Outcome::Condition {
-            diagnostic: crate::numeric_transport::numeric(error).map_err(|_| Error::Internal)?,
-            identity: keys.map(identity),
+            diagnostic: crate::numeric_transport::numeric(error.clone())
+                .map_err(|_| Error::Internal)?,
+            identity: keys.clone().map(identity),
             matched_key: None,
             partition: None,
             verifications: None,
@@ -1053,19 +1063,19 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             partition,
         } => Outcome::Condition {
             diagnostic: crate::numeric_transport::baseline_ambiguity(
-                path,
-                column,
-                date,
-                match_count,
+                path.clone(),
+                column.clone(),
+                date.clone(),
+                *match_count,
             )?,
             identity: None,
             matched_key: None,
             partition: Some(
                 partition
-                    .into_iter()
+                    .iter()
                     .map(|(name, value)| PartitionValue {
-                        name,
-                        value: ScalarValue::from_core(value),
+                        name: name.clone(),
+                        value: ScalarValue::from_core(value.clone()),
                     })
                     .collect(),
             ),
@@ -1081,20 +1091,20 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             identity: keys,
         } => Outcome::Condition {
             diagnostic: crate::numeric_transport::join_condition(
-                path,
-                dataset,
-                intermediate,
-                Some(match_count),
+                path.clone(),
+                dataset.clone(),
+                intermediate.clone(),
+                Some(*match_count),
             )?,
-            identity: keys.map(identity),
+            identity: keys.clone().map(identity),
             partition: None,
             verifications: None,
             matched_key: Some(
                 matched_key
-                    .into_iter()
+                    .iter()
                     .map(|(name, value)| PartitionValue {
-                        name,
-                        value: ScalarValue::from_core(value),
+                        name: name.clone(),
+                        value: ScalarValue::from_core(value.clone()),
                     })
                     .collect(),
             ),
@@ -1107,20 +1117,20 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             identity: keys,
         } => Outcome::Condition {
             diagnostic: crate::numeric_transport::join_condition(
-                path,
-                dataset,
-                intermediate,
+                path.clone(),
+                dataset.clone(),
+                intermediate.clone(),
                 None,
             )?,
-            identity: keys.map(identity),
+            identity: keys.clone().map(identity),
             partition: None,
             verifications: None,
             matched_key: Some(
                 matched_key
-                    .into_iter()
+                    .iter()
                     .map(|(name, value)| PartitionValue {
-                        name,
-                        value: ScalarValue::from_core(value),
+                        name: name.clone(),
+                        value: ScalarValue::from_core(value.clone()),
                     })
                     .collect(),
             ),
@@ -1133,8 +1143,12 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
         } => Outcome::Condition {
             matched_key: None,
             partition: None,
-            diagnostic: crate::numeric_transport::multiple_values(path, identifier, value_count)?,
-            identity: keys.map(identity),
+            diagnostic: crate::numeric_transport::multiple_values(
+                path.clone(),
+                identifier.clone(),
+                *value_count,
+            )?,
+            identity: keys.clone().map(identity),
             verifications: None,
         },
         ExecutionError::Limit {
@@ -1177,11 +1191,11 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
         },
         ExecutionError::KeyFailures(found) => Outcome::Failure {
             phase: "output",
-            verifications: records(found)?,
+            verifications: records(found.clone())?,
         },
         ExecutionError::VerificationFailures(found) => Outcome::Failure {
             phase: "verification",
-            verifications: records(found)?,
+            verifications: records(found.clone())?,
         },
         ExecutionError::Conversion {
             path,
@@ -1192,8 +1206,8 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             matched_key: None,
             partition: None,
             verifications: None,
-            diagnostic: conversion(error, path),
-            identity: keys.map(identity),
+            diagnostic: conversion(error.clone(), path.clone()),
+            identity: keys.clone().map(identity),
         },
         ExecutionError::Predicate { error, .. } => Outcome::Condition {
             matched_key: None,
@@ -1214,11 +1228,11 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             verifications: None,
             identity: None,
             diagnostic: crate::numeric_transport::reduction_type(
-                path,
-                expression,
+                path.clone(),
+                expression.clone(),
                 reducer.name(),
-                source,
-                actual,
+                source.clone(),
+                *actual,
             ),
         },
         ExecutionError::Reduction {
@@ -1229,8 +1243,8 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             matched_key: None,
             partition: None,
             verifications: None,
-            diagnostic: arithmetic(error, path),
-            identity: keys.map(identity),
+            diagnostic: arithmetic(error.clone(), path.clone()),
+            identity: keys.clone().map(identity),
         },
         ExecutionError::VerificationDiagnostic {
             diagnostic,
@@ -1239,8 +1253,12 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             matched_key: None,
             partition: None,
             identity: None,
-            diagnostic: Box::new(diagnostic.into()),
-            verifications: Some(records(completed)?),
+            diagnostic: Box::new(diagnostic.clone().into()),
+            verifications: if retain_records {
+                Some(records(completed.clone())?)
+            } else {
+                None
+            },
         },
         ExecutionError::VerificationDeclaration {
             path,
@@ -1252,8 +1270,17 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             matched_key: None,
             partition: None,
             identity: None,
-            diagnostic: crate::numeric_transport::declaration(path, condition, requirement, reason),
-            verifications: Some(records(completed)?),
+            diagnostic: crate::numeric_transport::declaration(
+                path.clone(),
+                condition,
+                requirement,
+                reason.clone(),
+            ),
+            verifications: if retain_records {
+                Some(records(completed.clone())?)
+            } else {
+                None
+            },
         },
         ExecutionError::VerificationPredicate {
             error,
@@ -1263,13 +1290,23 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
             partition: None,
             diagnostic: crate::numeric_transport::predicate(error)?,
             identity: None,
-            verifications: Some(records(completed)?),
+            verifications: if retain_records {
+                Some(records(completed.clone())?)
+            } else {
+                None
+            },
         },
         ExecutionError::SchemaMismatch => return Err(Error::InvalidRequest),
         // Admitted references and normalized owned Arrow values make other semantic
         // and coordinate failures impossible. Never invent missing or acceptance.
         _ => return Err(Error::Internal),
     })
+}
+
+/// Borrow a retained non-host failure for the complete project report formatter.
+pub(crate) fn semantic_condition<E>(error: &ExecutionError<E>) -> Result<serde_json::Value, Error> {
+    let outcome = semantic_failure(error, false)?;
+    serde_json::to_value(outcome).map_err(|_| Error::Internal)
 }
 
 /// Encode engine observations through one existing diagnostic vocabulary.

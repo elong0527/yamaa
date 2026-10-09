@@ -3,7 +3,8 @@
 use crate::{
     scalar_transport::ScalarValue,
     specification_diagnostics,
-    specification_run::{CapturedAttempt, PortError, PreparedRun},
+    specification_run::{CapturedAttempt, PortError},
+    specification_run_view::RunView,
 };
 use serde_json::{json, Map, Value};
 use yamaa_core::{
@@ -40,7 +41,7 @@ fn plain(value: &Value) -> Result<Value, Error> {
         },
     )
 }
-fn condition(run: &PreparedRun, value: &Value) -> Result<Value, Error> {
+pub(crate) fn condition(run: &dyn RunView, value: &Value) -> Result<Value, Error> {
     let diagnostic = value.get("diagnostic").ok_or(Error::InvalidObservation)?;
     let mut context = diagnostic
         .get("context")
@@ -54,7 +55,7 @@ fn condition(run: &PreparedRun, value: &Value) -> Result<Value, Error> {
             .get("keys")
             .and_then(Value::as_array)
             .ok_or(Error::InvalidObservation)?;
-        let names = run.key_names().collect::<Vec<_>>();
+        let names = run.compiled().key_names().collect::<Vec<_>>();
         if names.len() != keys.len() {
             return Err(Error::InvalidObservation);
         }
@@ -116,7 +117,7 @@ fn captured_failure<E>(
 }
 
 fn inspected_failures<'a, E>(
-    run: &PreparedRun,
+    run: &dyn RunView,
     attempt: &'a CapturedAttempt<E>,
 ) -> Result<&'a [crate::specification_run::InspectionFailure<E>], Error> {
     let Err(PortError::Inspect(failures)) = &attempt.result else {
@@ -139,7 +140,7 @@ fn inspected_failures<'a, E>(
 
 /// Refuse outcomes outside this formatter instead of inventing observations.
 pub fn failure<E>(
-    run: &PreparedRun,
+    run: &dyn RunView,
     attempt: &CapturedAttempt<E>,
     id: Identity<'_>,
 ) -> Result<Value, Error> {
@@ -257,7 +258,7 @@ fn table_observation<T: TableAccess>(
     )
 }
 fn envelope<E>(
-    run: &PreparedRun,
+    run: &dyn RunView,
     attempt: &CapturedAttempt<E>,
     id: &Identity<'_>,
 ) -> Result<Value, Error> {
@@ -273,9 +274,17 @@ fn envelope<E>(
     {
         return Err(Error::InvalidObservation);
     }
+    envelope_sources(run, &attempt.sources, id)
+}
+
+pub(crate) fn envelope_sources<T: TableAccess>(
+    _run: &dyn RunView,
+    sources: &[yamaa_engine::specification_run::CapturedSource<T>],
+    id: &Identity<'_>,
+) -> Result<Value, Error> {
     let mut tables = Vec::new();
-    if attempt.sources.iter().all(|source| source.table.is_some()) {
-        for source in &attempt.sources {
+    if sources.iter().all(|source| source.table.is_some()) {
+        for source in sources {
             tables.push(table_observation(
                 source.table.as_ref().expect("complete ingestion"),
                 id,
@@ -284,7 +293,7 @@ fn envelope<E>(
             )?);
         }
     }
-    let reads = attempt.sources.iter().map(|source| Ok(json!({"base_directory":id.base_directory,"path":source.read.source.path,"outcome":if source.read.captured {"captured"} else {"failure"},"condition":source.read.failure.map(|failure| failure.code().definition().condition),"snapshots_created":source.read.snapshots_created.ok_or(Error::InvalidObservation)?}))).collect::<Result<Vec<_>,Error>>()?;
+    let reads = sources.iter().map(|source| Ok(json!({"base_directory":id.base_directory,"path":source.read.source.path,"outcome":if source.read.captured {"captured"} else {"failure"},"condition":source.read.failure.map(|failure| failure.code().definition().condition),"snapshots_created":source.read.snapshots_created.ok_or(Error::InvalidObservation)?}))).collect::<Result<Vec<_>,Error>>()?;
     Ok(
         json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,
         "outcome":"failure","artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],
@@ -293,14 +302,14 @@ fn envelope<E>(
         "source_reads":reads,"error":null}),
     )
 }
-fn bounded(report: Value) -> Result<Value, Error> {
+pub(crate) fn bounded(report: Value) -> Result<Value, Error> {
     if report.to_string().len() > 16_777_216 {
         Err(Error::OutputLimit)
     } else {
         Ok(report)
     }
 }
-fn set_handler_counts(report: &mut Value, response: &Value) -> Result<(), Error> {
+pub(crate) fn set_handler_counts(report: &mut Value, response: &Value) -> Result<(), Error> {
     let Some(raw) = response.get("handler_counts") else {
         return Ok(());
     };
@@ -320,7 +329,7 @@ fn set_handler_counts(report: &mut Value, response: &Value) -> Result<(), Error>
     report["nodes"][0]["handler_counts"] = report["handler_counts"].clone();
     Ok(())
 }
-fn set_diagnostics(report: &mut Value, diagnostics: Vec<Value>) {
+pub(crate) fn set_diagnostics(report: &mut Value, diagnostics: Vec<Value>) {
     report["diagnostics"] = json!(diagnostics);
     report["nodes"][0]["diagnostics"] = report["diagnostics"].clone();
 }
@@ -364,25 +373,34 @@ impl BuildResult {
 
 /// Prepare a public-result candidate without recapturing data or publishing bytes.
 pub fn build_result<E>(
-    run: &PreparedRun,
+    run: &dyn RunView,
     attempt: &CapturedAttempt<E>,
     id: Identity<'_>,
 ) -> Result<BuildResult, Error> {
-    use yamaa_engine::specification_output::{self as output, CompleteError as E};
     let execution = attempt
         .result
         .as_ref()
         .ok()
         .and_then(|r| r.execution.as_ref());
+    let observations = observations(run, attempt, &id)?;
+    prepare_result(run, execution, id, observations)
+}
+
+pub(crate) fn prepare_result(
+    run: &dyn RunView,
+    execution: Option<&yamaa_engine::dataset::Execution>,
+    id: Identity<'_>,
+    observations: Value,
+) -> Result<BuildResult, Error> {
+    use yamaa_engine::specification_output::{self as output, CompleteError as E};
     let prepared = output::prepare(
         run.compiled(),
         execution,
         8 * 1024 * 1024,
         &mut Report {
             run,
-            attempt,
             id,
-            value: None,
+            value: Some(observations),
         },
         &mut Encoder(run.compiled().output_profile()),
     )
@@ -433,8 +451,8 @@ fn count(record: &Value, name: &str) -> Result<usize, Error> {
         .and_then(|s| s.parse::<usize>().ok())
         .ok_or(Error::InvalidObservation)
 }
-fn check_observations(
-    run: &PreparedRun,
+pub(crate) fn check_observations(
+    run: &dyn RunView,
     outcome: &Value,
     id: &Identity<'_>,
 ) -> Result<(Vec<Value>, Vec<Value>), Error> {
@@ -462,7 +480,7 @@ fn check_observations(
                 let values = identity["keys"]
                     .as_array()
                     .ok_or(Error::InvalidObservation)?;
-                let names = run.key_names().collect::<Vec<_>>();
+                let names = run.compiled().key_names().collect::<Vec<_>>();
                 if names.len() != values.len() {
                     return Err(Error::InvalidObservation);
                 }
@@ -499,7 +517,7 @@ fn check_observations(
                         .and_then(|s| s.strip_suffix(']'))
                         .and_then(|s| s.parse::<usize>().ok())
                         .ok_or(Error::InvalidObservation)?;
-                    json!({"column":run.key_names().nth(position).ok_or(Error::InvalidObservation)?,"missing_count":failed})
+                    json!({"column":run.compiled().key_names().nth(position).ok_or(Error::InvalidObservation)?,"missing_count":failed})
                 }
                 "duplicate_key" => json!({"duplicate_count":failed}),
                 "assert_failed" | "all_or_none_failed" => json!({"failure_count":failed}),
@@ -532,9 +550,31 @@ fn check_observations(
                     context["verification_id"] = json!(identity);
                 }
             }
+            if let Some(codelist) = record.get("codelist") {
+                let Some(yamaa_engine::dataset::Check::Codelist { id, .. }) =
+                    run.compiled().column_check(path)
+                else {
+                    return Err(Error::InvalidObservation);
+                };
+                if codelist["id"].as_str() != Some(id.as_str()) {
+                    return Err(Error::InvalidObservation);
+                }
+                context["values"] = Value::Array(
+                    codelist["values"]
+                        .as_array()
+                        .ok_or(Error::InvalidObservation)?
+                        .iter()
+                        .map(plain)
+                        .collect::<Result<_, _>>()?,
+                );
+            }
             let mut log_context = context.clone();
             log_context["keys"] = json!(keys);
-            context["keys"] = json!(&keys[..keys.len().min(5)]);
+            context["keys"] = if record.get("codelist").is_some() {
+                json!(keys)
+            } else {
+                json!(&keys[..keys.len().min(5)])
+            };
             let diagnostic = json!({"phase":if output_phase {"output"} else {"verification"},"condition":condition,"spec_paths":[path],"requirement":record["requirement"],"context":context});
             diagnostics.push(diagnostic.clone());
             detail = diagnostic;
@@ -569,7 +609,7 @@ fn output_diagnostics(
 /// Render all portable observations and enforce report/output budgets before
 /// publication. A host publication failure is retained, never a success report.
 pub fn complete<E, P: ArtifactPort>(
-    run: &PreparedRun,
+    run: &dyn RunView,
     attempt: &CapturedAttempt<E>,
     id: Identity<'_>,
     publisher: &mut P,
@@ -580,15 +620,15 @@ pub fn complete<E, P: ArtifactPort>(
         .as_ref()
         .ok()
         .and_then(|response| response.execution.as_ref());
+    let observations = observations(run, attempt, &id)?;
     output::complete(
         run.compiled(),
         execution,
         8 * 1024 * 1024,
         &mut Report {
             run,
-            attempt,
             id,
-            value: None,
+            value: Some(observations),
         },
         &mut Encoder(run.compiled().output_profile()),
         publisher,
@@ -638,34 +678,44 @@ impl yamaa_engine::specification_output::ArtifactEncoder for Encoder {
     }
 }
 
-struct Report<'a, 'i, E> {
-    run: &'a PreparedRun,
-    attempt: &'a CapturedAttempt<E>,
+fn observations<E>(
+    run: &dyn RunView,
+    attempt: &CapturedAttempt<E>,
+    id: &Identity<'_>,
+) -> Result<Value, Error> {
+    let Some(response) = attempt
+        .result
+        .as_ref()
+        .ok()
+        .filter(|r| r.execution.is_some())
+    else {
+        return failure(run, attempt, id.borrow());
+    };
+    let value: Value =
+        serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
+    let mut report = envelope(run, attempt, id)?;
+    let (checks, unexpected) = check_observations(run, &value["outcome"], id)?;
+    if !unexpected.is_empty() {
+        return Err(Error::InvalidObservation);
+    }
+    set_handler_counts(&mut report, &value)?;
+    report["verifications"] = json!(checks);
+    bounded(report)
+}
+
+struct Report<'a, 'i> {
+    run: &'a dyn RunView,
     id: Identity<'i>,
     value: Option<Value>,
 }
-impl<E> yamaa_engine::specification_output::OutputReport for Report<'_, '_, E> {
+impl yamaa_engine::specification_output::OutputReport for Report<'_, '_> {
     type Error = Error;
     type Report = Value;
     fn failure(&mut self) -> Result<Value, Error> {
-        failure(self.run, self.attempt, self.id.borrow())
+        bounded(self.value.take().ok_or(Error::InvalidObservation)?)
     }
     fn begin(&mut self, _execution: &yamaa_engine::dataset::Execution) -> Result<(), Error> {
-        let response = self
-            .attempt
-            .result
-            .as_ref()
-            .map_err(|_| Error::InvalidObservation)?;
-        let value: Value =
-            serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
-        let mut report = envelope(self.run, self.attempt, &self.id)?;
-        let (checks, unexpected) = check_observations(self.run, &value["outcome"], &self.id)?;
-        if !unexpected.is_empty() {
-            return Err(Error::InvalidObservation);
-        }
-        set_handler_counts(&mut report, &value)?;
-        report["verifications"] = json!(checks);
-        self.value = Some(report);
+        self.value.as_ref().ok_or(Error::InvalidObservation)?;
         Ok(())
     }
     fn rejected(
