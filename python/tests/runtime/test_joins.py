@@ -17,6 +17,9 @@ from yamaa.runtime import (
     execute_with_source_provider,
 )
 from yamaa.runtime.joins import (
+    IndexedRecord,
+    OrderError,
+    RecordResolver,
     RelationIndex,
     applicable_keys,
     compare_values,
@@ -25,6 +28,7 @@ from yamaa.runtime.joins import (
     order_records,
     partition_records,
     resolution_result,
+    resolve_order_terms,
 )
 from yamaa.specification.models import (
     Column,
@@ -484,3 +488,147 @@ def test_a_structured_implicit_source_filters_and_selects_before_reading() -> No
 
     assert isinstance(result, ExecutionSuccess)
     assert result.table.frame.to_dicts() == [{"STUDYID": "S", "USUBJID": "a", "V": 3.0}]
+
+
+def test_descending_order_reverses_distinct_values() -> None:
+    # REQ-0300: the `desc` branch must actually reverse. The earlier coverage
+    # used two equal dates, which cannot tell ascending from descending.
+    index = relation(
+        "EX",
+        [("EXSTDTC", "date"), ("EXSEQ", "int")],
+        [
+            [DateValue.parse("2025-01-08"), 1],
+            [DateValue.parse("2025-01-20"), 2],
+            [DateValue.parse("2025-01-15"), 3],
+        ],
+    )
+    descending = OrderTerm(variable="EX.EXSTDTC", direction="desc")
+
+    ordered = order_records(index.records, [(descending, "EXSTDTC")])
+
+    assert [record.position for record in ordered] == [1, 2, 0]
+
+
+def test_ordering_names_the_variable_and_types_it_cannot_compare() -> None:
+    # REQ-0324: the incompatible-type diagnostic carries the variable and the
+    # compared type names, not just the refusal.
+    records = (
+        IndexedRecord(position=0, values={"V": "b"}),
+        IndexedRecord(position=1, values={"V": 1}),
+    )
+
+    with pytest.raises(OrderError) as exc_info:
+        order_records(records, [(OrderTerm(variable="EX.V"), "V")])
+
+    assert exc_info.value.variable == "EX.V"
+    assert sorted(exc_info.value.types) == ["int", "str"]
+
+
+def test_keep_first_selects_the_earliest_match() -> None:
+    # REQ-0118 and REQ-0140: keep="first" is the mirror of the covered
+    # keep="last" selection.
+    index = ex_relation()
+
+    result = join_scalar(
+        index,
+        ("STUDYID", "USUBJID"),
+        ("CATH", "S1"),
+        "EXTRT",
+        multiple_matches={"order_by": [ORDER_BY], "keep": "first"},
+    )
+
+    assert isinstance(result, ResolvedValue)
+    assert result.value == "VITAMIN D3"
+    assert result.handled_by == "multiple_matches"
+
+
+def test_a_descending_selection_orders_before_keeping_first() -> None:
+    # The declared order_by must actually bind: skipping the terms leaves
+    # position order, which disagrees with a descending date order.
+    index = ex_relation()
+
+    result = join_scalar(
+        index,
+        ("STUDYID", "USUBJID"),
+        ("CATH", "S1"),
+        "EXTRT",
+        multiple_matches={
+            "order_by": [{"variable": "EX.EXSTDTC", "direction": "desc"}],
+            "keep": "first",
+        },
+    )
+
+    assert isinstance(result, ResolvedValue)
+    assert result.value == "PLACEBO"
+    assert result.handled_by == "multiple_matches"
+
+
+@pytest.mark.parametrize("variable", ["AAA.EXTRT", "ZZZ.EXTRT"])
+def test_a_right_side_reference_with_a_foreign_qualifier_fails_validation(
+    variable: str,
+) -> None:
+    # REQ-0132: any qualifier other than the relation's own dataset is
+    # unknown_field, whichever way it sorts against the dataset name.
+    index = ex_relation()
+    resolver = RecordResolver("EX", index.fields, index.records[0])
+
+    result = resolver.resolve(variable)
+
+    assert isinstance(result, FailedResolution)
+    assert result.condition.condition == "unknown_field"
+
+
+def test_a_right_side_reference_to_an_unknown_field_fails_validation() -> None:
+    # REQ-0132: a correct qualifier with an unknown field is unknown_field,
+    # not a record access error.
+    index = ex_relation()
+
+    kept = eligible_records(index.records, parse_predicate("EX.NOPE = 'X'"), index)
+
+    assert isinstance(kept, ConditionResult)
+    assert kept.condition.condition == "unknown_field"
+
+
+@pytest.mark.parametrize("variable", ["AAA.EXSTDTC", "ZZZ.EXSTDTC", "EX.NOPE"])
+def test_an_order_term_outside_the_relation_is_rejected(variable: str) -> None:
+    # resolve_order_terms binds each term to a field of the relation it
+    # orders; a foreign qualifier or an unknown field is unknown_field.
+    index = ex_relation()
+
+    result = resolve_order_terms([OrderTerm(variable=variable)], index)
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "unknown_field"
+
+
+def test_a_doubly_dotted_variable_is_an_unknown_field() -> None:
+    # The qualifier/field split happens on the first dot only; the remainder
+    # is a field name the relation does not carry.
+    index = ex_relation()
+    resolver = RecordResolver("EX", index.fields, index.records[0])
+
+    result = resolver.resolve("EX.A.B")
+
+    assert isinstance(result, FailedResolution)
+    assert result.condition.condition == "unknown_field"
+
+
+def test_a_selection_with_an_unknown_key_is_rejected() -> None:
+    # MultipleMatchSelection forbids extra keys; a stray key is
+    # invalid_field_type rather than a silently accepted selection.
+    index = ex_relation()
+
+    result = join_scalar(
+        index,
+        ("STUDYID", "USUBJID"),
+        ("CATH", "S1"),
+        "EXTRT",
+        multiple_matches={
+            "order_by": [{"variable": "EX.EXSTDTC"}],
+            "keep": "last",
+            "bogus": 1,
+        },
+    )
+
+    assert isinstance(result, FailedResolution)
+    assert result.condition.condition == "invalid_field_type"
