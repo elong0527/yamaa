@@ -38,6 +38,9 @@ scales <- tribble(
 )
 
 score_one <- function(pcode, pname, members, anchor, min_ans, direction, rng) {
+  # `members` arrives as a one-element list from the tribble's list-column;
+  # `%in%` against a list never matches, so unwrap it first.
+  members <- unlist(members)
   member_rows <- items |> filter(PARAMCD %in% members)
   visits <- items |>
     filter(PARAMCD %in% anchor) |>
