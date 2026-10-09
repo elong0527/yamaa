@@ -293,6 +293,11 @@ columns:
     derivation:
       compute:
         expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
+    # The Excel row's "rounded to 1 decimal" is display-only here: the source
+    # benchmark stores the unrounded computed value, so the rounding becomes
+    # a submission.display_format instead of round_half_away_from_zero.
+    submission:
+      display_format: 8.1
 
 verifications:
   - assert:
