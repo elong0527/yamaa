@@ -122,6 +122,20 @@ with the derivation below and the admiral function as grounding.
    > per subject/visit/differential, gated on a WBC count and a
    > fraction with an existing-record block; drift verified clean
    > 2026-10-09.
+   >
+   > Enhancement checks recorded 2026-10-09: `factory.sh validate`
+   > adam-adlb-lymphocytes clean on every benchmark-scoped check
+   > (spec, expected csv, run.py/run.R, badges, README contract,
+   > golden columns, spec style); the sole failure is the repo-wide
+   > validate_repository.py non-ASCII flag in
+   > automation/background/bug-sweeps/runs.md, pre-existing on main
+   > since 2026-10-05 and unrelated to this benchmark. drift-check
+   > passes. The Python reference solution reproduces the golden
+   > exactly (29/29 rows, 87/87 cells, evaluations/harbor/grade.py
+   > score 1); the R solution mirrors it (updated in the same
+   > commits; no local R to rerun). Prompt tiers: conventions.md 16
+   > lines (20-line limit), brief.md fresh per brief.py, and
+   > full/brief/conventions updated for the LB restaging.
 3. **`adam-advs-windows`** -- add expected/missing visit records
    (cf. `derive_expected_records()`): planned visits with no
    collected result are a realistic gap in the current fixtures.
