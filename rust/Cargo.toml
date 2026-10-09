@@ -14,9 +14,10 @@ publish = false
 lto = "thin"
 
 # Release code generation for the test suite: optimized, with debug assertions
-# and overflow checks off exactly as in the shipped extension. Link-time
-# optimization stays with the shipped artifact, which CI qualifies installed;
-# applying it to every integration-test binary cost 12-20 minutes per platform.
+# and overflow checks off exactly as in the shipped extension. Cross-crate
+# link-time optimization stays with the shipped artifact, which CI qualifies
+# installed; applying it to every integration-test binary cost 12-20 minutes per
+# platform. `false` keeps Cargo's default per-crate (thin local) optimization.
 [profile.release-test]
 inherits = "release"
 lto = false

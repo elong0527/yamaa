@@ -182,7 +182,7 @@ conversion paths/contexts, resolution order and handler counts. Additional Rust
 tests cover declaration order, repeated firings, opaque failures, count overflow
 and a dependent plan consuming a converted replacement. CI runs core, engine and
 adapters in the debug profile and in `release-test` (release code generation
-without link-time optimization) on all native Python targets.
+without cross-crate link-time optimization) on all native Python targets.
 
 This service accepts already normalized declarations. It does not decode a
 specification, plan dependencies, execute tables, implement expression-local
