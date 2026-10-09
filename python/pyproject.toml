@@ -18,6 +18,7 @@ dependencies = [
   "py-yaml12>=0.2",
   "pyarrow>=23.0.1",
   "pydantic>=2.12.4",
+  "packaging>=25",
   "pyyaml>=6.0.3",
 ]
 

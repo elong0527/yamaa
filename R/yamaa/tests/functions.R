@@ -330,3 +330,136 @@ condition(result$value, "invalid_function_result", "REQ-0702")
 stopifnot(identical(.Call(symbol, as.raw(255L), function(...) stop("must not run"))$error, "invalid function request"))
 stopifnot(identical(invoke_function(base_req, function() 1L), value_outcome(wire("int:1"))))
 cat("Installed R callback ownership, temporal, condition and resource contracts passed\n")
+
+# Installed package capabilities: metadata precedes normal namespace resolution.
+.yamaa_verify_locked_versions <- get(".yamaa_verify_locked_versions", asNamespace("yamaa"))
+.yamaa_resolve_locked_function <- get(".yamaa_resolve_locked_function", asNamespace("yamaa"))
+trace <- character()
+versions <- function(package) {
+  trace <<- c(trace, package)
+  value <- switch(package, yamaa = '0.2.0', projectbmi = '1.2.0', NULL)
+  if (is.null(value)) return(NULL)
+  package_version(value)
+}
+stopifnot(identical(.yamaa_verify_locked_versions(NULL, character(), version = function(p) stop('must not run')), list()))
+for (i in 1:2) {
+  stopifnot(identical(.yamaa_verify_locked_versions(list(yamaa='0.2.0'), 'stats::median', version=versions, base_packages='stats'), list()))
+}
+stopifnot(identical(trace,c('yamaa','yamaa')))
+trace <- character()
+stopifnot(identical(.yamaa_verify_locked_versions(list(yamaa='0.2.0',projectbmi='1.2-0',unused='999'), c('projectbmi::bmi','projectbmi::other'), version=versions, base_packages=character()),list()))
+stopifnot(identical(trace,c('projectbmi','yamaa')))
+trace <- character()
+result <- .yamaa_verify_locked_versions(list(yamaa='0.1.0',projectbmi='2.0',absent='3.0'),c('projectbmi::bmi','absent::function','unknown::function'),version=versions,base_packages=character())
+stopifnot(identical(result,list(
+  list(package='absent',reason='package_not_installed',expected='3.0',actual=NULL),
+  list(package='projectbmi',reason='version_mismatch',expected='2.0',actual='1.2.0'),
+  list(package='unknown',reason='version_not_locked',expected=NULL,actual=NULL),
+  list(package='yamaa',reason='version_mismatch',expected='0.1.0',actual='0.2.0')
+)))
+original <- structure(list(message='opaque metadata error',call=NULL),class=c('original_metadata_error','error','condition'))
+caught <- tryCatch(.yamaa_verify_locked_versions(list(yamaa='0.2.0'),'stats::median',version=function(p) stop(original),base_packages='stats'),error=function(e)e)
+stopifnot(identical(caught,original))
+result <- .yamaa_verify_locked_versions(list(yamaa='bad-version'),'stats::median',version=function(p) stop('must not run'),base_packages='stats')
+stopifnot(identical(result,list(list(package='yamaa',reason='invalid_locked_version',expected='bad-version',actual=NULL))))
+# Actual installed yamaa metadata is compared using R's version semantics.
+stopifnot(identical(.yamaa_verify_locked_versions(list(yamaa=as.character(utils::packageVersion('yamaa'))),'stats::median',base_packages='stats'),list()))
+cat('PASS empty/std-library/repeated/subset/normalized-version/all-failure/opaque-condition/actual-installed R metadata cases\n')
+
+# Resolve exported installed functions without running them or using their defaults.
+lookup_trace <- character()
+invoke_trace <- list()
+target <- function(x, y = 999L) {
+  invoke_trace[[length(invoke_trace) + 1L]] <<- list(x, y)
+  x + y
+}
+lookup <- function(package, name) {
+  lookup_trace <<- c(lookup_trace, paste(package, name, sep = "::"))
+  target
+}
+for (i in 1:2) stopifnot(identical(.yamaa_resolve_locked_function("projectbmi::bmi", c("y", "x"), lookup), target))
+stopifnot(identical(lookup_trace, rep("projectbmi::bmi", 2L)), !length(invoke_trace))
+stopifnot(identical(target(x=1L, y=100L), 101L), identical(invoke_trace, list(list(1L, 100L))))
+for (parameters in list(c("x", "renamed"), c("x", "x"))) {
+  caught <- tryCatch(.yamaa_resolve_locked_function("projectbmi::bmi", parameters, lookup), error=function(e)e)
+  stopifnot(inherits(caught, "error"))
+}
+for (bad in list(function(...) NULL, 3L)) {
+  caught <- tryCatch(.yamaa_resolve_locked_function("projectbmi::bmi", character(), function(package, name) bad), error=function(e)e)
+  stopifnot(inherits(caught, "error"))
+}
+for (original in list(
+  structure(list(message="opaque namespace failure",call=NULL),class=c("original_binding_error","error","condition")),
+  structure(list(message="user interrupt",call=NULL),class=c("interrupt","condition"))
+)) {
+  caught <- tryCatch(.yamaa_resolve_locked_function("projectbmi::bmi", "x", function(package, name) stop(original)),
+                    error=function(e)e, interrupt=function(e)e)
+  stopifnot(identical(caught, original))
+}
+stopifnot(identical(.yamaa_resolve_locked_function("base::identity", "x"), base::identity))
+# Primitive function formals use R's builtin args metadata.
+stopifnot(identical(.yamaa_resolve_locked_function("base::is.na", "x"), base::is.na))
+# Actual package-not-found condition has a missing-installation finding.
+result <- .yamaa_verify_locked_versions(list(yamaa="0.2.0",yamaaPackageNeverInstalled1757="1.0"),
+                                      "yamaaPackageNeverInstalled1757::run", base_packages=character())
+stopifnot(identical(result,list(list(package="yamaaPackageNeverInstalled1757",reason="package_not_installed",expected="1.0",actual=NULL))))
+original <- structure(list(message="metadata interrupt",call=NULL),class=c("interrupt","condition"))
+caught <- tryCatch(.yamaa_verify_locked_versions(list(yamaa="0.2.0"), "stats::median", version=function(package) stop(original),base_packages="stats"),interrupt=function(e)e)
+stopifnot(identical(caught,original))
+cat("PASS exact/reordered/default-independent/closed/normal-namespace/builtin/original-interrupt R binding and actual missing-package metadata cases\n")
+
+# Exercise closed host envelopes with the installed exact scalar codecs.
+host <- new.env(parent = baseenv())
+for (name in c(".scalar_text_bytes", ".scalar_unpack", ".function_pack")) {
+  host[[name]] <- get(name, envir = asNamespace("yamaa"))
+}
+host$.yamaa_verify_locked_versions <- .yamaa_verify_locked_versions
+host$.yamaa_resolve_locked_function <- .yamaa_resolve_locked_function
+# Inject ordinary failing host boundaries into a copy of the installed factory.
+# Namespace bindings and the production factory's environment stay untouched.
+factory <- get(".yamaa_locked_host_capabilities", asNamespace("yamaa"))
+environment(factory) <- host
+capabilities <- factory()
+raw_text <- function(value) charToRaw(value)
+reply <- capabilities$verify(list(yamaa=raw_text(as.character(utils::packageVersion("yamaa")))),
+                             list(raw_text("base::identity")))
+stopifnot(identical(reply, list(0L, list())))
+bound <- capabilities$resolve(raw_text("base::identity"), list(raw_text("x")))
+stopifnot(identical(bound[[1L]], 0L), is.function(bound[[2L]]))
+for (value in list(
+  list(tag=1L, payload=raw_text("-9223372036854775808")),
+  list(tag=1L, payload=raw_text("9223372036854775807")),
+  list(tag=3L, payload=c(as.raw(0L), raw_text("e\u0301\U0001f600"))),
+  list(tag=2L, payload=writeBin(-0.0, raw(), size=8L, endian="little")),
+  list(tag=0L, payload=raw()),
+  list(tag=4L, payload=as.raw(1L)),
+  list(tag=5L, payload=writeBin(-1.0, raw(), size=8L, endian="little")),
+  list(tag=6L, payload=writeBin(-1.0, raw(), size=8L, endian="little"))
+)) {
+  observed <- bound[[2L]](list(x=value))
+  stopifnot(identical(observed, list(0L, list(value$tag, value$payload))))
+}
+# Binding has no invocation effects; errors/interrupts retain the exact object.
+invocations <- 0L
+host$.yamaa_resolve_locked_function <- function(call, parameters) function(x) {
+  invocations <<- invocations + 1L
+  stop(original)
+}
+for (original in list(
+  structure(list(message="original invocation failure", call=NULL), class=c("original_error","error","condition")),
+  structure(list(message="original invocation interrupt", call=NULL), class=c("interrupt","condition"))
+)) {
+  before <- invocations
+  bound <- capabilities$resolve(raw_text("sample::run"), list(raw_text("x")))
+  stopifnot(identical(invocations, before))
+  observed <- bound[[2L]](list(x=list(tag=4L,payload=as.raw(1L))))
+  stopifnot(identical(observed, list(if (inherits(original,"interrupt")) 3L else 1L, original)))
+  host$.yamaa_verify_locked_versions <- function(versions, calls) stop(original)
+  observed <- capabilities$verify(list(),list())
+  stopifnot(identical(observed, list(if (inherits(original,"interrupt")) 3L else 1L, original)))
+}
+host$.yamaa_resolve_locked_function <- function(call, parameters) function(x) c(1L,2L)
+bound <- capabilities$resolve(raw_text("sample::run"), list(raw_text("x")))
+observed <- bound[[2L]](list(x=list(tag=4L,payload=as.raw(1L))))
+stopifnot(identical(observed[[1L]],2L), inherits(observed[[2L]],"error"))
+cat("PASS closed R envelopes, installed exact i64/NUL/Unicode/signed-zero/temporal codecs, no-code binding, original failures/interrupts and invalid return classification\n")
