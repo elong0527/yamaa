@@ -315,6 +315,31 @@ def test_flag_accepts_a_bare_predicate_string_as_the_condition() -> None:
     assert _evaluate(expression, {"AGE": MISSING}) == ValueResult(value=MISSING)
 
 
+@pytest.mark.parametrize(
+    ("values", "extra", "actual"),
+    [
+        ({"AGE": 70}, {"true_value": {"x": 1}}, "dict"),
+        ({"AGE": 5}, {"false_value": ["N"], "missing": "U"}, "list"),
+        ({"AGE": MISSING}, {"missing": {"x": 1}}, "dict"),
+    ],
+)
+def test_flag_rejects_a_non_scalar_branch_value_with_a_structured_condition(
+    values: dict[str, object], extra: dict[str, object], actual: str
+) -> None:
+    # A dict or list branch value is a validation condition, not a raw
+    # pydantic crash.
+    result = _evaluate(_flag(**extra), values)
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.phase == "validation"
+    assert result.condition.condition == "incompatible_input_type"
+    assert result.condition.context == {"actual": actual}
+    # No requirement ID names this R008 normalization contract, and the
+    # condition is about the branch value itself, not a payload subfield.
+    assert result.condition.requirement is None
+    assert result.condition.path_suffix is None
+
+
 def test_flag_rejects_a_non_string_non_mapping_payload() -> None:
     result = _evaluate({"flag": 42}, {"AGE": 70})
 
