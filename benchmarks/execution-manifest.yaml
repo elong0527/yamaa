@@ -939,6 +939,9 @@ examples:
   adam-advs-locf-record:
     status: executable
     runtimes: ['python']
+  bimo-clinsite-site-level:
+    status: executable
+    runtimes: ['python']
   negative-locf-no-order:
     status: executable
     runtimes: ['python']
