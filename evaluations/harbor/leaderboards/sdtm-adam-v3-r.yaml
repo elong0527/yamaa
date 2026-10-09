@@ -80,6 +80,7 @@ tasks:
   - adam-adtte-first-ae-r
   - adam-adtte-os-r
   - adam-adtte-pfs-r
+  - adam-adtte-pro-deterioration-r
   - adam-advs-bmi-r
   - adam-advs-bsa-r
   - adam-advs-carryforward-r

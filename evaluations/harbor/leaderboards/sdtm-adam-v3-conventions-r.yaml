@@ -82,6 +82,7 @@ tasks:
   - adam-adtte-first-ae-conventions-r
   - adam-adtte-os-conventions-r
   - adam-adtte-pfs-conventions-r
+  - adam-adtte-pro-deterioration-conventions-r
   - adam-advs-bmi-conventions-r
   - adam-advs-bsa-conventions-r
   - adam-advs-carryforward-conventions-r

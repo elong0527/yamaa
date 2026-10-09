@@ -82,6 +82,7 @@ tasks:
   - adam-adtte-first-ae-brief-python
   - adam-adtte-os-brief-python
   - adam-adtte-pfs-brief-python
+  - adam-adtte-pro-deterioration-brief-python
   - adam-advs-bmi-brief-python
   - adam-advs-bsa-brief-python
   - adam-advs-carryforward-brief-python
