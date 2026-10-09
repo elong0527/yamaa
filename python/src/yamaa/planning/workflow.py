@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -21,17 +21,32 @@ from yamaa.io.source import (
     load_source_tables,
 )
 from yamaa.odm.items import odm_inputs
-from yamaa.runtime.executor import (
-    ExecutionHooks,
-    ExecutionResult,
-    ExecutionSuccess,
-    execute_with_source_provider,
-)
 from yamaa.schema.inheritance import ResolvedSpecification, resolve_specification
 from yamaa.specification._yaml import read_yaml_bytes
 from yamaa.specification.diagnostics import SpecificationError, ValidationDiagnostic
 from yamaa.specification.models import DatasetSource, Specification
 from yamaa.specification.schema import SchemaBundle
+
+if TYPE_CHECKING:
+    # Annotation-only: importing yamaa.runtime.executor at module level here
+    # re-enters yamaa.runtime.executor through yamaa.planning.__init__, which
+    # is a circular import (executor itself imports yamaa.planning). The
+    # runtime names are imported lazily inside execute_workflow instead.
+    from yamaa.runtime.executor import ExecutionHooks, ExecutionResult
+
+
+def __getattr__(name: str) -> object:
+    # Lazy re-export: the native conformance suite patches
+    # yamaa.planning.workflow.execute_with_source_provider, so the attribute
+    # must keep resolving after both modules finish initializing. Importing
+    # eagerly at module level would re-enter the partially initialized
+    # yamaa.runtime.executor (the circular import this module was split to
+    # avoid); deferring to first attribute access keeps that cycle broken.
+    if name == "execute_with_source_provider":
+        from yamaa.runtime.executor import execute_with_source_provider
+
+        return execute_with_source_provider
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class _FrozenModel(BaseModel):
@@ -460,6 +475,11 @@ def execute_workflow(
     event: WorkflowEvent | None = None,
 ) -> WorkflowExecution:
     """Execute each shared producer once, then its consumers, in memory."""
+    # Deferred to function level: a module-level import would re-enter
+    # yamaa.runtime.executor while it is still initializing (it imports
+    # yamaa.planning, which imports this module).
+    from yamaa.runtime.executor import ExecutionSuccess, execute_with_source_provider
+
     selected_dispatcher = dispatcher or ExpressionDispatcher()
     links_by_consumer: dict[Path, dict[str, ProducerLink]] = {}
     for link in workflow.links:
