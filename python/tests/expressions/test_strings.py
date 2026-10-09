@@ -609,7 +609,7 @@ def _contains(pattern: str, subject: str | None) -> object:
     [
         ("DERM", "APPLICATION SITE DERMATITIS", True),
         ("DERM", "HEADACHE", False),
-        # REQ-1240: alternation, searched anywhere in the source.
+        # REQ-1243: alternation, searched anywhere in the source.
         (
             "APPLICATION|DERMATITIS|ERYTHEMA|BLISTER",
             "APPLICATION SITE DERMATITIS",
@@ -631,7 +631,7 @@ def test_str_contains_reports_a_plain_boolean(
 
 
 def test_str_contains_rejects_an_invalid_pattern() -> None:
-    # REQ-1240: same validation path as `str_extract`.
+    # REQ-0827: same validation path as `str_extract`.
     result = _contains("(", "HEADACHE")
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "invalid_regex"
@@ -648,7 +648,7 @@ def test_str_contains_rejects_a_non_string_source() -> None:
 
 def test_str_contains_propagates_missing_for_the_missing_handler() -> None:
     # A column derivation's `missing:` handler decides; the predicate call
-    # maps this to UNKNOWN instead (REQ-1241).
+    # maps this to UNKNOWN instead (REQ-1243).
     result = _contains("a", None)
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "missing_input"
