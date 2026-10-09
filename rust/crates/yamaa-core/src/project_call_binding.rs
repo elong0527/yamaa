@@ -42,6 +42,7 @@ pub struct Finding {
 #[derive(Debug)]
 pub enum Error {
     InvalidCallIndex,
+    InactiveCall,
     Reference(reference_binding::Error),
     Findings(Vec<Finding>),
     InvalidAdmittedCall,
@@ -69,7 +70,8 @@ pub fn bind(
     context: Context<'_>,
 ) -> Result<BoundCall, Error> {
     let prepared = calls.calls().get(call).ok_or(Error::InvalidCallIndex)?;
-    let plan = &calls.plans()[prepared.slot()];
+    let slot = prepared.slot().ok_or(Error::InactiveCall)?;
+    let plan = &calls.plans()[slot];
     let mut findings = Vec::new();
     let mut arguments = Vec::new();
     let mut dependencies = Vec::new();
@@ -190,7 +192,7 @@ pub fn bind(
     if !findings.is_empty() {
         return Err(Error::Findings(findings));
     }
-    let function = BoundProjectFunction::new_project(prepared.slot(), plan.clone(), arguments)
+    let function = BoundProjectFunction::new_project(slot, plan.clone(), arguments)
         .map_err(|_| Error::InvalidAdmittedCall)?;
     Ok(BoundCall {
         function,

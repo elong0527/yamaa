@@ -88,6 +88,11 @@ impl Default for CompilationLimits {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PreflightFinding {
     ProjectFunction(FunctionFinding),
+    RowPhase {
+        path: String,
+        identifier: String,
+        row: String,
+    },
     UndeclaredRowColumn {
         index: usize,
         column: String,
@@ -934,7 +939,18 @@ impl PreparedSpecification {
             if !extra.is_empty() {
                 return Err(PrepareError::Unsupported(extra));
             }
-            let rows = rows::Rows::prepare(d, &output, driver, limits)?;
+            let rows = rows::Rows::prepare(d, &output, driver, limits, project.as_ref())?;
+            let project = match project {
+                Some(project) => {
+                    let uses = rows.call_uses(&project.calls)?;
+                    Some(functions::select_rows(
+                        project,
+                        functions.ok_or(PrepareError::Internal)?,
+                        &uses,
+                    )?)
+                }
+                None => None,
+            };
             let column_verifications = columns
                 .iter()
                 .enumerate()
@@ -1266,6 +1282,7 @@ impl PreparedSpecification {
                     &self.output,
                     &self.keys,
                     self.verifications(),
+                    self.project_calls.as_ref(),
                 )
                 .and_then(|plan| {
                     plan.with_column_verifications(self.column_verification_groups())
@@ -1376,7 +1393,7 @@ impl PreparedSpecification {
                             Some(Expression::ProjectFunction(bound.function))
                         }
                         Err(crate::project_call_binding::Error::Findings(errors)) => {
-                            findings.extend(functions::bind_findings(calls, *call, errors)?);
+                            findings.extend(functions::bind_findings(calls, *call, errors, None)?);
                             None
                         }
                         Err(crate::project_call_binding::Error::Reference(error)) => {

@@ -1,4 +1,4 @@
-//! Versionless column-call preparation and retained diagnostic projection.
+//! Versionless call preparation and retained diagnostic projection.
 use super::*;
 use crate::{
     diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
@@ -12,6 +12,10 @@ use crate::{
 pub enum Cause {
     UnknownFunction,
     UnknownReference(String),
+    RowPhase {
+        identifier: String,
+        row: String,
+    },
     UnknownArgument,
     DuplicateArgument,
     MissingRequiredArgument,
@@ -51,6 +55,16 @@ impl FunctionFinding {
             Cause::UnknownReference(ref identifier) => {
                 context.insert("identifier".into(), text(identifier));
                 (C::OutputUnknownReference, None)
+            }
+            Cause::RowPhase {
+                ref identifier,
+                ref row,
+            } => {
+                context.insert("identifier".into(), text(identifier));
+                context.insert("row".into(), text(row));
+                context.insert("available_phase".into(), text("column_derivation"));
+                context.insert("required_phase".into(), text("row_construction"));
+                (C::RowDependencyPhaseBoundary, None)
             }
             Cause::UnknownFunction => (C::UnknownProjectFunction, None),
             Cause::UnknownArgument => (C::InvalidFunctionArgument, Some("unknown_argument")),
@@ -140,13 +154,28 @@ pub(super) fn prepare(
             requests.push((node, format!("columns.{name}.derivation.function")));
         }
     }
-    // A closed row lowering follows separately; it must not silently promote
-    // column function arguments into row reads without the row phase catalogue.
-    if !requests.is_empty() && present(d, d.root(), "rows") {
-        return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-            operation: "row_project_function".into(),
-            path: "rows".into(),
-        }]));
+    let has_rows = present(d, d.root(), "rows");
+    if has_rows {
+        let rows = sequence(d, field(d, d.root(), "rows")?)?;
+        if rows.len() > 16 {
+            return Err(PrepareError::Limit("row_templates"));
+        }
+        for (row, &node) in rows.iter().enumerate() {
+            for &(name, derivation) in mapping(d, field(d, node, "derivations")?)? {
+                if let Some(node) = d
+                    .field(derivation, "value")
+                    .and_then(|id| d.field(id, "function"))
+                {
+                    if requests.len() >= 1024 {
+                        return Err(PrepareError::Limit("function_calls"));
+                    }
+                    requests.push((
+                        node,
+                        format!("rows[{row}].derivations.{}.function", text(d, name)?),
+                    ));
+                }
+            }
+        }
     }
     let mut bytes = 0usize;
     for (node, path) in &requests {
@@ -246,17 +275,20 @@ pub(super) fn prepare(
         .iter()
         .map(|(_, _, _, name)| function_index.get(name.as_str()).copied())
         .collect::<Vec<_>>();
-    let admitted = match ProjectCalls::admit_with_reference_types(
+    let uses = alloc::vec![usize::from(!has_rows); calls.len()];
+    let admitted = match ProjectCalls::admit_with_reference_types_and_uses(
         functions,
         calls,
         &types,
+        &uses,
         Default::default(),
     ) {
         Ok(calls) => Some(calls),
         Err(project_calls::Error::Limit(_)) => return Err(PrepareError::Limit("function_calls")),
         Err(
             project_calls::Error::DuplicateDefinitions(_)
-            | project_calls::Error::InvalidAdmittedSignature,
+            | project_calls::Error::InvalidAdmittedSignature
+            | project_calls::Error::InvalidCallUses,
         ) => return Err(PrepareError::Internal),
         Err(project_calls::Error::Findings(errors)) => {
             for error in errors {
@@ -354,10 +386,34 @@ pub(super) fn prepare(
     Ok(Prepared { calls, nodes })
 }
 
+/// Static row calls remain unselected until defaults and per-template overrides
+/// have established their actual multiplicities. Move calls rather than clone them.
+pub(super) fn select_rows(
+    prepared: Prepared,
+    functions: &[Function],
+    uses: &[usize],
+) -> Result<Prepared, PrepareError> {
+    let calls = ProjectCalls::admit_with_uses(
+        functions,
+        prepared.calls.into_located_calls(),
+        uses,
+        Default::default(),
+    )
+    .map_err(|error| match error {
+        project_calls::Error::Limit(_) => PrepareError::Limit("function_calls"),
+        _ => PrepareError::Internal,
+    })?;
+    Ok(Prepared {
+        calls,
+        nodes: prepared.nodes,
+    })
+}
+
 pub(super) fn bind_findings(
     calls: &ProjectCalls,
     call: usize,
     errors: Vec<crate::project_call_binding::Finding>,
+    row: Option<&str>,
 ) -> Result<Vec<BindFinding>, BindError> {
     let call = &calls.calls().get(call).ok_or(BindError::Internal)?.located;
     errors
@@ -373,6 +429,18 @@ pub(super) fn bind_findings(
                 return Err(BindError::Internal);
             };
             Ok(match error.kind {
+                crate::project_call_binding::Kind::Output(
+                    crate::reference_binding::Diagnostic::PhaseBoundary { .. },
+                ) => BindFinding::ProjectFunction(FunctionFinding {
+                    path,
+                    function: call.call.name.clone(),
+                    argument: Some(argument.name.clone()),
+                    node: argument.node,
+                    cause: Cause::RowPhase {
+                        identifier: name.clone(),
+                        row: row.ok_or(BindError::Internal)?.into(),
+                    },
+                }),
                 crate::project_call_binding::Kind::Output(finding) => {
                     BindFinding::OutputReference {
                         path,
@@ -391,7 +459,7 @@ pub(super) fn bind_findings(
                     BindFinding::QualifiedReference {
                         path,
                         name: name.clone(),
-                        row: None,
+                        row: row.map(String::from),
                         finding,
                     }
                 }

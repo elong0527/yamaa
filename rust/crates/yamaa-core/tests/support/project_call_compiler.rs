@@ -82,7 +82,14 @@ pub fn call(name: &str, args: Vec<(&str, Tree)>) -> Tree {
         Tree::map(vec![("name", Tree::text(name)), ("args", Tree::map(args))]),
     )])
 }
+#[allow(dead_code)]
 pub fn specification(columns: Vec<(&str, &str, Tree)>) -> SpecificationDocument {
+    specification_with_rows(columns, Vec::new())
+}
+pub fn specification_with_rows(
+    columns: Vec<(&str, &str, Tree)>,
+    rows: Vec<Tree>,
+) -> SpecificationDocument {
     let mut projection = vec![Tree::text("ID")];
     let mut declarations = vec![Tree::map(vec![
         ("name", Tree::text("ID")),
@@ -106,7 +113,7 @@ pub fn specification(columns: Vec<(&str, &str, Tree)>) -> SpecificationDocument 
             ("derivation", Tree::map(vec![("value", value)])),
         ]));
     }
-    let tree = Tree::map(vec![
+    let mut fields = vec![
         ("schema_version", Tree::text("1.0")),
         ("domain", Tree::text("TEST")),
         (
@@ -125,9 +132,12 @@ pub fn specification(columns: Vec<(&str, &str, Tree)>) -> SpecificationDocument 
                 ("columns", Tree::List(projection)),
             ]),
         ),
-    ]);
+    ];
+    if !rows.is_empty() {
+        fields.push(("rows", Tree::List(rows)));
+    }
     let mut nodes = vec![];
-    let root = tree.append(&mut nodes);
+    let root = Tree::map(fields).append(&mut nodes);
     let d = Document::new(nodes, root, DocumentLimits::default()).unwrap();
     SpecificationDocument::admit(d, &mut ValidationBudget::new(Default::default()))
         .unwrap()
