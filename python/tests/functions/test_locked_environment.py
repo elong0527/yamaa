@@ -347,6 +347,31 @@ def test_opaque_cached_callable_is_a_binding_failure_without_running_target(
     assert observed == []
 
 
+@pytest.mark.parametrize("member", ["method", "__call__"])
+def test_cached_bound_formals_are_a_binding_failure_without_running_target(
+    installed_callable, member
+):
+    from functools import cache
+
+    observed = []
+
+    class Bound:
+        @cache  # noqa: B019 -- exercise the installed cached-method boundary
+        def method(self, x):
+            observed.append(x)
+            return x
+
+        __call__ = method
+
+    bound = Bound()
+    installed_callable.target = bound.method if member == "method" else bound
+    with pytest.raises(m.InvalidBinding) as caught:
+        m.resolve_callable("yamaa_locked_test_module.target", ["x"])
+    assert caught.value.call == "yamaa_locked_test_module.target"
+    assert isinstance(caught.value.__cause__, ValueError)
+    assert observed == []
+
+
 @pytest.mark.parametrize("original", [ValueError("opaque"), TypeError("invalid")])
 def test_unavailable_signature_retains_the_original_binding_failure_cause(
     installed_callable, monkeypatch, original

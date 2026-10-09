@@ -302,6 +302,8 @@ def _concrete_signature(target: object, depth: int = 0) -> inspect.Signature:
     if inspect.ismethod(target):
         function = target.__func__
         bound_to = target.__self__
+        if not inspect.isfunction(function):
+            raise ValueError("bound callable has no concrete Python formals")
     elif inspect.isfunction(target):
         function = target
     elif (
