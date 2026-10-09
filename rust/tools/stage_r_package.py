@@ -78,6 +78,10 @@ def stage(destination: Path):
     helper = importlib.util.module_from_spec(helper_spec)
     helper_spec.loader.exec_module(helper)
     helper.stage(resources / "specification-original")
+    shutil.copytree(
+        WORKSPACE / "crates/yamaa-adapters/tests/fixtures/environment-candidate",
+        resources / "specification-environment-candidate",
+    )
     print(destination)
 
 

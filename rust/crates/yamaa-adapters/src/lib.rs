@@ -84,6 +84,7 @@ pub mod project_environment_diagnostics;
 
 pub mod project_source_decoder;
 
+pub mod project_attempt;
 pub mod project_run;
 
 pub mod project_function_diagnostics;
@@ -91,3 +92,5 @@ pub mod project_function_diagnostics;
 pub mod project_codelist_diagnostics;
 
 pub mod project_activation_diagnostics;
+
+pub mod project_activation_observations;

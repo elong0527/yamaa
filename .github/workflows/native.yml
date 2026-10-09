@@ -294,6 +294,7 @@ jobs:
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-lookup" specification-lookup
           cp -R "${GITHUB_WORKSPACE}/benchmarks/adam-advs-bmi" specification-advs-bmi
           cp -R "${GITHUB_WORKSPACE}/yaml" specification-yaml
+          cp -R "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/environment-candidate" specification-environment-candidate
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-inheritance" specification-inheritance
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-column-composition" specification-column-composition
           cp -R "${GITHUB_WORKSPACE}/benchmarks/schema-inherited-output" specification-inherited-output

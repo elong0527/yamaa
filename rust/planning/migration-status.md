@@ -1,7 +1,7 @@
 # yamaa Rust engine migration
 
 Assessed 2026-10-09 against main
-`a1e0cee41a545e3070d601b9ffb0d8419c10d65c` and the acceptance criteria in
+`3ddbd67342f40ed510bdf2be0b1650dc537ef37f` and the acceptance criteria in
 [#1585](https://github.com/elong0527/yamaa/issues/1585).
 
 The goal is to complete one shared Rust implementation behind Python and R,
@@ -35,23 +35,28 @@ explicitly open policy decisions.
   passes 953 Rust tests across 120 targets. Actual Windows debug/release-test
   logs include all 32 affected activation/project tests.
 
-The two latest PRs passed their complete reviews, every applicable workflow
-check, all 16 native CI jobs and all 37 downloaded artifact/source audits. Their
+- [#1844](https://github.com/elong0527/yamaa/pull/1844) connects owned project
+  preparation to native approved resources and preserves original lock/metadata
+  through each typed build. Its final source passes 968 shared-crate tests across
+  121 targets, both installed Python forms and all 17 strict R scripts. Actual
+  Windows debug/release-test logs include all 15 new project/lock-fact tests.
+
+These PRs passed their complete reviews, every applicable workflow check,
+all 16 native CI jobs and all 37 downloaded artifact/source audits. Their
 merged source trees equal the qualified heads directly. These results establish
 the stated slices; component counts are not a migration percentage.
 
 ## Current implementation frontier
 
-Connect the installed Python/R host capabilities to the owned shared project
-build path, preserving called-only fresh activation and complete reports. Public
-`domain(..., environment=...)` and `check(..., environment=...)` still require
-this integration. Authoritative environment/function formats and the five
-locked function benchmarks have not yet been replaced. The next branch begins
-with classified lock facts and bounded projection against held authored origins;
-that local foundation also retains owned checked project runs, native metadata
-capture and original host failures through each build. Fifteen new local
-regressions cover this foundation, including approved roots and inherited source
-authorship. Installed public-environment qualification remains pending.
+The installed Python/R connection is being qualified through private native
+project handles with explicit candidate schemas. These call the shared whole
+project build, retain typed attempts and prepared documents independently, and
+project bounded lossless activation evidence without repeating host effects.
+Complete project reports, output admission and public
+`domain(..., environment=...)` / `check(..., environment=...)` remain the next
+integration gate. Authoritative environment/function formats and the five locked
+function benchmarks have not yet been replaced. Installed public-environment
+qualification remains pending.
 
 Continue with the following acceptance gates in the
 [serial implementation order](migration-order.md):

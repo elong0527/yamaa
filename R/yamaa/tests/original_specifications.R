@@ -1117,6 +1117,91 @@ for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
 }
 cat("public save rejects linked parents before or after build, retains external targets and permits safe retry passed\n")
 
+
+# Actual installed R capabilities run the owned project service before study IO.
+local({
+  ns <- asNamespace("yamaa")
+  prepare <- get(".prepare_file_project",ns)
+  status <- get(".file_project_status",ns)
+  reads <- get(".file_project_reads",ns)
+  build <- get(".file_project_build",ns)
+  observations <- get(".file_project_observations",ns)
+  names <- c("schema.yaml",sort(setdiff(list.files(file.path(root,"schema"),pattern="[.]yaml$"),"schema.yaml")))
+  modules <- setNames(lapply(file.path(root,"schema",names),rawfile),names)
+  old <- "        - contract_version:\n            type: function_contract_version\n            required: true\n            description: See REQ-1085.\n"
+  text <- rawToChar(modules[["schema_function.yaml"]])
+  stopifnot(grepl(old,text,fixed=TRUE))
+  modules[["schema_function.yaml"]] <- charToRaw(sub(old,"",text,fixed=TRUE))
+  envroot <- system.file("specification-environment-candidate",package="yamaa",mustWork=TRUE)
+  names <- c("schema_environment.yaml","schema_shared.yaml")
+  envmodules <- setNames(lapply(file.path(envroot,names),rawfile),names)
+  directory <- tempfile("owned-project-"); dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  lock <- charToRaw(paste0('{"R":{"Version":"',getRversion(),'"},"Packages":{"yamaa":{"Version":"',utils::packageVersion("yamaa"),'"}}}'))
+  writeBin(lock,file.path(directory,"renv.lock"))
+  writeBin(charToRaw("schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions:\n  id:\n    function: base::identity\n    description: Integer identity.\n    params: [{name: x, type: int}]\n    returns: int\n    tests:\n      - {id: normal, covers: [normal], args: {x: 7}, result: 7}\n      - {id: boundary, covers: [boundary], args: {x: -9223372036854775808}, result: -9223372036854775808}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"),file.path(directory,"environment.yaml"))
+  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: V, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: result.csv, columns: [ID, V]}\n"),file.path(directory,"domain.yaml"))
+  writeBin(charToRaw("ID\n1\n"),file.path(directory,"input.csv"))
+  project <- prepare(directory,directory,"domain.yaml","environment.yaml",modules,envmodules)
+  stopifnot(identical(status(project),"ready"))
+  first <- build(project); first_observed <- observations(first)
+  stopifnot(identical(first_observed$engine_succeeded,TRUE),identical(first_observed$host_failures,list()))
+  stopifnot(identical(first_observed$prepared_sources[[1L]]$bytes,rawfile(file.path(directory,"domain.yaml"))),
+            identical(first_observed$prepared_sources[[2L]]$bytes,rawfile(file.path(directory,"environment.yaml"))))
+  text <- rawToChar(first_observed$activation)
+  stopifnot(grepl('"actual":{"int":"-9223372036854775808"}',text,fixed=TRUE),
+            grepl('"actual":{"missing":null}',text,fixed=TRUE),grepl('"invoked":false',text,fixed=TRUE))
+  before <- reads(project)
+  writeBin(charToRaw('{"R":{"Version":"4.6.1"},"Packages":{"yamaa":{"Version":"999.0"}}}'),file.path(directory,"renv.lock"))
+  second <- build(project)
+  stopifnot(identical(observations(second)$engine_succeeded,TRUE),identical(reads(project),before),identical(observations(first),first_observed))
+  writeBin(charToRaw("ID\n999\n"),file.path(directory,"input.csv"))
+  changed <- observations(build(project))
+  stopifnot(identical(changed$engine_succeeded,FALSE),identical(observations(first),first_observed))
+  rejected <- prepare(directory,directory,"domain.yaml","environment.yaml",modules,envmodules)
+  before <- reads(rejected)
+  failed <- observations(build(rejected))
+  stopifnot(identical(failed$engine_succeeded,FALSE),identical(reads(rejected),before),
+            identical(failed$host_failures[[1L]]$stage,"lock"),
+            identical(failed$host_failures[[1L]]$facts$findings[[1L]]$reason,"version_mismatch"))
+  stopifnot(inherits(tryCatch(status(new.env()),error=identity),"error"),
+            inherits(tryCatch(observations(project),error=identity),"error"))
+  writeBin(lock,file.path(directory,"renv.lock"))
+  writeBin(charToRaw("ID\n1\n"),file.path(directory,"input.csv"))
+  # Exercise the actual installed closed-envelope factory with an adversarial
+  # invocation boundary. Its production namespace and metadata helper stay held.
+  host <- new.env(parent=ns)
+  factory <- get(".yamaa_locked_host_capabilities",ns); environment(factory) <- host
+  native_build <- get("wrap__file_project_build",ns)
+  for (mode in c("error","interrupt","live")) {
+    original <- structure(list(message=paste("original",mode),call=NULL,token=new.env()),
+      class=if(mode=="interrupt") c("interrupt","condition") else c("original_error","error","condition"))
+    invocations <- 0L
+    host$.yamaa_resolve_locked_function <- function(call,parameters) function(x) {
+      invocations <<- invocations + 1L
+      if(mode!="live" || invocations>2L) stop(original)
+      x
+    }
+    capabilities <- factory()
+    checked <- prepare(directory,directory,"domain.yaml","environment.yaml",modules,envmodules)
+    before <- reads(checked)
+    reply <- .Call(native_build,checked,capabilities$verify,capabilities$resolve)
+    stopifnot(is.null(reply$error))
+    attempted <- observations(reply$value)
+    stopifnot(identical(attempted$engine_succeeded,FALSE),length(attempted$host_failures)>0L,
+      all(vapply(attempted$host_failures,function(failure) identical(failure$facts$condition,original),logical(1))))
+    if(mode=="live") stopifnot(identical(invocations,3L),reads(checked)==before+1L,
+      identical(attempted$host_failures[[1L]]$stage,"derivation"))
+    else stopifnot(identical(reads(checked),before),identical(attempted$host_failures[[1L]]$stage,"conformance"))
+    if(mode=="interrupt") stopifnot(identical(invocations,1L),identical(attempted$host_failures[[1L]]$facts$kind,"interrupt"))
+  }
+  writeBin(charToRaw("[changed"),file.path(directory,"domain.yaml"))
+  writeBin(charToRaw("[changed"),file.path(directory,"environment.yaml"))
+  rm(project); invisible(gc())
+  stopifnot(identical(observations(first),first_observed))
+  cat("owned installed R project runs retain fresh activation, held lock/source, i64/missing evidence, original conditions/interrupts, lock rejection and registered handle authority passed\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

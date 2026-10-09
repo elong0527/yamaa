@@ -478,8 +478,11 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                 "from pathlib import Path\n"
                 f"Path({str(marker)!r}).write_text('imported', encoding='utf-8')\n"
                 "calls = []\n"
+                "failure = None\n"
+                "failure_after = 0\n"
                 "def calculate(*, x, y=999):\n"
                 "    calls.append((x, y))\n"
+                "    if failure is not None and len(calls) > failure_after: raise failure\n"
                 "    return x + y\n"
             )
             members = {
@@ -547,6 +550,130 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                     self.assertEqual(sys.modules[module].calls, [])
                     self.assertEqual(bound(x=1, y=100), 101)
                     self.assertEqual(sys.modules[module].calls, [(1, 100)])
+                    # The installed native project handle consumes the same
+                    # normally installed wheel, held candidate schema bytes and
+                    # approved file resources. No host planner selects calls.
+                    schema_names = (
+                        "schema.yaml", "schema_shared.yaml", "schema_derivation.yaml",
+                        "schema_verification.yaml", "schema_metadata.yaml", "schema_function.yaml",
+                        "schema_expression_core.yaml", "schema_expression_aggregate.yaml",
+                        "schema_expression_numeric.yaml", "schema_expression_str.yaml",
+                        "schema_expression_date.yaml", "schema_expression_mapping.yaml",
+                        "schema_expression_window.yaml", "schema_expression_odm.yaml",
+                    )
+                    spec_modules = [(name, (SCHEMA / name).read_bytes()) for name in schema_names]
+                    declaration = b"        - contract_version:\n            type: function_contract_version\n            required: true\n            description: See REQ-1085.\n"
+                    spec_modules = [(name, value.replace(declaration, b"", 1) if name == "schema_function.yaml" else value) for name, value in spec_modules]
+                    env_root = ROOT / "specification-environment-candidate"
+                    env_modules = [(name, (env_root / name).read_bytes()) for name in ("schema_environment.yaml", "schema_shared.yaml")]
+                    (root / "uv.lock").write_bytes(raw)
+                    (root / "environment.yaml").write_text(
+                        "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions:\n"
+                        "  add:\n    function: yamaa_lock_witness_programs.calculate\n"
+                        "    description: Add a declared default.\n"
+                        "    params: [{name: x, type: int}, {name: y, type: int, required: false, default: 100}]\n"
+                        "    returns: int\n    tests:\n"
+                        "      - {id: normal, covers: [normal, 'default:y'], args: {x: 1}, result: 101}\n"
+                        "      - {id: boundary, covers: [boundary], args: {x: -9223372036854775808}, result: -9223372036854775708}\n"
+                        "      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"
+                        "      - {id: missing-y, covers: ['short-circuit-missing:y'], args: {x: 1, y: null}, result: null}\n",
+                        encoding="ascii",
+                    )
+                    (root / "domain.yaml").write_text(
+                        "schema_version: '1.0'\ndomain: TEST\nkeys: [x]\n"
+                        "input: {SRC: {path: input.csv, types: {x: int}}}\n"
+                        "columns:\n  - {name: x, type: int, derivation: SRC.x}\n"
+                        "  - {name: V, type: int, derivation: {function: {name: add, args: {x: SRC.x}}}}\n"
+                        "output: {path: result.csv, columns: [x, V]}\n", encoding="ascii",
+                    )
+                    (root / "input.csv").write_bytes(b"x\n1\n")
+                    sys.modules.pop(module)
+                    marker.unlink()
+                    native_project = yamaa_native._prepare_file_project(
+                        str(root), str(root), "domain.yaml", "environment.yaml", [],
+                        spec_modules, 0, env_modules, 0,
+                    )
+                    self.assertEqual(native_project.preparation_status(), "ready")
+                    self.assertNotIn(module, sys.modules)
+                    self.assertFalse(marker.exists())
+                    first = native_project.build()
+                    self.assertTrue(first.engine_succeeded())
+                    self.assertEqual(first.study_snapshot(0), b"x\n1\n")
+                    evidence = json.loads(first.activation())
+                    self.assertEqual(evidence["lock"], "verified")
+                    self.assertEqual([test["outcome"] for test in evidence["tests"]], ["passed"] * 4)
+                    self.assertEqual(evidence["tests"][1]["actual"], {"int": "-9223372036854775708"})
+                    self.assertEqual(evidence["tests"][2]["actual"], {"missing": None})
+                    self.assertFalse(evidence["tests"][2]["invoked"])
+                    self.assertEqual(first.host_failures(), [])
+                    self.assertEqual(first.failure_facts(), [])
+                    self.assertEqual(sys.modules[module].calls, [(1, 100), (-9223372036854775808, 100), (1, 100)])
+                    prepared_sources = first.prepared_sources()
+                    self.assertEqual([Path(identity).name for identity, _ in prepared_sources], ["domain.yaml", "environment.yaml"])
+                    self.assertEqual(prepared_sources[0][1], (root / "domain.yaml").read_bytes())
+                    self.assertEqual(prepared_sources[1][1], (root / "environment.yaml").read_bytes())
+                    held_reads = native_project.capture_reads()
+                    (root / "uv.lock").write_bytes(bad)
+                    second = native_project.build()
+                    self.assertTrue(second.engine_succeeded())
+                    self.assertEqual(second.study_snapshot(0), b"x\n1\n")
+                    self.assertEqual(native_project.capture_reads(), held_reads)
+                    self.assertEqual(len(sys.modules[module].calls), 6)
+                    self.assertEqual(json.loads(first.activation()), evidence)
+                    (root / "input.csv").write_bytes(b"x\n999\n")
+                    changed = native_project.build()
+                    self.assertFalse(changed.engine_succeeded())
+                    self.assertEqual(first.study_snapshot(0), b"x\n1\n")
+                    self.assertEqual(json.loads(first.activation()), evidence)
+                    self.assertEqual(len(sys.modules[module].calls), 8)
+                    rejected = yamaa_native._prepare_file_project(
+                        str(root), str(root), "domain.yaml", "environment.yaml", [],
+                        spec_modules, 0, env_modules, 0,
+                    )
+                    before = rejected.capture_reads()
+                    failed = rejected.build()
+                    self.assertFalse(failed.engine_succeeded())
+                    self.assertEqual(rejected.capture_reads(), before)
+                    facts = failed.failure_facts()
+                    self.assertEqual(facts[0][0], "lock")
+                    self.assertEqual(facts[0][1]["findings"][0]["reason"], "version_mismatch")
+                    self.assertEqual(len(sys.modules[module].calls), 8)
+                    (root / "uv.lock").write_bytes(raw)
+                    (root / "input.csv").write_bytes(b"x\n1\n")
+                    for original, after, stage in (
+                        (ValueError("original conformance failure"), 0, "conformance"),
+                        (KeyboardInterrupt("original interrupt"), 0, "conformance"),
+                        (ValueError("original live failure"), 2, "derivation"),
+                    ):
+                        package = sys.modules[module]
+                        package.calls.clear()
+                        package.failure, package.failure_after = original, after
+                        checked = yamaa_native._prepare_file_project(
+                            str(root), str(root), "domain.yaml", "environment.yaml", [],
+                            spec_modules, 0, env_modules, 0,
+                        )
+                        before = checked.capture_reads()
+                        attempted = checked.build()
+                        self.assertFalse(attempted.engine_succeeded())
+                        failures = attempted.host_failures()
+                        self.assertTrue(failures)
+                        self.assertTrue(all(held_stage == stage and held is original for held_stage, held in failures))
+                        self.assertTrue(all(facts["exception"] is original for _, facts in attempted.failure_facts()))
+                        if stage == "conformance":
+                            self.assertEqual(checked.capture_reads(), before)
+                        else:
+                            self.assertEqual(attempted.study_snapshot(0), b"x\n1\n")
+                            self.assertEqual([test["outcome"] for test in json.loads(attempted.activation())["tests"]], ["passed"] * 4)
+                        if isinstance(original, KeyboardInterrupt):
+                            self.assertEqual(len(json.loads(attempted.activation())["tests"]), 1)
+                            self.assertEqual(len(package.calls), 1)
+                    (root / "domain.yaml").write_bytes(b"[changed")
+                    (root / "environment.yaml").write_bytes(b"[changed")
+                    del native_project
+                    self.assertEqual(first.prepared_sources(), prepared_sources)
+                    self.assertEqual(json.loads(first.activation()), evidence)
+                    self.assertEqual(first.study_snapshot(0), b"x\n1\n")
+                    print("owned installed project run retains fresh activation, cached source, i64/missing evidence and original host failures passed")
                 finally:
                     sys.modules.pop(module, None)
 
