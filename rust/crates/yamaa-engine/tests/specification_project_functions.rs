@@ -399,6 +399,33 @@ mod project_usecase {
         ]
     }
     #[test]
+    fn owning_check_preserves_definitions_and_cases_on_rejection_and_success() {
+        let environment = environment(Some(definitions()));
+        let functions = environment.functions().as_ptr();
+        let cases = environment.functions()[1].definition().tests.as_ptr();
+        let rejected = project_domain::check_owned(&model("unknown"), environment).unwrap_err();
+        assert!(matches!(rejected.error, PrepareError::Invalid(_)));
+        assert_eq!(rejected.environment.functions().as_ptr(), functions);
+        assert_eq!(
+            rejected.environment.functions()[1]
+                .definition()
+                .tests
+                .as_ptr(),
+            cases
+        );
+        let checked = project_domain::check_owned(&model("id"), rejected.environment).unwrap();
+        assert_eq!(checked.environment().functions().as_ptr(), functions);
+        assert_eq!(
+            checked.environment().functions()[1]
+                .definition()
+                .tests
+                .as_ptr(),
+            cases
+        );
+        assert_eq!(checked.compiled().called_functions(), [1]);
+        assert!(checked.check_diagnostics().is_empty());
+    }
+    #[test]
     fn owned_environment_repeats_selected_activation_before_cached_study_capture() {
         let environment = environment(Some(definitions()));
         let trace = Rc::new(RefCell::new(vec![]));
