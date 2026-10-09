@@ -111,6 +111,17 @@ with the derivation below and the admiral function as grounding.
    `derive_param_wbc_abs()` ("lab differentials converted to
    absolute values"); if it matches, generalize the benchmark to
    all differentials rather than lymphocytes alone.
+
+   > REVIEWED 2026-10-09 (benchmark-maintenance run) -- candidate
+   > COMPLETED. `aa2e92b8` generalized the benchmark to the full
+   > five-part differential panel (LYMPH/NEUT/MONO/EOS/BASO) per
+   > admiral's `derive_param_wbc_abs()`; 15 pre-existing golden
+   > values byte-identical, lifecycle reset to draft, Harbor prompts
+   > and both reference solutions updated. `efd8cd41` later restaged
+   > the input as SDTM LB. Current spec derives one absolute record
+   > per subject/visit/differential, gated on a WBC count and a
+   > fraction with an existing-record block; drift verified clean
+   > 2026-10-09.
 3. **`adam-advs-windows`** -- add expected/missing visit records
    (cf. `derive_expected_records()`): planned visits with no
    collected result are a realistic gap in the current fixtures.
