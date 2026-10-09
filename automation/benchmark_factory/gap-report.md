@@ -107,6 +107,35 @@ with the derivation below and the admiral function as grounding.
    with the existing golden: existing values do not move. *Status:
    chosen as the factory's first maintenance pilot; see
    work-item issue #1609.*
+
+   > REVIEWED 2026-10-09 (benchmark-maintenance run) -- candidate
+   > COMPLETED. `3ce91b5d` ("Enhance adam-adlb-shift-criteria with
+   > CRIT2/CRIT2FL; extend factory for maintenance") implemented the
+   > second criterion pair as the factory's first maintenance pilot;
+   > work item #1609 closed 2026-10-03. Current spec carries CRIT2
+   > ("Result less than LLN") and CRIT2FL (Y where AVAL < ANRLO) in
+   > the output columns, README, and golden (17 rows: 11 N, 3 Y, 3
+   > empty); pre-existing CRIT1/CRIT1FL values unchanged, lifecycle
+   > reset to draft, and Harbor prompts (brief/conventions/full)
+   > updated in the same pilot.
+   >
+   > Enhancement checks recorded 2026-10-09: the golden was
+   > independently reproduced -- the Python reference solution
+   > (evaluations/harbor/solutions/adam-adlb-shift-criteria/result.py)
+   > reproduces it exactly (17/17 rows, 255/255 cells,
+   > evaluations/harbor/grade.py passed with no problems); the R
+   > solution mirrors it (updated in the same pilot commits; no local
+   > R to rerun). `factory.sh validate` clean on every
+   > benchmark-scoped check (spec, expected csv, run.py/run.R, badges,
+   > README contract, golden columns, spec style); the sole failure is
+   > the repo-wide validate_repository.py non-ASCII flag in
+   > automation/background/bug-sweeps/runs.md, pre-existing on main
+   > since 2026-10-05 and unrelated to this benchmark. drift-check's
+   > example test passes against the working tree (run.py validates
+   > with 0 issues and emits the 17-row frame); the plain factory.sh
+   > invocation fails locally only because the non-editable
+   > python/.venv predates the spec's verifications[5] predicate
+   > syntax -- a stale-install artifact, not benchmark drift.
 2. **`adam-adlb-lymphocytes`** -- verify against
    `derive_param_wbc_abs()` ("lab differentials converted to
    absolute values"); if it matches, generalize the benchmark to
