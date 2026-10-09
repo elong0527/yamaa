@@ -20,7 +20,7 @@ pub enum Error {
 }
 
 pub struct FileProject {
-    run: PreparedRun,
+    run: Arc<PreparedRun>,
     resources: Resources,
 }
 impl FileProject {
@@ -60,10 +60,18 @@ impl FileProject {
         )
         .map_err(Error::Document)?;
         let run = PreparedRun::prepare(document, environment).map_err(Error::Compile)?;
-        Ok(Self { run, resources })
+        Ok(Self {
+            run: Arc::new(run),
+            resources,
+        })
     }
     pub fn run(&self) -> &PreparedRun {
         &self.run
+    }
+    /// A retained attempt keeps original documents and metadata independently
+    /// of this file capability, without acquiring its study-resource authority.
+    pub fn retained_run(&self) -> Arc<PreparedRun> {
+        Arc::clone(&self.run)
     }
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()

@@ -1,12 +1,15 @@
 //! Optional R installation probe; all R interactions occur on the calling thread.
 use extendr_api::prelude::*;
 mod domain_entry;
+mod file_project;
 mod file_publication;
 mod file_resources;
 mod file_specification;
 mod function_callback;
 mod inheritance_callback;
 mod issue_frame;
+#[cfg(unix)]
+mod project_activation;
 mod public_table;
 mod scalars;
 mod specification_inheritance;
@@ -286,6 +289,7 @@ extendr_module! {
     use file_publication;
 use file_resources;
 use file_specification;
+use file_project;
     use inheritance_callback;
     fn engine_info;
     fn analyze_dependencies;

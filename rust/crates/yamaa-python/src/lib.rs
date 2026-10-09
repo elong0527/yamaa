@@ -2,8 +2,11 @@
 use pyo3::prelude::*;
 mod domain_entry;
 #[cfg(any(unix, windows))]
+mod file_project;
+#[cfg(any(unix, windows))]
 mod file_specification;
 mod function_callback;
+mod project_activation;
 mod reference_catalog;
 mod schema_service;
 mod specification_inheritance;
@@ -263,6 +266,12 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(any(unix, windows))]
     {
         module.add_class::<file_specification::Specification>()?;
+        module.add_class::<file_project::Specification>()?;
+        module.add_class::<file_project::Attempt>()?;
+        module.add_function(wrap_pyfunction!(
+            file_project::_prepare_file_project,
+            module
+        )?)?;
         module.add_function(wrap_pyfunction!(
             file_specification::_prepare_file_specification,
             module

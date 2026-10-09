@@ -118,6 +118,24 @@ pub(super) fn captured_schema(
     {
         return Err(invalid());
     }
+    captured_modules(modules, entry, "root_class")
+}
+
+/// Admit a held schema closure with an explicit named root; no file authority.
+pub(super) fn captured_modules(
+    modules: &Bound<'_, PyList>,
+    entry: usize,
+    root: &str,
+) -> PyResult<std::sync::Arc<CapturedSchema>> {
+    let limits = Limits::default();
+    let invalid = || {
+        pyo3::exceptions::PyValueError::new_err(
+            "invalid or over-limit captured specification sources",
+        )
+    };
+    if modules.len() > limits.bundle.modules {
+        return Err(invalid());
+    }
     let mut total = 0usize;
     let mut names = 0usize;
     for item in modules.iter() {
@@ -155,7 +173,7 @@ pub(super) fn captured_schema(
             })
         })
         .collect::<PyResult<Vec<_>>>()?;
-    CapturedSchema::admit(sources, entry, limits)
+    CapturedSchema::admit_root(sources, entry, root, limits)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(capture_failure(&e)))
 }
 

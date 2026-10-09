@@ -75,6 +75,17 @@ pub(super) fn capture_inputs(
     identity: &Raw,
     source: &Raw,
 ) -> std::result::Result<(Arc<CapturedSchema>, Source), String> {
+    capture_inputs_with_root(names, modules, entry, identity, source, "root_class")
+}
+
+pub(super) fn capture_inputs_with_root(
+    names: &List,
+    modules: &List,
+    entry: i32,
+    identity: &Raw,
+    source: &Raw,
+    root: &str,
+) -> std::result::Result<(Arc<CapturedSchema>, Source), String> {
     let limits = Limits::default();
     if names.len() != modules.len()
         || names.len() > limits.bundle.modules
@@ -115,8 +126,8 @@ pub(super) fn capture_inputs(
     }
     let identity = std::str::from_utf8(identity.as_slice())
         .map_err(|_| "invalid UTF-8 specification identity")?;
-    let schema =
-        CapturedSchema::admit(sources, entry as usize, limits).map_err(|e| capture_failure(&e))?;
+    let schema = CapturedSchema::admit_root(sources, entry as usize, root, limits)
+        .map_err(|e| capture_failure(&e))?;
     Ok((
         schema,
         Source {

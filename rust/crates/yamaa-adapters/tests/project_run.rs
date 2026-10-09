@@ -271,6 +271,29 @@ fn every_build_reactivates_only_called_definitions_on_exact_cached_study_bytes()
             .all(|case| case.outcome == TestOutcome::Passed));
         assert!(!attempt.activation.tests[2].invoked);
         assert_eq!(attempt.activation.tests[2].actual, Some(Value::Missing));
+        let trace = activation.trace.borrow().clone();
+        let observed =
+            yamaa_adapters::project_activation_observations::activation(&run, &attempt.activation)
+                .unwrap();
+        assert_eq!(
+            observed["tests"][1]["args"]["x"],
+            serde_json::json!({"int":"-9223372036854775808"})
+        );
+        assert_eq!(
+            observed["tests"][1]["actual"],
+            serde_json::json!({"int":"-9223372036854775808"})
+        );
+        assert_eq!(
+            observed["tests"][2]["actual"],
+            serde_json::json!({"missing":null})
+        );
+        assert_eq!(observed["tests"][2]["actual_retained"], true);
+        assert_eq!(observed["tests"][2]["invoked"], false);
+        assert_eq!(observed["tests"][0]["source"], "study/environment.yaml");
+        assert_eq!(observed["tests"][0]["function"], "id");
+        assert_eq!(observed["tests"][0]["call"], "project.id");
+        assert_eq!(*activation.trace.borrow(), trace);
+        assert!(yamaa_adapters::project_attempt::execution(&attempt).is_some());
         let captured = &attempt.dataset.sources[0];
         assert_eq!(captured.read.snapshots_created, reads);
         assert!(Arc::ptr_eq(
@@ -338,6 +361,13 @@ fn rejected_activation_preserves_original_payloads_and_has_zero_study_authority(
             }
             _ => panic!("exact ordinary or interrupt stage"),
         };
+        let mut visited = 0;
+        yamaa_adapters::project_attempt::visit_host_failures(&attempt, |_, original| {
+            assert!(std::ptr::eq(original, payload));
+            visited += 1;
+        });
+        assert_eq!(visited, 1);
+        assert!(yamaa_adapters::project_attempt::execution(&attempt).is_none());
         assert!(Rc::ptr_eq(&payload.original, &activation.original));
         assert_eq!(payload.interrupt, matches!(mode, Mode::CaseInterrupt));
         assert!(attempt.dataset.sources.is_empty());
@@ -368,6 +398,17 @@ fn unwound_activation_keeps_original_boundary_payload_and_completed_case_evidenc
     assert_eq!(attempt.activation.tests[0].outcome, TestOutcome::Passed);
     assert_eq!(attempt.activation.tests[1].outcome, TestOutcome::Attempted);
     assert!(attempt.activation.tests[1].invoked);
+    let observed =
+        yamaa_adapters::project_activation_observations::activation(&run, &attempt.activation)
+            .unwrap();
+    assert_eq!(observed["tests"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        observed["tests"][0]["actual"],
+        serde_json::json!({"int":"7"})
+    );
+    assert_eq!(observed["tests"][1]["outcome"], "attempted");
+    assert_eq!(observed["tests"][1]["actual_retained"], false);
+    assert!(observed["tests"][1]["actual"].is_null());
     assert!(attempt.dataset.sources.is_empty());
     assert_eq!(study.inspections, 0);
     activation.mode = Mode::Pass;
@@ -417,6 +458,14 @@ fn live_host_failure_retains_exact_study_snapshot_and_typed_activation_success()
         attempt.dataset.sources[0].snapshot.as_ref().unwrap(),
         &study.bytes
     ));
+    let mut visited = 0;
+    yamaa_adapters::project_attempt::visit_host_failures(&attempt, |stage, original| {
+        assert_eq!(stage, "derivation");
+        assert!(std::ptr::eq(original, payload));
+        visited += 1;
+    });
+    assert_eq!(visited, 1);
+    assert!(yamaa_adapters::project_attempt::execution(&attempt).is_none());
     assert_eq!(study.capture_reads(), 1);
     assert_eq!(
         &*activation.trace.borrow(),
@@ -436,4 +485,28 @@ fn unused_environment_does_not_request_any_host_activation() {
     assert!(attempt.activation.tests.is_empty());
     assert!(attempt.dataset.result.unwrap().result.is_ok());
     assert_eq!(&*activation.trace.borrow(), &["inspect", "capture"]);
+}
+
+#[test]
+fn activation_projection_refuses_partial_budget_and_forged_case_order_without_effects() {
+    use yamaa_adapters::project_activation_observations::{
+        activation, activation_with_limit, Error,
+    };
+    let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+    let (mut host, mut study) = ports();
+    let mut attempt = run.execute_with_ports(&mut host, &mut study);
+    let trace = host.trace.borrow().clone();
+    let reads = study.capture_reads();
+    assert_eq!(
+        activation_with_limit(&run, &attempt.activation, 1),
+        Err(Error::Limit)
+    );
+    assert!(activation(&run, &attempt.activation).is_ok());
+    attempt.activation.tests.swap(0, 1);
+    assert_eq!(
+        activation(&run, &attempt.activation),
+        Err(Error::InvalidObservation)
+    );
+    assert_eq!(*host.trace.borrow(), trace);
+    assert_eq!(study.capture_reads(), reads);
 }

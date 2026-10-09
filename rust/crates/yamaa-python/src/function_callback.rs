@@ -244,7 +244,10 @@ impl FunctionPort for PythonPort<'_, '_> {
     }
 }
 /// Function argument encoding drops collected precision only at this boundary.
-fn host_argument<'py>(py: Python<'py>, value: ValueRef<'_>) -> PyResult<Bound<'py, PyAny>> {
+pub(super) fn host_argument<'py>(
+    py: Python<'py>,
+    value: ValueRef<'_>,
+) -> PyResult<Bound<'py, PyAny>> {
     match value {
         ValueRef::Missing => Ok(py.None().into_bound(py)),
         ValueRef::Str(s) => s.into_bound_py_any(py),
@@ -298,7 +301,7 @@ fn rejected(reason: &str, returned: Option<String>) -> CallbackError {
 }
 /// Admit exact numeric/temporal built-ins, compatible text subclasses, and None.
 /// ABI3 date fields use safe attributes after exact built-in type admission.
-fn host_result(value: &Bound<'_, PyAny>) -> Result<Value, CallbackError> {
+pub(super) fn host_result(value: &Bound<'_, PyAny>) -> Result<Value, CallbackError> {
     if let Ok(temporal) = value.extract::<PyRef<'_, crate::temporal_result::TemporalResult>>() {
         return temporal.value();
     }
