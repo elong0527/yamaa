@@ -770,6 +770,11 @@ def whole_units(
     """Count whole calendar units from `start` to `end` (REQ-0594 to REQ-0598)."""
     if unit == "day":
         days = _ordinal(end) - _ordinal(start)
+        if days < 0:
+            # REQ-0597: an earlier end negates the count with the operands
+            # exchanged, in every unit; the endpoint adjustment below would
+            # otherwise count against the sign of the difference.
+            return -whole_units(end, start, unit, bounds)
         if bounds == "inclusive":
             return days + 1
         if bounds == "between":
