@@ -19,6 +19,8 @@ mod grammar;
 mod parquet;
 #[path = "diagnostic/preflight.rs"]
 mod preflight;
+#[path = "diagnostic/project_codelist_binding.rs"]
+mod project_codelist_binding;
 #[path = "diagnostic/project_environment.rs"]
 mod project_environment;
 #[path = "diagnostic/project_functions.rs"]
@@ -177,6 +179,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     }
     reached.extend(project_functions::reached());
     reached.extend(project_environment::reached());
+    reached.extend(project_codelist_binding::reached());
     reached.extend(preflight::reached());
     reached.extend(preflight::output_reached());
     reached.extend(grammar::reached());
@@ -360,6 +363,37 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());
     reached.extend(parquet::reached());
+    let check = yamaa_core::dataset::Check::Codelist {
+        id: "SEX".into(),
+        values: vec![Value::Str("F".into())],
+    };
+    assert_eq!(
+        yamaa_core::dataset_checks::column_offenders(
+            &check,
+            &[Value::Missing, Value::Str("X".into())]
+        ),
+        [1]
+    );
+    let finding = yamaa_core::dataset_checks::column_diagnostic(
+        &check,
+        "columns.SEX.submission.codelist".into(),
+        "SEX".into(),
+        1,
+    )
+    .unwrap();
+    assert_eq!(
+        (
+            finding.definition().phase,
+            finding.definition().condition,
+            finding.definition().requirement
+        ),
+        ("verification", "allowed_values_failed", Some("REQ-0957"))
+    );
+    assert_eq!(
+        finding.context["codelist"],
+        ContextValue::Scalar(Value::Str("SEX".into()))
+    );
+    reached.insert(finding.code);
     assert_eq!(reached, CONDITIONS.iter().copied().collect());
     assert_eq!(
         CONDITIONS.len(),

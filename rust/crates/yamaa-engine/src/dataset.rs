@@ -132,6 +132,14 @@ pub struct CheckRecord {
     pub failed_count: usize,
     pub output_rows: usize,
     pub offending_rows: Vec<RowIdentity>,
+    /// Full offending values survive discarded output, under identity quotas.
+    pub codelist: Option<CodelistObservation>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CodelistObservation {
+    pub id: String,
+    pub values: Vec<Value>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -982,6 +990,7 @@ impl Executor<'_> {
                     evaluated_count: dataset.rows.len(),
                     failed_count: missing.len(),
                     output_rows: dataset.rows.len(),
+                    codelist: None,
                     offending_rows: identities(&dataset, self.plan.keys(), missing, &mut budget)?,
                 });
             }
@@ -1007,6 +1016,7 @@ impl Executor<'_> {
                 evaluated_count: groups.len(),
                 failed_count: duplicates.len(),
                 output_rows: dataset.rows.len(),
+                codelist: None,
                 offending_rows: identities(&dataset, self.plan.keys(), duplicates, &mut budget)?,
             });
         }
@@ -1018,6 +1028,7 @@ impl Executor<'_> {
             let record = match &verification.check {
                 Check::NotMissing
                 | Check::AllowedValues(_)
+                | Check::Codelist { .. }
                 | Check::Range { .. }
                 | Check::MaxLength(_)
                 | Check::Matches(_) => unreachable!("column-only check is rejected at admission"),
@@ -1075,6 +1086,7 @@ impl Executor<'_> {
                         evaluated_count: groups.len(),
                         failed_count: repeated.len(),
                         output_rows: dataset.rows.len(),
+                        codelist: None,
                         offending_rows: identities(
                             &dataset,
                             self.plan.keys(),
@@ -1103,6 +1115,7 @@ impl Executor<'_> {
                         evaluated_count: dataset.rows.len(),
                         failed_count: offending_rows.len(),
                         output_rows: dataset.rows.len(),
+                        codelist: None,
                         offending_rows,
                     }
                 }
@@ -1118,6 +1131,7 @@ impl Executor<'_> {
                         evaluated_count: 1,
                         failed_count: usize::from(failed),
                         output_rows: dataset.rows.len(),
+                        codelist: None,
                         offending_rows: Vec::new(),
                     }
                 }
@@ -1178,11 +1192,13 @@ impl Executor<'_> {
                         }
                         Check::NotMissing
                         | Check::AllowedValues(_)
+                        | Check::Codelist { .. }
                         | Check::Range { .. }
                         | Check::MaxLength(_)
                         | Check::Matches(_) => {
                             let width = match &verification.check {
                                 Check::AllowedValues(accepted) => accepted.len(),
+                                Check::Codelist { values, .. } => values.len().max(1),
                                 Check::Range { .. } => 2,
                                 _ => 1,
                             };
@@ -1212,6 +1228,24 @@ impl Executor<'_> {
                             let definition =
                                 yamaa_core::dataset_checks::column_definition(&verification.check)
                                     .expect("admitted column check");
+                            let codelist =
+                                if let Check::Codelist { id, .. } = &verification.check {
+                                    budget.scalar_text(id.len())?;
+                                    budget.identity(offending.iter().map(|&position| {
+                                        &candidates[position].values[group.column]
+                                    }))?;
+                                    Some(CodelistObservation {
+                                        id: id.clone(),
+                                        values: offending
+                                            .iter()
+                                            .map(|&position| {
+                                                candidates[position].values[group.column].clone()
+                                            })
+                                            .collect(),
+                                    })
+                                } else {
+                                    None
+                                };
                             let mut offending_rows = Vec::new();
                             for position in offending {
                                 offending_rows.push(
@@ -1233,6 +1267,7 @@ impl Executor<'_> {
                                 evaluated_count: candidates.len(),
                                 failed_count: offending_rows.len(),
                                 output_rows: candidates.len(),
+                                codelist,
                                 offending_rows,
                             });
                         }

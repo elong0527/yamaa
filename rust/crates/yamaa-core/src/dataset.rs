@@ -161,6 +161,12 @@ pub enum Check {
     NotMissing,
     /// Already converted, present permitted values for the owning column.
     AllowedValues(Vec<Value>),
+    /// Fixed environment terminology at the owning column's checkpoint.
+    /// Numeric codes retain their original integer/binary64 representation.
+    Codelist {
+        id: String,
+        values: Vec<Value>,
+    },
     Range {
         min: Option<Value>,
         max: Option<Value>,
@@ -585,6 +591,7 @@ impl DatasetPlan {
             match &verification.check {
                 Check::NotMissing
                 | Check::AllowedValues(_)
+                | Check::Codelist { .. }
                 | Check::Range { .. }
                 | Check::MaxLength(_)
                 | Check::Matches(_) => return Err(PlanError::InvalidColumns),
@@ -669,6 +676,7 @@ impl DatasetPlan {
                     verification.check,
                     Check::NotMissing
                         | Check::AllowedValues(_)
+                        | Check::Codelist { .. }
                         | Check::Range { .. }
                         | Check::MaxLength(_)
                         | Check::Matches(_)

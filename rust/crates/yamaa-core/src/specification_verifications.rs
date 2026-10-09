@@ -137,6 +137,10 @@ fn operation(d: &Document, id: usize) -> Result<(&str, usize), PrepareError> {
     Ok((text(d, name)?, payload))
 }
 impl Verifications {
+    pub(super) fn append_codelist(&mut self, verification: Verification) {
+        self.checks.push(verification);
+        self.identities.push(None);
+    }
     pub(super) fn prepare(d: &Document, output: &TableSchema) -> Result<Self, PrepareError> {
         let result = Self::default();
         let Some(id) = d
