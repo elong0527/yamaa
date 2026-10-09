@@ -2315,3 +2315,31 @@ def test_secondary_row_filter_refuses_before_provider(predicate):
         (feature.operation, feature.spec_path) for feature in actual.result.features
     } == {("secondary_row_filter", "rows[0].filter")}
     assert effects == []
+
+
+def test_empty_input_is_a_validation_failure_not_a_crash(tmp_path):
+    """A schema-valid specification with no inputs cannot crash admission."""
+    import yaml
+
+    document = {
+        "schema_version": "1.0",
+        "domain": "KEYS",
+        "keys": ["TAG"],
+        "input": {},
+        "output": {"path": "out.csv", "columns": ["TAG"]},
+        "columns": [
+            {"name": "TAG", "type": "str", "label": "Tag", "derivation": "TAG"}
+        ],
+    }
+    entry = tmp_path / "spec.yaml"
+    entry.write_text(yaml.safe_dump(document), encoding="utf-8")
+    spec = load_specification(entry, ROOT / "yaml").specification
+    with pytest.raises(ExecutionPlanningError) as raised:
+        admit(spec)
+    assert raised.value.diagnostics[0].condition == "driver_unavailable"
+    assert raised.value.diagnostics[0].phase == "validation"
+    effects = []
+    result = execute_with_source_provider(spec, lambda _: effects.append("read"))
+    assert result.result.status == "failure"
+    assert result.result.diagnostics[0].condition == "driver_unavailable"
+    assert effects == []
