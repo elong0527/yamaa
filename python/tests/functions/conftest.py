@@ -22,18 +22,6 @@ def bmi(weight_kg, height_cm, cm_per_m=100):
     return weight_kg / (height_cm / cm_per_m) ** 2
 """
 
-# The same arithmetic, with every invocation recorded where a test can read
-# it. REQ-0691 is an ordering rule, and an order is only observable from
-# inside the code that gets called.
-RECORDING_CODE = """
-CALLS = []
-
-
-def bmi(weight_kg, height_cm, cm_per_m=100):
-    CALLS.append((weight_kg, height_cm, cm_per_m))
-    return weight_kg / (height_cm / cm_per_m) ** 2
-"""
-
 ENVIRONMENT = """schema_version: "1.0"
 version: "{version}"
 

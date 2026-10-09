@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 import yaml
-from conftest import RECORDING_CODE
+from _recording_code import RECORDING_CODE
 
 from yamaa.functions import execute_with_project_functions
 from yamaa.io import render_csv
