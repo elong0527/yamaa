@@ -542,7 +542,6 @@ than off the text beside it:
   derivation:
     date_impute:
       source: AESTDTC          # "2025-01"
-      month: 6
       day: 15
       minimum_source_precision: month
       not_before: TRTSDT       # moves only what imputation supplied
