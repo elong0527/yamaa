@@ -59,7 +59,7 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]        # one row per subject
 input:
-  DM: input/dm.csv
+  DM: {path: input/dm.csv, types: {AGE: int}}   # CSV fields are text; cut needs a numeric source
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, AGEGR1]
