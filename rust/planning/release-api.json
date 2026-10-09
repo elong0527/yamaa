@@ -379,6 +379,7 @@
         "ClinicalItemRow",
         "DatasetBinding",
         "MultipleMatchSelection",
+        "ODMError",
         "ODM_ITEM_SCHEMA",
         "ParquetWriteResult",
         "RuntimeContext",
