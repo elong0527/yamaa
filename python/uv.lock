@@ -2532,6 +2532,7 @@ source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
     { name = "lxml" },
+    { name = "packaging" },
     { name = "polars" },
     { name = "py-yaml12" },
     { name = "pyarrow" },
@@ -2554,6 +2555,7 @@ harbor = [
 requires-dist = [
     { name = "jsonschema", specifier = ">=4.25" },
     { name = "lxml", specifier = ">=6.1.0" },
+    { name = "packaging", specifier = ">=25" },
     { name = "polars", specifier = ">=1.35.2" },
     { name = "py-yaml12", specifier = ">=0.2" },
     { name = "pyarrow", specifier = ">=23.0.1" },

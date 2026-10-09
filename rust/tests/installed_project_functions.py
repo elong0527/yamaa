@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import unittest
 from contextlib import ExitStack
+from importlib import metadata
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -421,6 +422,133 @@ class InstalledProjectFunctions(unittest.TestCase):
                         spec = load_specification(path, SCHEMA).specification
                 self.assertEqual(self.execute(spec=spec).result.status, "unsupported")
                 self.assertEqual(self.events, [])
+
+
+class InstalledLockedHostCapabilities(unittest.TestCase):
+    def test_actual_yamaa_versions_repeat_without_importing_called_code(self):
+        from yamaa import _locked_functions as host
+
+        installed_version = metadata.version("yamaa")
+        raw = (
+            'version = 1\n[[package]]\nname = "yamaa"\n'
+            f'version = "{installed_version}"\n'
+        ).encode()
+        with patch.object(
+            host.importlib,
+            "import_module",
+            side_effect=AssertionError("lock verification must not import called code"),
+        ):
+            for _ in range(2):
+                self.assertEqual(
+                    host.verify_versions(raw, ["yamaa._native.engine_info"]), ()
+                )
+            wrong = raw.replace(
+                f'version = "{installed_version}"'.encode(),
+                b'version = "999999.0"',
+            )
+            self.assertEqual(
+                host.verify_versions(wrong, ["yamaa._native.engine_info"]),
+                (
+                    host.Finding(
+                        "yamaa", "version_mismatch", ("999999.0",), installed_version
+                    ),
+                ),
+            )
+        bound = host.resolve_callable("yamaa._native.engine_info", [])
+        self.assertIs(bound, yamaa_native.engine_info)
+        self.assertEqual(bound()["core_version"], "0.1.0")
+
+    def test_normally_installed_project_wheel_is_checked_before_import_and_binding(
+        self,
+    ):
+        import subprocess
+        import sys
+        import zipfile
+
+        from yamaa import _locked_functions as host
+
+        module = "yamaa_lock_witness_programs"
+        info = "yamaa_lock_witness_programs-1.2.0.dist-info"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            marker = root / "project-imported.txt"
+            target = root / "installed"
+            wheel = root / "yamaa_lock_witness_programs-1.2.0-py3-none-any.whl"
+            source = (
+                "from pathlib import Path\n"
+                f"Path({str(marker)!r}).write_text('imported', encoding='utf-8')\n"
+                "calls = []\n"
+                "def calculate(*, x, y=999):\n"
+                "    calls.append((x, y))\n"
+                "    return x + y\n"
+            )
+            members = {
+                f"{module}/__init__.py": source,
+                f"{info}/METADATA": "Metadata-Version: 2.1\nName: yamaa-lock-witness-programs\nVersion: 1.2.0\n",
+                f"{info}/WHEEL": "Wheel-Version: 1.0\nGenerator: yamaa-installed-host-witness\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+                f"{info}/top_level.txt": module + "\n",
+            }
+            record = f"{info}/RECORD"
+            members[record] = "".join(name + ",,\n" for name in [*members, record])
+            with zipfile.ZipFile(wheel, "w") as archive:
+                for name, content in members.items():
+                    archive.writestr(name, content)
+            installed = subprocess.run(
+                [
+                    "uv",
+                    "pip",
+                    "install",
+                    "--python",
+                    sys.executable,
+                    "--target",
+                    str(target),
+                    "--no-cache",
+                    "--offline",
+                    "--no-deps",
+                    str(wheel),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertEqual(
+                installed.returncode, 0, installed.stdout + installed.stderr
+            )
+            raw = (
+                'version = 1\n[[package]]\nname = "yamaa"\n'
+                f'version = "{metadata.version("yamaa")}"\n'
+                '[[package]]\nname = "yamaa-lock-witness-programs"\nversion = "1.2"\n'
+            ).encode()
+            self.assertNotIn(module, sys.modules)
+            with patch.object(sys, "path", [str(target), *sys.path]):
+                try:
+                    bad = raw.replace(b'"1.2"', b'"9.0"')
+                    self.assertEqual(
+                        host.verify_versions(bad, [module + ".calculate"]),
+                        (
+                            host.Finding(
+                                "yamaa-lock-witness-programs",
+                                "version_mismatch",
+                                ("9.0",),
+                                "1.2.0",
+                            ),
+                        ),
+                    )
+                    self.assertFalse(marker.exists())
+                    self.assertNotIn(module, sys.modules)
+                    for _ in range(2):
+                        self.assertEqual(
+                            host.verify_versions(raw, [module + ".calculate"]), ()
+                        )
+                    self.assertFalse(marker.exists())
+                    bound = host.resolve_callable(module + ".calculate", ["x", "y"])
+                    self.assertEqual(marker.read_text(encoding="utf-8"), "imported")
+                    self.assertEqual(sys.modules[module].calls, [])
+                    self.assertEqual(bound(x=1, y=100), 101)
+                    self.assertEqual(sys.modules[module].calls, [(1, 100)])
+                finally:
+                    sys.modules.pop(module, None)
 
 
 if __name__ == "__main__":
