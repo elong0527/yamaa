@@ -442,6 +442,17 @@ def test_an_earlier_end_negates_the_count_with_the_operands_exchanged(
     assert forward > 0
 
 
+@pytest.mark.parametrize("bounds", ["inclusive", "between"])
+def test_an_earlier_end_negates_the_bounded_day_count(bounds: str) -> None:
+    # REQ-0597 applies in every unit: with bounds, the endpoint adjustment
+    # must follow the exchanged operands, not the sign of the difference.
+    forward = whole_units(date("2025-01-01"), date("2025-01-11"), "day", bounds)
+    backward = whole_units(date("2025-01-11"), date("2025-01-01"), "day", bounds)
+
+    assert backward == -forward
+    assert forward > 0
+
+
 def test_a_february_29_anniversary_falls_on_february_28_in_a_common_year() -> None:
     # REQ-0596: the case an age computation meets every leap year.
     assert whole_units(date("2024-02-29"), date("2025-02-28"), "year") == 1
