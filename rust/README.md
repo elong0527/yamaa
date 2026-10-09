@@ -180,8 +180,9 @@ The shared 31-case corpus is hand-written truth replayed through this service an
 Python's real lifecycle. It checks types, exact float bits, temporal precision,
 conversion paths/contexts, resolution order and handler counts. Additional Rust
 tests cover declaration order, repeated firings, opaque failures, count overflow
-and a dependent plan consuming a converted replacement. CI runs core and engine
-in debug and release profiles on all native Python targets.
+and a dependent plan consuming a converted replacement. CI runs core, engine and
+adapters in the debug profile and in `release-test` (release code generation
+without link-time optimization) on all native Python targets.
 
 This service accepts already normalized declarations. It does not decode a
 specification, plan dependencies, execute tables, implement expression-local
@@ -273,6 +274,7 @@ cd rust
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test
+cargo test -p yamaa-core -p yamaa-engine -p yamaa-adapters --profile release-test
 python tools/check_dependencies.py
 python tools/check_float_text.py
 uv run --project ../python --locked python tools/check_numeric_grammar.py
