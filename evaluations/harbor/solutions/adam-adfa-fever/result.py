@@ -34,14 +34,14 @@ adfa = (
         .when(pl.col("AVALC") == "N")
         .then(0.0)
         .alias("AVAL"),
-        pl.col("VSDTC").str.to_date("%Y-%m-%dT%H:%M").alias("ADT"),
+        pl.col("VSDTC").str.slice(0, 10).str.to_date(strict=False).alias("ADT"),
         pl.lit("VS").alias("SRCDOM"),
         pl.lit("VSSTRESN").alias("SRCVAR"),
         pl.col("VSSEQ").alias("SRCSEQ"),
     )
-    .sort(["USUBJID", "VSDTC", "VSSEQ"])
+    .sort(["STUDYID", "USUBJID", "ADT", "VSSEQ"], nulls_last=True)
     # Number each subject's records 1, 2, 3 ... in assessment-date order.
-    .with_columns(pl.col("USUBJID").cum_count().over("USUBJID").alias("ASEQ"))
+    .with_columns(pl.col("USUBJID").cum_count().over(["STUDYID", "USUBJID"]).alias("ASEQ"))
     .select(
         "DOMAIN",
         "STUDYID",

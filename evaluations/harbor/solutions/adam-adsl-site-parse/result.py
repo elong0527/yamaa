@@ -14,7 +14,7 @@ adsl = (
     dm.with_columns(
         # The middle segment when the identifier holds two dashes with
         # exactly four digits after the last one.
-        SITEIDP=pl.col("USUBJID").str.extract(r"^YAMAA-([^-]+)-[0-9]{4}$", 1),
+        SITEIDP=pl.col("USUBJID").str.extract(r"^[^-]+-([^-]+)-[0-9]{4}$", 1),
     )
     .with_columns(
         SITEID=pl.coalesce("SITEIDP", "SITEID").fill_null("UNKNOWN"),

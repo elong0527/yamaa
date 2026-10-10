@@ -60,11 +60,11 @@ for (subj, repkey), items in groups.items():
 # Latest record with a result on or before the reference start date,
 # per subject, test, and specimen; ties go to the higher sequence number.
 flag_keys = {}
-for row in sorted(rows, key=lambda r: (r["LBDTC"] or "", r["LBSEQ"])):
+for row in sorted(rows, key=lambda r: ((r["LBDTC"] or "")[:10], r["LBSEQ"])):
     if not row["_HAS"] or row["LBDTC"] is None:
         continue
     ref = ref_of.get(row["USUBJID"])
-    if ref is not None and row["LBDTC"] > ref:
+    if ref is not None and row["LBDTC"][:10] > ref[:10]:
         continue
     flag_keys[(row["USUBJID"], row["LBTESTCD"], row["LBSPEC"])] = row["LBSEQ"]
 

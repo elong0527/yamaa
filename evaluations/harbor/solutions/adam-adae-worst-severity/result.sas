@@ -10,10 +10,10 @@ run;
 
 data graded;
   length ASEV $20;
-  set adae_raw; ASEV=AESEV;
+  set adae_raw; NODATE=missing(ASTDT); ASEV=AESEV;
   select(ASEV); when('MILD') ASEVN=1; when('MODERATE') ASEVN=2; when('SEVERE') ASEVN=3; when('LIFE-THREATENING') ASEVN=4; otherwise ASEVN=.; end;
 run;
-proc sort data=graded(where=(TRTEMFL='Y' and not missing(ASEVN))) out=eligible; by STUDYID USUBJID AEDECOD descending ASEVN ASTDT AESEQ; run;
+proc sort data=graded(where=(TRTEMFL='Y' and not missing(ASEVN))) out=eligible; by STUDYID USUBJID AEDECOD descending ASEVN NODATE ASTDT AESEQ; run;
 data worst; set eligible; by STUDYID USUBJID AEDECOD; if first.AEDECOD; keep STUDYID USUBJID AESEQ; run;
 proc sql; create table result as select a.*,a.ASEVN as AESEVN,case when not missing(b.AESEQ) then 'Y' else '' end as AWSEVFL from graded as a left join worst as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.AESEQ=b.AESEQ; quit;
 

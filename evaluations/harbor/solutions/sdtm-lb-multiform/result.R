@@ -54,12 +54,11 @@ results <- wide |>
       event_short == "UNSCH" ~ "UNSCHEDULED"
     ),
     VISITNUM = case_when(
-      event_short == "SCRN" ~ "1",
-      event_short == "BL" ~ "2",
-      event_short == "D21" ~ "3",
-      event_short == "UNSCH" & ItemGroupRepeatKey == "1" ~ "2.01",
-      event_short == "UNSCH" & ItemGroupRepeatKey == "2" ~ "2.02",
-      TRUE ~ paste0("2.0", ItemGroupRepeatKey)
+      event_short == "SCRN" ~ 1,
+      event_short == "BL" ~ 2,
+      event_short == "D21" ~ 3,
+      event_short == "UNSCH" ~ 2 + as.numeric(ItemGroupRepeatKey) / 100,
+      TRUE ~ NA_real_
     ),
     not_done = Value == "NOT DONE",
     LBORRES = if_else(not_done, NA_character_, Value),

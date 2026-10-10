@@ -29,12 +29,6 @@ ETHNIC_MAP = {
 }
 
 
-def usubjid(study: str, subject: str) -> str:
-    if subject.startswith(study):
-        return subject
-    return f"{study}-{subject}"
-
-
 # Distinct collected answers per subject.
 race_rows = odm.filter(pl.col("ItemOID") == "IT.DM.RACE", pl.col("Value") != "")
 ethnic_rows = odm.filter(pl.col("ItemOID") == "IT.DM.ETHNIC", pl.col("Value") != "")
@@ -44,10 +38,7 @@ subjects = (
     .unique()
     .with_columns(
         STUDYID=pl.col("StudyOID"),
-        USUBJID=pl.struct(["StudyOID", "SubjectKey"]).map_elements(
-            lambda s: usubjid(s["StudyOID"], s["SubjectKey"]),
-            return_dtype=pl.String,
-        ),
+        USUBJID=pl.col("SubjectKey"),
     )
 )
 

@@ -65,8 +65,9 @@ lb <- pmap_dfr(
 flags <- lb |>
   filter(HAS, !is.na(LBDTC)) |>
   left_join(dm |> select(USUBJID, RFSTDTC), by = "USUBJID") |>
-  filter(is.na(RFSTDTC) | LBDTC <= RFSTDTC) |>
-  arrange(USUBJID, LBTESTCD, LBSPEC, LBDTC, LBSEQ) |>
+  mutate(DAYDATE = substr(LBDTC, 1, 10), REFDAY = substr(RFSTDTC, 1, 10)) |>
+  filter(is.na(REFDAY) | DAYDATE <= REFDAY) |>
+  arrange(USUBJID, LBTESTCD, LBSPEC, DAYDATE, LBSEQ) |>
   group_by(USUBJID, LBTESTCD, LBSPEC) |>
   slice_tail(n = 1) |>
   ungroup() |>

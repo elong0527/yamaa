@@ -70,10 +70,11 @@ one_lab <- function(study, subj, igrep) {
     hit <- lbrange |>
       filter(
         LBNAM == lbnam, LBTESTCD == code, SEX == sex,
-        AGELO <= age, age <= AGEHI,
+        AGELO <= age, age < AGEHI,
         EFFSTDT <= lbdtc,
         is.na(EFFENDT) | lbdtc <= EFFENDT
       ) |>
+      arrange(desc(EFFSTDT), desc(AGELO)) |>
       slice_head(n = 1)
     if (nrow(hit) == 1) {
       unit <- hit$UNIT[[1]]

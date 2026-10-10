@@ -15,10 +15,11 @@ vs = pl.read_csv("/app/input/vs.csv", infer_schema=False).with_columns(
 
 # Rows with no series value share one series within each subject; order
 # within a series by visit number with missing numbers last, keeping the
-# collected order (VSSEQ) for ties.
+# collected order (input row order) for ties.
 ordered = vs.sort(
-    ["STUDYID", "USUBJID", "SERIES", "AVISITN", "VSSEQ"],
+    ["STUDYID", "USUBJID", "SERIES", "AVISITN"],
     nulls_last=True,
+    maintain_order=True,
 )
 
 # The closest earlier result with a value in the same subject and series.

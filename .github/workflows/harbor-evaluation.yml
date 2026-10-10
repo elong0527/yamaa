@@ -18,6 +18,8 @@ on:
       - 'benchmarks/**'
       - 'evaluations/harbor/**'
       - 'python/tests/test_harbor_evaluation.py'
+      - 'python/tests/test_harbor_reference_edges.py'
+      - 'python/tests/test_harbor_opensas.py'
       - 'python/pyproject.toml'
       - 'python/uv.lock'
       - '.github/workflows/harbor-evaluation.yml'
@@ -26,6 +28,8 @@ on:
       - 'benchmarks/**'
       - 'evaluations/harbor/**'
       - 'python/tests/test_harbor_evaluation.py'
+      - 'python/tests/test_harbor_reference_edges.py'
+      - 'python/tests/test_harbor_opensas.py'
       - 'python/pyproject.toml'
       - 'python/uv.lock'
       - '.github/workflows/harbor-evaluation.yml'
@@ -48,11 +52,12 @@ jobs:
       R_PACKAGES: dplyr tidyr readr stringr lubridate purrr haven xml2 nanoparquet
       # A result.R whose packages are missing fails instead of skipping.
       YAMAA_REQUIRE_R: '1'
+      YAMAA_REQUIRE_OPENSAS: '1'
     steps:
       - name: Install git, Python, and the R packages' system libraries
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends git python3 python3-venv \
+          apt-get install -y --no-install-recommends curl git python3 python3-venv \
             libxml2-dev zlib1g-dev libicu-dev
 
       - name: Checkout repository
@@ -82,5 +87,12 @@ jobs:
       - name: Create locked environment
         run: uv sync --project python --extra test --locked --no-editable
 
+      - name: Install the evaluation image's pinned opensas release
+        run: bash evaluations/harbor/install-opensas.sh amd64
+
       - name: Grade every reference solution and check every prompt
-        run: uv run --project python --no-sync pytest python/tests/test_harbor_evaluation.py
+        run: >-
+          uv run --project python --no-sync pytest
+          python/tests/test_harbor_evaluation.py
+          python/tests/test_harbor_opensas.py
+          python/tests/test_harbor_reference_edges.py

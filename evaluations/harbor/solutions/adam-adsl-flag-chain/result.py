@@ -41,7 +41,9 @@ adsl = (
         .otherwise(pl.lit("N")),
         AGEGR1=pl.when(pl.col("AGE") < 65)
         .then(pl.lit("<65"))
-        .otherwise(pl.lit(">=65")),
+        .when(pl.col("AGE") >= 65)
+        .then(pl.lit(">=65"))
+        .otherwise(None),
     )
 )
 

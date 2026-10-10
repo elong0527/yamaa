@@ -74,7 +74,7 @@ reason = (
             ["DISEASE PROGRESSION", "STUDY DISCONTINUATION", "WITHDRAWAL OF CONSENT"]
         )
     )
-    .sort(["STUDYID", "USUBJID", "DSDTC", "DSSEQ"])
+    .sort(["STUDYID", "USUBJID", "DSDTC", "DSSEQ"], nulls_last=True)
     .unique(["STUDYID", "USUBJID"], keep="first", maintain_order=True)
     .select("STUDYID", "USUBJID", CENSORRSNDT="DSDTC", CENSORRSN="DSDECOD")
 )

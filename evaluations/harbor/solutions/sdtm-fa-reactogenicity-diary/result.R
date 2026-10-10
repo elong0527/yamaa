@@ -16,9 +16,9 @@ diary <- read_csv(
 local_reactions <- c("PAIN", "REDNESS", "SWELLING")
 
 one_row <- function(r) {
-  fascat <- if (r$CATSRC == "LOCAL") {
+  fascat <- if (r$CATSRC %in% "LOCAL") {
     "ADMINISTRATION SITE"
-  } else if (r$CATSRC == "SYSTEMIC") {
+  } else if (r$CATSRC %in% "SYSTEMIC") {
     "SYSTEMIC"
   } else if (r$REACTION %in% local_reactions) {
     "ADMINISTRATION SITE"
@@ -40,7 +40,7 @@ one_row <- function(r) {
   clean <- function(x) {
     if (is.na(x) || x == "") NA_character_ else x
   }
-  if (!is.na(r$COMPLETED) && r$COMPLETED != "Y") {
+  if (is.na(r$COMPLETED) || r$COMPLETED != "Y") {
     return(base |> mutate(
       ORDER = 0L, FATESTCD = "OCCUR",
       FATEST = "Occurrence Indicator",
@@ -50,7 +50,7 @@ one_row <- function(r) {
     ))
   }
   occur <- clean(r$OCCUR)
-  sev <- clean(r$SEV)
+  sev <- if (occur %in% "Y") clean(r$SEV) else "NONE"
   diam <- clean(r$DIAMETER)
   unit <- clean(r$DIAMUNIT)
   out <- base |> mutate(
@@ -86,9 +86,20 @@ one_row <- function(r) {
   out
 }
 
-fa <- diary |>
-  split(seq_len(nrow(diary))) |>
-  map_dfr(~ one_row(as.list(.x))) |>
+selected <- diary |> filter(REACTION != "TEMPERATURE")
+empty <- tibble(
+  DOMAIN = character(), STUDYID = character(), USUBJID = character(),
+  DAY = integer(), REACTION = character(), FAOBJ = character(),
+  FACAT = character(), FASCAT = character(), FATPT = character(),
+  FADTC = character(), ORDER = integer(), FATESTCD = character(),
+  FATEST = character(), FAORRES = character(), FAORRESU = character(),
+  FASTRESC = character(), FASTRESN = double(), FASTRESU = character(),
+  FASTAT = character()
+)
+fa <- bind_rows(
+  empty,
+  map(seq_len(nrow(selected)), ~ one_row(as.list(selected[.x, ])))
+) |>
   arrange(STUDYID, USUBJID, DAY, REACTION, ORDER) |>
   group_by(STUDYID, USUBJID) |>
   mutate(FASEQ = row_number()) |>

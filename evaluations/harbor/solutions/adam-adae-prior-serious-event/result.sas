@@ -18,7 +18,7 @@ data result;
   set joined; by STUDYID USUBJID;
   if first.USUBJID then do; lastterm=''; lastseq=.; prevterm=''; end;
   PREV_AEDECOD=prevterm;
-  if AESER ne 'Y' then do;
+  if AESER='N' then do;
     PRIOR_SAEDECOD=lastterm; PRIOR_SAESEQ=lastseq;
     FIRST_SAEDECOD=firstterm; FIRST_SAESEQ=firstseq;
     if not missing(lastseq) then PRIOR_SAEFL='Y';

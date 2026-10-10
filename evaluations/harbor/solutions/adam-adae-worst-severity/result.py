@@ -32,7 +32,7 @@ adae = adae_raw.with_columns(
 # with a graded severity is eligible. ISO dates sort as text.
 best = (
     adae.filter(pl.col("TRTEMFL") == "Y", pl.col("AESEVN").is_not_null())
-    .sort(["AESEVN", "ASTDT", "AESEQ"], descending=[True, False, False])
+    .sort(["AESEVN", "ASTDT", "AESEQ"], descending=[True, False, False], nulls_last=True)
     .unique(["USUBJID", "AEDECOD"], keep="first", maintain_order=True)
     .select("USUBJID", "AEDECOD", "AESEQ")
     .with_columns(BEST=pl.lit("Y"))

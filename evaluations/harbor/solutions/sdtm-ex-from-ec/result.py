@@ -124,7 +124,7 @@ ex = (
         DOMAIN=pl.lit("EX"),
         EXSTDTC_DT=pl.col("EXSTDTC").str.to_date(strict=False),
     )
-    .sort(["STUDYID", "USUBJID", "EXSTDTC_DT", "FORMREPEAT"])
+    .sort(["STUDYID", "USUBJID", "EXSTDTC_DT", "FORMREPEAT"], nulls_last=True)
     .with_columns(EXSEQ=pl.col("USUBJID").cum_count().over(["STUDYID", "USUBJID"]))
     .with_columns(EXSEQ=pl.col("EXSEQ").cast(pl.Int64))
     .select(

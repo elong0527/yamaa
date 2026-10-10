@@ -31,7 +31,7 @@ for row in odm.to_dicts():
     key = (str(row["StudyOID"]), str(row["SubjectKey"]))
     oid, value = str(row["ItemOID"]), row["Value"]
     if oid in checklist_oids:
-        # One extract record per asked checklist condition.
+        # Last collected answer wins when an item repeats, including blanks.
         records_by_subject[key]["checklist"][oid] = value if _present(value) else None
     elif not _present(value):
         continue

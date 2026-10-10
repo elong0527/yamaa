@@ -63,7 +63,7 @@ framed = pl.DataFrame(assigned).with_columns(
 # visit; the lower sequence number breaks a tie.
 flagged = (
     framed.filter(pl.col("AVISIT").is_not_null())
-    .sort(["AWTABS", "VSSEQ"])
+    .sort(["AWTABS", "VSSEQ"], nulls_last=True)
     .unique(["STUDYID", "USUBJID", "PARAMCD", "AVISIT"], keep="first", maintain_order=True)
     .select("STUDYID", "USUBJID", "PARAMCD", "AVISIT", "VSSEQ")
     .with_columns(ANL01FL=pl.lit("Y"))

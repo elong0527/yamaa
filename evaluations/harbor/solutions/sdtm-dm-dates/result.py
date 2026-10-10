@@ -44,7 +44,6 @@ dm = (
     .join(ae_sum, on=["STUDYID", "USUBJID"], how="left")
     .with_columns(
         DOMAIN=pl.lit("DM"),
-        RFICDTC=pl.col("RFICDTC").str.to_date(strict=False),
         RFSTDTC=pl.col("RFXSTDTC"),
         RFPENDTC=pl.max_horizontal("RFXENDTC", "DS_MAX", "AE_MAX"),
     )

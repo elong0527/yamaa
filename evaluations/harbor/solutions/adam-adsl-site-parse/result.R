@@ -17,7 +17,7 @@ adsl <- dm |>
   mutate(
     # The middle segment when the identifier holds two dashes with
     # exactly four digits after the last one.
-    SITEIDP = str_match(USUBJID, "^YAMAA-([^-]+)-[0-9]{4}$")[, 2],
+    SITEIDP = str_match(USUBJID, "^[^-]+-([^-]+)-[0-9]{4}$")[, 2],
     SITEID = coalesce(SITEIDP, SITEID),
     SITEID = if_else(is.na(SITEID), "UNKNOWN", SITEID),
     SUBJREF = if_else(is.na(SUBJID), "UNKNOWN", paste0(SITEID, ":", SUBJID))

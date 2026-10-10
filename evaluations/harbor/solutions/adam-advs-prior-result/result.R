@@ -20,7 +20,7 @@ vs <- read_csv(
 # last, keeping the collected order for ties. The look-back skips blank
 # results but never crosses into another series.
 ordered <- vs |>
-  arrange(STUDYID, USUBJID, SERIES, is.na(AVISITN), AVISITN, VSSEQ)
+  arrange(STUDYID, USUBJID, SERIES, is.na(AVISITN), AVISITN)
 
 # Forward-fill the ordered results, then lag by one so the row's own
 # value never counts.
