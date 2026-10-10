@@ -271,3 +271,57 @@ def test_typed_table_normalizes_nonfinite_float_cells_to_missing() -> None:
     )
 
     assert table.frame["VALUE"].to_list() == [1.0, None, None, None]
+
+
+def test_typed_table_rejects_duplicate_column_names() -> None:
+    # Mutation probe: `len(declared) < len(set(declared))` is never true, so
+    # only a duplicate-names case pins the uniqueness check.
+    with pytest.raises(ValidationError, match="unique"):
+        TypedTable(
+            columns=(
+                TypedColumn(name="ID", type="int"),
+                TypedColumn(name="ID", type="str"),
+            ),
+            frame=pl.DataFrame({"ID": [1]}),
+        )
+
+
+def test_typed_table_rejects_frame_column_mismatch_in_either_direction() -> None:
+    # Mutation probe: `frame.columns < declared` still raises for one swap
+    # direction, so the reversed mismatch pins the inequality check.
+    frame = pl.DataFrame({"VALUE": ["A"], "ID": [1]})
+
+    with pytest.raises(ValidationError, match="column order"):
+        TypedTable(
+            columns=(
+                TypedColumn(name="ID", type="int"),
+                TypedColumn(name="VALUE", type="str"),
+            ),
+            frame=frame,
+        )
+
+
+def test_rejects_surrogate_code_point_at_the_upper_bound() -> None:
+    # The U+D800 probe pins the lower edge; U+DFFF pins the upper edge of the
+    # surrogate range.
+    result = normalize_runtime_value("ok\udfffbad")
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.phase == "ingest"
+    assert result.condition.condition == "invalid_text"
+    assert result.condition.context == {"code_point": "U+DFFF", "offset": 2}
+
+
+def test_rejects_one_below_int64_min() -> None:
+    # Mutation probe: INT64_MIN = ~(2**63) shifts the bound by one; only the
+    # exact edge below the minimum pins it (REQ-0021).
+    below = normalize_runtime_value(-(2**63) - 1)
+
+    assert isinstance(below, ConditionResult)
+    assert below.condition.condition == "integer_overflow"
+
+
+def test_accepts_code_point_just_below_the_surrogate_range() -> None:
+    # Mutation probe: 0xD800 -> 0xD7FF wrongly rejects the code point just
+    # below the surrogate range.
+    assert normalize_runtime_value("ok\ud7ffbad") == ValueResult(value="ok\ud7ffbad")
