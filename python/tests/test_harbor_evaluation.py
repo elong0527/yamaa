@@ -1217,9 +1217,17 @@ def test_the_oracle_shows_a_text_golden_as_text(language):
 
 REFERENCES = sorted(
     p.relative_to(build.SOLUTIONS).as_posix()
-    for p in build.SOLUTIONS.rglob("*")
-    if p.is_file()
+    for p in build.SOLUTIONS.glob("*/result.*")
+    if p.is_file() and p.name in SCRIPTS.values()
 )
+
+
+def test_prepared_sas_solutions_cover_every_prompt():
+    # SAS sources are prepared separately until the openSAS Harbor track lands.
+    # They must not be sent to the Python interpreter by reference discovery.
+    sources = sorted(build.SOLUTIONS.glob("*/result.sas"))
+    assert [p.parent.name for p in sources] == PROMPTED
+    assert all(p.read_text(encoding="utf-8").strip() for p in sources)
 
 
 def _r_has(*packages: str) -> bool:
