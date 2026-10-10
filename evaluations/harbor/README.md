@@ -22,6 +22,11 @@ Docker; this folder only writes Harbor task directories and a job file.
 Results are not kept in this repository: runs are uploaded to Harbor Hub and
 reviewed on its leaderboards.
 
+Standalone `result.sas` sources are also prepared for the 137 prompted
+derivation benchmarks. Their execution prerequisites, local checks and known
+compatibility gaps are documented in [solutions/SAS.md](solutions/SAS.md).
+They are not yet a Harbor language track.
+
 Tasks are built from the full prompt unless `--prompt` names the
 conventions or brief tier (see [Prompt tiers](#prompt-tiers)). The Harbor
 Evaluation workflow
