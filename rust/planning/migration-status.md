@@ -232,15 +232,37 @@ Status OK. All 14 packages pass 4,547 direct source-byte comparisons, with compl
 [native selection contract](../WORKFLOW_SELECTION.md) and
 [qualification record](1881-qualification.md).
 
-The active prerequisite is [#1883 installed producer domain build results](https://github.com/elong0527/yamaa/issues/1883).
-The public explicit-environment entries are being connected to selected whole
-producer builds and bounded typed root output. The complete retained attempt and
-classified whole report must gate accepted unrounded root output; consumers still
-use accepted rounded serialized producer bytes. Original host payloads and
-actually entered prefixes stay owned. This work is not qualified yet. It supplies
-no producer publisher or Save capability; ordinary Save remains unchanged.
-Final public workflow and ordered publication acceptance remain #1741, with
-unanswered publication lifecycle decision #1866 separate.
+The [#1883 installed producer domain build results](https://github.com/elong0527/yamaa/issues/1883)
+prerequisite is qualified by [#1885](https://github.com/elong0527/yamaa/pull/1885),
+merged as `421dc17f4e24bf48d8589dd98e3a9c3ac1690f73`. Its merged source directly
+matches qualified head `68746afe882c769723375c66530ad055d570fad1`. All 23 applicable
+contexts, 16 native jobs, complete assessed 22-file review, 40 artifact audits and
+a fresh protected guard pass. Public explicit-environment producer entries retain
+complete classified whole attempts and bounded unrounded root output; consumers
+use accepted rounded serialized bytes. Actual modes pass 1,127 Rust cases on
+Linux/macOS and 1,113 on Windows across 129 targets. Six installed Python forms
+pass 26 suites each; exercised R forms pass 20 and strict Status OK. All 14 packages
+pass 4,554 direct byte comparisons, with 29 evidence rows and 30,033 PortableLibmV1
+sample observations. See [the result contract](../PRODUCER_PUBLIC_RESULTS.md) and
+[qualification record](1883-qualification.md). Producer publication remains
+#1741 and awaits #1866; no graph publisher or Save capability is supplied.
+
+The active independent submission prerequisite is
+[#1888 bounded typed submission declarations](https://github.com/elong0527/yamaa/issues/1888).
+Core declaration decoding now retains a complete closed owned study/section
+model, authored section/specification/document order, existing defaults and
+overrides, and original normalized field occurrence facts. Whole count, text,
+escaping, depth, work and finding capacities are admitted before ownership;
+refusals preserve the exact borrowed input without a fitting diagnostic prefix.
+Sixteen independently authored cases cover all families, scalar/shape failures,
+limits and retention after the original document drops. See
+[the declaration contract](../SUBMISSION_DECLARATIONS.md). Final qualification
+and reviewed exact-head CI remain required before #1888 closes. This metadata
+model provides no execution, rendering, artifact-read or publication authority.
+[#1887](https://github.com/elong0527/yamaa/issues/1887) separately asks whether an
+explicit source-system-version override should preserve existing XML/JSON bytes:
+installed packages are 0.2.0, while independent expected metadata declares 1.0.
+No answer, schema change or expected-byte rewrite is inferred.
 
 See [the closing qualification record](1757-qualification.md) for actual local
 results and the distinction between those results and the CI platform matrix.
@@ -256,14 +278,14 @@ Continue with the following acceptance gates in the
 2. [#1860 CSV precision](https://github.com/elong0527/yamaa/issues/1860) is closed
    by #1862 with complete qualification above.
 3. #1863 is closed by #1865, #1867 by #1868, #1869 by #1870 and #1871 by #1873
-   with complete qualification above. #1874 is closed by #1876, #1877 by #1880 and #1881 by #1882. Complete
-   #1883's installed producer domain results, then #1741's
+   with complete qualification above. #1874 is closed by #1876, #1877 by #1880,
+   #1881 by #1882 and #1883 by #1885. Complete #1741's
    producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.
    Settle #1866's publication lifecycle decision before closing #1741 acceptance.
-4. Complete #1758's shared Define-XML/Dataset-JSON implementation and three
-   submission fixtures before retiring the old schema and generator.
+4. Complete #1888's bounded typed submission declarations, then #1758's shared
+   Define-XML/Dataset-JSON implementation and three submission fixtures before retiring the old schema and generator.
 5. Close the remaining language/API gaps in #1751/#1752/#1754 and the executable
    inventory, migrate every supported benchmark runner, and qualify complete
    output, issues, logs and exact saved bytes through both installed public APIs.
