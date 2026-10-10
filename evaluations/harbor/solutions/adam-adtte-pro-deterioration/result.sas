@@ -31,7 +31,8 @@ run;
 data deterioration; set deteriorations; by STUDYID USUBJID; if first.USUBJID; keep STUDYID USUBJID ADT QSSEQ; rename ADT=DETERDT QSSEQ=DETERSEQ; run;
 proc sort data=ds(where=(DSDECOD in ('DISEASE PROGRESSION','STUDY DISCONTINUATION','WITHDRAWAL OF CONSENT'))) out=reasons; by STUDYID USUBJID DSDTC DSSEQ; run;
 data reason; set reasons; by STUDYID USUBJID; if first.USUBJID; keep STUDYID USUBJID DSDTC DSDECOD; rename DSDTC=REASONDT DSDECOD=REASON; run;
-proc sql; create table candidates as select a.* from ordered as a inner join reason as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID where a.ADT<=b.REASONDT; quit;
+proc sql; create table assessment_reasons as select a.*,b.REASONDT from ordered as a left join reason as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID; quit;
+data candidates; set assessment_reasons; if missing(REASONDT) or ADT<=REASONDT; run;
 proc sort data=candidates; by STUDYID USUBJID descending ADT descending QSSEQ; run;
 data lastassessment; set candidates; by STUDYID USUBJID; if first.USUBJID; keep STUDYID USUBJID ADT QSSEQ; rename ADT=LASTDT QSSEQ=LASTSEQ; run;
 proc sql; create table joined as select a.*,b.DETERDT,b.DETERSEQ,c.REASONDT,c.REASON,d.LASTDT,d.LASTSEQ from adsl as a

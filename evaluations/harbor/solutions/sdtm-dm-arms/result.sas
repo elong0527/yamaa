@@ -14,7 +14,11 @@ data rand;
   input STUDYID : $char1024. USUBJID : $char1024. RANDCD : $char1024. RAND : $char1024. SCRNFL : $char1024.;
 run;
 
-proc sql; create table joined as select a.*,b.EXTRT from rand a left join ex b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID; quit;
+/* Keep the first nonmissing collected exposure per subject. */
+data nonmissing_ex; set ex; if not missing(EXTRT); EXORDER=_N_; run;
+proc sort data=nonmissing_ex; by STUDYID USUBJID EXORDER; run;
+data exposure; set nonmissing_ex; by STUDYID USUBJID; if first.USUBJID; run;
+proc sql; create table joined as select a.*,b.EXTRT from rand a left join exposure b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID; quit;
 data result; set joined; length DOMAIN $2 ARMCD ARM ACTARMCD ACTARM ARMNRS ACTARMUD $1024; DOMAIN='DM'; ARMCD=RANDCD; ARM=RAND;
 if EXTRT='PLACEBO' then do; ACTARMCD='PBO'; ACTARM='Placebo'; end;
 else if EXTRT='VITAMIN D3' then do; ACTARMCD='TRT'; ACTARM='Vitamin D3'; end;
