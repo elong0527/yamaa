@@ -26,7 +26,7 @@ CASES = (
 
 
 class PublicEnvironment(unittest.TestCase):
-    def test_graph_metadata_does_not_enable_public_producer_execution(self):
+    def test_selected_functionless_producer_failure_retains_actual_source_prefix(self):
         os.chdir(self.directory)
         (self.directory / "environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
         (self.directory / "producer.yaml").write_text(
@@ -48,8 +48,10 @@ class PublicEnvironment(unittest.TestCase):
             checked = yamaa.check("spec.yaml", environment="environment.yaml")
             failed = yamaa.domain("spec.yaml", environment="environment.yaml")
         self.assertTrue(checked.issues.is_empty(), checked.issues)
-        self.assertEqual(failed.issues["condition"].to_list(), ["unsupported_operation"])
-        self.assertEqual(failed.issues["spec_paths"].to_list(), [["input.P.schema"]])
+        self.assertEqual(failed.issues["condition"].to_list(), ["resource_path_missing"])
+        self.assertEqual(failed.issues["spec_paths"].to_list(), [["input.RAW.path"]])
+        self.assertEqual(failed._native.producer_attempt().entered_nodes(), [1])
+        self.assertEqual(self.report(failed)["source_reads"], [])
         self.assertIsNone(failed.output)
         with self.assertRaises(yamaa.DomainError):
             failed.save()

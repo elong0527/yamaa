@@ -1112,6 +1112,13 @@
       "level": "component"
     },
     {
+      "id": "python/public-producer-builds",
+      "runtime": "python",
+      "path": "rust/tests/installed_public_producers.py",
+      "staged_path": "installed_public_producers.py",
+      "level": "component"
+    },
+    {
       "id": "python/project_functions",
       "runtime": "python",
       "path": "rust/tests/installed_project_functions.py",
@@ -1214,6 +1221,13 @@
       "runtime": "r",
       "path": "R/yamaa/tests/producer_builds.R",
       "staged_path": "producer_builds.R",
+      "level": "component"
+    },
+    {
+      "id": "r/public-producer-builds",
+      "runtime": "r",
+      "path": "R/yamaa/tests/public_producers.R",
+      "staged_path": "public_producers.R",
       "level": "component"
     },
     {

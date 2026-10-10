@@ -115,5 +115,7 @@ pub mod producer_graph;
 #[cfg(any(unix, windows))]
 pub mod producer_report;
 #[cfg(any(unix, windows))]
+pub mod producer_result;
+#[cfg(any(unix, windows))]
 pub mod project_application;
 pub mod project_check;

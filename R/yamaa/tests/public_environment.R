@@ -189,11 +189,13 @@ writeLines(c("schema_version: '1.0'", "domain: CONS", "keys: [ID]",
 checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
 failed <- yamaa_domain("spec.yaml", environment = "environment.yaml")
 stopifnot(nrow(checked$issues) == 0L,
-  identical(failed$issues$condition, "unsupported_operation"),
-  identical(failed$issues$spec_paths, list("input.P.schema")))
+  identical(failed$issues$condition, "resource_path_missing"),
+  identical(failed$issues$spec_paths, list("input.RAW.path")),
+  grepl('"outcome":"failure"', observations(failed), fixed = TRUE),
+  grepl('"path":"never-read.csv"', observations(failed), fixed = TRUE))
 stopifnot(is.null(failed$output), !file.exists("produced.csv"), !file.exists("consumer.csv"),
   inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"))
-cat("public R producer execution remains explicitly unsupported after graph metadata admission\n")
+cat("public R selected functionless producer failure retains its actual source prefix\n")
 graph_document <- function(input, base, output, invalid = FALSE) c(
   "schema_version: '1.0'", "domain: TEST", "keys: [ID]", paste0("base: ", base),
   paste0("input: ", input), "columns:",

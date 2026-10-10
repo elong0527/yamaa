@@ -941,6 +941,233 @@ fn report_id() -> yamaa_adapters::specification_report::Identity<'static> {
 }
 
 #[test]
+fn public_root_result_keeps_independent_unrounded_truth_after_all_other_owners_and_files_drop() {
+    use yamaa_adapters::{producer_result, public_table::Values};
+    let study = Study::new();
+    study.rounded();
+    // Independent root precision witness: consumer references retain the
+    // established 2.46/4.70 truth; this separate root column is not rounded.
+    study.write("consumer/root.yaml", CONSUMER.replace(
+        "output: {path:",
+        "  - {name: ROOT_UNROUNDED, type: float, label: Root precision, derivation: {compute: {expr: 'VALUE + 0.004'}}}\noutput: {path:",
+    ).replace("columns: [ID, VALUE], decimals: 2", "columns: [ROOT_UNROUNDED, ID, VALUE], decimals: 2"));
+    let mut build = study.build(Language::Python);
+    let mut host = Activation::new(&study, Mode::Pass);
+    let first = build.build_reported(&mut host, report_id(), Limits::default());
+    let second = build.build_reported(&mut host, report_id(), Limits::default());
+    assert_eq!(host.trace.len(), 12);
+    assert_eq!(artifact(&first, 0), b"ID,VALUE\n1,1.23\n2,2.35\n");
+    assert_eq!(
+        artifact(&first, 1),
+        b"ROOT_UNROUNDED,ID,VALUE\n2.46,1,2.46\n4.70,2,4.70\n"
+    );
+    drop(build);
+    drop(host);
+    fs::remove_dir_all(&study.0).unwrap();
+    for attempt in [&first, &second] {
+        let result =
+            producer_result::prepare_classified(attempt, report_id(), 16777216, &[]).unwrap();
+        assert!(result.issues().is_empty());
+        assert_eq!(result.observations()["outcome"], "success");
+        let columns = result.output_table().unwrap().columns();
+        assert_eq!(
+            columns
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            ["ROOT_UNROUNDED", "ID", "VALUE"]
+        );
+        assert!(
+            matches!(&columns[0].1, Values::Float(values) if values == &[Some(2.464), Some(4.704)])
+        );
+        assert!(matches!(&columns[1].1, Values::Int(values) if values == &[Some(1), Some(2)]));
+        assert!(
+            matches!(&columns[2].1, Values::Float(values) if values == &[Some(2.46), Some(4.70)])
+        );
+        let copied =
+            yamaa_adapters::public_table::PublicTable::decode(result.output().unwrap()).unwrap();
+        assert!(
+            matches!(&copied.columns()[0].1, Values::Float(values) if values == &[Some(2.464), Some(4.704)])
+        );
+        assert_eq!(artifact(attempt, 0), b"ID,VALUE\n1,1.23\n2,2.35\n");
+    }
+}
+
+#[test]
+fn public_failed_graph_retains_prior_artifacts_as_evidence_without_root_output() {
+    use yamaa_adapters::producer_result;
+    let study = Study::new();
+    study.rounded();
+    study.write(
+        "consumer/root.yaml",
+        format!("{CONSUMER}verifications:\n  - row_count: {{min: 99}}\n"),
+    );
+    let mut build = study.build(Language::Python);
+    let mut host = Activation::new(&study, Mode::Pass);
+    let attempt = build.build_reported(&mut host, report_id(), Limits::default());
+    assert!(!attempt.accepted());
+    assert_eq!(artifact(&attempt, 0), b"ID,VALUE\n1,1.23\n2,2.35\n");
+    let before = host.trace.clone();
+    let result = producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]).unwrap();
+    assert!(result.output().is_none() && result.output_table().is_none());
+    assert_eq!(result.issues().len(), 1);
+    assert_eq!(result.observations()["outcome"], "failure");
+    assert_eq!(host.trace, before);
+    drop(build);
+    drop(host);
+    fs::remove_dir_all(&study.0).unwrap();
+    assert!(
+        producer_result::prepare_classified(&attempt, report_id(), 16777216, &[])
+            .unwrap()
+            .output()
+            .is_none()
+    );
+}
+
+#[test]
+fn public_root_projection_requires_complete_classification_and_preserves_original_host_failure() {
+    use yamaa_adapters::{
+        producer_report::ProjectionError, producer_result,
+        project_function_diagnostics::HostDetails, project_report::Classified,
+    };
+    let study = Study::new();
+    study.rounded();
+    let mut build = study.build(Language::Python);
+    let mut host = Activation::new(&study, Mode::LiveFailure);
+    let original = Rc::clone(&host.original);
+    let attempt = build.build_reported(&mut host, report_id(), Limits::default());
+    drop(build);
+    drop(host);
+    fs::remove_dir_all(&study.0).unwrap();
+    let mut failures = vec![];
+    yamaa_adapters::producer_attempt::visit_host_failures(&attempt, |_, error| {
+        failures.push(error)
+    });
+    assert_eq!(failures.len(), 1);
+    assert!(Rc::ptr_eq(&original, &failures[0].original));
+    match producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]) {
+        Err(producer_result::Error::Report(ProjectionError::Original {
+            attempt: held,
+            observations,
+        })) => {
+            assert!(std::ptr::eq(&attempt, held));
+            assert_eq!(observations["outcome"], "failure");
+        }
+        _ => panic!("opaque original attempt must remain beside refusal"),
+    }
+    let facts = [Classified::Host {
+        failure: failures[0],
+        details: HostDetails::Exception {
+            class: "OriginalError",
+            message: "held failure",
+            truncated: false,
+        },
+    }];
+    let result =
+        producer_result::prepare_classified(&attempt, report_id(), 16777216, &facts).unwrap();
+    assert!(result.output().is_none());
+    assert_eq!(result.issues().len(), 1);
+    assert_eq!(result.issues()[0].condition, "function_call_failed");
+    assert!(Rc::ptr_eq(&original, &failures[0].original));
+}
+
+#[test]
+fn public_root_result_refuses_limited_or_contradictory_whole_attempts_before_output_copy() {
+    use yamaa_adapters::{
+        producer_report::ProjectionError, producer_result, specification_report::Error,
+    };
+    let study = Study::new();
+    study.rounded();
+    let mut build = study.build(Language::Python);
+    let mut host = Activation::new(&study, Mode::Pass);
+    let mut attempt = build.build_reported(&mut host, report_id(), Limits::default());
+    let before = host.trace.clone();
+    assert!(matches!(
+        producer_result::prepare_classified(&attempt, report_id(), 1, &[]),
+        Err(producer_result::Error::Report(ProjectionError::Report(
+            Error::OutputLimit
+        )))
+    ));
+    attempt.graph.nodes.swap(0, 1);
+    assert!(matches!(
+        producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]),
+        Err(producer_result::Error::Report(ProjectionError::Report(
+            Error::InvalidObservation
+        )))
+    ));
+    assert_eq!(host.trace, before);
+    assert!(!study.0.join("generated").exists());
+}
+
+#[test]
+fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_refusal() {
+    use yamaa_adapters::{producer_result, table_transport::TableTransportError};
+    let study = Study::new();
+    study.rounded();
+    let declarations = (0..59).map(|index| format!("  - {{name: EXTRA{index}, type: float, label: Extra value, derivation: {{literal: 1.234}}}}\n")).collect::<String>();
+    let names = std::iter::once("ID".to_owned())
+        .chain(std::iter::once("VALUE".to_owned()))
+        .chain((0..59).map(|index| format!("EXTRA{index}")))
+        .collect::<Vec<_>>()
+        .join(", ");
+    study.write(
+        "consumer/root.yaml",
+        CONSUMER
+            .replace("output: {path:", &format!("{declarations}output: {{path:"))
+            .replace(
+                "columns: [ID, VALUE], decimals: 2",
+                &format!("columns: [{names}], decimals: 2"),
+            ),
+    );
+    study.write(
+        "raw/raw.csv",
+        format!(
+            "ID,VALUE\n{}",
+            (1..=100)
+                .map(|index| format!("{index},1.234\n"))
+                .collect::<String>()
+        ),
+    );
+    let mut build = study.build(Language::Python);
+    let mut host = Activation::new(&study, Mode::Pass);
+    let attempt = build.build_reported(&mut host, report_id(), Limits::default());
+    assert!(attempt.accepted());
+    let before = host.trace.clone();
+    match producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]) {
+        Err(producer_result::Error::Output {
+            attempt: held,
+            observations,
+            error: TableTransportError::OutputLimit,
+        }) => {
+            assert!(std::ptr::eq(&attempt, held));
+            assert_eq!(observations["outcome"], "success");
+            assert_eq!(observations["nodes"].as_array().unwrap().len(), 2);
+            assert_eq!(observations["artifacts"].as_array().unwrap().len(), 2);
+        }
+        other => panic!(
+            "original output quota owner expected: {}",
+            match other {
+                Ok(_) => "unexpected success",
+                Err(_) => "wrong refusal",
+            }
+        ),
+    }
+    assert_eq!(host.trace, before);
+    assert!(!study.0.join("generated").exists());
+    drop(build);
+    drop(host);
+    fs::remove_dir_all(&study.0).unwrap();
+    assert!(attempt.accepted());
+    assert!(matches!(
+        producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]),
+        Err(producer_result::Error::Output {
+            error: TableTransportError::OutputLimit,
+            ..
+        })
+    ));
+}
+
+#[test]
 fn classified_graph_reports_keep_actual_host_causes_and_authored_origins_without_replay() {
     use yamaa_adapters::{
         producer_report::{attempt_report_classified, ProjectionError},

@@ -213,20 +213,34 @@ comparisons; 29 evidence rows and 30,033 PortableLibmV1 samples pass. See the
 [private host carrier contract](../PRODUCER_HOST_BUILDS.md) and
 [qualification scope](1877-qualification.md).
 
-The active prerequisite is [#1881 original workflow selection](https://github.com/elong0527/yamaa/issues/1881).
-Public domain entries still use single-project preparation. They need explicit
-ordinary/producer capability selection from one original environment/entry
-capture, with ordinary behavior preserved and no failed-compilation retry.
-Native selection now consumes one sealed original capture into the existing
-ordinary FileProject or the complete FileGraph. Inherited producer declarations
-select structurally before compilation; graph collection receives the captured
-root directly. Cumulative environment/entry/recursive metadata quotas and owned
-raw rejections stay retained. Ordinary reports, fresh activation and explicit
-held-byte Save remain compatible, including a metadata-scope transition before
-study authority. Independent native witnesses pass; final installed/hosted
-qualification is pending. See the [native selection contract](../WORKFLOW_SELECTION.md).
-Ordinary installed producer domain dispatch and explicit publication remain
-#1741, with lifecycle decision #1866 separate.
+The [#1881 original workflow selection](https://github.com/elong0527/yamaa/issues/1881)
+prerequisite is qualified by [#1882](https://github.com/elong0527/yamaa/pull/1882),
+merged as `1eb38974dc8b1cfb2936c3b7bcb8114555fba418`. Its merged source directly
+equals qualified head `51044204e0fc4a5d5bab8e7fbee04bdf25b68ab3`. All 22 applicable
+final-head contexts, all 16 native jobs, complete assessed 15-file review,
+40 artifact audits and a fresh protected guard pass. Native selection consumes
+one sealed original capture into the existing ordinary FileProject or complete
+FileGraph. Inherited non-null producer declarations select structurally before
+compilation; graph collection receives the original root directly. Known root
+and schema admission precedes the first environment read, cumulative metadata
+quotas and raw rejection owners stay retained, and ordinary scope transition,
+reports, activation and explicit held-byte Save remain compatible. Actual
+Linux/macOS modes pass 1,122 Rust cases and Windows passes 1,108 across 129 targets.
+Fresh installed Python forms pass 25 suites; exercised R forms pass 19 and strict
+Status OK. All 14 packages pass 4,547 direct source-byte comparisons, with complete
+29-row evidence and 30,033 PortableLibmV1 sampled observations. See the
+[native selection contract](../WORKFLOW_SELECTION.md) and
+[qualification record](1881-qualification.md).
+
+The active prerequisite is [#1883 installed producer domain build results](https://github.com/elong0527/yamaa/issues/1883).
+The public explicit-environment entries are being connected to selected whole
+producer builds and bounded typed root output. The complete retained attempt and
+classified whole report must gate accepted unrounded root output; consumers still
+use accepted rounded serialized producer bytes. Original host payloads and
+actually entered prefixes stay owned. This work is not qualified yet. It supplies
+no producer publisher or Save capability; ordinary Save remains unchanged.
+Final public workflow and ordered publication acceptance remain #1741, with
+unanswered publication lifecycle decision #1866 separate.
 
 See [the closing qualification record](1757-qualification.md) for actual local
 results and the distinction between those results and the CI platform matrix.
@@ -242,8 +256,8 @@ Continue with the following acceptance gates in the
 2. [#1860 CSV precision](https://github.com/elong0527/yamaa/issues/1860) is closed
    by #1862 with complete qualification above.
 3. #1863 is closed by #1865, #1867 by #1868, #1869 by #1870 and #1871 by #1873
-   with complete qualification above. #1874 is closed by #1876 and #1877 by #1880. Complete
-   #1881's original workflow selection, then #1741's
+   with complete qualification above. #1874 is closed by #1876, #1877 by #1880 and #1881 by #1882. Complete
+   #1883's installed producer domain results, then #1741's
    producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.

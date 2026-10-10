@@ -2,9 +2,9 @@
 
 `file_workflow::select` and `select_with_resources` prepare one original native
 entry and return either the existing `FileProject` or a complete `FileGraph`.
-They accept no activation, study-source or publication port. Ordinary installed
-Python/R producer domain dispatch and graph publication remain #1741; this native
-preparation boundary does not settle publication lifecycle decision #1866.
+They accept no activation, study-source or publication port. Installed Python/R
+producer domain build results are tracked in #1883; graph publication remains
+#1741. This native preparation boundary does not settle lifecycle decision #1866.
 
 The configured entry preserves approved roots and the existing absolute caller
 path policy for the environment. A cumulative metadata scope admits existing
