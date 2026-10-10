@@ -530,12 +530,14 @@ fn decoded_finding(
     findings.extend(values);
     Ok(true)
 }
-fn failed_observations<E>(
+fn failed_observations<'a, E>(
     view: &NodeReport<'_>,
-    entered: &crate::file_producer_build::GraphAttempt<E, Value, Error>,
+    entered: &'a crate::file_producer_build::GraphAttempt<E, Value, Error>,
     position: usize,
     id: &Identity<'_>,
     budget: &mut Budget,
+    facts: &crate::producer_diagnostics::Facts<'a, '_, E>,
+    entry: &str,
 ) -> Result<(Value, bool), Error> {
     use yamaa_engine::dataset::ExecutionError;
     use yamaa_engine::specification_run::{PortError, RunError};
@@ -608,6 +610,20 @@ fn failed_observations<E>(
                         .ok_or(Error::InvalidObservation)?;
                         push_diagnostic(budget, &mut diagnostics, &diagnostic)?;
                         records
+                    }
+                    ExecutionError::ProjectFunction {
+                        path,
+                        error,
+                        identity,
+                    } => {
+                        if let Some(issue) =
+                            facts.invocation(path, error, identity.as_ref(), view, entry, budget)?
+                        {
+                            diagnostics.push(issue);
+                        } else {
+                            portable = false;
+                        }
+                        &[]
                     }
                     _ => {
                         portable = false;
@@ -706,7 +722,19 @@ pub fn attempt_report<'a, E>(
     id: Identity<'_>,
     maximum: usize,
 ) -> Result<Value, ProjectionError<'a, E>> {
+    attempt_report_classified(attempt, id, maximum, &[])
+}
+
+/// Ordinary facts borrow payloads in this exact complete attempt. Reporting
+/// retains opaque refusal and introduces no activation or publication authority.
+pub fn attempt_report_classified<'a, E>(
+    attempt: &'a NativeAttempt<E>,
+    id: Identity<'_>,
+    maximum: usize,
+    facts: &[project_report::Classified<'a, E>],
+) -> Result<Value, ProjectionError<'a, E>> {
     let mut budget = Budget::new(maximum);
+    let facts = crate::producer_diagnostics::Facts::admit(attempt, facts, &mut budget)?;
     let metadata = attempt.provenance.metadata();
     let entered = &attempt.graph.nodes;
     if entered.len() > metadata.order().len()
@@ -755,6 +783,7 @@ pub fn attempt_report<'a, E>(
         budget.text(text)?;
     }
     let activation = activation_prefix(attempt, &mut budget)?;
+    let activation_findings = facts.activation(attempt, &mut budget)?;
     let environment = attempt.provenance.environment();
     budget.entries(8)?;
     budget.text(&environment.root().source().identity)?;
@@ -765,11 +794,11 @@ pub fn attempt_report<'a, E>(
     let mut result = json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,"entry":attempt.provenance.entry(),"outcome":if attempt.accepted() {"success"} else {"failure"},"activation":activation,"environment":environment,"nodes":[],"artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],"tables":[],"verifications":[],"callbacks":[],"source_reads":[],"error":null});
     let mut portable = attempt.boundary.is_ok()
         && attempt.resources.is_ok()
-        && !matches!(
-            attempt.graph.outcome,
-            Err(yamaa_engine::producer_build::Failure::Activation(_)
-                | yamaa_engine::producer_build::Failure::Incomplete)
-        );
+        && activation_findings.is_some()
+        && !matches!(attempt.graph.outcome, Err(Failure::Incomplete));
+    if let Some(findings) = activation_findings {
+        result["diagnostics"] = json!(findings);
+    }
     match &attempt.graph.outcome {
         Err(yamaa_engine::producer_build::Failure::Limit(code)) => {
             budget.entries(8)?;
@@ -832,6 +861,14 @@ pub fn attempt_report<'a, E>(
                 position,
                 &identity(&view, &id),
                 &mut budget,
+                &facts,
+                &attempt
+                    .provenance
+                    .documents()
+                    .first()
+                    .ok_or(Error::InvalidObservation)?
+                    .source()
+                    .identity,
             )?;
             portable &= supported;
             value

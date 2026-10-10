@@ -45,6 +45,15 @@ impl RejectedEnvironment {
     pub fn captured_sources(&self) -> impl Iterator<Item = (String, &[u8])> {
         self.resources.captured_sources()
     }
+    /// Bounded owned aliases of held bytes; this performs no resource access.
+    pub fn retained_sources(
+        &self,
+        aliases: usize,
+        text: usize,
+    ) -> Result<crate::file_resources::RetainedSources, crate::file_resources::RetentionFailure>
+    {
+        self.resources.retain_sources(aliases, text)
+    }
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }

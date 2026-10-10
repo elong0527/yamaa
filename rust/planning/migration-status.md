@@ -182,16 +182,30 @@ byte comparisons. Ordinary installed workflow and
 publication acceptance remains #1741. See [the reporting contract](../PRODUCER_REPORTS.md)
 and [qualification scope](1871-qualification.md).
 
-The active prerequisite is [#1874 ordinary producer graph preparation and checks](https://github.com/elong0527/yamaa/issues/1874).
-The implementation connects original graph capture, one retained environment
-and bounded complete static diagnostics to the ordinary installed check entry
-points. Native witnesses pass for canonical diamonds/aliases, inherited authored
-origins, ordinary check compatibility, typed rejections, early raw failures and
-cumulative metadata quotas. Installed Python/R witnesses are added; full local,
-clean-package, installed-form, review and exact-head CI qualification is still
-pending. This issue remains open until every acceptance gate passes. See the
-[static checking contract](../PRODUCER_CHECKS.md). Installed execution and
-publication remain #1741.
+The [#1874 ordinary producer graph preparation/checks](https://github.com/elong0527/yamaa/issues/1874)
+prerequisite is qualified by [#1876](https://github.com/elong0527/yamaa/pull/1876),
+merged as `01fdd553212605f7147e017212d074470214cb5b`. All 23 final-head checks,
+16 native jobs, complete assessed 17-file review, 40 artifact audits and a fresh
+protected guard passed. Its merged source equals qualified head
+`330638f3b8067e89aa0a22a3bfe08aa1adf9b8cf` directly. Ordinary installed Python/R
+checks now capture one environment and the complete original recursive graph,
+retain cumulative quotas and rejection evidence, and project complete bounded
+static findings with actual inherited origins. Checking grants no activation,
+study-data or publication authority. Actual Linux/macOS modes pass 1,101 Rust
+tests and Windows passes 1,087 across 129 targets each. Fresh installed Python
+forms pass all 24 suites; exercised R forms pass all 18 with strict package
+checks. See the [static contract](../PRODUCER_CHECKS.md) and
+[qualification scope](1874-qualification.md).
+
+The active prerequisite is [#1877 installed producer build handles and retained reports](https://github.com/elong0527/yamaa/issues/1877).
+It isolates actual installed whole-graph host activation/execution and owned
+failure/report carriers. Private whole-graph Python/R carriers, exact-reference
+classified reporting and independent installed component witnesses are implemented;
+complete final-source package/CI/review qualification remains in progress. See
+the [private host carrier contract](../PRODUCER_HOST_BUILDS.md). These components
+do not qualify public workflow execution. Ordinary installed
+producer domain dispatch and explicit publication remain #1741, with the
+publication lifecycle decision retained separately in #1866.
 
 See [the closing qualification record](1757-qualification.md) for actual local
 results and the distinction between those results and the CI platform matrix.
@@ -207,8 +221,8 @@ Continue with the following acceptance gates in the
 2. [#1860 CSV precision](https://github.com/elong0527/yamaa/issues/1860) is closed
    by #1862 with complete qualification above.
 3. #1863 is closed by #1865, #1867 by #1868, #1869 by #1870 and #1871 by #1873
-   with complete qualification above. Complete #1874's graph preparation/checks,
-   then #1741's
+   with complete qualification above. #1874 is closed by #1876. Complete
+   #1877's installed build/report handles, then #1741's
    producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.
