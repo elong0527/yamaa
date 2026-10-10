@@ -129,6 +129,14 @@ impl ActivationPort for Activation {
 #[test]
 fn project_report_uses_held_external_function_origins_after_metadata_files_change() {
     let study = Study::new();
+    // Resource identities use portable separators and omit the Windows verbatim
+    // prefix; the host path passed to preparation keeps its native spelling.
+    let identity = |name| {
+        let path = study.text(name);
+        #[cfg(windows)]
+        let path = path.trim_start_matches(r"\\?\").replace('\\', "/");
+        path
+    };
     let mut project = study.prepare(&study.text(""), &[]).unwrap();
     let reads = project.capture_reads();
     let mut activation = Activation {
@@ -157,8 +165,8 @@ fn project_report_uses_held_external_function_origins_after_metadata_files_chang
     assert_eq!(result.issues().len(), 1);
     assert_eq!(result.issues()[0].spec_paths, ["tests[0]"]);
     let context: serde_json::Value = serde_json::from_str(&result.issues()[0].context).unwrap();
-    assert_eq!(context["source"], study.text("env/id.yaml"));
-    assert_eq!(context["entry"], study.text("env/environment.yaml"));
+    assert_eq!(context["source"], identity("env/id.yaml"));
+    assert_eq!(context["entry"], identity("env/environment.yaml"));
     assert_eq!(context["environment_path"], "functions.id");
     assert_eq!(context["actual"], 8);
     assert_eq!(context["expected"], 7);
@@ -170,7 +178,7 @@ fn project_report_uses_held_external_function_origins_after_metadata_files_chang
             .document
             .source()
             .identity,
-        study.text("env/id.yaml")
+        identity("env/id.yaml")
     );
 }
 
