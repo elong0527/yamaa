@@ -96,25 +96,19 @@ fn checks(records: &[CheckRecord], phase: &str) -> Value {
         value
     }).collect::<Vec<_>>()})
 }
-fn checked_records<'a, C, E>(
-    run: &PreparedRun,
+pub(crate) fn checked_records(
+    run: &dyn crate::specification_run_view::RunView,
     records: &[CheckRecord],
     phase: &str,
     id: &Identity<'_>,
-) -> Result<(Vec<Value>, Vec<Value>), Error<'a, C, E>> {
+) -> Result<(Vec<Value>, Vec<Value>), report::Error> {
     crate::project_codelist_diagnostics::codelist_issues(run.compiled(), records).map_err(
         |error| match error {
-            crate::project_codelist_diagnostics::Error::Limit => {
-                Error::Report(report::Error::OutputLimit)
-            }
-            _ => invalid(),
+            crate::project_codelist_diagnostics::Error::Limit => report::Error::OutputLimit,
+            _ => report::Error::InvalidObservation,
         },
     )?;
-    Ok(report::check_observations(
-        run,
-        &checks(records, phase),
-        id,
-    )?)
+    report::check_observations(run, &checks(records, phase), id)
 }
 
 fn same_value(left: &yamaa_core::value::Value, right: &yamaa_core::value::Value) -> bool {
@@ -127,13 +121,18 @@ fn same_value(left: &yamaa_core::value::Value, right: &yamaa_core::value::Value)
 }
 /// The prefix formatter also supports incomplete attempts. A complete report
 /// additionally requires the boundary result and each actual observation to agree.
-fn validate_activation<C, E>(
-    run: &PreparedRun,
-    attempt: &Attempt<C, E>,
+pub(crate) enum ActivationBoundary<'a, E> {
+    Complete,
+    Failed(&'a Failure<E>),
+    Incomplete,
+}
+pub(crate) fn validate_activation<E>(
+    run: &dyn crate::project_activation_observations::ActivationView,
+    observed: &yamaa_engine::project_activation::Observations,
+    boundary: ActivationBoundary<'_, E>,
 ) -> Result<(), report::Error> {
     use yamaa_engine::project_activation::{BindingOutcome, LockObservation, TestOutcome};
-    let observed = &attempt.activation;
-    let selected = run.compiled().called_functions();
+    let selected = run.called_functions();
     let total = selected
         .iter()
         .map(|&index| {
@@ -149,8 +148,8 @@ fn validate_activation<C, E>(
             .bindings
             .iter()
             .all(|binding| binding.outcome == BindingOutcome::Bound);
-    match &attempt.boundary {
-        Ok(()) => {
+    match boundary {
+        ActivationBoundary::Complete => {
             if !selected.is_empty()
                 && (!bound
                     || observed.tests.len() != total
@@ -162,7 +161,7 @@ fn validate_activation<C, E>(
                 return Err(report::Error::InvalidObservation);
             }
         }
-        Err(BoundaryFailure::Activation(Failure::Lock(_))) => {
+        ActivationBoundary::Failed(Failure::Lock(_)) => {
             if observed.lock != LockObservation::Rejected
                 || !observed.bindings.is_empty()
                 || !observed.tests.is_empty()
@@ -170,7 +169,7 @@ fn validate_activation<C, E>(
                 return Err(report::Error::InvalidObservation);
             }
         }
-        Err(BoundaryFailure::Activation(Failure::Bindings(failures))) => {
+        ActivationBoundary::Failed(Failure::Bindings(failures)) => {
             if failures.is_empty()
                 || observed.lock != LockObservation::Verified
                 || observed.bindings.len() != selected.len()
@@ -200,7 +199,7 @@ fn validate_activation<C, E>(
                 }
             }
         }
-        Err(BoundaryFailure::Activation(Failure::Tests(failures))) => {
+        ActivationBoundary::Failed(Failure::Tests(failures)) => {
             if failures.is_empty()
                 || !bound
                 || observed.tests.len() != total
@@ -240,7 +239,7 @@ fn validate_activation<C, E>(
                 }
             }
         }
-        _ => return Ok(()),
+        _ => {}
     }
     for case in &observed.tests {
         if case.outcome != TestOutcome::Passed {
@@ -393,7 +392,12 @@ pub fn build_result<'a, C, E>(
         }
         _ => invalid(),
     })?;
-    validate_activation(run, attempt)?;
+    let boundary = match &attempt.boundary {
+        Ok(()) => ActivationBoundary::Complete,
+        Err(BoundaryFailure::Activation(error)) => ActivationBoundary::Failed(error),
+        _ => ActivationBoundary::Incomplete,
+    };
+    validate_activation(run, &attempt.activation, boundary)?;
     let execution = crate::project_attempt::execution(attempt);
     let mut diagnostics = Vec::new();
     let mut verifications = Vec::new();

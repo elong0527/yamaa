@@ -4,8 +4,8 @@ The concise [current migration assessment](migration-status.md) records the
 qualified implementation frontier and remaining acceptance gates as of 2026-10-10.
 The historical evidence below retains each slice's original scope and provenance.
 
-The current serial order follows merged #1757/#1858/#1860/#1863/#1867: complete
-#1869 shared producer build orchestration, #1741 installed producer workflows,
+The current serial order follows merged #1757/#1858/#1860/#1863/#1867/#1869: complete
+#1871 retained producer graph reports, #1741 installed producer workflows,
 #1758 submission outputs
 and the remaining language/API/release gates. #1857 retains the separate Windows R
 release decision; #1866 retains the publication lifecycle decision for #1741.

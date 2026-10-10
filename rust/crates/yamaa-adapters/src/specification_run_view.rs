@@ -10,10 +10,12 @@ mod sealed {
     pub trait Sealed {}
     impl Sealed for crate::specification_run::PreparedRun {}
     impl Sealed for crate::project_run::PreparedRun {}
+    #[cfg(any(unix, windows))]
+    impl Sealed for crate::file_producer_build::NodeReport<'_> {}
     impl<T: super::RunView + ?Sized> Sealed for std::sync::Arc<T> {}
 }
 
-/// A coherent view supplied only by the two prepared-run services or an Arc.
+/// A coherent view supplied by a prepared-run or complete producer service, or an Arc.
 /// External callers cannot mix unrelated source, document and compiler facts.
 pub trait RunView: sealed::Sealed {
     fn document(&self) -> &PreparedDocument;
@@ -43,6 +45,18 @@ impl RunView for crate::project_run::PreparedRun {
     }
     fn check_diagnostics(&self) -> Vec<Diagnostic> {
         self.check_diagnostics()
+    }
+}
+#[cfg(any(unix, windows))]
+impl RunView for crate::file_producer_build::NodeReport<'_> {
+    fn document(&self) -> &PreparedDocument {
+        self.document()
+    }
+    fn compiled(&self) -> &PreparedSpecification {
+        self.compiled()
+    }
+    fn check_diagnostics(&self) -> Vec<Diagnostic> {
+        self.compiled().verification_declaration_diagnostics()
     }
 }
 impl<T: RunView + ?Sized> RunView for std::sync::Arc<T> {

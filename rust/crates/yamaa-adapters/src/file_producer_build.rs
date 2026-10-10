@@ -53,6 +53,24 @@ pub struct Provenance {
     entry: String,
     environment: CapturedEnvironment,
 }
+/// A read-only report view borrowed from the exact consumed whole graph. Its
+/// constructor is private: callers cannot pair an unrelated document and plan.
+pub struct NodeReport<'a> {
+    node: &'a Node,
+    document: &'a PreparedDocument,
+    compiled: &'a PreparedSpecification,
+}
+impl NodeReport<'_> {
+    pub fn node(&self) -> &Node {
+        self.node
+    }
+    pub(crate) fn document(&self) -> &PreparedDocument {
+        self.document
+    }
+    pub(crate) fn compiled(&self) -> &PreparedSpecification {
+        self.compiled
+    }
+}
 impl Provenance {
     pub fn metadata(&self) -> &PreparedGraph {
         self.build.metadata()
@@ -65,6 +83,19 @@ impl Provenance {
     }
     pub fn environment(&self) -> &CapturedEnvironment {
         &self.environment
+    }
+    /// The original document order matches the sealed canonical node order.
+    /// Borrowing this iterator neither recompiles nor enters any host/resource
+    /// authority, and it cannot replace the retained environment or node plans.
+    pub fn report_views(&self) -> impl ExactSizeIterator<Item = NodeReport<'_>> {
+        self.build
+            .report_contexts()
+            .zip(&self.documents)
+            .map(|((node, compiled), document)| NodeReport {
+                node,
+                document,
+                compiled,
+            })
     }
 }
 pub enum BoundaryFailure {
@@ -141,6 +172,18 @@ impl FileBuild {
     }
     pub fn provenance(&self) -> &Arc<Provenance> {
         &self.provenance
+    }
+    /// Use complete native original-document reports as the ordinary output
+    /// gate. Returned attempts own every report and all original typed failures.
+    pub fn build_reported<A: ActivationPort>(
+        &mut self,
+        activation: &mut A,
+        id: crate::specification_report::Identity<'_>,
+        limits: Limits,
+    ) -> Attempt<A::Error, serde_json::Value, crate::specification_report::Error> {
+        let provenance = Arc::clone(&self.provenance);
+        let mut report = crate::producer_report::NativeReport::new(&provenance, id);
+        self.build(activation, &mut report, limits)
     }
     /// Fresh native scope and union activation on every attempt. Only the initial
     /// metadata prefix is verified before activation; cached study snapshots are

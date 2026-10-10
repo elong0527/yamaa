@@ -63,3 +63,5 @@ producer dispatch, complete host workflow reports and ordered explicit
 publication remain #1741. Its publication lifecycle decision remains #1866;
 Windows R release scope remains #1857. Neither decision is inferred by this slice.
 See [qualification](planning/1869-qualification.md).
+
+Complete retained native reports are described in [the report contract](PRODUCER_REPORTS.md). Ordinary installed producer workflows remain #1741.

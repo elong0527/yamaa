@@ -221,35 +221,46 @@ pub fn failure<E>(
     report["verifications"] = json!(verifications);
     bounded(report)
 }
-fn table_observation<T: TableAccess>(
+pub(crate) fn table_observation_projected<T: TableAccess>(
     table: &T,
     id: &Identity<'_>,
     stage: &str,
     name: &str,
+    mut budget: Option<&mut crate::report_projection::Budget>,
 ) -> Result<Value, Error> {
     let columns = table.schema().columns();
+    if let Some(budget) = budget.as_deref_mut() {
+        budget.shape(table.row_count(), columns.len())?;
+        for text in [id.specification, stage, name] {
+            budget.text(text)?;
+        }
+        for column in columns {
+            budget.text(&column.name)?;
+        }
+    }
     let mut rows = Vec::new();
     for row in 0..table.row_count() {
         let mut cells = Vec::new();
         for column in 0..columns.len() {
-            cells.push(
-                match table
-                    .cell(row, column)
-                    .map_err(|_| Error::InvalidObservation)?
-                {
-                    ValueRef::Str(value) => json!({"type":"str","value":value}),
-                    ValueRef::Missing => json!({"type":"missing","value":null}),
-                    ValueRef::Int(value) => json!({"type":"int","value":value.to_string()}),
-                    ValueRef::Float(value) => {
-                        json!({"type":"float","value":format!("{:016x}",value.get().to_bits())})
-                    }
-                    ValueRef::Bool(value) => json!({"type":"bool","value":value}),
-                    ValueRef::Date(value) => json!({"type":"date","value":value.to_string()}),
-                    ValueRef::DateTime(value) => {
-                        json!({"type":"datetime","value":value.to_string()})
-                    }
-                },
-            );
+            let value = table
+                .cell(row, column)
+                .map_err(|_| Error::InvalidObservation)?;
+            if let Some(budget) = budget.as_deref_mut() {
+                budget.cell(&value)?;
+            }
+            cells.push(match value {
+                ValueRef::Str(value) => json!({"type":"str","value":value}),
+                ValueRef::Missing => json!({"type":"missing","value":null}),
+                ValueRef::Int(value) => json!({"type":"int","value":value.to_string()}),
+                ValueRef::Float(value) => {
+                    json!({"type":"float","value":format!("{:016x}",value.get().to_bits())})
+                }
+                ValueRef::Bool(value) => json!({"type":"bool","value":value}),
+                ValueRef::Date(value) => json!({"type":"date","value":value.to_string()}),
+                ValueRef::DateTime(value) => {
+                    json!({"type":"datetime","value":value.to_string()})
+                }
+            });
         }
         rows.push(cells);
     }
@@ -278,22 +289,57 @@ fn envelope<E>(
 }
 
 pub(crate) fn envelope_sources<T: TableAccess>(
-    _run: &dyn RunView,
+    run: &dyn RunView,
     sources: &[yamaa_engine::specification_run::CapturedSource<T>],
     id: &Identity<'_>,
 ) -> Result<Value, Error> {
-    let mut tables = Vec::new();
-    if sources.iter().all(|source| source.table.is_some()) {
+    envelope_sources_projected(run, sources, id, None)
+}
+pub(crate) fn envelope_sources_projected<T: TableAccess>(
+    _run: &dyn RunView,
+    sources: &[yamaa_engine::specification_run::CapturedSource<T>],
+    id: &Identity<'_>,
+    mut budget: Option<&mut crate::report_projection::Budget>,
+) -> Result<Value, Error> {
+    let partial = budget.is_some();
+    if let Some(budget) = budget.as_deref_mut() {
+        budget.entries(32)?;
+        budget.entries(sources.len())?;
+        for text in [
+            id.runtime,
+            id.runtime_version,
+            id.engine_version,
+            id.example,
+            id.specification,
+            id.base_directory,
+        ] {
+            budget.text(text)?;
+        }
         for source in sources {
-            tables.push(table_observation(
-                source.table.as_ref().expect("complete ingestion"),
+            budget.text(&source.read.source.name)?;
+            budget.text(&source.read.source.path)?;
+            budget.text(id.base_directory)?;
+        }
+    }
+    let mut tables = Vec::new();
+    if partial || sources.iter().all(|source| source.table.is_some()) {
+        for source in sources {
+            let Some(table) = source.table.as_ref() else {
+                continue;
+            };
+            tables.push(table_observation_projected(
+                table,
                 id,
                 "source",
                 &source.read.source.name,
+                budget.as_deref_mut(),
             )?);
         }
     }
-    let reads = sources.iter().map(|source| Ok(json!({"base_directory":id.base_directory,"path":source.read.source.path,"outcome":if source.read.captured {"captured"} else {"failure"},"condition":source.read.failure.map(|failure| failure.code().definition().condition),"snapshots_created":source.read.snapshots_created.ok_or(Error::InvalidObservation)?}))).collect::<Result<Vec<_>,Error>>()?;
+    let reads = sources.iter().map(|source| {
+        if !partial && source.read.snapshots_created.is_none() { return Err(Error::InvalidObservation); }
+        Ok(json!({"base_directory":id.base_directory,"path":source.read.source.path,"outcome":if source.read.captured {"captured"} else if partial && source.read.snapshots_created.is_none() {"attempted"} else {"failure"},"condition":source.read.failure.map(|failure| failure.code().definition().condition),"snapshots_created":source.read.snapshots_created}))
+    }).collect::<Result<Vec<_>,Error>>()?;
     Ok(
         json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,
         "outcome":"failure","artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],
@@ -598,7 +644,7 @@ pub(crate) fn check_observations(
     }
     Ok((observations, diagnostics))
 }
-fn output_diagnostics(
+pub(crate) fn output_diagnostics(
     findings: &[yamaa_core::specification::OutputFinding],
 ) -> Result<Vec<Value>, Error> {
     findings
@@ -737,43 +783,88 @@ impl yamaa_engine::specification_output::OutputReport for Report<'_, '_> {
         projection: &[usize],
         bytes: &[u8],
     ) -> Result<Value, Error> {
-        let run = self.run;
-        let table = &execution.dataset;
-        let profile = run
-            .compiled()
-            .output_profile()
-            .ok_or(Error::InvalidObservation)?;
-        let (content, records) = if profile == "csv" {
-            let content = std::str::from_utf8(bytes).map_err(|_| Error::InvalidObservation)?;
-            let records = content
-                .strip_suffix('\n')
-                .ok_or(Error::InvalidObservation)?
-                .split('\n')
-                .map(String::from)
-                .collect::<Vec<_>>();
-            (content, records)
-        } else {
-            let records = crate::parquet_artifact::records(table, projection, 8 * 1024 * 1024)
-                .map_err(|error| match error {
-                    crate::parquet_artifact::Error::Limit => Error::OutputLimit,
-                    _ => Error::InvalidObservation,
-                })?;
-            ("", records)
-        };
-        let mut report = self.value.take().ok_or(Error::InvalidObservation)?;
-        report["artifacts"] = json!([{"name":run.compiled().output_name(),"profile":profile,"columns":run.compiled().projection(),"types":projection.iter().map(|&c|specification_diagnostics::type_name(table.schema().columns()[c].kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":records,"byte_length":bytes.len(),"content":content}]);
-        report["tables"]
-            .as_array_mut()
-            .ok_or(Error::InvalidObservation)?
-            .push(table_observation(table, &self.id, "derived", "output")?);
-        report["outcome"] = json!("success");
-        report["nodes"][0]["outcome"] = json!("success");
-        bounded(report)
+        artifact_report(
+            self.run,
+            &self.id,
+            self.value.take().ok_or(Error::InvalidObservation)?,
+            execution,
+            projection,
+            bytes,
+            None,
+        )
     }
 }
 
+pub(crate) fn artifact_report(
+    run: &dyn RunView,
+    id: &Identity<'_>,
+    mut report: Value,
+    execution: &yamaa_engine::dataset::Execution,
+    projection: &[usize],
+    bytes: &[u8],
+    mut budget: Option<&mut crate::report_projection::Budget>,
+) -> Result<Value, Error> {
+    let table = &execution.dataset;
+    let profile = run
+        .compiled()
+        .output_profile()
+        .ok_or(Error::InvalidObservation)?;
+    if let Some(budget) = budget.as_deref_mut() {
+        budget.entries(16)?;
+        budget.entries(projection.len())?;
+        budget.text(run.compiled().output_name())?;
+        budget.text(profile)?;
+        for name in run.compiled().projection() {
+            budget.text(name)?;
+        }
+    }
+    let (content, records) = if profile == "csv" {
+        let content = std::str::from_utf8(bytes).map_err(|_| Error::InvalidObservation)?;
+        if let Some(budget) = budget.as_deref_mut() {
+            budget.text(content)?;
+            budget.text(content)?; // content and record strings are separately retained.
+            budget.entries(content.bytes().filter(|&b| b == b'\n').count())?;
+        }
+        let records = content
+            .strip_suffix('\n')
+            .ok_or(Error::InvalidObservation)?
+            .split('\n')
+            .map(String::from)
+            .collect::<Vec<_>>();
+        (content, records)
+    } else {
+        if let Some(budget) = budget.as_deref_mut() {
+            budget.shape(table.row_count(), projection.len())?;
+            for row in 0..table.row_count() {
+                for &column in projection {
+                    let value = table
+                        .cell(row, column)
+                        .map_err(|_| Error::InvalidObservation)?;
+                    budget.cell(&value)?;
+                }
+            }
+        }
+        let records = crate::parquet_artifact::records(table, projection, 8 * 1024 * 1024)
+            .map_err(|error| match error {
+                crate::parquet_artifact::Error::Limit => Error::OutputLimit,
+                _ => Error::InvalidObservation,
+            })?;
+        ("", records)
+    };
+    report["artifacts"] = json!([{"name":run.compiled().output_name(),"profile":profile,"columns":run.compiled().projection(),"types":projection.iter().map(|&c|specification_diagnostics::type_name(table.schema().columns()[c].kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":records,"byte_length":bytes.len(),"content":content}]);
+    report["tables"]
+        .as_array_mut()
+        .ok_or(Error::InvalidObservation)?
+        .push(table_observation_projected(
+            table, id, "derived", "output", budget,
+        )?);
+    report["outcome"] = json!("success");
+    report["nodes"][0]["outcome"] = json!("success");
+    bounded(report)
+}
+
 impl Identity<'_> {
-    fn borrow(&self) -> Identity<'_> {
+    pub(crate) fn borrow(&self) -> Identity<'_> {
         Identity {
             runtime: self.runtime,
             runtime_version: self.runtime_version,
