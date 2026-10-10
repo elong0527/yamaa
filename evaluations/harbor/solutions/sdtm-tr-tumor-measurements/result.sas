@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-tr-tumor-measurements.
+/* opensas reference solution for the yamaa benchmark sdtm-tr-tumor-measurements.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data tr_raw;
   length STUDYID USUBJID TRLNKID TRTESTCD TRTEST TRORRES TRORRESU TRSTAT TRMETHOD TREVAL TRDTC $1024;

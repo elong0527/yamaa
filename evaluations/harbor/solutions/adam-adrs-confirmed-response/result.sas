@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-adrs-confirmed-response.
+/* opensas reference solution for the yamaa benchmark adam-adrs-confirmed-response.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data rs;
   length STUDYID USUBJID RSDTC RSSTRESC $1024;

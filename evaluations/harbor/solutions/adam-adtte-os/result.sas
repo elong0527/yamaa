@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-adtte-os.
+/* opensas reference solution for the yamaa benchmark adam-adtte-os.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data adrs;
   length STUDYID USUBJID PARAMCD AVALC ANL01FL ADT $1024;

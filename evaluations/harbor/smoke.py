@@ -1,7 +1,8 @@
 """Run offline oracle/nop checks through Harbor's real Docker verifier.
 
-Randomly sample ten buildable tasks, shared by oracle and nop. Save the
-sample and seed so the check can be reproduced. No model API or key is used.
+Randomly sample ten buildable tasks, or select every task with --all-cases.
+Oracle and nop share the selection, saved with its seed and exclusions.
+No model API or key is used.
 """
 
 from __future__ import annotations
@@ -34,6 +35,15 @@ def main() -> None:
     # Older launch scripts pass --full. It now uses the same ten-task sample.
     parser.add_argument("--full", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--seed", type=int, help="repeat a saved preflight sample")
+    parser.add_argument(
+        "--all-cases", action="store_true", help="run every selected buildable case"
+    )
+    parser.add_argument(
+        "--language",
+        nargs="+",
+        choices=list(build.LANGUAGES),
+        default=list(build.DEFAULT_LANGUAGES),
+    )
     parser.add_argument("--image", default=build.IMAGE)
     parser.add_argument(
         "--prompt", nargs="+", choices=list(build.TIERS), default=["full"]
@@ -43,7 +53,7 @@ def main() -> None:
     names = sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
     tasks, skipped = build.build_selection(
         names,
-        languages=["r", "python"],
+        languages=args.language,
         tasks_dir=args.out / "tasks",
         image=args.image,
         commit=build.git_commit(),
@@ -52,19 +62,37 @@ def main() -> None:
     )
     for note in skipped:
         print(f"skip {note}")
+    if not tasks:
+        raise RuntimeError("no buildable tasks selected")
     probe_task = next(
-        t
-        for t in tasks
-        if t.name.startswith("adam-adsl-age-group-") and t.name.endswith("-python")
+        (
+            t
+            for t in tasks
+            if t.name.startswith("adam-adsl-age-group-") and t.name.endswith("-python")
+        ),
+        None,
     )
+    if probe_task is None:
+        # The boundary probe uses Python to try protected filesystem/process
+        # operations. Keep this probe outside the opensas evaluation dataset.
+        probe_task = build.build_task(
+            build.BENCHMARKS / "adam-adsl-age-group",
+            args.out / "probe",
+            args.image,
+            build.git_commit(),
+            "python",
+        )
     seed = args.seed if args.seed is not None else secrets.randbits(64)
     candidates = tasks
-    tasks = sample_tasks(candidates, seed)
+    tasks = sorted(candidates) if args.all_cases else sample_tasks(candidates, seed)
     (args.out / "sample.json").write_text(
         json.dumps(
             {
                 "seed": seed,
                 "candidate_tasks": len(candidates),
+                "selection": "all" if args.all_cases else "sample",
+                "languages": args.language,
+                "skipped": skipped,
                 "tasks": [t.name for t in tasks],
                 "agents": ["oracle", "nop"],
                 "prompt_tiers": args.prompt,
@@ -73,7 +101,7 @@ def main() -> None:
         )
         + "\n"
     )
-    print(f"sampled {len(tasks)} of {len(candidates)} tasks (seed {seed})")
+    print(f"selected {len(tasks)} of {len(candidates)} tasks (seed {seed})", flush=True)
     probe_image = "yamaa-harbor-sandbox-probe:local"
     try:
         subprocess.run(
@@ -101,6 +129,7 @@ def main() -> None:
             check=False,
             stdout=subprocess.DEVNULL,
         )
+    failures, summary = [], {}
     for agent, reward in (("oracle", 1.0), ("nop", 0.0)):
         config_path = args.out / f"{agent}.json"
         config_path.write_text(
@@ -127,6 +156,7 @@ def main() -> None:
         job_dir = args.out / "jobs" / agent
         manifest = json.loads((job_dir / "evaluation.json").read_text())["tasks"]
         results = list(job_dir.glob("*/result.json"))
+        summary[agent] = {"expected_reward": reward, "cases": []}
         if len(results) != len(tasks):
             raise RuntimeError(f"{agent}: {len(results)} trials for {len(tasks)} tasks")
         for path in results:
@@ -143,8 +173,15 @@ def main() -> None:
             ):
                 raise RuntimeError(f"{path}: pre-execution evidence was not retained")
             rewards = (result.get("verifier_result") or {}).get("rewards") or {}
+            summary[agent]["cases"].append(
+                {
+                    "task": result["task_name"],
+                    "rewards": rewards,
+                    "exception": result.get("exception_info"),
+                }
+            )
             if result.get("exception_info") or rewards.get("reward") != reward:
-                raise RuntimeError(
+                failures.append(
                     f"{agent} failed: {path}: {result.get('exception_info')}, {rewards}"
                 )
             if agent == "oracle":
@@ -157,7 +194,12 @@ def main() -> None:
                     contract["challenge_required"]
                     and rewards.get("challenge_checked") != 1.0
                 ):
-                    raise RuntimeError(f"{path}: required challenges were skipped")
+                    failures.append(f"{path}: required challenges were skipped")
+    (args.out / "summary.json").write_text(
+        json.dumps({"agents": summary, "failures": failures}, indent=2) + "\n"
+    )
+    if failures:
+        raise RuntimeError("\n".join(failures))
     print(f"oracle/nop passed for {len(tasks)} tasks")
 
 

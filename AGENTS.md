@@ -39,3 +39,9 @@ equality has to be decided on bytes.
 
 The one exception is `python/uv.lock`, whose hashes belong to the packaging
 tool and are not the repository's own provenance.
+
+## Label the benchmark runtime `opensas`
+
+Use `opensas` in benchmark labels, prose, prompts, commands, dataset names,
+leaderboards, and solution comments. Keep the standard `.sas` source extension,
+upstream asset names, and required legal trademark attribution intact.

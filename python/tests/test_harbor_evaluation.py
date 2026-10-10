@@ -604,7 +604,9 @@ def _board_name(language: str, tier: str) -> str:
 def test_each_language_has_a_board_per_prompt_tier():
     boards = {b["harbor"]["name"]: b for b in leaderboard.load_leaderboards()}
     assert set(boards) == {
-        _board_name(language, tier) for language in LANGUAGES for tier in build.TIERS
+        _board_name(language, tier)
+        for language in build.LANGUAGES
+        for tier in build.TIERS
     }
     buildable = []
     for benchmark in PROMPTED:
@@ -1222,8 +1224,8 @@ REFERENCES = sorted(
 )
 
 
-def test_prepared_sas_solutions_cover_every_prompt():
-    # SAS sources are prepared separately until the openSAS Harbor track lands.
+def test_prepared_opensas_solutions_cover_every_prompt():
+    # opensas references are executed by their own Harbor track.
     # They must not be sent to the Python interpreter by reference discovery.
     sources = sorted(build.SOLUTIONS.glob("*/result.sas"))
     assert [p.parent.name for p in sources] == PROMPTED

@@ -1,26 +1,26 @@
-# SAS language reference solutions
+# opensas reference solutions
 
 The `result.sas` programs prepare all 137 prompted derivation benchmarks for
-execution with the existing [openSAS v0.6.6 release](https://github.com/kirha-ai/opensas/releases/tag/v0.6.6).
+execution with the existing [opensas v0.6.6 release](https://github.com/kirha-ai/opensas/releases/tag/v0.6.6).
 Each program reads `/app/input` and writes the CSV files requested by its full
 prompt to `/app/output`. The race/ethnicity solution writes both DM and SUPPDM.
 Identifiers are read as character values to preserve leading zeros; numeric
 measurements and sequence variables use explicit numeric input.
 
-These are source solutions only. The Harbor builder, image, verifier, language
-policy and leaderboards still support their existing R/Python tracks. The
-programs do not install, implement or modify an execution engine. Benchmarks
+The Harbor opensas track executes the 134 confident native CSV cases with the
+existing opensas v0.6.6 release. The image installs an unmodified release
+executable; these programs do not implement or modify an execution engine. Benchmarks
 without derivation prompts, including yamaa specification rejection cases,
 are outside this collection.
 
 ## Execution prerequisites
 
 Provide a writable `/app/output`, the benchmark's inputs under `/app/input`,
-and an independently installed openSAS executable. Copy that benchmark's
+and an independently installed opensas executable. Copy that benchmark's
 `result.sas` into the output directory and execute:
 
 ```sh
-sas /app/output/result.sas
+opensas /app/output/result.sas
 ```
 
 For a local run using other directories, replace the two absolute directory
@@ -31,10 +31,10 @@ program, so the exit status alone cannot establish success.
 
 `adam-adsl-randomization` requires its `dm.parquet` input to be staged as
 `dm.csv` with the same columns, character identifiers, missing values and ISO
-date/datetime values. openSAS has no native Parquet reader in this release.
+date/datetime values. opensas has no native Parquet reader in this release.
 Refresh this I/O conversion whenever the inputs change. Do not substitute the
-ODM input for DM or use a conversion to perform derivations. No converter or
-runtime installation is included in these source solutions.
+ODM input for DM or use a conversion to perform derivations. The Harbor opensas
+selection excludes this case; no converter is included.
 
 ## Preparation checks
 
@@ -56,7 +56,7 @@ column types, keys and tolerances.
 The changed-input check uses the existing grader's deterministic subject
 renaming and supported age, measurement and complete-date perturbations.
 The Python references were first checked against their original goldens;
-they then computed expected data for the changed inputs. The SAS programs
+they then computed expected data for the changed inputs. The opensas programs
 perform all their own derivations. This local comparison does not exercise
 Harbor's sandbox, trajectory audit or Linux image, and it does not establish
 parity with SAS Institute software.
@@ -77,7 +77,7 @@ and it has no existing Python reference for the changed-input check.
 
 - **Whitespace remains unresolved.** `adam-adsl-investigator-comment`
   preserves quoted commas, doubled quotes and multiline text, but the
-  spaces-only comment is normalized to SAS character missing. The expected
+  spaces-only comment is normalized to opensas character missing. The expected
   CSV requires two spaces and `CMNTFL=Y`; the release writes an empty comment
   and `CMNTFL=N`. Keep this case visible as a failure.
 - **SQL join expressions.** Numeric and padded character keys are calculated
@@ -100,11 +100,12 @@ or prompts were changed to accommodate runtime behavior.
 
 ## Licensing scope
 
-These original benchmark programs follow the repository's MIT license. No
-openSAS code, executable or dependency is redistributed in this change. A
-future bundled runtime must separately meet its Apache 2.0 obligations and
-resolve the ReadStat notice and package-license inclusion questions recorded
-in #1875. The earlier provenance, contract and trademark review remains open;
+These original benchmark programs follow the repository's MIT license. The
+evaluation Docker image installs the unmodified opensas release executable
+with its Apache 2.0 license, the ReadStat MIT copyright/permission notice and
+the Zig MIT notice retained at `/usr/local/share/licenses/opensas`. Their
+provenance is documented in [runtime notices](../licenses/opensas/README.md).
+The earlier upstream provenance, contract and trademark review remains open;
 source preparation is not legal clearance for distribution or SAS Institute
 reference testing.
 

@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-vs-epoch-from-subject-elements.
+/* opensas reference solution for the yamaa benchmark sdtm-vs-epoch-from-subject-elements.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data se;
   length STUDYID USUBJID ETCD ELEMENT EPOCH SESTDTC SEENDTC $1024;

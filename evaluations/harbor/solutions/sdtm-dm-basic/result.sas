@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-dm-basic.
+/* opensas reference solution for the yamaa benchmark sdtm-dm-basic.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data odm;
   length StudyOID MetaDataVersionOID SubjectKey StudyEventOID StudyEventRepeatKey ItemGroupOID ItemGroupRepeatKey ItemOID Value $1024;

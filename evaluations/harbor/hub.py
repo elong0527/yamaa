@@ -239,6 +239,7 @@ async def publish_job_datasets(job_dir: Path) -> list[dict]:
         if tier not in ("full", "conventions", "brief") or language not in (
             "python",
             "r",
+            "opensas",
         ):
             raise ValueError("unknown language or prompt tier in job evidence")
         suffix = language if tier == "full" else f"{tier}-{language}"

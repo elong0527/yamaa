@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-adae-review-order.
+/* opensas reference solution for the yamaa benchmark adam-adae-review-order.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data ae;
   length STUDYID USUBJID AETERM AESTDTC AESEV $1024;

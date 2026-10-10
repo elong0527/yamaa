@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-adsl-analysis-age.
+/* opensas reference solution for the yamaa benchmark adam-adsl-analysis-age.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data dm;
   length STUDYID USUBJID BRTHDT RANDDT $1024;

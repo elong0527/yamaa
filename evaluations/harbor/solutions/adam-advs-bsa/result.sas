@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-advs-bsa.
+/* opensas reference solution for the yamaa benchmark adam-advs-bsa.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data advs;
   length STUDYID USUBJID PARAMCD PARAM VISIT $1024;

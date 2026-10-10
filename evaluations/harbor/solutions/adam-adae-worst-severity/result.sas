@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-adae-worst-severity.
+/* opensas reference solution for the yamaa benchmark adam-adae-worst-severity.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data adae_raw;
   length STUDYID USUBJID AEBODSYS AEDECOD ASTDT AESEV TRTEMFL $1024;
