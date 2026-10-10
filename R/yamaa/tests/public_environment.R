@@ -175,5 +175,24 @@ failed <- yamaa_domain("spec.yaml", environment = "environment.yaml")
 stopifnot(is.null(failed$output), identical(failed$issues$condition, "division_by_zero"),
   inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"), !file.exists("rounded.csv"))
 cat("public R CSV precision preserves unrounded tables, exact saved bytes and failure gates\n")
+graph_dir <- file.path(work, "producer-metadata-refusal"); dir.create(graph_dir)
+setwd(graph_dir)
+writeLines(c("schema_version: '1.0'", "language: r"), "environment.yaml")
+writeLines(c("schema_version: '1.0'", "domain: PROD", "keys: [ID]",
+  "input: {RAW: never-read.csv}",
+  "columns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]",
+  "output: {path: produced.csv, columns: [ID], decimals: 2}"), "producer.yaml")
+writeLines(c("schema_version: '1.0'", "domain: CONS", "keys: [ID]",
+  "input: {P: {path: produced.csv, schema: producer.yaml}}",
+  "columns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]",
+  "output: {path: consumer.csv, columns: [ID]}"), "spec.yaml")
+checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
+failed <- yamaa_domain("spec.yaml", environment = "environment.yaml")
+for (result in list(checked, failed)) stopifnot(
+  identical(result$issues$condition, "unsupported_operation"),
+  identical(result$issues$spec_paths, list("input.P.schema")))
+stopifnot(is.null(failed$output), !file.exists("produced.csv"), !file.exists("consumer.csv"),
+  inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"))
+cat("public R producer execution remains explicitly unsupported after graph metadata admission\n")
 setwd(previous)
 cat("public R environment static diagnostics, lock/test failure ordering and no data reads passed\n")

@@ -98,6 +98,7 @@ pub mod project_activation_diagnostics;
 pub mod project_activation_observations;
 
 pub mod producer_admission;
+pub mod producer_graph;
 #[cfg(any(unix, windows))]
 pub mod project_application;
 pub mod project_check;

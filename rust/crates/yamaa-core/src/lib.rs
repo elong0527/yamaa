@@ -30,6 +30,7 @@ pub mod predicate_compiler;
 pub mod predicate_parser;
 pub mod producer_admission;
 pub mod producer_contract;
+pub mod producer_graph;
 pub mod reference_binding;
 pub mod reference_scope;
 pub mod resource;

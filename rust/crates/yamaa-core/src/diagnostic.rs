@@ -87,6 +87,7 @@ conditions! {
     PreflightDomainInputCollision => ("validation", "duplicate_identifier", Some("REQ-0080")),
     PreflightRedundantSourceType => ("validation", "redundant_field_type", Some("REQ-0533")),
     ProducerInvalidContract => ("validation", "invalid_producer_contract", Some("REQ-0534")),
+    ProducerWorkflowCycle => ("validation", "producer_workflow_cycle", Some("REQ-0534")),
     ProducerOutputPathMismatch => ("validation", "producer_output_path_mismatch", Some("REQ-0534")),
     ProducerRedundantSourceType => ("validation", "redundant_field_type", Some("REQ-0523")),
     ProducerContractMismatch => ("validation", "producer_contract_mismatch", Some("REQ-0535")),

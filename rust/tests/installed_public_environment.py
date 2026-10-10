@@ -26,6 +26,36 @@ CASES = (
 
 
 class PublicEnvironment(unittest.TestCase):
+    def test_graph_metadata_does_not_enable_public_producer_execution(self):
+        os.chdir(self.directory)
+        (self.directory / "environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
+        (self.directory / "producer.yaml").write_text(
+            "schema_version: '1.0'\ndomain: PROD\nkeys: [ID]\n"
+            "input: {RAW: never-read.csv}\n"
+            "columns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\n"
+            "output: {path: produced.csv, columns: [ID], decimals: 2}\n"
+        )
+        (self.directory / "spec.yaml").write_text(
+            "schema_version: '1.0'\ndomain: CONS\nkeys: [ID]\n"
+            "input: {P: {path: produced.csv, schema: producer.yaml}}\n"
+            "columns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\n"
+            "output: {path: consumer.csv, columns: [ID]}\n"
+        )
+        with (
+            patch.object(host, "verify_versions", side_effect=AssertionError("unexpected activation")),
+            patch.object(host, "resolve_callable", side_effect=AssertionError("unexpected binding")),
+        ):
+            checked = yamaa.check("spec.yaml", environment="environment.yaml")
+            failed = yamaa.domain("spec.yaml", environment="environment.yaml")
+        for result in (checked, failed):
+            self.assertEqual(result.issues["condition"].to_list(), ["unsupported_operation"])
+            self.assertEqual(result.issues["spec_paths"].to_list(), [["input.P.schema"]])
+        self.assertIsNone(failed.output)
+        with self.assertRaises(yamaa.DomainError):
+            failed.save()
+        self.assertFalse((self.directory / "produced.csv").exists())
+        self.assertFalse((self.directory / "consumer.csv").exists())
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="yamaa-public-environment-")
         self.addCleanup(self.temporary.cleanup)
