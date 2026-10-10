@@ -265,9 +265,9 @@ impl Resources {
                 .map(|(key, _, _)| (path_text(key), snapshot.bytes.as_ref()))
         })
     }
-    pub(crate) fn verify_captured(&self) -> Result<(), Error> {
+    pub(crate) fn verify_captured(&self) -> Result<(), (String, Error)> {
         for index in 0..self.snapshots.len() {
-            self.verify(index)?;
+            self.verify_paths(index)?;
         }
         Ok(())
     }
@@ -546,19 +546,25 @@ impl Resources {
         Ok((bytes, true))
     }
     fn verify(&self, index: usize) -> Result<(), Error> {
+        self.verify_paths(index).map_err(|(_, error)| error)
+    }
+    fn verify_paths(&self, index: usize) -> Result<(), (String, Error)> {
         let snapshot = &self.snapshots[index];
         for (key, written, base) in &snapshot.paths {
-            self.charge_work(snapshot.bytes.len())?;
-            let mut opened = self.open_at(base, written).map_err(changed)?;
-            if &opened.key != key
-                || self
-                    .read_bounded(&mut opened.file, snapshot.bytes.len(), true)
-                    .map_err(changed)?
-                    .as_slice()
-                    != snapshot.bytes.as_ref()
-            {
-                return Err(Error::Changed);
-            }
+            let result = (|| {
+                self.charge_work(snapshot.bytes.len())?;
+                let mut opened = self.open_at(base, written).map_err(changed)?;
+                if &opened.key != key
+                    || self
+                        .read_bounded(&mut opened.file, snapshot.bytes.len(), true)?
+                        .as_slice()
+                        != snapshot.bytes.as_ref()
+                {
+                    return Err(Error::Changed);
+                }
+                Ok(())
+            })();
+            result.map_err(|error| (path_text(key), error))?;
         }
         Ok(())
     }
@@ -1174,6 +1180,30 @@ mod metadata_budget_tests {
             Error::Limit
         );
         assert_eq!(resources.capture_reads(), 1);
+        assert_eq!(
+            resources.captured_sources().next().unwrap().1,
+            before.as_ref()
+        );
+        resources.metadata.as_mut().unwrap().limits.work = 1_048_576;
+        std::fs::hard_link(fixture.0.join("source.yaml"), fixture.0.join("other.yaml")).unwrap();
+        assert!(!resources.capture("other.yaml", 1024).unwrap().1);
+        std::fs::remove_file(fixture.0.join("other.yaml")).unwrap();
+        std::fs::write(fixture.0.join("other.yaml"), b"changed alias").unwrap();
+        assert_eq!(
+            resources.verify_captured().unwrap_err(),
+            (
+                fixture.0.join("other.yaml").to_str().unwrap().to_owned(),
+                Error::Changed,
+            )
+        );
+        std::fs::write(fixture.0.join("source.yaml"), b"changed bytes").unwrap();
+        assert_eq!(
+            resources.verify_captured().unwrap_err(),
+            (
+                fixture.0.join("source.yaml").to_str().unwrap().to_owned(),
+                Error::Changed,
+            )
+        );
         assert_eq!(
             resources.captured_sources().next().unwrap().1,
             before.as_ref()

@@ -14,6 +14,10 @@ use yamaa_core::schema::DocumentNode as N;
 #[derive(Debug)]
 pub enum Error {
     Resource(ResourceError),
+    Snapshot {
+        identity: String,
+        error: ResourceError,
+    },
     Document(file_preparation::Error),
     Graph(producer_graph::Error),
     Limit(&'static str),
@@ -251,6 +255,7 @@ fn collect(
     // New documents append to the frontier. Alias edges verify their original
     // spelling and snapshots but reuse the one canonical prepared Arc.
     while index < documents.len() {
+        *origin = None;
         let document = Arc::clone(&documents[index]);
         let d = document.model().document();
         resources
@@ -265,13 +270,10 @@ fn collect(
             if d.field(declaration, "schema").is_none() {
                 continue;
             }
+            *origin = None;
             let N::Text(dataset) = &d.nodes()[name] else {
                 return Err(Error::Boundary("dataset"));
             };
-            charge(&mut edges, 1, limits.graph.edges, "producer_graph_edges")?;
-            if producers.len() >= limits.graph.metadata.candidates {
-                return Err(Error::Limit("producer_candidates"));
-            }
             resources
                 .charge_metadata_text(dataset.len())
                 .map_err(Error::Resource)?;
@@ -279,6 +281,10 @@ fn collect(
                 document: index,
                 dataset: dataset.clone(),
             });
+            charge(&mut edges, 1, limits.graph.edges, "producer_graph_edges")?;
+            if producers.len() >= limits.graph.metadata.candidates {
+                return Err(Error::Limit("producer_candidates"));
+            }
             let schema_origin = document
                 .written_input_origin(dataset, "schema")
                 .ok_or(Error::Boundary("schema_origin"))?;
@@ -356,7 +362,9 @@ fn collect(
         });
         index += 1;
     }
-    resources.verify_captured().map_err(Error::Resource)?;
     *origin = None;
+    resources
+        .verify_captured()
+        .map_err(|(identity, error)| Error::Snapshot { identity, error })?;
     Ok(nodes)
 }

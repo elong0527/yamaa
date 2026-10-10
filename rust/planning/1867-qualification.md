@@ -17,11 +17,20 @@ capture/project/preparation and installed producer-refusal behavior must pass.
 
 Local Rust debug and release-test each pass 1,056 tests across 126 targets.
 Strict all-target Clippy passes all five crates, dependency/requirement guards
-pass, and all 48 tooling tests pass. Fresh clean wheel/source/R packages and
-installed witnesses are the remaining local qualification. No ready PR,
-final-head CI, completed review, artifact audit or merge has been claimed at
-this checkpoint. Readiness and closing evidence will identify completed package
-and CI results separately from this local component proof.
+pass, and all 48 tooling tests pass. Initial clean wheel/source/R package audits,
+both installed Python forms (24 suites and 17 public environment methods each),
+strict R (18 scripts, Status: OK) and 18 installed R supplements pass.
+[PR #1868](https://github.com/elong0527/yamaa/pull/1868) closes only #1867.
+
+The valid review finding about stale rejection origins is fixed: each document
+clears prior context, and current declaration ownership is admitted before edge
+and candidate limit checks. Independent quota cases assert the current alias.
+Final snapshot rejection also retains the actual failed alias identity and the
+original native failure; a hard-link replacement witness verifies attribution
+while earlier raw bytes remain held. The updated head requires fresh installed
+packages, exact-head CI, complete assessed review, downloaded artifact audits
+and a fresh merge guard. Older heads do not supply closing evidence; no merge
+or issue closure is claimed here.
 
 The independent rounded truth stays `1.234/2.345 -> CSV 1.23/2.35 -> 2.46/4.70`,
 with no new POWER dependency. Original host failure/interrupt handling,

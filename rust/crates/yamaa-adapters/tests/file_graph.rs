@@ -370,7 +370,41 @@ fn graph_limits_stop_before_next_capture_or_owned_preparation_copy() {
         let failure = rejected(study.graph(limits));
         assert_eq!(failure.capture_reads(), 1);
         assert_eq!(failure.documents().len(), 1);
+        assert_eq!(failure.origin().unwrap().dataset, "P");
     }
+    study.write(
+        "root.yaml",
+        &yaml(
+            "{P: {path: leaf.csv, schema: leaf.yaml}, Q: {path: leaf.csv, schema: './leaf.yaml'}}",
+            "P",
+            "root.csv",
+        ),
+    );
+    for limits in [
+        Limits {
+            graph: yamaa_core::producer_graph::Limits {
+                edges: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        Limits {
+            graph: yamaa_core::producer_graph::Limits {
+                metadata: yamaa_core::producer_admission::Limits {
+                    candidates: 1,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    ] {
+        let failure = rejected(study.graph(limits));
+        assert_eq!(failure.origin().unwrap().dataset, "Q");
+        assert_eq!(failure.capture_reads(), 2);
+        assert_eq!(failure.documents().len(), 2);
+    }
+    study.write("root.yaml", &root);
     // Capture itself fits, but its owned preparation copy does not. Raw bytes
     // stay held; no prepared document is admitted under the exhausted budget.
     let failure = rejected(study.graph(Limits {
