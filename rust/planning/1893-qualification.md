@@ -34,9 +34,14 @@ Its 21 independent cases supply metadata evidence; it adds no execution,
 capture, rendering or publication authority. See
 [the declaration contract](../SPECIFICATION_SUBMISSION_DECLARATIONS.md).
 
-The existing environment document-list malformed-item occurrence defect is
-separately tracked in #1897. Submission semantics, row overlays, inherited
-capture, generators and installed define APIs remain #1758. Decisions #1887,
-#1866 and #1857 remain unanswered. No source-version override, schema or expected
-XML/JSON change is inferred. Old Define-XML remains until its replacement
+The environment document-list malformed-item occurrence defect was tracked in
+#1897, subsequently closed by #1901. Current R qualification is affected by the
+SDK lock mismatch tracked in #1907; the older passing package evidence above
+does not qualify the prepared release. Submission semantics, row overlays,
+inherited capture, generators and installed define APIs remain #1758.
+
+At the original qualification, #1887, #1866 and #1857 were unanswered. The later
+[2026-10-10 maintainer decisions](maintainer-decisions.md) approve the submission
+version override, workflow lifecycle and required Windows R scope without
+changing that historical evidence. Old Define-XML remains until its replacement
 qualifies; #1758/#1741/#1585 and the broader release gates stay open.
