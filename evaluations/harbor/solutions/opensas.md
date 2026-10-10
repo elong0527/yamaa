@@ -64,8 +64,9 @@ parity with SAS Institute software.
 The reduced-subject comparison drops every third subject when possible and
 recomputes the expected data with the Python reference. Tumor measurements and
 event findings each have one subject and were skipped in that comparison.
-The spaces-only comment belongs to a dropped subject in this check, so the
-passing reduced-subject run does not resolve its original/changed-input failure.
+The spaces-only comment belongs to a dropped subject in this check. Its
+reference was later rewritten to pass the original and changed-input checks
+too; see the whitespace entry below.
 
 `adam-adsl-age-quality` matches the prompt's requested ADSL data. Its
 specification also declares a warning log that is absent from the full prompt;
@@ -75,11 +76,13 @@ and it has no existing Python reference for the changed-input check.
 
 ## Compatibility gaps and solution choices
 
-- **Whitespace remains unresolved.** `adam-adsl-investigator-comment`
-  preserves quoted commas, doubled quotes and multiline text, but the
-  spaces-only comment is normalized to opensas character missing. The expected
-  CSV requires two spaces and `CMNTFL=Y`; the release writes an empty comment
-  and `CMNTFL=N`. Keep this case visible as a failure.
+- **Whitespace needs raw records.** opensas's CSV reader and exporter
+  normalize the spaces-only comment in `adam-adsl-investigator-comment` to
+  character missing. Its reference reads raw records instead, counts each
+  field's length with `lengthc(_infile_)`, and writes its CSV with a DATA step,
+  so the two-space comment and `CMNTFL=Y` survive the original, held-out and
+  changed-input checks. The track still excludes the case. Whether SAS 9.4
+  keeps the trailing blanks of `_infile_` the same way is unverified.
 - **SQL join expressions.** Numeric and padded character keys are calculated
   in DATA steps before joining SUPPLB. Function calls in join predicates were
   rejected by the release. Questionnaire membership is filtered into tables
