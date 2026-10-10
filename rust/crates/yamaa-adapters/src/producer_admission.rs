@@ -21,6 +21,7 @@ pub struct Limits {
     pub captured_bytes: usize,
     pub schema_bytes: usize,
     pub schema_modules: usize,
+    pub snapshots: usize,
     pub metadata: CoreLimits,
 }
 impl Default for Limits {
@@ -29,6 +30,7 @@ impl Default for Limits {
             captured_bytes: 16_777_216,
             schema_bytes: 16_777_216,
             schema_modules: 128,
+            snapshots: 1_024,
             metadata: Default::default(),
         }
     }
@@ -71,6 +73,7 @@ pub fn prepare(
     let mut nodes = 0usize;
     let mut identities = 0usize;
     let mut schema_bytes = 0usize;
+    let mut snapshots = 0usize;
     for document in
         core::iter::once(consumer.as_ref()).chain(producers.iter().map(|p| p.document.as_ref()))
     {
@@ -95,6 +98,16 @@ pub fn prepare(
             .checked_add(document.source().identity.len())
             .filter(|&n| n <= limits.metadata.text_bytes)
             .ok_or(Error::Limit("producer_metadata_text_bytes"))?;
+        snapshots = snapshots
+            .checked_add(document.parents().len().saturating_add(1))
+            .filter(|&n| n <= limits.snapshots)
+            .ok_or(Error::Limit("producer_snapshots"))?;
+        for parent in document.parents() {
+            identities = identities
+                .checked_add(parent.source().identity.len())
+                .filter(|&n| n <= limits.metadata.text_bytes)
+                .ok_or(Error::Limit("producer_metadata_text_bytes"))?;
+        }
         for length in core::iter::once(document.source().bytes.len())
             .chain(document.parents().iter().map(|p| p.source().bytes.len()))
         {
@@ -134,15 +147,42 @@ pub fn prepare(
             ])));
         }
     }
+    // Shared identities mean the same retained bytes, including parent layers.
+    // Compare held snapshots directly; no resource reopening or digest is used.
+    for (index, p) in producers.iter().enumerate() {
+        for snapshot in core::iter::once(p.document.source())
+            .chain(p.document.parents().iter().map(|parent| parent.source()))
+        {
+            for prior in core::iter::once(consumer.as_ref()).chain(
+                producers[..index]
+                    .iter()
+                    .map(|prior| prior.document.as_ref()),
+            ) {
+                if core::iter::once(prior.source())
+                    .chain(prior.parents().iter().map(|parent| parent.source()))
+                    .any(|other| {
+                        snapshot.identity == other.identity && snapshot.bytes != other.bytes
+                    })
+                {
+                    return Err(Error::Admission(CoreError::Invalid(vec![
+                        yamaa_core::producer_admission::contradictory_snapshot(&p.dataset),
+                    ])));
+                }
+            }
+        }
+    }
     let d = consumer.model().document();
     let input = d.field(d.root(), "input").ok_or(Error::Boundary)?;
     let candidates = producers
         .iter()
         .map(|p| {
-            let declaration = d.field(input, &p.dataset).ok_or(Error::Boundary)?;
-            let schema = d.field(declaration, "schema").ok_or(Error::Boundary)?;
-            let N::Text(schema_path) = &d.nodes()[schema] else {
-                return Err(Error::Boundary);
+            let schema = d
+                .field(input, &p.dataset)
+                .and_then(|declaration| d.field(declaration, "schema"));
+            let Some(N::Text(schema_path)) = schema.map(|id| &d.nodes()[id]) else {
+                return Err(Error::Admission(CoreError::Invalid(vec![
+                    yamaa_core::producer_admission::undeclared_metadata(&p.dataset),
+                ])));
             };
             Ok(Candidate {
                 dataset: &p.dataset,

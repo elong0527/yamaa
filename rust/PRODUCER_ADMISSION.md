@@ -15,6 +15,9 @@ infer types.
 `producer_admission::prepare` compiles consumer vocabulary against supplied
 producer contracts. A declared `schema` requires exactly one metadata candidate;
 missing, duplicate, undeclared, contradictory and self-dependent candidates fail.
+Repeated producer identities must agree on output contracts, artifact identity
+and output origins. The adapter also compares original entry/parent snapshots by
+identity and bytes, refusing contradictory captures.
 Inline `types`, including empty and explicit-null declarations, fail REQ-0523 even
 when they agree with the producer. Resolved consumer and producer artifact
 identities must agree. The compiler retains declaration order, producer schema

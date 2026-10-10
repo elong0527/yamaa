@@ -392,3 +392,52 @@ fn actual_metadata_comparison_is_ordered_typed_bounded_and_portable() {
         ))
     ));
 }
+#[test]
+fn one_producer_identity_cannot_describe_two_different_output_contracts() {
+    use Tree::*;
+    let input = Map(vec![
+        (
+            "A",
+            Map(vec![
+                ("path", Text("produced.csv")),
+                ("schema", Text("a.yaml")),
+            ]),
+        ),
+        (
+            "B",
+            Map(vec![
+                ("path", Text("produced.csv")),
+                ("schema", Text("b.yaml")),
+            ]),
+        ),
+    ]);
+    let consumer = document(input, &[("ID", "int", Some("ID"))], &["ID"], false);
+    let source = producer();
+    let other = document(
+        Map(vec![("RAW", Map(vec![("path", Text("raw.csv"))]))]),
+        &[
+            ("ID", "int", Some("Identifier")),
+            ("VALUE", "str", Some("Reported value")),
+        ],
+        &["ID", "VALUE"],
+        false,
+    );
+    let mut a = candidate(&source);
+    a.dataset = "A";
+    a.schema_path = "a.yaml";
+    let mut b = candidate(&other);
+    b.dataset = "B";
+    b.schema_path = "b.yaml";
+    let findings = invalid(prepare(
+        "/consumer.yaml",
+        &consumer,
+        &[a, b],
+        None,
+        Limits::default(),
+    ));
+    assert_eq!(findings[0].spec_paths, ["input.B.schema"]);
+    assert_eq!(
+        findings[0].context["reason"],
+        text("contradictory_metadata")
+    );
+}

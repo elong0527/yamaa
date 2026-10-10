@@ -182,6 +182,14 @@ fn invalid(dataset: &str, reason: &str) -> Diagnostic {
 pub fn schema_mismatch(dataset: &str) -> Diagnostic {
     invalid(dataset, "schema_mismatch")
 }
+/// One retained source identity cannot describe two different byte snapshots.
+pub fn contradictory_snapshot(dataset: &str) -> Diagnostic {
+    invalid(dataset, "contradictory_snapshot")
+}
+/// Supplied metadata names no producer-backed consumer declaration.
+pub fn undeclared_metadata(dataset: &str) -> Diagnostic {
+    invalid(dataset, "undeclared_metadata")
+}
 fn charge(
     total: &mut usize,
     count: usize,
@@ -311,7 +319,7 @@ pub fn prepare(
     if !findings.is_empty() {
         return Err(Error::Invalid(findings));
     }
-    let mut producers = Vec::new();
+    let mut producers: Vec<Declaration> = Vec::new();
     for &(name, id) in inputs {
         let dataset = scalar(d, name)?;
         let Some(schema) = d
@@ -391,6 +399,16 @@ pub fn prepare(
             });
             continue;
         }
+        if producers.iter().any(|p| {
+            p.producer_identity == c.producer_identity
+                && (p.contract != contract
+                    || p.artifact_identity != c.output_identity
+                    || p.output_origin.declaring_source != c.output_origin.declaring_source
+                    || p.output_origin.written != c.output_origin.written)
+        }) {
+            findings.push(invalid(dataset, "contradictory_metadata"));
+            continue;
+        }
         producers.push(Declaration {
             dataset: dataset.into(),
             schema_path: schema_path.into(),
@@ -417,7 +435,7 @@ pub fn prepare(
                 && d.field(id, "schema")
                     .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
         }) {
-            findings.push(invalid(c.dataset, "undeclared_metadata"));
+            findings.push(undeclared_metadata(c.dataset));
         }
     }
     if !findings.is_empty() {

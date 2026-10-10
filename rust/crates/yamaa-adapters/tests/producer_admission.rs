@@ -314,3 +314,82 @@ fn producer_must_use_the_same_captured_root_closure_and_schema_comparison_is_bou
         Err(Error::Limit("producer_schema_modules"))
     ));
 }
+#[test]
+fn shared_producer_identities_require_the_same_original_byte_snapshot() {
+    let two=CONSUMER.replace("schema: nested/producer.yaml}}", "schema: nested/producer.yaml}, OTHER: {path: './produced.csv', schema: nested/producer.yaml}}")+"base: SRC\n";
+    let consumer = standalone("/consumer.yaml", &two);
+    let original = standalone("/producer.yaml", PRODUCER);
+    // Equal normalized contracts cannot hide different captured source bytes.
+    let changed = standalone(
+        "/producer.yaml",
+        &(PRODUCER.to_owned() + "# different captured bytes\n"),
+    );
+    let mut other = supplied(changed);
+    other.dataset = "OTHER".into();
+    let Err(Error::Admission(CoreError::Invalid(findings))) = prepare(
+        consumer,
+        vec![supplied(original), other],
+        None,
+        Limits::default(),
+    ) else {
+        panic!("contradictory source snapshot")
+    };
+    assert_eq!(findings[0].definition().requirement, Some("REQ-0534"));
+    assert_eq!(findings[0].spec_paths, ["input.OTHER.schema"]);
+    assert_eq!(
+        findings[0].context["reason"],
+        yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+            "contradictory_snapshot".into()
+        ))
+    );
+}
+#[test]
+fn undeclared_and_schema_less_supplied_metadata_retain_the_portable_cause() {
+    let producer = standalone("/producer.yaml", PRODUCER);
+    for (text, dataset) in [
+        (CONSUMER.to_owned(), "ABSENT"),
+        (
+            CONSUMER.replace(", schema: nested/producer.yaml", ""),
+            "SRC",
+        ),
+        (
+            CONSUMER.replace(
+                "{path: './produced.csv', schema: nested/producer.yaml}",
+                "produced.csv",
+            ),
+            "SRC",
+        ),
+    ] {
+        let consumer = standalone("/consumer.yaml", &text);
+        let mut supplied = supplied(Arc::clone(&producer));
+        supplied.dataset = dataset.into();
+        let Err(Error::Admission(CoreError::Invalid(findings))) =
+            prepare(consumer, vec![supplied], None, Limits::default())
+        else {
+            panic!("undeclared metadata diagnostic")
+        };
+        assert_eq!(findings[0].definition().requirement, Some("REQ-0534"));
+        assert_eq!(findings[0].spec_paths, [format!("input.{dataset}.schema")]);
+        assert_eq!(
+            findings[0].context["reason"],
+            yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                "undeclared_metadata".into()
+            ))
+        );
+    }
+    // The shipped structural root rejects explicit-null schema before this
+    // metadata boundary; retain that original finding rather than bypassing it.
+    let null = CONSUMER.replace("schema: nested/producer.yaml", "schema: null");
+    let Err(yamaa_adapters::specification_source::Error::Findings(findings)) =
+        shipped_schema::capture()
+            .unwrap()
+            .prepare_standalone(Source {
+                identity: "/consumer.yaml".into(),
+                bytes: null.into_bytes(),
+            })
+    else {
+        panic!("original structural null refusal")
+    };
+    assert_eq!(findings.findings()[0].path, "input.SRC.schema");
+    assert_eq!(findings.findings()[0].requirement, Some("REQ-0287"));
+}

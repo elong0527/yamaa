@@ -93,7 +93,7 @@ with retained producer identities and authored layer paths. Ordered output
 contracts, required labels, redundant inline types and artifact metadata
 comparison now have shared portable causes. Ordinary check/build routes still
 reject producer schemas, and the metadata result explicitly refuses an execution
-capability. Its 22 independent contract/compiler/engine/adapter tests establish
+capability. Its 25 independent contract/compiler/engine/adapter tests establish
 admission only. Native graph preparation, producer execution and serialized
 rounded consumer ingestion remain #1741. See [the boundary contract](../PRODUCER_ADMISSION.md)
 and [the qualification record](1858-qualification.md).
