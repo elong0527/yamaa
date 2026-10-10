@@ -5,8 +5,8 @@ name: Harbor Oracle
 # the oracle must score 1 with every required check run, nop must score 0.
 # It also probes the verifier sandbox (probe.py): the agent's script cannot
 # read the golden files, change the inputs or the grader's logs, or leave a
-# process behind. Each run randomly samples ten tasks across both languages
-# and all prompt tiers, using the same sample for oracle and nop. The saved
+# process behind. Each run checks all 134 confident SAS full-prompt cases,
+# then samples ten R/Python tasks across all prompt tiers. The saved
 # seed and sample make failures reproducible. A test keeps the image tag here
 # equal to build.py's IMAGE.
 
@@ -51,7 +51,14 @@ jobs:
           uv run --project python --no-sync ruff format --check evaluations/harbor/*.py python/tests/test_harbor*.py
           uv run --project python --no-sync pytest python/tests/test_harbor*.py
       - name: Build evaluation image
-        run: docker build -t yamaa-harbor-env:0.5 evaluations/harbor
+        run: docker build -t yamaa-harbor-env:0.6 evaluations/harbor
+      - name: Run all 134 confident SAS cases through Harbor
+        run: |
+          uv run --project python --no-sync python evaluations/harbor/smoke.py \
+            --language sas --all-cases --prompt full \
+            --n-concurrent 6 \
+            --out "${{ runner.temp }}/harbor-sas"
+          python -c 'import json; from pathlib import Path; data = json.loads(Path("${{ runner.temp }}/harbor-sas/sample.json").read_text()); assert len(data["tasks"]) == data["candidate_tasks"] == 134'
       - name: Run both tracks through the separate Docker verifier
         run: |
           uv run --project python --no-sync python evaluations/harbor/smoke.py \
@@ -66,4 +73,8 @@ jobs:
           path: |
             ${{ runner.temp }}/harbor/jobs
             ${{ runner.temp }}/harbor/sample.json
+            ${{ runner.temp }}/harbor/summary.json
+            ${{ runner.temp }}/harbor-sas/jobs
+            ${{ runner.temp }}/harbor-sas/sample.json
+            ${{ runner.temp }}/harbor-sas/summary.json
           if-no-files-found: ignore

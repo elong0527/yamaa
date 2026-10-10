@@ -72,7 +72,7 @@ SOLUTIONS = HERE / "solutions"
 REPO = "https://github.com/elong0527/yamaa"
 # One Harbor Hub dataset per language: <prefix>-r and <prefix>-python.
 DATASET_PREFIX = "yamaa/yamaa-sdtm-adam"
-IMAGE = "yamaa-harbor-env:0.5"
+IMAGE = "yamaa-harbor-env:0.6"
 # What the verifier checks, recorded in every task and required by the
 # leaderboards: 3 adds changed derivation values, replayed partial credit and
 # complete job evidence, so scores under an older protocol do not mix.
@@ -94,8 +94,32 @@ PROVIDERS = {
 # prompt.md stays language-agnostic; the system prompt names the language
 # and the required script, so R and Python are assessed independently.
 LANGUAGES = {
-    "r": {"script": "result.R", "system": "system-r.md", "label": "R"},
-    "python": {"script": "result.py", "system": "system-python.md", "label": "Python"},
+    "r": {
+        "script": "result.R",
+        "system": "system-r.md",
+        "label": "R",
+        "runner": "Rscript",
+    },
+    "python": {
+        "script": "result.py",
+        "system": "system-python.md",
+        "label": "Python",
+        "runner": "python3",
+    },
+    "sas": {
+        "script": "result.sas",
+        "system": "system-sas.md",
+        "label": "SAS",
+        "runner": "sas",
+    },
+}
+DEFAULT_LANGUAGES = ("r", "python")
+# Prepared sources remain available for these cases, but they cannot yet
+# earn a correct Harbor score on native inputs with openSAS v0.6.6.
+SAS_EXCLUSIONS = {
+    "adam-adsl-investigator-comment": "openSAS normalizes the spaces-only comment to missing",
+    "adam-adsl-randomization": "openSAS has no native Parquet reader",
+    "adam-adsl-age-quality": "the specification's warning log is not graded by Harbor",
 }
 # Harbor installs OpenCode with nvm and npm during agent setup only.
 SETUP_HOSTS = (
@@ -136,7 +160,7 @@ def readme_tags(readme: str) -> dict[str, str]:
 def system_prompt(language: str) -> str:
     """The shared system prompt for one language, read from its file."""
     if language not in LANGUAGES:
-        raise BuildError(f"unknown language {language!r}; want r or python")
+        raise BuildError(f"unknown language {language!r}; want {', '.join(LANGUAGES)}")
     return (HERE / LANGUAGES[language]["system"]).read_text(encoding="utf-8").strip()
 
 
@@ -207,7 +231,9 @@ def contract_for(benchmark: Path, language: str) -> dict:
     which the grader checks, reruns, and grades alongside the datasets.
     """
     if language not in LANGUAGES:
-        raise BuildError(f"unknown language {language!r}; want r or python")
+        raise BuildError(f"unknown language {language!r}; want {', '.join(LANGUAGES)}")
+    if language == "sas" and benchmark.name in SAS_EXCLUSIONS:
+        raise BuildError(f"{benchmark.name}: {SAS_EXCLUSIONS[benchmark.name]}")
     outputs = [_output_contract(benchmark, s) for s in output_specs(benchmark)]
     return {
         "benchmark": benchmark.name,
@@ -263,6 +289,8 @@ def oracle_script(language: str, golden: list[Path]) -> str:
     It holds each golden as readable text, so a reviewer can see what the
     oracle writes; only a binary golden (parquet) is held as bytes.
     """
+    if language not in DEFAULT_LANGUAGES:
+        raise BuildError("literal golden writers are only available for R and Python")
     label = LANGUAGES[language]["label"]
     script = LANGUAGES[language]["script"]
     lines = [
@@ -415,9 +443,9 @@ def task_readme(
     It sits at the task root, which never enters the agent's container."""
     language = contract["language"]
     label, script = LANGUAGES[language]["label"], contract["script"]
-    other = "Python" if language == "r" else "R"
+    other = " or ".join(v["label"] for k, v in LANGUAGES.items() if k != language)
     article = "an" if language == "r" else "a"
-    runner = "Rscript" if language == "r" else "python3"
+    runner = LANGUAGES[language]["runner"]
     tags = readme_tags((benchmark / "README.md").read_text(encoding="utf-8"))
     domain = " and ".join(s["domain"] for s in output_specs(benchmark))
     tiers = _source_link(commit, "evaluations/harbor/prompts/README.md")
@@ -709,7 +737,7 @@ def build_task(
         "RUN chmod 700 /tests\n"
     )
     shutil.copyfile(reference, task / "solution" / script)
-    runner = "Rscript" if language == "r" else "python3"
+    runner = LANGUAGES[language]["runner"]
     solve = task / "solution" / "solve.sh"
     solve.write_text(
         "#!/usr/bin/env bash\n"
@@ -838,8 +866,8 @@ def main() -> None:
         "--language",
         nargs="*",
         choices=sorted(LANGUAGES),
-        default=sorted(LANGUAGES),
-        help="default: both tracks",
+        default=sorted(DEFAULT_LANGUAGES),
+        help="default: R and Python; --language sas selects the confident native-input cases",
     )
     parser.add_argument(
         "--prompt",

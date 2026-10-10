@@ -4,7 +4,7 @@
 # verifier. Python and R with common data packages; no yamaa, no benchmark
 # files, no network at run time beyond the model API.
 #
-#   docker build -t yamaa-harbor-env:0.5 evaluations/harbor
+#   docker build -t yamaa-harbor-env:0.6 evaluations/harbor
 #
 # Bump the tag in build.py (IMAGE) whenever this file changes.
 
@@ -19,6 +19,7 @@ ARG R_VERSION=4.6.1
 ARG CRAN_SNAPSHOT=2026-09-27
 ARG PYPI_SNAPSHOT=2026-09-22T00:00:00Z
 ARG OPENCODE_VERSION=1.18.33
+ARG TARGETARCH
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \
@@ -35,6 +36,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=uv /uv /uvx /usr/local/bin/
+
+# --- Existing openSAS release; no engine build or source modifications -------
+COPY install-opensas.sh /tmp/install-opensas.sh
+COPY licenses/opensas/ /usr/local/share/licenses/opensas/
+RUN bash /tmp/install-opensas.sh "${TARGETARCH}" \
+    && rm /tmp/install-opensas.sh
 
 # --- Python data packages, resolved as of a fixed date ----------------------
 RUN uv venv /opt/yamaa-eval/venv --python /usr/bin/python3 \
@@ -93,3 +100,5 @@ LABEL org.opencontainers.image.title="yamaa-harbor-env" \
       org.yamaa.harbor.cran-snapshot="${CRAN_SNAPSHOT}" \
       org.yamaa.harbor.pypi-snapshot="${PYPI_SNAPSHOT}" \
       org.yamaa.harbor.opencode-version="${OPENCODE_VERSION}"
+LABEL org.yamaa.harbor.opensas-version="0.6.6" \
+      org.yamaa.harbor.opensas-source="1e8bc655b6a56c58ab20e263e7a2638063834768"

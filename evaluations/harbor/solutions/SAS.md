@@ -7,9 +7,9 @@ prompt to `/app/output`. The race/ethnicity solution writes both DM and SUPPDM.
 Identifiers are read as character values to preserve leading zeros; numeric
 measurements and sequence variables use explicit numeric input.
 
-These are source solutions only. The Harbor builder, image, verifier, language
-policy and leaderboards still support their existing R/Python tracks. The
-programs do not install, implement or modify an execution engine. Benchmarks
+The Harbor SAS track executes the 134 confident native CSV cases with the
+existing openSAS v0.6.6 release. The image installs an unmodified release
+executable; these programs do not implement or modify an execution engine. Benchmarks
 without derivation prompts, including yamaa specification rejection cases,
 are outside this collection.
 
@@ -33,8 +33,8 @@ program, so the exit status alone cannot establish success.
 `dm.csv` with the same columns, character identifiers, missing values and ISO
 date/datetime values. openSAS has no native Parquet reader in this release.
 Refresh this I/O conversion whenever the inputs change. Do not substitute the
-ODM input for DM or use a conversion to perform derivations. No converter or
-runtime installation is included in these source solutions.
+ODM input for DM or use a conversion to perform derivations. The Harbor SAS
+selection excludes this case; no converter is included.
 
 ## Preparation checks
 
@@ -100,11 +100,12 @@ or prompts were changed to accommodate runtime behavior.
 
 ## Licensing scope
 
-These original benchmark programs follow the repository's MIT license. No
-openSAS code, executable or dependency is redistributed in this change. A
-future bundled runtime must separately meet its Apache 2.0 obligations and
-resolve the ReadStat notice and package-license inclusion questions recorded
-in #1875. The earlier provenance, contract and trademark review remains open;
+These original benchmark programs follow the repository's MIT license. The
+evaluation Docker image installs the unmodified openSAS release executable
+with its Apache 2.0 license, the ReadStat MIT copyright/permission notice and
+the Zig MIT notice retained at `/usr/local/share/licenses/opensas`. Their
+provenance is documented in [runtime notices](../licenses/opensas/README.md).
+The earlier upstream provenance, contract and trademark review remains open;
 source preparation is not legal clearance for distribution or SAS Institute
 reference testing.
 

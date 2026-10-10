@@ -72,8 +72,9 @@ def test_preflight_sample_is_bounded_unique_and_reproducible(smoke):
     assert smoke.sample_tasks(candidates[:6], 42) == candidates[:6]
 
 
-def test_preflight_runs_both_agents_on_the_saved_ten_task_sample(
-    tmp_path, monkeypatch, smoke
+@pytest.mark.parametrize("all_cases", [False, True])
+def test_preflight_runs_both_agents_on_the_saved_selection(
+    tmp_path, monkeypatch, smoke, all_cases
 ):
     tasks = []
     names = ["adam-adsl-age-group-python", *[f"task-{i:02}-r" for i in range(14)]]
@@ -131,7 +132,16 @@ def test_preflight_runs_both_agents_on_the_saved_ten_task_sample(
 
     monkeypatch.setattr(smoke.subprocess, "run", run_command)
     monkeypatch.setattr(
-        sys, "argv", ["smoke.py", "--out", str(tmp_path), "--seed", "42"]
+        sys,
+        "argv",
+        [
+            "smoke.py",
+            "--out",
+            str(tmp_path),
+            "--seed",
+            "42",
+            *(["--all-cases"] if all_cases else []),
+        ],
     )
     smoke.main()
     sample = json.loads((tmp_path / "sample.json").read_text())
@@ -139,7 +149,10 @@ def test_preflight_runs_both_agents_on_the_saved_ten_task_sample(
     assert [j["agents"][0]["name"] for j in jobs] == ["oracle", "nop"]
     assert jobs[0]["tasks"] == jobs[1]["tasks"]
     assert [Path(t["path"]).name for t in jobs[0]["tasks"]] == sample["tasks"]
-    assert len(jobs[0]["tasks"]) == 10
+    assert len(jobs[0]["tasks"]) == (15 if all_cases else 10)
+    assert sample["selection"] == ("all" if all_cases else "sample")
+    summary = json.loads((tmp_path / "summary.json").read_text())
+    assert summary["failures"] == []
 
 
 @pytest.fixture

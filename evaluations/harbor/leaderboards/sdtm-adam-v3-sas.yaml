@@ -4,149 +4,146 @@
 # attempt counts and at least `attempts` attempts each, at the tasks' own
 # timeouts, so every row answers
 # the same question. Metrics are computed from the listed tasks only.
-# What each prompt tier keeps is in evaluations/harbor/prompts/README.md;
-# rows rank by complete task pass rate first; cell accuracy is secondary.
-# This board is the whole Python track on the conventions prompts: every buildable
-# SDTM and ADaM benchmark, each requiring `/app/output/result.py`.
+# This board covers 134 confident derivation cases, including BIMO;
+# exclusions are in build.py SAS_EXCLUSIONS. Each task requires `/app/output/result.sas`.
 grading_protocol: "3"
 image_reference: yamaa-harbor-env:0.6
-package: yamaa/yamaa-sdtm-adam-conventions-python
+package: yamaa/yamaa-sdtm-adam-sas
 tasks:
-  - adam-adae-death-conventions-python
-  - adam-adae-occurrence-flags-conventions-python
-  - adam-adae-onset-emergence-conventions-python
-  - adam-adae-partial-dates-conventions-python
-  - adam-adae-post-index-conventions-python
-  - adam-adae-prior-serious-event-conventions-python
-  - adam-adae-protocol-review-conventions-python
-  - adam-adae-query-flags-conventions-python
-  - adam-adae-review-order-conventions-python
-  - adam-adae-serious-events-conventions-python
-  - adam-adae-serious-sequence-conventions-python
-  - adam-adae-severity-conventions-python
-  - adam-adae-severity-override-conventions-python
-  - adam-adae-severity-rank-conventions-python
-  - adam-adae-text-cleanup-conventions-python
-  - adam-adae-worsening-emergence-conventions-python
-  - adam-adae-worst-severity-conventions-python
-  - adam-adce-worst-toxicity-conventions-python
-  - adam-adcm-atc-classes-conventions-python
-  - adam-adcm-on-treatment-conventions-python
-  - adam-adeg-derived-intervals-conventions-python
-  - adam-adex-cumulative-dose-conventions-python
-  - adam-adex-dose-reduction-conventions-python
-  - adam-adex-uncollected-conventions-python
-  - adam-adfa-fever-conventions-python
-  - adam-adlb-bds-conventions-python
-  - adam-adlb-closest-visit-conventions-python
-  - adam-adlb-end-of-treatment-conventions-python
-  - adam-adlb-lymphocytes-conventions-python
-  - adam-adlb-mean-conventions-python
-  - adam-adlb-ordered-sum-conventions-python
-  - adam-adlb-reported-precision-conventions-python
-  - adam-adlb-shift-criteria-conventions-python
-  - adam-adlb-supplb-padded-key-conventions-python
-  - adam-adlbc-row-window-conventions-python
-  - adam-adlbc-window-chain-conventions-python
-  - adam-adoe-study-eye-conventions-python
-  - adam-adqs-missed-visit-locf-conventions-python
-  - adam-adqs-multi-scale-scoring-conventions-python
-  - adam-adqs-subscale-score-conventions-python
-  - adam-adrs-best-response-conventions-python
-  - adam-adrs-composite-response-conventions-python
-  - adam-adrs-confirmed-response-conventions-python
-  - adam-adrs-measurable-disease-conventions-python
-  - adam-adrs-response-prep-conventions-python
-  - adam-adrs-response-records-conventions-python
-  - adam-adsl-age-group-conventions-python
-  - adam-adsl-alive-date-conventions-python
-  - adam-adsl-analysis-age-conventions-python
-  - adam-adsl-bmi-conventions-python
-  - adam-adsl-completion-flag-conventions-python
-  - adam-adsl-country-region-conventions-python
-  - adam-adsl-crossover-periods-conventions-python
-  - adam-adsl-demographics-conventions-python
-  - adam-adsl-disposition-conventions-python
-  - adam-adsl-dose-adjustment-conventions-python
-  - adam-adsl-duration-conventions-python
-  - adam-adsl-flag-chain-conventions-python
-  - adam-adsl-investigator-comment-conventions-python
-  - adam-adsl-new-therapy-conventions-python
-  - adam-adsl-randomization-conventions-python
-  - adam-adsl-rescue-med-conventions-python
-  - adam-adsl-site-parse-conventions-python
-  - adam-adsl-treatment-conventions-python
-  - adam-adtr-nadir-conventions-python
-  - adam-adtr-sum-conventions-python
-  - adam-adtte-dor-conventions-python
-  - adam-adtte-first-ae-conventions-python
-  - adam-adtte-os-conventions-python
-  - adam-adtte-pfs-conventions-python
-  - adam-adtte-pro-deterioration-conventions-python
-  - adam-advs-bmi-conventions-python
-  - adam-advs-bsa-conventions-python
-  - adam-advs-carryforward-conventions-python
-  - adam-advs-first-observed-carry-conventions-python
-  - adam-advs-locf-conventions-python
-  - adam-advs-locf-record-conventions-python
-  - adam-advs-map-conventions-python
-  - adam-advs-percentiles-conventions-python
-  - adam-advs-prior-result-conventions-python
-  - adam-advs-window-table-conventions-python
-  - adam-advs-windows-conventions-python
-  - sdtm-ae-coding-conventions-python
-  - sdtm-ae-meddra-hierarchy-conventions-python
-  - sdtm-ae-odm-repeated-conventions-python
-  - sdtm-ae-partial-dates-conventions-python
-  - sdtm-ae-seriousness-conventions-python
-  - sdtm-cm-collected-medications-conventions-python
-  - sdtm-cm-odm-repeated-conventions-python
-  - sdtm-cm-whodrug-coding-conventions-python
-  - sdtm-dm-age-conventions-python
-  - sdtm-dm-arms-conventions-python
-  - sdtm-dm-basic-conventions-python
-  - sdtm-dm-dates-conventions-python
-  - sdtm-dm-death-conventions-python
-  - sdtm-dm-metadata-conventions-python
-  - sdtm-dm-race-ethnicity-conventions-python
-  - sdtm-ds-multi-form-disposition-conventions-python
-  - sdtm-ds-reasons-conventions-python
-  - sdtm-ds-sequence-conventions-python
-  - sdtm-ec-collected-exposure-conventions-python
-  - sdtm-ex-combination-conventions-python
-  - sdtm-ex-from-ec-conventions-python
-  - sdtm-ex-intervals-conventions-python
-  - sdtm-fa-event-findings-conventions-python
-  - sdtm-fa-odm-multitest-conventions-python
-  - sdtm-fa-reactogenicity-diary-conventions-python
-  - sdtm-lb-character-results-conventions-python
-  - sdtm-lb-compartments-conventions-python
-  - sdtm-lb-findings-conventions-python
-  - sdtm-lb-grading-conventions-python
-  - sdtm-lb-lab-specific-ranges-conventions-python
-  - sdtm-lb-last-observation-before-exposure-conventions-python
-  - sdtm-lb-metadata-conventions-python
-  - sdtm-lb-multiform-conventions-python
-  - sdtm-lb-ranges-conventions-python
-  - sdtm-mh-ongoing-conditions-conventions-python
-  - sdtm-mh-prespecified-conditions-conventions-python
-  - sdtm-pr-procedures-conventions-python
-  - sdtm-qs-questionnaire-items-conventions-python
-  - sdtm-relrec-dataset-level-conventions-python
-  - sdtm-relrec-links-conventions-python
-  - sdtm-rs-timepoint-response-conventions-python
-  - sdtm-se-subject-elements-conventions-python
-  - sdtm-suppmh-linkage-conventions-python
-  - sdtm-suppmh-qualifiers-conventions-python
-  - sdtm-sv-subject-visits-conventions-python
-  - sdtm-tr-tumor-measurements-conventions-python
-  - sdtm-tu-tumor-identification-conventions-python
-  - sdtm-vs-collected-form-conventions-python
-  - sdtm-vs-epoch-from-subject-elements-conventions-python
-  - sdtm-vs-planned-time-points-conventions-python
-  - sdtm-vs-replicates-conventions-python
-  - sdtm-vs-study-day-conventions-python
-  - sdtm-vs-units-conventions-python
+  - adam-adae-death-sas
+  - adam-adae-occurrence-flags-sas
+  - adam-adae-onset-emergence-sas
+  - adam-adae-partial-dates-sas
+  - adam-adae-post-index-sas
+  - adam-adae-prior-serious-event-sas
+  - adam-adae-protocol-review-sas
+  - adam-adae-query-flags-sas
+  - adam-adae-review-order-sas
+  - adam-adae-serious-events-sas
+  - adam-adae-serious-sequence-sas
+  - adam-adae-severity-sas
+  - adam-adae-severity-override-sas
+  - adam-adae-severity-rank-sas
+  - adam-adae-text-cleanup-sas
+  - adam-adae-worsening-emergence-sas
+  - adam-adae-worst-severity-sas
+  - adam-adce-worst-toxicity-sas
+  - adam-adcm-atc-classes-sas
+  - adam-adcm-on-treatment-sas
+  - adam-adeg-derived-intervals-sas
+  - adam-adex-cumulative-dose-sas
+  - adam-adex-dose-reduction-sas
+  - adam-adex-uncollected-sas
+  - adam-adfa-fever-sas
+  - adam-adlb-bds-sas
+  - adam-adlb-closest-visit-sas
+  - adam-adlb-end-of-treatment-sas
+  - adam-adlb-lymphocytes-sas
+  - adam-adlb-mean-sas
+  - adam-adlb-ordered-sum-sas
+  - adam-adlb-reported-precision-sas
+  - adam-adlb-shift-criteria-sas
+  - adam-adlb-supplb-padded-key-sas
+  - adam-adlbc-row-window-sas
+  - adam-adlbc-window-chain-sas
+  - adam-adoe-study-eye-sas
+  - adam-adqs-missed-visit-locf-sas
+  - adam-adqs-multi-scale-scoring-sas
+  - adam-adqs-subscale-score-sas
+  - adam-adrs-best-response-sas
+  - adam-adrs-composite-response-sas
+  - adam-adrs-confirmed-response-sas
+  - adam-adrs-measurable-disease-sas
+  - adam-adrs-response-prep-sas
+  - adam-adrs-response-records-sas
+  - adam-adsl-age-group-sas
+  - adam-adsl-alive-date-sas
+  - adam-adsl-analysis-age-sas
+  - adam-adsl-bmi-sas
+  - adam-adsl-completion-flag-sas
+  - adam-adsl-country-region-sas
+  - adam-adsl-crossover-periods-sas
+  - adam-adsl-demographics-sas
+  - adam-adsl-disposition-sas
+  - adam-adsl-dose-adjustment-sas
+  - adam-adsl-duration-sas
+  - adam-adsl-flag-chain-sas
+  - adam-adsl-new-therapy-sas
+  - adam-adsl-rescue-med-sas
+  - adam-adsl-site-parse-sas
+  - adam-adsl-treatment-sas
+  - adam-adtr-nadir-sas
+  - adam-adtr-sum-sas
+  - adam-adtte-dor-sas
+  - adam-adtte-first-ae-sas
+  - adam-adtte-os-sas
+  - adam-adtte-pfs-sas
+  - adam-adtte-pro-deterioration-sas
+  - adam-advs-bmi-sas
+  - adam-advs-bsa-sas
+  - adam-advs-carryforward-sas
+  - adam-advs-first-observed-carry-sas
+  - adam-advs-locf-sas
+  - adam-advs-locf-record-sas
+  - adam-advs-map-sas
+  - adam-advs-percentiles-sas
+  - adam-advs-prior-result-sas
+  - adam-advs-window-table-sas
+  - adam-advs-windows-sas
+  - bimo-clinsite-site-level-sas
+  - sdtm-ae-coding-sas
+  - sdtm-ae-meddra-hierarchy-sas
+  - sdtm-ae-odm-repeated-sas
+  - sdtm-ae-partial-dates-sas
+  - sdtm-ae-seriousness-sas
+  - sdtm-cm-collected-medications-sas
+  - sdtm-cm-odm-repeated-sas
+  - sdtm-cm-whodrug-coding-sas
+  - sdtm-dm-age-sas
+  - sdtm-dm-arms-sas
+  - sdtm-dm-basic-sas
+  - sdtm-dm-dates-sas
+  - sdtm-dm-death-sas
+  - sdtm-dm-metadata-sas
+  - sdtm-dm-race-ethnicity-sas
+  - sdtm-ds-multi-form-disposition-sas
+  - sdtm-ds-reasons-sas
+  - sdtm-ds-sequence-sas
+  - sdtm-ec-collected-exposure-sas
+  - sdtm-ex-combination-sas
+  - sdtm-ex-from-ec-sas
+  - sdtm-ex-intervals-sas
+  - sdtm-fa-event-findings-sas
+  - sdtm-fa-odm-multitest-sas
+  - sdtm-fa-reactogenicity-diary-sas
+  - sdtm-lb-character-results-sas
+  - sdtm-lb-compartments-sas
+  - sdtm-lb-findings-sas
+  - sdtm-lb-grading-sas
+  - sdtm-lb-lab-specific-ranges-sas
+  - sdtm-lb-last-observation-before-exposure-sas
+  - sdtm-lb-metadata-sas
+  - sdtm-lb-multiform-sas
+  - sdtm-lb-ranges-sas
+  - sdtm-mh-ongoing-conditions-sas
+  - sdtm-mh-prespecified-conditions-sas
+  - sdtm-pr-procedures-sas
+  - sdtm-qs-questionnaire-items-sas
+  - sdtm-relrec-dataset-level-sas
+  - sdtm-relrec-links-sas
+  - sdtm-rs-timepoint-response-sas
+  - sdtm-se-subject-elements-sas
+  - sdtm-suppmh-linkage-sas
+  - sdtm-suppmh-qualifiers-sas
+  - sdtm-sv-subject-visits-sas
+  - sdtm-tr-tumor-measurements-sas
+  - sdtm-tu-tumor-identification-sas
+  - sdtm-vs-collected-form-sas
+  - sdtm-vs-epoch-from-subject-elements-sas
+  - sdtm-vs-planned-time-points-sas
+  - sdtm-vs-replicates-sas
+  - sdtm-vs-study-day-sas
+  - sdtm-vs-units-sas
 attempts: 1
 
 # The Harbor Hub definition, in the shape `harbor hub leaderboard create
@@ -154,18 +151,16 @@ attempts: 1
 # it with the rows built from the jobs, ready to create once the dataset is
 # published and the jobs uploaded.
 harbor:
-  name: sdtm-adam-v3-conventions-python
-  title: yamaa SDTM and ADaM v3, conventions prompts (Python)
+  name: sdtm-adam-v3-sas
+  title: yamaa SDTM and ADaM v3 (SAS)
   description: >-
-    Every buildable yamaa SDTM and ADaM benchmark (133 tasks), solved in
-    Python. An agent gets the Python system prompt, the benchmark's
-    conventions prompt (the full prompt with its rules cut down to the
-    sponsor's conventions) and input datasets, with no internet but the
-    model's API. A task passes when its output matches every golden cell,
-    the verifier's rerun of `/app/output/result.py` from a clean state
-    writes the same output, the held-out rerun and required changed-input
-    challenges pass, and the agent used no R and no web tool. One row per
-    model variant.
+    The 134 confident yamaa derivation benchmarks, including BIMO, solved
+    in SAS with openSAS v0.6.6. An agent gets the SAS system prompt, the benchmark's
+    prompt and input datasets, with no internet but the model's API. A task
+    passes when its output matches every golden cell, the verifier's rerun
+    of `/app/output/result.sas` from a clean state writes the same output,
+    the held-out rerun and required changed-input challenges pass, and
+    the agent used no Python, R, Lua or web tool. One row per model variant.
   visibility: private
   metadata_schema:
     type: object

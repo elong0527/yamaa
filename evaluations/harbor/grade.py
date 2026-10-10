@@ -60,22 +60,31 @@ CHALLENGE_SEED = 20261001
 # language: running one of its programs in a shell call, or a bridge in the
 # script. Only a call counts: the program's name in a grep pattern, a quoted
 # string, a comment, or a heredoc body is not one.
-INTERPRETERS = {"r": "Rscript", "python": "python3"}
+INTERPRETERS = {"r": "Rscript", "python": "python3", "sas": "sas"}
 OTHER_LANGUAGE_PROGRAMS = {
-    "r": re.compile(r"python[\d.]*|pip[\d.]*|ipython[\d.]*|jupyter|uvx?"),
+    "r": re.compile(r"python[\d.]*|pip[\d.]*|ipython[\d.]*|jupyter|uvx?|sas|opensas"),
     # `r` is littler, the R front end rocker images install.
-    "python": re.compile(r"R|Rscript|r"),
+    "python": re.compile(r"R|Rscript|r|sas|opensas"),
+    "sas": re.compile(
+        r"R|Rscript|r|python[\d.]*|pip[\d.]*|ipython[\d.]*|jupyter|uvx?|lua[\d.]*"
+    ),
 }
 OTHER_LANGUAGE_IN_SCRIPT = {
     "r": re.compile(
         r"\b(?:library|require|requireNamespace)\s*\(\s*['\"]?reticulate\b"
         r"|\breticulate::"
-        r"|\bsystem2?\s*\(\s*['\"][^'\"]*\b(?:python[\d.]*|pip[\d.]*)\b"
+        r"|\bsystem2?\s*\(\s*['\"][^'\"]*\b(?:python[\d.]*|pip[\d.]*|sas|opensas)\b"
     ),
     "python": re.compile(
         r"\b(?:import|from)\s+rpy2\b"
         r"|\b(?:subprocess\.\w+|os\.(?:system|popen|exec\w*|spawn\w*))\s*\("
-        r"\s*\[?\s*['\"](?:[^'\"]*/)?(?:Rscript|R)\b"
+        r"\s*\[?\s*['\"](?:[^'\"]*/)?(?:Rscript|R|sas|opensas)\b"
+    ),
+    "sas": re.compile(
+        r"\bproc\s+(?:python|lua)\b|\b(?:call\s+)?system\s*\("
+        r"|\b(?:systask\s+command|filename\s+\w+\s+pipe)\b"
+        r"|(?:^|;)\s*x\b(?!\s*(?:=|\+|\[|\{))|%sysexec\b",
+        re.IGNORECASE,
     ),
 }
 SHELL_TOOLS = ("bash", "shell", "exec", "terminal", "command")
@@ -531,6 +540,15 @@ def grade_script(contract: dict, output_dir: Path) -> dict:
         result["problems"].append(f"{name} is empty")
         return result
     pattern = OTHER_LANGUAGE_IN_SCRIPT.get(contract.get("language") or "")
+    if contract.get("language") == "sas":
+        # Quoted data and SAS comments are mentions, not procedure/bridge calls.
+        text = re.sub(
+            r"/\*.*?\*/|%\*[^;]*;|(?:^|(?<=;))\s*\*[^;]*;"
+            r"|'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"",
+            " ",
+            text,
+            flags=re.DOTALL,
+        )
     match = pattern.search(text) if pattern else None
     if match:
         result["problems"].append(f"{name} calls another language: {match.group(0)!r}")
