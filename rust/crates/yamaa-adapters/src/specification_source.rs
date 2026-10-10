@@ -430,33 +430,70 @@ impl PreparedDocument {
     /// may have rebased the executable path; diagnostics must not disclose that
     /// spelling instead of the value written by the contributing layer.
     pub fn written_source_path(&self, dataset: &str) -> Option<&str> {
+        self.written_input_origin(dataset, "path")
+            .map(|p| p.written)
+    }
+    /// Retain the layer that authored each producer link independently from the
+    /// layer that authored its artifact path. No source is reopened or resolved.
+    pub fn written_input_origin(
+        &self,
+        dataset: &str,
+        field: &str,
+    ) -> Option<yamaa_core::producer_admission::WrittenPath<'_>> {
+        if !["path", "schema"].contains(&field) {
+            return None;
+        }
         use yamaa_core::schema::DocumentNode;
-        let raw = if let Some(inherited) = self.inheritance() {
-            let path = format!("input.{dataset}.path");
-            let origin = inherited.provenance().iter().find(|p| p.path == path)?;
-            let identity = &inherited.layers().get(origin.layer)?.source.identity;
-            if identity == &self.source.identity {
-                &self.raw.document
-            } else {
-                &self
-                    .parents
-                    .iter()
-                    .find(|p| &p.source().identity == identity)?
-                    .raw()
-                    .document
-            }
-        } else {
-            &self.raw.document
-        };
+        let (identity, raw) = self.authored_document(&format!("input.{dataset}.{field}"))?;
         let input = raw.field(raw.root(), "input")?;
         let source = raw.field(input, dataset)?;
         let node = match raw.nodes().get(source)? {
-            DocumentNode::Text(_) => source,
-            _ => raw.field(source, "path")?,
+            DocumentNode::Text(_) if field == "path" => source,
+            _ => raw.field(source, field)?,
         };
         match raw.nodes().get(node)? {
-            DocumentNode::Text(path) => Some(path),
+            DocumentNode::Text(path) => Some(yamaa_core::producer_admission::WrittenPath {
+                declaring_source: identity,
+                written: path,
+            }),
             _ => None,
+        }
+    }
+    /// The producer's diagnostic path also belongs to its contributing layer.
+    pub fn written_output_origin(&self) -> Option<yamaa_core::producer_admission::WrittenPath<'_>> {
+        // Output is an atomic top-level field in shared layer composition.
+        let (identity, raw) = self.authored_document("output")?;
+        let output = raw.field(raw.root(), "output")?;
+        let node = raw.field(output, "path")?;
+        match &raw.nodes()[node] {
+            yamaa_core::schema::DocumentNode::Text(path) => {
+                Some(yamaa_core::producer_admission::WrittenPath {
+                    declaring_source: identity,
+                    written: path,
+                })
+            }
+            _ => None,
+        }
+    }
+    fn authored_document(&self, path: &str) -> Option<(&str, &yamaa_core::schema::Document)> {
+        if let Some(inherited) = self.inheritance() {
+            let origin = inherited.provenance().iter().find(|p| p.path == path)?;
+            let identity = &inherited.layers().get(origin.layer)?.source.identity;
+            if identity == &self.source.identity {
+                Some((identity.as_str(), &self.raw.document))
+            } else {
+                Some((
+                    identity.as_str(),
+                    &self
+                        .parents
+                        .iter()
+                        .find(|p| &p.source().identity == identity)?
+                        .raw()
+                        .document,
+                ))
+            }
+        } else {
+            Some((self.source.identity.as_str(), &self.raw.document))
         }
     }
 }

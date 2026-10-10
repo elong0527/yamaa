@@ -88,6 +88,16 @@ vendored benchmark code are removed. The old submission schema/generator and
 three Define-XML fixtures remain for #1758. Approved resource-root configuration
 also remains until its own path-policy decision.
 
+The #1858 producer compiler prerequisite adds a separate sealed metadata boundary
+with retained producer identities and authored layer paths. Ordered output
+contracts, required labels, redundant inline types and artifact metadata
+comparison now have shared portable causes. Ordinary check/build routes still
+reject producer schemas, and the metadata result explicitly refuses an execution
+capability. Its 22 independent contract/compiler/engine/adapter tests establish
+admission only. Native graph preparation, producer execution and serialized
+rounded consumer ingestion remain #1741. See [the boundary contract](../PRODUCER_ADMISSION.md)
+and [the qualification record](1858-qualification.md).
+
 See [the closing qualification record](1757-qualification.md) for actual local
 results and the distinction between those results and the CI platform matrix.
 Continue with the following acceptance gates in the

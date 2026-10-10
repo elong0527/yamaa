@@ -625,7 +625,7 @@ impl PreparedSpecification {
         spec: &SpecificationDocument,
         limits: CompilationLimits,
     ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, limits, None, None, Default::default())
+        Self::prepare_implementation(spec, limits, None, None, Default::default(), None)
     }
     /// Prepare calls against statically admitted environment definitions. No
     /// project imports, lock verification, test invocation or study reads occur.
@@ -639,6 +639,7 @@ impl PreparedSpecification {
             Some(functions),
             None,
             Default::default(),
+            None,
         )
     }
     /// Compile project calls and fixed terminology against the same admitted metadata.
@@ -665,6 +666,24 @@ impl PreparedSpecification {
             Some(environment.functions()),
             Some(environment.catalogue()),
             terminology_limits,
+            None,
+        )
+    }
+    /// This representation stays inside the sealed producer metadata result.
+    /// No public constructor exposes a producer-backed executable plan.
+    pub(crate) fn prepare_producer_metadata(
+        spec: &SpecificationDocument,
+        limits: CompilationLimits,
+        environment: Option<&crate::project_environment::ExecutionEnvironment>,
+        producers: &[crate::producer_admission::Declaration],
+    ) -> Result<Self, PrepareError> {
+        Self::prepare_implementation(
+            spec,
+            limits,
+            environment.map(|e| e.functions()),
+            environment.map(|e| e.catalogue()),
+            Default::default(),
+            Some(producers),
         )
     }
     fn prepare_implementation(
@@ -673,6 +692,7 @@ impl PreparedSpecification {
         functions: Option<&[crate::project_function::Function]>,
         catalogue: Option<&crate::project_terminology::Catalogue>,
         terminology_limits: crate::project_limits::Limits,
+        producers: Option<&[crate::producer_admission::Declaration]>,
     ) -> Result<Self, PrepareError> {
         let d = spec.document();
         let root = d.root();
@@ -898,7 +918,10 @@ impl PreparedSpecification {
             .ok_or(PrepareError::Internal)?;
         for &(name, id) in inputs {
             let prefix = format!("input.{}", text(d, name)?);
-            optional_features(d, id, &["schema", "ordinal"], &prefix, &mut extra);
+            optional_features(d, id, &["ordinal"], &prefix, &mut extra);
+            if producers.is_none() {
+                optional_features(d, id, &["schema"], &prefix, &mut extra);
+            }
             let profile = SourceProfile::from_path(text(d, field(d, id, "path")?)?);
             if profile != Some(SourceProfile::Parquet)
                 && d.field(id, "empty_string")
@@ -981,6 +1004,19 @@ impl PreparedSpecification {
                     |id| matches!(&d.nodes()[id], N::Text(value) if value == "present"),
                 ),
             });
+            if let Some(producer) = producers.and_then(|p| {
+                p.iter()
+                    .find(|p| p.dataset() == text(d, name).unwrap_or(""))
+            }) {
+                // A producer's selected output contract is the sole type authority.
+                // The private metadata wrapper never exposes these as file reads.
+                sources.last_mut().ok_or(PrepareError::Internal)?.types = producer
+                    .contract()
+                    .fields()
+                    .iter()
+                    .map(|f| (f.name.clone(), f.kind))
+                    .collect();
+            }
         }
         let output_id = field(d, root, "output")?;
         optional_features(

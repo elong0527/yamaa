@@ -5,6 +5,9 @@ use crate::{
 };
 use alloc::{string::String, vec::Vec};
 
+#[path = "producer_contract_diagnostics.rs"]
+pub(crate) mod diagnostics;
+
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     pub declarations: usize,
