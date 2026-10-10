@@ -23,7 +23,7 @@ wrong report-owner pointers, count admission before table reads, contradictory
 activation/order evidence and native REQ-0535 header mismatch before typing.
 Preparation's existing REQ-0534/REQ-0523 authored rejection witnesses remain.
 
-Local debug and optimized release checks each pass 1,087 tests across 128 targets.
+Local debug and optimized release checks each pass 1,088 tests across 128 targets.
 Strict all-target Clippy passes all five crates; all 48 tooling guards pass.
 Dependency direction, current requirement literals, authoritative Unicode tables
 and shipped schema byte guards pass. Ready PR, clean archive package/installed

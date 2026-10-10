@@ -12,7 +12,7 @@ pub(crate) struct Budget {
 impl Budget {
     pub(crate) fn new(bytes: usize) -> Self {
         Self {
-            bytes,
+            bytes: bytes.min(16_777_216),
             cells: 1_048_576,
             work: 67_108_864,
         }

@@ -40,6 +40,7 @@ leaves the caller's complete attempt intact. Reporting never classifies a native
 resource cause by its message or fabricates an unentered dependent.
 
 Count, cell, text, escaping and work capacities precede report ownership growth.
+Larger caller budgets cannot exceed the formatter's fixed 16 MiB admission ceiling.
 Table shape admission precedes cell access; each generic source cell is read once
 and charged before its value is copied. Immutable JSON is charged before cloning.
 Activation-origin scans and repeated check metadata lookups also consume work.

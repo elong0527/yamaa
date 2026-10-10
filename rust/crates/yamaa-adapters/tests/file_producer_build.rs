@@ -1270,3 +1270,65 @@ fn whole_report_rejects_contradictory_actual_activation_and_node_order_without_r
     ));
     assert_eq!(host.trace, before);
 }
+
+#[test]
+fn a_larger_caller_report_budget_cannot_defer_the_fixed_formatter_ceiling_until_after_copy() {
+    let study = Study::new();
+    study.write(
+        "producer/p.yaml",
+        passthrough(
+            "{RAW: {path: ../raw/raw.csv, types: {ID: int, VALUE: str}}}",
+            "RAW",
+            "../generated/producer.csv",
+            "str",
+        ),
+    );
+    study.write(
+        "consumer/root.yaml",
+        passthrough(
+            "{FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}}",
+            "FIRST",
+            "../generated/root.csv",
+            "str",
+        ),
+    );
+    let text = "x".repeat(1_400_000);
+    study.write("raw/raw.csv", format!("ID,VALUE\n1,{text}\n"));
+    let mut build = study.build(Language::Python);
+    let mut host = Activation::new(&study, Mode::Lock);
+    let mut limits = Limits::default();
+    limits.engine.report_bytes = usize::MAX;
+    let attempt = build.build_reported(&mut host, report_id(), limits);
+    assert!(!attempt.accepted());
+    assert!(host.trace.is_empty());
+    assert_eq!(attempt.graph.nodes.len(), 1);
+    assert!(attempt.graph.nodes[0]
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .is_ok());
+    assert!(matches!(
+        attempt.graph.nodes[0].output,
+        Err(CompleteError::Report(
+            yamaa_adapters::specification_report::Error::OutputLimit
+        ))
+    ));
+    assert_eq!(
+        attempt.graph.nodes[0].dataset.sources[0]
+            .table
+            .as_ref()
+            .unwrap()
+            .cell(0, 1)
+            .unwrap(),
+        ValueRef::Str(&text)
+    );
+    assert!(matches!(
+        yamaa_adapters::producer_report::attempt_report(&attempt, report_id(), usize::MAX),
+        Err(yamaa_adapters::producer_report::ProjectionError::Report(
+            yamaa_adapters::specification_report::Error::OutputLimit
+        ))
+    ));
+    assert!(!study.0.join("generated").exists());
+}
