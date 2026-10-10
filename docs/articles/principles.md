@@ -61,15 +61,17 @@ These four principles follow from the core principle of one execution:
   contributes once; a cycle fails instead of resolving. A company standard is
   shared, not copied into files that then change separately.
 - **Language neutral**: The same specification with the same inputs generates the
-  same output dataset in R and in Python, wherever the spec's declared runtime
-  language is available. A runner whose language does not match the declaration
-  fails before reading data rather than approximating the result.
+  same output dataset in R and in Python, wherever the project's declared
+  environment language is available. A runner whose language does not match the
+  environment's declaration fails before reading data rather than approximating
+  the result.
 - **Explicit**: Nothing reaches the output unless the specification put it
   there. Each declared column is derived in exactly one place.
 - **Extension**: A specification holds no code from R or Python. It has one
-  extension point: a named contract. A project function is declared by its
-  contract where it is used, and written once per environment, in that
-  environment's language.
+  extension point: a named contract. A project function is declared once in the
+  project environment and called by its logical name where it is used; its
+  implementation is written once per environment, in that environment's
+  language.
 
 Following the principles, the goal is to move most of the AI agents' work into
 building the yamaa specification with people, where unclear points are cheap
