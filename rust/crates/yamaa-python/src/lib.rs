@@ -2,6 +2,8 @@
 use pyo3::prelude::*;
 mod domain_entry;
 #[cfg(any(unix, windows))]
+mod file_producer;
+#[cfg(any(unix, windows))]
 mod file_project;
 #[cfg(any(unix, windows))]
 mod file_specification;
@@ -274,6 +276,13 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
         module.add_class::<file_specification::Specification>()?;
         module.add_class::<file_project::Specification>()?;
         module.add_class::<file_project::Attempt>()?;
+        module.add_class::<file_producer::Specification>()?;
+        module.add_class::<file_producer::Attempt>()?;
+        module.add_class::<file_producer::Report>()?;
+        module.add_function(wrap_pyfunction!(
+            file_producer::_prepare_producer_file,
+            module
+        )?)?;
         module.add_class::<project_result::Result>()?;
         module.add_function(wrap_pyfunction!(
             file_project::_prepare_file_project,

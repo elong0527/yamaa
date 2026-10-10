@@ -31,7 +31,7 @@ pub enum Classified<'a, E> {
     },
 }
 impl<E> Classified<'_, E> {
-    fn failure(&self) -> &E {
+    pub(crate) fn failure(&self) -> &E {
         match self {
             Self::Lock { failure, .. } | Self::Host { failure, .. } => failure,
         }
@@ -72,7 +72,7 @@ fn invocation_host<'a, E>(
         _ => None,
     }
 }
-fn diagnostic(issue: Issue) -> Result<Value, report::Error> {
+pub(crate) fn diagnostic(issue: Issue) -> Result<Value, report::Error> {
     let context: Value =
         serde_json::from_str(&issue.context).map_err(|_| report::Error::InvalidObservation)?;
     Ok(
@@ -261,17 +261,36 @@ pub(crate) fn validate_activation<E>(
     Ok(())
 }
 
-fn activation_origins(
-    run: &PreparedRun,
+pub(crate) fn activation_origins(
+    run: &dyn crate::project_activation_observations::ActivationView,
     paths: &[String],
     issues: Vec<Issue>,
-    functions: impl Iterator<Item = usize>,
+    functions: impl Iterator<Item = usize> + Clone,
 ) -> Result<Vec<Value>, report::Error> {
+    // Admit the complete origin lookup and temporary ownership before collecting
+    // indices or captures. Both ordinary runs and graph unions are sealed views.
+    let mut budget =
+        crate::report_projection::Budget::new(crate::specification_check::MAX_ISSUE_BYTES);
+    let captured = run.captured_environment();
+    budget.entries(captured.captures().len())?;
+    budget.entries(paths.len())?;
+    for selected in functions.clone() {
+        budget.entries(1)?;
+        budget.work(captured.captures().len())?;
+        budget.text(&captured.root().source().identity)?;
+        budget.text(
+            paths
+                .get(selected)
+                .ok_or(report::Error::InvalidObservation)?,
+        )?;
+        for capture in captured.captures() {
+            budget.text(&capture.document.source().identity)?;
+        }
+    }
     let functions = functions.collect::<Vec<_>>();
     if issues.len() != functions.len() {
         return Err(report::Error::InvalidObservation);
     }
-    let captured = run.captured_environment();
     let entry = captured.root().source().identity.as_str();
     let external = captured
         .captures()
@@ -287,11 +306,16 @@ fn activation_origins(
     let mut metadata = Vec::new();
     for &selected in &functions {
         let &index = run
-            .compiled()
             .called_functions()
             .get(selected)
             .ok_or(report::Error::InvalidObservation)?;
-        let name = &run.environment().functions()[index].definition().name;
+        let name = &run
+            .environment()
+            .functions()
+            .get(index)
+            .ok_or(report::Error::InvalidObservation)?
+            .definition()
+            .name;
         if captured.origins().functions.get(index) != Some(name) {
             return Err(report::Error::InvalidObservation);
         }

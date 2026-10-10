@@ -179,6 +179,9 @@ struct Payload {
 enum Mode {
     Pass,
     Lock,
+    BindingFailure,
+    CaseFailure,
+    CaseMismatch,
     CaseInterrupt,
     LiveFailure,
     LiveInterrupt,
@@ -242,6 +245,9 @@ impl ActivationPort for Activation {
     ) -> Result<(), Payload> {
         assert_eq!(call.name, "id_float");
         self.trace.push("bind".into());
+        if matches!(self.mode, Mode::BindingFailure) {
+            return Err(self.payload(false));
+        }
         Ok(())
     }
     fn is_interrupt(&self, error: &Payload) -> bool {
@@ -257,6 +263,12 @@ impl ActivationPort for Activation {
         };
         self.trace.push(format!("invoke:{}", value.get()));
         if value.get() == 0.0 {
+            if matches!(self.mode, Mode::CaseFailure) {
+                return Err(HostError::Raised(self.payload(false)));
+            }
+            if matches!(self.mode, Mode::CaseMismatch) {
+                return Ok(Value::Int(19));
+            }
             if matches!(self.mode, Mode::CaseInterrupt) {
                 return Err(HostError::Raised(self.payload(true)));
             }
@@ -728,6 +740,69 @@ fn native_activation_failures_interrupts_and_unwind_retain_owned_original_prefix
 }
 
 #[test]
+fn original_graph_host_failure_visits_keep_stage_identity_after_other_owners_drop() {
+    for (mode, stage) in [
+        (Mode::Lock, "lock"),
+        (Mode::CaseInterrupt, "conformance"),
+        (Mode::LiveFailure, "derivation"),
+        (Mode::LiveInterrupt, "derivation"),
+    ] {
+        let study = Study::new();
+        study.rounded();
+        let mut build = study.build(Language::Python);
+        let mut activation = Activation::new(&study, mode);
+        let original = Rc::clone(&activation.original);
+        let attempt = build.build(&mut activation, &mut Report::default(), Limits::default());
+        let entered = attempt.graph.nodes.len();
+        drop(activation);
+        drop(build);
+        fs::remove_dir_all(&study.0).unwrap();
+        for _ in 0..2 {
+            let mut observed = Vec::new();
+            yamaa_adapters::producer_attempt::visit_host_failures(&attempt, |stage, error| {
+                observed.push((stage, error));
+            });
+            assert_eq!(observed.len(), 1);
+            assert_eq!(observed[0].0, stage);
+            assert!(Rc::ptr_eq(&observed[0].1.original, &original));
+            assert_eq!(
+                observed[0].1.interrupt,
+                matches!(mode, Mode::CaseInterrupt | Mode::LiveInterrupt)
+            );
+        }
+        assert_eq!(attempt.graph.nodes.len(), entered);
+    }
+}
+
+#[test]
+fn graph_failure_visits_leave_native_unwind_and_success_as_original_boundaries() {
+    for mode in [Mode::Pass, Mode::Unwind] {
+        let study = Study::new();
+        study.rounded();
+        let mut build = study.build(Language::Python);
+        let mut activation = Activation::new(&study, mode);
+        let unwind = Arc::clone(&activation.unwind);
+        let attempt = build.build(&mut activation, &mut Report::default(), Limits::default());
+        let mut count = 0;
+        yamaa_adapters::producer_attempt::visit_host_failures(&attempt, |_, _| count += 1);
+        assert_eq!(count, 0);
+        if matches!(mode, Mode::Unwind) {
+            let Err(BoundaryFailure::Unwind(payload)) = &attempt.boundary else {
+                panic!("original unwind remains held")
+            };
+            assert!(Arc::ptr_eq(
+                payload.downcast_ref::<Arc<()>>().unwrap(),
+                &unwind
+            ));
+            assert_eq!(attempt.graph.nodes.len(), 1);
+        } else {
+            assert!(attempt.accepted());
+            assert_eq!(attempt.graph.nodes.len(), 2);
+        }
+    }
+}
+
+#[test]
 fn native_ingestion_verification_codec_report_and_retention_gates_keep_distinct_prefixes() {
     for mode in 0..6 {
         let study = Study::new();
@@ -864,6 +939,221 @@ fn report_id() -> yamaa_adapters::specification_report::Identity<'static> {
         specification: "unused-entry-alias",
         base_directory: "unused-caller-base",
     }
+}
+
+#[test]
+fn classified_graph_reports_keep_actual_host_causes_and_authored_origins_without_replay() {
+    use yamaa_adapters::{
+        producer_report::{attempt_report_classified, ProjectionError},
+        project_function_diagnostics::HostDetails,
+        project_lock::{Finding, Reason},
+        project_report::Classified,
+    };
+    for (mode, condition) in [
+        (Mode::Lock, "runtime_artifact_mismatch"),
+        (Mode::BindingFailure, "project_environment_invalid"),
+        (Mode::CaseFailure, "function_conformance_failed"),
+        (Mode::CaseMismatch, "function_conformance_failed"),
+        (Mode::LiveFailure, "function_call_failed"),
+    ] {
+        let study = Study::new();
+        study.rounded();
+        let mut build = study.build(Language::Python);
+        let mut host = Activation::new(&study, mode);
+        let original = Rc::clone(&host.original);
+        let attempt = build.build_reported(&mut host, report_id(), Limits::default());
+        let trace = host.trace.clone();
+        drop(host);
+        drop(build);
+        fs::remove_dir_all(&study.0).unwrap();
+        let mut held = vec![];
+        yamaa_adapters::producer_attempt::visit_host_failures(&attempt, |stage, error| {
+            held.push((stage, error))
+        });
+        let lock = [Finding {
+            package: "yamaa".into(),
+            reason: Reason::VersionMismatch,
+            expected: vec!["0.2.0".into()],
+            actual: Some("0.3.0".into()),
+        }];
+        let facts = held
+            .iter()
+            .map(|(stage, error)| {
+                assert!(Rc::ptr_eq(&original, &error.original));
+                if *stage == "lock" {
+                    Classified::Lock {
+                        failure: *error,
+                        findings: &lock,
+                    }
+                } else {
+                    Classified::Host {
+                        failure: *error,
+                        details: HostDetails::Exception {
+                            class: "ActualHostError",
+                            message: "original quoted \"cause\"",
+                            truncated: false,
+                        },
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+        let report = attempt_report_classified(&attempt, report_id(), 16_777_216, &facts).unwrap();
+        assert_eq!(report["outcome"], "failure");
+        assert_eq!(report["diagnostics"].as_array().unwrap().len(), 1);
+        assert_eq!(report["diagnostics"][0]["condition"], condition);
+        assert_eq!(report["artifacts"], serde_json::json!([]));
+        if !matches!(mode, Mode::LiveFailure) {
+            assert!(attempt.graph.nodes.is_empty());
+            assert_eq!(report["source_reads"], serde_json::json!([]));
+            assert_eq!(
+                report["diagnostics"][0]["context"]["source"],
+                "held/environment.yaml"
+            );
+            assert_eq!(
+                report["diagnostics"][0]["context"]["entry"],
+                "held/environment.yaml"
+            );
+        } else {
+            assert_eq!(attempt.graph.nodes.len(), 1);
+            assert_eq!(
+                report["diagnostics"][0]["spec_paths"],
+                serde_json::json!(["columns.VALUE.derivation.function"])
+            );
+            assert_eq!(
+                report["diagnostics"][0]["context"]["keys"],
+                serde_json::json!([{"ID":1}])
+            );
+        }
+        assert_eq!(
+            attempt_report_classified(&attempt, report_id(), 16_777_216, &facts).unwrap(),
+            report
+        );
+        assert_eq!(
+            trace
+                .iter()
+                .filter(|entry| entry.starts_with("invoke:"))
+                .count(),
+            if matches!(mode, Mode::LiveFailure) {
+                3
+            } else if matches!(mode, Mode::Lock | Mode::BindingFailure) {
+                0
+            } else {
+                2
+            }
+        );
+        assert!(matches!(
+            attempt_report_classified(&attempt, report_id(), 1, &facts),
+            Err(ProjectionError::Report(
+                yamaa_adapters::specification_report::Error::OutputLimit
+            ))
+        ));
+    }
+}
+
+#[test]
+fn graph_classification_refuses_unrelated_duplicate_wrong_stage_and_oversized_facts() {
+    use yamaa_adapters::{
+        producer_report::{attempt_report_classified, ProjectionError},
+        project_function_diagnostics::HostDetails,
+        project_report::Classified,
+        specification_report::Error,
+    };
+    let study = Study::new();
+    study.rounded();
+    let mut build = study.build(Language::Python);
+    let mut host = Activation::new(&study, Mode::LiveFailure);
+    let attempt = build.build_reported(&mut host, report_id(), Limits::default());
+    let mut held = vec![];
+    yamaa_adapters::producer_attempt::visit_host_failures(&attempt, |_, error| held.push(error));
+    let error = held[0];
+    let ordinary = |failure| Classified::Host {
+        failure,
+        details: HostDetails::Exception {
+            class: "ActualHostError",
+            message: "original",
+            truncated: false,
+        },
+    };
+    let unrelated = host.payload(false);
+    for facts in [
+        vec![ordinary(&unrelated)],
+        vec![ordinary(error), ordinary(error)],
+        vec![Classified::Lock {
+            failure: error,
+            findings: &[],
+        }],
+    ] {
+        assert!(matches!(
+            attempt_report_classified(&attempt, report_id(), 16_777_216, &facts),
+            Err(ProjectionError::Report(Error::InvalidObservation))
+        ));
+    }
+    let message = "\\\"".repeat(131072);
+    let facts = [Classified::Host {
+        failure: error,
+        details: HostDetails::Exception {
+            class: "ActualHostError",
+            message: &message,
+            truncated: false,
+        },
+    }];
+    assert!(matches!(
+        attempt_report_classified(&attempt, report_id(), 16_777_216, &facts),
+        Err(ProjectionError::Report(Error::OutputLimit))
+    ));
+    assert_eq!(attempt.graph.nodes.len(), 1);
+    assert!(Rc::ptr_eq(&host.original, &error.original));
+}
+
+#[test]
+fn graph_host_classification_cannot_authorize_distinct_zero_sized_payloads_by_address() {
+    use yamaa_adapters::{
+        producer_report::{attempt_report_classified, ProjectionError},
+        project_report::Classified,
+        specification_report::Error,
+    };
+    struct Host;
+    impl ActivationPort for Host {
+        type Error = ();
+        type Handle = ();
+        fn verify_lock(
+            &mut self,
+            _: Language,
+            _: &LockReference,
+            _: &[ProjectFunctionIdentity],
+        ) -> Result<(), ()> {
+            Err(())
+        }
+        fn bind(&mut self, _: &ProjectFunctionIdentity, _: &LogicalSignature) -> Result<(), ()> {
+            unreachable!()
+        }
+        fn is_interrupt(&self, _: &()) -> bool {
+            false
+        }
+        fn invoke(&mut self, _: &(), _: &[Argument<'_>]) -> Result<Value, HostError<()>> {
+            unreachable!()
+        }
+    }
+    let study = Study::new();
+    study.rounded();
+    let mut build = study.build(Language::Python);
+    let attempt = build.build_reported(&mut Host, report_id(), Limits::default());
+    let mut held = vec![];
+    yamaa_adapters::producer_attempt::visit_host_failures(&attempt, |_, error| held.push(error));
+    assert_eq!(held.len(), 1);
+    let facts = [Classified::Lock {
+        failure: held[0],
+        findings: &[],
+    }];
+    assert!(matches!(
+        attempt_report_classified(&attempt, report_id(), 16777216, &facts),
+        Err(ProjectionError::Report(Error::InvalidObservation))
+    ));
+    assert!(matches!(
+        attempt_report_classified(&attempt, report_id(), 16777216, &[]),
+        Err(ProjectionError::Original { .. })
+    ));
+    assert!(attempt.graph.nodes.is_empty());
 }
 fn truth_table(
     specification: &str,

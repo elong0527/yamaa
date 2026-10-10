@@ -106,7 +106,11 @@ pub mod project_activation_observations;
 
 pub mod producer_admission;
 #[cfg(any(unix, windows))]
+pub mod producer_attempt;
+#[cfg(any(unix, windows))]
 pub mod producer_check;
+#[cfg(any(unix, windows))]
+mod producer_diagnostics;
 pub mod producer_graph;
 #[cfg(any(unix, windows))]
 pub mod producer_report;

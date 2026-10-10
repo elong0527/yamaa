@@ -45,3 +45,9 @@ twelve Windows R public tuples remain unqualified under #1742. Dirty-workspace
 wheel hygiene remains tracked there; clean archives must contain no caches.
 No new content hashes or repository digest locks are introduced. PortableLibmV1,
 existing python/uv.lock and hash-free R locks remain pinned.
+
+Ordinary original-graph static admission/checking subsequently qualified in
+[#1876](https://github.com/elong0527/yamaa/pull/1876), closing #1874. See
+[its qualification scope](1874-qualification.md). Actual installed graph build
+handles and retained host failure reports are the independent #1877 prerequisite;
+final ordinary dispatch and explicit publication remain #1741/#1866.
