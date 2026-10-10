@@ -146,18 +146,35 @@ passes 1,056 tests on Linux/macOS and 1,044 on Windows across 126 targets each.
 This boundary grants no workflow execution authority. See
 [the qualification scope](1867-qualification.md).
 
-The active prerequisite is [#1869 shared producer build orchestration](https://github.com/elong0527/yamaa/issues/1869).
+The [#1869 shared producer build orchestration](https://github.com/elong0527/yamaa/issues/1869)
+prerequisite is qualified by [#1870](https://github.com/elong0527/yamaa/pull/1870),
+merged as `2214ea79d952913285421f065307bbc52ba80e71`. All 22 final-head checks,
+16 native jobs, complete assessed 24-file review, 40 artifact audits and a fresh
+protected guard passed. Its merged source equals qualified head
+`2638559359bd2d0bf798100f0e9b206104362c04` directly.
 Its separate whole-graph owner now activates and validates all local/global full
 call signatures before study data, executes canonical producers once, and admits
 accepted serialized artifact re-ingestion through ordinary verification/output/
 codec/report gates. Whole entered attempts retain original failures, interrupts,
 unwind and source/check prefixes. Native witnesses preserve inherited origins,
 metadata/study snapshot ordering, exact rounded CSV truth, Parquet cells and a
-shared diamond. Local debug/release modes pass 1,079 tests across 128 targets,
-strict five-crate Clippy and all 48 tool guards pass; final package/CI/review
-qualification remains in progress. See [the service](../PRODUCER_BUILD.md) and
+shared diamond. Actual Linux/macOS debug/release modes pass 1,079 tests and Windows
+passes 1,066 across 128 targets each. Strict five-crate Clippy, all 48 tool guards,
+clean installed forms and package/evidence audits pass. See [the service](../PRODUCER_BUILD.md) and
 [qualification scope](1869-qualification.md). Installed workflow dispatch and
 ordered publication remain #1741. Publication acceptance still needs #1866.
+
+The active prerequisite is [#1871 complete retained producer graph reports](https://github.com/elong0527/yamaa/issues/1871).
+Its implementation borrows coherent original document/compiled-plan contexts from
+the sealed whole graph, gates dependent ingestion on complete native node reports,
+and retains whole union activation and actual entered-node failure evidence.
+Count/text/cell/work admission precedes report copying. Independent complete
+rounded CSV truth, native Parquet, source/check/opaque failure, repeat/drop-owner,
+late quota and contradictory-evidence witnesses are in local qualification.
+Clean installed packages, exact-head platform checks, full review and artifact
+and merge guards remain required before closure. Ordinary installed workflow and
+publication acceptance remains #1741. See [the reporting contract](../PRODUCER_REPORTS.md)
+and [qualification scope](1871-qualification.md).
 
 See [the closing qualification record](1757-qualification.md) for actual local
 results and the distinction between those results and the CI platform matrix.
@@ -172,8 +189,8 @@ Continue with the following acceptance gates in the
    is closed by #1859 with its complete qualification above.
 2. [#1860 CSV precision](https://github.com/elong0527/yamaa/issues/1860) is closed
    by #1862 with complete qualification above.
-3. #1863 is closed by #1865 and #1867 by #1868 with complete qualification above.
-   Complete #1869's shared build orchestration prerequisite, then #1741's
+3. #1863 is closed by #1865, #1867 by #1868 and #1869 by #1870 with complete
+   qualification above. Complete #1871's retained graph reporting, then #1741's
    producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.

@@ -91,6 +91,40 @@ impl Drop for Study {
 const PRODUCER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [ID]\ninput: {RAW: {path: ../../raw/raw.csv, types: {ID: int, VALUE: float}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: float, label: Reported value, derivation: {function: {name: id_float, args: {x: RAW.VALUE}}}}\noutput: {path: ../../generated/producer.csv, columns: [ID, VALUE], decimals: 2}\n";
 const CONSUMER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\nintermediates: [{id: SECOND_REFERENCE, dataset: SECOND, no_match: null}]\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n  - {name: VALUE, type: float, label: Reported value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\noutput: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}\n";
 
+#[test]
+fn whole_graph_report_views_keep_original_document_and_plan_together() {
+    use yamaa_adapters::specification_run_view::RunView;
+    let study = Study::new();
+    study.rounded();
+    let build = study.build(Language::Python);
+    let provenance = Arc::clone(build.provenance());
+    assert_eq!(provenance.metadata().order(), [1, 0]);
+    drop(build);
+    fs::remove_dir_all(&study.0).unwrap();
+
+    let views = provenance.report_views().collect::<Vec<_>>();
+    assert_eq!(views.len(), 2);
+    for (index, view) in views.iter().enumerate() {
+        assert!(std::ptr::eq(
+            view.document(),
+            provenance.documents()[index].as_ref()
+        ));
+        assert_eq!(view.document().source().identity, view.node().identity());
+        assert!(view.check_diagnostics().is_empty());
+        assert_eq!(view.compiled().output_decimals(), Some("2"));
+    }
+    assert!(views[0].node().identity().ends_with("/consumer/root.yaml"));
+    assert!(views[1].node().identity().ends_with("/producer/p.yaml"));
+    assert_eq!(views[0].compiled().source().name, "FIRST");
+    assert_eq!(views[1].compiled().source().name, "RAW");
+    assert_eq!(views[0].document().parents().len(), 0);
+    assert_eq!(views[1].document().parents().len(), 1);
+    assert_eq!(
+        views[1].document().parents()[0].source().bytes,
+        PRODUCER.as_bytes()
+    );
+}
+
 struct LockCapture {
     language: Language,
 }
@@ -254,7 +288,12 @@ struct Report {
     final_failure: bool,
 }
 impl ReportPort for Report {
-    fn select(&mut self, node: &Node, maximum: usize) -> Result<(), Self::Error> {
+    fn select<C, D, T: TableAccess>(
+        &mut self,
+        node: &Node,
+        _attempt: &yamaa_engine::specification_run::CapturedAttempt<C, D, T>,
+        maximum: usize,
+    ) -> Result<(), Self::Error> {
         self.entered.push(node.identity().into());
         self.maximum = maximum;
         if self.fail {
@@ -339,6 +378,21 @@ fn native_parquet_round_trip_uses_held_artifact_and_a_functionless_graph_grants_
         assert_eq!(table.cell(1, 1).unwrap(), ValueRef::Int(17));
     }
     assert!(!study.0.join("generated").exists());
+    let complete = build.build_reported(&mut activation, report_id(), Limits::default());
+    assert!(complete.accepted());
+    let value = yamaa_adapters::producer_report::attempt_report(&complete, report_id(), 16_777_216)
+        .unwrap();
+    assert_eq!(value["outcome"], "success");
+    assert_eq!(
+        value["activation"],
+        serde_json::json!({"lock":"not_requested","bindings":[],"tests":[]})
+    );
+    assert_eq!(value["artifacts"][0]["profile"], "parquet");
+    assert_eq!(
+        value["artifacts"][0]["records"],
+        serde_json::json!(["[\"ID\", \"VALUE\"]", "[1, 13]", "[2, 17]"])
+    );
+    assert_eq!(value["artifacts"][1]["content"], "ID,VALUE\n1,13\n2,17\n");
     let mut limits = Limits::default();
     limits.engine.source_storage_bytes = 1;
     let refused = build.build(&mut activation, &mut report, limits);
@@ -798,5 +852,483 @@ fn final_report_rendering_refusal_prevents_retaining_or_consuming_producer_bytes
         Err(CompleteError::Report("original report rendering refusal"))
     ));
     assert_eq!(report.entered.len(), 1);
+    assert!(!study.0.join("generated").exists());
+}
+
+fn report_id() -> yamaa_adapters::specification_report::Identity<'static> {
+    yamaa_adapters::specification_report::Identity {
+        runtime: "python",
+        runtime_version: "fixture-host",
+        engine_version: "fixture-engine",
+        example: "independent-rounded-producer",
+        specification: "unused-entry-alias",
+        base_directory: "unused-caller-base",
+    }
+}
+fn truth_table(
+    specification: &str,
+    stage: &str,
+    name: &str,
+    columns: &[&str],
+    rows: &[&[&str]],
+) -> serde_json::Value {
+    use serde_json::json;
+    let kinds = columns
+        .iter()
+        .map(|&column| if column == "ID" { "int" } else { "float" })
+        .collect::<Vec<_>>();
+    json!({"specification":specification,"stage":stage,"name":name,"columns":columns,"types":kinds,
+        "rows":rows.iter().map(|row| row.iter().zip(&kinds).map(|(value, kind)| json!({"type":kind,"value":value})).collect::<Vec<_>>()).collect::<Vec<_>>()})
+}
+#[test]
+fn native_complete_reports_pin_independent_rounded_truth_and_union_after_all_owners_drop() {
+    use serde_json::json;
+    use yamaa_adapters::producer_report::attempt_report;
+    let study = Study::new();
+    study.rounded();
+    let mut build = study.build(Language::Python);
+    let mut host = Activation::new(&study, Mode::Pass);
+    let first = build.build_reported(&mut host, report_id(), Limits::default());
+    let second = build.build_reported(&mut host, report_id(), Limits::default());
+    assert!(first.accepted() && second.accepted());
+    assert_eq!(host.trace.len(), 12);
+    let producer = study.path("producer/p.yaml");
+    let consumer = study.path("consumer/root.yaml");
+    let raw_rows: &[&[&str]] = &[&["1", "3ff3be76c8b43958"], &["2", "4002c28f5c28f5c3"]];
+    let rounded_rows: &[&[&str]] = &[&["1", "3ff3ae147ae147ae"], &["2", "4002cccccccccccd"]];
+    let derived_rows: &[&[&str]] = &[
+        &[
+            "1",
+            "3ff3ae147ae147ae",
+            "3ff3ae147ae147ae",
+            "4003ae147ae147ae",
+        ],
+        &[
+            "2",
+            "4002cccccccccccd",
+            "4002cccccccccccd",
+            "4012cccccccccccd",
+        ],
+    ];
+    let tables = json!([
+        truth_table(&producer, "source", "RAW", &["ID", "VALUE"], raw_rows),
+        truth_table(&producer, "derived", "output", &["ID", "VALUE"], raw_rows),
+        truth_table(&consumer, "source", "FIRST", &["ID", "VALUE"], rounded_rows),
+        truth_table(
+            &consumer,
+            "source",
+            "SECOND",
+            &["ID", "VALUE"],
+            rounded_rows
+        ),
+        truth_table(
+            &consumer,
+            "derived",
+            "output",
+            &["ID", "FIRST_VALUE", "SECOND_VALUE", "VALUE"],
+            derived_rows
+        ),
+    ]);
+    let activation = json!({"lock":"verified","bindings":[{"function":"id_float","call":"program.id_float","source":"held/environment.yaml","outcome":"bound"}],
+    "tests":[
+        {"function":"id_float","call":"program.id_float","source":"held/environment.yaml","case":"normal","args":{"x":{"float":"401c000000000000"}},"expected":{"float":"401c000000000000"},"comparison_decimals":4,"outcome":"passed","invoked":true,"actual_retained":true,"actual":{"float":"401c000000000000"}},
+        {"function":"id_float","call":"program.id_float","source":"held/environment.yaml","case":"boundary","args":{"x":{"float":"0000000000000000"}},"expected":{"float":"0000000000000000"},"comparison_decimals":4,"outcome":"passed","invoked":true,"actual_retained":true,"actual":{"float":"0000000000000000"}},
+        {"function":"id_float","call":"program.id_float","source":"held/environment.yaml","case":"missing","args":{"x":{"missing":null}},"expected":{"missing":null},"comparison_decimals":4,"outcome":"passed","invoked":false,"actual_retained":true,"actual":{"missing":null}}
+    ]});
+    drop(build);
+    drop(host);
+    fs::remove_dir_all(&study.0).unwrap();
+    for (attempt, created) in [(&first, 1), (&second, 0)] {
+        let observed = attempt_report(attempt, report_id(), 16_777_216).unwrap();
+        let expected = json!({"report_version":"0.3.0-draft","runtime":"python","backend":"rust","runtime_version":"fixture-host","engine_version":"fixture-engine","example":"independent-rounded-producer","entry":"consumer/root.yaml","outcome":"success","activation":activation,"environment":{"source":"held/environment.yaml","lock_source":"held/lock"},
+            "nodes":[{"specification":producer,"outcome":"success","diagnostics":[],"unsupported":[],"handler_counts":[]},{"specification":consumer,"outcome":"success","diagnostics":[],"unsupported":[],"handler_counts":[]}],
+            "artifacts":[
+                {"name":"producer","profile":"csv","columns":["ID","VALUE"],"types":["int","float"],"row_count":2,"records":["ID,VALUE","1,1.23","2,2.35"],"byte_length":23,"content":"ID,VALUE\n1,1.23\n2,2.35\n","specification":producer},
+                {"name":"root","profile":"csv","columns":["ID","VALUE"],"types":["int","float"],"row_count":2,"records":["ID,VALUE","1,2.46","2,4.70"],"byte_length":23,"content":"ID,VALUE\n1,2.46\n2,4.70\n","specification":consumer}],
+            "tables":tables,"diagnostics":[],"unsupported":[],"handler_counts":[],"verifications":[],"callbacks":[],"error":null,
+            "source_reads":[{"base_directory":study.path("producer"),"path":"../raw/raw.csv","outcome":"captured","condition":null,"snapshots_created":created,"specification":producer},
+                {"base_directory":study.path("consumer"),"path":"../generated/producer.csv","outcome":"captured","condition":null,"snapshots_created":0,"specification":consumer},
+                {"base_directory":study.path("consumer"),"path":"../generated/producer.csv","outcome":"captured","condition":null,"snapshots_created":0,"specification":consumer}]});
+        assert_eq!(observed, expected);
+        assert_eq!(
+            attempt_report(attempt, report_id(), 16_777_216).unwrap(),
+            expected
+        );
+        let bytes = attempt.graph.nodes[1]
+            .output
+            .as_ref()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .artifact()
+            .unwrap()
+            .bytes();
+        assert_eq!(bytes, b"ID,VALUE\n1,2.46\n2,4.70\n");
+    }
+}
+
+#[test]
+fn complete_failed_reports_keep_entered_producer_and_consumer_check_and_source_prefixes() {
+    use serde_json::json;
+    use yamaa_adapters::producer_report::attempt_report;
+    for mode in 0..4 {
+        let study = Study::new();
+        study.rounded();
+        match mode {
+            0 => study.write(
+                "producer/layers/base.yaml",
+                format!("{PRODUCER}verifications:\n  - row_count: {{min: 99}}\n"),
+            ),
+            1 => study.write(
+                "consumer/root.yaml",
+                format!("{CONSUMER}verifications:\n  - row_count: {{min: 99}}\n"),
+            ),
+            2 => fs::remove_file(study.0.join("raw/raw.csv")).unwrap(),
+            3 => study.write("raw/raw.csv", b"ID,VALUE\n1,bad\n"),
+            _ => unreachable!(),
+        }
+        let mut build = study.build(Language::Python);
+        let mut activation = Activation::new(&study, Mode::Pass);
+        let attempt = build.build_reported(&mut activation, report_id(), Limits::default());
+        assert!(!attempt.accepted());
+        let before = activation.trace.clone();
+        drop(build);
+        fs::remove_dir_all(&study.0).unwrap();
+        let value = attempt_report(&attempt, report_id(), 16_777_216).unwrap();
+        assert_eq!(activation.trace, before);
+        assert_eq!(value["outcome"], "failure");
+        assert_eq!(
+            value["nodes"].as_array().unwrap().len(),
+            if mode == 1 { 2 } else { 1 }
+        );
+        assert_eq!(
+            value["artifacts"].as_array().unwrap().len(),
+            if mode == 1 { 1 } else { 0 }
+        );
+        assert_eq!(value["diagnostics"].as_array().unwrap().len(), 1);
+        let finding = &value["diagnostics"][0];
+        match mode {
+            0 | 1 => {
+                assert_eq!(finding["condition"], "row_count_failed");
+                assert_eq!(finding["spec_paths"], json!(["verifications[0].row_count"]));
+                assert_eq!(finding["context"]["count"], 2);
+                assert_eq!(value["verifications"].as_array().unwrap().len(), 1);
+            }
+            2 => {
+                assert_eq!(finding["condition"], "resource_path_missing");
+                assert_eq!(finding["requirement"], "REQ-0785");
+                assert_eq!(finding["context"]["path"], "../../raw/raw.csv");
+                assert!(value["source_reads"].as_array().unwrap().is_empty());
+            }
+            3 => {
+                assert_eq!(finding["condition"], "field_parse_failed");
+                assert_eq!(finding["requirement"], "REQ-0536");
+                assert_eq!(finding["context"]["value"], "bad");
+                assert_eq!(value["source_reads"][0]["outcome"], "captured");
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            attempt_report(&attempt, report_id(), 16_777_216).unwrap(),
+            value
+        );
+    }
+}
+
+#[test]
+fn complete_projection_refusal_keeps_original_opaque_interrupt_unwind_and_actual_prefix() {
+    use yamaa_adapters::producer_report::{attempt_report, ProjectionError};
+    for mode in [
+        Mode::Lock,
+        Mode::CaseInterrupt,
+        Mode::LiveFailure,
+        Mode::LiveInterrupt,
+        Mode::Unwind,
+    ] {
+        let study = Study::new();
+        study.rounded();
+        let mut build = study.build(Language::Python);
+        let mut activation = Activation::new(&study, mode);
+        let attempt = build.build_reported(&mut activation, report_id(), Limits::default());
+        let original = Rc::clone(&activation.original);
+        let unwind = Arc::clone(&activation.unwind);
+        let before = activation.trace.clone();
+        drop(build);
+        fs::remove_dir_all(&study.0).unwrap();
+        let Err(ProjectionError::Original {
+            attempt: held,
+            observations,
+        }) = attempt_report(&attempt, report_id(), 16_777_216)
+        else {
+            panic!("original failure must accompany projection refusal");
+        };
+        assert!(std::ptr::eq(held, &attempt));
+        assert_eq!(activation.trace, before);
+        assert_eq!(observations["outcome"], "failure");
+        assert!(observations["artifacts"].as_array().unwrap().is_empty());
+        assert_eq!(
+            observations["nodes"].as_array().unwrap().len(),
+            attempt.graph.nodes.len()
+        );
+        match mode {
+            Mode::Lock => assert!(
+                matches!(&held.graph.outcome, Err(Failure::Activation(ActivationFailure::Lock(e))) if Rc::ptr_eq(&original, &e.original))
+            ),
+            Mode::Unwind => assert!(
+                matches!(&held.boundary, Err(BoundaryFailure::Unwind(payload)) if Arc::ptr_eq(payload.downcast_ref::<Arc<()>>().unwrap(), &unwind))
+            ),
+            Mode::CaseInterrupt => {
+                assert_eq!(
+                    observations["activation"]["tests"]
+                        .as_array()
+                        .unwrap()
+                        .len(),
+                    2
+                );
+                assert_eq!(
+                    observations["activation"]["tests"][1]["outcome"],
+                    "interrupted"
+                );
+            }
+            _ => {
+                let error = held.graph.nodes[0]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .as_ref()
+                    .unwrap_err();
+                assert!(
+                    matches!(error.as_ref(), ExecutionError::ProjectFunction { error, .. } if matches!(&error.kind, FailureKind::CallFailed(e) if Rc::ptr_eq(&original, &e.original)))
+                );
+                assert_eq!(observations["source_reads"].as_array().unwrap().len(), 1);
+                assert_eq!(observations["tables"].as_array().unwrap().len(), 1);
+            }
+        }
+    }
+}
+
+#[test]
+fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier_artifacts() {
+    use yamaa_adapters::{
+        producer_report::{attempt_report, ProjectionError},
+        specification_report::Error,
+    };
+    let study = Study::new();
+    study.rounded();
+    study.write(
+        "consumer/root.yaml",
+        format!("{CONSUMER}verifications:\n  - row_count: {{min: 1}}\n"),
+    );
+    let mut build = study.build(Language::Python);
+    let mut activation = Activation::new(&study, Mode::Pass);
+    let mut limits = Limits::default();
+    limits.engine.report_bytes = 1;
+    let first = build.build_reported(&mut activation, report_id(), limits);
+    assert!(!first.accepted());
+    assert_eq!(first.graph.nodes.len(), 1);
+    assert!(matches!(
+        first.graph.nodes[0].output,
+        Err(CompleteError::Report(Error::OutputLimit))
+    ));
+    assert_eq!(activation.trace.len(), 6);
+    assert_eq!(
+        attempt_report(&first, report_id(), 16_777_216).unwrap()["error"]["code"],
+        "output_limit"
+    );
+    limits.engine.report_bytes = 65536;
+    let later = build.build_reported(&mut activation, report_id(), limits);
+    assert!(!later.accepted());
+    assert_eq!(later.graph.nodes.len(), 2);
+    assert!(later.graph.nodes[0]
+        .output
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .artifact()
+        .is_some());
+    assert!(matches!(
+        later.graph.nodes[1].output,
+        Err(CompleteError::Report(Error::OutputLimit))
+    ));
+    let value = attempt_report(&later, report_id(), 16_777_216).unwrap();
+    assert_eq!(value["outcome"], "failure");
+    assert_eq!(value["artifacts"].as_array().unwrap().len(), 1);
+    let original = later.graph.nodes[0]
+        .output
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .artifact()
+        .unwrap();
+    assert_eq!(original.bytes(), b"ID,VALUE\n1,1.23\n2,2.35\n");
+    assert!(matches!(
+        attempt_report(&later, report_id(), 1),
+        Err(ProjectionError::Report(Error::OutputLimit))
+    ));
+    assert_eq!(original.bytes(), b"ID,VALUE\n1,1.23\n2,2.35\n");
+    assert!(!study.0.join("generated").exists());
+}
+
+#[test]
+fn report_context_pointer_and_table_count_admission_precede_table_authority_and_clear_old_selection(
+) {
+    use yamaa_adapters::{producer_report::NativeReport, specification_report::Error};
+    use yamaa_engine::specification_run::{CapturedAttempt, CapturedSource};
+    struct Bomb {
+        schema: yamaa_core::table::TableSchema,
+        reads: Rc<std::cell::Cell<usize>>,
+    }
+    impl TableAccess for Bomb {
+        type Error = Payload;
+        fn schema(&self) -> &yamaa_core::table::TableSchema {
+            &self.schema
+        }
+        fn row_count(&self) -> usize {
+            usize::MAX
+        }
+        fn cell(
+            &self,
+            _: usize,
+            _: usize,
+        ) -> Result<ValueRef<'_>, yamaa_core::table::CellError<Payload>> {
+            self.reads.set(self.reads.get() + 1);
+            panic!("count admission must precede cell authority")
+        }
+    }
+    let study = Study::new();
+    study.rounded();
+    let mut build = study.build(Language::Python);
+    let unrelated = study.build(Language::Python);
+    let mut attempt = build.build_reported(
+        &mut Activation::new(&study, Mode::Pass),
+        report_id(),
+        Limits::default(),
+    );
+    assert!(attempt.accepted());
+    let mut report = NativeReport::new(build.provenance(), report_id());
+    let node = &build.provenance().metadata().nodes()[1];
+    report
+        .select(node, &attempt.graph.nodes[0].dataset, 16_777_216)
+        .unwrap();
+    assert!(matches!(
+        report.select(
+            &unrelated.provenance().metadata().nodes()[1],
+            &attempt.graph.nodes[0].dataset,
+            16_777_216
+        ),
+        Err(Error::InvalidObservation)
+    ));
+    assert!(matches!(report.failure(), Err(Error::InvalidObservation)));
+    let mut entered = attempt.graph.nodes.remove(0);
+    let source = entered.dataset.sources.remove(0);
+    let reads = Rc::new(std::cell::Cell::new(0));
+    let fake = CapturedAttempt::<(), (), Bomb> {
+        sources: vec![CapturedSource {
+            read: source.read,
+            snapshot: source.snapshot,
+            table: Some(Bomb {
+                schema: source.table.unwrap().schema().clone(),
+                reads: Rc::clone(&reads),
+            }),
+        }],
+        result: Ok(entered.dataset.result.map_err(|_| ()).unwrap()),
+    };
+    assert!(matches!(
+        report.select(node, &fake, 16_777_216),
+        Err(Error::OutputLimit)
+    ));
+    assert_eq!(reads.get(), 0);
+    assert!(matches!(report.failure(), Err(Error::InvalidObservation)));
+}
+
+#[test]
+fn whole_report_rejects_contradictory_actual_activation_and_node_order_without_replay() {
+    use yamaa_adapters::{
+        producer_report::{attempt_report, ProjectionError},
+        specification_report::Error,
+    };
+    let study = Study::new();
+    study.rounded();
+    let mut build = study.build(Language::Python);
+    let mut host = Activation::new(&study, Mode::Pass);
+    let mut attempt = build.build_reported(&mut host, report_id(), Limits::default());
+    let before = host.trace.clone();
+    attempt.graph.activation.tests[0].actual = Some(Value::float(99.0));
+    assert!(matches!(
+        attempt_report(&attempt, report_id(), 16_777_216),
+        Err(ProjectionError::Report(Error::InvalidObservation))
+    ));
+    attempt.graph.activation.tests[0].actual = Some(Value::float(7.0));
+    attempt.graph.nodes.swap(0, 1);
+    assert!(matches!(
+        attempt_report(&attempt, report_id(), 16_777_216),
+        Err(ProjectionError::Report(Error::InvalidObservation))
+    ));
+    assert_eq!(host.trace, before);
+}
+
+#[test]
+fn a_larger_caller_report_budget_cannot_defer_the_fixed_formatter_ceiling_until_after_copy() {
+    let study = Study::new();
+    study.write(
+        "producer/p.yaml",
+        passthrough(
+            "{RAW: {path: ../raw/raw.csv, types: {ID: int, VALUE: str}}}",
+            "RAW",
+            "../generated/producer.csv",
+            "str",
+        ),
+    );
+    study.write(
+        "consumer/root.yaml",
+        passthrough(
+            "{FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}}",
+            "FIRST",
+            "../generated/root.csv",
+            "str",
+        ),
+    );
+    let text = "x".repeat(1_400_000);
+    study.write("raw/raw.csv", format!("ID,VALUE\n1,{text}\n"));
+    let mut build = study.build(Language::Python);
+    let mut host = Activation::new(&study, Mode::Lock);
+    let mut limits = Limits::default();
+    limits.engine.report_bytes = usize::MAX;
+    let attempt = build.build_reported(&mut host, report_id(), limits);
+    assert!(!attempt.accepted());
+    assert!(host.trace.is_empty());
+    assert_eq!(attempt.graph.nodes.len(), 1);
+    assert!(attempt.graph.nodes[0]
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .is_ok());
+    assert!(matches!(
+        attempt.graph.nodes[0].output,
+        Err(CompleteError::Report(
+            yamaa_adapters::specification_report::Error::OutputLimit
+        ))
+    ));
+    assert_eq!(
+        attempt.graph.nodes[0].dataset.sources[0]
+            .table
+            .as_ref()
+            .unwrap()
+            .cell(0, 1)
+            .unwrap(),
+        ValueRef::Str(&text)
+    );
+    assert!(matches!(
+        yamaa_adapters::producer_report::attempt_report(&attempt, report_id(), usize::MAX),
+        Err(yamaa_adapters::producer_report::ProjectionError::Report(
+            yamaa_adapters::specification_report::Error::OutputLimit
+        ))
+    ));
     assert!(!study.0.join("generated").exists());
 }

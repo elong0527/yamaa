@@ -1,11 +1,67 @@
 //! Bounded activation evidence from one owned build. This reads held metadata
 //! and actual engine observations; it never queries a host or invokes a case.
-use crate::{project_run::PreparedRun, project_source::Origin, scalar_transport::ScalarValue};
+use crate::{
+    project_run::PreparedRun,
+    project_source::{CapturedEnvironment, Origin},
+    scalar_transport::ScalarValue,
+};
 use serde_json::{json, Value as Json};
-use yamaa_core::{project_function::Function, value::Value};
+use yamaa_core::{
+    project_environment::ExecutionEnvironment, project_function::Function, value::Value,
+};
 use yamaa_engine::project_activation::{
     BindingOutcome, LockObservation, Observations, TestOutcome,
 };
+
+mod sealed {
+    pub trait Sealed {}
+    impl Sealed for super::PreparedRun {}
+    #[cfg(any(unix, windows))]
+    impl Sealed for crate::file_producer_build::Provenance {}
+    impl<T: super::ActivationView + ?Sized> Sealed for std::sync::Arc<T> {}
+}
+
+/// One retained activation context: ordinary selected calls or the complete
+/// consumed graph union. External callers cannot mix unrelated provenance.
+pub trait ActivationView: sealed::Sealed {
+    fn called_functions(&self) -> &[usize];
+    fn environment(&self) -> &ExecutionEnvironment;
+    fn captured_environment(&self) -> &CapturedEnvironment;
+}
+impl<T: ActivationView + ?Sized> ActivationView for std::sync::Arc<T> {
+    fn called_functions(&self) -> &[usize] {
+        self.as_ref().called_functions()
+    }
+    fn environment(&self) -> &ExecutionEnvironment {
+        self.as_ref().environment()
+    }
+    fn captured_environment(&self) -> &CapturedEnvironment {
+        self.as_ref().captured_environment()
+    }
+}
+impl ActivationView for PreparedRun {
+    fn called_functions(&self) -> &[usize] {
+        self.compiled().called_functions()
+    }
+    fn environment(&self) -> &ExecutionEnvironment {
+        self.environment()
+    }
+    fn captured_environment(&self) -> &CapturedEnvironment {
+        self.captured_environment()
+    }
+}
+#[cfg(any(unix, windows))]
+impl ActivationView for crate::file_producer_build::Provenance {
+    fn called_functions(&self) -> &[usize] {
+        self.metadata().called_functions()
+    }
+    fn environment(&self) -> &ExecutionEnvironment {
+        self.metadata().environment()
+    }
+    fn captured_environment(&self) -> &CapturedEnvironment {
+        self.environment()
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -34,9 +90,8 @@ impl Budget {
 fn scalar(value: &Value) -> Result<Json, Error> {
     serde_json::to_value(ScalarValue::from_core(value.clone())).map_err(|_| Error::Projection)
 }
-fn function(run: &PreparedRun, selected: usize) -> Result<(&Function, &str), Error> {
+fn function(run: &dyn ActivationView, selected: usize) -> Result<(&Function, &str), Error> {
     let index = *run
-        .compiled()
         .called_functions()
         .get(selected)
         .ok_or(Error::InvalidObservation)?;
@@ -61,18 +116,18 @@ fn function(run: &PreparedRun, selected: usize) -> Result<(&Function, &str), Err
     Ok((function, source))
 }
 
-pub fn activation(run: &PreparedRun, observed: &Observations) -> Result<Json, Error> {
+pub fn activation(run: &dyn ActivationView, observed: &Observations) -> Result<Json, Error> {
     activation_with_limit(run, observed, 16_777_216)
 }
 pub fn activation_with_limit(
-    run: &PreparedRun,
+    run: &dyn ActivationView,
     observed: &Observations,
     maximum: usize,
 ) -> Result<Json, Error> {
     if observed.bindings.len() > 1024 || observed.tests.len() > 65_536 {
         return Err(Error::Limit);
     }
-    let selected = run.compiled().called_functions().len();
+    let selected = run.called_functions().len();
     if selected == 0
         && (observed.lock != LockObservation::NotRequested
             || !observed.bindings.is_empty()

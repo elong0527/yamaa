@@ -65,7 +65,12 @@ pub trait CodecPort {
 /// Select the original node context and enforce this report's complete byte
 /// budget. Reports own observations only; no method grants publication authority.
 pub trait ReportPort: OutputReport {
-    fn select(&mut self, node: &Node, byte_limit: usize) -> Result<(), Self::Error>;
+    fn select<C, D, T: TableAccess>(
+        &mut self,
+        node: &Node,
+        attempt: &CapturedAttempt<C, D, T>,
+        byte_limit: usize,
+    ) -> Result<(), Self::Error>;
 }
 pub struct Ports<'a, A, P, D, R, C> {
     pub activation: &'a mut A,
@@ -188,6 +193,14 @@ impl PreparedBuild {
     }
     pub fn metadata(&self) -> &PreparedGraph {
         self.graph.metadata()
+    }
+    /// Borrow coherent reporting facts from the complete consumed closure.
+    /// Metadata nodes alone still expose no compiled plan; the whole immutable
+    /// owner must remain alive for every returned borrow.
+    pub fn report_contexts(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (&Node, &PreparedSpecification)> {
+        self.metadata().nodes().iter().zip(self.graph.plans())
     }
     /// Fill caller-owned evidence, so an adapter panic fence keeps the original
     /// activation/node prefix. Every call discards earlier attempt state and
@@ -342,9 +355,9 @@ impl PreparedBuild {
             let prepared = prepare_output(
                 node,
                 plan,
+                &entered.dataset,
                 execution,
-                output_left,
-                limits.report_bytes / count,
+                (output_left, limits.report_bytes / count),
                 ports.report,
                 ports.codec,
             );
@@ -436,22 +449,22 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
         Ok(table)
     }
 }
-fn prepare_output<R: ReportPort, C: CodecPort>(
+fn prepare_output<SC, SD, T: TableAccess, R: ReportPort, C: CodecPort>(
     node: &Node,
     plan: &PreparedSpecification,
+    attempt: &CapturedAttempt<SC, SD, T>,
     execution: &Execution,
-    bytes: usize,
-    report_bytes: usize,
+    capacities: (usize, usize),
     report: &mut R,
     codec: &mut C,
 ) -> PreparedNode<R, C> {
     report
-        .select(node, report_bytes)
+        .select(node, attempt, capacities.1)
         .map_err(output::CompleteError::Report)?;
     output::prepare(
         plan,
         Some(execution),
-        bytes,
+        capacities.0,
         report,
         &mut NodeCodec { plan, codec },
     )

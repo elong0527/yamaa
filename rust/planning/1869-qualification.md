@@ -45,10 +45,26 @@ Local complete shared-crate debug and optimized release-test modes pass 1,079
 tests each across 128 targets. Strict all-target Clippy passes all five crates;
 all 48 tool guard tests pass with the pinned Rust toolchain available. All 93
 focused activation/dataset/build/native resource/graph/decoder/project cases pass.
-Final clean package forms, installed regression evidence, exact-head CI, completed
-review and artifact audits remain required before this issue is closed. No
-installed producer workflow or publication acceptance is claimed by component
-results.
+[#1870](https://github.com/elong0527/yamaa/pull/1870) merged as
+`2214ea79d952913285421f065307bbc52ba80e71` and closed #1869 after all 22
+final-head checks, all 16 native jobs, a complete assessed 24-file review,
+40 artifact audits and a fresh protected guard passed. The merged source directly
+equals qualified head `2638559359bd2d0bf798100f0e9b206104362c04`.
+Native run `38051857292` used merge source
+`92cb462f75e12b3a3f35c6ea5ac97d1091efee5c`, whose tree equals that head.
+Actual Linux/macOS debug and optimized runs each pass 1,079 tests; Windows each
+passes 1,066, across 128 targets per mode. All 14 packages pass 4,501 direct
+byte comparisons, with no cache members or errors. Six installed Python forms
+each pass 24 supplemental suites; both R forms each pass 18 and their strict
+package checks report `Status: OK`. The fresh PortableLibmV1 matrix compares
+30,033 sample observations exactly across six hosts/versions. The wider inventory
+and historical assessment limitations remain explicit. See
+[closing evidence](https://github.com/elong0527/yamaa/pull/1870#issuecomment-6097591881).
+No installed producer workflow or publication acceptance is claimed by this slice.
+
+The next prerequisite is #1871's complete retained graph reporting. Existing
+native witnesses use fake report ports; ordinary installed Python/R dispatch,
+complete host workflow reports and ordered explicit publication remain #1741.
 
 #1741 and #1585 remain open. Publication decision #1866 and Windows R scope #1857
 remain unanswered. The twelve Windows R public tuples remain unqualified under

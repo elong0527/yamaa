@@ -229,7 +229,12 @@ struct Report {
     failure: bool,
 }
 impl ReportPort for Report {
-    fn select(&mut self, node: &Node, maximum: usize) -> Result<(), Self::Error> {
+    fn select<C, D, T: TableAccess>(
+        &mut self,
+        node: &Node,
+        _attempt: &yamaa_engine::specification_run::CapturedAttempt<C, D, T>,
+        maximum: usize,
+    ) -> Result<(), Self::Error> {
         self.trace
             .borrow_mut()
             .push(format!("report:{}", node.identity()));
