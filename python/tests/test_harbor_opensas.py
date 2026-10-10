@@ -173,6 +173,38 @@ def test_confident_opensas_reference_matches_original_golden(tmp_path, name):
         assert header == spec["columns"], (name, spec["file"], header)
 
 
+def test_the_spaces_only_comment_reference_matches_its_golden(tmp_path):
+    # The track still excludes this case, so grade its reference under the
+    # Python contract: it keeps the two-space comment by reading raw records
+    # and writing its own CSV.
+    if not shutil.which("opensas"):
+        pytest.skip("opensas is not installed")
+    name = "adam-adsl-investigator-comment"
+    benchmark = build.BENCHMARKS / name
+    shutil.copytree(
+        benchmark / "input",
+        tmp_path / "input",
+        ignore=shutil.ignore_patterns("*.yaml", "*.yml"),
+    )
+    output = tmp_path / "output"
+    output.mkdir()
+    script = output / "result.sas"
+    script.write_text(
+        (build.SOLUTIONS / name / script.name)
+        .read_text()
+        .replace("/app/", f"{tmp_path.as_posix()}/")
+    )
+    subprocess.run(
+        ["opensas", str(script)], cwd=tmp_path, check=True, capture_output=True
+    )
+    contract = build.contract_for(benchmark, "python")
+    contract.update(language="opensas", script=script.name)
+    result = grade.grade(
+        contract, benchmark / "expected", output, tmp_path / "none.json"
+    )
+    assert result["passed"], result
+
+
 def _edge_case(tmp_path, name, inputs, output_name):
     if not shutil.which("opensas"):
         pytest.skip("opensas is not installed")
