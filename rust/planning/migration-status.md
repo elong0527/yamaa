@@ -106,8 +106,20 @@ the exact binary64 fraction with genuine ties away from zero. Precision affects
 serialized bytes only; retained tables and same-node calculations stay unrounded.
 Portable invalid/Parquet diagnostics, arbitrary-width metadata quotas and explicit
 failed-save gates retain their existing lifecycle. See [the precision contract](../CSV_PRECISION.md)
-and [its qualification record](1860-qualification.md). This slice is being qualified;
-it does not supply producer execution or consumer re-ingestion.
+and [its qualification record](1860-qualification.md). [#1862](https://github.com/elong0527/yamaa/pull/1862)
+merged as `0267431afbe1d21f5806d01f21b25d711d69fe23` and closed #1860 after
+all 23 final-head checks, 16 native jobs, completed review and 40 artifact audits
+passed. Its merged source equals the qualified head. This slice does not supply
+producer execution or consumer re-ingestion.
+
+The next #1741 prerequisite is [#1863 complete producer graph metadata](https://github.com/elong0527/yamaa/issues/1863).
+Its bounded implementation is being qualified: one canonical document per node,
+complete acyclic closure, deterministic producer-first order, one compilation per
+node and explicit local-to-graph function slots against one owned environment.
+Cross-branch schema/snapshot and producer metadata conflicts refuse. This capability
+still exposes metadata and execution denial only; it grants no native resources,
+activation, producer execution, ingestion or publication authority. See
+[the boundary](../PRODUCER_GRAPH.md) and [qualification scope](1863-qualification.md).
 
 See [the closing qualification record](1757-qualification.md) for actual local
 results and the distinction between those results and the CI platform matrix.
@@ -120,9 +132,10 @@ Continue with the following acceptance gates in the
    The merged source equals the qualified head. Retain #1753's observation
    contracts and #1755's port ordering. #1858's producer compiler prerequisite
    is closed by #1859 with its complete qualification above.
-2. Complete [#1860 CSV precision](https://github.com/elong0527/yamaa/issues/1860)
-   admission and output qualification as one PR before #1741.
-3. Complete #1741's producer workflow: compile the graph once, activate before
+2. [#1860 CSV precision](https://github.com/elong0527/yamaa/issues/1860) is closed
+   by #1862 with complete qualification above.
+3. Qualify #1863's complete static graph prerequisite, then complete #1741's
+   producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.
 4. Complete #1758's shared Define-XML/Dataset-JSON implementation and three

@@ -1,0 +1,48 @@
+# Complete producer graph metadata
+
+The #1863 boundary admits the complete supplied closure of one root before any
+runtime or study authority. Each canonical identity owns one admitted document;
+every producer candidate borrows that owner. Missing, duplicate, replaced or
+unreachable nodes refuse. Adapter references share one retained `Arc` owner,
+including diamonds and distinct authored aliases to the same producer. Native
+recursive resource resolution remains #1741; identities here are supplied facts.
+
+Core reuses the #1858 producer declaration validator. It checks contracts,
+authored paths, sole type authority and artifact identities before iterative
+graph traversal. A cycle retains its complete closed identity route and the
+closing declaration's path as REQ-0534 `producer_workflow_cycle`. Shared producer
+metadata must agree across branches on its contract, output origin and location.
+Ordinary standalone producer admission preserves its existing refusal ordering.
+
+Traversal follows authored input order and yields deterministic producer-first
+order. Each reachable node compiles once against the same admitted environment.
+The graph moves that environment without copying its definitions or test cases.
+Required functions form one unique selection in environment order; each node
+retains an explicit local-call-slot to graph-activation-slot projection. For an
+environment `[unused, beta, alpha]`, a producer calling `beta` keeps local slot
+zero mapped to graph slot zero, and a consumer calling `alpha` keeps local slot
+zero mapped to graph slot one. Neither slot is a runtime handle.
+
+Aggregate quotas cover nodes, edges, model occurrences, text, function selection,
+local slots, retained signature parameters/text and index/traversal work. Repeated links charge their repeated contract
+scans and copies. Existing contract/compiler quotas still bound those component
+operations and temporary compilation frames; signatures are charged before each
+node enters graph ownership. Adapter quotas also cover the complete retained raw entry/parent and
+schema closure; its identity comparison work and text share the graph budgets.
+No content digest supplies an identity. Schema closures and repeated snapshots
+compare retained bytes directly, including conflicts appearing only in separate
+branches. Captured parents and independently authored path origins remain held.
+
+Core keeps all compiled plans private. Engine and adapter expose graph metadata
+and explicit execution refusal only. No check accepts a source, runtime,
+activation, codec or publication port. Installed ordinary Python/R producer
+declarations still report `unsupported_operation` and cannot save. This boundary
+does not qualify workflow execution, whole-graph activation, serialized ingestion,
+publication, #1741 acceptance or full migration.
+
+The next #1741 implementation must resolve native nodes under approved roots,
+activate the complete required selection before study data, project validated
+handles into local slots, execute each producer once, decode its retained
+serialized artifact and preserve whole attempts and explicit ordered save.
+Its independent truth remains `1.234/2.345 -> CSV 1.23/2.35 -> consumer 2.46/4.70`,
+with no added POWER dependency. See [qualification](planning/1863-qualification.md).

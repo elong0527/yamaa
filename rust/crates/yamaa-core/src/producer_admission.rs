@@ -212,6 +212,30 @@ pub fn prepare(
     environment: Option<&ExecutionEnvironment>,
     limits: Limits,
 ) -> Result<Prepared, Error> {
+    let producers = prepare_declarations(consumer_identity, consumer, candidates, limits, false)?;
+    let compiled = PreparedSpecification::prepare_producer_metadata(
+        consumer,
+        limits.compilation,
+        environment,
+        &producers,
+    )
+    .map_err(Error::Compilation)?;
+    Ok(Prepared {
+        compiled,
+        producers,
+    })
+}
+
+/// Graph admission reuses the exact declaration checks before proving recursive
+/// closure and compiling each node once. This stays inside core; it is neither
+/// an executable plan nor a public shortcut around the sealed boundary.
+pub(crate) fn prepare_declarations(
+    consumer_identity: &str,
+    consumer: &SpecificationDocument,
+    candidates: &[Candidate<'_>],
+    limits: Limits,
+    recursive_graph: bool,
+) -> Result<Vec<Declaration>, Error> {
     if candidates.len() > limits.candidates {
         return Err(Error::Limit("producer_candidates"));
     }
@@ -364,7 +388,7 @@ pub fn prepare(
             findings.push(invalid(dataset, "contradictory_metadata"));
             continue;
         }
-        if c.producer_identity == consumer_identity {
+        if !recursive_graph && c.producer_identity == consumer_identity {
             findings.push(invalid(dataset, "producer_workflow_cycle"));
             continue;
         }
@@ -444,15 +468,5 @@ pub fn prepare(
     if producers.is_empty() {
         return Err(Error::Boundary);
     }
-    let compiled = PreparedSpecification::prepare_producer_metadata(
-        consumer,
-        limits.compilation,
-        environment,
-        &producers,
-    )
-    .map_err(Error::Compilation)?;
-    Ok(Prepared {
-        compiled,
-        producers,
-    })
+    Ok(producers)
 }

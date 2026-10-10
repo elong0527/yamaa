@@ -1,4 +1,7 @@
 #[allow(dead_code)]
+#[path = "../support/producer_graph.rs"]
+mod graph;
+#[allow(dead_code)]
 #[path = "../support/producer.rs"]
 mod support;
 use std::collections::BTreeSet;
@@ -88,6 +91,24 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "producer_contract_mismatch",
         "REQ-0535",
         &["input.SRC.schema", "input.SRC.path"],
+    ));
+    let own = graph::document(&[("SELF", Some("/self"))], None);
+    let links = [graph::candidate("/self", "SELF", "/self", &own)];
+    let Err(yamaa_core::producer_graph::Error::Cycle { diagnostic, .. }) =
+        yamaa_core::producer_graph::prepare(
+            "/self",
+            &[graph::node("/self", &own, &links)],
+            graph::environment(&[]),
+            Default::default(),
+        )
+    else {
+        panic!("actual graph cycle cause")
+    };
+    reached.insert(check(
+        diagnostic,
+        "producer_workflow_cycle",
+        "REQ-0534",
+        &["input.SELF.schema"],
     ));
     reached
 }

@@ -60,12 +60,11 @@ impl PreparedProducers {
 /// Raw entry/parent bytes and independent layer origins remain held beside the
 /// sealed core metadata. The caller supplies location facts obtained under the
 /// existing approved path policy; this boundary neither resolves nor reads them.
-pub fn prepare(
-    consumer: Arc<PreparedDocument>,
-    producers: Vec<SuppliedProducer>,
-    environment: Option<&ExecutionEnvironment>,
+pub(crate) fn candidates<'a>(
+    consumer: &'a PreparedDocument,
+    producers: &'a [SuppliedProducer],
     limits: Limits,
-) -> Result<PreparedProducers, Error> {
+) -> Result<Vec<Candidate<'a>>, Error> {
     if producers.len() > limits.metadata.candidates {
         return Err(Error::Limit("producer_candidates"));
     }
@@ -74,8 +73,7 @@ pub fn prepare(
     let mut identities = 0usize;
     let mut schema_bytes = 0usize;
     let mut snapshots = 0usize;
-    for document in
-        core::iter::once(consumer.as_ref()).chain(producers.iter().map(|p| p.document.as_ref()))
+    for document in core::iter::once(consumer).chain(producers.iter().map(|p| p.document.as_ref()))
     {
         if document.schema().sources().len() > limits.schema_modules {
             return Err(Error::Limit("producer_schema_modules"));
@@ -117,7 +115,7 @@ pub fn prepare(
                 .ok_or(Error::Limit("producer_captured_bytes"))?;
         }
     }
-    for p in &producers {
+    for p in producers {
         for length in [
             p.dataset.len(),
             p.schema_identity.len(),
@@ -130,7 +128,7 @@ pub fn prepare(
                 .ok_or(Error::Limit("producer_metadata_text_bytes"))?;
         }
     }
-    for p in &producers {
+    for p in producers {
         let expected = consumer.schema();
         let actual = p.document.schema();
         if expected.structure().root_class().name != actual.structure().root_class().name
@@ -153,7 +151,7 @@ pub fn prepare(
         for snapshot in core::iter::once(p.document.source())
             .chain(p.document.parents().iter().map(|parent| parent.source()))
         {
-            for prior in core::iter::once(consumer.as_ref()).chain(
+            for prior in core::iter::once(consumer).chain(
                 producers[..index]
                     .iter()
                     .map(|prior| prior.document.as_ref()),
@@ -202,6 +200,16 @@ pub fn prepare(
             })
         })
         .collect::<Result<Vec<_>, Error>>()?;
+    Ok(candidates)
+}
+
+pub fn prepare(
+    consumer: Arc<PreparedDocument>,
+    producers: Vec<SuppliedProducer>,
+    environment: Option<&ExecutionEnvironment>,
+    limits: Limits,
+) -> Result<PreparedProducers, Error> {
+    let candidates = candidates(&consumer, &producers, limits)?;
     let checked = producer_admission::check(
         &consumer.source().identity,
         consumer.model(),
