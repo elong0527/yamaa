@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-cm-whodrug-coding.
+/* opensas reference solution for the yamaa benchmark sdtm-cm-whodrug-coding.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data coding_output;
   length STUDYID USUBJID DRUG_RECORD_NO DRUG_CODE ATC_CODE $1024;

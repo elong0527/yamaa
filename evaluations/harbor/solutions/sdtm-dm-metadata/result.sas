@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-dm-metadata.
+/* opensas reference solution for the yamaa benchmark sdtm-dm-metadata.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data dm_raw;
   length STUDYID SUBJID SITEID SEX COUNTRY $1024;

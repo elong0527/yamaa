@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-fa-reactogenicity-diary.
+/* opensas reference solution for the yamaa benchmark sdtm-fa-reactogenicity-diary.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data diary;
   length STUDYID USUBJID DIARYDAY TPT DTC REACTION CATSRC OCCUR SEV DIAMETER DIAMUNIT COMPLETED $1024;

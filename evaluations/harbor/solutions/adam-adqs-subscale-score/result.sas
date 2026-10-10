@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-adqs-subscale-score.
+/* opensas reference solution for the yamaa benchmark adam-adqs-subscale-score.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data qs;
   length STUDYID USUBJID VISIT QSCAT QSTESTCD QSTEST $1024;

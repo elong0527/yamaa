@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-mh-ongoing-conditions.
+/* opensas reference solution for the yamaa benchmark sdtm-mh-ongoing-conditions.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data mh_form;
   length STUDYID USUBJID MHTERM MHSTYY MHSTMM MHENDTC MHONGO SCRFDTC $1024;

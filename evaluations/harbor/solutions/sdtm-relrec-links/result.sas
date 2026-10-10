@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-relrec-links.
+/* opensas reference solution for the yamaa benchmark sdtm-relrec-links.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data ae;
   length STUDYID USUBJID AETERM AELNKID1 AELNKID2 $1024;

@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-qs-questionnaire-items.
+/* opensas reference solution for the yamaa benchmark sdtm-qs-questionnaire-items.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data items;
   length ItemOID ItemOrder QSTESTCD QSTEST $1024;

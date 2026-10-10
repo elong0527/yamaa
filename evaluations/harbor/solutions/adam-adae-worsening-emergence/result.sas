@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-adae-worsening-emergence.
+/* opensas reference solution for the yamaa benchmark adam-adae-worsening-emergence.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data adsl;
   length STUDYID USUBJID TRTSDTM $1024;

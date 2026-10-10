@@ -1,0 +1,382 @@
+# A leaderboard ranks Harbor jobs uploaded to Harbor Hub, one row per job:
+# one agent, model, and variant (reasoning effort).
+# A run belongs here only when it covers every task below with equal
+# attempt counts and at least `attempts` attempts each, at the tasks' own
+# timeouts, so every row answers
+# the same question. Metrics are computed from the listed tasks only.
+# What each prompt tier keeps is in evaluations/harbor/prompts/README.md;
+# rows rank by complete task pass rate first; cell accuracy is secondary.
+# This board covers the 134 confident derivation cases on brief prompts;
+# exclusions are in build.py OPENSAS_EXCLUSIONS. Each task requires `/app/output/result.sas`.
+grading_protocol: "3"
+image_reference: yamaa-harbor-env:0.7
+package: yamaa/yamaa-sdtm-adam-brief-opensas
+tasks:
+  - adam-adae-death-brief-opensas
+  - adam-adae-occurrence-flags-brief-opensas
+  - adam-adae-onset-emergence-brief-opensas
+  - adam-adae-partial-dates-brief-opensas
+  - adam-adae-post-index-brief-opensas
+  - adam-adae-prior-serious-event-brief-opensas
+  - adam-adae-protocol-review-brief-opensas
+  - adam-adae-query-flags-brief-opensas
+  - adam-adae-review-order-brief-opensas
+  - adam-adae-serious-events-brief-opensas
+  - adam-adae-serious-sequence-brief-opensas
+  - adam-adae-severity-brief-opensas
+  - adam-adae-severity-override-brief-opensas
+  - adam-adae-severity-rank-brief-opensas
+  - adam-adae-text-cleanup-brief-opensas
+  - adam-adae-worsening-emergence-brief-opensas
+  - adam-adae-worst-severity-brief-opensas
+  - adam-adce-worst-toxicity-brief-opensas
+  - adam-adcm-atc-classes-brief-opensas
+  - adam-adcm-on-treatment-brief-opensas
+  - adam-adeg-derived-intervals-brief-opensas
+  - adam-adex-cumulative-dose-brief-opensas
+  - adam-adex-dose-reduction-brief-opensas
+  - adam-adex-uncollected-brief-opensas
+  - adam-adfa-fever-brief-opensas
+  - adam-adlb-bds-brief-opensas
+  - adam-adlb-closest-visit-brief-opensas
+  - adam-adlb-end-of-treatment-brief-opensas
+  - adam-adlb-lymphocytes-brief-opensas
+  - adam-adlb-mean-brief-opensas
+  - adam-adlb-ordered-sum-brief-opensas
+  - adam-adlb-reported-precision-brief-opensas
+  - adam-adlb-shift-criteria-brief-opensas
+  - adam-adlb-supplb-padded-key-brief-opensas
+  - adam-adlbc-row-window-brief-opensas
+  - adam-adlbc-window-chain-brief-opensas
+  - adam-adoe-study-eye-brief-opensas
+  - adam-adqs-missed-visit-locf-brief-opensas
+  - adam-adqs-multi-scale-scoring-brief-opensas
+  - adam-adqs-subscale-score-brief-opensas
+  - adam-adrs-best-response-brief-opensas
+  - adam-adrs-composite-response-brief-opensas
+  - adam-adrs-confirmed-response-brief-opensas
+  - adam-adrs-measurable-disease-brief-opensas
+  - adam-adrs-response-prep-brief-opensas
+  - adam-adrs-response-records-brief-opensas
+  - adam-adsl-age-group-brief-opensas
+  - adam-adsl-alive-date-brief-opensas
+  - adam-adsl-analysis-age-brief-opensas
+  - adam-adsl-bmi-brief-opensas
+  - adam-adsl-completion-flag-brief-opensas
+  - adam-adsl-country-region-brief-opensas
+  - adam-adsl-crossover-periods-brief-opensas
+  - adam-adsl-demographics-brief-opensas
+  - adam-adsl-disposition-brief-opensas
+  - adam-adsl-dose-adjustment-brief-opensas
+  - adam-adsl-duration-brief-opensas
+  - adam-adsl-flag-chain-brief-opensas
+  - adam-adsl-new-therapy-brief-opensas
+  - adam-adsl-rescue-med-brief-opensas
+  - adam-adsl-site-parse-brief-opensas
+  - adam-adsl-treatment-brief-opensas
+  - adam-adtr-nadir-brief-opensas
+  - adam-adtr-sum-brief-opensas
+  - adam-adtte-dor-brief-opensas
+  - adam-adtte-first-ae-brief-opensas
+  - adam-adtte-os-brief-opensas
+  - adam-adtte-pfs-brief-opensas
+  - adam-adtte-pro-deterioration-brief-opensas
+  - adam-advs-bmi-brief-opensas
+  - adam-advs-bsa-brief-opensas
+  - adam-advs-carryforward-brief-opensas
+  - adam-advs-first-observed-carry-brief-opensas
+  - adam-advs-locf-brief-opensas
+  - adam-advs-locf-record-brief-opensas
+  - adam-advs-map-brief-opensas
+  - adam-advs-percentiles-brief-opensas
+  - adam-advs-prior-result-brief-opensas
+  - adam-advs-window-table-brief-opensas
+  - adam-advs-windows-brief-opensas
+  - bimo-clinsite-site-level-brief-opensas
+  - sdtm-ae-coding-brief-opensas
+  - sdtm-ae-meddra-hierarchy-brief-opensas
+  - sdtm-ae-odm-repeated-brief-opensas
+  - sdtm-ae-partial-dates-brief-opensas
+  - sdtm-ae-seriousness-brief-opensas
+  - sdtm-cm-collected-medications-brief-opensas
+  - sdtm-cm-odm-repeated-brief-opensas
+  - sdtm-cm-whodrug-coding-brief-opensas
+  - sdtm-dm-age-brief-opensas
+  - sdtm-dm-arms-brief-opensas
+  - sdtm-dm-basic-brief-opensas
+  - sdtm-dm-dates-brief-opensas
+  - sdtm-dm-death-brief-opensas
+  - sdtm-dm-metadata-brief-opensas
+  - sdtm-dm-race-ethnicity-brief-opensas
+  - sdtm-ds-multi-form-disposition-brief-opensas
+  - sdtm-ds-reasons-brief-opensas
+  - sdtm-ds-sequence-brief-opensas
+  - sdtm-ec-collected-exposure-brief-opensas
+  - sdtm-ex-combination-brief-opensas
+  - sdtm-ex-from-ec-brief-opensas
+  - sdtm-ex-intervals-brief-opensas
+  - sdtm-fa-event-findings-brief-opensas
+  - sdtm-fa-odm-multitest-brief-opensas
+  - sdtm-fa-reactogenicity-diary-brief-opensas
+  - sdtm-lb-character-results-brief-opensas
+  - sdtm-lb-compartments-brief-opensas
+  - sdtm-lb-findings-brief-opensas
+  - sdtm-lb-grading-brief-opensas
+  - sdtm-lb-lab-specific-ranges-brief-opensas
+  - sdtm-lb-last-observation-before-exposure-brief-opensas
+  - sdtm-lb-metadata-brief-opensas
+  - sdtm-lb-multiform-brief-opensas
+  - sdtm-lb-ranges-brief-opensas
+  - sdtm-mh-ongoing-conditions-brief-opensas
+  - sdtm-mh-prespecified-conditions-brief-opensas
+  - sdtm-pr-procedures-brief-opensas
+  - sdtm-qs-questionnaire-items-brief-opensas
+  - sdtm-relrec-dataset-level-brief-opensas
+  - sdtm-relrec-links-brief-opensas
+  - sdtm-rs-timepoint-response-brief-opensas
+  - sdtm-se-subject-elements-brief-opensas
+  - sdtm-suppmh-linkage-brief-opensas
+  - sdtm-suppmh-qualifiers-brief-opensas
+  - sdtm-sv-subject-visits-brief-opensas
+  - sdtm-tr-tumor-measurements-brief-opensas
+  - sdtm-tu-tumor-identification-brief-opensas
+  - sdtm-vs-collected-form-brief-opensas
+  - sdtm-vs-epoch-from-subject-elements-brief-opensas
+  - sdtm-vs-planned-time-points-brief-opensas
+  - sdtm-vs-replicates-brief-opensas
+  - sdtm-vs-study-day-brief-opensas
+  - sdtm-vs-units-brief-opensas
+attempts: 1
+
+# The Harbor Hub definition, in the shape `harbor hub leaderboard create
+# --config` takes. `leaderboard.py export` adds `package` above and writes
+# it with the rows built from the jobs, ready to create once the dataset is
+# published and the jobs uploaded.
+harbor:
+  name: sdtm-adam-v3-brief-opensas
+  title: yamaa derivation v3, brief prompts (opensas)
+  description: >-
+    The 134 confident yamaa derivation benchmarks, including BIMO, solved with opensas v0.6.6.
+    An agent gets the opensas system prompt, the benchmark's brief prompt (the
+    full prompt without its rules) and input datasets, with no internet but
+    the model's API. A task passes when its output matches every golden
+    cell, the verifier's rerun of `/app/output/result.sas` from a clean state
+    writes the same output, the held-out rerun and required changed-input
+    challenges pass, and the agent used no Python, R, Lua or web tool. One row
+    per model variant.
+  visibility: private
+  metadata_schema:
+    type: object
+    required: [agent, agent_version, model, variant, date, attempts, job,
+      grading_protocol, image_reference, yamaa_commit, agent_configuration]
+    properties:
+      agent:
+        type: string
+        description: Harbor agent name
+      agent_version:
+        type: string
+        description: Agent version the job pinned
+      model:
+        type: string
+        description: provider/model, as passed to build.py --model
+      variant:
+        type: string
+        description: >-
+          The agent's model variant, OpenCode's reasoning effort (low,
+          medium, high, xhigh), or default when the job set none
+      agent_configuration:
+        type: object
+        description: Preserved behavior settings with credentials redacted
+      date:
+        type: string
+        format: date
+        description: Day the first trial started (UTC)
+      attempts:
+        type: integer
+        description: Attempts per task (Harbor n_attempts)
+      job:
+        type: string
+        description: Harbor job name
+      job_url:
+        type: string
+        description: Link to the uploaded Harbor job
+      job_id:
+        type: [string, "null"]
+        description: Harbor job id, when the job directory recorded it
+      harbor_version:
+        type: [string, "null"]
+        description: Harbor version from the job's lock.json
+      grading_protocol:
+        type: string
+        const: "3"
+        description: Version of the grading and submission isolation protocol
+      image_reference:
+        type: string
+        description: Base image reference recorded by the verifier
+      yamaa_commit:
+        type: [string, "null"]
+        description: >-
+          yamaa commit the tasks were built from (task.toml metadata), with
+          +dirty when the tree had uncommitted changes
+  metrics_schema:
+    type: object
+    required: [reward, cell_accuracy, row_accuracy, n_trials, n_errors]
+    properties:
+      reward:
+        type: number
+        description: >-
+          Mean per-task pass rate: the share of attempts that
+          pass (every golden cell matches, the rerun reproduces the output,
+          no other language or web tool); an errored trial counts as 0
+      task_pass_rate_display:
+        type: string
+        description: Task pass rate formatted as a percentage
+      n_passed_trials:
+        type: integer
+        description: Attempts that passed every required check
+      passed_trials_display:
+        type: string
+        description: Successful attempts / total attempts
+      cell_accuracy:
+        type: number
+        description: Mean share of golden cells reproduced
+      row_accuracy:
+        type: number
+        description: Mean share of golden rows reproduced
+      n_trials:
+        type: integer
+        description: Trials the metrics aggregate
+      n_errors:
+        type: integer
+        description: Trials that ended in an exception
+      input_tokens:
+        type: [integer, "null"]
+        description: Total input tokens, when every trial reported them
+      output_tokens:
+        type: [integer, "null"]
+        description: Total output tokens, when every trial reported them
+      cost_usd:
+        type: [number, "null"]
+        description: Total model cost, when every trial reported it
+      agent_seconds:
+        type: [number, "null"]
+        description: Mean agent execution time per trial
+      trial_reward:
+        type: number
+        description: Mean reward over trials, matching Harbor
+      reward_ci_low:
+        type: [number, "null"]
+        description: Lower 95 percent task bootstrap bound; null for a single task
+      reward_ci_high:
+        type: [number, "null"]
+        description: Upper 95 percent task bootstrap bound; null for a single task
+      cost_per_trial_usd:
+        type: [number, "null"]
+        description: Mean cost per attempt when every trial reports cost
+    patternProperties:
+      "^pass_at_[0-9]+$":
+        type: number
+        description: >-
+          Harbor's unbiased pass@k averaged over tasks, for each k that the
+          fewest attempts on a task allow (k = 2, 4, 5, 8, 10, ...)
+  columns:
+    - id: agent
+      header: Agent
+      accessor: metadata.agent
+      type: text
+    - id: agent_version
+      header: Version
+      accessor: metadata.agent_version
+      type: text
+    - id: model
+      header: Model
+      accessor: metadata.model
+      type: text
+    - id: variant
+      header: Variant
+      accessor: metadata.variant
+      type: text
+    - id: reward
+      header: Task pass rate
+      accessor: metrics.reward
+      type: number
+      display_accessor: metrics.task_pass_rate_display
+      display_type: text
+      align: right
+      description: >-
+        Mean per-task pass rate: every golden cell matches, the rerun
+        reproduces the output, and no other language or web tool was used
+    - id: passed_trials
+      header: Passed / attempts
+      accessor: metrics.n_passed_trials
+      type: number
+      display_accessor: metrics.passed_trials_display
+      display_type: text
+      align: right
+    - id: job
+      header: Job
+      accessor: metadata.job_url
+      type: link
+    - id: pass_at_2
+      header: Pass@2
+      accessor: metrics.pass_at_2
+      type: number
+      align: right
+    - id: cell_accuracy
+      header: Cell accuracy
+      accessor: metrics.cell_accuracy
+      type: number
+      align: right
+    - id: n_errors
+      header: Errors
+      accessor: metrics.n_errors
+      type: number
+      align: right
+    - id: input_tokens
+      header: Tokens in
+      accessor: metrics.input_tokens
+      type: number
+      align: right
+    - id: output_tokens
+      header: Tokens out
+      accessor: metrics.output_tokens
+      type: number
+      align: right
+    - id: reward_ci_low
+      header: Pass rate lower bound
+      accessor: metrics.reward_ci_low
+      type: number
+      align: right
+    - id: reward_ci_high
+      header: Pass rate upper bound
+      accessor: metrics.reward_ci_high
+      type: number
+      align: right
+    - id: cost_per_trial_usd
+      header: Cost per attempt
+      accessor: metrics.cost_per_trial_usd
+      type: number
+      align: right
+    - id: cost_usd
+      header: Cost
+      accessor: metrics.cost_usd
+      type: number
+      align: right
+    - id: date
+      header: Date
+      accessor: metadata.date
+      type: date
+    - id: yamaa_commit
+      header: Tasks from
+      accessor: metadata.yamaa_commit
+      type: text
+  rank_by:
+    - accessor: metrics.reward
+      direction: desc
+      nulls: last
+    - accessor: metrics.cell_accuracy
+      direction: desc
+      nulls: last
+    - accessor: metrics.cost_per_trial_usd
+      direction: asc
+      nulls: last

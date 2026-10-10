@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-adsl-completion-flag.
+/* opensas reference solution for the yamaa benchmark adam-adsl-completion-flag.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data adsl_raw;
   length STUDYID USUBJID TRTSDT $1024;

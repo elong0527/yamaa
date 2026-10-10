@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-vs-units.
+/* opensas reference solution for the yamaa benchmark sdtm-vs-units.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data vs_raw;
   length STUDYID USUBJID VISIT VSTESTCD VSTEST VSORRES VSORRESU $1024;

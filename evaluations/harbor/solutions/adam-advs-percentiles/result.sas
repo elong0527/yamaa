@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-advs-percentiles.
+/* opensas reference solution for the yamaa benchmark adam-advs-percentiles.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data advs_raw;
   length STUDYID USUBJID AVISIT PARAMCD SEX $1024;

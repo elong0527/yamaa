@@ -7,7 +7,7 @@
 # This board is the whole R track: every buildable SDTM and ADaM
 # benchmark with a prompt, each requiring `/app/output/result.R`.
 grading_protocol: "3"
-image_reference: yamaa-harbor-env:0.5
+image_reference: yamaa-harbor-env:0.7
 package: yamaa/yamaa-sdtm-adam-r
 tasks:
   - adam-adae-death-r

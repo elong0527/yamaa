@@ -1,8 +1,8 @@
-/* SAS language reference solution for the yamaa benchmark adam-adsl-randomization.
+/* opensas reference solution for the yamaa benchmark adam-adsl-randomization.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
-/* openSAS v0.6.6 has no Parquet reader. The runner must stage dm.parquet
+/* opensas v0.6.6 has no Parquet reader. The runner must stage dm.parquet
    as dm.csv without deriving any values, preserving ISO dates/timestamps. */
 data dm;
   length STUDYID USUBJID $1024 RANDDT RFSTDTC $10 RANDDTTM $32;

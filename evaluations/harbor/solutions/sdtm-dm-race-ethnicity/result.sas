@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-dm-race-ethnicity.
+/* opensas reference solution for the yamaa benchmark sdtm-dm-race-ethnicity.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data odm;
   length StudyOID MetaDataVersionOID SubjectKey StudyEventOID StudyEventRepeatKey ItemGroupOID ItemGroupRepeatKey ItemOID Value $1024;
@@ -38,6 +38,10 @@ data dmout; set dmjoined; length DOMAIN $2 SUBJID RACE $1024; DOMAIN='DM'; SUBJI
 proc sort data=multirace; by STUDYID USUBJID Value; run;
 data suppout; set multirace; by STUDYID USUBJID; length RDOMAIN $2 IDVAR IDVARVAL QNAM QLABEL QORIG QEVAL $1024; retain N;
 if first.USUBJID then N=0; N+1; RDOMAIN='DM'; IDVAR='USUBJID'; IDVARVAL=USUBJID; QNAM=cats('RACE',put(N,best32.)); QLABEL=catx(' ','Race',strip(put(N,best32.))); QORIG='CRF'; QEVAL=''; run;
-proc sql; create table suppdmout as select STUDYID,RDOMAIN,USUBJID,IDVAR,IDVARVAL,QNAM,QLABEL,QVAL,QORIG,QEVAL from suppout; quit;
-proc export data=dmout outfile='/app/output/dm.csv' dbms=csv replace; run;
+/* KEEP drops variables but does not set their export order. */
+proc sql;
+create table dmexport as select DOMAIN,STUDYID,USUBJID,SUBJID,RACE,ETHNIC from dmout;
+create table suppdmout as select STUDYID,RDOMAIN,USUBJID,IDVAR,IDVARVAL,QNAM,QLABEL,QVAL,QORIG,QEVAL from suppout;
+quit;
+proc export data=dmexport outfile='/app/output/dm.csv' dbms=csv replace; run;
 proc export data=suppdmout outfile='/app/output/suppdm.csv' dbms=csv replace; run;

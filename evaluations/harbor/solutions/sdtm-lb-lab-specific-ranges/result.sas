@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-lb-lab-specific-ranges.
+/* opensas reference solution for the yamaa benchmark sdtm-lb-lab-specific-ranges.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data lbrange;
   length LBNAM LBTESTCD SEX EFFSTDT EFFENDT UNIT $1024;

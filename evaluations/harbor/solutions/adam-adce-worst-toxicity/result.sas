@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-adce-worst-toxicity.
+/* opensas reference solution for the yamaa benchmark adam-adce-worst-toxicity.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data ce;
   length STUDYID USUBJID CETERM CESEV ASTDT $1024;

@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-adtr-sum.
+/* opensas reference solution for the yamaa benchmark adam-adtr-sum.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data tr;
   length STUDYID USUBJID AVISIT TRLNKID TRGRPID TRTESTCD TRSTAT $1024;

@@ -1,9 +1,9 @@
-/* SAS language reference solution for the yamaa benchmark adam-adsl-investigator-comment.
+/* opensas reference solution for the yamaa benchmark adam-adsl-investigator-comment.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 /* The benchmark treats a spaces-only CSV field as a collected comment.
-   The existing openSAS CSV reader/exporter normalizes it to SAS missing.
+   The existing opensas CSV reader/exporter normalizes it to opensas missing.
    Track this compatibility gap in issue #1875 before benchmark execution. */
 libname source '/app/input' access=readonly;
 data result;

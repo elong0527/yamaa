@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-advs-locf.
+/* opensas reference solution for the yamaa benchmark adam-advs-locf.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data vs;
   length USUBJID PARAMCD $1024;

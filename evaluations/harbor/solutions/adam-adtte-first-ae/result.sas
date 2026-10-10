@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-adtte-first-ae.
+/* opensas reference solution for the yamaa benchmark adam-adtte-first-ae.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data adae;
   length STUDYID USUBJID ASTDT AEDECOD $1024;
