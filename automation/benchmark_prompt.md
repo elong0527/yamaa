@@ -175,7 +175,9 @@ Before committing, review the prompt as the agent would read it:
    `result.py`. It must score 1; if it cannot without the README, the
    prompt is missing a rule. Harbor's oracle agent then runs it, so the
    task page shows a readable reference instead of a script that writes
-   the golden files. Follow the pilots' solutions for style.
+   the golden files. Follow the pilots' solutions for style. Solve it in
+   SAS too, as `result.sas`, following the conventions in
+   [SAS reference solutions](../evaluations/harbor/README.md#sas-reference-solutions).
 
 ## 6. Keep it in step
 

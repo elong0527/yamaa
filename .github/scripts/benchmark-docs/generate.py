@@ -39,7 +39,7 @@ PROMPT_TIERS = (
     ("conventions", "Conventions", "the sponsor's conventions only"),
     ("brief", "Brief", "the opening, columns, and paths only"),
 )
-SOLUTION_FILES = ("result.R", "result.py")
+SOLUTION_FILES = ("result.R", "result.py", "result.sas")
 # The review ask names the README's standard when it is one of these; other
 # README standards (CDISC, TEST) read as "CDISC standards".
 REVIEW_STANDARDS = ("SDTM", "ADaM")

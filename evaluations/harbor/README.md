@@ -15,7 +15,7 @@ Docker; this folder only writes Harbor task directories and a job file.
 | `build.py` | benchmarks with a prompt -> Harbor tasks per prompt tier and language with their Harbor Hub READMEs, one dataset README per tier and language, and one job file per tier, language, and model variant |
 | `hub.py` | a job's preserved tasks -> private Hub task and dataset revisions, with verified job associations |
 | `grade.py` | the verifier, copied into every task's `tests/` |
-| `solutions/` | reference solutions, `<benchmark>/result.R` and `result.py`, written from the full prompt alone; the oracle runs them |
+| `solutions/` | reference solutions, `<benchmark>/result.R` and `result.py`, written from the full prompt alone; the oracle runs them. `result.sas` is the same in SAS, checked in CI only (see [SAS reference solutions](#sas-reference-solutions)) |
 | `leaderboard.py` | Harbor job directories -> Harbor Hub leaderboard and row configs |
 | `leaderboards/` | leaderboard definitions, one file per leaderboard (one per prompt tier and language) |
 
@@ -26,7 +26,7 @@ Tasks are built from the full prompt unless `--prompt` names the
 conventions or brief tier (see [Prompt tiers](#prompt-tiers)). The Harbor
 Evaluation workflow
 (`.github/workflows/harbor-evaluation.yml`) reruns every reference
-solution, in R and in Python, against its benchmark's current data, and
+solution, in R, Python, and SAS, against its benchmark's current data, and
 checks that every prompt still asks for the datasets and columns the
 expected data holds, so a change to a benchmark that breaks either fails
 its pull request.
@@ -102,6 +102,52 @@ How to write a prompt is in
   `evaluation.json` before execution, so setup failures retain provenance
   and later builds cannot change what the job runs. The verifier's saved
   `task.toml` must agree with that snapshot.
+
+## SAS reference solutions
+
+Every benchmark solved in R and Python is also solved in SAS, in
+`solutions/<benchmark>/result.sas`, written the same way: from the full
+prompt and the inputs alone. SAS has no Harbor track yet; no system
+prompt, task, or leaderboard uses these scripts. The Harbor Evaluation
+workflow runs each one with [OpenSAS](https://github.com/kirha-ai/opensas),
+an open-source interpreter for the SAS 9.4 language, at the release its
+`OPENSAS_VERSION` pins, and grades the datasets it writes as it grades the
+other two. `adam-adsl-randomization` has none: its DM input is Parquet,
+which neither SAS 9.4 nor OpenSAS reads. To run them locally, put that
+release on `PATH` as `sas`; without it the SAS cases skip.
+
+```bash
+uv run --project python --no-sync pytest python/tests/test_harbor_evaluation.py \
+	-k "sas"
+```
+
+OpenSAS runs some valid SAS 9.4 differently, and accepts some code SAS 9.4
+would not. Write each script so that it is correct under both:
+
+- Read every input with a DATA step `INFILE ... dsd firstobs=2 truncover`
+  that declares each column's length or informat, with identifiers as text,
+  rather than PROC IMPORT. OpenSAS keeps `0001` as text where SAS 9.4 reads
+  the number 1, and a guessed type can change when the verifier's reruns
+  drop subjects.
+- Declare every character variable's length before its first assignment.
+  OpenSAS sizes it from the data, which hides a truncation SAS 9.4 makes.
+- `trim()` a variable before matching it with a PRX pattern; SAS 9.4 sees
+  its trailing blanks.
+- Join on a range with `where lo <= x <= hi`; OpenSAS ignores
+  `on x between lo and hi`. In a join, qualify a column both tables hold
+  when ORDER BY names it.
+- End with one PROC SQL `select` of the output columns, in the prompt's
+  order and case, with each date as `put(DATE, yymmdd10.)` text that is
+  empty when the date is missing, then PROC EXPORT that table with no data
+  set options. OpenSAS's PROC EXPORT writes dates as day counts and ignores
+  KEEP=, DROP=, WHERE=, and RENAME=.
+
+OpenSAS is a project by KIRHA, licensed under the Apache License 2.0. The
+workflow downloads its release binary and runs it; this repository holds no
+OpenSAS code or files, and the `result.sas` scripts are original work under
+this repository's MIT license. SAS is a registered trademark of SAS
+Institute Inc.; neither yamaa nor OpenSAS is affiliated with, endorsed by,
+or sponsored by SAS Institute Inc.
 
 ## Setup
 

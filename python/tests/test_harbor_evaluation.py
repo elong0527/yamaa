@@ -21,6 +21,9 @@ HARBOR = ROOT / "evaluations" / "harbor"
 PILOTS = ("adam-adsl-age-group", "adam-adae-death", "adam-adtte-dor")
 LANGUAGES = ("r", "python")
 SCRIPTS = {"r": "result.R", "python": "result.py"}
+# SAS reference solutions run with OpenSAS, the `sas` binary. SAS has no
+# Harbor track yet, so its scripts are graded under the Python contract.
+SAS_SCRIPT = "result.sas"
 
 
 def _load(name: str):
@@ -1234,19 +1237,35 @@ def test_every_reference_solution_belongs_to_a_benchmark_track():
     assert REFERENCES
     for reference in REFERENCES:
         benchmark, script = reference.split("/")
-        assert script in SCRIPTS.values(), reference
+        assert script in (*SCRIPTS.values(), SAS_SCRIPT), reference
         assert benchmark in PROMPTED, reference
     for benchmark in PILOTS:
-        for script in SCRIPTS.values():
+        for script in (*SCRIPTS.values(), SAS_SCRIPT):
             assert f"{benchmark}/{script}" in REFERENCES
+
+
+def test_every_reference_solution_has_a_sas_twin():
+    """A benchmark solved in R and Python is solved in SAS too, unless an
+    input is Parquet, which neither SAS 9.4 nor OpenSAS reads."""
+    solved = {r.split("/")[0] for r in REFERENCES if r.endswith("/result.py")}
+    for benchmark in sorted(solved):
+        parquet = any((ROOT / "benchmarks" / benchmark / "input").glob("*.parquet"))
+        has_sas = f"{benchmark}/{SAS_SCRIPT}" in REFERENCES
+        assert has_sas != parquet, benchmark
 
 
 @pytest.mark.parametrize("reference", REFERENCES)
 def test_a_reference_solution_scores_one(tmp_path, reference):
     """Every available reference solution earns full credit from the grader."""
     benchmark, script = reference.split("/")
-    language = "r" if script == "result.R" else "python"
+    language = {"result.R": "r", "result.py": "python", SAS_SCRIPT: "sas"}[script]
     text = (build.SOLUTIONS / reference).read_text()
+    if language == "sas" and shutil.which("sas") is None:
+        # The solutions workflow installs OpenSAS and sets this, so there a
+        # missing interpreter fails the solution instead of skipping it.
+        if os.environ.get("YAMAA_REQUIRE_SAS"):
+            pytest.fail("OpenSAS is not installed as sas")
+        pytest.skip("OpenSAS is not installed as sas")
     if language == "r":
         libs = sorted(
             set(re.findall(r"library\(([\w.]+)", text))
@@ -1272,9 +1291,13 @@ def test_a_reference_solution_scores_one(tmp_path, reference):
         ),
         encoding="utf-8",
     )
-    command = ["Rscript"] if language == "r" else [sys.executable]
-    subprocess.run([*command, str(runnable)], check=True)
-    contract = build.contract_for(ROOT / "benchmarks" / benchmark, language)
+    command = {"r": ["Rscript"], "python": [sys.executable], "sas": ["sas"]}[language]
+    subprocess.run([*command, str(runnable)], check=True, cwd=tmp_path)
+    if language == "sas":
+        contract = build.contract_for(ROOT / "benchmarks" / benchmark, "python")
+        contract.update(language="sas", script=SAS_SCRIPT)
+    else:
+        contract = build.contract_for(ROOT / "benchmarks" / benchmark, language)
     expected = ROOT / "benchmarks" / benchmark / "expected"
     result = grade.grade(contract, expected, output, tmp_path / "none.json")
     assert result["reward"]["reward"] == 1.0, result

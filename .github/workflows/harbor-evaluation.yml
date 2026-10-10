@@ -9,6 +9,11 @@ name: Harbor Evaluation
 # The package tests have no R and skip every result.R. This job runs in the
 # R version, CRAN snapshot, and R packages of the evaluation image
 # (evaluations/harbor/Dockerfile); a test keeps the two in step.
+#
+# Each result.sas runs with OpenSAS (https://github.com/kirha-ai/opensas,
+# Apache-2.0), an open-source SAS 9.4 interpreter. The job downloads the
+# release OPENSAS_VERSION names and only runs it; nothing of OpenSAS is
+# redistributed.
 
 on:
   push:
@@ -39,7 +44,7 @@ permissions:
 
 jobs:
   solutions:
-    name: reference-solutions (R and Python)
+    name: reference-solutions (R, Python, and SAS)
     runs-on: ubuntu-24.04
     container: rocker/r-ver:4.6.1
     timeout-minutes: 30
@@ -48,12 +53,16 @@ jobs:
       R_PACKAGES: dplyr tidyr readr stringr lubridate purrr haven xml2 nanoparquet
       # A result.R whose packages are missing fails instead of skipping.
       YAMAA_REQUIRE_R: '1'
+      # The OpenSAS release every result.sas runs with, pinned by its tag.
+      OPENSAS_VERSION: 'v0.6.6'
+      # A result.sas without OpenSAS fails instead of skipping.
+      YAMAA_REQUIRE_SAS: '1'
     steps:
       - name: Install git, Python, and the R packages' system libraries
         run: |
           apt-get update
           apt-get install -y --no-install-recommends git python3 python3-venv \
-            libxml2-dev zlib1g-dev libicu-dev
+            libxml2-dev zlib1g-dev libicu-dev ca-certificates curl
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -72,6 +81,13 @@ jobs:
             pkgs <- strsplit(Sys.getenv('R_PACKAGES'), ' ')[[1]]; \
             install.packages(pkgs, Ncpus = 4); \
             stopifnot(all(vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)))"
+
+      - name: Install OpenSAS
+        run: |
+          curl -fsSL -o /usr/local/bin/sas \
+            "https://github.com/kirha-ai/opensas/releases/download/${OPENSAS_VERSION}/sas-${OPENSAS_VERSION}-amd"
+          chmod +x /usr/local/bin/sas
+          sas --version
 
       - name: Install uv
         run: |

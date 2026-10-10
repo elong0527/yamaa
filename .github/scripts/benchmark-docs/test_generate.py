@@ -91,7 +91,7 @@ class DashboardTests(unittest.TestCase):
         run_r_lines = (BENCHMARK / "run.R").read_text().splitlines()
         solution_lines = [
             line
-            for name in ("result.R", "result.py")
+            for name in generate.SOLUTION_FILES
             for line in (SOLUTIONS / name).read_text().splitlines()
         ]
         self.assertEqual(
@@ -486,7 +486,7 @@ class DashboardTests(unittest.TestCase):
             "DTHFL is Y or has no value.", (prompts / "conventions.md").read_text()
         )
         self.assertIn("<p>DTHFL is Y or has no value.</p>", page)
-        for name in ("result.R", "result.py"):
+        for name in generate.SOLUTION_FILES:
             self.assertIn(f'data-filename="solutions/adam-adae-death/{name}"', page)
             self.assertIn(
                 '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/'
@@ -624,6 +624,7 @@ class DashboardTests(unittest.TestCase):
                 "run.py",
                 "solutions/sdtm-dm-race-ethnicity/result.R",
                 "solutions/sdtm-dm-race-ethnicity/result.py",
+                "solutions/sdtm-dm-race-ethnicity/result.sas",
             ],
         )
         self.assertIn('<span class="panel-caption">2 spec files</span>', page)
