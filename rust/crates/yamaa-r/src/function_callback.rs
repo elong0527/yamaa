@@ -249,7 +249,7 @@ fn internal() -> HostError<CallbackError> {
 
 /// Decode host detail bytes strictly and cap only at a Unicode scalar boundary.
 /// Invalid encodings retain a stable fallback; raw invalid text is never repaired.
-fn detail(
+pub(super) fn detail(
     value: &Robj,
     fallback: &str,
 ) -> std::result::Result<(String, bool), HostError<CallbackError>> {

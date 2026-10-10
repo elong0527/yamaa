@@ -7,6 +7,8 @@ mod file_project;
 mod file_specification;
 mod function_callback;
 mod project_activation;
+#[cfg(any(unix, windows))]
+mod project_result;
 mod reference_catalog;
 mod schema_service;
 mod specification_inheritance;
@@ -268,6 +270,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
         module.add_class::<file_specification::Specification>()?;
         module.add_class::<file_project::Specification>()?;
         module.add_class::<file_project::Attempt>()?;
+        module.add_class::<project_result::Result>()?;
         module.add_function(wrap_pyfunction!(
             file_project::_prepare_file_project,
             module

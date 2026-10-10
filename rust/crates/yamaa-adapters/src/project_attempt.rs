@@ -14,12 +14,16 @@ pub fn execution<C, E>(attempt: &Attempt<C, E>) -> Option<&Execution> {
 
 /// Borrow original host payloads in actual failure order. Scalar/type failures
 /// have no host payload; unwind payloads remain in the original typed boundary.
-pub fn visit_host_failures<C, E>(attempt: &Attempt<C, E>, mut visit: impl FnMut(&'static str, &E)) {
-    let invocation = |stage, kind: &FailureKind<E>, visit: &mut dyn FnMut(&'static str, &E)| {
-        if let FailureKind::CallFailed(error) | FailureKind::InvalidHostResult(error) = kind {
-            visit(stage, error);
-        }
-    };
+pub fn visit_host_failures<'a, C, E>(
+    attempt: &'a Attempt<C, E>,
+    mut visit: impl FnMut(&'static str, &'a E),
+) {
+    let invocation =
+        |stage, kind: &'a FailureKind<E>, visit: &mut dyn FnMut(&'static str, &'a E)| {
+            if let FailureKind::CallFailed(error) | FailureKind::InvalidHostResult(error) = kind {
+                visit(stage, error);
+            }
+        };
     if let Err(BoundaryFailure::Activation(failure)) = &attempt.boundary {
         match failure {
             Failure::Lock(error) => visit("lock", error),

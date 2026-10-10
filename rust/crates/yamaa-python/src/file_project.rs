@@ -59,15 +59,15 @@ impl Specification {
             )
         });
         Ok(Attempt {
-            inner: Mutex::new(inner),
+            inner: Arc::new(Mutex::new(inner)),
             run: project.retained_run(),
         })
     }
 }
 #[pyclass(frozen, module = "yamaa._native", name = "_ProjectAttempt")]
 pub struct Attempt {
-    inner: Mutex<NativeAttempt>,
-    run: Arc<yamaa_adapters::project_run::PreparedRun>,
+    pub(super) inner: Arc<Mutex<NativeAttempt>>,
+    pub(super) run: Arc<yamaa_adapters::project_run::PreparedRun>,
 }
 impl Attempt {
     fn get(&self) -> PyResult<MutexGuard<'_, NativeAttempt>> {
@@ -80,12 +80,19 @@ impl Attempt {
 }
 #[pymethods]
 impl Attempt {
+    fn result(
+        &self,
+        py: Python<'_>,
+        metadata: &Bound<'_, pyo3::types::PyTuple>,
+    ) -> PyResult<crate::project_result::Result> {
+        crate::project_result::prepare(py, self, metadata)
+    }
     /// This is engine execution status, before output admission or publication.
     fn engine_succeeded(&self) -> PyResult<bool> {
         let state = self.get()?;
         Ok(yamaa_adapters::project_attempt::execution(&state).is_some())
     }
-    fn activation(&self) -> PyResult<String> {
+    pub(super) fn activation(&self) -> PyResult<String> {
         let state = self.get()?;
         yamaa_adapters::project_activation_observations::activation(&self.run, &state.activation)
             .map(|value| value.to_string())
@@ -96,7 +103,10 @@ impl Attempt {
             })
     }
     /// Held authored entry snapshots remain available after the file handle dies.
-    fn prepared_sources<'py>(&self, py: Python<'py>) -> Vec<(String, Bound<'py, PyBytes>)> {
+    pub(super) fn prepared_sources<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> Vec<(String, Bound<'py, PyBytes>)> {
         [
             self.run.document().source(),
             self.run.captured_environment().root().source(),
@@ -105,7 +115,7 @@ impl Attempt {
         .map(|source| (source.identity.clone(), PyBytes::new(py, &source.bytes)))
         .collect()
     }
-    fn host_failures(&self, py: Python<'_>) -> PyResult<Vec<(&'static str, Py<PyAny>)>> {
+    pub(super) fn host_failures(&self, py: Python<'_>) -> PyResult<Vec<(&'static str, Py<PyAny>)>> {
         let state = self.get()?;
         let mut failures = Vec::new();
         yamaa_adapters::project_attempt::visit_host_failures(&state, |stage, error| {
@@ -115,7 +125,7 @@ impl Attempt {
         });
         Ok(failures)
     }
-    fn failure_facts<'py>(
+    pub(super) fn failure_facts<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<Vec<(&'static str, Bound<'py, pyo3::types::PyDict>)>> {
@@ -126,7 +136,7 @@ impl Attempt {
         });
         facts.into_iter().collect()
     }
-    fn study_snapshot<'py>(
+    pub(super) fn study_snapshot<'py>(
         &self,
         py: Python<'py>,
         index: usize,

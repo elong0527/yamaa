@@ -10,6 +10,7 @@ mod inheritance_callback;
 mod issue_frame;
 #[cfg(unix)]
 mod project_activation;
+mod project_result;
 mod public_table;
 mod scalars;
 mod specification_inheritance;
@@ -284,6 +285,7 @@ extendr_module! {
     use scalars;
     use specification_service;
     use specification_result;
+    use project_result;
     use specification_inheritance;
     use function_callback;
     use file_publication;

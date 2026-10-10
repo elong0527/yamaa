@@ -28,3 +28,27 @@
   .project_reply(.Call(wrap__file_project_build,handle,capabilities$verify,capabilities$resolve))
 }
 .file_project_observations <- function(handle) .project_reply(.Call(wrap__file_project_observations,handle))
+
+# Formatting is explicitly limited to ordinary host conditions; interrupts stay
+# rooted in the native attempt and propagate only after Rust returns.
+.project_condition_details <- function(condition) {
+  list(.function_detail(function() class(condition)[1L],"R condition"),
+       .function_detail(function() conditionMessage(condition),"unavailable R condition message"))
+}
+.file_project_result <- function(attempt,metadata) {
+  if(!is.list(metadata) || length(metadata)!=5L) stop("invalid report metadata",call.=FALSE)
+  metadata <- lapply(metadata,.specification_text_bytes,maximum=4096)
+  .project_reply(.Call(wrap__file_project_result,attempt,metadata,.project_condition_details))
+}
+.project_result_status <- function(handle) .project_reply(.Call(wrap__project_result_status,handle))
+.project_result_output <- function(handle) .project_reply(.Call(wrap__project_result_output,handle))
+.project_result_observations <- function(handle) .project_reply(.Call(wrap__project_result_observations,handle))
+.project_result_issues <- function(handle) .project_reply(.Call(wrap__project_result_issues,handle))
+.project_result_retained <- function(handle) .project_reply(.Call(wrap__project_result_retained,handle))
+.project_result_propagate_interrupt <- function(handle) {
+  condition <- .project_reply(.Call(wrap__project_result_interrupt,handle))
+  if(!is.null(condition)) stop(condition)
+  invisible(NULL)
+}
+.project_result_save <- function(handle,publish) .project_reply(.Call(wrap__project_result_save,handle,publish))
+.project_result_save_file <- function(handle,publisher) .project_reply(.Call(wrap__project_result_save_file,handle,publisher))

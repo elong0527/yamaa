@@ -3,7 +3,7 @@
 use crate::specification_service::boundary;
 use extendr_api::prelude::*;
 #[cfg(unix)]
-mod platform {
+pub(super) mod platform {
     use super::*;
     use crate::specification_service::{address, capture_inputs_with_root};
     use std::{
@@ -21,9 +21,9 @@ mod platform {
         yamaa_adapters::file_resources::Error,
         crate::project_activation::Error,
     >;
-    struct HeldAttempt {
-        inner: NativeAttempt,
-        run: Arc<yamaa_adapters::project_run::PreparedRun>,
+    pub(crate) struct HeldAttempt {
+        pub(crate) inner: NativeAttempt,
+        pub(crate) run: Arc<yamaa_adapters::project_run::PreparedRun>,
     }
     thread_local! {
         static PROJECTS: RefCell<BTreeMap<usize, Weak<RefCell<State>>>> = const { RefCell::new(BTreeMap::new()) };
@@ -63,7 +63,7 @@ mod platform {
             .with(|handles| handles.borrow().get(&id).and_then(Weak::upgrade))
             .ok_or_else(|| "unknown project handle".into())
     }
-    fn attempt(handle: &Robj) -> std::result::Result<Rc<HeldAttempt>, String> {
+    pub(crate) fn attempt(handle: &Robj) -> std::result::Result<Rc<HeldAttempt>, String> {
         let id = address(handle)?;
         ATTEMPTS
             .with(|handles| handles.borrow().get(&id).and_then(Weak::upgrade))
@@ -191,6 +191,9 @@ mod platform {
     }
     pub(super) fn observations(handle: Robj) -> std::result::Result<Robj, String> {
         let state = attempt(&handle)?;
+        observe(&state)
+    }
+    pub(crate) fn observe(state: &HeldAttempt) -> std::result::Result<Robj, String> {
         let activation = yamaa_adapters::project_activation_observations::activation(
             &state.run,
             &state.inner.activation,
