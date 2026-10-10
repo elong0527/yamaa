@@ -457,10 +457,9 @@ def convert_value(value: object, target: ColumnType) -> EvaluationResult:
         source = parsed
 
     if target == "int":
-        if type(source) is int:
-            if INT64_MIN <= source <= INT64_MAX:
-                return ValueResult(value=source)
-            return _failed_conversion(source, target, "REQ-0021")
+        # An int source returns through the source_type == target fast path
+        # above, so only the float source (from text or a host float) converts
+        # here.
         if type(source) is float:
             if not source.is_integer():
                 return _failed_conversion(source, target, "REQ-0021")
@@ -470,10 +469,10 @@ def convert_value(value: object, target: ColumnType) -> EvaluationResult:
         return _failed_conversion(source, target, "REQ-0013")
 
     if target == "float":
+        # A float source returns through the source_type == target fast path
+        # above; only an int source converts here.
         if type(source) is int and INT64_MIN <= source <= INT64_MAX:
             return ValueResult(value=float(source))
-        if type(source) is float:
-            return ValueResult(value=source)
         return _failed_conversion(source, target, "REQ-0013")
 
     if target == "date" and isinstance(source, str):
