@@ -19,6 +19,8 @@ mod grammar;
 mod parquet;
 #[path = "diagnostic/preflight.rs"]
 mod preflight;
+#[path = "diagnostic/producer.rs"]
+mod producer;
 #[path = "diagnostic/project_codelist_binding.rs"]
 mod project_codelist_binding;
 #[path = "diagnostic/project_environment.rs"]
@@ -202,6 +204,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.insert(lock.code);
     reached.extend(project_codelist_binding::reached());
     reached.extend(preflight::reached());
+    reached.extend(producer::reached());
     reached.extend(preflight::output_reached());
     reached.extend(grammar::reached());
     reached.extend(grammar::predicate_reached());

@@ -88,13 +88,28 @@ vendored benchmark code are removed. The old submission schema/generator and
 three Define-XML fixtures remain for #1758. Approved resource-root configuration
 also remains until its own path-policy decision.
 
+The #1858 producer compiler prerequisite adds a separate sealed metadata boundary
+with retained producer identities and authored layer paths. Ordered output
+contracts, required labels, redundant inline types and artifact metadata
+comparison now have shared portable causes. Ordinary check/build routes still
+reject producer schemas, and the metadata result explicitly refuses an execution
+capability. Its 25 independent contract/compiler/engine/adapter tests establish
+admission only. Native graph preparation, producer execution and serialized
+rounded consumer ingestion remain #1741. See [the boundary contract](../PRODUCER_ADMISSION.md)
+and [the qualification record](1858-qualification.md).
+
 See [the closing qualification record](1757-qualification.md) for actual local
 results and the distinction between those results and the CI platform matrix.
 Continue with the following acceptance gates in the
 [serial implementation order](migration-order.md):
 
-1. Review and merge the #1757 closing change after its installed platform gates
-   pass; retain #1753's issue/observation contracts and #1755's port ordering.
+1. #1757 is closed by [#1856](https://github.com/elong0527/yamaa/pull/1856),
+   merged as `aff53fb65df5b9d6a45d8cf203fa0b9b52f1176a`. All 26 final-head
+   checks, all 16 native jobs, completed review and 40 artifact audits pass.
+   The merged source equals the qualified head. Retain #1753's observation
+   contracts and #1755's port ordering. Complete the explicit
+   [#1858 producer compiler prerequisite](https://github.com/elong0527/yamaa/issues/1858)
+   before claiming #1741 workflow execution.
 2. Complete #1741's producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.
