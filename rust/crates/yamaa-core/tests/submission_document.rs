@@ -896,3 +896,188 @@ fn control_and_unicode_text_survive_ownership_while_complete_escaping_capacity_i
     assert_eq!(owned.study().unwrap().name.value, "A\nB\t'\\");
     assert_eq!(owned.study().unwrap().description.value, "é < 漢字 & 😀");
 }
+
+struct DocumentItemFact {
+    family: F,
+    sequence: usize,
+    node: usize,
+    index: usize,
+}
+
+// Independent normalized occurrences: valid mappings surround two different
+// malformed shapes in every family. Expected facts come from this arena alone.
+fn malformed_document_lists() -> (Document, Vec<DocumentItemFact>) {
+    let mut a = Arena::default();
+    let mut sections = Vec::new();
+    let mut facts = Vec::new();
+    for (name, family, guide) in [
+        ("send", F::Send, "SENDIG"),
+        ("sdtm", F::Sdtm, "SDTMIG"),
+        ("adam", F::Adam, "ADaMIG"),
+    ] {
+        let guide = a.guide(guide);
+        let spec = a.text("specifications/domain.yaml");
+        let specs = a.node(N::Sequence(vec![spec]));
+        let define = a.text("results/define.xml");
+        let first = a.text_map(&[
+            ("id", "first"),
+            ("kind", "supplemental"),
+            ("link", "docs/first.pdf"),
+            ("title", "First document"),
+        ]);
+        let null = a.node(N::Null);
+        let scalar = a.node(N::Integer("42".into()));
+        let last = a.text_map(&[
+            ("id", "last"),
+            ("kind", "other"),
+            ("link", "docs/last.pdf"),
+            ("title", "Last document"),
+        ]);
+        let sequence = a.node(N::Sequence(vec![first, null, scalar, last]));
+        let section = a.map(vec![
+            ("documents", sequence),
+            ("standard", guide),
+            ("specs", specs),
+            ("define", define),
+        ]);
+        sections.push((name, section));
+        for (index, node) in [(1, null), (2, scalar)] {
+            facts.push(DocumentItemFact {
+                family,
+                sequence,
+                node,
+                index,
+            });
+        }
+    }
+    let root = a.map(sections);
+    (a.finish(root), facts)
+}
+
+#[test]
+fn malformed_document_items_retain_actual_occurrences_in_every_family_and_position() {
+    let (input, expected) = malformed_document_lists();
+    let error = submission_document::decode(&input, input.root(), Limits::default()).unwrap_err();
+    assert!(std::ptr::eq(error.input, &input));
+    let Cause::Findings(findings) = error.cause else {
+        panic!("complete shape findings")
+    };
+    assert_eq!(findings.len(), 6);
+    for (finding, fact) in findings.iter().zip(&expected) {
+        assert_eq!(finding.kind, Kind::ExpectedMapping);
+        assert_eq!(finding.node, fact.node);
+        assert_eq!(finding.container, Some(fact.sequence));
+        assert_eq!(finding.key, None);
+        assert_eq!(finding.requirement(), None);
+        assert_eq!(
+            finding.origin,
+            Some(submission_document::Origin {
+                container: fact.sequence,
+                key: None,
+                node: Some(fact.node),
+                field: F::Documents,
+            })
+        );
+        assert_eq!(
+            finding.path.steps().collect::<Vec<_>>(),
+            [
+                Step::Field(fact.family),
+                Step::Field(F::Documents),
+                Step::Index(fact.index)
+            ]
+        );
+        let N::Sequence(items) = &error.input.nodes()[fact.sequence] else {
+            panic!("original document sequence")
+        };
+        assert_eq!(items[fact.index], fact.node);
+        let section = input.field(input.root(), fact.family.name()).unwrap();
+        assert_eq!(input.field(section, "documents"), Some(fact.sequence));
+        assert_ne!(section, fact.sequence);
+    }
+    assert!(matches!(input.nodes()[expected[0].node], N::Null));
+    assert_eq!(input.nodes()[expected[1].node], N::Integer("42".into()));
+}
+
+#[test]
+fn document_item_finding_and_path_capacities_admit_the_complete_set_or_keep_raw_input() {
+    let (input, _) = malformed_document_lists();
+    for (limits, resource) in [
+        (
+            Limits {
+                findings: 5,
+                ..Limits::default()
+            },
+            Resource::Findings,
+        ),
+        (
+            Limits {
+                path_segments: 17,
+                ..Limits::default()
+            },
+            Resource::PathSegments,
+        ),
+    ] {
+        let error = submission_document::decode(&input, input.root(), limits).unwrap_err();
+        assert!(std::ptr::eq(error.input, &input));
+        assert_eq!(error.cause, Cause::Limit(resource));
+        assert_eq!(error.input, &input);
+    }
+    let error = submission_document::decode(
+        &input,
+        input.root(),
+        Limits {
+            findings: 6,
+            path_segments: 18,
+            ..Limits::default()
+        },
+    )
+    .unwrap_err();
+    assert!(std::ptr::eq(error.input, &input));
+    assert!(matches!(error.cause, Cause::Findings(v) if v.len() == 6));
+}
+
+#[test]
+fn valid_document_fields_and_omitted_defaults_remain_owned_after_original_input_drops() {
+    let input = full();
+    let adam = input.field(input.root(), "adam").unwrap();
+    let sequence = input.field(adam, "documents").unwrap();
+    let N::Sequence(items) = &input.nodes()[sequence] else {
+        panic!("document list")
+    };
+    let document_nodes = items.clone();
+    let field_nodes = document_nodes
+        .iter()
+        .map(|&node| ["id", "kind", "link", "title"].map(|name| input.field(node, name).unwrap()))
+        .collect::<Vec<_>>();
+    let owned = submission_document::decode(&input, input.root(), Limits::default()).unwrap();
+    drop(input);
+    let docs = &owned.sections()[1].documents;
+    assert_eq!(docs.origin.container, adam);
+    assert_eq!(docs.origin.node, Some(sequence));
+    assert!(docs.origin.key.is_some());
+    assert_eq!(docs.value.len(), 3);
+    for ((document, &node), expected) in docs.value.iter().zip(&document_nodes).zip(&field_nodes) {
+        assert_eq!(document.node, node);
+        for (origin, &value_node) in [
+            document.id.origin,
+            document.kind.origin,
+            document.link.origin,
+            document.title.origin,
+        ]
+        .iter()
+        .zip(expected)
+        {
+            assert_eq!(origin.container, node);
+            assert_eq!(origin.node, Some(value_node));
+            assert!(origin.key.is_some());
+        }
+    }
+    assert_eq!(docs.value[0].title.value, "Reviewer guide");
+    assert_eq!(docs.value[1].kind.value, DocumentKind::AnnotatedCrf);
+    assert_eq!(docs.value[2].link.value, "notes/data.txt");
+    let send = &owned.sections()[0];
+    assert!(send.documents.value.is_empty());
+    assert_eq!(send.documents.origin.container, send.origin.node.unwrap());
+    assert_eq!(send.documents.origin.key, None);
+    assert_eq!(send.documents.origin.node, None);
+}

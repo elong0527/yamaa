@@ -26,6 +26,9 @@ describe the supplied normalized document. They do not assert a written file
 origin, or claim that a present normalized default was authored in YAML. Unknown
 and non-text fields also retain exact container/key facts on refusal. The owned
 accepted values remain available after the original document is dropped.
+Malformed document-list items retain their actual sequence container, absent
+mapping key and item node, alongside the section/documents/index semantic path.
+The section's `documents` mapping occurrence continues to identify the sequence.
 
 A non-owning pass reserves cumulative field, declaration, node, list member,
 text, depth and work capacity before model ownership. The same budget covers

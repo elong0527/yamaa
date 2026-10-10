@@ -6,8 +6,8 @@ The historical evidence below retains each slice's original scope and provenance
 
 The current serial order follows merged #1757/#1858/#1860/#1863/#1867/#1869/#1871/#1874/#1877/#1881/#1883/#1888:
 complete #1741 ordered producer publication after #1866 is answered; independently
-complete #1893 bounded specification submission declarations after qualified
-#1888/#1891 before
+complete #1897's document-list diagnostic occurrence correction after #1893/#1896
+and its [recorded evidence limits](1893-qualification.md), before
 #1758 submission outputs
 and the remaining language/API/release gates. #1857 retains the separate Windows R
 release decision; #1866 retains the publication lifecycle decision for #1741.
