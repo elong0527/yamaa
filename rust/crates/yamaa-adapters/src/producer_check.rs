@@ -513,6 +513,22 @@ fn inheritance_issues<'a>(
     let mut supported = true;
     match cause {
         I::Entry(S::Findings(captured)) => budget.captured(captured)?,
+        I::Entry(S::Decode { identity, error }) => {
+            use crate::yaml_decode::DecodeFailure;
+            budget.entries(16)?;
+            budget.text(identity)?;
+            match error {
+                DecodeFailure::NonAscii(_) => (),
+                DecodeFailure::InvalidYaml { reason, .. } => budget.text(reason)?,
+                DecodeFailure::InvalidText(findings) => {
+                    budget.entries(findings.len().checked_mul(16).ok_or_else(invalid)?)?;
+                    for finding in findings {
+                        budget.text(&finding.path)?;
+                    }
+                }
+                _ => return Err(Error::Original(owner)),
+            }
+        }
         I::Preparation { schema, error, .. } => match error.as_ref() {
             E::Traversal(
                 G::Unavailable { declaring, path } | G::InvalidParent { declaring, path },

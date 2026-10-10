@@ -81,7 +81,7 @@ class PublicEnvironment(unittest.TestCase):
                 rows = yamaa.check("spec.yaml", environment="environment.yaml").issues.to_dicts()
                 self.assertEqual(len(rows), 2)
                 for row, source in zip(rows, ("spec.yaml", "leaf.yaml"), strict=True):
-                    context = {"entry": Path("spec.yaml").resolve().as_posix(), "pattern": "é(", "source": Path(source).resolve().as_posix()}
+                    context = {"entry": Path("spec.yaml").resolve().as_posix(), "pattern": "\u00e9(", "source": Path(source).resolve().as_posix()}
                     if source == "leaf.yaml":
                         context["declaring_sources"] = [Path("parents/base.yaml").resolve().as_posix()]
                     self.assertEqual(row, {

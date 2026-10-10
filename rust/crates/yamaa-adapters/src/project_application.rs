@@ -169,20 +169,56 @@ fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
             file_project::Error::Environment(EnvironmentFailure::Interrupted { error, .. }) => {
                 file_application::resource_failure("environment", error)
             }
+            file_project::Error::Environment(EnvironmentFailure::Root(_)) => {
+                file_application::rejected("environment", "environment_boundary")
+            }
             _ => file_application::rejected("environment", "metadata_boundary"),
         },
         W::Graph(graph) => match graph.error() {
             G::Resource(error) | G::Document(D::Resource(error)) => {
                 file_application::resource_failure("prepare", error)
             }
+            G::Document(D::Preparation(error)) => preparation_boundary(error),
+            G::Document(D::Compile(_)) => refused("prepare"),
             G::Graph(crate::producer_graph::Error::Graph(
                 yamaa_core::producer_graph::Error::Compilation {
                     error: PrepareError::Limit(_),
                     ..
                 },
             )) => file_application::rejected("check", "compilation_limit"),
+            G::Graph(crate::producer_graph::Error::Graph(
+                yamaa_core::producer_graph::Error::Compilation { .. },
+            )) => file_application::rejected("check", "compilation_boundary"),
             _ => file_application::rejected("check", "metadata_boundary"),
         },
         _ => file_application::rejected("prepare", "metadata_boundary"),
     }
+}
+// Semantic findings have already passed the complete producer_check preflight.
+// These entry failures encode fixed boundary codes without cloning diagnostics,
+// source bytes or an inherited arena. Opaque transport causes remain retained.
+fn preparation_boundary(
+    error: &crate::specification_source::InheritanceError<crate::file_resources::Error>,
+) -> Failure {
+    use crate::specification_source::{Error as S, InheritanceError as I};
+    let I::Entry(source) = error else {
+        return refused("prepare");
+    };
+    if matches!(source, S::Findings(_) | S::Decode { .. }) {
+        // Decode semantic rows are handled by the bounded static projection;
+        // only its fixed internal/limit refusal reaches this fallback.
+        if !matches!(
+            source,
+            S::Decode {
+                error: crate::yaml_decode::DecodeFailure::Internal
+                    | crate::yaml_decode::DecodeFailure::Limit(_),
+                ..
+            }
+        ) {
+            return refused("prepare");
+        }
+    }
+    crate::specification_diagnostics::inheritance_failure_ref(error)
+        .map(file_application::preparation_failure)
+        .unwrap_or_else(|_| refused("prepare"))
 }

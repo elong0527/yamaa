@@ -76,6 +76,68 @@ fn yaml(input: &str, base: &str, output: &str, invalid: bool) -> String {
 }
 
 #[test]
+fn original_decode_diagnostics_remain_bounded_and_owned() {
+    use yamaa_adapters::issue_rows::Issue;
+    let study = Study::new();
+    study.write("root.yaml", "\u{e9}\n");
+    let owner = study.rejected(Limits::default());
+    let expected = vec![Issue {
+        phase: "validation".into(),
+        condition: "non_ascii_source".into(),
+        requirement: None,
+        spec_paths: vec!["$".into()],
+        context: serde_json::json!({"line":1, "column":1, "path":study.path("root.yaml")})
+            .to_string(),
+    }];
+    assert_eq!(
+        producer_check::rejected(&owner, Language::Python).unwrap(),
+        expected
+    );
+    assert!(matches!(
+        producer_check::rejected_with_limit(&owner, Language::Python, 32),
+        Err(producer_check::Error::Projection(_))
+    ));
+    assert_eq!(
+        yamaa_adapters::project_application::check(
+            &study.path("root.yaml"),
+            &study.path("environment.yaml"),
+            Language::Python
+        ),
+        expected
+    );
+    study.write("root.yaml", "[");
+    let malformed = yamaa_adapters::project_application::check(
+        &study.path("root.yaml"),
+        &study.path("environment.yaml"),
+        Language::Python,
+    );
+    assert_eq!(malformed.len(), 1);
+    assert_eq!(
+        (
+            &*malformed[0].phase,
+            &*malformed[0].condition,
+            &malformed[0].spec_paths
+        ),
+        ("validation", "invalid_yaml", &vec!["$".to_owned()])
+    );
+    study.write("environment.yaml", "[");
+    let environment = yamaa_adapters::project_application::check(
+        &study.path("root.yaml"),
+        &study.path("environment.yaml"),
+        Language::Python,
+    );
+    assert_eq!(
+        environment,
+        yamaa_adapters::file_application::rejected("environment", "environment_boundary")
+    );
+    fs::remove_dir_all(&study.0).unwrap();
+    assert_eq!(
+        producer_check::rejected(&owner, Language::Python).unwrap(),
+        expected
+    );
+}
+
+#[test]
 fn complete_original_diamond_checks_each_canonical_node_once_without_data() {
     let study = Study::new();
     study.write(
