@@ -127,6 +127,13 @@ pub struct Resources {
     reads: usize,
     metadata: Option<MetadataBudget>,
 }
+
+pub type RetainedSources = Vec<(String, Arc<[u8]>)>;
+#[derive(Debug)]
+pub struct RetentionFailure {
+    pub error: Error,
+    pub retained: RetainedSources,
+}
 impl Resources {
     /// Only native entry configuration may add roots, before entry/model capture.
     /// Keep the selected primary descriptor and captured configuration immutable.
@@ -174,6 +181,14 @@ impl Resources {
     }
     pub fn capture_reads(&self) -> usize {
         self.reads
+    }
+    pub(crate) fn snapshot_count(&self) -> usize {
+        self.snapshots.len()
+    }
+    /// End a traversal's cumulative scope without discarding descriptors, raw
+    /// snapshots or alias witnesses. A later build admits its own fresh scope.
+    pub(crate) fn finish_metadata_budget(&mut self) {
+        self.metadata = None;
     }
     pub(crate) fn admit_metadata_budget(&mut self, limits: MetadataLimits) -> Result<(), Error> {
         if self.metadata.is_some()
@@ -266,10 +281,43 @@ impl Resources {
         })
     }
     pub(crate) fn verify_captured(&self) -> Result<(), (String, Error)> {
-        for index in 0..self.snapshots.len() {
+        self.verify_prefix(self.snapshots.len())
+    }
+    pub(crate) fn verify_prefix(&self, count: usize) -> Result<(), (String, Error)> {
+        if count > self.snapshots.len() {
+            return Err((String::new(), Error::InvalidPath));
+        }
+        for index in 0..count {
             self.verify_paths(index)?;
         }
         Ok(())
+    }
+    /// Own immutable raw evidence without copying content. Charge each path
+    /// before allocating its spelling; quota failure keeps the admitted prefix.
+    pub(crate) fn retain_sources(
+        &self,
+        aliases: usize,
+        text: usize,
+    ) -> Result<RetainedSources, RetentionFailure> {
+        let mut retained = Vec::new();
+        let mut used = 0usize;
+        for snapshot in &self.snapshots {
+            for (key, _, _) in &snapshot.paths {
+                let amount = key
+                    .iter()
+                    .try_fold(key.len().saturating_add(4), |n, s| n.checked_add(s.len()));
+                let next = amount.and_then(|n| used.checked_add(n));
+                if retained.len() >= aliases || next.is_none_or(|n| n > text) {
+                    return Err(RetentionFailure {
+                        error: Error::Limit,
+                        retained,
+                    });
+                }
+                used = next.expect("retained path budget admitted");
+                retained.push((path_text(key), Arc::clone(&snapshot.bytes)));
+            }
+        }
+        Ok(retained)
     }
     fn charge_alias(
         &self,
@@ -342,6 +390,11 @@ impl Resources {
     /// Metadata only: no bytes read and no snapshot created.
     pub fn inspect(&self, written: &str) -> Result<(), Error> {
         self.open(written).map(drop)
+    }
+    /// Inspect relative to a canonical declaring entry without changing another
+    /// node's resource base, reading bytes or creating a snapshot.
+    pub fn inspect_from(&self, declaring: &str, written: &str) -> Result<(), Error> {
+        self.open_at(&file_base(declaring)?, written).map(drop)
     }
     /// Capture bounded immutable content, verify it and retain its authority witnesses.
     pub fn capture(&mut self, written: &str, maximum: usize) -> Result<(Arc<[u8]>, bool), Error> {

@@ -34,8 +34,10 @@ No content digest supplies an identity. Schema closures and repeated snapshots
 compare retained bytes directly, including conflicts appearing only in separate
 branches. Captured parents and independently authored path origins remain held.
 
-Core keeps all compiled plans private. Engine and adapter expose graph metadata
-and explicit execution refusal only. No check accepts a source, runtime,
+Metadata nodes keep their compiled plans private. Static engine and adapter
+checks expose graph metadata and explicit execution refusal. A separate consuming
+whole-graph transfer is available to [the #1869 build service](PRODUCER_BUILD.md);
+it cannot extract a plan from an arbitrary metadata node. No check accepts a source, runtime,
 activation, codec or publication port. Installed ordinary Python/R producer
 declarations still report `unsupported_operation` and cannot save. This boundary
 does not qualify workflow execution, whole-graph activation, serialized ingestion,
@@ -64,9 +66,8 @@ evidence remains available after source files disappear, without resource author
 
 This native boundary remains metadata-only and ordinary installed producer
 execution remains refused. See [its qualification scope](planning/1867-qualification.md).
-The next #1741 implementation must activate the complete required selection before
-study data, project validated
-handles into local slots, execute each producer once, decode its retained
-serialized artifact and preserve whole attempts and explicit ordered save.
+The separate #1869 service implements whole activation, validated projections,
+producer-once execution, retained serialized ingestion and whole attempts.
+Installed host workflow qualification and explicit ordered save remain #1741.
 Its independent truth remains `1.234/2.345 -> CSV 1.23/2.35 -> consumer 2.46/4.70`,
 with no added POWER dependency. See [qualification](planning/1863-qualification.md).

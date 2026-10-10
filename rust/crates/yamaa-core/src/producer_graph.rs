@@ -1,4 +1,4 @@
-//! Complete, bounded producer graph metadata. No execution plan is exposed.
+//! Complete, bounded producer metadata and sealed whole-graph build transfer.
 //! Graph compilation owns one admitted environment and preserves every local
 //! call's projection into the graph's unique activation selection.
 use crate::{
@@ -130,6 +130,11 @@ impl PreparedGraph {
     pub fn environment(&self) -> &ExecutionEnvironment {
         &self.environment
     }
+    /// Transfer the complete admitted closure, its plans and its one environment
+    /// together. Metadata nodes never expose a standalone compiled producer.
+    pub fn into_build(self) -> BuildGraph {
+        BuildGraph { graph: self }
+    }
     /// This static capability grants no data, activation, build or publication
     /// authority. #1741 must qualify the complete orchestration before release.
     pub fn execution_refusal(&self) -> PrepareError {
@@ -151,6 +156,23 @@ impl PreparedGraph {
                 })
                 .collect(),
         )
+    }
+}
+
+/// Whole-closure compilation ownership for the application engine. Construction
+/// consumes a validated graph; plans can only be borrowed with that owner alive.
+#[derive(Debug)]
+pub struct BuildGraph {
+    graph: PreparedGraph,
+}
+impl BuildGraph {
+    pub fn metadata(&self) -> &PreparedGraph {
+        &self.graph
+    }
+    /// Borrow the complete compiled collection in the metadata's node order.
+    /// No node plan is moved out, substituted or compiled again at this boundary.
+    pub fn plans(&self) -> impl ExactSizeIterator<Item = &PreparedSpecification> {
+        self.graph.nodes.iter().map(|node| &node.compiled)
     }
 }
 

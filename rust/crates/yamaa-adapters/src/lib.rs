@@ -69,6 +69,8 @@ pub mod file_graph;
 #[cfg(any(unix, windows))]
 pub mod file_preparation;
 #[cfg(any(unix, windows))]
+pub mod file_producer_build;
+#[cfg(any(unix, windows))]
 pub mod file_project;
 #[cfg(unix)]
 pub mod file_publication;

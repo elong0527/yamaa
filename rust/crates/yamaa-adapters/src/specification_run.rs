@@ -186,30 +186,62 @@ impl application::SourceDecoder for SourceDecoder {
         source: &SourceDeclaration,
         bytes: &[u8],
     ) -> Result<Self::Table, Self::Error> {
-        if source.profile == yamaa_core::specification::SourceProfile::Parquet {
-            return decode_parquet(source, bytes).map(dataset_transport::Snapshot);
-        }
-        crate::typed_csv::parse(
-            bytes,
-            &source.types,
-            csv_source::Limits::default(),
-            TableLimits {
-                max_rows: 65_536,
-                max_columns: 64,
-                max_batches: 1,
-                max_cells: 262_144,
-            },
-        )
-        .map(dataset_transport::Snapshot)
-        .map_err(|error| match error {
-            crate::typed_csv::Error::Csv(error) => Error::Source(TextTableError::Csv(error)),
-            crate::typed_csv::Error::Table(error) => Error::Source(TextTableError::Table(error)),
-            error => Error::TypedSource(error),
-        })
+        decode_source(source, bytes, None).map(dataset_transport::Snapshot)
     }
 }
 
-fn decode_parquet(source: &SourceDeclaration, bytes: &[u8]) -> Result<ArrowTable, Error> {
+pub(crate) fn decode_source(
+    source: &SourceDeclaration,
+    bytes: &[u8],
+    bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
+) -> Result<ArrowTable, Error> {
+    let cells = bounded.map_or(262_144, |l| l.cells.min(262_144));
+    if source.profile == yamaa_core::specification::SourceProfile::Parquet {
+        return decode_parquet(source, bytes, bounded);
+    }
+    let csv_limits = bounded.map_or_else(csv_source::Limits::default, bounded_csv_limits);
+    crate::typed_csv::parse(
+        bytes,
+        &source.types,
+        csv_limits,
+        TableLimits {
+            max_rows: 65_536,
+            max_columns: 64,
+            max_batches: 1,
+            max_cells: cells,
+        },
+    )
+    .map_err(typed_source_error)
+}
+
+pub(crate) fn typed_source_error(error: crate::typed_csv::Error) -> Error {
+    match error {
+        crate::typed_csv::Error::Csv(error) => Error::Source(TextTableError::Csv(error)),
+        crate::typed_csv::Error::Table(error) => Error::Source(TextTableError::Table(error)),
+        error => Error::TypedSource(error),
+    }
+}
+pub(crate) fn bounded_csv_limits(
+    limits: yamaa_engine::producer_build::DecodeLimits,
+) -> csv_source::Limits {
+    let ordinary = csv_source::Limits::default();
+    let cells = limits.cells.min(262_144);
+    csv_source::Limits {
+        bytes: ordinary
+            .bytes
+            .min(limits.storage_bytes)
+            .min(limits.work_bytes),
+        // Charges precede each temporary field, including at most 64 headers.
+        fields: ordinary.fields.min(cells.saturating_add(64)),
+        records: ordinary.records.min(cells.saturating_add(1)),
+    }
+}
+
+fn decode_parquet(
+    source: &SourceDeclaration,
+    bytes: &[u8],
+    bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
+) -> Result<ArrowTable, Error> {
     use crate::parquet_source::{self, CompressionLimits, FramingLimits, MetadataLimits};
     use arrow_array::{Array, ArrayRef, RecordBatch, StringArray};
     use std::sync::Arc;
@@ -218,8 +250,10 @@ fn decode_parquet(source: &SourceDeclaration, bytes: &[u8]) -> Result<ArrowTable
         max_rows: 65_536,
         max_columns: 64,
         max_batches: 1,
-        max_cells: 262_144,
+        max_cells: bounded.map_or(262_144, |l| l.cells.min(262_144)),
     };
+    let work_bytes = bounded.map_or(64 * 1024 * 1024, |l| l.work_bytes.min(64 * 1024 * 1024));
+    let storage_bytes = bounded.map_or(64 * 1024 * 1024, |l| l.storage_bytes.min(64 * 1024 * 1024));
     let table = parquet_source::parse(
         bytes,
         parquet_source::Limits {
@@ -235,7 +269,7 @@ fn decode_parquet(source: &SourceDeclaration, bytes: &[u8]) -> Result<ArrowTable
                 cells: table_limits.max_cells,
                 pages: 65_536,
                 page_bytes: 8 * 1024 * 1024,
-                decoded_bytes: 64 * 1024 * 1024,
+                decoded_bytes: work_bytes,
             },
             compression: CompressionLimits {
                 page_bytes: 8 * 1024 * 1024,
@@ -246,8 +280,8 @@ fn decode_parquet(source: &SourceDeclaration, bytes: &[u8]) -> Result<ArrowTable
                 tables: 65_536,
                 depth: 64,
             },
-            expanded_bytes: 64 * 1024 * 1024,
-            retained_bytes: 64 * 1024 * 1024,
+            expanded_bytes: work_bytes,
+            retained_bytes: storage_bytes,
             array_elements: table_limits.max_cells,
             batches: table_limits.max_batches,
         },

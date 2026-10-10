@@ -23,6 +23,82 @@ use yamaa_engine::{
 struct Payload(Rc<()>);
 
 #[test]
+fn bounded_producer_csv_admits_original_header_before_typing_and_owns_portable_mismatch() {
+    use yamaa_engine::producer_build::{DecodeError, DecodeLimits, DecodePort};
+    let document = yamaa_adapters::shipped_schema::capture().unwrap().prepare_standalone(
+        yamaa_adapters::specification_source::Source {
+            identity: "held-producer.yaml".into(),
+            bytes: b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: int, label: Value, derivation: RAW.VALUE}\noutput: {path: produced.csv, columns: [ID, VALUE]}\n".to_vec(),
+        }
+    ).unwrap();
+    let contract =
+        yamaa_core::producer_contract::prepare(document.model(), Default::default()).unwrap();
+    let source = SourceDeclaration {
+        name: "P".into(),
+        path: "produced.csv".into(),
+        types: vec![
+            ("ID".into(), ColumnType::Int),
+            ("VALUE".into(), ColumnType::Int),
+        ],
+        profile: SourceProfile::Csv,
+        empty_string_present: false,
+    };
+    let limits = DecodeLimits {
+        cells: 100,
+        storage_bytes: 4096,
+        work_bytes: 4096,
+    };
+    let mut decoder = Decoder::<Payload>::default();
+    for bytes in [
+        b"VALUE,ID\nnot-an-int,also-bad\n".as_slice(),
+        b"ID\nnot-an-int\n",
+        b"ID,VALUE,EXTRA\nnot-an-int,also-bad,x\n",
+    ] {
+        let DecodeError::Metadata(diagnostic) = decoder
+            .decode_bounded(&source, bytes, Some(&contract), limits)
+            .err()
+            .unwrap()
+        else {
+            panic!("header mismatch must precede declared typing")
+        };
+        assert_eq!(
+            diagnostic.code,
+            yamaa_core::diagnostic::ConditionCode::ProducerContractMismatch
+        );
+        assert_eq!(diagnostic.spec_paths, ["input.P.schema", "input.P.path"]);
+    }
+    let table = decoder
+        .decode_bounded(&source, b"ID,VALUE\n1,13\n", Some(&contract), limits)
+        .unwrap();
+    assert_eq!(table.cell(0, 1).unwrap(), ValueRef::Int(13));
+    for bounded in [
+        DecodeLimits { cells: 1, ..limits },
+        DecodeLimits {
+            storage_bytes: 1,
+            ..limits
+        },
+        DecodeLimits {
+            work_bytes: 1,
+            ..limits
+        },
+    ] {
+        assert!(matches!(
+            decoder.decode_bounded(&source, b"ID,VALUE\n1,13\n", Some(&contract), bounded),
+            Err(DecodeError::Codec(_))
+        ));
+    }
+    let header = (0..65)
+        .map(|i| format!("F{i}"))
+        .collect::<Vec<_>>()
+        .join(",")
+        + "\n";
+    assert!(matches!(
+        decoder.decode_bounded(&source, header.as_bytes(), Some(&contract), limits),
+        Err(DecodeError::Limit("producer_source_fields"))
+    ));
+}
+
+#[test]
 fn decoded_profiles_keep_exact_cells_bounds_and_ingestion_failure_categories() {
     let mut decoder = Decoder::<Payload>::default();
     let source = SourceDeclaration {

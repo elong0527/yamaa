@@ -55,6 +55,17 @@ impl PreparedGraph {
     pub fn checked(&self) -> &CheckedProducerGraph {
         &self.checked
     }
+    pub(crate) fn into_build(
+        self,
+    ) -> (
+        Vec<Arc<PreparedDocument>>,
+        yamaa_engine::producer_build::PreparedBuild,
+    ) {
+        (
+            self.nodes.into_iter().map(|node| node.document).collect(),
+            self.checked.into_build(),
+        )
+    }
 }
 fn charge(
     used: &mut usize,

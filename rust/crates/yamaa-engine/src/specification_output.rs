@@ -1,6 +1,6 @@
 //! Gate artifact encoding and publication on accepted execution and observations.
 use crate::dataset::{Dataset, Execution};
-use alloc::{string::String, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use yamaa_core::{
     specification::{OutputFinding, PreparedSpecification},
     table::TableAccess,
@@ -61,7 +61,7 @@ pub enum SaveError<E> {
 #[derive(Debug)]
 pub struct Artifact {
     path: String,
-    bytes: Vec<u8>,
+    bytes: Arc<[u8]>,
     projection: Vec<usize>,
 }
 impl Artifact {
@@ -70,6 +70,9 @@ impl Artifact {
     }
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
+    }
+    pub(crate) fn retained_bytes(&self) -> Arc<[u8]> {
+        Arc::clone(&self.bytes)
     }
     pub fn projection(&self) -> &[usize] {
         &self.projection
@@ -196,7 +199,7 @@ pub fn prepare<R: OutputReport, C: ArtifactEncoder>(
         report: completed,
         artifact: Some(Artifact {
             path: prepared.output_path().into(),
-            bytes,
+            bytes: bytes.into(),
             projection,
         }),
     })
