@@ -62,13 +62,34 @@ pub(crate) fn prepare_document(
     written: &str,
     schema: Option<Arc<crate::specification_source::CapturedSchema>>,
 ) -> Result<crate::specification_source::PreparedDocument, Error> {
-    let identity = resources.resolve(written).map_err(Error::Resource)?;
-    let (bytes, _) = resources
-        .capture(written, Limits::default().captured_bytes)
-        .map_err(Error::Resource)?;
+    prepare_document_from(resources, None, written, schema)
+}
+
+/// Recursive metadata uses the original declaring identity and written spelling.
+/// A reader-returned canonical identity is never reinterpreted as authored text.
+pub(crate) fn prepare_document_from(
+    resources: &mut Resources,
+    declaring: Option<&str>,
+    written: &str,
+    schema: Option<Arc<crate::specification_source::CapturedSchema>>,
+) -> Result<crate::specification_source::PreparedDocument, Error> {
+    let identity = match declaring {
+        Some(declaring) => resources.resolve_from(declaring, written),
+        None => resources.resolve(written),
+    }
+    .map_err(Error::Resource)?;
+    let (bytes, _) = match declaring {
+        Some(declaring) => {
+            resources.capture_from(declaring, written, Limits::default().captured_bytes)
+        }
+        None => resources.capture(written, Limits::default().captured_bytes),
+    }
+    .map_err(Error::Resource)?;
     let source = Source {
         identity: identity.clone(),
-        bytes: bytes.to_vec(),
+        bytes: resources
+            .preparation_copy(&bytes)
+            .map_err(Error::Resource)?,
     };
     let mut parents = Parents {
         resources,
@@ -149,9 +170,20 @@ impl InheritancePort for Parents<'_> {
         if display_path.len() > Limits::default().identity_bytes {
             return Err(SourceError::Raised(ResourceError::Limit));
         }
+        self.resources
+            .charge_metadata_text(identity.len().saturating_add(display_path.len()))
+            .map_err(available)?;
         let paths = self.paths.entry(identity.clone()).or_default();
         let path = (declaring.into(), written.into());
         if !paths.contains(&path) {
+            self.resources
+                .charge_metadata_text(
+                    declaring
+                        .len()
+                        .saturating_add(written.len())
+                        .saturating_add(identity.len()),
+                )
+                .map_err(available)?;
             paths.push(path);
         }
         Ok(Identity {
@@ -171,7 +203,7 @@ impl InheritancePort for Parents<'_> {
             .ok_or(SourceError::Raised(ResourceError::InvalidPath))?;
         self.resources
             .capture_from(declaring, written, maximum)
-            .map(|(bytes, _)| bytes.to_vec())
+            .and_then(|(bytes, _)| self.resources.preparation_copy(&bytes))
             .map_err(available)
     }
     fn rebase(
@@ -248,5 +280,80 @@ fn rebase(
         Err(ResourceError::Limit)
     } else {
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod declaring_origin_tests {
+    use super::*;
+    use std::{
+        fs,
+        path::PathBuf,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    struct Study(PathBuf);
+    impl Study {
+        fn new(name: &str) -> Self {
+            let root = std::env::temp_dir()
+                .join(format!(
+                    "yamaa-declaring-origin-{}-{}",
+                    std::process::id(),
+                    NEXT.fetch_add(1, Ordering::Relaxed)
+                ))
+                .join(name);
+            fs::create_dir_all(root.join("entry")).unwrap();
+            fs::create_dir(root.join("producer")).unwrap();
+            Self(fs::canonicalize(root).unwrap())
+        }
+        fn check(&self) {
+            let parent = "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+            let child = "schema_version: '1.0'\nparents: ['./base.yaml']\ndomain: PRODUCER\n";
+            fs::write(self.0.join("entry/root.yaml"), b"declaring metadata").unwrap();
+            fs::write(self.0.join("producer/base.yaml"), parent).unwrap();
+            fs::write(self.0.join("producer/child.yaml"), child).unwrap();
+            let mut resources = Resources::new(
+                self.0.to_str().unwrap(),
+                self.0.join("entry").to_str().unwrap(),
+                &[],
+            )
+            .unwrap();
+            let declaring = resources.resolve("root.yaml").unwrap();
+            let document = prepare_document_from(
+                &mut resources,
+                Some(&declaring),
+                "../producer/child.yaml",
+                None,
+            )
+            .unwrap();
+            assert_eq!(document.source().bytes, child.as_bytes());
+            assert_eq!(document.parents().len(), 1);
+            assert_eq!(document.parents()[0].source().bytes, parent.as_bytes());
+            let output = document.written_output_origin().unwrap();
+            assert!(output.declaring_source.ends_with("/producer/base.yaml"));
+            assert_eq!(output.written, "never-written.csv");
+            assert_eq!(
+                resources.resolve("child.yaml").unwrap(),
+                document.source().identity
+            );
+            assert_eq!(resources.capture_reads(), 2);
+            assert!(!self.0.join("producer/never-read.csv").exists());
+            assert!(!self.0.join("producer/never-written.csv").exists());
+        }
+    }
+    impl Drop for Study {
+        fn drop(&mut self) {
+            let parent = self.0.parent().unwrap();
+            fs::remove_dir_all(parent).unwrap();
+        }
+    }
+    #[test]
+    fn original_declaring_origin_captures_inherited_metadata_and_selects_its_entry_base() {
+        Study::new("ordinary").check();
+    }
+    #[cfg(unix)]
+    #[test]
+    fn canonical_declaring_origin_preserves_literal_backslashes_in_selected_root_names() {
+        Study::new("named\\root").check();
     }
 }

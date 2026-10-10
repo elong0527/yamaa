@@ -11,7 +11,10 @@ use std::{
     fs::File,
     io::Read,
     path::Path,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 
 const MAX_PATH_BYTES: usize = 65_536;
@@ -82,6 +85,37 @@ struct Snapshot {
     paths: Vec<(Segments, String, Segments)>,
 }
 
+/// A native metadata traversal shares these ceilings across captures, owned
+/// preparation copies, aliases and rereads. Ordinary resource use is unchanged.
+#[derive(Clone, Copy)]
+pub(crate) struct MetadataLimits {
+    pub bytes: usize,
+    pub snapshots: usize,
+    pub text: usize,
+    pub work: usize,
+}
+struct MetadataBudget {
+    limits: MetadataLimits,
+    bytes: AtomicUsize,
+    text: AtomicUsize,
+    work: AtomicUsize,
+}
+fn reserve(counter: &AtomicUsize, amount: usize, maximum: usize) -> Result<(), Error> {
+    counter
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |used| {
+            used.checked_add(amount).filter(|&n| n <= maximum)
+        })
+        .map(|_| ())
+        .map_err(|_| Error::Limit)
+}
+fn changed(error: Error) -> Error {
+    if error == Error::Limit {
+        error
+    } else {
+        Error::Changed
+    }
+}
+
 pub struct Resources {
     roots: Vec<Root>,
     base: Segments,
@@ -91,6 +125,7 @@ pub struct Resources {
     captured_bytes: usize,
     aliases: usize,
     reads: usize,
+    metadata: Option<MetadataBudget>,
 }
 impl Resources {
     /// Only native entry configuration may add roots, before entry/model capture.
@@ -134,10 +169,175 @@ impl Resources {
             captured_bytes: 0,
             aliases: 0,
             reads: 0,
+            metadata: None,
         })
     }
     pub fn capture_reads(&self) -> usize {
         self.reads
+    }
+    pub(crate) fn admit_metadata_budget(&mut self, limits: MetadataLimits) -> Result<(), Error> {
+        if self.metadata.is_some()
+            || self.captured_bytes > limits.bytes
+            || self.snapshots.len() > limits.snapshots
+            || self.aliases > limits.snapshots
+        {
+            return Err(Error::Limit);
+        }
+        let mut text = 0usize;
+        for snapshot in &self.snapshots {
+            for (key, written, base) in &snapshot.paths {
+                for length in key
+                    .iter()
+                    .chain(base)
+                    .map(String::len)
+                    .chain([written.len()])
+                {
+                    text = text
+                        .checked_add(length)
+                        .filter(|&n| n <= limits.text)
+                        .ok_or(Error::Limit)?;
+                }
+            }
+        }
+        for key in self.by_path.keys() {
+            for part in key {
+                text = text
+                    .checked_add(part.len())
+                    .filter(|&n| n <= limits.text)
+                    .ok_or(Error::Limit)?;
+            }
+        }
+        self.metadata = Some(MetadataBudget {
+            limits,
+            bytes: AtomicUsize::new(self.captured_bytes),
+            text: AtomicUsize::new(text),
+            work: AtomicUsize::new(0),
+        });
+        self.charge_work(text)
+    }
+    pub(crate) fn metadata_usage(&self) -> (usize, usize, usize) {
+        self.metadata.as_ref().map_or((0, 0, 0), |budget| {
+            (
+                budget.bytes.load(Ordering::Relaxed),
+                budget.text.load(Ordering::Relaxed),
+                budget.work.load(Ordering::Relaxed),
+            )
+        })
+    }
+    pub(crate) fn charge_work(&self, amount: usize) -> Result<(), Error> {
+        if let Some(budget) = &self.metadata {
+            reserve(&budget.work, amount, budget.limits.work)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn charge_metadata_text(&self, amount: usize) -> Result<(), Error> {
+        if let Some(budget) = &self.metadata {
+            reserve(&budget.text, amount, budget.limits.text)?;
+        }
+        self.charge_work(amount)
+    }
+    fn available_metadata_bytes(&self) -> usize {
+        self.metadata.as_ref().map_or(usize::MAX, |budget| {
+            budget
+                .limits
+                .bytes
+                .saturating_sub(budget.bytes.load(Ordering::Relaxed))
+        })
+    }
+    fn charge_metadata_bytes(&self, amount: usize) -> Result<(), Error> {
+        if let Some(budget) = &self.metadata {
+            reserve(&budget.bytes, amount, budget.limits.bytes)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn preparation_copy(&self, bytes: &[u8]) -> Result<Vec<u8>, Error> {
+        self.charge_metadata_bytes(bytes.len())?;
+        self.charge_work(bytes.len())?;
+        Ok(bytes.to_vec())
+    }
+    /// Immutable raw prefix evidence survives failed decoding and inheritance.
+    /// This view grants no resource, execution or publication port.
+    pub(crate) fn captured_sources(&self) -> impl Iterator<Item = (String, &[u8])> {
+        self.snapshots.iter().flat_map(|snapshot| {
+            snapshot
+                .paths
+                .iter()
+                .map(|(key, _, _)| (path_text(key), snapshot.bytes.as_ref()))
+        })
+    }
+    pub(crate) fn verify_captured(&self) -> Result<(), (String, Error)> {
+        for index in 0..self.snapshots.len() {
+            self.verify_paths(index)?;
+        }
+        Ok(())
+    }
+    fn charge_alias(
+        &self,
+        key: &[String],
+        written: &str,
+        base: &[String],
+        new_path: bool,
+    ) -> Result<(), Error> {
+        let mut amount = written.len();
+        for part in key
+            .iter()
+            .chain(base)
+            .chain(if new_path { key } else { &[] })
+        {
+            amount = amount.checked_add(part.len()).ok_or(Error::Limit)?;
+        }
+        self.charge_metadata_text(amount)
+    }
+    fn read_bounded(
+        &self,
+        file: &mut File,
+        maximum: usize,
+        verifying: bool,
+    ) -> Result<Vec<u8>, Error> {
+        let observed = |error| if verifying { Error::Changed } else { error };
+        let Some(budget) = &self.metadata else {
+            return read_bounded(file, maximum).map_err(observed);
+        };
+        if file
+            .metadata()
+            .map_err(|_| observed(Error::Unreadable))?
+            .len()
+            > maximum as u64
+        {
+            return Err(observed(Error::Limit));
+        }
+        let mut bytes = Vec::new();
+        let mut buffer = [0u8; 65_536];
+        loop {
+            let available = budget
+                .limits
+                .work
+                .saturating_sub(budget.work.load(Ordering::Relaxed));
+            if available <= 1 {
+                return Err(Error::Limit);
+            }
+            let count_limit = maximum
+                .saturating_sub(bytes.len())
+                .saturating_add(1)
+                .min(buffer.len())
+                .min(available - 1);
+            // Reserve before the read. Unused reservation is returned after IO;
+            // every read operation and every byte, including EOF probes, count.
+            self.charge_work(count_limit + 1)?;
+            let count = file
+                .read(&mut buffer[..count_limit])
+                .map_err(|_| observed(Error::Unreadable))?;
+            budget
+                .work
+                .fetch_sub(count_limit - count, Ordering::Relaxed);
+            if count == 0 {
+                return Ok(bytes);
+            }
+            if count > maximum.saturating_sub(bytes.len()) {
+                return Err(observed(Error::Limit));
+            }
+            bytes.extend_from_slice(&buffer[..count]);
+        }
     }
     /// Metadata only: no bytes read and no snapshot created.
     pub fn inspect(&self, written: &str) -> Result<(), Error> {
@@ -156,23 +356,32 @@ impl Resources {
     pub fn resolve(&self, written: &str) -> Result<String, Error> {
         Ok(path_text(&self.open(written)?.key))
     }
-    /// Publication names the declaration's first anchor, including absent targets.
-    /// Retain its selected physical root; parent traversal is checked at save.
-    pub(crate) fn publication_target(
-        &self,
-        written: &str,
-    ) -> Result<crate::file_publication::AnchoredTarget, Error> {
+    /// A lexical declaration location under the approved first-anchor policy.
+    /// The target may be absent. This fact opens no file and grants no byte or
+    /// publication authority; declaring identities come from this reader.
+    pub fn location_from(&self, declaring: &str, written: &str) -> Result<String, Error> {
+        let anchor = self.declaration_anchor(&file_base(declaring)?, written)?;
+        Ok(path_text(&anchor.key))
+    }
+    fn declaration_anchor(&self, base: &[String], written: &str) -> Result<Anchor, Error> {
         if matches!(
             written.rsplit(['/', '\\']).next(),
             None | Some("" | "." | "..")
         ) {
             return Err(Error::InvalidPath);
         }
-        let anchor = self
-            .anchors(&self.base, written)?
+        self.anchors(base, written)?
             .into_iter()
             .next()
-            .ok_or(Error::OutsideRoots)?;
+            .ok_or(Error::OutsideRoots)
+    }
+    /// Publication names the declaration's first anchor, including absent targets.
+    /// Retain its selected physical root; parent traversal is checked at save.
+    pub(crate) fn publication_target(
+        &self,
+        written: &str,
+    ) -> Result<crate::file_publication::AnchoredTarget, Error> {
+        let anchor = self.declaration_anchor(&self.base, written)?;
         let descriptor = self.roots[anchor.root]
             .descriptor
             .try_clone()
@@ -226,8 +435,11 @@ impl Resources {
             // Only a current physical witness and fully valid old aliases allow
             // reuse. Previously captured path keys always retain their snapshot.
             if length == self.snapshots[index].bytes.len() as u64
-                && self.physical_witness(index, physical)
-                && self.verify(index).is_ok()
+                && self.physical_witness(index, physical)?
+                && match self.verify(index) {
+                    Err(Error::Limit) => return Err(Error::Limit),
+                    result => result.is_ok(),
+                }
             {
                 Some(index)
             } else {
@@ -237,23 +449,50 @@ impl Resources {
         } else {
             None
         };
-        if !self.by_path.contains_key(&opened.key) && self.by_path.len() >= MAX_SNAPSHOTS {
+        let snapshots_limit = self
+            .metadata
+            .as_ref()
+            .map_or(MAX_SNAPSHOTS, |b| b.limits.snapshots.min(MAX_SNAPSHOTS));
+        if !self.by_path.contains_key(&opened.key) && self.by_path.len() >= snapshots_limit {
             return Err(Error::Limit);
         }
         if let Some(index) = accepted {
+            self.charge_work(
+                self.snapshots[index]
+                    .paths
+                    .iter()
+                    .try_fold(0usize, |n, (key, path, from)| {
+                        key.iter()
+                            .chain(from)
+                            .map(String::len)
+                            .chain([path.len()])
+                            .try_fold(n, usize::checked_add)
+                    })
+                    .ok_or(Error::Limit)?,
+            )?;
             let known_alias = self.snapshots[index]
                 .paths
                 .iter()
                 .any(|(key, path, from)| key == &opened.key && path == written && from == &base);
-            if !known_alias && self.aliases >= MAX_SNAPSHOTS {
+            if !known_alias && self.aliases >= snapshots_limit {
                 return Err(Error::Limit);
             }
             if self.snapshots[index].bytes.len() > maximum {
                 return Err(Error::Limit);
             }
             let bytes = Arc::clone(&self.snapshots[index].bytes);
-            if read_bounded(&mut opened.file, bytes.len())
-                .map_err(|_| Error::Changed)?
+            self.charge_work(bytes.len())?;
+            if !known_alias {
+                self.charge_alias(
+                    &opened.key,
+                    written,
+                    &base,
+                    !self.by_path.contains_key(&opened.key),
+                )?;
+            }
+            if self
+                .read_bounded(&mut opened.file, bytes.len(), true)
+                .map_err(changed)?
                 .as_slice()
                 != bytes.as_ref()
             {
@@ -269,22 +508,30 @@ impl Resources {
             self.by_path.insert(opened.key, index);
             return Ok((bytes, false));
         }
-        if self.snapshots.len() >= MAX_SNAPSHOTS || self.aliases >= MAX_SNAPSHOTS {
+        if self.snapshots.len() >= snapshots_limit || self.aliases >= snapshots_limit {
             return Err(Error::Limit);
         }
         let available = MAX_CAPTURED_BYTES
             .checked_sub(self.captured_bytes)
             .ok_or(Error::Limit)?;
-        let content = read_bounded(&mut opened.file, maximum.min(available))?;
-        let mut current = self.open_at(&base, written).map_err(|_| Error::Changed)?;
+        self.charge_alias(&opened.key, written, &base, true)?;
+        let content = self.read_bounded(
+            &mut opened.file,
+            maximum.min(available).min(self.available_metadata_bytes()),
+            false,
+        )?;
+        self.charge_work(content.len())?;
+        let mut current = self.open_at(&base, written).map_err(changed)?;
         if current.key != opened.key
-            || read_bounded(&mut current.file, content.len())
-                .map_err(|_| Error::Changed)?
+            || self
+                .read_bounded(&mut current.file, content.len(), true)
+                .map_err(changed)?
                 .as_slice()
                 != content.as_slice()
         {
             return Err(Error::Changed);
         }
+        self.charge_metadata_bytes(content.len())?;
         self.captured_bytes += content.len();
         self.reads += 1;
         self.aliases += 1;
@@ -299,32 +546,49 @@ impl Resources {
         Ok((bytes, true))
     }
     fn verify(&self, index: usize) -> Result<(), Error> {
+        self.verify_paths(index).map_err(|(_, error)| error)
+    }
+    fn verify_paths(&self, index: usize) -> Result<(), (String, Error)> {
         let snapshot = &self.snapshots[index];
         for (key, written, base) in &snapshot.paths {
-            let mut opened = self.open_at(base, written).map_err(|_| Error::Changed)?;
-            if &opened.key != key
-                || read_bounded(&mut opened.file, snapshot.bytes.len())
-                    .map_err(|_| Error::Changed)?
-                    .as_slice()
-                    != snapshot.bytes.as_ref()
-            {
-                return Err(Error::Changed);
-            }
+            let result = (|| {
+                self.charge_work(snapshot.bytes.len())?;
+                let mut opened = self.open_at(base, written).map_err(changed)?;
+                if &opened.key != key
+                    || self
+                        .read_bounded(&mut opened.file, snapshot.bytes.len(), true)?
+                        .as_slice()
+                        != snapshot.bytes.as_ref()
+                {
+                    return Err(Error::Changed);
+                }
+                Ok(())
+            })();
+            result.map_err(|error| (path_text(key), error))?;
         }
         Ok(())
     }
-    fn physical_witness(&self, index: usize, physical: (i128, i128)) -> bool {
-        self.snapshots[index]
-            .paths
-            .iter()
-            .any(|(key, written, base)| {
-                self.open_at(base, written).is_ok_and(|opened| {
-                    opened.key == *key && (opened.identity.0, opened.identity.1) == physical
-                })
-            })
+    fn physical_witness(&self, index: usize, physical: (i128, i128)) -> Result<bool, Error> {
+        for (key, written, base) in &self.snapshots[index].paths {
+            match self.open_at(base, written) {
+                Ok(opened)
+                    if opened.key == *key && (opened.identity.0, opened.identity.1) == physical =>
+                {
+                    return Ok(true)
+                }
+                Err(Error::Limit) => return Err(Error::Limit),
+                _ => {}
+            }
+        }
+        Ok(false)
     }
     fn anchors(&self, base: &[String], written: &str) -> Result<Vec<Anchor>, Error> {
         bounded(written)?;
+        let size = base
+            .iter()
+            .try_fold(written.len(), |n, part| n.checked_add(part.len()))
+            .ok_or(Error::Limit)?;
+        self.charge_work(size.checked_mul(self.roots.len() + 1).ok_or(Error::Limit)?)?;
         if written.contains('\\') || written.contains('\0') {
             return Err(Error::InvalidPath);
         }
@@ -433,6 +697,7 @@ impl Resources {
     }
     #[cfg(unix)]
     fn open_anchor(&self, anchor: Anchor) -> Result<Opened, WalkError> {
+        self.charge_work(anchor.remainder.len().checked_mul(4).ok_or(Error::Limit)?)?;
         let root = &self.roots[anchor.root].descriptor;
         let mut directories = Vec::new();
         let mut links = Vec::new();
@@ -514,6 +779,7 @@ impl Resources {
     }
     #[cfg(windows)]
     fn open_anchor(&self, anchor: Anchor) -> Result<Opened, WalkError> {
+        self.charge_work(anchor.remainder.len().checked_mul(4).ok_or(Error::Limit)?)?;
         let root = &self.roots[anchor.root].descriptor;
         let mut directories = Vec::new();
         let mut witnesses = Vec::new();
@@ -807,6 +1073,7 @@ fn within(path: &[String], root: &[String]) -> bool {
         }
     })
 }
+
 fn path_text(segments: &[String]) -> String {
     format!("{}/{}", segments[0], segments[1..].join("/"))
 }
@@ -853,5 +1120,117 @@ mod identity_cache_tests {
         assert!(resources.capture("c", 32).unwrap().1);
         assert_eq!(resources.capture_reads(), 2);
         assert!(!resources.capture("a", 32).unwrap().1);
+    }
+}
+
+#[cfg(test)]
+mod metadata_budget_tests {
+    use super::*;
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    struct Fixture(std::path::PathBuf);
+    impl Fixture {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "yamaa-metadata-budget-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            std::fs::create_dir(&path).unwrap();
+            Self(std::fs::canonicalize(path).unwrap())
+        }
+        fn resources(&self, snapshots: usize) -> Resources {
+            let root = self.0.to_str().unwrap();
+            let mut resources = Resources::new(root, root, &[]).unwrap();
+            resources
+                .admit_metadata_budget(MetadataLimits {
+                    bytes: 65_536,
+                    snapshots,
+                    text: 65_536,
+                    work: 1_048_576,
+                })
+                .unwrap();
+            resources
+        }
+        fn identity(&self, name: &str) -> String {
+            let path = self.0.join(name).to_str().unwrap().to_owned();
+            #[cfg(windows)]
+            let path = path
+                .strip_prefix(r"\\?\")
+                .unwrap_or(&path)
+                .replace('\\', "/");
+            path
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+
+    #[test]
+    fn repeated_alias_verification_spends_work_without_claiming_a_new_capture() {
+        let fixture = Fixture::new();
+        std::fs::write(fixture.0.join("source.yaml"), b"held original bytes").unwrap();
+        let mut resources = fixture.resources(4);
+        let (before, new) = resources.capture("source.yaml", 1024).unwrap();
+        assert!(new);
+        let (bytes, text, work) = resources.metadata_usage();
+        let (alias, new) = resources.capture("./source.yaml", 1024).unwrap();
+        assert!(!new);
+        assert!(Arc::ptr_eq(&before, &alias));
+        let (after_bytes, after_text, after_work) = resources.metadata_usage();
+        assert_eq!(after_bytes, bytes);
+        assert!(after_text > text);
+        assert!(after_work > work + before.len() * 2);
+        assert_eq!(resources.capture_reads(), 1);
+        resources.metadata.as_mut().unwrap().limits.work = after_work;
+        assert_eq!(
+            resources.capture("./source.yaml", 1024).unwrap_err(),
+            Error::Limit
+        );
+        assert_eq!(resources.capture_reads(), 1);
+        assert_eq!(
+            resources.captured_sources().next().unwrap().1,
+            before.as_ref()
+        );
+        resources.metadata.as_mut().unwrap().limits.work = 1_048_576;
+        std::fs::hard_link(fixture.0.join("source.yaml"), fixture.0.join("other.yaml")).unwrap();
+        assert!(!resources.capture("other.yaml", 1024).unwrap().1);
+        std::fs::remove_file(fixture.0.join("other.yaml")).unwrap();
+        std::fs::write(fixture.0.join("other.yaml"), b"changed alias").unwrap();
+        assert_eq!(
+            resources.verify_captured().unwrap_err(),
+            (fixture.identity("other.yaml"), Error::Changed,)
+        );
+        std::fs::write(fixture.0.join("source.yaml"), b"changed bytes").unwrap();
+        assert_eq!(
+            resources.verify_captured().unwrap_err(),
+            (fixture.identity("source.yaml"), Error::Changed,)
+        );
+        assert_eq!(
+            resources.captured_sources().next().unwrap().1,
+            before.as_ref()
+        );
+    }
+
+    #[test]
+    fn alias_and_copy_ownership_are_bounded_before_new_authority() {
+        let fixture = Fixture::new();
+        std::fs::write(fixture.0.join("source.yaml"), b"abc").unwrap();
+        let mut resources = fixture.resources(1);
+        let (bytes, _) = resources.capture("source.yaml", 3).unwrap();
+        assert_eq!(
+            resources.capture("./source.yaml", 3).unwrap_err(),
+            Error::Limit
+        );
+        assert_eq!(resources.aliases, 1);
+        assert_eq!(resources.by_path.len(), 1);
+        resources.metadata.as_mut().unwrap().limits.bytes = 5;
+        assert_eq!(
+            resources.preparation_copy(&bytes).unwrap_err(),
+            Error::Limit
+        );
+        assert_eq!(resources.metadata_usage().0, 3);
+        assert_eq!(resources.captured_sources().next().unwrap().1, b"abc");
     }
 }

@@ -64,6 +64,62 @@ impl Drop for Study {
 }
 
 #[test]
+fn declaration_locations_use_first_anchor_without_opening_absent_artifacts() {
+    let study = Study::new();
+    fs::write(study.path("project/spec/producer.yaml"), b"metadata").unwrap();
+    // A fallback artifact exists, but a declaration still names the first
+    // anchor beneath the originating specification, including absent parents.
+    fs::write(study.path("additional/output.csv"), b"never captured").unwrap();
+    let resources = study.resources();
+    let declaring = resources.resolve("producer.yaml").unwrap();
+    let expected = declaring.rsplit_once('/').unwrap().0;
+    assert_eq!(
+        resources.location_from(&declaring, "output.csv").unwrap(),
+        format!("{expected}/output.csv")
+    );
+    assert_eq!(
+        resources
+            .location_from(&declaring, "absent/output.csv")
+            .unwrap(),
+        format!("{expected}/absent/output.csv")
+    );
+    assert_eq!(
+        resources.resolve_from(&declaring, "absent/output.csv"),
+        Err(Error::Missing)
+    );
+    assert_eq!(resources.capture_reads(), 0);
+    assert!(!study.path("project/spec/output.csv").exists());
+    assert!(!study.path("project/spec/absent").exists());
+}
+
+#[test]
+fn declaration_locations_keep_approved_containment_and_file_intent() {
+    let study = Study::new();
+    fs::write(study.path("project/spec/producer.yaml"), b"metadata").unwrap();
+    let resources = study.resources();
+    let declaring = resources.resolve("producer.yaml").unwrap();
+    for written in [
+        "",
+        "output.csv/",
+        "output.csv/.",
+        "output.csv/..",
+        "folder\\output.csv",
+        "https://example.invalid/output.csv",
+    ] {
+        assert_eq!(
+            resources.location_from(&declaring, written),
+            Err(Error::InvalidPath),
+            "{written}"
+        );
+    }
+    assert_eq!(
+        resources.location_from(&declaring, "../../outside/output.csv"),
+        Err(Error::OutsideRoots)
+    );
+    assert_eq!(resources.capture_reads(), 0);
+}
+
+#[test]
 fn metadata_and_bounded_capture_reuse_only_exact_retained_bytes() {
     let study = Study::new();
     fs::write(study.path("project/data/source.csv"), b"ID,V\n1,2\n").unwrap();
