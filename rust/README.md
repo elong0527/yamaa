@@ -72,8 +72,8 @@ with default features disabled. This MIT-licensed pure-Rust no_std numeric libra
 has no runtime dependencies; its Rust 1.63 minimum is below this workspace's 1.90.
 Disabling the default `arch` feature selects its generic square-root algorithm.
 The dependency allowlist deliberately includes libm for this primitive; it does
-not grant coverage to other math functions. No host math ABI is added. Cargo
-transitive locking remains a separate release gate under the repository policy.
+not grant coverage to other math functions. No host math ABI is added. The
+canonical Cargo lock and unchanged source-package workspace are described in [CARGO_LOCKING.md](CARGO_LOCKING.md).
 
 `evaluation::NumericPlan` evaluates the implemented numeric subset from a typed
 tree through a core-owned resolver. It preserves operand order, association,
@@ -192,9 +192,13 @@ numeric request. The full workflow, table and callback gates remain open.
 ## Packaging decision
 
 Python uses a mixed Maturin build in `python/`: one `yamaa` wheel includes the
-facade and private `yamaa._native` extension. Build it from `python/` with
-`maturin build --release --sdist`. A source archive owns all four required Rust
-crates and the Python package. The public domain/check candidate never selects
+facade and private `yamaa._native` extension. Build both distributions through
+the PEP 517 backend with `uv build --wheel --sdist python`. The source archive
+owns the Python package, all five workspace crates, and the unchanged canonical
+Cargo lock and workspace manifest. The wheel selects `yamaa-python`; building
+it does not compile the R binding or require an R installation. See
+[CARGO_LOCKING.md](CARGO_LOCKING.md) for the workspace preservation backend.
+The public domain/check candidate never selects
 or falls back to the retained reference implementation.
 
 R installs as `yamaa`. Its archive embeds the shared workspace through
@@ -220,8 +224,8 @@ Transport uses pinned [serde 1.0.228](https://docs.rs/serde/1.0.228/serde/) and
 Both are MIT/Apache-2.0 with MSRVs 1.56/1.61 below the workspace's 1.90. Derive is
 explicitly enabled for serde; JSON uses standard features and its recursion guard.
 The dependency allowlist admits these serialization libraries only in adapters.
-Core and engine remain no_std without serialization dependencies. The transitive
-locking release gate also covers these new adapter dependencies.
+Core and engine remain no_std without serialization dependencies. The canonical
+Cargo lock also covers these adapter dependencies.
 
 Requests are capped at 1 MiB before parsing; decoded scalar data and output are
 bounded by that input (output escaping can expand text). Unknown/duplicate fields,
@@ -272,10 +276,11 @@ R installed and on `PATH`.
 ```sh
 cd rust
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test
-cargo test -p yamaa-core -p yamaa-engine -p yamaa-adapters --profile release-test
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked
+cargo test --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters --profile release-test
 python tools/check_dependencies.py
+python tools/check_cargo_lock.py
 python tools/check_float_text.py
 uv run --project ../python --locked python tools/check_numeric_grammar.py
 python -m unittest discover -s tests -p 'test_*.py'
@@ -284,8 +289,7 @@ python -m unittest discover -s tests -p 'test_*.py'
 From the repository root, with a new empty output directory:
 
 ```sh
-(cd python && uv tool run --from maturin==1.9.6 maturin build \
-  --release --sdist --out /tmp/yamaa-dist)
+uv build --wheel --sdist --out-dir /tmp/yamaa-dist python
 python rust/tools/stage_r_package.py /tmp/yamaa-stage/yamaa
 cd /tmp/yamaa-dist
 R CMD build --no-build-vignettes --no-manual /tmp/yamaa-stage/yamaa
@@ -344,8 +348,9 @@ semantics change and qualify both hosts, dependent calculations, rounding and CS
 outputs against independent truth. Do not enable libm behind a broad tolerance.
 Decimal expression rounding now follows the exact rule described in
 [ROUNDING_ASSESSMENT.md](ROUNDING_ASSESSMENT.md); broader qualification remains a
-separate implementation gate. Cargo locking and dataset execution remain later
-release gates.
+separate implementation gate. Locked builds require installed qualification on
+every required platform;
+complete dataset execution remains a separate release gate.
 
 
 An explicit opt-in is now available through `compile_numeric_with_policy` and
@@ -376,9 +381,10 @@ most 649 digits. Runtime integer values remain i64; big integers are private
 rounding intermediates. Final decimal-to-binary64 conversion uses Rust's float
 parser once, followed by nonfinite and positive-zero normalization.
 
-The dependency allowlist explicitly admits this numerical helper. Transitive
-Cargo locking remains the existing release gate; this PR adds no lockfile or
-repository content digest. Host APIs, standalone specification dispatch, result
+The dependency allowlist explicitly admits this numerical helper.
+The canonical Cargo lock covers this helper and its transitive dependencies.
+Installed qualification on all required platforms remains a release gate. Host
+APIs, standalone specification dispatch, result
 conversion/handlers and complete dataset execution remain separate integration.
 
 ## Ordered table access and numeric reductions
@@ -469,8 +475,8 @@ documents this MSRV. Split Arrow crates are rejected in core/engine by the
 dependency guard. The transitive graph includes arrow-data, chrono with its clock
 and platform support, ahash/hashbrown, half, num-complex, num-integer and num-traits;
 disabling Arrow defaults does not remove those dependencies. This adds no IPC,
-Parquet, compute-kernel or unsafe FFI API. Transitive Cargo locking remains an
-unresolved release gate; no lockfile or content digest is committed.
+Parquet, compute-kernel or unsafe FFI API. The canonical Cargo lock covers the
+transitive graph; the repository still prohibits runtime content digests.
 
 ## Installed table interchange
 

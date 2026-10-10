@@ -14,7 +14,7 @@ all: $(SHLIB) rust_clean
 $(SHLIB): $(RUST_LIB)
 
 $(RUST_LIB): FORCE
-	cd rust && $(RUST_PLATFORM_ENV) CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" cargo build --release -p yamaa-r
+	cd rust && $(RUST_PLATFORM_ENV) CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" cargo build --locked --release -p yamaa-r
 
 .PHONY: clean rust_clean FORCE
 FORCE:

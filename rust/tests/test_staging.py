@@ -7,6 +7,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location(
     "stage_r_package", Path(__file__).parents[1] / "tools/stage_r_package.py"
@@ -31,7 +32,10 @@ class StagingTests(unittest.TestCase):
                     self.assertEqual(source.read_bytes(), copied.read_bytes())
             self.assertTrue((embedded / "rust-toolchain.toml").is_file())
             self.assertFalse((embedded / "target").exists())
-            self.assertFalse((embedded / "Cargo.lock").exists())
+            self.assertEqual(
+                (embedded / "Cargo.lock").read_bytes(),
+                (staging.WORKSPACE / "Cargo.lock").read_bytes(),
+            )
             original = destination / "inst/specification-original"
             for module in (original / "schema").glob("*.yaml"):
                 self.assertEqual(
@@ -124,6 +128,14 @@ class StagingTests(unittest.TestCase):
                     / "crates/yamaa-core/tests/fixtures/column_dependencies.tsv"
                 ).read_bytes(),
             )
+
+    def test_missing_lock_refuses_before_staging(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with mock.patch.object(staging, "WORKSPACE", root):
+                with self.assertRaisesRegex(FileNotFoundError, "canonical Cargo.lock"):
+                    staging.stage(root / "destination")
+            self.assertFalse((root / "destination").exists())
 
     def test_existing_destination_is_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
