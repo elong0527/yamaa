@@ -492,6 +492,7 @@ jobs:
             --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.3.0.tar.gz" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Check R source package outside checkout
+        id: r_package_check
         working-directory: ${{ runner.temp }}
         env:
           _R_CHECK_CRAN_INCOMING_REMOTE_: 'false'
@@ -503,7 +504,7 @@ jobs:
           R CMD check --no-manual ../yamaa_0.3.0.tar.gz
           python -c 'from pathlib import Path; lines = Path("yamaa.Rcheck/00check.log").read_text().splitlines(); assert "Status: OK" in lines, "R package check has unresolved findings"'
       - name: Preserve R package check
-        if: always()
+        if: ${{ always() && (steps.r_package_check.outcome == 'success' || steps.r_package_check.outcome == 'failure') }}
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: native-r-check-${{ matrix.os }}
