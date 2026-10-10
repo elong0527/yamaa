@@ -100,13 +100,6 @@ fn kind(d: &Document, node: usize) -> Result<ColumnType, Error> {
         _ => Err(Error::Boundary),
     }
 }
-fn charge_owned(total: &mut usize, count: usize, limit: usize) -> Result<(), Error> {
-    *total = total
-        .checked_add(count)
-        .filter(|&n| n <= limit)
-        .ok_or(Error::Limit("producer_owned_text_bytes"))?;
-    Ok(())
-}
 /// Validate producer output fields and labels before any activation or study port.
 /// All owned strings and findings follow aggregate quota admission.
 pub fn prepare(spec: &SpecificationDocument, limits: Limits) -> Result<Contract, Error> {
@@ -130,10 +123,6 @@ pub fn prepare(spec: &SpecificationDocument, limits: Limits) -> Result<Contract,
         }
     }
     let path = text(d, field(d, output, "path")?)?;
-    // Arena nodes may be shared by several occurrences. Charge every owned
-    // copy as well as the admitted input, before cloning its text.
-    let mut owned_bytes = 0usize;
-    charge_owned(&mut owned_bytes, path.len(), limits.text_bytes)?;
     let mut fields = Vec::new();
     let mut findings = Vec::new();
     if selected.is_empty() {
@@ -141,7 +130,6 @@ pub fn prepare(spec: &SpecificationDocument, limits: Limits) -> Result<Contract,
     }
     for (position, &id) in selected.iter().enumerate() {
         let name = text(d, id)?;
-        charge_owned(&mut owned_bytes, name.len(), limits.text_bytes)?;
         if selected[..position]
             .iter()
             .any(|&prior| text(d, prior).is_ok_and(|prior| prior == name))
@@ -174,7 +162,6 @@ pub fn prepare(spec: &SpecificationDocument, limits: Limits) -> Result<Contract,
             findings.push(Cause::Label { field: name.into() });
             continue;
         };
-        charge_owned(&mut owned_bytes, label.len(), limits.text_bytes)?;
         fields.push(Field {
             name: name.into(),
             kind: kind(d, field(d, column, "type")?)?,
