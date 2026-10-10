@@ -74,26 +74,9 @@ impl Specification {
                 "producer preparation failed; original rejection remains retained",
             )
         })?;
-        let provenance = Arc::clone(build.provenance());
-        let mut port = crate::project_activation::Port::new(
-            py,
-            provenance
-                .environment()
-                .lock()
-                .map_or(&[], |lock| &lock.source.bytes),
-        );
-        let mut limits = Limits::default();
-        limits.engine.report_bytes = report_bytes;
-        let inner = build.build_reported(
-            &mut port,
-            crate::specification_result::identity(&fields),
-            limits,
-        );
-        Ok(Attempt {
-            inner: Arc::new(Mutex::new(inner)),
-            fields,
-        })
+        Ok(build_selected(py, build, fields, report_bytes))
     }
+
     /// Early rejections retain all original bytes even if no build can be entered.
     fn rejected_sources<'py>(
         &self,
@@ -133,6 +116,34 @@ impl Specification {
             .collect())
     }
 }
+/// Transfer the selected whole build directly; preparation is never repeated.
+pub(crate) fn build_selected(
+    py: Python<'_>,
+    build: &mut FileBuild,
+    fields: Arc<Vec<String>>,
+    report_bytes: usize,
+) -> Attempt {
+    let provenance = Arc::clone(build.provenance());
+    let mut port = crate::project_activation::Port::new(
+        py,
+        provenance
+            .environment()
+            .lock()
+            .map_or(&[], |lock| &lock.source.bytes),
+    );
+    let mut limits = Limits::default();
+    limits.engine.report_bytes = report_bytes;
+    let inner = build.build_reported(
+        &mut port,
+        crate::specification_result::identity(&fields),
+        limits,
+    );
+    Attempt {
+        inner: Arc::new(Mutex::new(inner)),
+        fields,
+    }
+}
+
 #[pyfunction]
 pub fn _prepare_producer_file(specification: &str, environment: &str) -> Specification {
     Specification {
@@ -156,24 +167,18 @@ impl Attempt {
     fn get(&self) -> PyResult<MutexGuard<'_, NativeAttempt>> {
         self.inner.try_lock().map_err(|_| borrow_error())
     }
-    fn retained(&self) -> Self {
+    pub(crate) fn retained(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
             fields: Arc::clone(&self.fields),
         }
     }
-}
-#[pymethods]
-impl Attempt {
-    fn accepted(&self) -> PyResult<bool> {
-        Ok(self.get()?.accepted())
-    }
-    fn entered_nodes(&self) -> PyResult<Vec<usize>> {
-        let state = self.get()?;
-        Ok(state.graph.nodes.iter().map(|node| node.node).collect())
-    }
-    #[pyo3(signature = (maximum=16_777_216))]
-    fn result(&self, py: Python<'_>, maximum: usize) -> PyResult<Report> {
+    pub(crate) fn formatted(
+        &self,
+        py: Python<'_>,
+        maximum: usize,
+        public: bool,
+    ) -> PyResult<Report> {
         let state = self.get()?;
         let mut count = 0usize;
         yamaa_adapters::producer_attempt::visit_host_failures(&state, |_, _| {
@@ -239,6 +244,8 @@ impl Attempt {
             }
         }
         let mut observations = None;
+        let mut domain = None;
+        let mut output_error = None;
         if refusal.is_empty() {
             let facts = failures
                 .iter()
@@ -261,13 +268,41 @@ impl Attempt {
                         }),
                 })
                 .collect::<Vec<_>>();
-            match producer_report::attempt_report_classified(
-                &state,
-                crate::specification_result::identity(&self.fields),
-                maximum,
-                &facts,
-            ) {
-                Ok(value) => observations = Some(value.to_string()),
+            let projected = if public {
+                match yamaa_adapters::producer_result::prepare_classified(
+                    &state,
+                    crate::specification_result::identity(&self.fields),
+                    maximum,
+                    &facts,
+                ) {
+                    Ok(value) => {
+                        domain = Some(value);
+                        Ok(None)
+                    }
+                    Err(yamaa_adapters::producer_result::Error::Report(error)) => Err(error),
+                    Err(yamaa_adapters::producer_result::Error::Output {
+                        observations: value,
+                        error,
+                        ..
+                    }) => {
+                        observations = Some(value.to_string());
+                        output_error = Some(error);
+                        refusal = "output_projection";
+                        Ok(None)
+                    }
+                }
+            } else {
+                producer_report::attempt_report_classified(
+                    &state,
+                    crate::specification_result::identity(&self.fields),
+                    maximum,
+                    &facts,
+                )
+                .map(Some)
+            };
+            match projected {
+                Ok(Some(value)) => observations = Some(value.to_string()),
+                Ok(None) => {}
                 Err(ProjectionError::Original {
                     observations: value,
                     ..
@@ -285,9 +320,25 @@ impl Attempt {
             carrier: self.retained(),
             observations,
             refusal,
+            domain,
+            output_error,
         })
     }
-    fn host_failures(&self, py: Python<'_>) -> PyResult<Vec<(&'static str, Py<PyAny>)>> {
+}
+#[pymethods]
+impl Attempt {
+    fn accepted(&self) -> PyResult<bool> {
+        Ok(self.get()?.accepted())
+    }
+    fn entered_nodes(&self) -> PyResult<Vec<usize>> {
+        let state = self.get()?;
+        Ok(state.graph.nodes.iter().map(|node| node.node).collect())
+    }
+    #[pyo3(signature = (maximum=16_777_216))]
+    fn result(&self, py: Python<'_>, maximum: usize) -> PyResult<Report> {
+        self.formatted(py, maximum, false)
+    }
+    pub(crate) fn host_failures(&self, py: Python<'_>) -> PyResult<Vec<(&'static str, Py<PyAny>)>> {
         let state = self.get()?;
         let mut count = 0usize;
         yamaa_adapters::producer_attempt::visit_host_failures(&state, |_, error| {
@@ -308,7 +359,7 @@ impl Attempt {
         });
         Ok(failures)
     }
-    fn propagate_interrupt(&self, py: Python<'_>) -> PyResult<()> {
+    pub(crate) fn propagate_interrupt(&self, py: Python<'_>) -> PyResult<()> {
         let state = self.get()?;
         let mut interrupt = None;
         yamaa_adapters::producer_attempt::visit_host_failures(&state, |_, error| {
@@ -361,7 +412,42 @@ pub struct Report {
     carrier: Attempt,
     observations: Option<String>,
     refusal: &'static str,
+    domain: Option<yamaa_adapters::producer_result::RootResult>,
+    output_error: Option<yamaa_adapters::table_transport::TableTransportError>,
 }
+impl Report {
+    pub(crate) fn domain_attempt(&self) -> Attempt {
+        self.carrier.retained()
+    }
+    pub(crate) fn domain_output(&self) -> Option<&[u8]> {
+        self.domain.as_ref().and_then(|result| result.output())
+    }
+    pub(crate) fn domain_projection_failure(&self) -> Option<String> {
+        self.output_error.map(|error| error.to_string())
+    }
+    pub(crate) fn domain_issues(&self) -> Vec<yamaa_adapters::issue_rows::Issue> {
+        self.domain
+            .as_ref()
+            .map(|result| result.issues().to_vec())
+            .unwrap_or_else(|| yamaa_adapters::file_application::rejected("build", self.refusal))
+    }
+    pub(crate) fn domain_observations(&self) -> Option<String> {
+        self.domain
+            .as_ref()
+            .map(|result| result.observations().to_string())
+            .or_else(|| self.observations.clone())
+    }
+    pub(crate) fn domain_failures(
+        &self,
+        py: Python<'_>,
+    ) -> PyResult<Vec<(&'static str, Py<PyAny>)>> {
+        self.carrier.host_failures(py)
+    }
+    pub(crate) fn propagate_domain_interrupt(&self, py: Python<'_>) -> PyResult<()> {
+        self.carrier.propagate_interrupt(py)
+    }
+}
+
 #[pymethods]
 impl Report {
     fn report_status(&self) -> &'static str {
@@ -434,7 +520,9 @@ fn ordinary_exception(
         truncated: false,
     })
 }
-fn source_budget<'a>(sources: impl Iterator<Item = (&'a str, &'a [u8])>) -> PyResult<()> {
+pub(crate) fn source_budget<'a>(
+    sources: impl Iterator<Item = (&'a str, &'a [u8])>,
+) -> PyResult<()> {
     let mut text = 16_777_216usize;
     let mut bytes = 67_108_864usize;
     let mut count = 65_536usize;

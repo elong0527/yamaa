@@ -14,7 +14,9 @@ struct State {
     #[cfg(unix)]
     project: Option<Rc<crate::file_project::platform::HeldAttempt>>,
     #[cfg(unix)]
-    _preparation: Option<yamaa_adapters::project_application::Error>,
+    _preparation: Option<yamaa_adapters::file_workflow::SelectionError>,
+    #[cfg(unix)]
+    producer: Option<crate::file_producer::platform::PublicResult>,
     issues: Vec<Issue>,
 }
 thread_local! { static HANDLES:RefCell<BTreeMap<usize,Weak<RefCell<State>>>>=const { RefCell::new(BTreeMap::new()) }; }
@@ -106,22 +108,47 @@ fn domain_file(
                     .map_err(|_| "missing condition capability")?
                     .as_function()
                     .ok_or("invalid condition capability")?;
-                let mut project = match yamaa_adapters::project_application::prepare(
+                let selected = match yamaa_adapters::file_workflow::select(
                     specification,
                     environment,
                     yamaa_core::project_function::Language::R,
                 ) {
-                    Ok(project) => project,
+                    Ok(selected) => selected,
                     Err(error) => {
                         return store(State {
+                            producer: None,
                             result: None,
                             project: None,
-                            issues: yamaa_adapters::project_application::failure(
+                            issues: yamaa_adapters::project_application::selection_failure(
                                 &error,
                                 yamaa_core::project_function::Language::R,
                             ),
                             _preparation: Some(error),
                         })
+                    }
+                };
+                let mut project = match selected {
+                    yamaa_adapters::file_workflow::Selected::Ordinary(project) => project,
+                    yamaa_adapters::file_workflow::Selected::Producer(graph) => {
+                        let mut build = graph.into_build();
+                        let fields = [version, yamaa_core::VERSION, "domain", specification, "."];
+                        if fields.iter().any(|text| text.len() > 65536) {
+                            return Err("producer identity byte limit".into());
+                        }
+                        let producer = crate::file_producer::platform::build_selected(
+                            &mut build,
+                            fields.map(str::to_owned).to_vec(),
+                            verify,
+                            resolve,
+                            formatter,
+                        )?;
+                        return store(State {
+                            producer: Some(producer),
+                            result: None,
+                            project: None,
+                            _preparation: None,
+                            issues: Vec::new(),
+                        });
                     }
                 };
                 let inner = project.build_with(|run| {
@@ -155,12 +182,14 @@ fn domain_file(
                 };
                 return store(match result {
                     Ok(result) => State {
+                        producer: None,
                         result: Some(result),
                         project: Some(attempt),
                         _preparation: None,
                         issues: Vec::new(),
                     },
                     Err(issues) => State {
+                        producer: None,
                         result: None,
                         project: Some(attempt),
                         _preparation: None,
@@ -184,12 +213,14 @@ fn domain_file(
             );
             store(match result {
                 Ok(result) => State {
+                    producer: None,
                     result: Some(result),
                     project: None,
                     _preparation: None,
                     issues: Vec::new(),
                 },
                 Err(issues) => State {
+                    producer: None,
                     result: None,
                     project: None,
                     _preparation: None,
@@ -256,6 +287,10 @@ fn domain_issues(handle: Robj) -> List {
         if let Some(result) = &state.result {
             return crate::issue_frame::frame(&result.issues());
         }
+        #[cfg(unix)]
+        if let Some(producer) = &state.producer {
+            return crate::issue_frame::frame(&producer.issues());
+        }
         crate::issue_frame::frame(&state.issues)
     })
 }
@@ -269,6 +304,14 @@ fn domain_output(handle: Robj) -> List {
         #[cfg(unix)]
         if let Some(table) = state
             .result
+            .as_ref()
+            .and_then(|result| result.output_table())
+        {
+            return crate::public_table::frame(table);
+        }
+        #[cfg(unix)]
+        if let Some(table) = state
+            .producer
             .as_ref()
             .and_then(|result| result.output_table())
         {
@@ -289,6 +332,14 @@ fn domain_observations(handle: Robj) -> List {
         if let Some(result) = &state.result {
             return Ok(Raw::from_bytes(result.observations().to_string().as_bytes()).into_robj());
         }
+        #[cfg(unix)]
+        if let Some(value) = state
+            .producer
+            .as_ref()
+            .and_then(|result| result.observations())
+        {
+            return Ok(Raw::from_bytes(value.as_bytes()).into_robj());
+        }
         let _ = state;
         Ok(NULL.into_robj())
     })
@@ -307,6 +358,14 @@ fn domain_save(handle: Robj) -> List {
                 Err(_) => list!(saved = false, failed = true),
             }
             .into_robj());
+        }
+        #[cfg(unix)]
+        if state
+            .producer
+            .as_ref()
+            .is_some_and(|result| result.output_table().is_some())
+        {
+            return Ok(list!(saved = false, failed = false, unsupported = true).into_robj());
         }
         let _ = &mut state;
         Ok(list!(saved = false, failed = true).into_robj())
@@ -331,6 +390,76 @@ fn domain_interrupt(handle: Robj) -> List {
             });
             return Ok(interrupted.unwrap_or_else(|| r!(NULL)));
         }
+        #[cfg(unix)]
+        if let Some(producer) = &state.producer {
+            return producer.interrupt();
+        }
+        let _ = state;
+        Ok(r!(NULL))
+    })
+}
+/// Private installed evidence consults the exact held public-domain owner.
+#[extendr]
+fn domain_producer_evidence(handle: Robj) -> List {
+    boundary(|| {
+        let state = resolve(&handle)?;
+        let state = state
+            .try_borrow()
+            .map_err(|_| "domain result already borrowed")?;
+        #[cfg(unix)]
+        if let Some(producer) = &state.producer {
+            return producer.evidence();
+        }
+        let _ = state;
+        Ok(r!(NULL))
+    })
+}
+#[extendr]
+fn domain_preparation_sources(handle: Robj) -> List {
+    boundary(|| {
+        let state = resolve(&handle)?;
+        let state = state
+            .try_borrow()
+            .map_err(|_| "domain result already borrowed")?;
+        #[cfg(unix)]
+        if let Some(error) = &state._preparation {
+            let sources = error
+                .retained_sources(65_536, 16_777_216)
+                .map_err(|_| "source evidence limit; original preparation remains retained")?;
+            let mut remaining = 67_108_864usize;
+            for (_, bytes) in &sources {
+                remaining = remaining
+                    .checked_sub(bytes.len())
+                    .ok_or("source evidence limit; original preparation remains retained")?;
+            }
+            return Ok(List::from_values(sources.iter().map(|(name, bytes)| {
+                list!(
+                    name = Raw::from_bytes(name.as_bytes()),
+                    bytes = Raw::from_bytes(bytes)
+                )
+            }))
+            .into_robj());
+        }
+        let _ = state;
+        Ok(List::new(0).into_robj())
+    })
+}
+
+#[extendr]
+fn domain_projection_failure(handle: Robj) -> List {
+    boundary(|| {
+        let state = resolve(&handle)?;
+        let state = state
+            .try_borrow()
+            .map_err(|_| "domain result already borrowed")?;
+        #[cfg(unix)]
+        if let Some(value) = state
+            .producer
+            .as_ref()
+            .and_then(|producer| producer.projection_failure())
+        {
+            return Ok(r!(value));
+        }
         let _ = state;
         Ok(r!(NULL))
     })
@@ -344,4 +473,7 @@ extendr_module! {
     fn domain_observations;
     fn domain_save;
     fn domain_interrupt;
+    fn domain_producer_evidence;
+    fn domain_preparation_sources;
+    fn domain_projection_failure;
 }

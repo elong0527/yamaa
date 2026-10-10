@@ -4,8 +4,8 @@ The concise [current migration assessment](migration-status.md) records the
 qualified implementation frontier and remaining acceptance gates as of 2026-10-10.
 The historical evidence below retains each slice's original scope and provenance.
 
-The current serial order follows merged #1757/#1858/#1860/#1863/#1867/#1869/#1871/#1874/#1877:
-complete #1881 original workflow selection, #1741 ordinary producer workflows,
+The current serial order follows merged #1757/#1858/#1860/#1863/#1867/#1869/#1871/#1874/#1877/#1881:
+complete #1883 installed producer domain build results, #1741 ordinary producer workflows,
 #1758 submission outputs
 and the remaining language/API/release gates. #1857 retains the separate Windows R
 release decision; #1866 retains the publication lifecycle decision for #1741.
@@ -424,7 +424,7 @@ component-only evidence for the remaining original-YAML frontend gates.
 | 2 | #1755; #1754 alongside each moved service | Define the engine-owned resource, codec, publication, environment and function ports and shared fakes. Move semantic decisions out of adapters as those services migrate. Preserve failure/read/publication order; do not build new features on JSON host callbacks or adapter-owned planning. |
 | 3 | #1751 foundation, #1739 | Finish the reviewed path/API rules, file ports, failure reports and bounded `domain`/`check` facade over the landed shared schema/compiler services. Connect the original-YAML conformance frontend for the now-implemented lookup, full windows and inherited entrypoint. Qualify all six original documents through both installed hosts and promote only evidenced `shared_run` tuples. |
 | 4 | #1757 | Land environment/function/codelist rules and schema, shared static admission, lock verification and per-build function testing before study reads; migrate the five function benchmarks and equivalent R projects. Use the reviewed new format rather than extending the retired artifact/cache design. |
-| 5 | #1881, then #1741 | First qualify ordinary/producer selection from one original native capture. Then qualify the producer workflow on the compiled representation and ports, including activation-before-data, producer-once execution, rounded serialized consumer inputs, failure ledgers and explicit save gates. |
+| 5 | #1883, then #1741 | Use qualified original workflow selection to connect installed producer domain builds and retained typed root results. Then qualify the producer workflow on the compiled representation and ports, including activation-before-data, producer-once execution, rounded serialized consumer inputs, failure ledgers and explicit save gates. |
 | 6 | #1758 | Complete shared Define-XML and Dataset-JSON generation from environment sections, migrate the three submission benchmarks and only then retire `define.yaml` and its loaders/schema. Preserve the existing committed XML/JSON bytes for fixed creation time. |
 | 7 | #1585, #1751, #1754 | Close remaining language-family gaps from the executable inventory; qualify the full public API matrix, finish adapter cleanup, migrate benchmark runners/docs and remove superseded APIs/probes after their replacements pass. |
 | 8 | #1742, #1585 | Complete release/build reproducibility, installed support matrix, representative performance/memory evidence and approved budgets; perform the qualified transition and remove duplicate evaluators. |

@@ -214,6 +214,23 @@ pub enum SelectionError {
     Preparation(Error),
     Ordinary(Box<RejectedOrdinary>),
 }
+impl SelectionError {
+    /// Bounded aliases of originally retained bytes; no file access or replay.
+    pub fn retained_sources(
+        &self,
+        aliases: usize,
+        text: usize,
+    ) -> Result<crate::file_resources::RetainedSources, crate::file_resources::RetentionFailure>
+    {
+        match self {
+            Self::Preparation(Error::Admission(error)) => error.retained_sources(aliases, text),
+            Self::Preparation(Error::Environment(error)) => error.retained_sources(aliases, text),
+            Self::Preparation(Error::Graph(error)) => error.retained_sources(aliases, text),
+            Self::Ordinary(error) => error.retained_sources(aliases, text),
+            Self::Preparation(Error::Configuration(_) | Error::Schema(_)) => Ok(Vec::new()),
+        }
+    }
+}
 
 pub fn select(
     specification: &str,

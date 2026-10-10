@@ -41,11 +41,17 @@ def domain(
     *,
     environment: str | PathLike[str] | None = None,
 ) -> Domain:
-    return Domain(
-        _domain_file(
-            fspath(specification), None if environment is None else fspath(environment)
-        )
+    native = _domain_file(
+        fspath(specification), None if environment is None else fspath(environment)
     )
+    try:
+        native.propagate_interrupt()
+    except BaseException:
+        # The original payload retains this traceback. Release this local owner
+        # so it cannot form a hidden native-attempt/exception/frame cycle.
+        del native
+        raise
+    return Domain(native)
 
 
 class Check:

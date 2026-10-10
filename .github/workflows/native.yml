@@ -263,6 +263,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_specification.py" installed_specification.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_project_functions.py" installed_project_functions.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_builds.py" installed_producer_builds.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_producers.py" installed_public_producers.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_profile.py" installed_profile.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_dependencies.py" installed_dependencies.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_references.py" installed_references.py
@@ -454,6 +455,7 @@ jobs:
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.2.0.tar.gz
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_builds.R" producer_builds.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_producers.R" public_producers.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/scalars.R" scalars.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/functions.R" functions.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/datasets.R" datasets.R

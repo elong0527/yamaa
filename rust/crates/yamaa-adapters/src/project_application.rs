@@ -140,23 +140,64 @@ fn environment_failure(
 pub fn check(specification: &str, environment: &str, host: Language) -> Failure {
     match crate::file_workflow::prepare(specification, environment, host) {
         Ok(graph) => crate::producer_check::prepared(&graph).unwrap_or_else(|_| refused("check")),
-        Err(error) => {
-            crate::producer_check::rejected(&error, host).unwrap_or_else(|error| match error {
-                crate::producer_check::Error::Original(
-                    crate::file_workflow::Error::Configuration(error),
-                ) => match error {
-                    crate::file_configuration::Error::Path(error) => {
-                        file_application::resource_failure("prepare", error)
-                    }
-                    _ => file_application::rejected("prepare", "project_configuration"),
-                },
-                crate::producer_check::Error::Original(crate::file_workflow::Error::Schema(_)) => {
-                    file_application::rejected("prepare", "shipped_schema")
-                }
-                crate::producer_check::Error::Original(error) => workflow_failure(error),
-                crate::producer_check::Error::Projection(_) => refused("check"),
-            })
+        Err(error) => workflow_issues(&error, host),
+    }
+}
+fn workflow_issues(error: &crate::file_workflow::Error, host: Language) -> Failure {
+    crate::producer_check::rejected(error, host).unwrap_or_else(|error| match error {
+        crate::producer_check::Error::Original(crate::file_workflow::Error::Configuration(
+            error,
+        )) => match error {
+            crate::file_configuration::Error::Path(error) => {
+                file_application::resource_failure("prepare", error)
+            }
+            _ => file_application::rejected("prepare", "project_configuration"),
+        },
+        crate::producer_check::Error::Original(crate::file_workflow::Error::Schema(_)) => {
+            file_application::rejected("prepare", "shipped_schema")
         }
+        crate::producer_check::Error::Original(error) => workflow_failure(error),
+        crate::producer_check::Error::Projection(_) => refused("check"),
+    })
+}
+
+/// Selected preparation retains the original owner in the caller. Diagnostic
+/// projection is complete and bounded; no feature dispatch depends on failure.
+pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Language) -> Failure {
+    match error {
+        crate::file_workflow::SelectionError::Preparation(error) => workflow_issues(error, host),
+        crate::file_workflow::SelectionError::Ordinary(error) => match &error.run().rejection.error
+        {
+            PrepareError::Invalid(_) => {
+                crate::project_check::rejected(error.run()).unwrap_or_else(|_| refused("check"))
+            }
+            PrepareError::Unsupported(features) => {
+                let mut budget = crate::report_projection::Budget::new(
+                    crate::specification_check::MAX_ISSUE_BYTES,
+                );
+                let admitted = (|| {
+                    budget.entries(features.len())?;
+                    for feature in features {
+                        for _ in 0..4 {
+                            budget.text(&feature.operation)?;
+                            budget.text(&feature.path)?;
+                        }
+                    }
+                    Ok::<_, crate::specification_report::Error>(())
+                })();
+                if admitted.is_err() {
+                    return refused("check");
+                }
+                features
+                    .iter()
+                    .flat_map(|feature| {
+                        file_application::unsupported(&feature.operation, Some(&feature.path))
+                    })
+                    .collect()
+            }
+            PrepareError::Limit(_) => file_application::rejected("check", "compilation_limit"),
+            _ => file_application::rejected("check", "compilation_boundary"),
+        },
     }
 }
 fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {

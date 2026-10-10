@@ -4,7 +4,7 @@ use crate::specification_service::boundary;
 use extendr_api::prelude::*;
 
 #[cfg(unix)]
-mod platform {
+pub(crate) mod platform {
     use super::*;
     use crate::project_activation::Error as HostError;
     use std::{
@@ -33,6 +33,8 @@ mod platform {
             attempt: Rc<Attempt>,
             observations: Option<String>,
             refusal: &'static str,
+            domain: Option<yamaa_adapters::producer_result::RootResult>,
+            output_error: Option<yamaa_adapters::table_transport::TableTransportError>,
         },
     }
     thread_local! {
@@ -149,6 +151,24 @@ mod platform {
         let prepared = state
             .as_mut()
             .map_err(|_| "producer preparation failed; original rejection remains retained")?;
+        register(
+            State::Attempt(build_selected_attempt(
+                prepared,
+                fields,
+                verify,
+                resolve_host,
+                maximum,
+            )),
+            slot,
+        )
+    }
+    fn build_selected_attempt(
+        prepared: &mut FileBuild,
+        fields: Vec<String>,
+        verify: Function,
+        resolve_host: Function,
+        maximum: usize,
+    ) -> Rc<Attempt> {
         let provenance = std::sync::Arc::clone(prepared.provenance());
         let mut port = crate::project_activation::Port::new(
             provenance
@@ -165,14 +185,78 @@ mod platform {
             crate::specification_result::identity(&fields),
             limits,
         );
-        register(
-            State::Attempt(Rc::new(Attempt {
-                inner: RefCell::new(inner),
-                fields,
-            })),
-            slot,
-        )
+        Rc::new(Attempt {
+            inner: RefCell::new(inner),
+            fields,
+        })
     }
+
+    /// The public domain registry roots this whole state on the calling thread.
+    /// Its reservation continues for the full result lifetime, before growth.
+    pub(crate) struct PublicResult {
+        state: State,
+        _slot: Slot,
+    }
+    pub(crate) fn build_selected(
+        prepared: &mut FileBuild,
+        fields: Vec<String>,
+        verify: Function,
+        resolve_host: Function,
+        formatter: Function,
+    ) -> Result<PublicResult, String> {
+        let slot = Slot::reserve()?;
+        let attempt = build_selected_attempt(prepared, fields, verify, resolve_host, 16_777_216);
+        Ok(PublicResult {
+            state: format_attempt(attempt, &formatter, 16_777_216, true)?,
+            _slot: slot,
+        })
+    }
+    impl PublicResult {
+        pub(crate) fn output_table(&self) -> Option<&yamaa_adapters::public_table::PublicTable> {
+            match &self.state {
+                State::Report {
+                    domain: Some(result),
+                    ..
+                } => result.output_table(),
+                _ => None,
+            }
+        }
+        pub(crate) fn issues(&self) -> Vec<yamaa_adapters::issue_rows::Issue> {
+            match &self.state {
+                State::Report {
+                    domain: Some(result),
+                    ..
+                } => result.issues().to_vec(),
+                State::Report { refusal, .. } => {
+                    yamaa_adapters::file_application::rejected("build", refusal)
+                }
+                _ => yamaa_adapters::file_application::rejected("build", "producer_report"),
+            }
+        }
+        pub(crate) fn observations(&self) -> Option<String> {
+            match &self.state {
+                State::Report {
+                    domain: Some(result),
+                    ..
+                } => Some(result.observations().to_string()),
+                State::Report { observations, .. } => observations.clone(),
+                _ => None,
+            }
+        }
+        pub(crate) fn projection_failure(&self) -> Option<String> {
+            match &self.state {
+                State::Report { output_error, .. } => output_error.map(|error| error.to_string()),
+                _ => None,
+            }
+        }
+        pub(crate) fn interrupt(&self) -> Result<Robj, String> {
+            held_interrupt(attempt(&self.state)?)
+        }
+        pub(crate) fn evidence(&self) -> Result<Robj, String> {
+            held_evidence(attempt(&self.state)?)
+        }
+    }
+
     fn details(error: &CallbackError) -> Option<HostDetails<'_>> {
         match error {
             CallbackError::Exception {
@@ -243,6 +327,14 @@ mod platform {
         let maximum = usize::try_from(maximum).map_err(|_| "invalid report byte limit")?;
         let owner = resolve(&handle)?;
         let attempt = Rc::clone(attempt(&owner)?);
+        register(format_attempt(attempt, &formatter, maximum, false)?, slot)
+    }
+    fn format_attempt(
+        attempt: Rc<Attempt>,
+        formatter: &Function,
+        maximum: usize,
+        public: bool,
+    ) -> Result<State, String> {
         // Exclusive borrow spans host classification. Reentrant reads or reports
         // refuse promptly; the original rooted condition cannot be replaced.
         let observations = attempt
@@ -273,10 +365,10 @@ mod platform {
                 let mut limited = false;
                 let projection = match failure {
                     HostError::Host(condition) => {
-                        ordinary(condition, &formatter, false, &mut remaining, &mut limited)
+                        ordinary(condition, formatter, false, &mut remaining, &mut limited)
                     }
                     HostError::Representation(condition) => {
-                        ordinary(condition, &formatter, true, &mut remaining, &mut limited)
+                        ordinary(condition, formatter, true, &mut remaining, &mut limited)
                     }
                     HostError::Scalar(reason) => Some(CallbackError::Rejected {
                         reason: (*reason).into(),
@@ -315,6 +407,8 @@ mod platform {
             }
         }
         let mut formatted = None;
+        let mut domain = None;
+        let mut output_error = None;
         if refusal.is_empty() {
             let facts = failures
                 .iter()
@@ -327,13 +421,41 @@ mod platform {
                         .map(|details| Classified::Host { failure, details }),
                 })
                 .collect::<Vec<_>>();
-            match producer_report::attempt_report_classified(
-                &observations,
-                crate::specification_result::identity(&attempt.fields),
-                maximum,
-                &facts,
-            ) {
-                Ok(value) => formatted = Some(value.to_string()),
+            let projected = if public {
+                match yamaa_adapters::producer_result::prepare_classified(
+                    &observations,
+                    crate::specification_result::identity(&attempt.fields),
+                    maximum,
+                    &facts,
+                ) {
+                    Ok(value) => {
+                        domain = Some(value);
+                        Ok(None)
+                    }
+                    Err(yamaa_adapters::producer_result::Error::Report(error)) => Err(error),
+                    Err(yamaa_adapters::producer_result::Error::Output {
+                        observations: value,
+                        error,
+                        ..
+                    }) => {
+                        formatted = Some(value.to_string());
+                        output_error = Some(error);
+                        refusal = "output_projection";
+                        Ok(None)
+                    }
+                }
+            } else {
+                producer_report::attempt_report_classified(
+                    &observations,
+                    crate::specification_result::identity(&attempt.fields),
+                    maximum,
+                    &facts,
+                )
+                .map(Some)
+            };
+            match projected {
+                Ok(Some(value)) => formatted = Some(value.to_string()),
+                Ok(None) => {}
                 Err(ProjectionError::Original { observations, .. }) => {
                     formatted = Some(observations.to_string());
                     refusal = "original_boundary";
@@ -345,14 +467,13 @@ mod platform {
             }
         }
         drop(observations);
-        register(
-            State::Report {
-                attempt,
-                observations: formatted,
-                refusal,
-            },
-            slot,
-        )
+        Ok(State::Report {
+            attempt,
+            observations: formatted,
+            refusal,
+            domain,
+            output_error,
+        })
     }
     pub(super) fn observations(handle: Robj) -> Result<Robj, String> {
         let state = resolve(&handle)?;
@@ -366,7 +487,9 @@ mod platform {
     }
     pub(super) fn retained(handle: Robj) -> Result<Robj, String> {
         let owner = resolve(&handle)?;
-        let attempt = attempt(&owner)?;
+        held_evidence(attempt(&owner)?)
+    }
+    fn held_evidence(attempt: &Attempt) -> Result<Robj, String> {
         let held = attempt
             .inner
             .try_borrow()
@@ -441,7 +564,10 @@ mod platform {
     }
     pub(super) fn interrupt(handle: Robj) -> Result<Robj, String> {
         let owner = resolve(&handle)?;
-        let held = attempt(&owner)?
+        held_interrupt(attempt(&owner)?)
+    }
+    fn held_interrupt(attempt: &Attempt) -> Result<Robj, String> {
+        let held = attempt
             .inner
             .try_borrow()
             .map_err(|_| "producer attempt already borrowed")?;
