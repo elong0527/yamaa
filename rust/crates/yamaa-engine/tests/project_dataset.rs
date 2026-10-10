@@ -15,6 +15,7 @@ use yamaa_engine::{
         RowTemplate,
     },
     function_invocation::{Argument, FailureKind, HostError},
+    project_activation::{ActivatedFunction, ActivationPort, Bindings},
 };
 fn schema() -> TableSchema {
     TableSchema::new(vec![
@@ -403,4 +404,171 @@ fn opposite_zero_default_is_a_binding_mismatch_before_any_table_or_callback_effe
         assert!(source.observations.borrow().is_empty());
         assert!(callbacks.calls.is_empty());
     }
+}
+
+fn union_signature(name: &str) -> ProjectInvocationPlan {
+    ProjectInvocationPlan::new(
+        ProjectFunctionIdentity {
+            name: name.into(),
+            call: format!("installed.{name}"),
+        },
+        signature().signature().parameters().to_vec(),
+        ColumnType::Int,
+        false,
+    )
+    .unwrap()
+}
+fn union() -> [ActivatedFunction<&'static str>; 2] {
+    ["producer", "consumer"].map(|name| ActivatedFunction {
+        plan: union_signature(name),
+        handle: name,
+        cases: vec![],
+    })
+}
+#[derive(Default)]
+struct UnionPort {
+    calls: Vec<&'static str>,
+    failure: bool,
+}
+impl ActivationPort for UnionPort {
+    type Handle = &'static str;
+    type Error = &'static str;
+    fn verify_lock(
+        &mut self,
+        _: yamaa_core::project_function::Language,
+        _: &yamaa_core::project_environment::LockReference,
+        _: &[ProjectFunctionIdentity],
+    ) -> Result<(), Self::Error> {
+        panic!("projected handles must not reactivate")
+    }
+    fn bind(
+        &mut self,
+        _: &ProjectFunctionIdentity,
+        _: &yamaa_core::function_signature::LogicalSignature,
+    ) -> Result<Self::Handle, Self::Error> {
+        panic!("projected handles must not rebind")
+    }
+    fn invoke(
+        &mut self,
+        handle: &Self::Handle,
+        _: &[Argument<'_>],
+    ) -> Result<Value, HostError<Self::Error>> {
+        self.calls.push(*handle);
+        if self.failure {
+            Err(HostError::Raised("original union host failure"))
+        } else {
+            Ok(Value::Int(match *handle {
+                "producer" => 71,
+                "consumer" => 19,
+                _ => panic!("independently declared handle"),
+            }))
+        }
+    }
+}
+
+#[test]
+fn different_nodes_local_zero_projects_to_their_exact_union_handle() {
+    let activated = union();
+    let mut port = UnionPort::default();
+    // Consumer is local slot zero but graph slot one; producer is graph slot
+    // zero. Distinct host results make accidental identity projection observable.
+    for (name, global, expected) in [("consumer", 1, 19), ("producer", 0, 71)] {
+        let node_plan = plan(
+            union_signature(name),
+            vec![argument(FunctionInput::Read(Read::Source(1)))],
+            RowMode::Records,
+        )
+        .unwrap();
+        let source = table(vec![Value::Int(7)]);
+        let projection = [global];
+        let plans = [union_signature(name)];
+        let mut bindings = Bindings::projected(&activated, &projection, &plans, &mut port).unwrap();
+        assert!(bindings.project_signature(1).is_none());
+        let result = node_plan
+            .execute_observed_functions(&source, &[], &mut bindings, limits())
+            .result
+            .unwrap();
+        assert_eq!(result.dataset.cell(0, 1).unwrap(), ValueRef::Int(expected));
+    }
+    assert_eq!(port.calls, ["consumer", "producer"]);
+}
+
+#[test]
+fn projection_admission_rejects_shape_slot_identity_and_complete_signature_without_host_effects() {
+    let activated = union();
+    let consumer = [union_signature("consumer")];
+    for projection in [vec![], vec![0], vec![2], vec![1, 0]] {
+        let mut port = UnionPort::default();
+        assert!(Bindings::projected(&activated, &projection, &consumer, &mut port).is_err());
+        assert!(port.calls.is_empty());
+    }
+    let changed = ProjectInvocationPlan::new(
+        consumer[0].identity().clone(),
+        consumer[0].signature().parameters().to_vec(),
+        ColumnType::Float,
+        false,
+    )
+    .unwrap();
+    let mut port = UnionPort::default();
+    assert!(matches!(
+        Bindings::projected(&activated, &[1], &[changed], &mut port),
+        Err(0)
+    ));
+    assert!(port.calls.is_empty());
+}
+
+#[test]
+fn projected_handles_still_preflight_the_actual_node_before_any_table_observation() {
+    let activated = union();
+    let expected = [union_signature("producer")];
+    let mut port = UnionPort::default();
+    let mut bindings = Bindings::projected(&activated, &[0], &expected, &mut port).unwrap();
+    let consumer = plan(
+        union_signature("consumer"),
+        vec![argument(FunctionInput::Read(Read::Source(1)))],
+        RowMode::Records,
+    )
+    .unwrap();
+    let source = table(vec![Value::Int(7)]);
+    let error = consumer
+        .execute_observed_functions(&source, &[], &mut bindings, limits())
+        .result
+        .unwrap_err();
+    assert_eq!(*error, ExecutionError::FunctionBinding { slot: 0 });
+    assert!(source.observations.borrow().is_empty());
+    assert!(port.calls.is_empty());
+}
+
+#[test]
+fn projected_invocations_preserve_missing_short_circuit_and_original_failure_without_replay() {
+    let activated = union();
+    let expected = [union_signature("consumer")];
+    let node_plan = plan(
+        union_signature("consumer"),
+        vec![argument(FunctionInput::Read(Read::Source(1)))],
+        RowMode::Records,
+    )
+    .unwrap();
+    let mut port = UnionPort::default();
+    let source = table(vec![Value::Missing]);
+    let mut bindings = Bindings::projected(&activated, &[1], &expected, &mut port).unwrap();
+    let result = node_plan
+        .execute_observed_functions(&source, &[], &mut bindings, limits())
+        .result
+        .unwrap();
+    assert_eq!(result.dataset.cell(0, 1).unwrap(), ValueRef::Missing);
+    assert!(port.calls.is_empty());
+
+    port.failure = true;
+    let mut bindings = Bindings::projected(&activated, &[1], &expected, &mut port).unwrap();
+    let source = table(vec![Value::Int(7), Value::Int(8)]);
+    let error = node_plan
+        .execute_observed_functions(&source, &[], &mut bindings, limits())
+        .result
+        .unwrap_err();
+    assert!(
+        matches!(*error, ExecutionError::ProjectFunction { error, .. }
+        if error.kind == FailureKind::CallFailed("original union host failure"))
+    );
+    assert_eq!(port.calls, ["consumer"]);
 }

@@ -57,3 +57,61 @@ impl<E> SourceDecoder for Decoder<E> {
             })
     }
 }
+
+impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
+    fn decode_bounded(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        contract: Option<&yamaa_core::producer_contract::Contract>,
+        limits: yamaa_engine::producer_build::DecodeLimits,
+    ) -> Result<Snapshot<E>, yamaa_engine::producer_build::DecodeError<Error>> {
+        use yamaa_engine::producer_build::DecodeError;
+        let table = if let Some(contract) =
+            contract.filter(|_| source.profile == yamaa_core::specification::SourceProfile::Csv)
+        {
+            // Admit stored header order before declared typing can replace a
+            // producer mismatch with an unrelated missing-field diagnostic.
+            let types =
+                yamaa_core::typed_csv::PreparedTypes::new(&source.types, 64).map_err(|e| {
+                    DecodeError::Codec(Error::TypedSource(crate::typed_csv::Error::Typing(e)))
+                })?;
+            let parsed = crate::csv_source::parse(
+                bytes,
+                crate::specification_run::bounded_csv_limits(limits),
+            )
+            .map_err(|e| {
+                DecodeError::Codec(Error::Source(crate::csv_source::TextTableError::Csv(e)))
+            })?;
+            let contract_limits = yamaa_core::producer_contract::Limits::default();
+            if parsed.names.len() > contract_limits.fields {
+                return Err(DecodeError::Limit("producer_source_fields"));
+            }
+            let header = parsed.names.iter().map(String::as_str).collect::<Vec<_>>();
+            if let Some(diagnostic) = contract
+                .validate_header(&source.name, &header, contract_limits)
+                .map_err(DecodeError::Contract)?
+            {
+                return Err(DecodeError::Metadata(diagnostic));
+            }
+            crate::typed_csv::convert(
+                parsed,
+                types,
+                crate::arrow_table::TableLimits {
+                    max_rows: 65_536,
+                    max_columns: 64,
+                    max_batches: 1,
+                    max_cells: limits.cells.min(262_144),
+                },
+            )
+            .map_err(|e| DecodeError::Codec(crate::specification_run::typed_source_error(e)))?
+        } else {
+            crate::specification_run::decode_source(source, bytes, Some(limits))
+                .map_err(DecodeError::Codec)?
+        };
+        Ok(Snapshot {
+            table,
+            error: PhantomData,
+        })
+    }
+}

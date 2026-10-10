@@ -160,6 +160,21 @@ impl FileGraph {
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }
+    /// Consume the complete native graph into the distinct build owner. Static
+    /// preparation never accepts ports or exposes a standalone producer plan.
+    pub fn into_build(mut self) -> crate::file_producer_build::FileBuild {
+        let metadata_snapshots = self.resources.snapshot_count();
+        self.resources.finish_metadata_budget();
+        let (documents, build) = self.graph.into_build();
+        crate::file_producer_build::FileBuild::new(
+            build,
+            documents,
+            self.entry,
+            self.environment,
+            self.resources,
+            metadata_snapshots,
+        )
+    }
 }
 
 fn charge(

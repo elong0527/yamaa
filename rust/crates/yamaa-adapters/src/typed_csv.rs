@@ -21,6 +21,14 @@ pub fn parse(
     let types =
         PreparedTypes::new(declarations, table_limits.max_columns).map_err(Error::Typing)?;
     let parsed = csv_source::parse(content, csv_limits).map_err(Error::Csv)?;
+    convert(parsed, types, table_limits)
+}
+
+pub(crate) fn convert(
+    parsed: csv_source::CsvSource,
+    types: PreparedTypes,
+    table_limits: TableLimits,
+) -> Result<ArrowTable, Error> {
     let row_count = parsed.records.len();
     let column_count = parsed.names.len();
     for (resource, required, limit) in [

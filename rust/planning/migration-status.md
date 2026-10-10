@@ -127,18 +127,37 @@ merged source equals the qualified head directly. Linux/macOS pass 1,037 Rust
 tests per mode; Windows passes 1,028, across 125 targets each. Six installed Python
 forms and both exercised R forms pass their complete supplemental suites.
 
-The next native prerequisite is [#1867 producer graph capture](https://github.com/elong0527/yamaa/issues/1867).
-It must capture each original recursive producer document once under approved
-descriptor roots, retain independent authored origins and rejection evidence,
-and supply artifact location facts while prospective outputs remain absent.
-The implementation now captures a canonical closure iteratively through shared
+The [#1867 producer graph capture](https://github.com/elong0527/yamaa/issues/1867)
+prerequisite captures each original recursive producer document once under
+approved descriptor roots, retains independent authored origins and rejection
+evidence, and supplies artifact location facts while prospective outputs remain
+absent. It captures a canonical closure iteratively through shared
 source/inheritance preparation, verifies aliases and whole-prefix snapshots,
 bounds capture/copies/text/work, and retains original raw failure evidence.
 Component filesystem tests cover diamonds, separate inherited origins, absent
 artifacts, mismatch/cycle/missing/binding failures, limits, fallback, links,
-changed snapshots and literal-backslash Unix roots. Full qualification is in
-progress; this boundary grants no workflow execution authority. See
+changed snapshots and literal-backslash Unix roots.
+[#1868](https://github.com/elong0527/yamaa/pull/1868) merged as
+`0beaecaae144d12a536c988e8b336cd0323a0add` after all 22 final-head checks,
+16 native jobs, a complete assessed review, 40 artifact audits and a fresh guard
+passed. Its merged source equals qualified head
+`75f5fabd9b60175bb17b5527e407bd7820a608d1` directly. Actual Rust debug/release-test
+passes 1,056 tests on Linux/macOS and 1,044 on Windows across 126 targets each.
+This boundary grants no workflow execution authority. See
 [the qualification scope](1867-qualification.md).
+
+The active prerequisite is [#1869 shared producer build orchestration](https://github.com/elong0527/yamaa/issues/1869).
+Its separate whole-graph owner now activates and validates all local/global full
+call signatures before study data, executes canonical producers once, and admits
+accepted serialized artifact re-ingestion through ordinary verification/output/
+codec/report gates. Whole entered attempts retain original failures, interrupts,
+unwind and source/check prefixes. Native witnesses preserve inherited origins,
+metadata/study snapshot ordering, exact rounded CSV truth, Parquet cells and a
+shared diamond. Local debug/release modes pass 1,079 tests across 128 targets,
+strict five-crate Clippy and all 48 tool guards pass; final package/CI/review
+qualification remains in progress. See [the service](../PRODUCER_BUILD.md) and
+[qualification scope](1869-qualification.md). Installed workflow dispatch and
+ordered publication remain #1741. Publication acceptance still needs #1866.
 
 See [the closing qualification record](1757-qualification.md) for actual local
 results and the distinction between those results and the CI platform matrix.
@@ -153,8 +172,8 @@ Continue with the following acceptance gates in the
    is closed by #1859 with its complete qualification above.
 2. [#1860 CSV precision](https://github.com/elong0527/yamaa/issues/1860) is closed
    by #1862 with complete qualification above.
-3. #1863 is closed by #1865 with complete qualification above. Complete #1867's
-   native graph capture prerequisite, then #1741's
+3. #1863 is closed by #1865 and #1867 by #1868 with complete qualification above.
+   Complete #1869's shared build orchestration prerequisite, then #1741's
    producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.

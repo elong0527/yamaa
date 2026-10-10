@@ -23,6 +23,11 @@ impl CheckedProducerGraph {
     pub fn metadata(&self) -> &PreparedGraph {
         &self.metadata
     }
+    /// Consume the complete validated closure into the separate build owner.
+    /// Static checking continues to refuse the ordinary single-document route.
+    pub fn into_build(self) -> crate::producer_build::PreparedBuild {
+        crate::producer_build::PreparedBuild::new(self.metadata.into_build())
+    }
     /// No source, activation, build or publication port is accepted by check.
     /// #1741 must qualify graph orchestration before this capability can execute.
     pub fn execution_capability(

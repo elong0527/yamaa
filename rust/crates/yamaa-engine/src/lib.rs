@@ -42,5 +42,6 @@ pub mod specification_run;
 pub mod project_activation;
 
 pub mod producer_admission;
+pub mod producer_build;
 pub mod producer_graph;
 pub mod project_domain;
