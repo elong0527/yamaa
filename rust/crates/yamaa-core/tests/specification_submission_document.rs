@@ -1005,6 +1005,10 @@ fn root_scalar_column_scalar_and_non_text_root_key_keep_transport_facts() {
     assert_eq!(values.len(), 1);
     assert_eq!(values[0].kind, Kind::ExpectedMapping);
     assert_eq!(values[0].node, scalar);
+    let columns_node = input.field(root, "columns").unwrap();
+    assert_eq!(values[0].origin.unwrap().container, columns_node);
+    assert_eq!(values[0].origin.unwrap().key, None);
+    assert_eq!(values[0].origin.unwrap().node, Some(scalar));
     for root in [scalar, usize::MAX] {
         let error = submission::decode(&input, root, Limits::default()).unwrap_err();
         assert_eq!(error.cause, Cause::Shape { node: root });

@@ -547,8 +547,10 @@ impl<'a> Parser<'a, '_> {
     }
     fn column(&mut self, node: usize, parent: Origin, path: Path) -> Result<Option<Column>, Cause> {
         let origin = Origin {
+            container: parent.node.expect("column list occurrence"),
+            key: None,
             node: Some(node),
-            ..parent
+            field: F::Columns,
         };
         if !self.mapping(origin, path, COLUMN, true)? {
             return Ok(None);
