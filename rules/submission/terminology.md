@@ -164,6 +164,11 @@ values name the source SDTM domain or ADaM dataset, binds this vocabulary.
 
 ### Interface behavior
 
+The retained `define_class` format below remains available until #1758
+qualifies its replacement. Environment codelists use the same list and item
+fields except `standard`: that field belongs to the source under
+[REQ-0928](terminology.md#req-0928), and is absent from an environment list.
+
 <a id="req-1076"></a>
 
 **REQ-1076.** The `define_class` fields have these meanings:

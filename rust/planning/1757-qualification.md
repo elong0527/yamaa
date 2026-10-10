@@ -55,7 +55,9 @@ validator tests, dependency/release-API guards, rule/style checks and Python
 formatting/lint. Both installed Python forms pass all 24 supplemental suites;
 the updated public suite passes 13 methods directly in each form. The R source
 archive passes all 18 supplemental suites and strict `R CMD check` with
-`Status: OK`. The full Python regression replay is recorded in the PR checks.
+`Status: OK`. The full Python regression replay passes 4,807 tests with 94
+skips. The retained legacy R submission schema copies remain byte-identical to
+the canonical shared/metadata/Define schemas.
 CI independently rebuilds packages from the PR revision and exercises all six
 Python OS/package-form lanes and both exercised R platforms. The existing
 Windows R gap remains explicit under #1742.
