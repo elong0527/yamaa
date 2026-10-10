@@ -280,6 +280,7 @@ pub struct PreparedSpecification {
     output: TableSchema,
     projection: Vec<String>,
     output_path: String,
+    output_decimals: Option<String>,
     keys: Vec<usize>,
     declarations: Vec<Declaration>,
     rows: Option<rows::Rows>,
@@ -710,7 +711,7 @@ impl PreparedSpecification {
         }
         let mut model_text_bytes = 0usize;
         for node in d.nodes() {
-            if let N::Text(value) = node {
+            if let N::Text(value) | N::Integer(value) = node {
                 model_text_bytes = model_text_bytes
                     .checked_add(value.len())
                     .filter(|&n| n <= limits.model_text_bytes)
@@ -1026,8 +1027,17 @@ impl PreparedSpecification {
             "output",
             &mut extra,
         );
-        optional_features(d, output_id, &["decimals"], "output", &mut extra);
         let output_path = String::from(text(d, field(d, output_id, "path")?)?);
+        // Keep arbitrary-width schema integers. Output declaration validation
+        // retains its existing post-verification phase; width is a codec quota.
+        let output_decimals = d
+            .field(output_id, "decimals")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+            .map(|id| match &d.nodes()[id] {
+                N::Integer(value) => Ok(value.clone()),
+                _ => Err(PrepareError::Internal),
+            })
+            .transpose()?;
         // Output declaration errors retain their post-verification phase.
         let projection = sequence(d, field(d, output_id, "columns")?)?
             .iter()
@@ -1084,6 +1094,7 @@ impl PreparedSpecification {
                 output,
                 projection,
                 output_path,
+                output_decimals,
                 keys,
                 declarations: Vec::new(),
                 rows: Some(rows),
@@ -1246,6 +1257,7 @@ impl PreparedSpecification {
             output,
             projection,
             output_path,
+            output_decimals,
             keys,
             declarations,
             rows: None,
@@ -1344,6 +1356,10 @@ impl PreparedSpecification {
     pub fn output_profile(&self) -> Option<&'static str> {
         output_profile(&self.output_path)
     }
+    /// Canonical arbitrary-width declaration, never a runtime signed-i64 value.
+    pub fn output_decimals(&self) -> Option<&str> {
+        self.output_decimals.as_deref()
+    }
     pub fn output_name(&self) -> &str {
         let name = output_basename(&self.output_path);
         name.rsplit_once('.')
@@ -1357,6 +1373,17 @@ impl PreparedSpecification {
             findings.push(OutputFinding::UnknownProfile {
                 path: self.output_path.clone(),
             });
+        }
+        if let Some(value) = &self.output_decimals {
+            if value.starts_with('-') {
+                findings.push(OutputFinding::InvalidDecimals {
+                    value: value.clone(),
+                });
+            } else if self.output_profile() == Some("parquet") {
+                findings.push(OutputFinding::DecimalsNotApplicable {
+                    path: self.output_path.clone(),
+                });
+            }
         }
         for (position, name) in self.projection.iter().enumerate() {
             if self.projection[..position].contains(name) {
@@ -1818,6 +1845,8 @@ impl PreparedSpecification {
 #[derive(Debug)]
 pub enum OutputFinding {
     UnknownProfile { path: String },
+    InvalidDecimals { value: String },
+    DecimalsNotApplicable { path: String },
     DuplicateColumn { position: usize, name: String },
     UndeclaredColumn { position: usize, name: String },
     InternalKey { position: usize, name: String },

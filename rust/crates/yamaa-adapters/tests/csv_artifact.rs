@@ -106,3 +106,114 @@ fn scalar_output_uses_exact_integer_and_shortest_positional_float_text() {
         b"I,F\n9223372036854775807,-0\n9007199254740993,0.0000001\n"
     );
 }
+
+#[test]
+fn precision_serializes_float_projection_only_and_preserves_missing_and_empty_text() {
+    let table = Table {
+        schema: TableSchema::new(vec![
+            Column {
+                name: "I".into(),
+                kind: ColumnType::Int,
+            },
+            Column {
+                name: "F".into(),
+                kind: ColumnType::Float,
+            },
+            Column {
+                name: "S".into(),
+                kind: ColumnType::Str,
+            },
+        ])
+        .unwrap(),
+        rows: vec![
+            vec![Value::Int(1), Value::float(0.125), Value::Str("".into())],
+            vec![Value::Int(2), Value::float(2.675), Value::Str("a,b".into())],
+            vec![Value::Int(3), Value::Missing, Value::Missing],
+            vec![Value::Int(4), Value::float(-0.004), Value::Str("z".into())],
+        ],
+    };
+    let expected = b"S,F,I\n\"\",0.13,1\n\"a,b\",2.67,2\n,,3\nz,0.00,4\n";
+    assert_eq!(
+        csv_artifact::render_with_decimals(&table, &[2, 1, 0], Some("2"), expected.len()).unwrap(),
+        expected
+    );
+    assert!(matches!(
+        csv_artifact::render_with_decimals(&table, &[2, 1, 0], Some("2"), expected.len() - 1),
+        Err(Error::Limit)
+    ));
+    assert_eq!(table.rows[0][1], Value::float(0.125));
+    assert_eq!(
+        csv_artifact::render_with_decimals(
+            &table,
+            &[0],
+            Some("999999999999999999999999999999"),
+            10
+        )
+        .unwrap(),
+        b"I\n1\n2\n3\n4\n"
+    );
+}
+
+#[test]
+fn excessive_precision_refuses_before_the_first_projected_cell_read() {
+    struct NoCells(TableSchema);
+    impl TableAccess for NoCells {
+        type Error = Infallible;
+        fn schema(&self) -> &TableSchema {
+            &self.0
+        }
+        fn row_count(&self) -> usize {
+            1
+        }
+        fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
+            panic!("precision quota must precede cell authority")
+        }
+    }
+    let table = NoCells(
+        TableSchema::new(vec![
+            Column {
+                name: "I".into(),
+                kind: ColumnType::Int,
+            },
+            Column {
+                name: "F".into(),
+                kind: ColumnType::Float,
+            },
+        ])
+        .unwrap(),
+    );
+    for precision in ["10000", "999999999999999999999999999999"] {
+        assert!(matches!(
+            csv_artifact::render_with_decimals(&table, &[0, 1], Some(precision), 100),
+            Err(Error::Limit)
+        ));
+    }
+    struct FirstCellOnly(TableSchema);
+    impl TableAccess for FirstCellOnly {
+        type Error = Infallible;
+        fn schema(&self) -> &TableSchema {
+            &self.0
+        }
+        fn row_count(&self) -> usize {
+            2
+        }
+        fn cell(&self, row: usize, _: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
+            assert_eq!(row, 0, "remaining width quota precedes every later cell");
+            Ok(ValueRef::Float(
+                yamaa_core::value::FiniteFloat::new(1.0).unwrap(),
+            ))
+        }
+    }
+    let table = FirstCellOnly(
+        TableSchema::new(vec![Column {
+            name: "F".into(),
+            kind: ColumnType::Float,
+        }])
+        .unwrap(),
+    );
+    // F\n1.00\n exhausts seven bytes; the second record's cell is never read.
+    assert!(matches!(
+        csv_artifact::render_with_decimals(&table, &[0], Some("2"), 7),
+        Err(Error::Limit)
+    ));
+}

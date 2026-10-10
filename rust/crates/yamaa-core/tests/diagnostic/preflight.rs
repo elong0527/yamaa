@@ -9,6 +9,7 @@ use yamaa_core::{
 
 enum Tree<'a> {
     Text(&'a str),
+    Integer(&'a str),
     Map(Vec<(&'a str, Tree<'a>)>),
     List(Vec<Tree<'a>>),
 }
@@ -17,6 +18,7 @@ impl Tree<'_> {
     fn append(self, nodes: &mut Vec<N>) -> usize {
         let node = match self {
             Text(value) => N::Text(value.into()),
+            Integer(value) => N::Integer(value.into()),
             Map(fields) => N::Mapping(
                 fields
                     .into_iter()
@@ -113,7 +115,7 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
         ),
     ];
     assert_eq!(findings.len(), expected.len());
-    findings
+    let mut reached: BTreeSet<_> = findings
         .iter()
         .zip(expected)
         .map(|(finding, (condition, requirement, path, fields))| {
@@ -136,7 +138,77 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
             assert_eq!(diagnostic.operand_route, None);
             diagnostic.code
         })
-        .collect()
+        .collect();
+    for (precision, path, condition, requirement, context) in [
+        (
+            "-9223372036854775809",
+            "result.csv",
+            "invalid_field_type",
+            "REQ-0744",
+            vec![
+                ("expected", text("a non-negative integer")),
+                ("actual", V::Integer("-9223372036854775809".into())),
+            ],
+        ),
+        (
+            "2",
+            "result.parquet",
+            "decimals_not_applicable",
+            "REQ-0762",
+            vec![
+                ("path", text("result.parquet")),
+                ("profile", text("parquet")),
+            ],
+        ),
+    ] {
+        let mut fields = base(
+            "TEST",
+            inputs(),
+            vec![column("ID", Some(source()))],
+            vec![Text("ID")],
+        );
+        fields.push(("base", Text("SRC")));
+        fields
+            .iter_mut()
+            .find(|(name, _)| *name == "output")
+            .unwrap()
+            .1 = Map(vec![
+            ("path", Text(path)),
+            ("decimals", Integer(precision)),
+            ("columns", List(vec![Text("ID")])),
+        ]);
+        let mut nodes = Vec::new();
+        let root = Map(fields).append(&mut nodes);
+        let document = Document::new(nodes, root, Default::default()).unwrap();
+        let model =
+            SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
+                .unwrap()
+                .unwrap();
+        let compiled = PreparedSpecification::prepare(&model).unwrap();
+        assert_eq!(compiled.output_decimals(), Some(precision));
+        let findings = compiled.output_findings();
+        assert_eq!(findings.len(), 1);
+        let diagnostic = findings[0].diagnostic();
+        let definition = diagnostic.definition();
+        assert_eq!(
+            (
+                definition.phase,
+                definition.condition,
+                definition.requirement
+            ),
+            ("validation", condition, Some(requirement))
+        );
+        assert_eq!(diagnostic.spec_paths, ["output.decimals"]);
+        assert_eq!(
+            diagnostic.context,
+            context
+                .into_iter()
+                .map(|(key, value)| (key.into(), value))
+                .collect()
+        );
+        reached.insert(diagnostic.code);
+    }
+    reached
 }
 
 fn check(fields: Vec<(&str, Tree<'_>)>, expected: Vec<Expected<'_>>) -> BTreeSet<ConditionCode> {

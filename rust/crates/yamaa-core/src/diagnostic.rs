@@ -91,6 +91,8 @@ conditions! {
     ProducerRedundantSourceType => ("validation", "redundant_field_type", Some("REQ-0523")),
     ProducerContractMismatch => ("validation", "producer_contract_mismatch", Some("REQ-0535")),
     OutputUnknownProfile => ("validation", "unknown_artifact_profile", Some("REQ-0760")),
+    OutputInvalidDecimals => ("validation", "invalid_field_type", Some("REQ-0744")),
+    OutputDecimalsNotApplicable => ("validation", "decimals_not_applicable", Some("REQ-0762")),
     OutputDuplicateColumn => ("validation", "duplicate_identifier", Some("REQ-0234")),
     OutputUndeclaredColumn => ("validation", "undeclared_column", Some("REQ-0234")),
     OutputInternalKey => ("validation", "internal_column_in_keys", Some("REQ-0220")),

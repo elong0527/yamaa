@@ -50,6 +50,107 @@ class PublicEnvironment(unittest.TestCase):
     def report(self, result):
         return json.loads(result._native.observations())
 
+    def precision_study(self, decimals="2", output="rounded.csv"):
+        os.chdir(self.directory)
+        (self.directory / "environment.yaml").write_text(
+            "schema_version: '1.0'\nlanguage: python\n"
+        )
+        (self.directory / "input.csv").write_text(
+            "ID,VALUE,INT\n1,0.125,7\n2,-0.125,-7\n3,2.675,0\n"
+            "4,-0.004,9\n5,1.234,1\n6,2.345,2\n7,,3\n8,25,4\n"
+        )
+        precision = "" if decimals is None else ", decimals: " + decimals
+        (self.directory / "spec.yaml").write_text(
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            "input: {SRC: {path: input.csv, types: {ID: int, VALUE: float, INT: int}}}\n"
+            f"output: {{path: {output}, columns: [ID, VALUE, DOUBLE, EMPTY, INT]{precision}}}\n"
+            "columns:\n"
+            "  - {name: ID, type: int, derivation: SRC.ID}\n"
+            "  - {name: VALUE, type: float, derivation: SRC.VALUE}\n"
+            "  - {name: DOUBLE, type: float, derivation: {compute: {expr: 'VALUE + VALUE'}}}\n"
+            "  - {name: EMPTY, type: str, derivation: {literal: ''}}\n"
+            "  - {name: INT, type: int, derivation: SRC.INT}\n"
+            "verifications: [{assert: {when: 'ID = 5', require: 'DOUBLE = 2.468'}}]\n"
+        )
+
+    def test_csv_precision_changes_saved_bytes_only_and_preserves_derived_values(self):
+        expected = (
+            b'ID,VALUE,DOUBLE,EMPTY,INT\n1,0.13,0.25,"",7\n2,-0.13,-0.25,"",-7\n'
+            b'3,2.67,5.35,"",0\n4,0.00,-0.01,"",9\n5,1.23,2.47,"",1\n'
+            b'6,2.35,4.69,"",2\n7,,,"",3\n8,25.00,50.00,"",4\n'
+        )
+        self.precision_study()
+        with (
+            patch.object(host, "verify_versions", side_effect=AssertionError("unused lock")),
+            patch.object(host, "resolve_callable", side_effect=AssertionError("unused code")),
+        ):
+            self.assertTrue(yamaa.check("spec.yaml", environment="environment.yaml").issues.is_empty())
+            result = yamaa.domain("spec.yaml", environment="environment.yaml")
+        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.output["VALUE"].to_list(), [0.125, -0.125, 2.675, -0.004, 1.234, 2.345, None, 25.0])
+        self.assertEqual(result.output["DOUBLE"].to_list(), [0.25, -0.25, 5.35, -0.008, 2.468, 4.69, None, 50.0])
+        before = self.report(result)
+        self.assertEqual(before["artifacts"], [])
+        self.assertFalse((self.directory / "rounded.csv").exists())
+        self.assertTrue(result.save())
+        self.assertEqual((self.directory / "rounded.csv").read_bytes(), expected)
+        self.assertEqual(self.report(result)["artifacts"][0]["content"].encode(), expected)
+        (self.directory / "rounded.csv").unlink()
+        self.precision_study(None)
+        ordinary = yamaa.domain("spec.yaml", environment="environment.yaml")
+        self.assertTrue(ordinary.issues.is_empty(), ordinary.issues)
+        self.assertEqual(ordinary.output.to_dicts(), result.output.to_dicts())
+        # Metadata and every calculation/check observation retain the same truth.
+        self.assertEqual(self.report(ordinary), before)
+
+    def test_csv_precision_has_no_machine_width_limit_and_output_budget_refuses_save(self):
+        self.precision_study("5000")
+        (self.directory / "input.csv").write_text("ID,VALUE,INT\n1,0.125,7\n")
+        result = yamaa.domain("spec.yaml", environment="environment.yaml")
+        self.assertTrue(result.issues.is_empty(), result.issues)
+        expected = b'ID,VALUE,DOUBLE,EMPTY,INT\n1,0.125' + b"0" * 4997 + b",0.25" + b"0" * 4998 + b',"",7\n'
+        self.assertTrue(result.save())
+        self.assertEqual((self.directory / "rounded.csv").read_bytes(), expected)
+        (self.directory / "rounded.csv").unlink()
+        self.precision_study("999999999999999999999999999999")
+        self.assertTrue(yamaa.check("spec.yaml", environment="environment.yaml").issues.is_empty())
+        failed = yamaa.domain("spec.yaml", environment="environment.yaml")
+        self.assertIsNone(failed.output)
+        self.assertFalse(failed.issues.is_empty())
+        self.assertEqual(failed.issues["condition"].to_list(), ["engine_rejected"])
+        with self.assertRaises(yamaa.DomainError):
+            failed.save()
+        self.assertFalse((self.directory / "rounded.csv").exists())
+
+    def test_csv_precision_validation_and_prior_failure_preserve_public_save_gates(self):
+        for precision, output, condition, requirement, context in (
+            ("-9223372036854775809", "rounded.csv", "invalid_field_type", "REQ-0744", {"expected": "a non-negative integer", "actual": -9223372036854775809}),
+            ("2", "rounded.parquet", "decimals_not_applicable", "REQ-0762", {"path": "rounded.parquet", "profile": "parquet"}),
+        ):
+            self.precision_study(precision, output)
+            result = yamaa.domain("spec.yaml", environment="environment.yaml")
+            self.assertIsNone(result.output)
+            self.assertEqual(result.issues["condition"].to_list(), [condition])
+            self.assertEqual(result.issues["requirement"].to_list(), [requirement])
+            self.assertEqual(self.report(result)["diagnostics"][0]["context"], context)
+            with self.assertRaises(yamaa.DomainError):
+                result.save()
+            self.assertFalse((self.directory / output).exists())
+        for invalid in ("true", "2.0", "'2'"):
+            self.precision_study(invalid)
+            result = yamaa.check("spec.yaml", environment="environment.yaml")
+            self.assertEqual(result.issues["spec_paths"].to_list(), [["output.decimals"]])
+            self.assertFalse(result.issues.is_empty())
+        self.precision_study("-1")
+        path = self.directory / "spec.yaml"
+        path.write_text(path.read_text().replace("VALUE + VALUE", "1 / 0"))
+        failed = yamaa.domain("spec.yaml", environment="environment.yaml")
+        self.assertIsNone(failed.output)
+        self.assertEqual(failed.issues["condition"].to_list(), ["division_by_zero"])
+        with self.assertRaises(yamaa.DomainError):
+            failed.save()
+        self.assertFalse((self.directory / "rounded.csv").exists())
+
     def test_original_positive_artifacts_and_fresh_activation_on_every_build(self):
         for name in CASES:
             with self.subTest(name=name):
@@ -280,7 +381,11 @@ class PublicEnvironment(unittest.TestCase):
                 self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,9\n")
 
     def test_original_interrupt_survives_activation(self):
-        self.value_study()
+        case = self.value_study()
+        path = case / "spec.yaml"
+        spec = yaml.safe_load(path.read_text())
+        spec["output"]["decimals"] = 2
+        path.write_text(yaml.safe_dump(spec, sort_keys=False))
         original = KeyboardInterrupt("original project interruption")
         with (
             patch.object(host, "verify_versions", side_effect=original),
@@ -320,6 +425,10 @@ class PublicEnvironment(unittest.TestCase):
 
     def test_opaque_host_error_is_retained_independently_of_issue_format(self):
         case = self.value_study()
+        path = case / "spec.yaml"
+        spec = yaml.safe_load(path.read_text())
+        spec["output"]["decimals"] = 2
+        path.write_text(yaml.safe_dump(spec, sort_keys=False))
         shutil.rmtree(case / "input")
         original = RuntimeError("original lock host error")
         with patch.object(host, "verify_versions", side_effect=original):

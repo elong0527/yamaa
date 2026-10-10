@@ -402,7 +402,10 @@ pub(crate) fn prepare_result(
             id,
             value: Some(observations),
         },
-        &mut Encoder(run.compiled().output_profile()),
+        &mut Encoder(
+            run.compiled().output_profile(),
+            run.compiled().output_decimals(),
+        ),
     )
     .map_err(|error| match error {
         E::Report(e) | E::Encode(e) => e,
@@ -630,7 +633,10 @@ pub fn complete<E, P: ArtifactPort>(
             id,
             value: Some(observations),
         },
-        &mut Encoder(run.compiled().output_profile()),
+        &mut Encoder(
+            run.compiled().output_profile(),
+            run.compiled().output_decimals(),
+        ),
         publisher,
     )
     .map_err(|error| match error {
@@ -641,8 +647,8 @@ pub fn complete<E, P: ArtifactPort>(
     })
 }
 
-struct Encoder(Option<&'static str>);
-impl yamaa_engine::specification_output::ArtifactEncoder for Encoder {
+struct Encoder<'a>(Option<&'static str>, Option<&'a str>);
+impl yamaa_engine::specification_output::ArtifactEncoder for Encoder<'_> {
     type Error = Error;
     fn encode(
         &mut self,
@@ -652,12 +658,11 @@ impl yamaa_engine::specification_output::ArtifactEncoder for Encoder {
     ) -> Result<Vec<u8>, Error> {
         match self.0 {
             Some("csv") => {
-                crate::csv_artifact::render(dataset, projection, byte_limit).map_err(|error| {
-                    match error {
+                crate::csv_artifact::render_with_decimals(dataset, projection, self.1, byte_limit)
+                    .map_err(|error| match error {
                         crate::csv_artifact::Error::Limit => Error::OutputLimit,
                         _ => Error::InvalidObservation,
-                    }
-                })
+                    })
             }
             Some("parquet") => crate::parquet_artifact::render(
                 dataset,
