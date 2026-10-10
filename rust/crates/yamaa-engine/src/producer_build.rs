@@ -8,7 +8,7 @@ use crate::{
     specification_run::{self as run, CapturedAttempt, SourceDecoder, SourcePort},
 };
 use alloc::{sync::Arc, vec::Vec};
-use core::convert::Infallible;
+use core::{cell::Cell, convert::Infallible};
 use yamaa_core::{
     producer_graph::{BuildGraph, Node, PreparedGraph},
     resource::ResourceFailure,
@@ -275,7 +275,7 @@ impl PreparedBuild {
         let mut bytes_left = limits.source_bytes;
         let mut cells_left = limits.source_cells;
         let mut output_left = limits.output_bytes;
-        let mut routing_left = limits.routing_work;
+        let routing_left = Cell::new(limits.routing_work);
         let e = limits.execution;
         let node_limits = run::Limits {
             source_bytes: limits.source_bytes,
@@ -308,7 +308,7 @@ impl PreparedBuild {
                 prefix,
                 external: ports.study,
                 bytes_left: &mut bytes_left,
-                work_left: &mut routing_left,
+                work_left: &routing_left,
             };
             let calls = plan.project_calls().map_or(&[][..], |calls| calls.plans());
             let mut functions =
@@ -323,6 +323,7 @@ impl PreparedBuild {
                     cells_left: &mut cells_left,
                     storage_bytes: decode_storage,
                     work_bytes: decode_work,
+                    work_left: &routing_left,
                 },
                 &mut functions,
                 node_limits,
@@ -370,6 +371,7 @@ struct NodeDecoder<'a, D> {
     cells_left: &'a mut usize,
     storage_bytes: usize,
     work_bytes: usize,
+    work_left: &'a Cell<usize>,
 }
 impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
     type Error = DecodeError<D::Error>;
@@ -386,11 +388,14 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
         source: &SourceDeclaration,
         bytes: &[u8],
     ) -> Result<D::Table, Self::Error> {
-        let declaration = self
-            .node
-            .producers()
-            .iter()
-            .find(|p| p.dataset() == source.name);
+        let mut declaration = None;
+        for producer in self.node.producers() {
+            charge_routing(self.work_left).map_err(DecodeError::Limit)?;
+            if producer.dataset() == source.name {
+                declaration = Some(producer);
+                break;
+            }
+        }
         let table = self.decoder.decode_bounded(
             source,
             bytes,
@@ -473,7 +478,7 @@ struct Sources<'a, P: StudyPort, D, T: TableAccess, R, RE, CE> {
     prefix: NodePrefix<'a, P, D, T, R, RE, CE>,
     external: &'a mut P,
     bytes_left: &'a mut usize,
-    work_left: &'a mut usize,
+    work_left: &'a Cell<usize>,
 }
 impl<P: StudyPort, D, T: TableAccess, R, RE, CE> Sources<'_, P, D, T, R, RE, CE> {
     fn producer(
@@ -482,10 +487,7 @@ impl<P: StudyPort, D, T: TableAccess, R, RE, CE> Sources<'_, P, D, T, R, RE, CE>
     ) -> Result<Option<usize>, CaptureError<P::Error>> {
         for (declaration, &dependency) in self.node.producers().iter().zip(self.node.dependencies())
         {
-            *self.work_left = self
-                .work_left
-                .checked_sub(1)
-                .ok_or(CaptureError::Limit("producer_routing_work"))?;
+            charge_routing(self.work_left).map_err(CaptureError::Limit)?;
             if declaration.dataset() == source.name {
                 return Ok(Some(dependency));
             }
@@ -495,10 +497,7 @@ impl<P: StudyPort, D, T: TableAccess, R, RE, CE> Sources<'_, P, D, T, R, RE, CE>
     fn artifact(&mut self, producer: usize) -> Result<&output::Artifact, CaptureError<P::Error>> {
         let mut found = None;
         for attempt in self.prefix {
-            *self.work_left = self
-                .work_left
-                .checked_sub(1)
-                .ok_or(CaptureError::Limit("producer_routing_work"))?;
+            charge_routing(self.work_left).map_err(CaptureError::Limit)?;
             if attempt.node == producer {
                 found = Some(attempt);
                 break;
@@ -556,4 +555,14 @@ impl<P: StudyPort, D, T: TableAccess, R, RE, CE> SourcePort for Sources<'_, P, D
         *self.bytes_left -= bytes.len();
         Ok(bytes)
     }
+}
+
+fn charge_routing(remaining: &Cell<usize>) -> Result<(), &'static str> {
+    remaining.set(
+        remaining
+            .get()
+            .checked_sub(1)
+            .ok_or("producer_routing_work")?,
+    );
+    Ok(())
 }

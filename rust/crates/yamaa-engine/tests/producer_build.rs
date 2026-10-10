@@ -738,13 +738,14 @@ fn producer_schema_mismatch_keeps_portable_diagnostics_before_consumer_cardinali
 #[test]
 fn alias_cells_and_codec_storage_and_work_are_reserved_before_decoded_table_ownership() {
     let build = prepared();
-    for mode in 0..3 {
+    for mode in 0..4 {
         let mut ports = Ports::new();
         let mut limits = build::Limits::default();
         match mode {
             0 => limits.source_cells = 5,
             1 => limits.source_storage_bytes = 0,
-            _ => limits.decode_work_bytes = 0,
+            2 => limits.decode_work_bytes = 0,
+            _ => limits.routing_work = 7,
         }
         let mut attempt = Attempt::default();
         build.build_into(ports.borrow(), limits, &mut attempt);
@@ -760,6 +761,25 @@ fn alias_cells_and_codec_storage_and_work_are_reserved_before_decoded_table_owne
                 .borrow()
                 .iter()
                 .any(|s| s == "decode:SECOND"));
+        } else if mode == 3 {
+            assert_eq!(attempt.nodes.len(), 2);
+            assert!(entered.dataset.sources[0].snapshot.is_some());
+            assert!(entered.dataset.sources[1].snapshot.is_none());
+            assert!(entered.dataset.sources.iter().all(|s| s.table.is_none()));
+            assert!(!ports
+                .activation
+                .trace
+                .borrow()
+                .iter()
+                .any(|s| s == "decode:FIRST"));
+            assert!(matches!(
+                entered.dataset.result,
+                Err(PortError::Run(
+                    yamaa_engine::specification_run::RunError::Decode(build::DecodeError::Limit(
+                        "producer_routing_work"
+                    ))
+                ))
+            ));
         } else {
             assert_eq!(attempt.nodes.len(), 1);
         }
