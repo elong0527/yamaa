@@ -1,7 +1,7 @@
 # yamaa Rust engine migration
 
 Assessed 2026-10-09 against main
-`3ddbd67342f40ed510bdf2be0b1650dc537ef37f` and the acceptance criteria in
+`0c52fc6caf761308cd6428822909d7a079a01cad` and the acceptance criteria in
 [#1585](https://github.com/elong0527/yamaa/issues/1585).
 
 The goal is to complete one shared Rust implementation behind Python and R,
@@ -18,7 +18,7 @@ explicitly open policy decisions.
   one package named `yamaa`.
 - The bounded six-document public M1 cohort passes 96 installed tuples across
   direct/source Python forms and the exercised R platforms. Twelve Windows R
-  tuples remain explicitly unqualified under #1742. The separate 945-row
+  tuples remain explicitly unqualified under #1742. The separate 954-row
   benchmark inventory is still reference-assisted.
 - Owned environment admission, versionless column and row calls, shared
   lock/bind/all-cases activation and governed column codelist checkpoints have
@@ -41,6 +41,13 @@ explicitly open policy decisions.
   121 targets, both installed Python forms and all 17 strict R scripts. Actual
   Windows debug/release-test logs include all 15 new project/lock-fact tests.
 
+- [#1848](https://github.com/elong0527/yamaa/pull/1848) connects actual installed
+  Python/R host capabilities to retained native project attempts. The final
+  source passes 969 shared-crate tests across 121 targets, both fresh installed
+  Python forms and all 17 strict R scripts. Its project witness passes in all
+  six CI Python forms and both exercised R platforms. Actual Windows
+  debug/release-test evidence includes all 12 affected project/file-project cases.
+
 These PRs passed their complete reviews, every applicable workflow check,
 all 16 native CI jobs and all 37 downloaded artifact/source audits. Their
 merged source trees equal the qualified heads directly. These results establish
@@ -48,14 +55,17 @@ the stated slices; component counts are not a migration percentage.
 
 ## Current implementation frontier
 
-The installed Python/R connection is being qualified through private native
-project handles with explicit candidate schemas. These call the shared whole
+The installed Python/R connection is qualified through private native project
+handles with explicit candidate schemas. These call the shared whole
 project build, retain typed attempts and prepared documents independently, and
 project bounded lossless activation evidence without repeating host effects.
-Complete project reports, output admission and public
-`domain(..., environment=...)` / `check(..., environment=...)` remain the next
-integration gate. Authoritative environment/function formats and the five locked
-function benchmarks have not yet been replaced. Installed public-environment
+The shared Rust project report formatter now borrows a whole retained attempt,
+including classified activation failures, source reads, codelist values and
+completed-check prefixes. It uses the ordinary output/save gate and matches
+independent complete truth for sixteen original benchmark documents. The next
+integration gate carries these results into owned installed SDK results and
+public `domain(..., environment=...)` / `check(..., environment=...)`. Authoritative environment/function formats and
+the five locked function benchmarks have not yet been replaced. Installed public-environment
 qualification remains pending.
 
 Continue with the following acceptance gates in the
