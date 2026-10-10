@@ -33,7 +33,13 @@ impl Study {
         Self(fs::canonicalize(root).unwrap())
     }
     fn path(&self, written: &str) -> String {
-        self.0.join(written).to_str().unwrap().into()
+        let path = self.0.join(written).to_str().unwrap().to_owned();
+        #[cfg(windows)]
+        let path = path
+            .strip_prefix(r"\\?\")
+            .unwrap_or(&path)
+            .replace('\\', "/");
+        path
     }
     fn write(&self, written: &str, text: &str) {
         let path = self.0.join(written);

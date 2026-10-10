@@ -1151,6 +1151,15 @@ mod metadata_budget_tests {
                 .unwrap();
             resources
         }
+        fn identity(&self, name: &str) -> String {
+            let path = self.0.join(name).to_str().unwrap().to_owned();
+            #[cfg(windows)]
+            let path = path
+                .strip_prefix(r"\\?\")
+                .unwrap_or(&path)
+                .replace('\\', "/");
+            path
+        }
     }
     impl Drop for Fixture {
         fn drop(&mut self) {
@@ -1191,18 +1200,12 @@ mod metadata_budget_tests {
         std::fs::write(fixture.0.join("other.yaml"), b"changed alias").unwrap();
         assert_eq!(
             resources.verify_captured().unwrap_err(),
-            (
-                fixture.0.join("other.yaml").to_str().unwrap().to_owned(),
-                Error::Changed,
-            )
+            (fixture.identity("other.yaml"), Error::Changed,)
         );
         std::fs::write(fixture.0.join("source.yaml"), b"changed bytes").unwrap();
         assert_eq!(
             resources.verify_captured().unwrap_err(),
-            (
-                fixture.0.join("source.yaml").to_str().unwrap().to_owned(),
-                Error::Changed,
-            )
+            (fixture.identity("source.yaml"), Error::Changed,)
         );
         assert_eq!(
             resources.captured_sources().next().unwrap().1,
