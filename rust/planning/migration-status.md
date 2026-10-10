@@ -93,8 +93,13 @@ results and the distinction between those results and the CI platform matrix.
 Continue with the following acceptance gates in the
 [serial implementation order](migration-order.md):
 
-1. Review and merge the #1757 closing change after its installed platform gates
-   pass; retain #1753's issue/observation contracts and #1755's port ordering.
+1. #1757 is closed by [#1856](https://github.com/elong0527/yamaa/pull/1856),
+   merged as `aff53fb65df5b9d6a45d8cf203fa0b9b52f1176a`. All 26 final-head
+   checks, all 16 native jobs, completed review and 40 artifact audits pass.
+   The merged source equals the qualified head. Retain #1753's observation
+   contracts and #1755's port ordering. Complete the explicit
+   [#1858 producer compiler prerequisite](https://github.com/elong0527/yamaa/issues/1858)
+   before claiming #1741 workflow execution.
 2. Complete #1741's producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.
