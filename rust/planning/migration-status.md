@@ -306,8 +306,12 @@ retains #1904's existing SDK corrections and adds an early repository guard plus
 an actual installed mismatch refusal witness through
 [#1909](https://github.com/elong0527/yamaa/pull/1909). Program versions and
 independent truth remain unchanged. See
-[the correction contract](../BENCHMARK_SDK_LOCKS.md). Complete fresh
-current-source qualification and a protected merge guard remain required.
+[the correction contract](../BENCHMARK_SDK_LOCKS.md). Local qualification of
+runtime source `6e79094c2352cfccba60ef263a714ac8db09e090` passed both installed
+Python forms and strict installed R, including the SDK mismatch witness. The
+subsequent merge of #1908 changes documentation only; runtime source and fixtures
+remain identical. Complete review, applicable current-head checks, installed
+artifact audits and a fresh protected merge guard remain required.
 Semantic composition, original inherited capture and generators remain #1758.
 The approved [#1887 decision](https://github.com/elong0527/yamaa/issues/1887)
 adds an optional bounded nonempty section-level `source_system_version` override,
@@ -337,10 +341,12 @@ Continue with the following acceptance gates in the
    Implement #1866's approved lifecycle: publication failure stops dependent
    publication while retaining completed execution evidence and prior writes.
 4. #1888 is closed by #1891 and #1893 by #1896 with its evidence limits above;
-   #1897 is closed by #1901. Complete #1907's SDK lock coherence correction and
-   current installed R qualification, then complete #1758's shared
-   Define-XML/Dataset-JSON implementation, approved source-system-version override
-   and three submission fixtures before retiring the old schema and generator.
+   #1897 is closed by #1901. Local qualification covers #1907's SDK lock
+   coherence correction and installed R as scoped above. Complete its review,
+   applicable current-head checks, artifact audits and protected merge guard,
+   then complete #1758's shared Define-XML/Dataset-JSON implementation, approved
+   source-system-version override and three submission fixtures before retiring
+   the old schema and generator.
 5. Close the remaining language/API gaps in #1751/#1752/#1754 and the executable
    inventory, migrate every supported benchmark runner, and qualify complete
    output, issues, logs and exact saved bytes through both installed public APIs.
