@@ -8,8 +8,8 @@ Docker; this folder only writes Harbor task directories and a job file.
 
 | File | Role |
 |---|---|
-| `Dockerfile` | the base image: Python and R data packages, openSAS v0.6.6, OpenCode's offline settings |
-| `system-r.md`, `system-python.md`, `system-sas.md` | the shared system prompt per language: use only that language and write `result.R`/`result.py`/`result.sas` |
+| `Dockerfile` | the base image: Python and R data packages, opensas v0.6.6, OpenCode's offline settings |
+| `system-r.md`, `system-python.md`, `system-opensas.md` | the shared system prompt per language: use only that language and write `result.R`/`result.py`/`result.sas` |
 | `prompts/` | the prompts, `<benchmark>/full.md`, `conventions.md`, and `brief.md`, one file per tier; what each tier means is in [`prompts/README.md`](prompts/README.md) |
 | `brief.py` | writes each `brief.md` from its `full.md` |
 | `build.py` | benchmarks with a prompt -> Harbor tasks per prompt tier and language with their Harbor Hub READMEs, one dataset README per tier and language, and one job file per tier, language, and model variant |
@@ -24,8 +24,8 @@ reviewed on its leaderboards.
 
 Standalone `result.sas` sources are also prepared for the 137 prompted
 derivation benchmarks. Their execution prerequisites, local checks and known
-compatibility gaps are documented in [solutions/SAS.md](solutions/SAS.md).
-The SAS track runs the 134 confident cases with native CSV inputs. Three
+compatibility gaps are documented in [solutions/opensas.md](solutions/opensas.md).
+The opensas track runs the 134 confident cases with native CSV inputs. Three
 prepared cases remain excluded: investigator comments (spaces-only text),
 randomization (Parquet input), and age quality (warning-log output).
 `build.py` records their reasons and rejects explicit requests to run them.
@@ -45,10 +45,10 @@ How to write a prompt is in
 ## What a run enforces
 
 - **One language per task.** Each task's `instruction.md` is the shared
-  system prompt for its language (`system-r.md`, `system-python.md` or `system-sas.md`)
+  system prompt for its language (`system-r.md`, `system-python.md` or `system-opensas.md`)
   followed by the benchmark's prompt of the task's tier, which itself
   never names a language. The R track requires `/app/output/result.R`,
-  the Python track `/app/output/result.py`, and the SAS track
+  the Python track `/app/output/result.py`, and the opensas track
   `/app/output/result.sas`, each rerunnable to reproduce
   the datasets. A
   shell call that runs the other language zeroes the trial: `python`,
@@ -58,7 +58,7 @@ How to write a prompt is in
   comment, a heredoc body, or the tool call's description. So is a bridge
   in the script: `library(reticulate)` or `system("python ...")` in R,
   `import rpy2` or `subprocess.run(["Rscript", ...])` in Python. R/Python
-  tracks also reject calls to openSAS. SAS rejects Python, R and Lua calls,
+  tracks also reject calls to opensas. opensas rejects Python, R and Lua calls,
   PROC PYTHON/LUA and shell bridges such as SYSTEM, X, PIPE and SYSEXEC.
 - **The agent sees only the prompt and `/app/input/`.** Specifications,
   READMEs, golden files, and input schemas (`*.schema.yaml`) never enter
@@ -121,7 +121,7 @@ needs it): Linux, or OrbStack on macOS. Docker Desktop may lack it.
 
 ```bash
 uv sync --project python --group harbor
-docker build -t yamaa-harbor-env:0.6 evaluations/harbor
+docker build -t yamaa-harbor-env:0.7 evaluations/harbor
 ```
 
 ## Build and check the tasks
@@ -231,19 +231,19 @@ uv run --project python --no-sync python evaluations/harbor/smoke.py \
 	--out ~/.cache/yamaa-harbor-smoke
 ```
 
-## Run every confident SAS case
+## Run every confident opensas case
 
-The image uses the existing official openSAS v0.6.6 Linux executable for
+The image uses the existing official opensas v0.6.6 Linux executable for
 amd64 or arm64. It retains the Apache 2.0 and applicable MIT notices under
 `/usr/local/share/licenses/opensas`; see [runtime notices](licenses/opensas/README.md).
 No engine is built. Harbor's separate verifier still uses clean outputs,
 unprivileged execution, held-out subjects and required changed-input checks.
 
 ```bash
-docker build -t yamaa-harbor-env:0.6 evaluations/harbor
+docker build -t yamaa-harbor-env:0.7 evaluations/harbor
 uv run --project python --no-sync python evaluations/harbor/smoke.py \
-    --language sas --all-cases --prompt full --n-concurrent 6 \
-    --out ~/.cache/yamaa-harbor-sas
+    --language opensas --all-cases --prompt full --n-concurrent 6 \
+    --out ~/.cache/yamaa-harbor-opensas
 ```
 
 This runs oracle and nop on the same 134 cases, with no model key. The saved
@@ -252,8 +252,8 @@ each case's rewards and exceptions. Jobs retain the usual task snapshots,
 verifier grades and logs. CI runs this complete selection on pull requests,
 weekly and through the Harbor Oracle workflow's manual dispatch.
 
-For a model evaluation, pass `--language sas` to `build.py`; it creates a
-separate SAS dataset, job and leaderboard per requested prompt tier.
+For a model evaluation, pass `--language opensas` to `build.py`; it creates a
+separate opensas dataset, job and leaderboard per requested prompt tier.
 R/Python remain the default selection when no language is given.
 
 ## Run an agent
@@ -495,7 +495,7 @@ It also refuses a trial without the grading evidence `grade.json` keeps
 job whose tasks do not share one committed (not `+dirty`) yamaa commit,
 the board's grading protocol, and one image. `--hide` exports its rows
 hidden. Repeat for `sdtm-adam-v3-python` with the Python jobs. The published
-tasks build from the local `yamaa-harbor-env:0.6` image, so they run where
+tasks build from the local `yamaa-harbor-env:0.7` image, so they run where
 that image is built.
 
 Build the runtime once for a comparison and reuse that artifact reference.

@@ -9,7 +9,7 @@
 # This board is the whole Python track on the conventions prompts: every buildable
 # SDTM and ADaM benchmark, each requiring `/app/output/result.py`.
 grading_protocol: "3"
-image_reference: yamaa-harbor-env:0.6
+image_reference: yamaa-harbor-env:0.7
 package: yamaa/yamaa-sdtm-adam-conventions-python
 tasks:
   - adam-adae-death-conventions-python

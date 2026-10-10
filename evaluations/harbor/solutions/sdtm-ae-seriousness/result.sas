@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-ae-seriousness.
+/* opensas reference solution for the yamaa benchmark sdtm-ae-seriousness.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data ae_raw;
   length STUDYID USUBJID AETERM AESDTH AESLIFE AESHOSP AESDISAB AESCONG AESMIE $1024;

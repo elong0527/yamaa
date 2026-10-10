@@ -60,12 +60,12 @@ CHALLENGE_SEED = 20261001
 # language: running one of its programs in a shell call, or a bridge in the
 # script. Only a call counts: the program's name in a grep pattern, a quoted
 # string, a comment, or a heredoc body is not one.
-INTERPRETERS = {"r": "Rscript", "python": "python3", "sas": "sas"}
+INTERPRETERS = {"r": "Rscript", "python": "python3", "opensas": "opensas"}
 OTHER_LANGUAGE_PROGRAMS = {
     "r": re.compile(r"python[\d.]*|pip[\d.]*|ipython[\d.]*|jupyter|uvx?|sas|opensas"),
     # `r` is littler, the R front end rocker images install.
     "python": re.compile(r"R|Rscript|r|sas|opensas"),
-    "sas": re.compile(
+    "opensas": re.compile(
         r"R|Rscript|r|python[\d.]*|pip[\d.]*|ipython[\d.]*|jupyter|uvx?|lua[\d.]*"
         r"|node(?:js)?|deno|bun|perl|ruby|julia|php|java|javac"
         r"|gcc|g\+\+|clang(?:\+\+)?|cc|c\+\+|rustc|cargo|zig|go"
@@ -82,7 +82,7 @@ OTHER_LANGUAGE_IN_SCRIPT = {
         r"|\b(?:subprocess\.\w+|os\.(?:system|popen|exec\w*|spawn\w*))\s*\("
         r"\s*\[?\s*['\"](?:[^'\"]*/)?(?:Rscript|R|sas|opensas)\b"
     ),
-    "sas": re.compile(
+    "opensas": re.compile(
         r"\bproc\s+(?:python|lua)\b|\b(?:call\s+)?system\s*\("
         r"|\b(?:systask\s+command|filename\s+\w+\s+pipe)\b"
         r"|(?:^|;)\s*x\b(?!\s*(?:=|\+|\[|\{))|%sysexec\b",
@@ -542,8 +542,8 @@ def grade_script(contract: dict, output_dir: Path) -> dict:
         result["problems"].append(f"{name} is empty")
         return result
     pattern = OTHER_LANGUAGE_IN_SCRIPT.get(contract.get("language") or "")
-    if contract.get("language") == "sas":
-        # Quoted data and SAS comments are mentions, not procedure/bridge calls.
+    if contract.get("language") == "opensas":
+        # Quoted data and opensas comments are mentions, not procedure/bridge calls.
         text = re.sub(
             r"/\*.*?\*/|%\*[^;]*;|(?:^|(?<=;))\s*\*[^;]*;"
             r"|'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"",

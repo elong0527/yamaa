@@ -74,7 +74,7 @@ def main() -> None:
     )
     if probe_task is None:
         # The boundary probe uses Python to try protected filesystem/process
-        # operations. Keep this probe outside the SAS evaluation dataset.
+        # operations. Keep this probe outside the opensas evaluation dataset.
         probe_task = build.build_task(
             build.BENCHMARKS / "adam-adsl-age-group",
             args.out / "probe",

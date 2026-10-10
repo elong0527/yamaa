@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-ds-sequence.
+/* opensas reference solution for the yamaa benchmark sdtm-ds-sequence.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data ds_raw;
   length STUDY PATNUM INSTANCE DSDECOD DSDTCOL $1024;

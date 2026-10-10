@@ -1224,8 +1224,8 @@ REFERENCES = sorted(
 )
 
 
-def test_prepared_sas_solutions_cover_every_prompt():
-    # SAS sources are prepared separately until the openSAS Harbor track lands.
+def test_prepared_opensas_solutions_cover_every_prompt():
+    # opensas references are executed by their own Harbor track.
     # They must not be sent to the Python interpreter by reference discovery.
     sources = sorted(build.SOLUTIONS.glob("*/result.sas"))
     assert [p.parent.name for p in sources] == PROMPTED

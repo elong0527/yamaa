@@ -4,7 +4,7 @@
 # verifier. Python and R with common data packages; no yamaa, no benchmark
 # files, no network at run time beyond the model API.
 #
-#   docker build -t yamaa-harbor-env:0.6 evaluations/harbor
+#   docker build -t yamaa-harbor-env:0.7 evaluations/harbor
 #
 # Bump the tag in build.py (IMAGE) whenever this file changes.
 
@@ -37,7 +37,7 @@ RUN apt-get update \
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 
-# --- Existing openSAS release; no engine build or source modifications -------
+# --- Existing opensas release; no engine build or source modifications -------
 COPY install-opensas.sh /tmp/install-opensas.sh
 COPY licenses/opensas/ /usr/local/share/licenses/opensas/
 RUN bash /tmp/install-opensas.sh "${TARGETARCH}" \

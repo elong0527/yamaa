@@ -4,148 +4,146 @@
 # attempt counts and at least `attempts` attempts each, at the tasks' own
 # timeouts, so every row answers
 # the same question. Metrics are computed from the listed tasks only.
-# What each prompt tier keeps is in evaluations/harbor/prompts/README.md;
-# rows rank by complete task pass rate first; cell accuracy is secondary.
-# This board covers 134 confident derivation cases on conventions prompts;
-# exclusions are in build.py SAS_EXCLUSIONS. Each task requires `/app/output/result.sas`.
+# This board covers 134 confident derivation cases, including BIMO;
+# exclusions are in build.py OPENSAS_EXCLUSIONS. Each task requires `/app/output/result.sas`.
 grading_protocol: "3"
-image_reference: yamaa-harbor-env:0.6
-package: yamaa/yamaa-sdtm-adam-conventions-sas
+image_reference: yamaa-harbor-env:0.7
+package: yamaa/yamaa-sdtm-adam-opensas
 tasks:
-  - adam-adae-death-conventions-sas
-  - adam-adae-occurrence-flags-conventions-sas
-  - adam-adae-onset-emergence-conventions-sas
-  - adam-adae-partial-dates-conventions-sas
-  - adam-adae-post-index-conventions-sas
-  - adam-adae-prior-serious-event-conventions-sas
-  - adam-adae-protocol-review-conventions-sas
-  - adam-adae-query-flags-conventions-sas
-  - adam-adae-review-order-conventions-sas
-  - adam-adae-serious-events-conventions-sas
-  - adam-adae-serious-sequence-conventions-sas
-  - adam-adae-severity-conventions-sas
-  - adam-adae-severity-override-conventions-sas
-  - adam-adae-severity-rank-conventions-sas
-  - adam-adae-text-cleanup-conventions-sas
-  - adam-adae-worsening-emergence-conventions-sas
-  - adam-adae-worst-severity-conventions-sas
-  - adam-adce-worst-toxicity-conventions-sas
-  - adam-adcm-atc-classes-conventions-sas
-  - adam-adcm-on-treatment-conventions-sas
-  - adam-adeg-derived-intervals-conventions-sas
-  - adam-adex-cumulative-dose-conventions-sas
-  - adam-adex-dose-reduction-conventions-sas
-  - adam-adex-uncollected-conventions-sas
-  - adam-adfa-fever-conventions-sas
-  - adam-adlb-bds-conventions-sas
-  - adam-adlb-closest-visit-conventions-sas
-  - adam-adlb-end-of-treatment-conventions-sas
-  - adam-adlb-lymphocytes-conventions-sas
-  - adam-adlb-mean-conventions-sas
-  - adam-adlb-ordered-sum-conventions-sas
-  - adam-adlb-reported-precision-conventions-sas
-  - adam-adlb-shift-criteria-conventions-sas
-  - adam-adlb-supplb-padded-key-conventions-sas
-  - adam-adlbc-row-window-conventions-sas
-  - adam-adlbc-window-chain-conventions-sas
-  - adam-adoe-study-eye-conventions-sas
-  - adam-adqs-missed-visit-locf-conventions-sas
-  - adam-adqs-multi-scale-scoring-conventions-sas
-  - adam-adqs-subscale-score-conventions-sas
-  - adam-adrs-best-response-conventions-sas
-  - adam-adrs-composite-response-conventions-sas
-  - adam-adrs-confirmed-response-conventions-sas
-  - adam-adrs-measurable-disease-conventions-sas
-  - adam-adrs-response-prep-conventions-sas
-  - adam-adrs-response-records-conventions-sas
-  - adam-adsl-age-group-conventions-sas
-  - adam-adsl-alive-date-conventions-sas
-  - adam-adsl-analysis-age-conventions-sas
-  - adam-adsl-bmi-conventions-sas
-  - adam-adsl-completion-flag-conventions-sas
-  - adam-adsl-country-region-conventions-sas
-  - adam-adsl-crossover-periods-conventions-sas
-  - adam-adsl-demographics-conventions-sas
-  - adam-adsl-disposition-conventions-sas
-  - adam-adsl-dose-adjustment-conventions-sas
-  - adam-adsl-duration-conventions-sas
-  - adam-adsl-flag-chain-conventions-sas
-  - adam-adsl-new-therapy-conventions-sas
-  - adam-adsl-rescue-med-conventions-sas
-  - adam-adsl-site-parse-conventions-sas
-  - adam-adsl-treatment-conventions-sas
-  - adam-adtr-nadir-conventions-sas
-  - adam-adtr-sum-conventions-sas
-  - adam-adtte-dor-conventions-sas
-  - adam-adtte-first-ae-conventions-sas
-  - adam-adtte-os-conventions-sas
-  - adam-adtte-pfs-conventions-sas
-  - adam-adtte-pro-deterioration-conventions-sas
-  - adam-advs-bmi-conventions-sas
-  - adam-advs-bsa-conventions-sas
-  - adam-advs-carryforward-conventions-sas
-  - adam-advs-first-observed-carry-conventions-sas
-  - adam-advs-locf-conventions-sas
-  - adam-advs-locf-record-conventions-sas
-  - adam-advs-map-conventions-sas
-  - adam-advs-percentiles-conventions-sas
-  - adam-advs-prior-result-conventions-sas
-  - adam-advs-window-table-conventions-sas
-  - adam-advs-windows-conventions-sas
-  - bimo-clinsite-site-level-conventions-sas
-  - sdtm-ae-coding-conventions-sas
-  - sdtm-ae-meddra-hierarchy-conventions-sas
-  - sdtm-ae-odm-repeated-conventions-sas
-  - sdtm-ae-partial-dates-conventions-sas
-  - sdtm-ae-seriousness-conventions-sas
-  - sdtm-cm-collected-medications-conventions-sas
-  - sdtm-cm-odm-repeated-conventions-sas
-  - sdtm-cm-whodrug-coding-conventions-sas
-  - sdtm-dm-age-conventions-sas
-  - sdtm-dm-arms-conventions-sas
-  - sdtm-dm-basic-conventions-sas
-  - sdtm-dm-dates-conventions-sas
-  - sdtm-dm-death-conventions-sas
-  - sdtm-dm-metadata-conventions-sas
-  - sdtm-dm-race-ethnicity-conventions-sas
-  - sdtm-ds-multi-form-disposition-conventions-sas
-  - sdtm-ds-reasons-conventions-sas
-  - sdtm-ds-sequence-conventions-sas
-  - sdtm-ec-collected-exposure-conventions-sas
-  - sdtm-ex-combination-conventions-sas
-  - sdtm-ex-from-ec-conventions-sas
-  - sdtm-ex-intervals-conventions-sas
-  - sdtm-fa-event-findings-conventions-sas
-  - sdtm-fa-odm-multitest-conventions-sas
-  - sdtm-fa-reactogenicity-diary-conventions-sas
-  - sdtm-lb-character-results-conventions-sas
-  - sdtm-lb-compartments-conventions-sas
-  - sdtm-lb-findings-conventions-sas
-  - sdtm-lb-grading-conventions-sas
-  - sdtm-lb-lab-specific-ranges-conventions-sas
-  - sdtm-lb-last-observation-before-exposure-conventions-sas
-  - sdtm-lb-metadata-conventions-sas
-  - sdtm-lb-multiform-conventions-sas
-  - sdtm-lb-ranges-conventions-sas
-  - sdtm-mh-ongoing-conditions-conventions-sas
-  - sdtm-mh-prespecified-conditions-conventions-sas
-  - sdtm-pr-procedures-conventions-sas
-  - sdtm-qs-questionnaire-items-conventions-sas
-  - sdtm-relrec-dataset-level-conventions-sas
-  - sdtm-relrec-links-conventions-sas
-  - sdtm-rs-timepoint-response-conventions-sas
-  - sdtm-se-subject-elements-conventions-sas
-  - sdtm-suppmh-linkage-conventions-sas
-  - sdtm-suppmh-qualifiers-conventions-sas
-  - sdtm-sv-subject-visits-conventions-sas
-  - sdtm-tr-tumor-measurements-conventions-sas
-  - sdtm-tu-tumor-identification-conventions-sas
-  - sdtm-vs-collected-form-conventions-sas
-  - sdtm-vs-epoch-from-subject-elements-conventions-sas
-  - sdtm-vs-planned-time-points-conventions-sas
-  - sdtm-vs-replicates-conventions-sas
-  - sdtm-vs-study-day-conventions-sas
-  - sdtm-vs-units-conventions-sas
+  - adam-adae-death-opensas
+  - adam-adae-occurrence-flags-opensas
+  - adam-adae-onset-emergence-opensas
+  - adam-adae-partial-dates-opensas
+  - adam-adae-post-index-opensas
+  - adam-adae-prior-serious-event-opensas
+  - adam-adae-protocol-review-opensas
+  - adam-adae-query-flags-opensas
+  - adam-adae-review-order-opensas
+  - adam-adae-serious-events-opensas
+  - adam-adae-serious-sequence-opensas
+  - adam-adae-severity-opensas
+  - adam-adae-severity-override-opensas
+  - adam-adae-severity-rank-opensas
+  - adam-adae-text-cleanup-opensas
+  - adam-adae-worsening-emergence-opensas
+  - adam-adae-worst-severity-opensas
+  - adam-adce-worst-toxicity-opensas
+  - adam-adcm-atc-classes-opensas
+  - adam-adcm-on-treatment-opensas
+  - adam-adeg-derived-intervals-opensas
+  - adam-adex-cumulative-dose-opensas
+  - adam-adex-dose-reduction-opensas
+  - adam-adex-uncollected-opensas
+  - adam-adfa-fever-opensas
+  - adam-adlb-bds-opensas
+  - adam-adlb-closest-visit-opensas
+  - adam-adlb-end-of-treatment-opensas
+  - adam-adlb-lymphocytes-opensas
+  - adam-adlb-mean-opensas
+  - adam-adlb-ordered-sum-opensas
+  - adam-adlb-reported-precision-opensas
+  - adam-adlb-shift-criteria-opensas
+  - adam-adlb-supplb-padded-key-opensas
+  - adam-adlbc-row-window-opensas
+  - adam-adlbc-window-chain-opensas
+  - adam-adoe-study-eye-opensas
+  - adam-adqs-missed-visit-locf-opensas
+  - adam-adqs-multi-scale-scoring-opensas
+  - adam-adqs-subscale-score-opensas
+  - adam-adrs-best-response-opensas
+  - adam-adrs-composite-response-opensas
+  - adam-adrs-confirmed-response-opensas
+  - adam-adrs-measurable-disease-opensas
+  - adam-adrs-response-prep-opensas
+  - adam-adrs-response-records-opensas
+  - adam-adsl-age-group-opensas
+  - adam-adsl-alive-date-opensas
+  - adam-adsl-analysis-age-opensas
+  - adam-adsl-bmi-opensas
+  - adam-adsl-completion-flag-opensas
+  - adam-adsl-country-region-opensas
+  - adam-adsl-crossover-periods-opensas
+  - adam-adsl-demographics-opensas
+  - adam-adsl-disposition-opensas
+  - adam-adsl-dose-adjustment-opensas
+  - adam-adsl-duration-opensas
+  - adam-adsl-flag-chain-opensas
+  - adam-adsl-new-therapy-opensas
+  - adam-adsl-rescue-med-opensas
+  - adam-adsl-site-parse-opensas
+  - adam-adsl-treatment-opensas
+  - adam-adtr-nadir-opensas
+  - adam-adtr-sum-opensas
+  - adam-adtte-dor-opensas
+  - adam-adtte-first-ae-opensas
+  - adam-adtte-os-opensas
+  - adam-adtte-pfs-opensas
+  - adam-adtte-pro-deterioration-opensas
+  - adam-advs-bmi-opensas
+  - adam-advs-bsa-opensas
+  - adam-advs-carryforward-opensas
+  - adam-advs-first-observed-carry-opensas
+  - adam-advs-locf-opensas
+  - adam-advs-locf-record-opensas
+  - adam-advs-map-opensas
+  - adam-advs-percentiles-opensas
+  - adam-advs-prior-result-opensas
+  - adam-advs-window-table-opensas
+  - adam-advs-windows-opensas
+  - bimo-clinsite-site-level-opensas
+  - sdtm-ae-coding-opensas
+  - sdtm-ae-meddra-hierarchy-opensas
+  - sdtm-ae-odm-repeated-opensas
+  - sdtm-ae-partial-dates-opensas
+  - sdtm-ae-seriousness-opensas
+  - sdtm-cm-collected-medications-opensas
+  - sdtm-cm-odm-repeated-opensas
+  - sdtm-cm-whodrug-coding-opensas
+  - sdtm-dm-age-opensas
+  - sdtm-dm-arms-opensas
+  - sdtm-dm-basic-opensas
+  - sdtm-dm-dates-opensas
+  - sdtm-dm-death-opensas
+  - sdtm-dm-metadata-opensas
+  - sdtm-dm-race-ethnicity-opensas
+  - sdtm-ds-multi-form-disposition-opensas
+  - sdtm-ds-reasons-opensas
+  - sdtm-ds-sequence-opensas
+  - sdtm-ec-collected-exposure-opensas
+  - sdtm-ex-combination-opensas
+  - sdtm-ex-from-ec-opensas
+  - sdtm-ex-intervals-opensas
+  - sdtm-fa-event-findings-opensas
+  - sdtm-fa-odm-multitest-opensas
+  - sdtm-fa-reactogenicity-diary-opensas
+  - sdtm-lb-character-results-opensas
+  - sdtm-lb-compartments-opensas
+  - sdtm-lb-findings-opensas
+  - sdtm-lb-grading-opensas
+  - sdtm-lb-lab-specific-ranges-opensas
+  - sdtm-lb-last-observation-before-exposure-opensas
+  - sdtm-lb-metadata-opensas
+  - sdtm-lb-multiform-opensas
+  - sdtm-lb-ranges-opensas
+  - sdtm-mh-ongoing-conditions-opensas
+  - sdtm-mh-prespecified-conditions-opensas
+  - sdtm-pr-procedures-opensas
+  - sdtm-qs-questionnaire-items-opensas
+  - sdtm-relrec-dataset-level-opensas
+  - sdtm-relrec-links-opensas
+  - sdtm-rs-timepoint-response-opensas
+  - sdtm-se-subject-elements-opensas
+  - sdtm-suppmh-linkage-opensas
+  - sdtm-suppmh-qualifiers-opensas
+  - sdtm-sv-subject-visits-opensas
+  - sdtm-tr-tumor-measurements-opensas
+  - sdtm-tu-tumor-identification-opensas
+  - sdtm-vs-collected-form-opensas
+  - sdtm-vs-epoch-from-subject-elements-opensas
+  - sdtm-vs-planned-time-points-opensas
+  - sdtm-vs-replicates-opensas
+  - sdtm-vs-study-day-opensas
+  - sdtm-vs-units-opensas
 attempts: 1
 
 # The Harbor Hub definition, in the shape `harbor hub leaderboard create
@@ -153,17 +151,16 @@ attempts: 1
 # it with the rows built from the jobs, ready to create once the dataset is
 # published and the jobs uploaded.
 harbor:
-  name: sdtm-adam-v3-conventions-sas
-  title: yamaa derivation v3, conventions prompts (SAS)
+  name: sdtm-adam-v3-opensas
+  title: yamaa derivation v3 (opensas)
   description: >-
-    The 134 confident yamaa derivation benchmarks, including BIMO, solved in SAS with openSAS v0.6.6.
-    An agent gets the SAS system prompt, the benchmark's conventions prompt
-    (the full prompt with its rules cut down to the sponsor's conventions)
-    and input datasets, with no internet but the model's API. A task passes
-    when its output matches every golden cell, the verifier's rerun of
-    `/app/output/result.sas` from a clean state writes the same output, the
-    held-out rerun and required changed-input challenges pass, and the agent
-    used no Python, R, Lua or web tool. One row per model variant.
+    The 134 confident yamaa derivation benchmarks, including BIMO, solved
+    with opensas v0.6.6. An agent gets the opensas system prompt, the benchmark's
+    prompt and input datasets, with no internet but the model's API. A task
+    passes when its output matches every golden cell, the verifier's rerun
+    of `/app/output/result.sas` from a clean state writes the same output,
+    the held-out rerun and required changed-input challenges pass, and
+    the agent used no Python, R, Lua or web tool. One row per model variant.
   visibility: private
   metadata_schema:
     type: object

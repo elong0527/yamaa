@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark adam-adrs-response-prep.
+/* opensas reference solution for the yamaa benchmark adam-adrs-response-prep.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data adrs_raw;
   length STUDYID USUBJID ADT RANDDY AVALC $1024;

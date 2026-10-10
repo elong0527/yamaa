@@ -23,27 +23,31 @@ def _load(name):
 
 build, grade = _load("build"), _load("grade")
 PROMPTED = sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
-CONFIDENT = sorted(set(PROMPTED) - set(build.SAS_EXCLUSIONS))
+CONFIDENT = sorted(set(PROMPTED) - set(build.OPENSAS_EXCLUSIONS))
 
 
-def test_sas_selection_builds_all_134_native_input_cases(tmp_path):
+def test_opensas_selection_builds_all_134_native_input_cases(tmp_path):
     tasks, skipped = build.build_selection(
         PROMPTED,
-        languages=["sas"],
+        languages=["opensas"],
         tasks_dir=tmp_path,
         image=build.IMAGE,
         commit="test",
         strict=False,
     )
     assert len(tasks) == len(CONFIDENT) == 134
-    assert sorted(t.name for t in tasks) == sorted(f"{name}-sas" for name in CONFIDENT)
+    assert sorted(t.name for t in tasks) == sorted(
+        f"{name}-opensas" for name in CONFIDENT
+    )
     assert len(skipped) == 3
-    for name, reason in build.SAS_EXCLUSIONS.items():
+    for name, reason in build.OPENSAS_EXCLUSIONS.items():
         assert any(name in note and reason in note for note in skipped)
     for task in tasks:
         contract = json.loads((task / "tests/contract.json").read_text())
         assert contract["script"] == "result.sas"
-        assert "sas /app/output/result.sas" in (task / "solution/solve.sh").read_text()
+        assert (
+            "opensas /app/output/result.sas" in (task / "solution/solve.sh").read_text()
+        )
         reference = build.SOLUTIONS / contract["benchmark"] / "result.sas"
         assert (
             task / "tests/reference/result.sas"
@@ -51,25 +55,29 @@ def test_sas_selection_builds_all_134_native_input_cases(tmp_path):
         assert all(p.suffix == ".csv" for p in (task / "environment/input").iterdir())
 
 
-@pytest.mark.parametrize("name", list(build.SAS_EXCLUSIONS))
-def test_explicit_unsupported_sas_case_fails_instead_of_silently_staging(
+@pytest.mark.parametrize("name", list(build.OPENSAS_EXCLUSIONS))
+def test_explicit_unsupported_opensas_case_fails_instead_of_silently_staging(
     name, tmp_path
 ):
-    with pytest.raises(build.BuildError, match=build.SAS_EXCLUSIONS[name]):
-        build.build_task(build.BENCHMARKS / name, tmp_path, build.IMAGE, "test", "sas")
+    with pytest.raises(build.BuildError, match=build.OPENSAS_EXCLUSIONS[name]):
+        build.build_task(
+            build.BENCHMARKS / name, tmp_path, build.IMAGE, "test", "opensas"
+        )
 
 
-def test_every_sas_board_ranks_the_same_confident_set():
+def test_every_opensas_board_ranks_the_same_confident_set():
     for tier in build.TIERS:
-        suffix = "sas" if tier == "full" else f"{tier}-sas"
+        suffix = "opensas" if tier == "full" else f"{tier}-opensas"
         board = yaml.safe_load(
             (HARBOR / "leaderboards" / f"sdtm-adam-v3-{suffix}.yaml").read_text()
         )
         assert sorted(board["tasks"]) == sorted(
-            build.task_name(n, "sas", tier) for n in CONFIDENT
+            build.task_name(n, "opensas", tier) for n in CONFIDENT
         )
         assert board["image_reference"] == build.IMAGE
-        assert board["package"] == build.dataset_name(build.DATASET_PREFIX, "sas", tier)
+        assert board["package"] == build.dataset_name(
+            build.DATASET_PREFIX, "opensas", tier
+        )
 
 
 @pytest.mark.parametrize(
@@ -84,10 +92,10 @@ def test_every_sas_board_ranks_the_same_confident_set():
         "systask command 'python3 x.py';",
     ],
 )
-def test_sas_language_bridges_fail(tmp_path, text):
+def test_opensas_language_bridges_fail(tmp_path, text):
     (tmp_path / "result.sas").write_text(text)
     assert not grade.grade_script(
-        {"script": "result.sas", "language": "sas"}, tmp_path
+        {"script": "result.sas", "language": "opensas"}, tmp_path
     )["passed"]
 
 
@@ -100,11 +108,11 @@ def test_sas_language_bridges_fail(tmp_path, text):
         "data record; x=1; x+1; run;",
     ],
 )
-def test_sas_mentions_are_not_language_calls(tmp_path, text):
+def test_opensas_mentions_are_not_language_calls(tmp_path, text):
     (tmp_path / "result.sas").write_text(text)
-    assert grade.grade_script({"script": "result.sas", "language": "sas"}, tmp_path)[
-        "passed"
-    ]
+    assert grade.grade_script(
+        {"script": "result.sas", "language": "opensas"}, tmp_path
+    )["passed"]
 
 
 @pytest.mark.parametrize(
@@ -118,21 +126,22 @@ def test_sas_mentions_are_not_language_calls(tmp_path, text):
         "gcc x.c",
     ],
 )
-def test_sas_trajectory_rejects_other_language_commands(command):
-    assert grade.other_language_calls(command, "sas")
+def test_opensas_trajectory_rejects_other_language_commands(command):
+    assert grade.other_language_calls(command, "opensas")
 
 
-def test_sas_trajectory_allows_its_interpreter_and_text_mentions():
-    assert grade.other_language_calls("sas /app/output/result.sas", "sas") == []
+def test_opensas_trajectory_allows_its_interpreter_and_text_mentions():
+    assert grade.other_language_calls("opensas /app/output/result.sas", "opensas") == []
     assert (
-        grade.other_language_calls("grep 'python3' /app/output/result.sas", "sas") == []
+        grade.other_language_calls("grep 'python3' /app/output/result.sas", "opensas")
+        == []
     )
 
 
 @pytest.mark.parametrize("name", CONFIDENT)
-def test_confident_sas_reference_matches_original_golden(tmp_path, name):
-    if not shutil.which("sas"):
-        pytest.skip("openSAS is not installed; Harbor Oracle runs every case in Docker")
+def test_confident_opensas_reference_matches_original_golden(tmp_path, name):
+    if not shutil.which("opensas"):
+        pytest.skip("opensas is not installed; Harbor Oracle runs every case in Docker")
     benchmark = build.BENCHMARKS / name
     shutil.copytree(
         benchmark / "input",
@@ -147,9 +156,11 @@ def test_confident_sas_reference_matches_original_golden(tmp_path, name):
         .read_text()
         .replace("/app/", f"{tmp_path.as_posix()}/")
     )
-    subprocess.run(["sas", str(script)], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["opensas", str(script)], cwd=tmp_path, check=True, capture_output=True
+    )
     result = grade.grade(
-        build.contract_for(benchmark, "sas"),
+        build.contract_for(benchmark, "opensas"),
         benchmark / "expected",
         output,
         tmp_path / "none.json",
@@ -157,14 +168,14 @@ def test_confident_sas_reference_matches_original_golden(tmp_path, name):
     assert result["passed"], result
     # Changed-input reference outputs become goldens. They need canonical
     # headers even though an agent's column order is not itself graded.
-    for spec in build.contract_for(benchmark, "sas")["outputs"]:
+    for spec in build.contract_for(benchmark, "opensas")["outputs"]:
         header, _ = grade.read_rows(output / spec["file"])
         assert header == spec["columns"], (name, spec["file"], header)
 
 
 def _edge_case(tmp_path, name, inputs, output_name):
-    if not shutil.which("sas"):
-        pytest.skip("openSAS is not installed")
+    if not shutil.which("opensas"):
+        pytest.skip("opensas is not installed")
     source = tmp_path / "input"
     source.mkdir()
     for file, rows in inputs.items():
@@ -178,12 +189,14 @@ def _edge_case(tmp_path, name, inputs, output_name):
         .read_text()
         .replace("/app/", f"{tmp_path.as_posix()}/")
     )
-    subprocess.run(["sas", str(script)], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["opensas", str(script)], cwd=tmp_path, check=True, capture_output=True
+    )
     with (output / output_name).open(newline="") as handle:
         return list(csv.DictReader(handle))
 
 
-def test_sas_repeated_exposures_keep_one_subject_and_first_nonmissing_treatment(
+def test_opensas_repeated_exposures_keep_one_subject_and_first_nonmissing_treatment(
     tmp_path,
 ):
     rows = _edge_case(
@@ -207,7 +220,7 @@ def test_sas_repeated_exposures_keep_one_subject_and_first_nonmissing_treatment(
     assert rows[0]["ACTARMCD"] == "PBO"
 
 
-def test_sas_missing_lab_results_have_no_toxicity_grade(tmp_path):
+def test_opensas_missing_lab_results_have_no_toxicity_grade(tmp_path):
     rows = _edge_case(
         tmp_path,
         "sdtm-lb-grading",
@@ -232,7 +245,7 @@ def test_sas_missing_lab_results_have_no_toxicity_grade(tmp_path):
     assert all(row["LBTOXGR"] == "" for row in rows)
 
 
-def test_sas_censors_at_last_assessment_without_a_disposition_reason(tmp_path):
+def test_opensas_censors_at_last_assessment_without_a_disposition_reason(tmp_path):
     rows = _edge_case(
         tmp_path,
         "adam-adtte-pro-deterioration",

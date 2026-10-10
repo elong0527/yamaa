@@ -1,6 +1,6 @@
-/* SAS language reference solution for the yamaa benchmark sdtm-ec-collected-exposure.
+/* opensas reference solution for the yamaa benchmark sdtm-ec-collected-exposure.
    Reads the benchmark inputs and derives the requested output.
-   Execute with the existing openSAS runtime: sas /app/output/result.sas. */
+   Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data dosing_log;
   length STUDYID USUBJID LOGDATE TABLETS DOSE_TAKEN MISSREAS DOSE_ADJ $1024;

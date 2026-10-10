@@ -34,7 +34,7 @@ one build runs against any provider. Run from the repository root:
     uv run --project python --group harbor python evaluations/harbor/run.py \\
         -c ~/.cache/yamaa-harbor/configs/muse-spark-1.3-contributor-r-low.json
 
-Pass `--language r`, `--language python` or `--language sas` to build one track, and
+Pass `--language r`, `--language python` or `--language opensas` to build one track, and
 `--prompt conventions brief` to build the ablation tiers.
 """
 
@@ -71,7 +71,7 @@ SOLUTIONS = HERE / "solutions"
 REPO = "https://github.com/elong0527/yamaa"
 # One Harbor Hub dataset per language: <prefix>-r and <prefix>-python.
 DATASET_PREFIX = "yamaa/yamaa-sdtm-adam"
-IMAGE = "yamaa-harbor-env:0.6"
+IMAGE = "yamaa-harbor-env:0.7"
 # What the verifier checks, recorded in every task and required by the
 # leaderboards: 3 adds changed derivation values, replayed partial credit and
 # complete job evidence, so scores under an older protocol do not mix.
@@ -105,19 +105,19 @@ LANGUAGES = {
         "label": "Python",
         "runner": "python3",
     },
-    "sas": {
+    "opensas": {
         "script": "result.sas",
-        "system": "system-sas.md",
-        "label": "SAS",
-        "runner": "sas",
+        "system": "system-opensas.md",
+        "label": "opensas",
+        "runner": "opensas",
     },
 }
 DEFAULT_LANGUAGES = ("r", "python")
 # Prepared sources remain available for these cases, but they cannot yet
-# earn a correct Harbor score on native inputs with openSAS v0.6.6.
-SAS_EXCLUSIONS = {
-    "adam-adsl-investigator-comment": "openSAS normalizes the spaces-only comment to missing",
-    "adam-adsl-randomization": "openSAS has no native Parquet reader",
+# earn a correct Harbor score on native inputs with opensas v0.6.6.
+OPENSAS_EXCLUSIONS = {
+    "adam-adsl-investigator-comment": "opensas normalizes the spaces-only comment to missing",
+    "adam-adsl-randomization": "opensas has no native Parquet reader",
     "adam-adsl-age-quality": "the specification's warning log is not graded by Harbor",
 }
 # Harbor installs OpenCode with nvm and npm during agent setup only.
@@ -231,8 +231,8 @@ def contract_for(benchmark: Path, language: str) -> dict:
     """
     if language not in LANGUAGES:
         raise BuildError(f"unknown language {language!r}; want {', '.join(LANGUAGES)}")
-    if language == "sas" and benchmark.name in SAS_EXCLUSIONS:
-        raise BuildError(f"{benchmark.name}: {SAS_EXCLUSIONS[benchmark.name]}")
+    if language == "opensas" and benchmark.name in OPENSAS_EXCLUSIONS:
+        raise BuildError(f"{benchmark.name}: {OPENSAS_EXCLUSIONS[benchmark.name]}")
     outputs = [_output_contract(benchmark, s) for s in output_specs(benchmark)]
     return {
         "benchmark": benchmark.name,
@@ -869,7 +869,7 @@ def main() -> None:
         nargs="*",
         choices=sorted(LANGUAGES),
         default=sorted(DEFAULT_LANGUAGES),
-        help="default: R and Python; --language sas selects the confident native-input cases",
+        help="default: R and Python; --language opensas selects the confident native-input cases",
     )
     parser.add_argument(
         "--prompt",

@@ -4,146 +4,148 @@
 # attempt counts and at least `attempts` attempts each, at the tasks' own
 # timeouts, so every row answers
 # the same question. Metrics are computed from the listed tasks only.
-# This board covers 134 confident derivation cases, including BIMO;
-# exclusions are in build.py SAS_EXCLUSIONS. Each task requires `/app/output/result.sas`.
+# What each prompt tier keeps is in evaluations/harbor/prompts/README.md;
+# rows rank by complete task pass rate first; cell accuracy is secondary.
+# This board covers the 134 confident derivation cases on brief prompts;
+# exclusions are in build.py OPENSAS_EXCLUSIONS. Each task requires `/app/output/result.sas`.
 grading_protocol: "3"
-image_reference: yamaa-harbor-env:0.6
-package: yamaa/yamaa-sdtm-adam-sas
+image_reference: yamaa-harbor-env:0.7
+package: yamaa/yamaa-sdtm-adam-brief-opensas
 tasks:
-  - adam-adae-death-sas
-  - adam-adae-occurrence-flags-sas
-  - adam-adae-onset-emergence-sas
-  - adam-adae-partial-dates-sas
-  - adam-adae-post-index-sas
-  - adam-adae-prior-serious-event-sas
-  - adam-adae-protocol-review-sas
-  - adam-adae-query-flags-sas
-  - adam-adae-review-order-sas
-  - adam-adae-serious-events-sas
-  - adam-adae-serious-sequence-sas
-  - adam-adae-severity-sas
-  - adam-adae-severity-override-sas
-  - adam-adae-severity-rank-sas
-  - adam-adae-text-cleanup-sas
-  - adam-adae-worsening-emergence-sas
-  - adam-adae-worst-severity-sas
-  - adam-adce-worst-toxicity-sas
-  - adam-adcm-atc-classes-sas
-  - adam-adcm-on-treatment-sas
-  - adam-adeg-derived-intervals-sas
-  - adam-adex-cumulative-dose-sas
-  - adam-adex-dose-reduction-sas
-  - adam-adex-uncollected-sas
-  - adam-adfa-fever-sas
-  - adam-adlb-bds-sas
-  - adam-adlb-closest-visit-sas
-  - adam-adlb-end-of-treatment-sas
-  - adam-adlb-lymphocytes-sas
-  - adam-adlb-mean-sas
-  - adam-adlb-ordered-sum-sas
-  - adam-adlb-reported-precision-sas
-  - adam-adlb-shift-criteria-sas
-  - adam-adlb-supplb-padded-key-sas
-  - adam-adlbc-row-window-sas
-  - adam-adlbc-window-chain-sas
-  - adam-adoe-study-eye-sas
-  - adam-adqs-missed-visit-locf-sas
-  - adam-adqs-multi-scale-scoring-sas
-  - adam-adqs-subscale-score-sas
-  - adam-adrs-best-response-sas
-  - adam-adrs-composite-response-sas
-  - adam-adrs-confirmed-response-sas
-  - adam-adrs-measurable-disease-sas
-  - adam-adrs-response-prep-sas
-  - adam-adrs-response-records-sas
-  - adam-adsl-age-group-sas
-  - adam-adsl-alive-date-sas
-  - adam-adsl-analysis-age-sas
-  - adam-adsl-bmi-sas
-  - adam-adsl-completion-flag-sas
-  - adam-adsl-country-region-sas
-  - adam-adsl-crossover-periods-sas
-  - adam-adsl-demographics-sas
-  - adam-adsl-disposition-sas
-  - adam-adsl-dose-adjustment-sas
-  - adam-adsl-duration-sas
-  - adam-adsl-flag-chain-sas
-  - adam-adsl-new-therapy-sas
-  - adam-adsl-rescue-med-sas
-  - adam-adsl-site-parse-sas
-  - adam-adsl-treatment-sas
-  - adam-adtr-nadir-sas
-  - adam-adtr-sum-sas
-  - adam-adtte-dor-sas
-  - adam-adtte-first-ae-sas
-  - adam-adtte-os-sas
-  - adam-adtte-pfs-sas
-  - adam-adtte-pro-deterioration-sas
-  - adam-advs-bmi-sas
-  - adam-advs-bsa-sas
-  - adam-advs-carryforward-sas
-  - adam-advs-first-observed-carry-sas
-  - adam-advs-locf-sas
-  - adam-advs-locf-record-sas
-  - adam-advs-map-sas
-  - adam-advs-percentiles-sas
-  - adam-advs-prior-result-sas
-  - adam-advs-window-table-sas
-  - adam-advs-windows-sas
-  - bimo-clinsite-site-level-sas
-  - sdtm-ae-coding-sas
-  - sdtm-ae-meddra-hierarchy-sas
-  - sdtm-ae-odm-repeated-sas
-  - sdtm-ae-partial-dates-sas
-  - sdtm-ae-seriousness-sas
-  - sdtm-cm-collected-medications-sas
-  - sdtm-cm-odm-repeated-sas
-  - sdtm-cm-whodrug-coding-sas
-  - sdtm-dm-age-sas
-  - sdtm-dm-arms-sas
-  - sdtm-dm-basic-sas
-  - sdtm-dm-dates-sas
-  - sdtm-dm-death-sas
-  - sdtm-dm-metadata-sas
-  - sdtm-dm-race-ethnicity-sas
-  - sdtm-ds-multi-form-disposition-sas
-  - sdtm-ds-reasons-sas
-  - sdtm-ds-sequence-sas
-  - sdtm-ec-collected-exposure-sas
-  - sdtm-ex-combination-sas
-  - sdtm-ex-from-ec-sas
-  - sdtm-ex-intervals-sas
-  - sdtm-fa-event-findings-sas
-  - sdtm-fa-odm-multitest-sas
-  - sdtm-fa-reactogenicity-diary-sas
-  - sdtm-lb-character-results-sas
-  - sdtm-lb-compartments-sas
-  - sdtm-lb-findings-sas
-  - sdtm-lb-grading-sas
-  - sdtm-lb-lab-specific-ranges-sas
-  - sdtm-lb-last-observation-before-exposure-sas
-  - sdtm-lb-metadata-sas
-  - sdtm-lb-multiform-sas
-  - sdtm-lb-ranges-sas
-  - sdtm-mh-ongoing-conditions-sas
-  - sdtm-mh-prespecified-conditions-sas
-  - sdtm-pr-procedures-sas
-  - sdtm-qs-questionnaire-items-sas
-  - sdtm-relrec-dataset-level-sas
-  - sdtm-relrec-links-sas
-  - sdtm-rs-timepoint-response-sas
-  - sdtm-se-subject-elements-sas
-  - sdtm-suppmh-linkage-sas
-  - sdtm-suppmh-qualifiers-sas
-  - sdtm-sv-subject-visits-sas
-  - sdtm-tr-tumor-measurements-sas
-  - sdtm-tu-tumor-identification-sas
-  - sdtm-vs-collected-form-sas
-  - sdtm-vs-epoch-from-subject-elements-sas
-  - sdtm-vs-planned-time-points-sas
-  - sdtm-vs-replicates-sas
-  - sdtm-vs-study-day-sas
-  - sdtm-vs-units-sas
+  - adam-adae-death-brief-opensas
+  - adam-adae-occurrence-flags-brief-opensas
+  - adam-adae-onset-emergence-brief-opensas
+  - adam-adae-partial-dates-brief-opensas
+  - adam-adae-post-index-brief-opensas
+  - adam-adae-prior-serious-event-brief-opensas
+  - adam-adae-protocol-review-brief-opensas
+  - adam-adae-query-flags-brief-opensas
+  - adam-adae-review-order-brief-opensas
+  - adam-adae-serious-events-brief-opensas
+  - adam-adae-serious-sequence-brief-opensas
+  - adam-adae-severity-brief-opensas
+  - adam-adae-severity-override-brief-opensas
+  - adam-adae-severity-rank-brief-opensas
+  - adam-adae-text-cleanup-brief-opensas
+  - adam-adae-worsening-emergence-brief-opensas
+  - adam-adae-worst-severity-brief-opensas
+  - adam-adce-worst-toxicity-brief-opensas
+  - adam-adcm-atc-classes-brief-opensas
+  - adam-adcm-on-treatment-brief-opensas
+  - adam-adeg-derived-intervals-brief-opensas
+  - adam-adex-cumulative-dose-brief-opensas
+  - adam-adex-dose-reduction-brief-opensas
+  - adam-adex-uncollected-brief-opensas
+  - adam-adfa-fever-brief-opensas
+  - adam-adlb-bds-brief-opensas
+  - adam-adlb-closest-visit-brief-opensas
+  - adam-adlb-end-of-treatment-brief-opensas
+  - adam-adlb-lymphocytes-brief-opensas
+  - adam-adlb-mean-brief-opensas
+  - adam-adlb-ordered-sum-brief-opensas
+  - adam-adlb-reported-precision-brief-opensas
+  - adam-adlb-shift-criteria-brief-opensas
+  - adam-adlb-supplb-padded-key-brief-opensas
+  - adam-adlbc-row-window-brief-opensas
+  - adam-adlbc-window-chain-brief-opensas
+  - adam-adoe-study-eye-brief-opensas
+  - adam-adqs-missed-visit-locf-brief-opensas
+  - adam-adqs-multi-scale-scoring-brief-opensas
+  - adam-adqs-subscale-score-brief-opensas
+  - adam-adrs-best-response-brief-opensas
+  - adam-adrs-composite-response-brief-opensas
+  - adam-adrs-confirmed-response-brief-opensas
+  - adam-adrs-measurable-disease-brief-opensas
+  - adam-adrs-response-prep-brief-opensas
+  - adam-adrs-response-records-brief-opensas
+  - adam-adsl-age-group-brief-opensas
+  - adam-adsl-alive-date-brief-opensas
+  - adam-adsl-analysis-age-brief-opensas
+  - adam-adsl-bmi-brief-opensas
+  - adam-adsl-completion-flag-brief-opensas
+  - adam-adsl-country-region-brief-opensas
+  - adam-adsl-crossover-periods-brief-opensas
+  - adam-adsl-demographics-brief-opensas
+  - adam-adsl-disposition-brief-opensas
+  - adam-adsl-dose-adjustment-brief-opensas
+  - adam-adsl-duration-brief-opensas
+  - adam-adsl-flag-chain-brief-opensas
+  - adam-adsl-new-therapy-brief-opensas
+  - adam-adsl-rescue-med-brief-opensas
+  - adam-adsl-site-parse-brief-opensas
+  - adam-adsl-treatment-brief-opensas
+  - adam-adtr-nadir-brief-opensas
+  - adam-adtr-sum-brief-opensas
+  - adam-adtte-dor-brief-opensas
+  - adam-adtte-first-ae-brief-opensas
+  - adam-adtte-os-brief-opensas
+  - adam-adtte-pfs-brief-opensas
+  - adam-adtte-pro-deterioration-brief-opensas
+  - adam-advs-bmi-brief-opensas
+  - adam-advs-bsa-brief-opensas
+  - adam-advs-carryforward-brief-opensas
+  - adam-advs-first-observed-carry-brief-opensas
+  - adam-advs-locf-brief-opensas
+  - adam-advs-locf-record-brief-opensas
+  - adam-advs-map-brief-opensas
+  - adam-advs-percentiles-brief-opensas
+  - adam-advs-prior-result-brief-opensas
+  - adam-advs-window-table-brief-opensas
+  - adam-advs-windows-brief-opensas
+  - bimo-clinsite-site-level-brief-opensas
+  - sdtm-ae-coding-brief-opensas
+  - sdtm-ae-meddra-hierarchy-brief-opensas
+  - sdtm-ae-odm-repeated-brief-opensas
+  - sdtm-ae-partial-dates-brief-opensas
+  - sdtm-ae-seriousness-brief-opensas
+  - sdtm-cm-collected-medications-brief-opensas
+  - sdtm-cm-odm-repeated-brief-opensas
+  - sdtm-cm-whodrug-coding-brief-opensas
+  - sdtm-dm-age-brief-opensas
+  - sdtm-dm-arms-brief-opensas
+  - sdtm-dm-basic-brief-opensas
+  - sdtm-dm-dates-brief-opensas
+  - sdtm-dm-death-brief-opensas
+  - sdtm-dm-metadata-brief-opensas
+  - sdtm-dm-race-ethnicity-brief-opensas
+  - sdtm-ds-multi-form-disposition-brief-opensas
+  - sdtm-ds-reasons-brief-opensas
+  - sdtm-ds-sequence-brief-opensas
+  - sdtm-ec-collected-exposure-brief-opensas
+  - sdtm-ex-combination-brief-opensas
+  - sdtm-ex-from-ec-brief-opensas
+  - sdtm-ex-intervals-brief-opensas
+  - sdtm-fa-event-findings-brief-opensas
+  - sdtm-fa-odm-multitest-brief-opensas
+  - sdtm-fa-reactogenicity-diary-brief-opensas
+  - sdtm-lb-character-results-brief-opensas
+  - sdtm-lb-compartments-brief-opensas
+  - sdtm-lb-findings-brief-opensas
+  - sdtm-lb-grading-brief-opensas
+  - sdtm-lb-lab-specific-ranges-brief-opensas
+  - sdtm-lb-last-observation-before-exposure-brief-opensas
+  - sdtm-lb-metadata-brief-opensas
+  - sdtm-lb-multiform-brief-opensas
+  - sdtm-lb-ranges-brief-opensas
+  - sdtm-mh-ongoing-conditions-brief-opensas
+  - sdtm-mh-prespecified-conditions-brief-opensas
+  - sdtm-pr-procedures-brief-opensas
+  - sdtm-qs-questionnaire-items-brief-opensas
+  - sdtm-relrec-dataset-level-brief-opensas
+  - sdtm-relrec-links-brief-opensas
+  - sdtm-rs-timepoint-response-brief-opensas
+  - sdtm-se-subject-elements-brief-opensas
+  - sdtm-suppmh-linkage-brief-opensas
+  - sdtm-suppmh-qualifiers-brief-opensas
+  - sdtm-sv-subject-visits-brief-opensas
+  - sdtm-tr-tumor-measurements-brief-opensas
+  - sdtm-tu-tumor-identification-brief-opensas
+  - sdtm-vs-collected-form-brief-opensas
+  - sdtm-vs-epoch-from-subject-elements-brief-opensas
+  - sdtm-vs-planned-time-points-brief-opensas
+  - sdtm-vs-replicates-brief-opensas
+  - sdtm-vs-study-day-brief-opensas
+  - sdtm-vs-units-brief-opensas
 attempts: 1
 
 # The Harbor Hub definition, in the shape `harbor hub leaderboard create
@@ -151,16 +153,17 @@ attempts: 1
 # it with the rows built from the jobs, ready to create once the dataset is
 # published and the jobs uploaded.
 harbor:
-  name: sdtm-adam-v3-sas
-  title: yamaa derivation v3 (SAS)
+  name: sdtm-adam-v3-brief-opensas
+  title: yamaa derivation v3, brief prompts (opensas)
   description: >-
-    The 134 confident yamaa derivation benchmarks, including BIMO, solved
-    in SAS with openSAS v0.6.6. An agent gets the SAS system prompt, the benchmark's
-    prompt and input datasets, with no internet but the model's API. A task
-    passes when its output matches every golden cell, the verifier's rerun
-    of `/app/output/result.sas` from a clean state writes the same output,
-    the held-out rerun and required changed-input challenges pass, and
-    the agent used no Python, R, Lua or web tool. One row per model variant.
+    The 134 confident yamaa derivation benchmarks, including BIMO, solved with opensas v0.6.6.
+    An agent gets the opensas system prompt, the benchmark's brief prompt (the
+    full prompt without its rules) and input datasets, with no internet but
+    the model's API. A task passes when its output matches every golden
+    cell, the verifier's rerun of `/app/output/result.sas` from a clean state
+    writes the same output, the held-out rerun and required changed-input
+    challenges pass, and the agent used no Python, R, Lua or web tool. One row
+    per model variant.
   visibility: private
   metadata_schema:
     type: object
