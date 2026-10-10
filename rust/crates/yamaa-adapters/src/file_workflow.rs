@@ -2,7 +2,7 @@
 //! capture scope. Preparation accepts no activation, data or publication port.
 use crate::{
     file_graph::{FileGraph, RejectedGraph},
-    file_project,
+    file_project::{self, FileProject, RejectedOrdinary},
     file_resources::{MetadataLimits, Resources},
     producer_graph::Limits,
     specification_source::CapturedSchema,
@@ -78,7 +78,14 @@ impl std::fmt::Debug for Error {
         }
     }
 }
-pub fn prepare(specification: &str, environment: &str, host: Language) -> Result<FileGraph, Error> {
+struct Configured {
+    resources: Resources,
+    entry: String,
+    environment: String,
+    specification_schema: Arc<CapturedSchema>,
+    environment_schema: Arc<CapturedSchema>,
+}
+fn configure(specification: &str, environment: &str) -> Result<Configured, Error> {
     let (resources, entry) =
         crate::file_configuration::resources(specification).map_err(Error::Configuration)?;
     // Public caller paths retain the established absolute-path policy. This is
@@ -98,19 +105,30 @@ pub fn prepare(specification: &str, environment: &str, host: Language) -> Result
             })))
         }
     };
-    prepare_with_resources(
+    Ok(Configured {
         resources,
-        &entry,
-        &environment,
-        host,
+        entry,
+        environment,
         specification_schema,
         environment_schema,
+    })
+}
+
+pub fn prepare(specification: &str, environment: &str, host: Language) -> Result<FileGraph, Error> {
+    let request = configure(specification, environment)?;
+    prepare_with_resources(
+        request.resources,
+        &request.entry,
+        &request.environment,
+        host,
+        request.specification_schema,
+        request.environment_schema,
         Default::default(),
     )
 }
 
 pub fn prepare_with_resources(
-    mut resources: Resources,
+    resources: Resources,
     entry: &str,
     environment: &str,
     host: Language,
@@ -118,6 +136,92 @@ pub fn prepare_with_resources(
     environment_schema: Arc<CapturedSchema>,
     limits: Limits,
 ) -> Result<FileGraph, Error> {
+    let (resources, environment) = capture_environment(
+        resources,
+        entry,
+        environment,
+        host,
+        Arc::clone(&specification_schema),
+        environment_schema,
+        limits,
+    )?;
+    FileGraph::prepare(resources, entry, environment, specification_schema, limits)
+        .map_err(Error::Graph)
+}
+
+/// Explicit prepared capabilities from one original capture. Preparation takes
+/// no activation, study-source or publication port. The ordinary capability keeps
+/// existing build/Save behavior; the static producer graph grants no publisher.
+/// Installed public dispatch remains a separate integration boundary.
+pub enum Selected {
+    Ordinary(Box<FileProject>),
+    Producer(Box<FileGraph>),
+}
+#[derive(Debug)]
+pub enum SelectionError {
+    Preparation(Error),
+    Ordinary(Box<RejectedOrdinary>),
+}
+
+pub fn select(
+    specification: &str,
+    environment: &str,
+    host: Language,
+) -> Result<Selected, SelectionError> {
+    let request = configure(specification, environment).map_err(SelectionError::Preparation)?;
+    select_with_resources(
+        request.resources,
+        &request.entry,
+        &request.environment,
+        host,
+        request.specification_schema,
+        request.environment_schema,
+        Default::default(),
+    )
+}
+
+pub fn select_with_resources(
+    resources: Resources,
+    entry: &str,
+    environment: &str,
+    host: Language,
+    specification_schema: Arc<CapturedSchema>,
+    environment_schema: Arc<CapturedSchema>,
+    limits: Limits,
+) -> Result<Selected, SelectionError> {
+    let (resources, environment) = capture_environment(
+        resources,
+        entry,
+        environment,
+        host,
+        Arc::clone(&specification_schema),
+        environment_schema,
+        limits,
+    )
+    .map_err(SelectionError::Preparation)?;
+    let entry =
+        FileGraph::capture_entry(resources, entry, environment, specification_schema, limits)
+            .map_err(|error| SelectionError::Preparation(Error::Graph(error)))?;
+    if entry.is_producer() {
+        FileGraph::prepare_captured(entry)
+            .map(|graph| Selected::Producer(Box::new(graph)))
+            .map_err(|error| SelectionError::Preparation(Error::Graph(error)))
+    } else {
+        FileProject::from_workflow(entry)
+            .map(|project| Selected::Ordinary(Box::new(project)))
+            .map_err(SelectionError::Ordinary)
+    }
+}
+
+fn capture_environment(
+    mut resources: Resources,
+    entry: &str,
+    environment: &str,
+    host: Language,
+    specification_schema: Arc<CapturedSchema>,
+    environment_schema: Arc<CapturedSchema>,
+    limits: Limits,
+) -> Result<(Resources, crate::project_source::OwnedEnvironment), Error> {
     let mut owned_entry = None;
     let mut owned_environment = None;
     let result = (|| {
@@ -144,10 +248,7 @@ pub fn prepare_with_resources(
         )
     })();
     match result {
-        Ok(environment) => {
-            FileGraph::prepare(resources, entry, environment, specification_schema, limits)
-                .map_err(Error::Graph)
-        }
+        Ok(environment) => Ok((resources, environment)),
         Err(error) => Err(Error::Environment(Box::new(RejectedEnvironment {
             error,
             entry: owned_entry,

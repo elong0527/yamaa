@@ -45,8 +45,10 @@ verification failures, report gates, quotas, reentrancy and owner/file deletion.
 The installed suites are component qualification, not public workflow release
 qualification.
 
-Issue [#1877](https://github.com/elong0527/yamaa/issues/1877) remains open until its
-complete exact-source review, installed package audits and required CI pass.
+Issue [#1877](https://github.com/elong0527/yamaa/issues/1877) is qualified by
+[#1880](https://github.com/elong0527/yamaa/pull/1880). Complete exact-source review,
+installed package audits and every required check passed; see the
+[qualification record](planning/1877-qualification.md).
 Ordinary installed producer domain dispatch and explicit ordered publication
 remain [#1741](https://github.com/elong0527/yamaa/issues/1741), with publication
 lifecycle decision [#1866](https://github.com/elong0527/yamaa/issues/1866) separate.

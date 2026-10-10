@@ -197,15 +197,36 @@ forms pass all 24 suites; exercised R forms pass all 18 with strict package
 checks. See the [static contract](../PRODUCER_CHECKS.md) and
 [qualification scope](1874-qualification.md).
 
-The active prerequisite is [#1877 installed producer build handles and retained reports](https://github.com/elong0527/yamaa/issues/1877).
-It isolates actual installed whole-graph host activation/execution and owned
-failure/report carriers. Private whole-graph Python/R carriers, exact-reference
-classified reporting and independent installed component witnesses are implemented;
-complete final-source package/CI/review qualification remains in progress. See
-the [private host carrier contract](../PRODUCER_HOST_BUILDS.md). These components
-do not qualify public workflow execution. Ordinary installed
-producer domain dispatch and explicit publication remain #1741, with the
-publication lifecycle decision retained separately in #1866.
+The [#1877 installed producer build handles and retained reports](https://github.com/elong0527/yamaa/issues/1877)
+prerequisite is qualified by [#1880](https://github.com/elong0527/yamaa/pull/1880),
+merged as `3a919d02d03766281e8dbd280a1ca69fe35a38c2`. All 23 final-head checks,
+16 native jobs, complete assessed 23-file review with no actionable findings,
+40 artifact audits and a fresh protected guard pass. Its merged source directly
+equals qualified head `8a7694169c5f5510a88f53f9dc858f1257bf2ad7`.
+Private complete Python/R carriers retain original attempts, raw sources and
+host failures through bounded classified reporting, reentrancy and owner/file
+deletion. Native report gates precede accepted serialized producer consumption.
+Actual Linux/macOS modes pass 1,106 Rust cases and Windows passes 1,092 across
+129 targets each. All fresh installed Python forms pass 25 suites; exercised R
+forms pass 19 and strict Status OK. All 14 packages pass 4,547 direct source-byte
+comparisons; 29 evidence rows and 30,033 PortableLibmV1 samples pass. See the
+[private host carrier contract](../PRODUCER_HOST_BUILDS.md) and
+[qualification scope](1877-qualification.md).
+
+The active prerequisite is [#1881 original workflow selection](https://github.com/elong0527/yamaa/issues/1881).
+Public domain entries still use single-project preparation. They need explicit
+ordinary/producer capability selection from one original environment/entry
+capture, with ordinary behavior preserved and no failed-compilation retry.
+Native selection now consumes one sealed original capture into the existing
+ordinary FileProject or the complete FileGraph. Inherited producer declarations
+select structurally before compilation; graph collection receives the captured
+root directly. Cumulative environment/entry/recursive metadata quotas and owned
+raw rejections stay retained. Ordinary reports, fresh activation and explicit
+held-byte Save remain compatible, including a metadata-scope transition before
+study authority. Independent native witnesses pass; final installed/hosted
+qualification is pending. See the [native selection contract](../WORKFLOW_SELECTION.md).
+Ordinary installed producer domain dispatch and explicit publication remain
+#1741, with lifecycle decision #1866 separate.
 
 See [the closing qualification record](1757-qualification.md) for actual local
 results and the distinction between those results and the CI platform matrix.
@@ -221,8 +242,8 @@ Continue with the following acceptance gates in the
 2. [#1860 CSV precision](https://github.com/elong0527/yamaa/issues/1860) is closed
    by #1862 with complete qualification above.
 3. #1863 is closed by #1865, #1867 by #1868, #1869 by #1870 and #1871 by #1873
-   with complete qualification above. #1874 is closed by #1876. Complete
-   #1877's installed build/report handles, then #1741's
+   with complete qualification above. #1874 is closed by #1876 and #1877 by #1880. Complete
+   #1881's original workflow selection, then #1741's
    producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.
