@@ -36,5 +36,8 @@ applicable exact-head check, artifact audits and a fresh protected guard are
 required before this correction closes. The separate #1897 metadata-origin
 correction was merged through GitHub in PR #1901 while its fresh strict R check
 had failed on the preceding base. PR #1904 fixed the locks before #1901 merged;
-this correction freshly qualifies the resulting complete source. No source-system-version override or publication decision is
-inferred; #1887/#1866/#1857 and parent acceptance/release gates stay open.
+this correction freshly qualifies the resulting complete source. The
+[2026-10-10 maintainer decisions](planning/maintainer-decisions.md) separately
+approve the source-system-version override, publication lifecycle and required
+Windows R scope. This correction implements none of those changes; their
+implementation and parent acceptance/release gates remain open.
