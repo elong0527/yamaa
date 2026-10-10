@@ -34,24 +34,8 @@ impl FileProject {
         specification_schema: Arc<CapturedSchema>,
         environment_schema: Arc<CapturedSchema>,
     ) -> Result<Self, Error> {
-        let identity = resources.resolve(environment).map_err(Error::Resource)?;
-        let (bytes, _) = resources
-            .capture(environment, project_source::Limits::default().bytes)
-            .map_err(Error::Resource)?;
-        let environment = project_source::prepare(
-            environment_schema,
-            Source {
-                identity,
-                bytes: bytes.to_vec(),
-            },
-            host,
-            &mut Metadata {
-                resources: &mut resources,
-            },
-            Default::default(),
-        )
-        .map_err(Error::Environment)?
-        .into_owned();
+        let environment =
+            capture_environment(&mut resources, environment, host, environment_schema)?;
         let document = file_preparation::prepare_document(
             &mut resources,
             specification,
@@ -99,6 +83,35 @@ impl FileProject {
     }
 }
 
+/// Capture the original environment and declared metadata through the same
+/// approved reader. Static workflow preparation reuses this transfer without
+/// introducing a second capture or any activation or study-source port.
+pub(crate) fn capture_environment(
+    resources: &mut Resources,
+    written: &str,
+    host: Language,
+    schema: Arc<CapturedSchema>,
+) -> Result<project_source::OwnedEnvironment, Error> {
+    let identity = resources.resolve(written).map_err(Error::Resource)?;
+    let (bytes, _) = resources
+        .capture(written, project_source::Limits::default().bytes)
+        .map_err(Error::Resource)?;
+    project_source::prepare(
+        schema,
+        Source {
+            identity,
+            bytes: resources
+                .preparation_copy(&bytes)
+                .map_err(Error::Resource)?,
+        },
+        host,
+        &mut Metadata { resources },
+        Default::default(),
+    )
+    .map_err(Error::Environment)
+    .map(project_source::PreparedEnvironment::into_owned)
+}
+
 struct Metadata<'a> {
     resources: &'a mut Resources,
 }
@@ -118,7 +131,7 @@ impl CapturePort for Metadata<'_> {
         )?;
         let source = Source {
             identity,
-            bytes: bytes.to_vec(),
+            bytes: self.resources.preparation_copy(&bytes)?,
         };
         Ok(match request.kind {
             Kind::Lock => Reply::Lock {

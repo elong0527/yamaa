@@ -79,6 +79,8 @@ pub mod file_publication;
 pub mod file_publication;
 #[cfg(any(unix, windows))]
 pub mod file_resources;
+#[cfg(any(unix, windows))]
+pub mod file_workflow;
 
 pub mod project_source;
 
@@ -103,6 +105,8 @@ pub mod project_activation_diagnostics;
 pub mod project_activation_observations;
 
 pub mod producer_admission;
+#[cfg(any(unix, windows))]
+pub mod producer_check;
 pub mod producer_graph;
 #[cfg(any(unix, windows))]
 pub mod producer_report;

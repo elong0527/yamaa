@@ -288,6 +288,46 @@ pub struct PreparedSpecification {
     column_verifications: Vec<verifications::Verifications>,
 }
 
+/// A static finding borrowed from one admitted compilation. Allocate its
+/// portable diagnostic only after the caller has admitted ownership capacity.
+#[derive(Clone, Copy, Debug)]
+pub enum VerificationDeclarationFinding<'a> {
+    Diagnostic(&'a crate::diagnostic::Diagnostic),
+    Declaration {
+        path: &'a str,
+        condition: &'static str,
+        requirement: &'static str,
+        reason: &'a str,
+    },
+}
+impl VerificationDeclarationFinding<'_> {
+    pub fn visit_paths(self, mut visit: impl FnMut(&str)) {
+        match self {
+            Self::Diagnostic(diagnostic) => {
+                diagnostic.spec_paths.iter().for_each(|path| visit(path))
+            }
+            Self::Declaration { path, .. } => visit(path),
+        }
+    }
+    pub fn diagnostic(self) -> crate::diagnostic::Diagnostic {
+        match self {
+            Self::Diagnostic(diagnostic) => diagnostic.clone(),
+            Self::Declaration {
+                path,
+                condition,
+                requirement,
+                reason,
+            } => crate::dataset_checks::declaration_diagnostic(
+                path.into(),
+                condition,
+                requirement,
+                reason.into(),
+            )
+            .expect("compiled verification finding has a registered cause"),
+        }
+    }
+}
+
 /// Preserve omitted versus explicit-null recovery at every declaration.
 fn literal_handler(
     d: &Document,
@@ -1291,29 +1331,36 @@ impl PreparedSpecification {
     /// Inspect known declaration findings without reading sources or evaluating checks.
     /// Column findings retain declaration order, followed by dataset findings.
     pub fn verification_declaration_diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
+        self.verification_declaration_findings()
+            .map(VerificationDeclarationFinding::diagnostic)
+            .collect()
+    }
+    /// Borrow findings before a boundary admits their count and complete text.
+    /// This iterator cannot bind sources or expose the compiled dataset plan.
+    pub fn verification_declaration_findings(
+        &self,
+    ) -> impl Iterator<Item = VerificationDeclarationFinding<'_>> {
         use crate::dataset::Check;
         self.column_verifications
             .iter()
             .chain([&self.verifications])
             .flat_map(|group| &group.checks)
             .filter_map(|verification| match &verification.check {
-                Check::InvalidDiagnostic(diagnostic) => Some(diagnostic.clone()),
+                Check::InvalidDiagnostic(diagnostic) => {
+                    Some(VerificationDeclarationFinding::Diagnostic(diagnostic))
+                }
                 Check::InvalidDeclaration {
                     condition,
                     requirement,
                     reason,
-                } => Some(
-                    crate::dataset_checks::declaration_diagnostic(
-                        verification.path.clone(),
-                        condition,
-                        requirement,
-                        reason.clone(),
-                    )
-                    .expect("compiled verification finding has a registered cause"),
-                ),
+                } => Some(VerificationDeclarationFinding::Declaration {
+                    path: &verification.path,
+                    condition,
+                    requirement,
+                    reason,
+                }),
                 _ => None,
             })
-            .collect()
     }
     pub fn verification_identity(&self, path: &str) -> Option<&str> {
         core::iter::once(&self.verifications)

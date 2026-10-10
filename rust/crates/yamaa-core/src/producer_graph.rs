@@ -130,6 +130,22 @@ impl PreparedGraph {
     pub fn environment(&self) -> &ExecutionEnvironment {
         &self.environment
     }
+    /// Static findings borrow the complete sealed closure in canonical node
+    /// order. No standalone compiled node or execution plan is exposed.
+    pub fn check_findings(
+        &self,
+    ) -> impl Iterator<
+        Item = (
+            usize,
+            crate::specification::VerificationDeclarationFinding<'_>,
+        ),
+    > {
+        self.nodes.iter().enumerate().flat_map(|(index, node)| {
+            node.compiled
+                .verification_declaration_findings()
+                .map(move |finding| (index, finding))
+        })
+    }
     /// Transfer the complete admitted closure, its plans and its one environment
     /// together. Metadata nodes never expose a standalone compiled producer.
     pub fn into_build(self) -> BuildGraph {

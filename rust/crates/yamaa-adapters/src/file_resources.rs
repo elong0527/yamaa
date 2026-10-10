@@ -87,7 +87,7 @@ struct Snapshot {
 
 /// A native metadata traversal shares these ceilings across captures, owned
 /// preparation copies, aliases and rereads. Ordinary resource use is unchanged.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MetadataLimits {
     pub bytes: usize,
     pub snapshots: usize,
@@ -189,6 +189,16 @@ impl Resources {
     /// snapshots or alias witnesses. A later build admits its own fresh scope.
     pub(crate) fn finish_metadata_budget(&mut self) {
         self.metadata = None;
+    }
+    /// Environment and graph metadata may continue one already admitted scope.
+    /// Its policy and spent capacities remain fixed; a second stage cannot
+    /// replace the limits or reset work charged by earlier captures and aliases.
+    pub(crate) fn ensure_metadata_budget(&mut self, limits: MetadataLimits) -> Result<(), Error> {
+        match &self.metadata {
+            Some(budget) if budget.limits == limits => Ok(()),
+            Some(_) => Err(Error::Limit),
+            None => self.admit_metadata_budget(limits),
+        }
     }
     pub(crate) fn admit_metadata_budget(&mut self, limits: MetadataLimits) -> Result<(), Error> {
         if self.metadata.is_some()
@@ -1218,6 +1228,70 @@ mod metadata_budget_tests {
         fn drop(&mut self) {
             std::fs::remove_dir_all(&self.0).unwrap();
         }
+    }
+
+    #[test]
+    fn continuing_identical_metadata_scope_keeps_every_spent_capacity() {
+        let fixture = Fixture::new();
+        std::fs::write(fixture.0.join("environment.yaml"), b"12345").unwrap();
+        std::fs::write(fixture.0.join("node.yaml"), b"678").unwrap();
+        let root = fixture.0.to_str().unwrap();
+        let mut resources = Resources::new(root, root, &[]).unwrap();
+        let limits = MetadataLimits {
+            bytes: 7,
+            snapshots: 4,
+            text: 65_536,
+            work: 1_048_576,
+        };
+        resources.ensure_metadata_budget(limits).unwrap();
+        resources.capture("environment.yaml", 1024).unwrap();
+        resources.charge_metadata_text(51).unwrap();
+        resources.charge_work(137).unwrap();
+        let before = resources.metadata_usage();
+        resources.ensure_metadata_budget(limits).unwrap();
+        assert_eq!(resources.metadata_usage(), before);
+        assert_eq!(resources.capture_reads(), 1);
+        assert!(matches!(
+            resources.capture("node.yaml", 1024),
+            Err(Error::Limit)
+        ));
+        assert_eq!(resources.capture_reads(), 1);
+        assert_eq!(resources.snapshot_count(), 1);
+    }
+
+    #[test]
+    fn continuing_metadata_scope_cannot_replace_its_original_policy() {
+        let fixture = Fixture::new();
+        let mut resources = fixture.resources(4);
+        let before = resources.metadata_usage();
+        let original = resources.metadata.as_ref().unwrap().limits;
+        for changed in [
+            MetadataLimits {
+                bytes: original.bytes + 1,
+                ..original
+            },
+            MetadataLimits {
+                snapshots: original.snapshots + 1,
+                ..original
+            },
+            MetadataLimits {
+                text: original.text + 1,
+                ..original
+            },
+            MetadataLimits {
+                work: original.work + 1,
+                ..original
+            },
+        ] {
+            assert!(matches!(
+                resources.ensure_metadata_budget(changed),
+                Err(Error::Limit)
+            ));
+            assert_eq!(resources.metadata_usage(), before);
+            assert!(resources.metadata.as_ref().unwrap().limits == original);
+        }
+        resources.ensure_metadata_budget(original).unwrap();
+        assert_eq!(resources.capture_reads(), 0);
     }
 
     #[test]

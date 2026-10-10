@@ -47,14 +47,60 @@ class PublicEnvironment(unittest.TestCase):
         ):
             checked = yamaa.check("spec.yaml", environment="environment.yaml")
             failed = yamaa.domain("spec.yaml", environment="environment.yaml")
-        for result in (checked, failed):
-            self.assertEqual(result.issues["condition"].to_list(), ["unsupported_operation"])
-            self.assertEqual(result.issues["spec_paths"].to_list(), [["input.P.schema"]])
+        self.assertTrue(checked.issues.is_empty(), checked.issues)
+        self.assertEqual(failed.issues["condition"].to_list(), ["unsupported_operation"])
+        self.assertEqual(failed.issues["spec_paths"].to_list(), [["input.P.schema"]])
         self.assertIsNone(failed.output)
         with self.assertRaises(yamaa.DomainError):
             failed.save()
         self.assertFalse((self.directory / "produced.csv").exists())
         self.assertFalse((self.directory / "consumer.csv").exists())
+
+    def test_original_recursive_graph_checks_diagnostics_without_activation_or_data(self):
+        os.chdir(self.directory)
+        Path("environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
+        def document(input, base, output, invalid=False):
+            checks = '\n    verifications: [{matches: {pattern: "\\u00e9("}}]' if invalid else ""
+            return (
+                f"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {input}\n"
+                f"columns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n"
+                f"  - name: VALUE\n    type: str\n    label: Value\n    derivation: {base}.VALUE{checks}\n"
+                f"output: {{path: {output}, columns: [ID, VALUE]}}\n"
+            )
+        Path("parents").mkdir()
+        Path("parents/base.yaml").write_text(document("{RAW: ../never-read.csv}", "RAW", "../leaf.csv", True))
+        Path("leaf.yaml").write_text("schema_version: '1.0'\nparents: [parents/base.yaml]\ndomain: LEAF\n")
+        Path("left.yaml").write_text(document("{P: {path: leaf.csv, schema: './leaf.yaml'}}", "P", "left.csv"))
+        Path("right.yaml").write_text(document("{P: {path: leaf.csv, schema: leaf.yaml}}", "P", "right.csv"))
+        Path("spec.yaml").write_text(document("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}", "L", "consumer.csv", True))
+        with (
+            patch.object(host, "verify_versions", side_effect=AssertionError("unexpected activation")),
+            patch.object(host, "resolve_callable", side_effect=AssertionError("unexpected binding")),
+        ):
+            for _ in range(2):
+                rows = yamaa.check("spec.yaml", environment="environment.yaml").issues.to_dicts()
+                self.assertEqual(len(rows), 2)
+                for row, source in zip(rows, ("spec.yaml", "leaf.yaml"), strict=True):
+                    context = {"entry": Path("spec.yaml").resolve().as_posix(), "pattern": "é(", "source": Path(source).resolve().as_posix()}
+                    if source == "leaf.yaml":
+                        context["declaring_sources"] = [Path("parents/base.yaml").resolve().as_posix()]
+                    self.assertEqual(row, {
+                        "phase": "validation", "condition": "invalid_regex", "requirement": "REQ-0827",
+                        "spec_paths": ["columns.VALUE.verifications[0].matches.pattern"],
+                        "context": json.dumps(context, sort_keys=True, ensure_ascii=False, separators=(",", ":")),
+                    })
+            # The original authored mismatch is admitted independently of any
+            # absent serialized artifact. Checking never opens the CSV paths.
+            Path("spec.yaml").write_text(document("{P: {path: wrong.csv, schema: leaf.yaml}}", "P", "consumer.csv"))
+            rows = yamaa.check("spec.yaml", environment="environment.yaml").issues.to_dicts()
+            self.assertEqual([(r["condition"], r["requirement"], r["spec_paths"]) for r in rows],
+                [("producer_output_path_mismatch", "REQ-0534", ["input.P.path", "input.P.schema"])])
+            Path("spec.yaml").write_text(document("{P: {path: leaf.csv, schema: leaf.yaml, types: {ID: int}}}", "P", "consumer.csv"))
+            rows = yamaa.check("spec.yaml", environment="environment.yaml").issues.to_dicts()
+            self.assertEqual([(r["condition"], r["requirement"], r["spec_paths"]) for r in rows],
+                [("redundant_field_type", "REQ-0523", ["input.P.types.ID"])])
+        for name in ("never-read.csv", "leaf.csv", "left.csv", "right.csv", "consumer.csv", "wrong.csv"):
+            self.assertFalse(Path(name).exists())
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="yamaa-public-environment-")
