@@ -57,7 +57,7 @@ reference. The broader inventory retains every route and its actual result.
 ## Qualification and remaining scope
 
 Local qualification passes 986 shared Rust tests in each of debug and optimized
-`release-test`, strict workspace Clippy, 48 Rust tooling tests, 410 repository
+`release-test`, strict workspace Clippy, 48 Rust tooling tests, 411 repository
 validator tests, dependency/release-API guards, rule/style checks and Python
 formatting/lint. Both installed Python forms pass all 24 supplemental suites;
 the updated public suite passes 13 methods directly in each form. The R source

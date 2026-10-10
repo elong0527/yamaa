@@ -5560,7 +5560,11 @@ def validate_spec_functions_against(spec, spec_label, spec_path, schema_env,
         shutil.copytree(spec_path.parent, case)
         # Reuse the one permitted packaging lock; never author benchmark locks.
         destination = case / environment_path.relative_to(spec_path.parent)
-        language = source.get('language', 'python')
+        language = source.get('language')
+        if language not in ('python', 'r'):
+            # Malformed authored language belongs to native schema diagnostics,
+            # rather than the bridge's host-selector argument conversion.
+            language = 'r' if environment_path.parent.name == 'r' else 'python'
         if language == 'python' and source.get('lock') == 'uv.lock':
             shutil.copyfile(root / 'python/uv.lock', destination.parent / 'uv.lock')
         rows = _check_project_metadata(str(case / spec_path.name), str(destination), language)

@@ -2215,6 +2215,19 @@ class TestValidationManifest(unittest.TestCase):
 
 
 class TestProjectFunctionEnvironment(unittest.TestCase):
+    def test_invalid_authored_language_reaches_native_schema_diagnostics(self):
+        for language in (7, 'julia', []):
+            with self.subTest(language=language), tempfile.TemporaryDirectory() as temporary:
+                case = Path(temporary) / 'benchmarks' / 'project'
+                case.mkdir(parents=True)
+                (case / 'spec.yaml').write_text('schema_version: "1.0"\n')
+                environment = case / 'environment.yaml'
+                environment.write_text(yaml.safe_dump({'schema_version': '1.0', 'language': language}))
+                errors = VALIDATOR.validate_spec_functions_against(
+                    {}, 'project.spec', case / 'spec.yaml', {}, [], {}, environment)
+                self.assertTrue(errors)
+                self.assertTrue(any('language' in str(error) for error in errors))
+
     def test_malformed_environment_is_reported_without_entering_native_check(self):
         for content in (b'language: [', b'language: r\nlanguage: python\n', b'- r\n', b'\xff'):
             with self.subTest(content=content), tempfile.TemporaryDirectory() as temporary:
