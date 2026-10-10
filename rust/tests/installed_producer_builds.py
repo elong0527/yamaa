@@ -97,7 +97,7 @@ class InstalledProducerBuilds(unittest.TestCase):
 
     def prepare(self):
         prepared = native._prepare_producer_file(
-            str(self.root / "consumer/root.yaml"),
+            (self.root / "consumer/root.yaml").as_posix(),
             str(self.root / "env/environment.yaml"),
         )
         self.assertEqual(prepared.preparation_status(), "ready")
@@ -233,7 +233,8 @@ class InstalledProducerBuilds(unittest.TestCase):
                 attempts.append((failure, prepared.build(METADATA)))
         del prepared
         shutil.rmtree(self.root)
-        for failure, attempt in attempts:
+        while attempts:
+            failure, attempt = attempts.pop(0)
             with self.subTest(type=type(failure)):
                 self.assertFalse(attempt.accepted())
                 self.assertEqual(attempt.entered_nodes(), [1])
@@ -247,14 +248,14 @@ class InstalledProducerBuilds(unittest.TestCase):
                     self.assertEqual(result.report_status(), "complete")
                     context = observed["diagnostics"][0]["context"]
                     self.assertEqual(
-                        context["source"], str(self.root / "producer/p.yaml")
+                        context["source"], (self.root / "producer/p.yaml").as_posix()
                     )
                     self.assertEqual(
-                        context["entry"], str(self.root / "consumer/root.yaml")
+                        context["entry"], (self.root / "consumer/root.yaml").as_posix()
                     )
                     self.assertEqual(
                         context["declaring_sources"],
-                        [str(self.root / "producer/layers/base.yaml")],
+                        [(self.root / "producer/layers/base.yaml").as_posix()],
                     )
                     self.assertEqual(
                         context["host_message"],
@@ -450,7 +451,7 @@ class InstalledProducerBuilds(unittest.TestCase):
             host, "verify_versions", side_effect=AssertionError("rejected activation")
         ):
             prepared = native._prepare_producer_file(
-                str(self.root / "consumer/root.yaml"),
+                (self.root / "consumer/root.yaml").as_posix(),
                 str(self.root / "env/environment.yaml"),
             )
         self.assertEqual(prepared.preparation_status(), "environment_failure")
@@ -537,7 +538,7 @@ class InstalledProducerBuilds(unittest.TestCase):
             side_effect=AssertionError("rejected graph activation"),
         ):
             prepared = native._prepare_producer_file(
-                str(self.root / "consumer/root.yaml"),
+                (self.root / "consumer/root.yaml").as_posix(),
                 str(self.root / "env/environment.yaml"),
             )
         self.assertEqual(prepared.preparation_status(), "graph_failure")
