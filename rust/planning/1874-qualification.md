@@ -45,7 +45,8 @@ across six hosts/versions. A fresh protected exact-head/current-main/CI-parent/t
 guard passed immediately before merge without protection bypass.
 
 This slice does not qualify ordinary installed producer domain execution or
-ordered publication. #1877 isolates actual installed build/report handles;
+ordered publication. #1877's actual installed build/report handles are qualified by #1880;
+#1881 isolates original workflow selection before public dispatch;
 #1741 and #1585 remain open. Publication #1866 and Windows R #1857 decisions
 remain unanswered. Public scope stays 96 passing tuples and 12 unqualified
 Windows R tuples; the separate 954-row reference-assisted inventory retains its

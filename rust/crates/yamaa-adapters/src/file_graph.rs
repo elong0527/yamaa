@@ -94,29 +94,171 @@ pub struct FileGraph {
     environment: CapturedEnvironment,
     resources: Resources,
 }
+/// Constructed only by the approved original native capture boundary. Moving
+/// this whole owner never supplies an arbitrary document, plan or environment.
+pub(crate) struct CapturedEntry {
+    resources: Resources,
+    written: String,
+    environment: OwnedEnvironment,
+    schema: Arc<CapturedSchema>,
+    document: PreparedDocument,
+    limits: Limits,
+    producer: bool,
+}
+/// Entry/schema limits and written identity ownership admitted before capture.
+/// Private fields prevent an unadmitted request from entering the shared transfer.
+pub(crate) struct AdmittedEntry {
+    written: String,
+    schema: Arc<CapturedSchema>,
+    limits: Limits,
+}
+impl CapturedEntry {
+    pub(crate) fn is_producer(&self) -> bool {
+        self.producer
+    }
+    pub(crate) fn into_ordinary_parts(
+        self,
+    ) -> (Resources, String, PreparedDocument, OwnedEnvironment) {
+        (
+            self.resources,
+            self.written,
+            self.document,
+            self.environment,
+        )
+    }
+}
 impl FileGraph {
     /// Capture a canonical closure iteratively through the approved reader,
     /// then compile the whole graph once against the admitted environment.
     /// No activation, data, runtime or publisher port is accepted or exposed.
     pub fn prepare(
-        mut resources: Resources,
+        resources: Resources,
         written: &str,
         environment: OwnedEnvironment,
         schema: Arc<CapturedSchema>,
         limits: Limits,
     ) -> Result<Self, Box<RejectedGraph>> {
+        Self::capture_entry(resources, written, environment, schema, limits)
+            .and_then(Self::prepare_captured)
+    }
+    pub(crate) fn capture_entry(
+        mut resources: Resources,
+        written: &str,
+        environment: OwnedEnvironment,
+        schema: Arc<CapturedSchema>,
+        limits: Limits,
+    ) -> Result<CapturedEntry, Box<RejectedGraph>> {
+        let admitted = match admit_entry(&mut resources, written, Arc::clone(&schema), limits) {
+            Ok(admitted) => admitted,
+            Err(error) => {
+                let (_, environment) = environment.into_parts();
+                return Err(Box::new(RejectedGraph {
+                    error,
+                    entry: None,
+                    origin: None,
+                    documents: Vec::new(),
+                    schema,
+                    environment,
+                    resources,
+                }));
+            }
+        };
+        Self::capture_admitted_entry(resources, admitted, environment)
+    }
+    pub(crate) fn capture_admitted_entry(
+        mut resources: Resources,
+        admitted: AdmittedEntry,
+        environment: OwnedEnvironment,
+    ) -> Result<CapturedEntry, Box<RejectedGraph>> {
+        let AdmittedEntry {
+            written,
+            schema,
+            limits,
+        } = admitted;
+        let mut document = None;
+        let result = (|| {
+            document = Some(
+                file_preparation::prepare_document_from(
+                    &mut resources,
+                    None,
+                    &written,
+                    Some(Arc::clone(&schema)),
+                )
+                .map_err(Error::Document)?,
+            );
+            let root = document.as_ref().expect("captured entry");
+            let d = root.normalization_input();
+            // Document is a bounded tree. One whole arena reservation bounds
+            // all mapping lookups, including inherited declaration fields.
+            resources
+                .charge_work(d.nodes().len())
+                .map_err(Error::Resource)?;
+            if root.model().document().nodes().len() > limits.graph.document_nodes {
+                return Err(Error::Limit("producer_graph_document_nodes"));
+            }
+            // Defaults cannot invent authored producer declarations. Missing or
+            // nonmapping original input remains for the selected compiler's
+            // typed admission; shipped-schema failures have already rejected.
+            let mut producer = false;
+            if let Some(input) = d.field(d.root(), "input") {
+                if let N::Mapping(entries) = &d.nodes()[input] {
+                    // Inspect the whole collection, including after a match.
+                    for &(_, declaration) in entries {
+                        producer |=
+                            yamaa_core::producer_admission::is_producer_input(d, declaration);
+                    }
+                }
+            }
+            resources
+                .verify_captured()
+                .map_err(|(identity, error)| Error::Snapshot { identity, error })?;
+            Ok(producer)
+        })();
+        match result {
+            Ok(producer) => Ok(CapturedEntry {
+                resources,
+                written,
+                environment,
+                schema,
+                document: document.expect("captured entry"),
+                limits,
+                producer,
+            }),
+            Err(error) => {
+                let (_, environment) = environment.into_parts();
+                Err(Box::new(RejectedGraph {
+                    error,
+                    entry: Some(written),
+                    origin: None,
+                    documents: document.into_iter().map(Arc::new).collect(),
+                    schema,
+                    environment,
+                    resources,
+                }))
+            }
+        }
+    }
+    pub(crate) fn prepare_captured(entry: CapturedEntry) -> Result<Self, Box<RejectedGraph>> {
+        let CapturedEntry {
+            mut resources,
+            written,
+            environment,
+            schema,
+            document,
+            limits,
+            ..
+        } = entry;
         let (environment, captured) = environment.into_parts();
         let mut documents = Vec::new();
         let mut origin = None;
-        let mut entry = None;
+        let entry = written;
         let result = collect(
             &mut resources,
-            written,
+            document,
             &schema,
             limits,
             &mut documents,
             &mut origin,
-            &mut entry,
         )
         .and_then(|nodes| {
             let root = documents[0].source().identity.as_str();
@@ -139,13 +281,13 @@ impl FileGraph {
         match result {
             Ok(graph) => Ok(Self {
                 graph,
-                entry: entry.expect("successful collection owns its admitted entry"),
+                entry,
                 environment: captured,
                 resources,
             }),
             Err(error) => Err(Box::new(RejectedGraph {
                 error,
-                entry,
+                entry: Some(entry),
                 origin,
                 documents,
                 schema,
@@ -212,38 +354,57 @@ fn own_document(
         limits.graph.document_nodes,
         "producer_graph_document_nodes",
     )?;
+    let index = documents.len();
+    let document = Arc::new(document);
+    // The admitted node owner also retains this original document on a later
+    // identity-index quota refusal. The index copy receives separate text
+    // admission; failure grants no edge, compilation or execution authority.
+    documents.push(Arc::clone(&document));
     resources
         .charge_metadata_text(document.source().identity.len())
         .map_err(Error::Resource)?;
-    let index = documents.len();
-    let document = Arc::new(document);
     identities.insert(document.source().identity.clone(), index);
-    documents.push(Arc::clone(&document));
     Ok(document)
 }
 fn collect(
     resources: &mut Resources,
-    written: &str,
+    root: PreparedDocument,
     schema: &Arc<CapturedSchema>,
     limits: Limits,
     documents: &mut Vec<Arc<PreparedDocument>>,
     origin: &mut Option<Origin>,
-    entry: &mut Option<String>,
 ) -> Result<Vec<SuppliedNode>, Error> {
+    let mut identities = BTreeMap::new();
+    let mut model_nodes = 0;
+    own_document(
+        root,
+        resources,
+        documents,
+        &mut identities,
+        &mut model_nodes,
+        limits,
+    )?;
+    collect_nodes(
+        resources,
+        limits,
+        documents,
+        origin,
+        identities,
+        model_nodes,
+        schema,
+    )
+}
+pub(crate) fn admit_entry(
+    resources: &mut Resources,
+    written: &str,
+    schema: Arc<CapturedSchema>,
+    limits: Limits,
+) -> Result<AdmittedEntry, Error> {
     if limits.graph.nodes == 0 {
         return Err(Error::Limit("producer_graph_nodes"));
     }
     if schema.sources().len() > limits.schema_modules {
         return Err(Error::Limit("producer_graph_schema_modules"));
-    }
-    let mut schema_bytes = 0;
-    for source in schema.sources() {
-        charge(
-            &mut schema_bytes,
-            source.bytes.len(),
-            limits.schema_bytes,
-            "producer_graph_schema_bytes",
-        )?;
     }
     resources
         .ensure_metadata_budget(MetadataLimits {
@@ -253,26 +414,39 @@ fn collect(
             work: limits.graph.work,
         })
         .map_err(Error::Resource)?;
+    resources
+        .charge_work(schema.sources().len())
+        .map_err(Error::Resource)?;
+    let mut schema_bytes = 0;
+    for source in schema.sources() {
+        charge(
+            &mut schema_bytes,
+            source.bytes.len(),
+            limits.schema_bytes,
+            "producer_graph_schema_bytes",
+        )?;
+    }
     if written.len() > crate::specification_source::Limits::default().identity_bytes {
         return Err(Error::Limit("producer_graph_identity_bytes"));
     }
     resources
         .charge_metadata_text(written.len())
         .map_err(Error::Resource)?;
-    *entry = Some(written.into());
-    let mut identities = BTreeMap::new();
-    let mut model_nodes = 0;
-    let root =
-        file_preparation::prepare_document_from(resources, None, written, Some(Arc::clone(schema)))
-            .map_err(Error::Document)?;
-    own_document(
-        root,
-        resources,
-        documents,
-        &mut identities,
-        &mut model_nodes,
+    Ok(AdmittedEntry {
+        written: written.to_owned(),
+        schema,
         limits,
-    )?;
+    })
+}
+fn collect_nodes(
+    resources: &mut Resources,
+    limits: Limits,
+    documents: &mut Vec<Arc<PreparedDocument>>,
+    origin: &mut Option<Origin>,
+    mut identities: BTreeMap<String, usize>,
+    mut model_nodes: usize,
+    schema: &Arc<CapturedSchema>,
+) -> Result<Vec<SuppliedNode>, Error> {
     let mut nodes = Vec::new();
     let mut edges = 0;
     let mut index = 0;
@@ -291,7 +465,7 @@ fn collect(
         };
         let mut producers = Vec::new();
         for &(name, declaration) in entries {
-            if d.field(declaration, "schema").is_none() {
+            if !yamaa_core::producer_admission::is_producer_input(d, declaration) {
                 continue;
             }
             *origin = None;
@@ -391,4 +565,96 @@ fn collect(
         .verify_captured()
         .map_err(|(identity, error)| Error::Snapshot { identity, error })?;
     Ok(nodes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        fs,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    struct Files(std::path::PathBuf);
+    impl Drop for Files {
+        fn drop(&mut self) {
+            if self.0.exists() {
+                fs::remove_dir_all(&self.0).unwrap();
+            }
+        }
+    }
+    fn captured(root: &str, limits: Limits) -> CapturedEntry {
+        let mut resources = Resources::new(root, root, &[]).unwrap();
+        resources
+            .ensure_metadata_budget(MetadataLimits {
+                bytes: limits.captured_bytes,
+                snapshots: limits.snapshots,
+                text: limits.graph.text_bytes,
+                work: limits.graph.work,
+            })
+            .unwrap();
+        let environment = crate::file_project::capture_environment(
+            &mut resources,
+            "environment.yaml",
+            yamaa_core::project_function::Language::Python,
+            crate::shipped_schema::capture_environment().unwrap(),
+        )
+        .unwrap();
+        FileGraph::capture_entry(
+            resources,
+            "root.yaml",
+            environment,
+            crate::shipped_schema::capture().unwrap(),
+            limits,
+        )
+        .unwrap()
+    }
+    #[test]
+    fn retained_original_entry_survives_refusal_to_own_the_graph_identity_index() {
+        let path = std::env::temp_dir().join(format!(
+            "yamaa-entry-retention-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&path).unwrap();
+        let files = Files(fs::canonicalize(path).unwrap());
+        let root = crate::file_resources::caller_path(&files.0).unwrap();
+        let original = b"schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [ID]\ninput: {RAW: never-read.csv}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: never-written.csv, columns: [ID]}\n";
+        fs::write(files.0.join("root.yaml"), original).unwrap();
+        fs::write(files.0.join("environment.yaml"), b"schema_version: '1.0'\n").unwrap();
+        let baseline = captured(&root, Default::default());
+        let text = baseline.resources.metadata_usage().1;
+        drop(baseline);
+        let limited = captured(
+            &root,
+            Limits {
+                graph: yamaa_core::producer_graph::Limits {
+                    text_bytes: text,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+        let rejected = match FileGraph::prepare_captured(limited) {
+            Err(rejected) => rejected,
+            Ok(_) => panic!("identity index must receive separate text admission"),
+        };
+        assert!(matches!(
+            rejected.error(),
+            Error::Resource(ResourceError::Limit)
+        ));
+        assert_eq!(rejected.capture_reads(), 2);
+        assert_eq!(rejected.documents().len(), 1);
+        drop(files);
+        assert_eq!(rejected.documents()[0].source().bytes, original);
+        assert_eq!(
+            rejected.documents()[0].written_source_path("RAW"),
+            Some("never-read.csv")
+        );
+        assert_eq!(
+            rejected.environment().root().source().bytes,
+            b"schema_version: '1.0'\n"
+        );
+        assert_eq!(rejected.retained_sources(16, 65536).unwrap().len(), 2);
+    }
 }

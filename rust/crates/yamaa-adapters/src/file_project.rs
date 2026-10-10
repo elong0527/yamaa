@@ -23,7 +23,65 @@ pub struct FileProject {
     run: Arc<PreparedRun>,
     resources: Resources,
 }
+/// Ordinary compilation rejection beside the original native resource owner.
+/// Projection refusal and file deletion never consume or replace this evidence.
+pub struct RejectedOrdinary {
+    run: Box<RejectedRun>,
+    entry: String,
+    resources: Resources,
+}
+impl RejectedOrdinary {
+    pub fn run(&self) -> &RejectedRun {
+        &self.run
+    }
+    pub fn entry(&self) -> &str {
+        &self.entry
+    }
+    pub fn capture_reads(&self) -> usize {
+        self.resources.capture_reads()
+    }
+    pub fn retained_sources(
+        &self,
+        aliases: usize,
+        text: usize,
+    ) -> Result<crate::file_resources::RetainedSources, crate::file_resources::RetentionFailure>
+    {
+        self.resources.retain_sources(aliases, text)
+    }
+}
+impl std::fmt::Debug for RejectedOrdinary {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RejectedOrdinary")
+            .field("entry", &self.entry)
+            .field("error", &self.run.rejection.error)
+            .field("capture_reads", &self.capture_reads())
+            .finish_non_exhaustive()
+    }
+}
 impl FileProject {
+    /// Consume only the complete sealed native capture. No externally supplied
+    /// standalone document or replacement environment can enter this transfer.
+    pub(crate) fn from_workflow(
+        entry: crate::file_graph::CapturedEntry,
+    ) -> Result<Self, Box<RejectedOrdinary>> {
+        let (mut resources, entry, document, environment) = entry.into_ordinary_parts();
+        match PreparedRun::prepare(document, environment) {
+            Ok(run) => {
+                // All capture, selection and compilation has completed. Study
+                // authority uses ordinary build admission, never metadata quota.
+                resources.finish_metadata_budget();
+                Ok(Self {
+                    run: Arc::new(run),
+                    resources,
+                })
+            }
+            Err(run) => Err(Box::new(RejectedOrdinary {
+                run,
+                entry,
+                resources,
+            })),
+        }
+    }
     /// Schemas are retained capabilities; public entry points use the shipped
     /// domain and environment closures.
     pub fn prepare(

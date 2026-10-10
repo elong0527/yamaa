@@ -163,6 +163,14 @@ fn scalar(d: &Document, id: usize) -> Result<&str, Error> {
         _ => Err(Error::Boundary),
     }
 }
+
+/// A nullable schema field does not declare a producer. This borrowed metadata
+/// fact grants no compilation, execution or publication capability.
+pub fn is_producer_input(document: &Document, declaration: usize) -> bool {
+    document
+        .field(declaration, "schema")
+        .is_some_and(|id| !matches!(document.nodes()[id], N::Null))
+}
 fn invalid(dataset: &str, reason: &str) -> Diagnostic {
     Diagnostic {
         code: C::ProducerInvalidContract,
@@ -299,9 +307,7 @@ pub(crate) fn prepare_declarations(
     let mut findings = Vec::new();
     for &(name, id) in inputs {
         let dataset = scalar(d, name)?;
-        if d.field(id, "schema")
-            .is_none_or(|id| matches!(d.nodes()[id], N::Null))
-        {
+        if !is_producer_input(d, id) {
             continue;
         }
         if let Some(types) = d.field(id, "types") {
@@ -455,9 +461,7 @@ pub(crate) fn prepare_declarations(
     }
     for c in candidates {
         if !inputs.iter().any(|&(name, id)| {
-            scalar(d, name).is_ok_and(|name| name == c.dataset)
-                && d.field(id, "schema")
-                    .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
+            scalar(d, name).is_ok_and(|name| name == c.dataset) && is_producer_input(d, id)
         }) {
             findings.push(undeclared_metadata(c.dataset));
         }

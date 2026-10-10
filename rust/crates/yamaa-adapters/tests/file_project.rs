@@ -444,3 +444,64 @@ fn native_project_inheritance_retains_parent_authorship_and_selected_entry_sourc
     assert!(attempt.dataset.result.unwrap().result.is_ok());
     assert_eq!(project.capture_reads(), 7);
 }
+
+#[test]
+fn selected_ordinary_environment_owner_preserves_fresh_activation_and_inherited_data_origins() {
+    use yamaa_adapters::{file_workflow, file_workflow::Selected};
+    let study = Study::new();
+    study.write("parent/base.yaml", &DOMAIN.replace("input.csv", "data.csv"));
+    study.write(
+        "entry/domain.yaml",
+        "schema_version: '1.0'\nparents: ../parent/base.yaml\n",
+    );
+    let Selected::Ordinary(mut project) = file_workflow::select_with_resources(
+        Resources::new(&study.text(""), &study.text("entry"), &[]).unwrap(),
+        "domain.yaml",
+        "../env/environment.yaml",
+        Language::Python,
+        schemas::domain_schema(),
+        schemas::environment_schema(),
+        Default::default(),
+    )
+    .unwrap() else {
+        panic!("ordinary capability");
+    };
+    assert_eq!(project.capture_reads(), 6);
+    assert_eq!(project.run().compiled().source().path, "../parent/data.csv");
+    // A fresh activation still refuses before the absent authored study source.
+    let mut failed = Activation {
+        reject: true,
+        ..Default::default()
+    };
+    let rejection = project.build(&mut failed);
+    assert_eq!(failed.trace, ["lock"]);
+    assert!(rejection.dataset.sources.is_empty());
+    assert_eq!(project.capture_reads(), 6);
+    study.write("parent/data.csv", "ID\n1\n");
+    let mut host = Activation::default();
+    let first = project.build(&mut host);
+    let second = project.build(&mut host);
+    assert!(first.boundary.is_ok() && second.boundary.is_ok());
+    assert_eq!(
+        host.trace,
+        ["lock", "bind", "call", "call", "call", "lock", "bind", "call", "call", "call"]
+    );
+    assert_eq!(project.capture_reads(), 7);
+    assert!(std::sync::Arc::ptr_eq(
+        first.dataset.sources[0].snapshot.as_ref().unwrap(),
+        second.dataset.sources[0].snapshot.as_ref().unwrap()
+    ));
+    let retained = project.retained_run();
+    drop(project);
+    // Metadata and environment retention survives all other owners. The original
+    // tests and lock stay in this run; repeated builds never replaced them.
+    assert_eq!(retained.captured_environment().captures().len(), 2);
+    assert_eq!(
+        retained.document().parents()[0].source().bytes,
+        DOMAIN.replace("input.csv", "data.csv").as_bytes()
+    );
+    assert_eq!(
+        retained.captured_environment().lock().unwrap().source.bytes,
+        b"version = 1\npackage = []\n"
+    );
+}

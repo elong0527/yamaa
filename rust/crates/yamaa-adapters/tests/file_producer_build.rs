@@ -337,8 +337,7 @@ impl OutputReport for Report {
         }
     }
 }
-type NativeAttempt = Attempt<Payload, String, &'static str>;
-fn artifact(attempt: &NativeAttempt, node: usize) -> &[u8] {
+fn artifact<E, R, F: std::fmt::Debug>(attempt: &Attempt<E, R, F>, node: usize) -> &[u8] {
     attempt.graph.nodes[node]
         .output
         .as_ref()
@@ -1621,4 +1620,66 @@ fn a_larger_caller_report_budget_cannot_defer_the_fixed_formatter_ceiling_until_
         ))
     ));
     assert!(!study.0.join("generated").exists());
+}
+
+#[test]
+fn original_native_selection_builds_the_retained_rounded_alias_workflow_without_recapture() {
+    use yamaa_adapters::file_workflow::{self, Selected};
+    let study = Study::new();
+    study.rounded();
+    // This preparation fixture independently supplies the real original native
+    // environment/lock closure rather than the supplied in-memory test owner.
+    study.write("environment.yaml", "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions:\n  id_float:\n    function: program.id_float\n    description: Float identity.\n    params: [{name: x, type: float}]\n    returns: float\n    tests:\n      - {id: normal, covers: [normal, numeric-comparison], args: {x: 7.0}, result: 7.0}\n      - {id: boundary, covers: [boundary], args: {x: 0.0}, result: 0.0}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n");
+    study.write("uv.lock", "version = 1\npackage = []\n");
+    let Selected::Producer(graph) = file_workflow::select_with_resources(
+        Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
+        "consumer/root.yaml",
+        "environment.yaml",
+        Language::Python,
+        shipped_schema::capture().unwrap(),
+        shipped_schema::capture_environment().unwrap(),
+        Default::default(),
+    )
+    .unwrap() else {
+        panic!("producer capability");
+    };
+    assert_eq!(graph.capture_reads(), 5); // environment, lock, entry, producer, parent
+    let root = Arc::clone(&graph.graph().nodes()[0].document);
+    let producer = Arc::clone(&graph.graph().nodes()[1].document);
+    assert!(Arc::ptr_eq(
+        &graph.graph().nodes()[0].producers[0].document,
+        &graph.graph().nodes()[0].producers[1].document
+    ));
+    let mut build = (*graph).into_build();
+    assert!(Arc::ptr_eq(&root, &build.provenance().documents()[0]));
+    assert!(Arc::ptr_eq(&producer, &build.provenance().documents()[1]));
+    let mut activation = Activation::new(&study, Mode::Pass);
+    let attempt = build.build_reported(&mut activation, report_id(), Limits::default());
+    let execution = attempt.graph.nodes[0]
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .as_ref()
+        .unwrap();
+    for (row, expected) in [1.234, 2.345].into_iter().enumerate() {
+        let ValueRef::Float(value) = execution.dataset.cell(row, 1).unwrap() else {
+            panic!("separate unrounded producer truth");
+        };
+        assert_eq!(value.get(), expected);
+    }
+    assert_eq!(artifact(&attempt, 0), b"ID,VALUE\n1,1.23\n2,2.35\n");
+    assert_eq!(artifact(&attempt, 1), b"ID,VALUE\n1,2.46\n2,4.70\n");
+    assert_eq!(attempt.graph.nodes.len(), 2);
+    assert_eq!(attempt.graph.nodes[0].dataset.sources.len(), 1);
+    assert_eq!(attempt.graph.nodes[1].dataset.sources.len(), 2);
+    assert!(!study.0.join("generated/producer.csv").exists());
+    assert!(!study.0.join("generated/root.csv").exists());
+    drop(build);
+    drop(root);
+    drop(producer);
+    fs::remove_dir_all(&study.0).unwrap();
+    assert_eq!(artifact(&attempt, 0), b"ID,VALUE\n1,1.23\n2,2.35\n");
+    assert_eq!(artifact(&attempt, 1), b"ID,VALUE\n1,2.46\n2,4.70\n");
 }

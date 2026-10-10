@@ -120,6 +120,7 @@ mod platform {
                 Ok(_) => "ready",
                 Err(file_workflow::Error::Configuration(_)) => "configuration_failure",
                 Err(file_workflow::Error::Schema(_)) => "schema_failure",
+                Err(file_workflow::Error::Admission(_)) => "admission_failure",
                 Err(file_workflow::Error::Environment(_)) => "environment_failure",
                 Err(file_workflow::Error::Graph(_)) => "graph_failure",
             },
@@ -484,6 +485,7 @@ mod platform {
             .try_borrow()
             .map_err(|_| "producer handle already borrowed")?;
         let sources = match &*state {
+            Err(file_workflow::Error::Admission(error)) => error.retained_sources(65536, 16777216),
             Err(file_workflow::Error::Environment(error)) => {
                 error.retained_sources(65536, 16777216)
             }

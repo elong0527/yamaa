@@ -36,6 +36,7 @@ impl Specification {
             Ok(_) => "ready",
             Err(file_workflow::Error::Configuration(_)) => "configuration_failure",
             Err(file_workflow::Error::Schema(_)) => "schema_failure",
+            Err(file_workflow::Error::Admission(_)) => "admission_failure",
             Err(file_workflow::Error::Environment(_)) => "environment_failure",
             Err(file_workflow::Error::Graph(_)) => "graph_failure",
         })
@@ -100,6 +101,13 @@ impl Specification {
     ) -> PyResult<Vec<(String, Bound<'py, PyBytes>)>> {
         let state = self.get()?;
         let sources = match &*state {
+            Err(file_workflow::Error::Admission(error)) => {
+                error.retained_sources(65_536, 16_777_216).map_err(|_| {
+                    PyValueError::new_err(
+                        "source evidence limit; original rejection remains retained",
+                    )
+                })?
+            }
             Err(file_workflow::Error::Environment(error)) => {
                 error.retained_sources(65_536, 16_777_216).map_err(|_| {
                     PyValueError::new_err(
