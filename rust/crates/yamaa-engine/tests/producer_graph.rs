@@ -30,8 +30,29 @@ fn complete_graph_metadata_never_grants_the_ordinary_build_capability() {
     assert_eq!(checked.metadata().root(), 1);
     assert_eq!(checked.metadata().called_functions(), [0, 2]);
     assert_eq!(checked.metadata().nodes()[1].activation_slots(), [1]);
+    let Err(PrepareError::Unsupported(features)) = checked.execution_capability() else {
+        panic!("metadata graph must refuse execution")
+    };
+    assert_eq!(
+        features
+            .iter()
+            .map(|f| (f.operation.as_str(), f.path.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            ("producer_workflow", "input.FIRST.schema"),
+            ("producer_workflow", "input.SECOND.schema"),
+        ]
+    );
+    let leaf = producer_graph::check(
+        "/p",
+        &[node("/p", &p, &[])],
+        environment(&["beta"]),
+        Limits::default(),
+    )
+    .unwrap();
     assert!(
-        matches!(checked.execution_capability(), Err(PrepareError::Unsupported(features)) if features[0].operation == "producer_workflow" && features[0].path == "input.schema")
+        matches!(leaf.execution_capability(), Err(PrepareError::Unsupported(features))
+        if features.len() == 1 && features[0].operation == "producer_workflow" && features[0].path == "input")
     );
     assert!(matches!(
         yamaa_engine::domain::check(&root),

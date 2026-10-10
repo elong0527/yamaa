@@ -133,10 +133,24 @@ impl PreparedGraph {
     /// This static capability grants no data, activation, build or publication
     /// authority. #1741 must qualify the complete orchestration before release.
     pub fn execution_refusal(&self) -> PrepareError {
-        PrepareError::Unsupported(vec![UnsupportedFeature {
-            operation: "producer_workflow".into(),
-            path: "input.schema".into(),
-        }])
+        let producers = &self.nodes[self.root].producers;
+        if producers.is_empty() {
+            // A single external-input node is a valid metadata graph. Keep its
+            // denial nonempty and anchored at the admitted input declaration.
+            return PrepareError::Unsupported(vec![UnsupportedFeature {
+                operation: "producer_workflow".into(),
+                path: "input".into(),
+            }]);
+        }
+        PrepareError::Unsupported(
+            producers
+                .iter()
+                .map(|p| UnsupportedFeature {
+                    operation: "producer_workflow".into(),
+                    path: format!("input.{}.schema", p.dataset()),
+                })
+                .collect(),
+        )
     }
 }
 

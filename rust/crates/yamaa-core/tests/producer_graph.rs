@@ -51,10 +51,20 @@ fn diamond_and_shared_aliases_retain_authored_order_but_compile_each_identity_on
         ["RIGHT", "LEFT", "AGAIN"]
     );
     assert!(graph.called_functions().is_empty());
-    assert!(matches!(
-        graph.execution_refusal(),
-        PrepareError::Unsupported(_)
-    ));
+    let PrepareError::Unsupported(features) = graph.execution_refusal() else {
+        panic!("metadata graph must refuse execution")
+    };
+    assert_eq!(
+        features
+            .iter()
+            .map(|f| (f.operation.as_str(), f.path.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            ("producer_workflow", "input.RIGHT.schema"),
+            ("producer_workflow", "input.LEFT.schema"),
+            ("producer_workflow", "input.AGAIN.schema"),
+        ]
+    );
     assert!(matches!(
         yamaa_core::specification::PreparedSpecification::prepare(&root),
         Err(PrepareError::Unsupported(_))
