@@ -2,15 +2,22 @@
 
 This is the finite blocker register for [#1742](https://github.com/elong0527/yamaa/issues/1742).
 It records evidence and decisions still needed, not approval to release or switch
-backends. Main `3895017b619642d4cda1d14b0000e20dc65becd7` includes #1811's
+backends. The [2026-10-10 maintainer decisions](maintainer-decisions.md) settle
+eight implementation choices, including required Windows R and the Cargo
+packaging exception. The register below distinguishes those approvals from
+remaining implementation and qualification.
+
+Historical foundation: main `3895017b619642d4cda1d14b0000e20dc65becd7` includes #1811's
 combined packages and #1812's complete public cohort reports. Native run
 37805429480 passes all seven jobs, all thirteen workflow checks and a clean
 full 13-file review, with fresh package/source auditing and independent replay
 of all 72 downloaded cohort tuples. Both Unix hosts compare all seventeen
 complete original public reports; the 945-row assisted inventory remains
-separate. The older matrix below retains historical #1792 evidence. Windows
-file transport is the next candidate; cross-target checks and local prototypes
-do not settle migration or release acceptance. Follow [the delivery order](migration-order.md).
+separate. The older matrix below retains historical #1792 evidence. See
+[the current migration assessment](migration-status.md) for later qualified
+public frontend, environment and producer-build slices. Cross-target checks and
+local prototypes do not settle migration or release acceptance.
+Follow [the delivery order](migration-order.md).
 
 ## Declared API inventory
 
@@ -43,7 +50,7 @@ explicit inventory update. It neither generates approval nor tests API behavior.
 | Function artifact/contract/cache helpers | Replace under #1757; ordinary locked function packages and engine ports replace artifact resolution and cached activation. |
 | IO, custom-schema/provenance, ODM and authoring helpers | Explicit decisions remain. `read_odm`, `write_odm_parquet` and package version metadata are retention candidates, not evidence of qualified parity. |
 | All 22 `cdiscbuilder` exports | The target is package replacement. `parse_odm_to_long_df` has an explicit unresolved translation/removal decision; no equivalence to `read_odm` is assumed. |
-| Native Python/R probes, private handles and scalar S3 methods | Migrate qualification consumers, then fold native distributions into `yamaa`. R scalar representation still depends on the INT64_MIN decision. |
+| Native Python/R probes, private handles and scalar S3 methods | Migrate qualification consumers, then fold native distributions into `yamaa`. The approved full-range `yamaa_int64_vector` representation, separate missingness and exact-or-error conversions still need installed qualification. |
 
 The inventory covers declared exports, not every importable submodule name,
 inherited class member, Python import side effect or R internal function. B02/B03
@@ -73,9 +80,12 @@ inventory were audited against the tested merge and its exact base/head parents.
 The manifests declare Python >=3.12 and R >=4.6.1. The native wheel uses
 `abi3-py312`; that ABI choice is not installed qualification of Python 3.12/3.13
 or future interpreters. Python 3.12 numerical-probe CI is not an installed-wheel
-API test. Windows R, macOS x86_64, Linux arm64, musl, other Python implementations,
-R binary distributions and untested versions have no release promise yet. They
-are **undecided/unqualified**, not silently approved exclusions.
+API test. Windows R is required for the first shared Rust release by the
+2026-10-10 maintainer decision (#1857); implementation and installed qualification
+are tracked in #1903. Its twelve missing public cohort tuples remain unqualified.
+macOS x86_64, Linux arm64, musl, other Python implementations, R binary
+distributions and untested versions still need explicit support dispositions.
+They are **undecided/unqualified**, not silently approved exclusions.
 
 The native R CI job now runs `R CMD check --no-manual` on Linux and macOS in
 addition to build/install and the separately recorded supplemental scripts. It
@@ -106,28 +116,29 @@ package version policy.
 
 ## Finite blocker register
 
-All rows below are current contract or release-decision blockers. No row is
-preemptively reclassified as unsupported release scope or a future enhancement.
-A disposition that narrows scope requires an explicit linked decision. Issue
-numbers identify the implementation/test or decision owner.
+The rows distinguish approved policy from open implementation and release
+qualification. B14's packaging policy is resolved; its build evidence remains
+under B13. No open row is preemptively reclassified as unsupported release scope
+or a future enhancement. A disposition that narrows scope requires an explicit
+linked decision. Issue numbers identify the implementation/test or decision owner.
 
 | ID | Blocker and current evidence | Owner | Evidence required to close |
 | --- | --- | --- | --- |
-| B01 | Bounded public frontend and complete Unix public M1 reports qualify in #1811/#1812; Windows file transport remains a candidate. | #1739, #1751 | Both installed public host APIs consume original files, block reference semantics, compare complete observations and saved bytes, and produce evidenced `shared_run` tuples for all six unchanged cases. |
-| B02 | Public domain/check/result/log/save API and benchmark runner migration. | #1751 | Installed signatures, wrong-argument exceptions, issue rows for specification/data/environment/function failures, logs retained on failure, explicit save, and all 178 Python/R runner pairs migrated. |
-| B03 | API representation, retained helpers and full surface review. | #1751, #1742 | Decide check result, issues.context, full-range R integers/INT64_MIN, custom schema/provenance and IO/ODM/style helpers; test every retained surface and deliberate removal, including class members and undocumented imports. |
-| B04 | Declaring-file path policy and production file ports. Existing rules still enforce approved roots/fallback. | #1751, #1755 | Explicit approval for the containment change, reviewed coordinated requirements, path provenance, no fallback, resource preflight, held snapshots and both-host file/error tests. Approval is currently pending after automatic approval review rejected that separate rewrite. |
+| B01 | The bounded public M1 cohort qualifies 96 installed tuples across six Python forms and exercised R hosts; twelve Windows R tuples remain unqualified. | #1739, #1751, #1903 | Preserve complete original-file observations and saved bytes, block reference semantics, and qualify all required Windows R tuples. Promote only evidenced `shared_run` tuples. |
+| B02 | Public domain/check/result/log/save API and benchmark runner migration. | #1751 | Installed signatures, wrong-argument exceptions, issue rows for specification/data/environment/function failures, logs retained on failure, explicit save, and every supported Python/R runner pair migrated. |
+| B03 | Issues-only checks, JSON-text context and full-range `yamaa_int64_vector` are approved; retained helpers and full surface review remain. | #1751, #1742 | Qualify the approved representations, separate missingness and exact-or-error integer conversions. Settle custom schema/provenance and IO/ODM/style helper dispositions; test retained surfaces and deliberate removals, including class members and undocumented imports. |
+| B04 | Declaring-file path replacement is approved; existing implementation still enforces approved roots/fallback. | #1905, #1751, #1755 | Implement the coordinated requirements: original declaring-file provenance, no fallback/configuration search, absolute and parent-relative local paths without yamaa root containment, preserved file-kind/link/snapshot checks, resource preflight and both-host file/error/publication tests. |
 | B05 | Combined `yamaa` packages qualify in #1811; obsolete probe/duplicate cleanup remains open. | #1751, #1754, #1742 | Clean wheel/source and R package installations exercise combined artifacts; remove duplicate/probe exports only after their replacement consumers qualify. |
-| B06 | Environment, lock verification and function-definition migration. | #1757 | Reviewed schema/rules, static validation without code/data, installed-version verification and all called-function tests on every build before study reads; migrate five function fixtures in both languages. |
-| B07 | Complete producer workflow. | #1741 | Producer-once execution, function activation before any study data, exact serialized/rounded consumer input, failure ledgers, reuse and explicit publication gates in both installed hosts. |
-| B08 | Terminology and submission. | #1757, #1758 | Cross-source uniqueness and bound list verification; new define API and all three submission cases preserve independently expected fixed-time XML/JSON bytes before retiring old formats. |
+| B06 | #1757 is closed by #1856 for public environment/function admission, lock verification, per-build activation and five equivalent Python/R fixtures. | #1757, #1742 | Retain that bounded qualification and exercise the final installed release matrix, including Windows R and later public workflow/submission integrations, without weakening activation-before-data. |
+| B07 | Public producer builds qualify; ordered publication remains open under the approved #1866 lifecycle. | #1741 | Producer-once execution, activation before study data, exact serialized/rounded consumer input and complete ledgers. Build without writes; explicit Save publishes held bytes producer-first without rereads/callbacks/re-encoding. Failed publication stops dependents and preserves prior writes and completed execution evidence. |
+| B08 | Environment codelist admission is qualified under #1757; shared submission generators remain open. The source-system-version override is approved in #1887. | #1758, #1742 | Qualify final terminology scopes and the define API. Implement the optional section override with the installed-version default; all three migrated fixtures use explicit `"1.0"` and preserve fixed-time XML/JSON truth before retiring old formats. Record actual generator versions separately. |
 | B09 | Remaining language/compiler families. Component support is not full-language compilation. | #1585, #1752, #1754 | Qualify handlers, row-output dependencies, predicates/flags/first-available, correlated/keyed aggregates and lookups, full verification scopes, strings/regex/temporal/ODM and submission/value metadata from the executable inventory. |
 | B10 | Source/output codecs and filesystem publication. The private original-document route reads CSV/Parquet and writes bounded CSV/Parquet through callbacks; #1785's installed codec audit passed. Actual filesystem publication and producer workflows remain unqualified. | #1755, #1585 | Exact CSV, logical Parquet/ordinal/type contracts, producer re-ingestion, non-regular/missing/changed resources, atomic publication and publication-failure behavior through actual file ports. |
 | B11 | Complete diagnostics and failure timing. Core owns preflight, output-declaration, numeric/aggregate grammar, binding/dependency, CSV profile/declared typing, closed Parquet metadata, window/lookup and predicate grammar findings; #1790 qualifies original scalar literals and conversion wrappers; schema kinds are portable after #1789; #1772/#1773 merged captured schema and classified source observations. Remaining diagnostic families, production file-port integration and five assisted-route mismatches remain open. | #1753, #1739 | Preserve normative phase, order, requirement, authored path/context and full source/check/handler ledgers; resolve all five known gaps against independent truth without masking them. |
-| B12 | Numerical policy and downstream bytes. #1740 now proposes one behavior per locked release, with no public policy/backend selector; the choice and production policy remain unratified. | #1740 | Ratified one-policy-per-release behavior, implementation in every affected scope, and reviewed disposition for every observable numerical/artifact difference. |
-| B13 | Transitive dependency reproducibility. Cargo.lock is ignored and omitted from the staged R source package. | #1742 | Approved no-content-hashing-compatible build process, clean independent resolution/build evidence and retained exact versions/features. Exact direct dependency pins alone do not settle this. |
-| B14 | Packaging checksum exceptions. Current AGENTS.md permits only python/uv.lock. | #1757, #1742 | Explicit approval before any additional lock/checksum exception; preserve held-byte resource comparison and prohibit runtime provenance digests. Study locks and Cargo reproducibility are distinct decisions. |
-| B15 | Supported platform/version/distribution promises. | #1742 | Ratified matrix, explicit Windows R decision and named exclusions, then complete installed checks including R CMD check for the chosen scope. |
+| B12 | Pinned `PortableLibmV1` and one behavior per locked release are approved, including documented historical Python differences. | #1740 | Qualify every affected final scope and retain reviewed disposition for observable numerical/artifact differences. Public APIs and YAML do not select policy/backend. |
+| B13 | Canonical Cargo locking and its packaging exception are approved; Cargo.lock is still ignored and omitted from the staged R source package. | #1906, #1742 | Commit one canonical lock, stage unchanged Python/R source-package copies, enforce locked builds, and retain clean full-transitive-graph build evidence with exact versions/features/toolchains on all required platforms, including Windows R. |
+| B14 | Packaging checksum policy resolved: AGENTS.md permits python/uv.lock and the canonical rust/Cargo.lock with unchanged staged copies. | #1742, #1906 | No further policy decision is needed for those files. B13 tracks implementation/build evidence. Preserve held-byte comparison; runtime identity, contract, activation-cache and resource-snapshot digests remain prohibited. Additional exceptions need a separate decision. |
+| B15 | Windows R is required for the first release; other platform/version/distribution promises still need a complete matrix. | #1903, #1742 | Qualify Windows R native file ports, source build/install, public/cohort suites and strict R CMD check. Specify other supported combinations and exclusions, then complete final installed checks for the entire chosen scope. |
 | B16 | Native ownership, interruption, reentrancy and repeated-use behavior across the final facade. Probes already exercise many cases. | #1755, #1742 | Repeat those contracts through final installed domain/check/workflow/save APIs, including failed builds and expired/mismatched handles; probes alone do not close this. |
 | B17 | Representative phase/performance/memory evidence. Existing harness is small and cold, with host-assisted preparation. | #1742 | Shared-path workloads at agreed sizes, repeated cold/warm measurements, raw samples/spread, exact truth/callback checks, phase attribution and peak RSS or explicit unavailability. |
 | B18 | Performance regression budgets and support tradeoffs. | #1742 | Maintainer-approved numeric budgets before release qualification; evaluate distributions and representative workloads, not one smoke sample or a tiny fixture speedup. |

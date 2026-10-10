@@ -12,9 +12,12 @@ defaults for #1757. It does not claim that the remaining acceptance tests pass.
   universal correct rounding. The locked yamaa release supplies one behavior;
   public APIs and YAML do not select a numerical policy. Implementation and
   installed qualification precede release exposure.
-- Keep AGENTS.md unchanged. Reuse the permitted `python/uv.lock` for Python
-  benchmark packages and use hash-free R locks. No additional digest-bearing lock
-  files, runtime identity digests or Cargo reproducibility exception are approved.
+- The original #1757 approval kept AGENTS.md unchanged, reused `python/uv.lock`
+  for Python benchmark packages and used hash-free R locks. The later
+  [Cargo decision](maintainer-decisions.md#cargo-dependency-locking) on 2026-10-10
+  supersedes that restriction only for the canonical `rust/Cargo.lock` and its
+  unchanged staged copies. Runtime identity digests remain prohibited; R study
+  locks remain hash-free.
 - Replace `negative-function-contract`'s obsolete requested-contract-version
   mismatch with a missing-required-argument failure. Independently specify its
   replacement diagnostic and explain this intentional expected-fixture change in
@@ -32,5 +35,7 @@ scope, reproducibility, performance and controlled transition remain #1742/#1585
 The closing change includes authoritative formats, public static diagnostics and
 fresh per-build activation, environment terminology, all five equivalent locked
 Python/R benchmarks, and removal of the superseded function-code paths. The
-retained submission and resource-root compatibility paths follow the approved
-disposition above. No evidence from the other migration checkout is counted.
+retained submission compatibility path follows the approved disposition above.
+Resource-root compatibility remains in the implementation until the later
+approved declaring-file replacement qualifies under #1905. No evidence from the
+other migration checkout is counted.

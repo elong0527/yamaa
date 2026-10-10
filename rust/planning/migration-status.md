@@ -10,6 +10,10 @@ retire superseded implementations after their replacements pass. The migration
 is active; this assessment does not authorize release cutover. The numerical
 choice was subsequently approved on 2026-10-10. The #1757 closing change implements
 the public environment path; full release qualification remains separate.
+The [2026-10-10 maintainer decisions](maintainer-decisions.md) settle the workflow
+lifecycle, submission version override, Windows R requirement, public result
+representations, declaring-file paths and Cargo packaging exception. Their
+implementation and installed release gates remain open.
 
 ## Delivered and qualified
 
@@ -86,7 +90,8 @@ unsupported reference routes; it does not count them as shared execution.
 The obsolete artifact resolvers, contract fingerprints, cached activation and
 vendored benchmark code are removed. The old submission schema/generator and
 three Define-XML fixtures remain for #1758. Approved resource-root configuration
-also remains until its own path-policy decision.
+also remains pending implementation of the approved declaring-file path policy
+under #1905.
 
 The #1858 producer compiler prerequisite adds a separate sealed metadata boundary
 with retained producer identities and authored layer paths. Ordered output
@@ -162,7 +167,8 @@ shared diamond. Actual Linux/macOS debug/release modes pass 1,079 tests and Wind
 passes 1,066 across 128 targets each. Strict five-crate Clippy, all 48 tool guards,
 clean installed forms and package/evidence audits pass. See [the service](../PRODUCER_BUILD.md) and
 [qualification scope](1869-qualification.md). Installed workflow dispatch and
-ordered publication remain #1741. Publication acceptance still needs #1866.
+ordered publication remain #1741. The approved #1866 lifecycle keeps execution
+in memory and stops dependent publication on Save failure.
 
 The [#1871 complete retained producer graph reports](https://github.com/elong0527/yamaa/issues/1871)
 prerequisite is qualified by [#1873](https://github.com/elong0527/yamaa/pull/1873),
@@ -245,7 +251,8 @@ pass 26 suites each; exercised R forms pass 20 and strict Status OK. All 14 pack
 pass 4,554 direct byte comparisons, with 29 evidence rows and 30,033 PortableLibmV1
 sample observations. See [the result contract](../PRODUCER_PUBLIC_RESULTS.md) and
 [qualification record](1883-qualification.md). Producer publication remains
-#1741 and awaits #1866; no graph publisher or Save capability is supplied.
+#1741 under the approved #1866 lifecycle; this slice supplies no graph publisher
+or Save capability.
 
 The [#1888 bounded typed submission declarations](https://github.com/elong0527/yamaa/issues/1888)
 prerequisite is qualified by [#1891](https://github.com/elong0527/yamaa/pull/1891),
@@ -281,19 +288,17 @@ structural admission precedes model or finding growth. Independent core cases
 cover every current vocabulary, order/default/null/shape distinctions, cumulative
 limits and retention after input deletion. See
 [the boundary](../SPECIFICATION_SUBMISSION_DECLARATIONS.md).
-The active corrective prerequisite is
-[#1897 document-list rejection occurrence facts](https://github.com/elong0527/yamaa/issues/1897).
-Malformed environment document items must identify their actual sequence
-container, absent mapping key and item node alongside the authored section/index
-path. Independent cases cover all three families, multiple positions, complete
-quota refusals and unaffected valid ownership after input deletion. Full fresh
-current-source qualification, reviewed exact-head CI and a protected merge guard
-remain required before this correction closes. Semantic composition, original
-inherited capture and generators remain #1758.
-[#1887](https://github.com/elong0527/yamaa/issues/1887) separately asks whether an
-explicit source-system-version override should preserve existing XML/JSON bytes:
-installed packages are 0.2.0, while independent expected metadata declares 1.0.
-No answer, schema change or expected-byte rewrite is inferred.
+The document-list occurrence correction #1897 is closed by
+[#1901](https://github.com/elong0527/yamaa/pull/1901), merged as
+`48eb58c30e3cb9ca587b6c237a77a63977b644ef`. Current installed R qualification
+remains affected by the prepared SDK/benchmark-lock mismatch tracked in #1907;
+its corrective [#1909](https://github.com/elong0527/yamaa/pull/1909) is in review.
+Semantic composition, original inherited capture and generators remain #1758.
+The approved [#1887 decision](https://github.com/elong0527/yamaa/issues/1887)
+adds an optional bounded nonempty section-level `source_system_version` override,
+defaulting to the installed yamaa version. Migrated fixtures explicitly declare
+`"1.0"` to preserve committed XML/JSON bytes; qualification records the actual
+generator version separately. Implementation remains #1758.
 
 See [the closing qualification record](1757-qualification.md) for actual local
 results and the distinction between those results and the CI platform matrix.
@@ -314,40 +319,41 @@ Continue with the following acceptance gates in the
    producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.
-   Settle #1866's publication lifecycle decision before closing #1741 acceptance.
-4. #1888 is closed by #1891 and #1893 by #1896 with its evidence limits above.
-   Complete #1897's document-list occurrence correction, then #1758's shared
-   Define-XML/Dataset-JSON implementation and three submission fixtures before retiring the old schema and generator.
+   Implement #1866's approved lifecycle: publication failure stops dependent
+   publication while retaining completed execution evidence and prior writes.
+4. #1888 is closed by #1891 and #1893 by #1896 with its evidence limits above;
+   #1897 is closed by #1901. Restore current installed R qualification through
+   #1907, then complete #1758's shared Define-XML/Dataset-JSON implementation,
+   approved source-system-version override and three submission fixtures before
+   retiring the old schema and generator.
 5. Close the remaining language/API gaps in #1751/#1752/#1754 and the executable
    inventory, migrate every supported benchmark runner, and qualify complete
    output, issues, logs and exact saved bytes through both installed public APIs.
 6. Complete #1740/#1742's numerical, reproducibility, platform and representative
-   performance gates. Remove duplicate evaluators and superseded APIs only after
-   the approved complete supported matrix passes.
+   performance gates, including required Windows R (#1903), approved resource
+   paths (#1905) and locked Cargo builds (#1906). Remove duplicate evaluators and
+   superseded APIs only after the approved complete supported matrix passes.
 
-## Decisions still separate from implementation
+## Approved decisions and remaining qualification
 
-The pending declaring-file-only path policy has not been adopted: current
-approved roots, configuration and fallback behavior remain. The maintainer
-approved pinned `PortableLibmV1` for implementation and qualification on
-2026-10-10, accepting the documented historical Python differences and their
-downstream effects. See the [decision record](1757-maintainer-decisions.md) and
-[math policy](../MATH_POLICY.md). Release representations, Windows R scope, Cargo
-reproducibility and performance budgets retain their decisions and qualification
-gates; numerical approval does not close them.
+The [maintainer decision record](maintainer-decisions.md) records eight choices
+approved on 2026-10-10. #1866, #1887 and #1857 are closed as decisions; their
+workflow, submission and Windows R implementation gates remain #1741, #1758 and
+#1903. #1751 records issues-only checks, lossless full-range R integer vectors and
+JSON-text diagnostic context. The declaring-file path replacement is approved
+and tracked in #1905; current resource-root behavior remains until that change
+qualifies.
 
-[#1866](https://github.com/elong0527/yamaa/issues/1866) records one unanswered
-workflow publication decision. The existing build computes the graph in memory
-before explicit Save publishes held bytes. #1741's literal publication-failure
-wording cannot prevent dependent execution already completed before Save.
-The recommendation preserves this lifecycle and stops dependent publication on a
-producer Save failure while retaining completed execution evidence. No answer or
-acceptance change is inferred; independent graph preparation can continue.
+The Cargo packaging exception in [AGENTS.md](../../AGENTS.md) permits one canonical
+`rust/Cargo.lock` and unchanged staged Python/R source-package copies. Commit the
+lock, enforce locked builds and obtain clean installed evidence under #1906.
+Runtime identity, contract, activation-cache and resource-snapshot digests remain
+prohibited. Existing Python UV locks and hash-free R study locks remain usable.
 
-AGENTS.md still permits tool hashes only in the existing `python/uv.lock`.
-Additional digest-bearing lock files are not authorized. The verified existing
-UV-lock and hash-free renv restore paths allow independent locked-package work
-without changing that convention. The maintainer approved continuing along those
-paths on 2026-10-10, with no additional digest-bearing lock files. Keep old
-submission and reference assessment paths until their replacements qualify, and
-keep acceptance issues open until their own complete criteria are fulfilled.
+The previously approved pinned `PortableLibmV1` policy and its accepted historical
+Python differences remain in force; see [the numerical decision](1757-maintainer-decisions.md)
+and [math policy](../MATH_POLICY.md). Full language/API qualification, retained
+helper dispositions, the remaining version/architecture/distribution matrix,
+representative measurements and numeric performance budgets remain release gates.
+Keep old submission and reference assessment paths until their replacements
+qualify. These decisions do not authorize default cutover or close #1585.

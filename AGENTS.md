@@ -37,8 +37,12 @@ Do not reintroduce SHA-256 (or any digest field) to give something an
 identity. Compare the canonical form directly, and keep the bytes when
 equality has to be decided on bytes.
 
-The one exception is `python/uv.lock`, whose hashes belong to the packaging
-tool and are not the repository's own provenance.
+The packaging-tool exceptions are `python/uv.lock` and the canonical
+`rust/Cargo.lock`, including unchanged copies staged into Python/R source
+packages. Their checksum fields belong to the packaging tools and are not
+the repository's own provenance. This exception does not permit runtime
+identity digests, hashed contract fingerprints, activation-cache digests or
+resource-snapshot digests.
 
 ## Label the benchmark runtime `opensas`
 

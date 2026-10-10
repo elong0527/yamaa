@@ -4,15 +4,17 @@ The concise [current migration assessment](migration-status.md) records the
 qualified implementation frontier and remaining acceptance gates as of 2026-10-10.
 The historical evidence below retains each slice's original scope and provenance.
 
-The current serial order follows merged #1757/#1858/#1860/#1863/#1867/#1869/#1871/#1874/#1877/#1881/#1883/#1888:
-complete #1741 ordered producer publication after #1866 is answered; independently
-complete #1897's document-list diagnostic occurrence correction after #1893/#1896
-and its [recorded evidence limits](1893-qualification.md), before
-#1758 submission outputs
-and the remaining language/API/release gates. #1857 retains the separate Windows R
-release decision; #1866 retains the publication lifecycle decision for #1741.
-Numerical policy and reuse of existing UV/hash-free R locks were approved
-on 2026-10-10; the historical decision requests below do not reopen them.
+The current serial order follows merged #1757/#1858/#1860/#1863/#1867/#1869/#1871/#1874/#1877/#1881/#1883/#1888/#1893/#1897:
+complete #1741 ordered producer publication under the approved #1866 lifecycle;
+restore current installed R qualification through #1907 and complete #1758
+submission composition/outputs after the landed declaration owners. Preserve
+#1893's [recorded evidence limits](1893-qualification.md), then close the
+remaining language/API/release gates. The
+[2026-10-10 maintainer decisions](maintainer-decisions.md) require Windows R and
+settle the public result representations, source-system-version override,
+declaring-file paths and Cargo packaging exception. The numerical policy was
+approved earlier that day. Historical decision requests below do not reopen
+those choices; implementation and qualification remain separate.
 
 Reconciled 2026-10-08 against main `ebf1f9e7f15bc16839501eaa48d2d9dde6b71521`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.
@@ -403,11 +405,14 @@ Unix regressions are draft evidence; immutable package installations, Windows
 execution, complete final-head review and artifact auditing are required before
 this slice merges. #1739 and B01 remain open pending that qualification.
 
-Issues-only checks, lossless character-backed R integer vectors and explicit raw
-vectors for NUL-containing strings remain candidates for the final release API.
+At that qualification boundary, issues-only checks, lossless character-backed R
+integer vectors and explicit raw vectors for NUL-containing strings were final
+API candidates. The later maintainer decision approves issues-only checks and
+`yamaa_int64_vector`; the NUL-string representation still needs disposition.
 Environment activation and declared logs remain unsupported before study access,
 without reference fallback. Existing approved roots, configuration discovery and
-fallback searches remain while the declaring-file path-policy approval is pending.
+fallback searches remain in that implementation; the subsequently approved
+declaring-file replacement is tracked in #1905.
 Retained reference helpers continue independent assessment. Broader language,
 environment/functions, workflows, submission, benchmark runner migration, API
 cleanup and release gates remain open; the 945-row assisted inventory is unchanged.
@@ -426,10 +431,10 @@ component-only evidence for the remaining original-YAML frontend gates.
 | 2 | #1755; #1754 alongside each moved service | Define the engine-owned resource, codec, publication, environment and function ports and shared fakes. Move semantic decisions out of adapters as those services migrate. Preserve failure/read/publication order; do not build new features on JSON host callbacks or adapter-owned planning. |
 | 3 | #1751 foundation, #1739 | Finish the reviewed path/API rules, file ports, failure reports and bounded `domain`/`check` facade over the landed shared schema/compiler services. Connect the original-YAML conformance frontend for the now-implemented lookup, full windows and inherited entrypoint. Qualify all six original documents through both installed hosts and promote only evidenced `shared_run` tuples. |
 | 4 | #1757 | Land environment/function/codelist rules and schema, shared static admission, lock verification and per-build function testing before study reads; migrate the five function benchmarks and equivalent R projects. Use the reviewed new format rather than extending the retired artifact/cache design. |
-| 5 | #1741 | Retain qualified #1883 installed producer builds and typed root results; settle #1866 before final ordered publication acceptance. Then qualify the producer workflow on the compiled representation and ports, including activation-before-data, producer-once execution, rounded serialized consumer inputs, failure ledgers and explicit save gates. |
-| 6 | #1888, then #1758 | Admit closed owned typed submission declarations before the shared generator. Complete shared Define-XML and Dataset-JSON generation from environment sections, migrate the three submission benchmarks and only then retire `define.yaml` and its loaders/schema. Preserve the existing committed XML/JSON bytes for fixed creation time. |
+| 5 | #1741 | Retain qualified #1883 installed producer builds and typed root results. Implement #1866's approved lifecycle and qualify activation-before-data, producer-once execution, rounded serialized consumer inputs, failure ledgers and explicit producer-first Save of held bytes. Publication failure stops dependent publication and preserves completed execution evidence. |
+| 6 | #1758 after #1888/#1893 | Compose the qualified owned submission declarations and complete shared Define-XML/Dataset-JSON generation. Implement #1887's approved source-system-version override, migrate all three fixtures with explicit `"1.0"`, and preserve committed fixed-time XML/JSON bytes before retiring `define.yaml` and its loaders/schema. |
 | 7 | #1585, #1751, #1754 | Close remaining language-family gaps from the executable inventory; qualify the full public API matrix, finish adapter cleanup, migrate benchmark runners/docs and remove superseded APIs/probes after their replacements pass. |
-| 8 | #1742, #1585 | Complete release/build reproducibility, installed support matrix, representative performance/memory evidence and approved budgets; perform the qualified transition and remove duplicate evaluators. |
+| 8 | #1742, #1585 | Complete locked Cargo builds (#1906), required Windows R qualification (#1903), the installed support matrix, representative performance/memory evidence and approved budgets; perform the qualified transition and remove duplicate evaluators. |
 
 This order is incremental, not an all-or-nothing prerequisite chain. In step 1,
 the diagnostic type and first exercised mappings unblock the compiled model;
@@ -453,20 +458,21 @@ the non-transcendental cohort:
 - **#1740:** retain the existing numerical evidence and compatibility witnesses,
   and use the reconciled #1751 proposal: one numerical behavior per locked yamaa
   release. The old per-run selectable policy proposal is not the target public
-  API. Record the maintainer's numerical choice before changing production
-  behavior, then qualify it in both hosts and every affected compute context.
+  API. The pinned PortableLibmV1 choice is approved; qualify it in both hosts
+  and every affected final compute context.
 - **#1742:** maintain the [release blocker register and declared API inventory](release-readiness.md),
   using the API replacement in #1751 rather than assuming legacy API preservation.
-  Reproducible Cargo dependencies, Windows R scope and numeric performance budgets
-  remain explicit decisions. Measure representative shared workloads once their
-  compiler/workflow paths exist; tiny fixtures cannot support speedup claims.
-- **#1751:** record the three public representation decisions: `check`'s result,
-  R's full-range integer behavior and `issues.context`. The current full-i64
-  contract cannot silently lose INT64_MIN through bit64's missing-value sentinel.
-- **#1757:** the proposed study/benchmark uv/renv lock-file checksum exception
-  needs explicit maintainer approval. Until then, AGENTS.md still permits only
-  `python/uv.lock`. Do not introduce other digest fields or weaken that convention.
-  Rules/schema and static environment work can proceed independently.
+  Cargo locking and required Windows R scope are approved; complete #1906 and
+  #1903 and the rest of the supported matrix. Numeric performance budgets still
+  need representative measurements and a recorded decision. Measure shared
+  workloads once their paths exist; tiny fixtures cannot support speedup claims.
+- **#1751:** qualify the approved issues-only check result, JSON-text context and
+  full-range `yamaa_int64_vector` with missingness separate from INT64_MIN. Finish
+  the retained-helper dispositions and implement the approved paths under #1905.
+- **#1757/#1906:** retain existing Python UV and hash-free R study locks. The
+  approved Cargo packaging exception permits the canonical `rust/Cargo.lock` and
+  unchanged staged copies; complete its locked build paths and clean evidence.
+  Runtime digests and additional checksum exceptions remain prohibited.
 
 Coordinate the environment submission classes in #1757 with #1758. Adding the new
 classes does not permit deleting the old Define-XML schema or loaders before the
@@ -494,6 +500,7 @@ and focused tests, not silent edits during an architectural move.
 - Keep #1585 open through complete supported scope and transition. Bounded
   milestones and decision preparation alone cannot close the migration.
 
-The current unattended-work authorization permits creating and merging PRs. It
-does not supply answers to the explicitly open numerical/lock-file decisions.
-Continue independent work and retain those blockers until they are resolved.
+The maintainer's recorded decisions supply the implementation choices above.
+They do not replace final qualification or explicit release-transition approval.
+Continue independent implementation and retain every remaining acceptance gate
+until its linked evidence or scope disposition is complete.
