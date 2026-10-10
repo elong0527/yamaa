@@ -281,18 +281,28 @@ structural admission precedes model or finding growth. Independent core cases
 cover every current vocabulary, order/default/null/shape distinctions, cumulative
 limits and retention after input deletion. See
 [the boundary](../SPECIFICATION_SUBMISSION_DECLARATIONS.md).
-The active corrective prerequisite is
-[#1897 document-list rejection occurrence facts](https://github.com/elong0527/yamaa/issues/1897).
-Malformed environment document items must identify their actual sequence
-container, absent mapping key and item node alongside the authored section/index
-path. Independent cases cover all three families, multiple positions, complete
-quota refusals and unaffected valid ownership after input deletion. Full fresh
-current-source qualification, reviewed exact-head CI and a protected merge guard
-remain required before this correction closes. Semantic composition, original
-inherited capture and generators remain #1758.
+[#1897 document-list rejection occurrence facts](https://github.com/elong0527/yamaa/issues/1897)
+is closed by [#1901](https://github.com/elong0527/yamaa/pull/1901), merged through
+GitHub at `48eb58c30e3cb9ca587b6c237a77a63977b644ef`. Malformed environment
+document items now identify their actual sequence container, absent mapping key
+and item node alongside the authored section/index path. Independent cases cover
+all three families, multiple positions, complete quota refusals and unaffected
+valid ownership after input deletion. This chat did not execute its final merge
+guard: fresh 0.3.0 strict R qualification failed because five benchmark SDK locks
+still pinned 0.2.0. PR #1904 corrected those pins before #1901 merged. The original failure is scoped
+to its preceding base; earlier passing 0.2.0 evidence is not current-release proof.
+See [the merge observation](https://github.com/elong0527/yamaa/pull/1901#issuecomment-6102664991).
+
+The active [#1907 SDK lock coherence correction](https://github.com/elong0527/yamaa/issues/1907)
+retains #1904's existing SDK corrections and adds an early repository guard plus
+an actual installed mismatch refusal witness. Program versions and independent truth
+remain unchanged. See [the correction contract](../BENCHMARK_SDK_LOCKS.md).
+Complete fresh current-source qualification and a protected merge guard remain
+required. Semantic composition, original inherited capture and generators remain
+#1758.
 [#1887](https://github.com/elong0527/yamaa/issues/1887) separately asks whether an
 explicit source-system-version override should preserve existing XML/JSON bytes:
-installed packages are 0.2.0, while independent expected metadata declares 1.0.
+prepared packages are 0.3.0, while independent expected metadata declares 1.0.
 No answer, schema change or expected-byte rewrite is inferred.
 
 See [the closing qualification record](1757-qualification.md) for actual local
@@ -316,7 +326,7 @@ Continue with the following acceptance gates in the
    ingestion, retain failures and publish only through explicit successful save.
    Settle #1866's publication lifecycle decision before closing #1741 acceptance.
 4. #1888 is closed by #1891 and #1893 by #1896 with its evidence limits above.
-   Complete #1897's document-list occurrence correction, then #1758's shared
+   Complete #1907's release SDK lock correction, then #1758's shared
    Define-XML/Dataset-JSON implementation and three submission fixtures before retiring the old schema and generator.
 5. Close the remaining language/API gaps in #1751/#1752/#1754 and the executable
    inventory, migrate every supported benchmark runner, and qualify complete
