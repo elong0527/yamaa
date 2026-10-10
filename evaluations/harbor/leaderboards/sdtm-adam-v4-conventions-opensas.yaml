@@ -164,7 +164,7 @@ harbor:
     when its output matches every golden cell, the verifier's rerun of
     `/app/output/result.sas` from a clean state writes the same output, the
     held-out rerun and required changed-input challenges pass, and the agent
-    used no Python, R, Lua or web tool. One row per model variant.
+    used only opensas throughout the workflow and no web tool. One row per model variant.
   visibility: private
   metadata_schema:
     type: object
