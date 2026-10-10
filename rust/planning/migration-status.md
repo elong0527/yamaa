@@ -267,17 +267,29 @@ limits and retention after the original document drops. See
 [qualification record](1888-qualification.md). This metadata model provides no
 execution, rendering, artifact-read or publication authority.
 
-The active independent #1758 prerequisite is
-[#1893 specification submission declarations](https://github.com/elong0527/yamaa/issues/1893).
+[#1893 specification submission declarations](https://github.com/elong0527/yamaa/issues/1893)
+is closed by [#1896](https://github.com/elong0527/yamaa/pull/1896), merged through
+GitHub as `8b369f1a96359f5454ab5669b476308be80cdad3` while this chat prepared a
+rebase after main advanced. The final merge guard was not executed by this chat.
+All nine authored paths equal the previously qualified head, but the whole merged
+tree differs through intervening main changes. Its old-base qualification and
+precise limits are recorded in [the evidence ledger](1893-qualification.md).
 Its closed metadata owner retains dataset and ordered columns, existing defaults,
 plain/structured alternatives, document/page references, arbitrary-width integer
 declarations and normalized occurrence facts. Complete non-owning resource and
 structural admission precedes model or finding growth. Independent core cases
 cover every current vocabulary, order/default/null/shape distinctions, cumulative
 limits and retention after input deletion. See
-[the boundary](../SPECIFICATION_SUBMISSION_DECLARATIONS.md). Full qualification
-and reviewed exact-head CI remain required before #1893 closes. Semantic
-composition, original inherited capture and generators remain #1758.
+[the boundary](../SPECIFICATION_SUBMISSION_DECLARATIONS.md).
+The active corrective prerequisite is
+[#1897 document-list rejection occurrence facts](https://github.com/elong0527/yamaa/issues/1897).
+Malformed environment document items must identify their actual sequence
+container, absent mapping key and item node alongside the authored section/index
+path. Independent cases cover all three families, multiple positions, complete
+quota refusals and unaffected valid ownership after input deletion. Full fresh
+current-source qualification, reviewed exact-head CI and a protected merge guard
+remain required before this correction closes. Semantic composition, original
+inherited capture and generators remain #1758.
 [#1887](https://github.com/elong0527/yamaa/issues/1887) separately asks whether an
 explicit source-system-version override should preserve existing XML/JSON bytes:
 installed packages are 0.2.0, while independent expected metadata declares 1.0.
@@ -303,8 +315,8 @@ Continue with the following acceptance gates in the
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.
    Settle #1866's publication lifecycle decision before closing #1741 acceptance.
-4. #1888 is closed by #1891. Complete #1893's bounded specification submission
-   declarations, then #1758's shared
+4. #1888 is closed by #1891 and #1893 by #1896 with its evidence limits above.
+   Complete #1897's document-list occurrence correction, then #1758's shared
    Define-XML/Dataset-JSON implementation and three submission fixtures before retiring the old schema and generator.
 5. Close the remaining language/API gaps in #1751/#1752/#1754 and the executable
    inventory, migrate every supported benchmark runner, and qualify complete

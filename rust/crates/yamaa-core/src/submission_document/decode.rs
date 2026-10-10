@@ -528,8 +528,10 @@ impl<'a> Parser<'a, '_> {
         path: Path,
     ) -> Result<Option<DocumentReference>, Cause> {
         let origin = Origin {
+            container: parent.node.expect("document list occurrence"),
+            key: None,
             node: Some(node),
-            ..parent
+            field: FieldName::Documents,
         };
         if !self.mapping(origin, path, DOCUMENT)? {
             return Ok(None);
