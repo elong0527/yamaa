@@ -155,6 +155,11 @@ def test_confident_sas_reference_matches_original_golden(tmp_path, name):
         tmp_path / "none.json",
     )
     assert result["passed"], result
+    # Changed-input reference outputs become goldens. They need canonical
+    # headers even though an agent's column order is not itself graded.
+    for spec in build.contract_for(benchmark, "sas")["outputs"]:
+        header, _ = grade.read_rows(output / spec["file"])
+        assert header == spec["columns"], (name, spec["file"], header)
 
 
 def _edge_case(tmp_path, name, inputs, output_name):
