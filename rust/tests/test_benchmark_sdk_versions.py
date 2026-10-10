@@ -93,6 +93,52 @@ class BenchmarkSdkVersions(unittest.TestCase):
                 path.unlink()
             self.assertEqual(guard.violations(root), ["no benchmark R SDK locks found"])
 
+    def test_unreadable_prepared_metadata_and_invalid_toml_remain_violations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture(root)
+            for name in ("R/yamaa/DESCRIPTION", "python/pyproject.toml"):
+                path = root / name
+                original = path.read_bytes()
+                path.unlink()
+                self.assertTrue(guard.violations(root)[0].startswith(name + ": unreadable"))
+                path.mkdir()
+                self.assertTrue(guard.violations(root)[0].startswith(name + ": unreadable"))
+                path.rmdir()
+                path.write_bytes(b"\xff")
+                self.assertTrue(guard.violations(root)[0].startswith(name + ": unreadable"))
+                self.assertEqual(path.read_bytes(), b"\xff")
+                path.write_bytes(original)
+            (root / "python/pyproject.toml").write_text('project = "unterminated')
+            self.assertTrue(guard.violations(root)[0].startswith(
+                "python/pyproject.toml: unreadable or invalid metadata: "
+            ))
+
+    def test_unreadable_lock_retains_bytes_and_does_not_hide_later_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = fixture(root)
+            second = root / "benchmarks/second/r/renv.lock"
+            second.write_text(second.read_text().replace('"0.3.0"', '"0.2.0"'))
+            original_second = second.read_bytes()
+            for unreadable in (False, True):
+                with self.subTest(unreadable=unreadable):
+                    if unreadable:
+                        first.unlink()
+                        first.mkdir()
+                    else:
+                        first.write_bytes(b"\xff")
+                    errors = guard.violations(root)
+                    self.assertEqual(len(errors), 2)
+                    self.assertTrue(errors[0].startswith(
+                        "benchmarks/first/r/renv.lock: unreadable or invalid JSON: "
+                    ))
+                    self.assertEqual(errors[1],
+                        "benchmarks/second/r/renv.lock: SDK version '0.2.0' differs from prepared '0.3.0'")
+                    self.assertEqual(second.read_bytes(), original_second)
+                    if not unreadable:
+                        self.assertEqual(first.read_bytes(), b"\xff")
+
 
 if __name__ == "__main__":
     unittest.main()

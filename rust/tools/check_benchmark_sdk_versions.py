@@ -9,18 +9,26 @@ from pathlib import Path
 def violations(root: Path) -> list[str]:
     errors = []
     description = root / "R/yamaa/DESCRIPTION"
+    try:
+        description_text = description.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        return [f"R/yamaa/DESCRIPTION: unreadable metadata: {error}"]
     versions = [
         line.removeprefix("Version:").strip()
-        for line in description.read_text(encoding="utf-8").splitlines()
+        for line in description_text.splitlines()
         if line.startswith("Version:")
     ]
     if len(versions) != 1 or not versions[0]:
         return ["R/yamaa/DESCRIPTION must declare exactly one nonempty Version"]
     expected = versions[0]
-    python = tomllib.loads((root / "python/pyproject.toml").read_text(encoding="utf-8"))
-    project = python.get("project")
-    if not isinstance(project, dict) or project.get("version") != expected:
-        errors.append("prepared Python/R SDK versions differ")
+    try:
+        python = tomllib.loads((root / "python/pyproject.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        errors.append(f"python/pyproject.toml: unreadable or invalid metadata: {error}")
+    else:
+        project = python.get("project")
+        if not isinstance(project, dict) or project.get("version") != expected:
+            errors.append("prepared Python/R SDK versions differ")
     locks = sorted((root / "benchmarks").glob("*/r/renv.lock"))
     if not locks:
         errors.append("no benchmark R SDK locks found")
@@ -28,8 +36,8 @@ def violations(root: Path) -> list[str]:
         name = lock.relative_to(root).as_posix()
         try:
             document = json.loads(lock.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as error:
-            errors.append(f"{name}: invalid JSON: {error}")
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError) as error:
+            errors.append(f"{name}: unreadable or invalid JSON: {error}")
             continue
         packages = document.get("Packages") if isinstance(document, dict) else None
         sdk = packages.get("yamaa") if isinstance(packages, dict) else None

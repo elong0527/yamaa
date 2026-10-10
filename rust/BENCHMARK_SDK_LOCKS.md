@@ -18,9 +18,11 @@ adds the automatic coherence guard and installed mismatch regression. No program
 version, lock structure, digest, input, conformance vector or expected output is
 changed. `tools/check_benchmark_sdk_versions.py` compares the prepared Python/R
 versions and every benchmark R SDK entry directly. It reads metadata only, writes
-nothing, and runs before native Rust and package builds. Five independent guard
+nothing, and runs before native Rust and package builds. Seven independent guard
 cases cover coherent immutable files, the original mismatch, missing or malformed
-SDK entries, host-version disagreement and original JSON failures.
+SDK entries, host-version disagreement, unreadable or invalid metadata and
+original JSON failures. A bad lock retains its original bytes and does not hide
+a later independently authored mismatch.
 
 The installed R producer witness separately constructs a valid SDK lock for
 version 99.0.0 and removes the study input after preparation. The actual installed
