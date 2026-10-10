@@ -79,7 +79,7 @@ def test_reference_derives_renamed_subject_inputs(tmp_path, language):
 
 def test_a_subject_keyed_task_requires_the_changed_input_challenge(tmp_path):
     assert build.contract_for(AGE_GROUP, "r")["challenge_required"]
-    task = build.build_task(AGE_GROUP, tmp_path, build.IMAGE, "test", "r")
+    task = build.build_task(AGE_GROUP, tmp_path, None, "test", "r")
     tests = task / "tests"
     assert json.loads((tests / "contract.json").read_text())["challenge_required"]
     assert (tests / "sandbox.py").is_file() and (tests / "task.toml").is_file()
@@ -87,7 +87,7 @@ def test_a_subject_keyed_task_requires_the_changed_input_challenge(tmp_path):
         p.name for p in (task / "environment" / "input").iterdir()
     )
     dockerfile = (tests / "Dockerfile").read_text()
-    assert dockerfile.startswith(f"FROM {build.IMAGE}\n")
+    assert dockerfile.startswith(f"FROM {build.VERIFIER_IMAGES['r']}\n")
     assert "COPY input/ /tests/input/" in dockerfile
     assert "RUN chmod 700 /tests" in dockerfile
 
@@ -143,7 +143,7 @@ def test_a_correct_answer_needs_an_audit_in_model_jobs(tmp_path):
 
 
 def test_a_model_job_requires_a_trajectory(tmp_path):
-    task = build.build_task(AGE_GROUP, tmp_path, build.IMAGE, "test", "r")
+    task = build.build_task(AGE_GROUP, tmp_path, None, "test", "r")
     config = build.job_config(
         [task],
         model="opencode-go/muse-spark-1.3-contributor",
@@ -289,7 +289,8 @@ def test_an_older_protocol_or_uncommitted_build_cannot_be_ranked(tmp_path):
 
 def test_the_oracle_workflow_builds_the_tasks_image():
     workflow = (ROOT / ".github" / "workflows" / "harbor-oracle.yml").read_text()
-    assert f"docker build -t {build.IMAGE} evaluations/harbor" in workflow
+    assert "python evaluations/harbor/images.py build" in workflow
+    assert "python evaluations/harbor/images.py verify" in workflow
 
 
 def test_minute_precision_fever_reference_passes_complete_changed_input_challenge(

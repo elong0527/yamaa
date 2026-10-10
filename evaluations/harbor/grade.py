@@ -61,26 +61,37 @@ CHALLENGE_SEED = 20261001
 # script. Only a call counts: the program's name in a grep pattern, a quoted
 # string, a comment, or a heredoc body is not one.
 INTERPRETERS = {"r": "Rscript", "python": "python3", "opensas": "opensas"}
+# Protocol 4 applies the same helper-runtime restriction to all tracks.
+ADDITIONAL_RUNTIMES = (
+    r"lua[\d.]*|node(?:js)?|npm|npx|deno|bunx?|perl|ruby|julia|php|java|javac"
+    r"|gcc|g\+\+|clang(?:\+\+)?|cc|c\+\+|rustc|cargo|zig|go"
+)
 OTHER_LANGUAGE_PROGRAMS = {
-    "r": re.compile(r"python[\d.]*|pip[\d.]*|ipython[\d.]*|jupyter|uvx?|sas|opensas"),
-    # `r` is littler, the R front end rocker images install.
-    "python": re.compile(r"R|Rscript|r|sas|opensas"),
+    "r": re.compile(
+        r"python[\d.]*|pip[\d.]*|ipython[\d.]*|jupyter|uvx?|sas|opensas|"
+        + ADDITIONAL_RUNTIMES
+    ),
+    # `r` is littler, an optional R front end.
+    "python": re.compile(r"R|Rscript|r|sas|opensas|" + ADDITIONAL_RUNTIMES),
     "opensas": re.compile(
-        r"R|Rscript|r|python[\d.]*|pip[\d.]*|ipython[\d.]*|jupyter|uvx?|lua[\d.]*"
-        r"|node(?:js)?|deno|bun|perl|ruby|julia|php|java|javac"
-        r"|gcc|g\+\+|clang(?:\+\+)?|cc|c\+\+|rustc|cargo|zig|go"
+        r"R|Rscript|r|python[\d.]*|pip[\d.]*|ipython[\d.]*|jupyter|uvx?|"
+        + ADDITIONAL_RUNTIMES
     ),
 }
 OTHER_LANGUAGE_IN_SCRIPT = {
     "r": re.compile(
         r"\b(?:library|require|requireNamespace)\s*\(\s*['\"]?reticulate\b"
         r"|\breticulate::"
-        r"|\bsystem2?\s*\(\s*['\"][^'\"]*\b(?:python[\d.]*|pip[\d.]*|sas|opensas)\b"
+        r"|\bsystem2?\s*\(\s*['\"][^'\"]*\b(?:python[\d.]*|pip[\d.]*|sas|opensas|"
+        + ADDITIONAL_RUNTIMES
+        + r")\b"
     ),
     "python": re.compile(
         r"\b(?:import|from)\s+rpy2\b"
         r"|\b(?:subprocess\.\w+|os\.(?:system|popen|exec\w*|spawn\w*))\s*\("
-        r"\s*\[?\s*['\"](?:[^'\"]*/)?(?:Rscript|R|sas|opensas)\b"
+        r"\s*\[?\s*['\"](?:[^'\"]*/)?(?:Rscript|R|r|sas|opensas|"
+        + ADDITIONAL_RUNTIMES
+        + r")\b"
     ),
     "opensas": re.compile(
         r"\bproc\s+(?:python|lua)\b|\b(?:call\s+)?system\s*\("

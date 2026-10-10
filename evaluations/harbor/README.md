@@ -8,7 +8,7 @@ Docker; this folder only writes Harbor task directories and a job file.
 
 | File | Role |
 |---|---|
-| `Dockerfile` | the base image: Python and R data packages, opensas v0.6.6, OpenCode's offline settings |
+| `Dockerfile`, `images.py` | build and verify a separate agent/verifier image pair per language, including Harbor's OpenCode setup |
 | `system-r.md`, `system-python.md`, `system-opensas.md` | the shared system prompt per language: use only that language and write `result.R`/`result.py`/`result.sas` |
 | `prompts/` | the prompts, `<benchmark>/full.md`, `conventions.md`, and `brief.md`, one file per tier; what each tier means is in [`prompts/README.md`](prompts/README.md) |
 | `brief.py` | writes each `brief.md` from its `full.md` |
@@ -44,14 +44,15 @@ How to write a prompt is in
 
 ## What a run enforces
 
-- **One language per task.** Each task's `instruction.md` is the shared
+- **One language throughout each task.** Each task's `instruction.md` is the shared
   system prompt for its language (`system-r.md`, `system-python.md` or `system-opensas.md`)
   followed by the benchmark's prompt of the task's tier, which itself
   never names a language. The R track requires `/app/output/result.R`,
   the Python track `/app/output/result.py`, and the opensas track
   `/app/output/result.sas`, each rerunnable to reproduce
   the datasets. A
-  shell call that runs the other language zeroes the trial: `python`,
+  shell call that attempts another runtime zeroes the trial, including
+  inspection, editing, debugging, help/version probes and failed commands: `python`,
   `pip`, or `uv` on the R track, `R` or `Rscript` on the Python track, as a
   command (also behind `env`, `sudo`, `timeout`, `bash -c`, or `$(...)`).
   Naming one is not a call: in a `grep` pattern, a quoted string, a
@@ -60,6 +61,12 @@ How to write a prompt is in
   `import rpy2` or `subprocess.run(["Rscript", ...])` in Python. R/Python
   tracks also reject calls to opensas. opensas rejects Python, R and Lua calls,
   PROC PYTHON/LUA and shell bridges such as SYSTEM, X, PIPE and SYSEXEC.
+  All tracks reject other helper runtimes, including Node/Bun, Lua, Perl,
+  Java and compilers. Use OpenCode file tools or shell text tools for
+  inspection and editing, and the required language for data calculations.
+  Generated OpenCode permissions deny common foreign-runtime commands; the
+  independent trajectory audit remains the authority for scoring. A denied
+  attempted tool call still violates the policy.
 - **The agent sees only the prompt and `/app/input/`.** Specifications,
   READMEs, golden files, and input schemas (`*.schema.yaml`) never enter
   its container; the golden files live in `tests/`, which Harbor builds
@@ -121,8 +128,29 @@ needs it): Linux, or OrbStack on macOS. Docker Desktop may lack it.
 
 ```bash
 uv sync --project python --group harbor
-docker build -t yamaa-harbor-env:0.7 evaluations/harbor
+uv run --project python --no-sync python evaluations/harbor/images.py build
+uv run --project python --no-sync python evaluations/harbor/images.py verify
 ```
+
+The six image targets are `agent-r`, `agent-python`, `agent-opensas` and
+`verifier-r`, `verifier-python`, `verifier-opensas`. Agent images expose only
+that track's benchmark runtime. OpenCode's Node infrastructure and standard
+shell tools remain available; they are covered by the workflow language rules.
+Verifier images contain the same language runtime plus Python for the trusted
+grader, and have no model agent or network access. The Python verifier reuses
+its existing runtime; the R verifier adds PyArrow for Parquet grading.
+The opensas verifier needs only the Python standard library for CSV grading.
+
+`images.py verify` checks runtime isolation and approved packages before and
+after invoking Harbor's pinned OpenCode installer. This catches setup packages
+that introduce a foreign runtime. Its disposable containers are removed on
+completion; diagnostics and a summary are saved under `image-checks/`.
+A deterministic local provider also tests explicit command denies through the
+actual pinned Harbor runner, confirms the required runtime still executes,
+and checks that denied attempts survive trajectory conversion and grading.
+This requires no remote model or credential. The permission configuration uses
+[OpenCode's granular rules](https://opencode.ai/docs/permissions/); the audit
+still catches attempts that a shell wrapper hides from those rules.
 
 ## Build and check the tasks
 
@@ -146,9 +174,10 @@ uv run --project python --no-sync python evaluations/harbor/build.py \
 	--model opencode-go/muse-spark-1.3-contributor
 ```
 
-One build covers both tracks (`--language r python`, the default); pass
-`--language r` or `--language python` to build a single track. Each
-benchmark becomes `<benchmark>-r` and `<benchmark>-python` tasks.
+One build covers R/Python (`--language r python`, the default). Add
+`--language opensas` for that track, or `--language r python opensas` for all
+three. Each model job contains one language and uses its own agent/verifier
+image pair. Each benchmark becomes a task suffixed with its language.
 A benchmark is skipped, with its reason on stderr, when the grader
 cannot check it: its golden is a warning or violation log, a golden cell
 holds a token the grader reads as no value (`NA`, `.`), a column's type is
@@ -240,7 +269,8 @@ No engine is built. Harbor's separate verifier still uses clean outputs,
 unprivileged execution, held-out subjects and required changed-input checks.
 
 ```bash
-docker build -t yamaa-harbor-env:0.7 evaluations/harbor
+uv run --project python --no-sync python evaluations/harbor/images.py build
+uv run --project python --no-sync python evaluations/harbor/images.py verify
 uv run --project python --no-sync python evaluations/harbor/smoke.py \
     --language opensas --all-cases --prompt full --n-concurrent 6 \
     --out ~/.cache/yamaa-harbor-opensas
@@ -255,6 +285,30 @@ weekly and through the Harbor Oracle workflow's manual dispatch.
 For a model evaluation, pass `--language opensas` to `build.py`; it creates a
 separate opensas dataset, job and leaderboard per requested prompt tier.
 R/Python remain the default selection when no language is given.
+
+## Prepare a fresh full comparison
+
+After reviewing and merging the harness change, start from that clean commit,
+build and verify the six images, and pass the offline preflight above. Then
+use a fresh output directory to prepare all nine jobs:
+
+```bash
+uv run --project python --no-sync python evaluations/harbor/build.py \
+    --language r python opensas --prompt full conventions brief \
+    --model opencode-go/muse-spark-1.3-contributor \
+    --n-attempts 1 --n-concurrent 1 \
+    --job-name muse-spark-1.3-language-images \
+    --out ~/.cache/yamaa-harbor-language-images
+```
+
+This prepares 1,218 trials: 136 R, 136 Python and 134 opensas cases in each
+prompt tier. Exclusions remain reported. Run at most six job processes in
+parallel, each with one active trial; start the remaining three as slots free
+up. Keep the default model variant, one attempt per task, and all failures.
+Use `run.py` for each generated configuration so completed jobs retain private
+Hub uploads, exact dataset associations and release-specific leaderboard links.
+Do not resume or combine the cancelled protocol-3 jobs with this comparison.
+A small model pilot should pass the workflow policy before launching all jobs.
 
 ## Run an agent
 
@@ -360,7 +414,8 @@ rules, and whose rows are uploaded runs that point back to their trials.
   its language and prompt tier.
 - `grading_protocol`: the verifier's checks a run must have been graded
   with (`GRADING_PROTOCOL` in `build.py`, recorded in every task).
-- `image_reference`: the runtime reference every ranked row must use.
+- `image_reference` and `verifier_image_reference`: the agent and verifier
+  references every ranked row must use.
 - `tasks` and `attempts`: the benchmarks a run must cover and the fewest
   attempts on each (every buildable benchmark, one attempt), with the
   same number of attempts on every task.
@@ -373,22 +428,23 @@ A leaderboard's tasks are its fixed question, as a Hub leaderboard is
 pinned to dataset versions: adding a task leaves earlier runs without it,
 and `export` then refuses them. Start a new leaderboard instead. There is
 one leaderboard per dataset, so one per language and prompt tier
-(`yamaa/yamaa-sdtm-adam-r/sdtm-adam-v3-r`,
-`yamaa/yamaa-sdtm-adam-brief-r/sdtm-adam-v3-brief-r`, ...), and R, Python,
-and each tier are ranked independently. All boards rank by complete task pass
+(`yamaa/yamaa-sdtm-adam-r/sdtm-adam-v4-r`,
+`yamaa/yamaa-sdtm-adam-brief-r/sdtm-adam-v4-brief-r`, ...), and R, Python,
+opensas and each tier are ranked independently. All boards rank by complete task pass
 rate before cell accuracy. Shorter prompts can leave sponsor choices unstated,
 so their strict pass rates include the model's ability to infer those choices.
-The boards are `v3` because
-grading protocol 3 changes derivation inputs, grades regenerated partial
-answers, and requires complete job evidence. Older scores stay on their
+The boards are `v4` because protocol 4 separates the language images,
+records both runtime references, and applies the helper-runtime restriction
+to every track. Protocol 3's changed-input checks, regenerated partial credit
+and complete job evidence remain required. Older scores stay on their
 existing boards. Export appends the full source commit to the Hub board name
-and pins that commit and image reference in its metadata schema, so separately
+and pins that commit and both image references in its metadata schema, so separately
 published runs cannot mix releases. Compared jobs must share the same commit.
 
 A row is one job: one agent, model, and variant, so the variants of a model
 sit side by side. Its metadata comes from the job (agent, version, model,
 variant, date, attempts, job and Harbor version, and the yamaa commit,
-grading protocol, and image of its tasks, read from the `task.toml` each
+grading protocol, and agent/verifier references of its tasks, read from the `task.toml` each
 trial's verifier saved), the effective agent configuration with credentials
 redacted, and its metrics from its trials on the
 leaderboard's tasks:
@@ -468,10 +524,10 @@ the job directories and create the board and its rows:
 
 ```bash
 uv run --project python --no-sync python evaluations/harbor/leaderboard.py \
-	export sdtm-adam-v3-r \
+	export sdtm-adam-v4-r \
 	~/.cache/yamaa-harbor/jobs/muse-spark-1.3-contributor-r-low
 $H hub leaderboard create \
-	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-v3-r.leaderboard.yaml
+	--config ~/.cache/yamaa-harbor/hub/sdtm-adam-v4-r.leaderboard.yaml
 ```
 
 `export` takes the board's dataset from its `package`; `--package`
@@ -493,15 +549,17 @@ effective agent settings within each row.
 It also refuses a trial without the grading evidence `grade.json` keeps
 (a checked trajectory, and the challenge where one is required), and a
 job whose tasks do not share one committed (not `+dirty`) yamaa commit,
-the board's grading protocol, and one image. `--hide` exports its rows
-hidden. Repeat for `sdtm-adam-v3-python` with the Python jobs. The published
-tasks build from the local `yamaa-harbor-env:0.7` image, so they run where
-that image is built.
+the board's grading protocol, and the board's agent/verifier image pair. `--hide` exports its rows
+hidden. Repeat for `sdtm-adam-v4-python` with the Python jobs. The published
+tasks build from `yamaa-harbor-agent-<language>:0.8` and
+`yamaa-harbor-verifier-<language>:0.8`, so both images must be built locally.
 
-Build the runtime once for a comparison and reuse that artifact reference.
+Build each image pair once for a comparison and reuse those artifact references.
 The catalog comes from the pinned OpenCode binary, with model fetching off;
 there is no live catalog download during the image build. Package managers
 still resolve system and Node packages during builds, so rebuilding a local
 tag is not a reproducibility guarantee. For shared evaluations, publish the
-image once under an immutable versioned reference and set `image_reference`
-on the board to that reference before running it (`build.py --image`).
+agent/verifier images once under immutable versioned references and set both
+references on the board before running (`build.py --language <language>
+--image <agent-reference> --verifier-image <verifier-reference>`). Image
+overrides require exactly one language.

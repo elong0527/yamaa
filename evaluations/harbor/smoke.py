@@ -44,18 +44,22 @@ def main() -> None:
         choices=list(build.LANGUAGES),
         default=list(build.DEFAULT_LANGUAGES),
     )
-    parser.add_argument("--image", default=build.IMAGE)
+    parser.add_argument("--image")
+    parser.add_argument("--verifier-image")
     parser.add_argument(
         "--prompt", nargs="+", choices=list(build.TIERS), default=["full"]
     )
     parser.add_argument("--n-concurrent", type=int, default=6)
     args = parser.parse_args()
+    if (args.image or args.verifier_image) and len(args.language) != 1:
+        parser.error("image overrides require exactly one language")
     names = sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
     tasks, skipped = build.build_selection(
         names,
         languages=args.language,
         tasks_dir=args.out / "tasks",
         image=args.image,
+        verifier_image=args.verifier_image,
         commit=build.git_commit(),
         strict=False,
         tiers=tuple(args.prompt),
@@ -78,7 +82,7 @@ def main() -> None:
         probe_task = build.build_task(
             build.BENCHMARKS / "adam-adsl-age-group",
             args.out / "probe",
-            args.image,
+            None,
             build.git_commit(),
             "python",
         )

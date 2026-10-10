@@ -31,7 +31,7 @@ def test_opensas_selection_builds_all_134_native_input_cases(tmp_path):
         PROMPTED,
         languages=["opensas"],
         tasks_dir=tmp_path,
-        image=build.IMAGE,
+        image=None,
         commit="test",
         strict=False,
     )
@@ -60,21 +60,19 @@ def test_explicit_unsupported_opensas_case_fails_instead_of_silently_staging(
     name, tmp_path
 ):
     with pytest.raises(build.BuildError, match=build.OPENSAS_EXCLUSIONS[name]):
-        build.build_task(
-            build.BENCHMARKS / name, tmp_path, build.IMAGE, "test", "opensas"
-        )
+        build.build_task(build.BENCHMARKS / name, tmp_path, None, "test", "opensas")
 
 
 def test_every_opensas_board_ranks_the_same_confident_set():
     for tier in build.TIERS:
         suffix = "opensas" if tier == "full" else f"{tier}-opensas"
         board = yaml.safe_load(
-            (HARBOR / "leaderboards" / f"sdtm-adam-v3-{suffix}.yaml").read_text()
+            (HARBOR / "leaderboards" / f"sdtm-adam-v4-{suffix}.yaml").read_text()
         )
         assert sorted(board["tasks"]) == sorted(
             build.task_name(n, "opensas", tier) for n in CONFIDENT
         )
-        assert board["image_reference"] == build.IMAGE
+        assert board["image_reference"] == build.AGENT_IMAGES["opensas"]
         assert board["package"] == build.dataset_name(
             build.DATASET_PREFIX, "opensas", tier
         )
