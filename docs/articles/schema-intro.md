@@ -18,7 +18,7 @@ keys: [STUDYID, USUBJID]
 | Entry point | What it validates |
 |---|---|
 | `schema.yaml` | One specification: one output dataset |
-| `schema_environment.yaml` | One project environment: runtime, function contracts, bindings |
+| `schema_environment.yaml` | One project environment: packaging lock, versionless installed functions, inline tests, codelists, and submission metadata |
 | `schema_define.yaml` | One study document: Define-XML composition inputs |
 
 Each entry point pulls in shared modules with `includes`. For a
