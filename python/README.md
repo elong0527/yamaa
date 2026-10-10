@@ -485,9 +485,13 @@ intermediates:
 ```
 
 An incomplete match value is answered before a record is looked for and an
-unmatched key after, and the two stay disjoint. Omitting `unmatched` keeps
-the behavior of the match the lookup performs: missing when it matches on
-output keys, fatal when it declares its own `source` and `key`.
+unmatched key after, and the two stay disjoint. A `source` binding answers an
+absent source variable with its `absent` handler (REQ-0345); an intermediate
+answers an unmatched key with `no_match` (REQ-0129). Omitting the handler
+keeps the behavior of the match the lookup performs: missing when it matches
+on output keys (REQ-0111), fatal when it declares its own `key` — an
+`unmatched_key` failure for an intermediate (REQ-0129), an unhandled-absent
+failure for a `source` binding (REQ-0334).
 
 `yamaa.runtime.rows` owns grouped row construction. A template with
 `group_by` partitions the complete driver relation, orders the groups by the
