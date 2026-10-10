@@ -152,7 +152,7 @@ attempts: 1
 # published and the jobs uploaded.
 harbor:
   name: sdtm-adam-v3-sas
-  title: yamaa SDTM and ADaM v3 (SAS)
+  title: yamaa derivation v3 (SAS)
   description: >-
     The 134 confident yamaa derivation benchmarks, including BIMO, solved
     in SAS with openSAS v0.6.6. An agent gets the SAS system prompt, the benchmark's

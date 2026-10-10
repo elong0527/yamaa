@@ -67,6 +67,8 @@ OTHER_LANGUAGE_PROGRAMS = {
     "python": re.compile(r"R|Rscript|r|sas|opensas"),
     "sas": re.compile(
         r"R|Rscript|r|python[\d.]*|pip[\d.]*|ipython[\d.]*|jupyter|uvx?|lua[\d.]*"
+        r"|node(?:js)?|deno|bun|perl|ruby|julia|php|java|javac"
+        r"|gcc|g\+\+|clang(?:\+\+)?|cc|c\+\+|rustc|cargo|zig|go"
     ),
 }
 OTHER_LANGUAGE_IN_SCRIPT = {

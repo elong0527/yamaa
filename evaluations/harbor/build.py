@@ -15,9 +15,8 @@ prompt by default:
       tests/               grade.py, contract.json, the golden files, and the
                            reference solution for the held-out rerun, built
                            into the separate verifier image
-      solution/            the result.R/result.py Harbor's oracle agent runs:
-                           the benchmark's reference solution in solutions/,
-                           or else a script that writes the golden files
+      solution/            result.R/result.py/result.sas run by the oracle:
+                           the benchmark's reference solution in solutions/
     <out>/datasets/[<tier>-]<language>/README.md   the page of one Harbor Hub
                            dataset, <prefix>-[<tier>-]<language>
     <out>/configs/<job>.json   one Harbor job per tier, language, and
@@ -35,7 +34,7 @@ one build runs against any provider. Run from the repository root:
     uv run --project python --group harbor python evaluations/harbor/run.py \\
         -c ~/.cache/yamaa-harbor/configs/muse-spark-1.3-contributor-r-low.json
 
-Pass `--language r` or `--language python` to build only one track, and
+Pass `--language r`, `--language python` or `--language sas` to build one track, and
 `--prompt conventions brief` to build the ablation tiers.
 """
 
@@ -594,8 +593,11 @@ def dataset_readme(
         )
     label, script = LANGUAGES[language]["label"], LANGUAGES[language]["script"]
     article = "an" if language == "r" else "a"
-    other = next(lang for lang in LANGUAGES if lang != language)
-    other_label = LANGUAGES[other]["label"]
+    others = [lang for lang in LANGUAGES if lang != language]
+    other_label = " or ".join(LANGUAGES[lang]["label"] for lang in others)
+    other_datasets = ", ".join(
+        f"`{dataset_name(prefix, lang, tier)}`" for lang in others
+    )
     track = f"{label} track" if tier == "full" else f"{label} track, {tier} prompts"
     given = (
         ""
@@ -613,8 +615,8 @@ Agent evaluation tasks built from [yamaa]({REPO}) benchmarks, {track}.
 In each task an AI coding agent gets a benchmark's prompt and input data in
 a sandbox with no internet, writes {article} {label} script that derives the
 requested CDISC dataset, and is graded cell by cell against the benchmark's
-expected data. The same benchmarks in {other_label} are the dataset
-`{dataset_name(prefix, other, tier)}`, ranked on their own leaderboard.{given}
+expected data. The other language datasets are {other_datasets}, each with
+its own supported cases and leaderboard.{given}
 
 Built from yamaa commit {_commit_label(commit)} by
 {_source_link(commit, "evaluations/harbor/build.py")}.

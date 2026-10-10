@@ -108,7 +108,15 @@ def test_sas_mentions_are_not_language_calls(tmp_path, text):
 
 
 @pytest.mark.parametrize(
-    "command", ["python3 x.py", "env Rscript x.R", "uv run x.py", "lua x.lua"]
+    "command",
+    [
+        "python3 x.py",
+        "env Rscript x.R",
+        "uv run x.py",
+        "lua x.lua",
+        "node x.js",
+        "gcc x.c",
+    ],
 )
 def test_sas_trajectory_rejects_other_language_commands(command):
     assert grade.other_language_calls(command, "sas")

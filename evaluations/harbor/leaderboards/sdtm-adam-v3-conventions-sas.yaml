@@ -6,8 +6,8 @@
 # the same question. Metrics are computed from the listed tasks only.
 # What each prompt tier keeps is in evaluations/harbor/prompts/README.md;
 # rows rank by complete task pass rate first; cell accuracy is secondary.
-# This board is the whole SAS track on the conventions prompts: every buildable
-# SDTM and ADaM benchmark, each requiring `/app/output/result.sas`.
+# This board covers 134 confident derivation cases on conventions prompts;
+# exclusions are in build.py SAS_EXCLUSIONS. Each task requires `/app/output/result.sas`.
 grading_protocol: "3"
 image_reference: yamaa-harbor-env:0.6
 package: yamaa/yamaa-sdtm-adam-conventions-sas
@@ -154,7 +154,7 @@ attempts: 1
 # published and the jobs uploaded.
 harbor:
   name: sdtm-adam-v3-conventions-sas
-  title: yamaa SDTM and ADaM v3, conventions prompts (SAS)
+  title: yamaa derivation v3, conventions prompts (SAS)
   description: >-
     The 134 confident yamaa derivation benchmarks, including BIMO, solved in SAS with openSAS v0.6.6.
     An agent gets the SAS system prompt, the benchmark's conventions prompt
