@@ -160,7 +160,11 @@ def collected_precision(text: str) -> Precision | None:
             return None
         return "day"
     if _YEAR_MONTH.fullmatch(text) is not None:
-        return "month" if 1 <= int(text[5:7]) <= 12 else None
+        # REQ-0578: the year-0 rejection matches the `_YEAR` branch below and
+        # the `_DATE_TEXT` branch above (via `dt.date.fromisoformat`), so a
+        # year-month prefix of no calendar date reads as no date prefix at
+        # all rather than month precision over year 0.
+        return "month" if int(text[:4]) >= 1 and 1 <= int(text[5:7]) <= 12 else None
     if _YEAR.fullmatch(text) is not None:
         return "year" if int(text) >= 1 else None
     return None

@@ -66,6 +66,11 @@ def _condition(
         ("20250102", None),
         ("2025-01-15T00:00:00", None),
         ("", None),
+        # REQ-0578: year 0 is not a calendar year, so every truncation of a
+        # year-0 text reads as no date prefix at all.
+        ("0000", None),
+        ("0000-01", None),
+        ("0000-01-15", None),
     ],
 )
 def test_only_a_date_or_a_date_prefix_carries_a_precision(
@@ -74,6 +79,32 @@ def test_only_a_date_or_a_date_prefix_carries_a_precision(
     # REQ-0578: the collected text is prefix truncation only, and REQ-0582
     # gives a day without its month no representation to describe.
     assert collected_precision(text) == expected
+
+
+def test_a_year_zero_month_prefix_is_invalid_date_text() -> None:
+    # REQ-0588: "0000-01" is not a date prefix (year 0 admits no calendar
+    # date), so both readers answer invalid text rather than crashing or
+    # reporting month precision.
+    impute = _condition(
+        "date_impute",
+        {"source": "S", "day": 15, "month": 1},
+        {"S": "0000-01"},
+    )
+    assert impute.condition.condition == "invalid_date_text"
+    assert impute.condition.requirement == "REQ-0588"
+    assert impute.condition.context == {
+        "operation": "date_impute",
+        "source": "S",
+        "value": "0000-01",
+    }
+    precision = _condition("date_precision", {"source": "S"}, {"S": "0000-01"})
+    assert precision.condition.condition == "invalid_date_text"
+    assert precision.condition.requirement == "REQ-0588"
+    assert precision.condition.context == {
+        "operation": "date_precision",
+        "source": "S",
+        "value": "0000-01",
+    }
 
 
 def test_precision_is_read_from_a_value_or_from_the_text_it_came_from() -> None:
