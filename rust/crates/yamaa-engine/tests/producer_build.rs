@@ -764,7 +764,7 @@ fn alias_cells_and_codec_storage_and_work_are_reserved_before_decoded_table_owne
         } else if mode == 3 {
             assert_eq!(attempt.nodes.len(), 2);
             assert!(entered.dataset.sources[0].snapshot.is_some());
-            assert!(entered.dataset.sources[1].snapshot.is_none());
+            assert_eq!(entered.dataset.sources.len(), 1);
             assert!(entered.dataset.sources.iter().all(|s| s.table.is_none()));
             assert!(!ports
                 .activation
@@ -772,13 +772,15 @@ fn alias_cells_and_codec_storage_and_work_are_reserved_before_decoded_table_owne
                 .borrow()
                 .iter()
                 .any(|s| s == "decode:FIRST"));
+            let Err(PortError::Run(yamaa_engine::specification_run::RunError::Sources(errors))) =
+                &entered.dataset.result
+            else {
+                panic!("original bounded decoder refusal")
+            };
+            assert_eq!(errors.len(), 1);
             assert!(matches!(
-                entered.dataset.result,
-                Err(PortError::Run(
-                    yamaa_engine::specification_run::RunError::Decode(build::DecodeError::Limit(
-                        "producer_routing_work"
-                    ))
-                ))
+                errors[0],
+                (0, build::DecodeError::Limit("producer_routing_work"))
             ));
         } else {
             assert_eq!(attempt.nodes.len(), 1);
