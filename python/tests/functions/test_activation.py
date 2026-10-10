@@ -15,7 +15,7 @@ import sys
 from types import ModuleType
 
 import pytest
-from conftest import RECORDING_CODE
+from _recording_code import RECORDING_CODE
 
 from yamaa.functions import (
     ACTIVATION_CACHE,
