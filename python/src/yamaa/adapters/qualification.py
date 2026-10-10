@@ -46,6 +46,7 @@ class ManifestEntry(Record):
     status: Literal["executable", "blocked"]
     runtimes: list[Host] = Field(default_factory=list)
     blocked_by: str | None = Field(default=None, pattern=r"^#[1-9][0-9]*$")
+    reference_retired_by: str | None = Field(default=None, pattern=r"^#[1-9][0-9]*$")
 
     @model_validator(mode="after")
     def validate_status(self):
@@ -53,6 +54,10 @@ class ManifestEntry(Record):
             raise ValueError("executable entries must declare runtimes")
         if self.status == "blocked" and self.blocked_by is None:
             raise ValueError("blocked entries must name an issue")
+        if self.reference_retired_by is not None and (
+            self.status != "executable" or "python" not in self.runtimes
+        ):
+            raise ValueError("reference retirement requires an executable Python entry")
         return self
 
 
@@ -331,7 +336,11 @@ def qualify(
             errors.append(f"required qualification missing or regressed: {identity}")
     # The existing manifest is an independent baseline, never rewritten from runs.
     for name, entry in manifest.examples.items():
-        if entry.status == "executable" and "python" in entry.runtimes:
+        if (
+            entry.status == "executable"
+            and "python" in entry.runtimes
+            and entry.reference_retired_by is None
+        ):
             row = index.get((name, "python", "python", "reference_run"))
             if row is None or row.result != "pass":
                 errors.append(f"reference baseline missing or regressed: {name}")

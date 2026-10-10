@@ -147,6 +147,11 @@ pub fn kind(bytes: &[u8]) -> Result<yamaa_core::project_environment::LockKind, E
             .as_table()
             .ok_or(Error::Shape("uv package record"))?;
         for key in ["name", "version"] {
+            // uv may omit an unresolved dynamic version. Activation checks
+            // versions only for yamaa and packages selected by called functions.
+            if key == "version" && !package.contains_key(key) {
+                continue;
+            }
             let value = package
                 .get(key)
                 .and_then(toml::Value::as_str)

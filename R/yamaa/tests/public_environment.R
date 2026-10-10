@@ -1,4 +1,11 @@
 library(yamaa)
+domain_file_native <- get("wrap__domain_file", asNamespace("yamaa"))
+for (capabilities in list(list(), list(NULL, function(...) NULL, function(...) NULL))) {
+  reply <- .Call(domain_file_native, charToRaw("absent-spec.yaml"),
+    charToRaw("absent-environment.yaml"), charToRaw(as.character(getRversion())), capabilities)
+  stopifnot(identical(reply$error, if (length(capabilities) == 0L)
+    "invalid project host capabilities" else "invalid lock capability"))
+}
 root <- system.file("project-original", package = "yamaa", mustWork = TRUE)
 rawfile <- function(path) readBin(path, "raw", n = file.info(path)$size)
 readtext <- function(path) readLines(path, warn = FALSE)

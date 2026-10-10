@@ -28,6 +28,56 @@ fn assign(column: usize, expression: Expression) -> Assignment {
     }
 }
 
+#[test]
+fn whole_column_windows_cannot_be_hidden_inside_selected_case_branches() {
+    use yamaa_core::{
+        bound_expression::{Binding, BoundPredicate, Read},
+        dataset::{CaseBranch, OrderTerm, Window, WindowKind},
+    };
+    let output = schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]);
+    let window = Expression::Window(Window {
+        kind: WindowKind::RowNumber,
+        group_by: vec![],
+        order_by: vec![OrderTerm {
+            column: 0,
+            descending: false,
+            nulls_first: false,
+        }],
+        filter: None,
+    });
+    let make = |expression| {
+        DatasetPlan::new(
+            output.clone(),
+            output.clone(),
+            vec![RowTemplate {
+                mode: RowMode::Keys,
+                assignments: vec![assign(0, Expression::Source(0))],
+                filter: None,
+            }],
+            vec![assign(1, expression)],
+            vec![0],
+            vec![],
+        )
+    };
+    assert!(make(window.clone()).is_ok());
+    let predicate = BoundPredicate::new(
+        yamaa_core::predicate_compiler::compile("ID > 0", "case.when", Default::default()).unwrap(),
+        vec![Binding {
+            name: "ID".into(),
+            read: Read::Column(0),
+        }],
+    )
+    .unwrap();
+    let mut nested = window;
+    for _ in 0..2 {
+        nested = Expression::Case(vec![CaseBranch {
+            when: Some(predicate.clone()),
+            assignment: Box::new(assign(1, nested)),
+        }]);
+        assert_eq!(make(nested.clone()), Err(PlanError::InvalidWindow));
+    }
+}
+
 fn verification(check: Check) -> Verification {
     Verification {
         path: "verifications[0]".into(),

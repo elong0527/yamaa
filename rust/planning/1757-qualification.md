@@ -47,15 +47,22 @@ other required rows and independent component truth stay in place. Supplemental
 inventories retain 24 Python suites and 18 R suites, with the new public suites
 classified as `shared_run` separately from component/compile contracts.
 
+The execution manifest records `reference_retired_by: '#1757'` for the five
+project studies. Their installed public suites replace the retired reference
+baseline gate, while all other executable reference baselines remain required.
+Retirement does not turn a missing or unsupported report into a pass, suppress
+a supplied failing report, or allow native parity qualification without its
+reference. The broader inventory retains every route and its actual result.
+
 ## Qualification and remaining scope
 
-Local qualification passes 982 shared Rust tests in each of debug and optimized
-`release-test`, strict workspace Clippy, 48 Rust tooling tests, 407 repository
+Local qualification passes 986 shared Rust tests in each of debug and optimized
+`release-test`, strict workspace Clippy, 48 Rust tooling tests, 410 repository
 validator tests, dependency/release-API guards, rule/style checks and Python
 formatting/lint. Both installed Python forms pass all 24 supplemental suites;
 the updated public suite passes 13 methods directly in each form. The R source
 archive passes all 18 supplemental suites and strict `R CMD check` with
-`Status: OK`. The full Python regression replay passes 4,807 tests with 94
+`Status: OK`. The full Python regression replay passes 4,814 tests with 94
 skips. The retained legacy R submission schema copies remain byte-identical to
 the canonical shared/metadata/Define schemas.
 CI independently rebuilds packages from the PR revision and exercises all six
@@ -73,3 +80,13 @@ qualification remains #1741. Full supported-language/API coverage, reproducibili
 representative performance, release transition and remaining numerical/platform
 gates remain #1751/#1752/#1754/#1740/#1742/#1585. Closing #1757 does not close the
 Rust migration as a whole.
+
+The final review corrections preserve nested numeric/predicate grammar paths,
+reject whole-column windows inside cases and unimplemented implicit-group source
+predicates before study authority, allow uncalled uv records without resolved
+versions, retain pathless repository rejections, and validate R capabilities
+before metadata capture. Duplicate retired project frontend checks are removed;
+the actual installed public environment suites retain activation/data ordering
+coverage. Focused regressions, both rebuilt Python forms and strict R source
+checking cover these corrections. The Windows R release-scope decision is
+tracked separately in [#1857](https://github.com/elong0527/yamaa/issues/1857).

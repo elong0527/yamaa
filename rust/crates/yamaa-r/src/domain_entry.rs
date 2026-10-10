@@ -88,24 +88,6 @@ fn domain_file(
         #[cfg(unix)]
         {
             if let Some(environment) = environment {
-                let mut project = match yamaa_adapters::project_application::prepare(
-                    specification,
-                    environment,
-                    yamaa_core::project_function::Language::R,
-                ) {
-                    Ok(project) => project,
-                    Err(error) => {
-                        return store(State {
-                            result: None,
-                            project: None,
-                            issues: yamaa_adapters::project_application::failure(
-                                &error,
-                                yamaa_core::project_function::Language::R,
-                            ),
-                            _preparation: Some(error),
-                        })
-                    }
-                };
                 if capabilities.len() != 3 {
                     return Err("invalid project host capabilities".into());
                 }
@@ -124,6 +106,24 @@ fn domain_file(
                     .map_err(|_| "missing condition capability")?
                     .as_function()
                     .ok_or("invalid condition capability")?;
+                let mut project = match yamaa_adapters::project_application::prepare(
+                    specification,
+                    environment,
+                    yamaa_core::project_function::Language::R,
+                ) {
+                    Ok(project) => project,
+                    Err(error) => {
+                        return store(State {
+                            result: None,
+                            project: None,
+                            issues: yamaa_adapters::project_application::failure(
+                                &error,
+                                yamaa_core::project_function::Language::R,
+                            ),
+                            _preparation: Some(error),
+                        })
+                    }
+                };
                 let inner = project.build_with(|run| {
                     crate::project_activation::Port::new(
                         run.captured_environment()

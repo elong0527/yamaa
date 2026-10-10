@@ -5549,12 +5549,17 @@ def validate_spec_functions_against(spec, spec_label, spec_path, schema_env,
     import shutil
     from yamaa._native import _check_project_metadata
     root = spec_path.parents[1].parent
+    try:
+        source = yaml.load(environment_path.read_text(encoding='utf-8'), Loader=UniqueKeyLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        return [f"ERROR: {environment_path}: {exc}"]
+    if not isinstance(source, dict):
+        return [f"ERROR: {environment_path}: expected a mapping"]
     with tempfile.TemporaryDirectory(prefix="yamaa-project-validation-") as temporary:
         case = Path(temporary) / spec_path.parent.name
         shutil.copytree(spec_path.parent, case)
         # Reuse the one permitted packaging lock; never author benchmark locks.
         destination = case / environment_path.relative_to(spec_path.parent)
-        source = yaml.load(environment_path.read_text(), Loader=UniqueKeyLoader)
         language = source.get('language', 'python')
         if language == 'python' and source.get('lock') == 'uv.lock':
             shutil.copyfile(root / 'python/uv.lock', destination.parent / 'uv.lock')
@@ -5564,9 +5569,10 @@ def validate_spec_functions_against(spec, spec_label, spec_path, schema_env,
             if condition == 'unsupported_feature':
                 continue  # Other contracts retain their independent validators.
             facts = json.loads(context) if context else {}
-            for path in paths:
+            for path in paths or [None]:
                 errors.append(validation_diagnostic(
-                    f"{spec_label}.{path}", condition, condition, context=facts))
+                    f"{spec_label}.{path}" if path is not None else str(environment_path),
+                    condition, condition, context=facts))
         return errors
 
 

@@ -408,7 +408,7 @@ fn validate_assignment_at(
             lookup::validate(lookup, secondary, available, output)?;
         }
         Expression::Window(window) => {
-            if !matches!(mode, RowMode::Keys) {
+            if depth != 0 || !matches!(mode, RowMode::Keys) {
                 return Err(PlanError::InvalidWindow);
             }
             window.validate(available, output)?;

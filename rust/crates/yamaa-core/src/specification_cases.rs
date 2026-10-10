@@ -9,7 +9,7 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub(super) struct Branch {
-    when: Option<Plan>,
+    when: Option<Result<Plan, crate::diagnostic::Diagnostic>>,
     path: String,
     operation: alloc::boxed::Box<Operation>,
 }
@@ -25,6 +25,7 @@ pub(super) fn prepare(
     path: &str,
     project: Option<&functions::Prepared>,
     intermediates: &intermediates::Declarations,
+    record: bool,
     depth: usize,
 ) -> Result<Vec<Branch>, PrepareError> {
     if depth > 64 || path.len() > 65_536 {
@@ -48,11 +49,30 @@ pub(super) fn prepare(
             (None, value, format!("{prefix}.otherwise"))
         } else {
             let when = text(d, field(d, item, "when")?)?;
-            let when =
-                predicate_compiler::compile(when, &format!("{prefix}.when"), Default::default())
-                    .map_err(|_| unsupported(&format!("{prefix}.when"), "case_predicate"))?;
+            let compiled =
+                predicate_compiler::compile(when, &format!("{prefix}.when"), Default::default());
+            let compiled = match compiled {
+                Ok(plan) => {
+                    // Raw predicate reads require a current driver record. A
+                    // non-key implicit group has no such record; reject this
+                    // unimplemented case scope before granting study authority.
+                    if !record && plan.identifiers().iter().any(|name| name.contains('.')) {
+                        return Err(unsupported(
+                            &format!("{prefix}.when"),
+                            "case_source_predicate",
+                        ));
+                    }
+                    Ok(plan)
+                }
+                Err(predicate_compiler::Error::Parse(
+                    crate::predicate_parser::ParseError::Grammar {
+                        position, failure, ..
+                    },
+                )) => Err(failure.diagnostic(&format!("{prefix}.when"), when, position.character)),
+                Err(_) => return Err(unsupported(&format!("{prefix}.when"), "case_predicate")),
+            };
             (
-                Some(when),
+                Some(compiled),
                 field(d, item, "then")?,
                 format!("{prefix}.then"),
             )
@@ -75,20 +95,35 @@ pub(super) fn prepare(
                 &result_path,
                 project,
                 intermediates,
+                record,
                 depth + 1,
             )?),
-            "compute" => Operation::Compute(
-                compile_numeric_with_policy(
-                    text(d, field(d, payload, "expr")?)?,
+            "compute" => {
+                let expression = text(d, field(d, payload, "expr")?)?;
+                match compile_numeric_with_policy(
+                    expression,
                     &result_path,
                     Default::default(),
                     crate::numeric_compiler::MathPolicy::PortableLibmV1,
-                )
-                .map_err(|error| PrepareError::Numeric {
-                    path: format!("{result_path}.expr"),
-                    error,
-                })?,
-            ),
+                ) {
+                    Ok(compiled) => Operation::Compute(compiled),
+                    Err(error @ CompileError::Parse(ParseError::Grammar { .. })) => {
+                        Operation::InvalidNumeric {
+                            expression: expression.into(),
+                            error,
+                        }
+                    }
+                    Err(CompileError::Unsupported { .. }) => {
+                        return Err(unsupported(&result_path, "numeric_function"))
+                    }
+                    Err(error) => {
+                        return Err(PrepareError::Numeric {
+                            path: format!("{result_path}.expr"),
+                            error,
+                        })
+                    }
+                }
+            }
             "source" => {
                 let mut features = Vec::new();
                 let source = source_expressions::Declaration::prepare(
@@ -133,7 +168,14 @@ pub(super) fn bind(
         let when = branch
             .when
             .as_ref()
-            .map(|plan| {
+            .map(|compiled| {
+                let plan = match compiled {
+                    Ok(plan) => plan,
+                    Err(diagnostic) => {
+                        findings.push(BindFinding::Predicate(diagnostic.clone()));
+                        return Ok(None);
+                    }
+                };
                 let mut bindings = Vec::new();
                 for name in plan.identifiers() {
                     if let Some(binding) = catalog.bind(name).map_err(BindError::Catalog)? {
@@ -167,6 +209,14 @@ pub(super) fn bind(
             .transpose()?
             .flatten();
         let expression = match branch.operation.as_ref() {
+            Operation::InvalidNumeric { expression, error } => {
+                findings.push(BindFinding::Numeric {
+                    path: format!("{}.expr", branch.path),
+                    expression: expression.clone(),
+                    error: error.clone(),
+                });
+                None
+            }
             Operation::Literal(value) => Some(Expression::Literal(value.clone())),
             Operation::Case(branches) => bind(
                 spec,

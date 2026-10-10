@@ -160,6 +160,7 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    Predicate(crate::diagnostic::Diagnostic),
     ProjectFunction(FunctionFinding),
     Source(SourceFinding),
     Window(WindowFinding),
@@ -1076,6 +1077,7 @@ impl PreparedSpecification {
                     &path,
                     project.as_ref(),
                     &intermediates,
+                    keys.contains(&column),
                     0,
                 )?)),
                 "function" if project.is_some() => Some(Operation::ProjectFunction(

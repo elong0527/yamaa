@@ -1976,6 +1976,30 @@ class TestExecutionManifestGate(unittest.TestCase):
             ],
         )
 
+    def test_reference_retirement_requires_an_issue_and_executable_python_entry(self):
+        entries = (
+            {'status': 'executable', 'runtimes': ['python'], 'reference_retired_by': 1757},
+            {'status': 'executable', 'runtimes': ['python'], 'reference_retired_by': '1757'},
+            {'status': 'blocked', 'blocked_by': '#1', 'reference_retired_by': '#1757'},
+            {'status': 'executable', 'runtimes': ['r'], 'reference_retired_by': '#1757'},
+        )
+        for entry in entries:
+            with self.subTest(entry=entry):
+                errors = EXECUTION_CHECK.check_manifest(
+                    {'version': '1.0', 'examples': {'one': entry}}, ['one']
+                )
+                self.assertEqual(len(errors), 1)
+                self.assertIn('reference_retired_by', errors[0])
+        self.assertEqual(
+            EXECUTION_CHECK.check_manifest(
+                {'version': '1.0', 'examples': {'one': {
+                    'status': 'executable', 'runtimes': ['python'],
+                    'reference_retired_by': '#1757',
+                }}}, ['one']
+            ),
+            [],
+        )
+
     def test_valid_minimal_manifest_passes(self):
         document = {
             'version': '1.0',
@@ -2191,6 +2215,36 @@ class TestValidationManifest(unittest.TestCase):
 
 
 class TestProjectFunctionEnvironment(unittest.TestCase):
+    def test_malformed_environment_is_reported_without_entering_native_check(self):
+        for content in (b'language: [', b'language: r\nlanguage: python\n', b'- r\n', b'\xff'):
+            with self.subTest(content=content), tempfile.TemporaryDirectory() as temporary:
+                case = Path(temporary) / 'benchmarks' / 'project'
+                case.mkdir(parents=True)
+                environment = case / 'environment.yaml'
+                environment.write_bytes(content)
+                with patch('yamaa._native._check_project_metadata') as native:
+                    errors = VALIDATOR.validate_spec_functions_against(
+                        {}, 'project.spec', case / 'spec.yaml', {}, [], {}, environment)
+                self.assertEqual(len(errors), 1)
+                self.assertIn(str(environment), str(errors[0]))
+                native.assert_not_called()
+
+    def test_pathless_native_rejections_are_reported_at_the_environment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            case = Path(temporary) / 'benchmarks' / 'project'
+            case.mkdir(parents=True)
+            (case / 'spec.yaml').write_text('schema_version: "1.0"\n')
+            environment = case / 'environment.yaml'
+            environment.write_text('language: r\n')
+            with patch('yamaa._native._check_project_metadata', return_value=[
+                ('validation', 'engine_rejected', None, [], '{"stage":"environment","code":"invalid_packaging_lock"}'),
+            ]):
+                errors = VALIDATOR.validate_spec_functions_against(
+                    {}, 'project.spec', case / 'spec.yaml', {}, [], {}, environment)
+            self.assertEqual(len(errors), 1)
+            self.assertIn(str(environment), str(errors[0]))
+            self.assertIn('engine_rejected', str(errors[0]))
+
     def test_authoritative_versionless_environment_and_call_shapes(self):
         root = TOOL_PATH.parents[3]
         environment, errors = VALIDATOR.build_schema_env(root, 'schema_environment.yaml')
