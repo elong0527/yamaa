@@ -1,0 +1,15 @@
+{
+  "R": {
+    "Version": "4.6.1"
+  },
+  "Packages": {
+    "yamaa": {
+      "Package": "yamaa",
+      "Version": "0.2.0"
+    },
+    "yamaabenchmarks": {
+      "Package": "yamaabenchmarks",
+      "Version": "1.0.0"
+    }
+  }
+}

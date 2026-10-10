@@ -18,15 +18,17 @@ pub(super) struct Run {
 }
 
 /// Reuse a selected record while recording each reading's own inherited handler site.
-pub(super) fn read<E>(
+#[allow(clippy::too_many_arguments)]
+pub(super) fn read<T: TableAccess + ?Sized>(
     index: usize,
     column: usize,
     assignment: &Assignment,
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
-    state: &mut EvaluationState<'_, E>,
-) -> Result<Value, Box<ExecutionError<E>>> {
+    primary: &T,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let item = &plan.intermediates()[index];
     let table = state.secondary[item.source];
     let choice = if let Some(choice) = state.intermediates.choices.get(&(row, index)) {
@@ -66,10 +68,41 @@ pub(super) fn read<E>(
         let eligible = &state.intermediates.eligible[&index];
         let mut count = 0;
         let mut selected = None;
-        if !item
-            .keys
+        state
+            .budget
+            .work(1, item.keys.len() + item.record_keys.len())?;
+        let mut keys = Vec::new();
+        for key in &item.keys {
+            let value = &candidate.values[key.output_column];
+            if let Value::Str(text) = value {
+                state.budget.scalar_text(text.len())?;
+            }
+            keys.push((key.source_column, value.clone()));
+        }
+        for key in &item.record_keys {
+            state.budget.work(candidate.members.len(), 1)?;
+            let value = key_grain::collect_bound(
+                primary,
+                key_grain::Collection {
+                    column: key.driver_column,
+                    identifier: &key.identifier,
+                    filter: None,
+                    selection: None,
+                },
+                key_grain::CollectionContext {
+                    path: &item.path,
+                    candidate,
+                    plan,
+                    row,
+                },
+                state.budget,
+                state.handlers,
+            )?;
+            keys.push((key.source_column, value));
+        }
+        if !keys
             .iter()
-            .any(|key| matches!(candidate.values[key.output_column], Value::Missing))
+            .any(|(_, value)| matches!(value, Value::Missing))
         {
             // First count every matching record without reading order or donor fields.
             let mut matching = Vec::new();
@@ -79,11 +112,9 @@ pub(super) fn read<E>(
                 .map_err(|_| Box::new(ExecutionError::Allocation))?;
             for &source_row in eligible {
                 let mut matches = true;
-                for key in &item.keys {
-                    let value = cell(table, item, source_row, key.source_column, state.budget)?;
-                    if Key::from(value)
-                        != Key::from(ValueRef::from(&candidate.values[key.output_column]))
-                    {
+                for (column, expected) in &keys {
+                    let value = cell(table, item, source_row, *column, state.budget)?;
+                    if Key::from(value) != Key::from(ValueRef::from(expected)) {
                         matches = false;
                         break;
                     }
@@ -103,7 +134,7 @@ pub(super) fn read<E>(
                         dataset: plan.secondary()[item.source].name.clone(),
                         intermediate: item.identifier.clone(),
                         match_count: count,
-                        matched_key: matched_key(item, table, candidate, state.budget)?,
+                        matched_key: matched_key(table, &keys, state.budget)?,
                         identity: failure_identity(candidate, plan.keys(), row, state.budget)?,
                     }));
                 }
@@ -121,7 +152,7 @@ pub(super) fn read<E>(
                 path: item.path.clone(),
                 dataset: plan.secondary()[item.source].name.clone(),
                 intermediate: item.identifier.clone(),
-                matched_key: matched_key(item, table, candidate, state.budget)?,
+                matched_key: matched_key(table, &keys, state.budget)?,
                 identity: failure_identity(candidate, plan.keys(), row, state.budget)?,
             }));
         };
@@ -159,24 +190,18 @@ pub(super) fn read<E>(
 
 /// Retain exact key values separately from output-row identity in join diagnostics.
 fn matched_key<E>(
-    item: &Intermediate,
     table: &dyn TableAccess<Error = E>,
-    candidate: &Candidate,
+    keys: &[(usize, Value)],
     budget: &mut Budget,
 ) -> Result<Vec<(String, Value)>, Box<ExecutionError<E>>> {
-    budget.work(1, item.keys.len())?;
-    budget.identity(
-        item.keys
-            .iter()
-            .map(|key| &candidate.values[key.output_column]),
-    )?;
-    Ok(item
-        .keys
+    budget.work(1, keys.len())?;
+    budget.identity(keys.iter().map(|(_, value)| value))?;
+    Ok(keys
         .iter()
-        .map(|key| {
+        .map(|(column, value)| {
             (
-                table.schema().columns()[key.source_column].name.clone(),
-                candidate.values[key.output_column].clone(),
+                table.schema().columns()[*column].name.clone(),
+                value.clone(),
             )
         })
         .collect())

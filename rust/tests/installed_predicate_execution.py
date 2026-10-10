@@ -7,7 +7,6 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
-import installed_project_functions as project_functions
 import installed_references as r
 from yamaa import _native as yamaa_native
 from yamaa.adapters import _native_dataset_plan, _native_predicate_plan
@@ -241,87 +240,6 @@ class PredicateExecution(unittest.TestCase):
             r.render_artifact(run.result.artifact), b"K,S\n1,cat\n2,\n3,bat\n4,\n"
         )
 
-    def test_filters_preserve_activation_callback_order_and_fatal_failures(self):
-        """Root selection precedes callbacks; record filters follow all row assignments."""
-        fixture = project_functions.InstalledProjectFunctions()
-        fixture.setUp()
-        self.addCleanup(fixture.doCleanups)
-        root = fixture.spec.model_copy(
-            update={"filter": "str_contains(SOURCE.ID, '^R[24]$')"}
-        )
-        rows = fixture.spec.model_copy(
-            update={
-                "columns": [fixture.spec.columns[0]]
-                + [
-                    column.model_copy(update={"derivation": None})
-                    for column in fixture.spec.columns[1:]
-                ],
-                "rows": [
-                    r.Row(
-                        id="records",
-                        dataset="SOURCE",
-                        derivations={
-                            column.name: column.derivation
-                            for column in fixture.spec.columns[1:]
-                        },
-                        filter="str_contains(SOURCE.ID, '^R2$')",
-                    )
-                ],
-            }
-        )
-        root_calls = [
-            project_functions.CALLS[offset + row]
-            for offset in (0, 5, 10, 15)
-            for row in (1, 3)
-        ]
-        row_calls = [
-            project_functions.CALLS[offset + row]
-            for row in range(5)
-            for offset in (0, 5, 10, 15)
-        ]
-        expected_lines = (
-            (project_functions.CASE / "expected" / "test.csv")
-            .read_bytes()
-            .splitlines(keepends=True)
-        )
-        for spec, calls, indexes in (
-            (root, root_calls, (0, 2, 4)),
-            (rows, row_calls, (0, 2)),
-        ):
-            fixture.events.clear()
-            fixture.read = False
-            with forbid_reference_predicates():
-                run = fixture.execute(spec=spec)
-            self.assertEqual(run.result.status, "success", run)
-            self.assertEqual(
-                r.render_artifact(run.result.artifact),
-                b"".join(expected_lines[i] for i in indexes),
-            )
-            self.assertEqual(
-                fixture.events, project_functions.VECTORS + ["source"] + calls
-            )
-        for spec, first_call, key in (
-            (root, root_calls[0], "R2"),
-            (rows, row_calls[0], None),
-        ):
-            fixture.events.clear()
-            fixture.read = False
-            fixture.mode = "raised"
-            with forbid_reference_predicates():
-                run = fixture.execute(spec=spec)
-            self.assertEqual(run.result.status, "failure")
-            self.assertEqual(
-                run.result.diagnostics[0].condition, "function_call_failed"
-            )
-            # Row assignments fail before the later key column exists; no
-            # partial identity may be fabricated for that failure.
-            self.assertEqual(
-                run.result.diagnostics[0].context.get("keys"),
-                None if key is None else [{"ID": key}],
-            )
-            self.assertEqual(
-                fixture.events, project_functions.VECTORS + ["source", first_call]
-            )
 
     def test_syntax_reasons_and_limits_remain_distinct_before_effects(self):
         """Rust reasons survive formatting, and compiler policies never become grammar errors."""
@@ -407,20 +325,15 @@ class PredicateExecution(unittest.TestCase):
                 self.subTest(project=project),
                 forbid_reference_predicates(),
                 patch.object(
-                    r.native_datasets,
-                    "activate_project",
+                    __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                    "verify_versions",
                     side_effect=AssertionError("activation"),
                 ),
             ):
                 spec = specification("row", text)
                 provider = lambda _: self.fail("source provider must not run")
                 if project:
-                    run = r.native_datasets.execute_with_project_functions(
-                        spec,
-                        provider,
-                        r.ROOT / "specification-functions" / "python",
-                        r.SCHEMA,
-                    )
+                    run = r.native_datasets.execute_with_source_provider(spec, provider)
                 else:
                     run = r.native_datasets.execute_with_source_provider(spec, provider)
             self.assertEqual(run.result.status, "failure")
@@ -452,8 +365,8 @@ class PredicateExecution(unittest.TestCase):
                     yamaa_native, "dataset_capabilities", lambda: json.dumps(available)
                 ),
                 patch.object(
-                    r.native_datasets,
-                    "activate_project",
+                    __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                    "verify_versions",
                     side_effect=AssertionError("activation"),
                 ),
             ):

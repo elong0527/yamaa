@@ -328,6 +328,7 @@ model!(
         required!("structure", Text),
         required!("repeating", Boolean),
         field!("reference_data", Boolean),
+        field!("has_no_data", Boolean),
         optional!("domain", Text),
         optional!("comment", COMMENT_VALUE),
     ]

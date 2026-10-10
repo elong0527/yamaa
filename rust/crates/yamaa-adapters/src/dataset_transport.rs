@@ -346,6 +346,7 @@ impl Intermediate {
             return Err(Error::RequestLimit);
         }
         Ok(dataset::Intermediate {
+            record_keys: Vec::new(),
             identifier: self.identifier,
             path: self.path,
             source: self.source,

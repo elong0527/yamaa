@@ -2,8 +2,8 @@
 
 Rust owns all admitted derivation, conversion, grouping and table checks. The
 existing Python loader/planner/source and artifact adapters are temporary ports;
-Project execution explicitly activates verified bindings before source IO. This
-interface does not publish files or run workflows.
+Project environments use the public Rust-owned file lifecycle. This component
+bridge does not activate project functions, publish files or run workflows.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ import io
 import json
 from dataclasses import dataclass
 from importlib import import_module
-from pathlib import Path
 
 import polars as pl
 import pyarrow as pa
@@ -35,14 +34,7 @@ from yamaa.adapters._native_dependencies import (
 )
 from yamaa.adapters._native_numeric_syntax import bind_numeric_analyzer
 from yamaa.adapters._native_predicate_syntax import bind_predicate_analyzer
-from yamaa.adapters._native_project_functions import (
-    NATIVE_ACTIVATION_CACHE,
-    NativeActivationCache,
-    activate_project,
-)
 from yamaa.adapters._native_references import bind_reference_compiler
-from yamaa.functions.artifact import ArtifactResolver
-from yamaa.functions.errors import FunctionActivationError
 from yamaa.io import (
     ArtifactError,
     LoadedDataset,
@@ -135,7 +127,7 @@ def _source_ipc(table):
                 column.type
             ]
             compatible = (
-                (pa.types.is_string(array.type) or pa.types.is_large_string(array.type))
+                pa.types.is_string(array.type) or pa.types.is_large_string(array.type)
                 if column.type == "str"
                 else array.type == dtype
             )
@@ -180,7 +172,6 @@ def _output_table(specification, data):
     series = []
     for column, array in zip(columns, native.columns, strict=True):
         if column.type in {"date", "datetime"}:
-            # Flattening a nullable struct must propagate its parent nulls.
             array = pc.struct_field(array, "value")
         series.append(
             pl.from_arrow(array)
@@ -216,38 +207,8 @@ def execute_with_source_provider(
     return _execute(specification, source_provider)
 
 
-def execute_with_project_functions(
-    specification: Specification,
-    source_provider: SourceProvider,
-    project_root: str | Path,
-    schema_root: str | Path,
-    *,
-    resolver: ArtifactResolver | None = None,
-    cache: NativeActivationCache | None = NATIVE_ACTIVATION_CACHE,
-) -> NativeDatasetRun:
-    """Activate a pinned project through native invocation before reading sources.
-
-    The host loads environments, verifies artifacts and compares activation
-    vectors. Rust owns each invocation and all admitted dataset derivations.
-    Reference activation cache entries cannot qualify this optional backend.
-    """
-    return _execute(
-        specification,
-        source_provider,
-        lambda spec: activate_project(spec, project_root, schema_root, resolver, cache),
-    )
-
-
-def _execute(
-    specification,
-    source_provider,
-    prepare_functions=None,
-    *,
-    observe_verifications=None,
-):
+def _execute(specification, source_provider, *, observe_verifications=None):
     """Capture and admit a whole run before activating callbacks or reading data."""
-    # Frozen Pydantic models still contain mutable lists/dictionaries. Retain
-    # the admitted run independently of caller/provider mutations during IO.
     specification = specification.model_copy(deep=True)
     aggregate_analyzer = None
     numeric_analyzer = None
@@ -258,7 +219,6 @@ def _execute(
         nonlocal aggregate_analyzer
         if aggregate_analyzer is None:
             yamaa_native = import_module("yamaa._native")
-
             aggregate_analyzer = bind_aggregate_analyzer(yamaa_native)
         return aggregate_analyzer(text)
 
@@ -267,7 +227,6 @@ def _execute(
         nonlocal numeric_analyzer
         if numeric_analyzer is None:
             yamaa_native = import_module("yamaa._native")
-
             numeric_analyzer = bind_numeric_analyzer(yamaa_native)
         return numeric_analyzer(text)
 
@@ -276,7 +235,6 @@ def _execute(
         nonlocal predicate_analyzer
         if predicate_analyzer is None:
             yamaa_native = import_module("yamaa._native")
-
             if not callable(getattr(yamaa_native, "analyze_predicate", None)):
                 raise UnsupportedPlanningError(
                     [
@@ -295,7 +253,7 @@ def _execute(
     try:
         predicate_regex_paths = admit(
             specification,
-            allow_functions=prepare_functions is not None,
+            allow_functions=False,
             aggregate_analyzer=analyze_aggregate,
             numeric_analyzer=analyze_numeric,
             predicate_analyzer=analyze_predicate,
@@ -307,14 +265,11 @@ def _execute(
         return NativeDatasetRun(
             ExecutionUnsupported(features=error.features, handler_counts=())
         )
-
     yamaa_native = import_module("yamaa._native")
-
     if aggregate_analyzer is None:
         aggregate_analyzer = bind_aggregate_analyzer(yamaa_native)
     if numeric_analyzer is None:
         numeric_analyzer = bind_numeric_analyzer(yamaa_native)
-    # Fail on a missing native API before the source provider runs.
     execute = yamaa_native.execute_dataset
     if not callable(execute):
         raise TypeError("native execute_dataset must be callable")
@@ -330,14 +285,16 @@ def _execute(
     ]
     required.extend(
         (
-            "predicate_checks",
-            UnsupportedFeature(
-                operation="native_predicate_checks",
-                spec_path=f"verifications[{i}].{check.operation}",
-            ),
+            (
+                "predicate_checks",
+                UnsupportedFeature(
+                    operation="native_predicate_checks",
+                    spec_path=f"verifications[{i}].{check.operation}",
+                ),
+            )
+            for i, check in enumerate(specification.verifications or ())
+            if check.operation == "assert"
         )
-        for i, check in enumerate(specification.verifications or ())
-        if check.operation == "assert"
     )
     if len(specification.input) > 1 and specification.rows:
         required.append(
@@ -355,10 +312,12 @@ def _execute(
         and "unconvertible" in column.derivation.model_fields_set
     ]
     handler_sites.extend(
-        f"rows[{index}].derivations.{name}.unconvertible"
-        for index, row in enumerate(specification.rows or ())
-        for name, declaration in row.derivations.items()
-        if "unconvertible" in declaration.model_fields_set
+        (
+            f"rows[{index}].derivations.{name}.unconvertible"
+            for index, row in enumerate(specification.rows or ())
+            for name, declaration in row.derivations.items()
+            if "unconvertible" in declaration.model_fields_set
+        )
     )
     required.extend(
         (
@@ -374,10 +333,12 @@ def _execute(
         and column.derivation.value.operation == "compute"
     ]
     compute_sites.extend(
-        f"rows[{index}].derivations.{name}.compute"
-        for index, row in enumerate(specification.rows or ())
-        for name, declaration in row.derivations.items()
-        if declaration.value.operation == "compute"
+        (
+            f"rows[{index}].derivations.{name}.compute"
+            for index, row in enumerate(specification.rows or ())
+            for name, declaration in row.derivations.items()
+            if declaration.value.operation == "compute"
+        )
     )
     required.extend(
         (
@@ -388,17 +349,21 @@ def _execute(
     )
     required.extend(
         (
-            "grouped_count",
-            UnsupportedFeature(
-                operation="native_grouped_count",
-                spec_path=f"rows[{index}].derivations.{name}.aggregate",
-            ),
+            (
+                "grouped_count",
+                UnsupportedFeature(
+                    operation="native_grouped_count",
+                    spec_path=f"rows[{index}].derivations.{name}.aggregate",
+                ),
+            )
+            for index, row in enumerate(specification.rows or ())
+            for name, declaration in row.derivations.items()
+            if declaration.value.operation == "aggregate"
+            and aggregate_analyzer(declaration.value.root["aggregate"]["expr"]).ast[
+                "name"
+            ]
+            == "COUNT"
         )
-        for index, row in enumerate(specification.rows or ())
-        for name, declaration in row.derivations.items()
-        if declaration.value.operation == "aggregate"
-        and aggregate_analyzer(declaration.value.root["aggregate"]["expr"]).ast["name"]
-        == "COUNT"
     )
     if specification.filter is not None:
         required.append(
@@ -437,10 +402,12 @@ def _execute(
         for column in specification.columns
         if column.derivation is not None
         and column.derivation.value.operation in WINDOWS
-        and column.derivation.value.root[column.derivation.value.operation]
-        .get("window", {})
-        .get("filter")
-        is not None
+        and (
+            column.derivation.value.root[column.derivation.value.operation]
+            .get("window", {})
+            .get("filter")
+            is not None
+        )
     )
     required.extend(
         (
@@ -478,7 +445,7 @@ def _execute(
         if column.derivation is not None
         and column.derivation.value.operation == "source"
         and isinstance(column.derivation.value.root["source"], dict)
-        and column.derivation.value.root["source"].get("filter") is not None
+        and (column.derivation.value.root["source"].get("filter") is not None)
     )
     required.extend(
         (
@@ -492,7 +459,7 @@ def _execute(
         if column.derivation is not None
         and column.derivation.value.operation == "source"
         and isinstance(column.derivation.value.root["source"], dict)
-        and column.derivation.value.root["source"].get("order_by") is not None
+        and (column.derivation.value.root["source"].get("order_by") is not None)
     )
     required.extend(
         (
@@ -517,22 +484,6 @@ def _execute(
                 UnsupportedFeature(operation="native_multi_source", spec_path="input"),
             )
         )
-    if prepare_functions is not None:
-        required.append(
-            (
-                "host_functions",
-                UnsupportedFeature(operation="native_host_functions", spec_path="$"),
-            )
-        )
-        if not specification.rows:
-            required.append(
-                (
-                    "function_source_collection",
-                    UnsupportedFeature(
-                        operation="native_function_source_collection", spec_path="$"
-                    ),
-                )
-            )
     if required:
         discover = getattr(yamaa_native, "dataset_capabilities", None)
         capabilities = json.loads(discover()) if callable(discover) else {}
@@ -541,7 +492,7 @@ def _execute(
             if capabilities.get("protocol") == "dataset/1"
             else []
         )
-        refused = tuple(feature for name, feature in required if name not in features)
+        refused = tuple((feature for name, feature in required if name not in features))
         if refused:
             return NativeDatasetRun(
                 ExecutionUnsupported(features=refused, handler_counts=())
@@ -588,14 +539,6 @@ def _execute(
     column_dependency_analyzer = bind_column_dependency_analyzer(yamaa_native)
     reference_compiler_factory = bind_reference_compiler(yamaa_native)
     functions = None
-    if prepare_functions is not None:
-        execute = getattr(yamaa_native, "execute_dataset_functions", None)
-        if not callable(execute):
-            raise TypeError("native execute_dataset_functions must be callable")
-        try:
-            functions = prepare_functions(specification)
-        except FunctionActivationError as error:
-            return _failure(error.diagnostics)
     try:
         sources = source_provider(
             {
@@ -622,9 +565,7 @@ def _execute(
         plan = plan_execution(
             specification,
             sources,
-            supported_operations=OPERATIONS | {"function"}
-            if functions is not None
-            else OPERATIONS,
+            supported_operations=OPERATIONS,
             dependency_analyzer=dependency_analyzer,
             column_dependency_analyzer=column_dependency_analyzer,
             reference_compiler_factory=reference_compiler_factory,
@@ -666,18 +607,9 @@ def _execute(
             request,
             _source_ipc(source),
             [_source_ipc(table) for table in secondary.values()],
-            list(functions.callbacks),
         )
-        if functions is not None
-        else (
-            execute(
-                request,
-                _source_ipc(source),
-                [_source_ipc(table) for table in secondary.values()],
-            )
-            if secondary
-            else execute(request, _source_ipc(source))
-        )
+        if secondary
+        else execute(request, _source_ipc(source))
     )
     envelope = json.loads(encoded)
     if envelope["protocol"] != "dataset/1":
@@ -708,7 +640,6 @@ def _execute(
     else:
         raise ValueError("unknown native dataset response status")
     if observe_verifications is not None:
-        # Preserve completed checks before host log/artifact materialization can fail.
         observe_verifications(records)
     if declaration_error is not None and (
         status == "success"

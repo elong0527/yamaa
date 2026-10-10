@@ -8,6 +8,7 @@ use alloc::{collections::BTreeSet, string::String, vec::Vec};
 pub enum Read {
     Source(usize),
     Column(usize),
+    Intermediate { index: usize, column: usize },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -98,6 +99,12 @@ pub struct BoundPredicate {
 impl BoundPredicate {
     /// Admit every occurrence, including those behind a short-circuiting node.
     pub fn new(plan: predicate::Plan, bindings: Vec<Binding>) -> Result<Self, BindingError> {
+        if bindings
+            .iter()
+            .any(|binding| matches!(binding.read, Read::Intermediate { .. }))
+        {
+            return Err(BindingError::InvalidSource);
+        }
         if plan.spec_path().is_empty() {
             return Err(BindingError::EmptyPath);
         }

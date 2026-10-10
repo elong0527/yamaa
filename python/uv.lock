@@ -2547,6 +2547,9 @@ test = [
 ]
 
 [package.dev-dependencies]
+benchmark = [
+    { name = "yamaa-benchmarks" },
+]
 harbor = [
     { name = "harbor" },
 ]
@@ -2567,7 +2570,13 @@ requires-dist = [
 provides-extras = ["test"]
 
 [package.metadata.requires-dev]
+benchmark = [{ name = "yamaa-benchmarks", editable = "../rust/tests/project-programs/python" }]
 harbor = [{ name = "harbor", specifier = "==0.23.0" }]
+
+[[package]]
+name = "yamaa-benchmarks"
+version = "1.0.0"
+source = { editable = "../rust/tests/project-programs/python" }
 
 [[package]]
 name = "yarl"

@@ -6,12 +6,9 @@ This runner does not qualify shared compilation or producer workflows.
 
 from __future__ import annotations
 
-import json
-from dataclasses import replace
 from importlib import import_module
 from pathlib import Path
 
-from yamaa.adapters._native_project_functions import activate_project
 from yamaa.adapters.conformance import (
     HandlerObservation,
     NodeObservation,
@@ -23,13 +20,10 @@ from yamaa.adapters.conformance import (
 )
 from yamaa.adapters.native_datasets import _execute
 from yamaa.adapters.observations import (
-    CallbackObservation,
     ObservedResources,
     RunObservations,
-    observe_scalar,
 )
 from yamaa.application import prepare_workflow
-from yamaa.functions import select_project_root
 from yamaa.io import load_source_tables
 from yamaa.odm.items import odm_inputs
 from yamaa.planning.workflow import _layer_origins
@@ -42,8 +36,6 @@ def execute_native_example(name, entry, schema_root, destination):
     observer = RunObservations(entry)
     tables = []
     core_version = "unavailable"
-    activation_started = False
-    activation_finished = False
 
     def report(outcome, **observations):
         return _report(
@@ -97,52 +89,9 @@ def execute_native_example(name, entry, schema_root, destination):
                 )
             return loaded
 
-        environment_root = select_project_root(entry.parent)
-
-        def prepare_functions(specification):
-            nonlocal activation_started, activation_finished
-            activation_started = True
-            # Vectors finish before wrapping callbacks, including on repeated runs.
-            bindings = activate_project(
-                specification, environment_root, schema_root, None, None
-            )
-            activation_finished = True
-            signatures = json.loads(bindings.declarations)
-
-            def observed(signature, callback):
-                def invoke(**arguments):
-                    observer.callbacks.append(
-                        CallbackObservation(
-                            specification=observer.current,
-                            function=signature["identity"]["name"],
-                            contract_version=signature["identity"]["contract_version"],
-                            arguments=tuple(
-                                (
-                                    parameter["name"],
-                                    observe_scalar(arguments[parameter["host_name"]]),
-                                )
-                                for parameter in signature["parameters"]
-                            ),
-                        )
-                    )
-                    return callback(**arguments)
-
-                return invoke
-
-            return replace(
-                bindings,
-                callbacks=tuple(
-                    observed(signature, callback)
-                    for signature, callback in zip(
-                        signatures, bindings.callbacks, strict=True
-                    )
-                ),
-            )
-
         run = _execute(
             specification,
             provide,
-            prepare_functions if environment_root is not None else None,
             observe_verifications=observer.record_verifications,
         )
         result = run.result
@@ -166,8 +115,6 @@ def execute_native_example(name, entry, schema_root, destination):
                 handler_counts=counts,
             ),
         )
-        if activation_started and not activation_finished:
-            nodes = ()
         artifacts = []
         if isinstance(result, ExecutionSuccess):
             tables.append(observer.table(entry, "derived", "output", result.table))

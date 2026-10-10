@@ -32,7 +32,7 @@ replay the same parser vectors.
 | Location | Purpose |
 | --- | --- |
 | [schema.yaml](schema.yaml) | Specification entry point |
-| [schema_environment.yaml](schema_environment.yaml) | Project function environment entry point |
+| [schema_environment.yaml](schema_environment.yaml) | Study environment entry point |
 | [schema_define.yaml](schema_define.yaml) | Study-document entry point |
 | [rules/](../rules/README.md) | Normative contracts |
 | [Schema fields](../rules/reference/schema-fields.md) | Generated shapes, defaults, and semantic links |

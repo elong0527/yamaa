@@ -850,10 +850,6 @@ expressions:
             type: identifier
             required: true
             description: See REQ-1085.
-        - contract_version:
-            type: function_contract_version
-            required: true
-            description: See REQ-1085.
         - args:
             type: "dict[identifier, function_arg]"
             default: {}
@@ -876,6 +872,10 @@ function_arg:
 # See REQ-1148.
 
 submission_dataset_class:
+    - has_no_data:
+        type: bool
+        default: false
+        description: See REQ-1296.
     - label:
         type: str
         required: true
@@ -1141,10 +1141,6 @@ identifier:
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
     description: See REQ-1046.
 
-function_contract_version:
-    type: str
-    min_length: 1
-    description: See REQ-1087.
 
 function_param_type:
     type: str
@@ -1248,5 +1244,419 @@ verification_id:
 verification_severity:
     type: str
     values: [error, warning]
+"#),
+];
+#[rustfmt::skip]
+pub(super) const ENVIRONMENT_MODULES: &[(&str, &str)] = &[
+    ("schema_environment.yaml", r#"version: '1.0'
+includes:
+- schema_shared.yaml
+environment_class:
+- schema_version:
+    type: str
+    required: true
+    description: See REQ-1080.
+- language:
+    type: str
+    values:
+    - python
+    - r
+    description: See REQ-1080.
+- lock:
+    type: path
+    description: See REQ-1080.
+- functions:
+    type: dict[identifier, function_definition]
+    description: See REQ-1080.
+- codelists:
+    type: list[codelist_source]
+    description: See REQ-1080.
+- study:
+    type: study_class
+    description: See REQ-1080.
+- sdtm:
+    type: submission_section_class
+    description: See REQ-1080.
+- adam:
+    type: submission_section_class
+    description: See REQ-1080.
+- send:
+    type: submission_section_class
+    description: See REQ-1080.
+function_definition:
+  type:
+  - path
+  - function_definition_class
+  description: See REQ-1083.
+function_definition_class:
+- function:
+    type: qualified_callable
+    required: true
+    description: See REQ-1083.
+- description:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1083.
+- params:
+    type: list[function_parameter_class]
+    required: true
+    description: See REQ-1083.
+- returns:
+    type: column_type
+    required: true
+    description: See REQ-1083.
+- may_return_missing:
+    type: bool
+    default: false
+    description: See REQ-1083.
+- comparison_decimals:
+    type: int
+    default: 4
+    description: See REQ-1083.
+- tests:
+    type: list[function_test_class]
+    required: true
+    description: See REQ-1083.
+function_parameter_class:
+- name:
+    type: identifier
+    required: true
+    description: See REQ-1083.
+- type:
+    type: function_param_type
+    required: true
+    description: See REQ-1083.
+- required:
+    type: bool
+    default: true
+    description: See REQ-1083.
+- default:
+    type: function_value
+    description: See REQ-1083.
+- accepts_missing:
+    type: bool
+    default: false
+    description: See REQ-1083.
+qualified_callable:
+  type: str
+  min_length: 1
+  description: See REQ-0669.
+function_case_id:
+  type: str
+  pattern: ^[a-z][a-z0-9-]*$
+  description: See REQ-1083.
+function_coverage:
+  type: str
+  pattern: ^(normal|boundary|nullable-output|numeric-comparison|(default|accepted-missing|short-circuit-missing|boolean-true|boolean-false):[A-Za-z_][A-Za-z0-9_]*)$
+  description: See REQ-1083.
+function_test_class:
+- id:
+    type: function_case_id
+    required: true
+    description: See REQ-1083.
+- covers:
+    type: list[function_coverage]
+    required: true
+    description: See REQ-1083.
+- args:
+    type: dict[identifier, function_value]
+    required: true
+    description: See REQ-1083.
+- result:
+    type: function_value
+    required: true
+    description: See REQ-1083.
+codelist_source:
+  type:
+  - path
+  - codelist_source_class
+  description: See REQ-0928.
+codelist_source_class:
+- standard:
+    type: terminology_standard_class
+    description: See REQ-0928.
+- codelists:
+    type: list[codelist_class]
+    required: true
+    description: See REQ-0928.
+terminology_standard_class:
+- name:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-0928.
+- publishing_set:
+    type: str
+    required: true
+    values:
+    - ADaM
+    - CDASH
+    - DEFINE-XML
+    - SDTM
+    - SEND
+    description: See REQ-0928.
+- version:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-0928.
+study_class:
+- id:
+    type: define_id
+    required: true
+    description: See REQ-1062.
+- name:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1062.
+- description:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1062.
+- protocol_name:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1062.
+metadata_version_class:
+- id:
+    type: define_id
+    required: true
+    description: See REQ-1063.
+- name:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1063.
+- description:
+    type: str
+    required: false
+    min_length: 1
+    description: See REQ-1063.
+codelist_class:
+- id:
+    type: identifier
+    required: true
+    description: See REQ-1077.
+- name:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1077.
+- data_type:
+    type: str
+    default: text
+    values:
+    - text
+    - integer
+    - float
+    description: See REQ-1077.
+- extensible:
+    type: bool
+    default: false
+    description: See REQ-1077.
+- alias:
+    type: str
+    required: false
+    min_length: 1
+    description: See REQ-1077.
+- format_name:
+    type: str
+    required: false
+    min_length: 1
+    description: See REQ-1077.
+- items:
+    type: list[codelist_item_class]
+    required: false
+    description: See REQ-1077.
+- external:
+    type: external_codelist_class
+    required: false
+    description: See REQ-1077.
+codelist_item_class:
+- value:
+    type: literal_value
+    required: true
+    description: See REQ-1078.
+- decode:
+    type: str
+    required: false
+    min_length: 1
+    description: See REQ-1078.
+- rank:
+    type: int
+    required: false
+    description: See REQ-1078.
+- alias:
+    type: str
+    required: false
+    min_length: 1
+    description: See REQ-1078.
+- extended:
+    type: bool
+    default: false
+    description: See REQ-1078.
+external_codelist_class:
+- dictionary:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1079.
+- version:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1079.
+- href:
+    type: str
+    required: false
+    min_length: 1
+    description: See REQ-1079.
+define_id:
+  type: str
+  pattern: ^[A-Za-z_][A-Za-z0-9_.-]*$
+  description: See REQ-1068.
+relative_href:
+  type: str
+  pattern: ^(?!/)(?!.*(^|/)\.\.(/|$))[^\\]+$
+  description: See REQ-1070.
+language_tag:
+  type: str
+  pattern: ^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$
+  description: See REQ-1073.
+standard_name:
+  type: str
+  values:
+  - ADaMIG
+  - ADaMIG-MD
+  - BIMO
+  - CDISC/NCI
+  - SDTMIG
+  - SDTMIG-AP
+  - SDTMIG-MD
+  - SENDIG
+  - SENDIG-AR
+  - SENDIG-DART
+  - SENDIG-GENETOX
+  description: See REQ-1074.
+submission_section_class:
+- standard:
+    type: implementation_guide_class
+    required: true
+- specs:
+    type: list[path]
+    required: true
+- define:
+    type: path
+    required: true
+- documents:
+    type: list[document_class]
+- dataset_json:
+    type: bool
+    default: false
+- context:
+    type: str
+    default: Submission
+    values:
+    - Submission
+    - Other
+- xml_lang:
+    type: language_tag
+    default: en
+- file_oid:
+    type: define_id
+- metadata_version:
+    type: metadata_version_class
+- originator:
+    type: str
+    min_length: 1
+- stylesheet:
+    type: relative_href
+implementation_guide_class:
+- name:
+    type: standard_name
+    required: true
+- version:
+    type: str
+    required: true
+    min_length: 1
+- status:
+    type: str
+    required: true
+    values:
+    - Draft
+    - Final
+document_class:
+- id:
+    type: identifier
+    required: true
+    description: See REQ-1065.
+- kind:
+    type: str
+    required: true
+    values:
+    - annotated_crf
+    - supplemental
+    - other
+    description: See REQ-1065.
+- link:
+    type: relative_href
+    required: true
+    description: See REQ-1065.
+- title:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1065.
+"#),
+    ("schema_shared.yaml", r#"version: "1.0"
+
+# See REQ-1150.
+
+column_type:
+    type: str
+    values: [str, int, float, date, datetime]
+
+literal_value:
+    type: [str, int, float, bool, "null"]
+    description: See REQ-1149.
+
+path:
+    type: str
+    min_length: 1
+
+project_path:
+    type: str
+    min_length: 1
+    description: See REQ-1151.
+
+identifier:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: See REQ-1046.
+
+
+function_param_type:
+    type: str
+    values: [str, int, float, bool, date, datetime]
+
+function_string_literal_class:
+    - literal: {type: str, required: true}
+
+function_date_literal_class:
+    - date: {type: str, required: true}
+
+function_datetime_literal_class:
+    - datetime: {type: str, required: true}
+
+function_value:
+    type:
+        - literal_value
+        - function_date_literal_class
+        - function_datetime_literal_class
+
 "#),
 ];

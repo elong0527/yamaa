@@ -3,6 +3,10 @@ version: "1.0"
 # See REQ-1148.
 
 submission_dataset_class:
+    - has_no_data:
+        type: bool
+        default: false
+        description: See REQ-1296.
     - label:
         type: str
         required: true

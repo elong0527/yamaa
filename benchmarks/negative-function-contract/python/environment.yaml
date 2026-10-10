@@ -1,0 +1,32 @@
+schema_version: '1.0'
+language: python
+lock: uv.lock
+functions:
+  project_value:
+    function: yamaa_benchmarks.project_value
+    description: Return the supplied numeric value.
+    params:
+    - name: x
+      type: float
+    returns: float
+    tests:
+    - id: ordinary
+      covers:
+      - normal
+      - numeric-comparison
+      args:
+        x: 1.5
+      result: 1.5
+    - id: zero-boundary
+      covers:
+      - boundary
+      - numeric-comparison
+      args:
+        x: 0.0
+      result: 0.0
+    - id: missing-short-circuits
+      covers:
+      - short-circuit-missing:x
+      args:
+        x: null
+      result: null

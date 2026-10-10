@@ -116,23 +116,14 @@ class InstalledAggregatePlanning(unittest.TestCase):
                     with (
                         self.subTest(expr=expr, project=project),
                         patch.object(
-                            r.native_datasets,
-                            "activate_project",
+                            __import__(
+                                "yamaa._locked_functions", fromlist=["verify_versions"]
+                            ),
+                            "verify_versions",
                             side_effect=AssertionError("activation"),
                         ),
                     ):
-                        run = (
-                            r.native_datasets.execute_with_project_functions(
-                                spec,
-                                lambda _: self.fail("source"),
-                                r.ROOT / "specification-functions" / "python",
-                                r.SCHEMA,
-                            )
-                            if project
-                            else r.native_datasets.execute_with_source_provider(
-                                spec, lambda _: self.fail("source")
-                            )
-                        )
+                        run = r.native_datasets.execute_with_source_provider(spec, lambda _: self.fail("source"))
                         self.assertEqual(run.result.status, "failure")
                         self.assertEqual(run.result.diagnostics, reference.diagnostics)
                         self.assertEqual(
@@ -248,8 +239,8 @@ class InstalledAggregatePlanning(unittest.TestCase):
                 yamaa_native, "dataset_capabilities", lambda: json.dumps(capabilities)
             ),
             patch.object(
-                r.native_datasets,
-                "activate_project",
+                __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                "verify_versions",
                 side_effect=AssertionError("activation"),
             ),
         ):
@@ -258,11 +249,8 @@ class InstalledAggregatePlanning(unittest.TestCase):
                 r.native_datasets.execute_with_source_provider(
                     spec, lambda _: self.fail("source")
                 ),
-                r.native_datasets.execute_with_project_functions(
-                    spec,
-                    lambda _: self.fail("source"),
-                    r.ROOT / "specification-functions" / "python",
-                    r.SCHEMA,
+                r.native_datasets.execute_with_source_provider(
+                    spec, lambda _: self.fail("source")
                 ),
             ]
         for run in results:
@@ -570,7 +558,7 @@ class InstalledAggregatePlanning(unittest.TestCase):
 
     def test_previous_capability_refuses_before_activation_or_source(self):
         """Both frontends refuse the preceding query set before host side effects."""
-        case = r.ROOT / "specification-functions"
+        case = r.ROOT / "specification-adlb"
         project = r.load_specification(case / "spec.yaml", r.SCHEMA).specification
         ordinary = r.load_specification(
             r.ROOT / "specification-adlb" / "spec.yaml", r.SCHEMA
@@ -584,14 +572,14 @@ class InstalledAggregatePlanning(unittest.TestCase):
                 ),
             ),
             patch.object(
-                r.native_datasets,
-                "activate_project",
+                __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                "verify_versions",
                 side_effect=AssertionError("activation"),
             ),
         ):
             outcomes = [
-                r.native_datasets.execute_with_project_functions(
-                    project, lambda _: self.fail("source"), case / "python", r.SCHEMA
+                r.native_datasets.execute_with_source_provider(
+                    project, lambda _: self.fail("source")
                 ),
                 r.native_datasets.execute_with_source_provider(
                     ordinary, lambda _: self.fail("source")

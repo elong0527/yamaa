@@ -116,3 +116,45 @@ pub fn decode_renv(bytes: &[u8]) -> Result<RenvLock, Error> {
         packages: result,
     })
 }
+
+/// Static lock-format classification from held bytes. Installed-version and
+/// target-marker selection remain activation-time packaging responsibilities.
+pub fn kind(bytes: &[u8]) -> Result<yamaa_core::project_environment::LockKind, Error> {
+    use yamaa_core::project_environment::LockKind;
+    if bytes.len() > MAX_BYTES {
+        return Err(Error::Limit("bytes"));
+    }
+    if bytes.iter().find(|byte| !byte.is_ascii_whitespace()) == Some(&b'{') {
+        decode_renv(bytes)?;
+        return Ok(LockKind::Renv);
+    }
+    let source = std::str::from_utf8(bytes).map_err(|_| Error::Shape("lock UTF-8"))?;
+    let root = source
+        .parse::<toml::Table>()
+        .map_err(|_| Error::Shape("uv TOML"))?;
+    if root.get("version").and_then(toml::Value::as_integer) != Some(1) {
+        return Err(Error::Shape("uv version"));
+    }
+    let packages = root
+        .get("package")
+        .and_then(toml::Value::as_array)
+        .ok_or(Error::Shape("uv package array"))?;
+    if packages.len() > MAX_RECORDS {
+        return Err(Error::Limit("packages"));
+    }
+    for package in packages {
+        let package = package
+            .as_table()
+            .ok_or(Error::Shape("uv package record"))?;
+        for key in ["name", "version"] {
+            let value = package
+                .get(key)
+                .and_then(toml::Value::as_str)
+                .ok_or(Error::Shape("uv package identity"))?;
+            if value.is_empty() || value.contains('\0') || value.len() > MAX_TEXT {
+                return Err(Error::Shape("uv package identity"));
+            }
+        }
+    }
+    Ok(LockKind::Uv)
+}

@@ -462,7 +462,7 @@ class InstalledReferences(unittest.TestCase):
 
     def test_match_value_capability_precedes_activation_and_data(self):
         """The previous installed query set refuses both frontends before side effects."""
-        case = ROOT / "specification-functions"
+        case = ROOT / "specification-adlb"
         project_spec = load_specification(case / "spec.yaml", SCHEMA).specification
         ordinary_spec = load_specification(
             ROOT / "specification-adlb" / "spec.yaml", SCHEMA
@@ -476,13 +476,13 @@ class InstalledReferences(unittest.TestCase):
                 ),
             ),
             patch.object(
-                native_datasets,
-                "activate_project",
+                __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                "verify_versions",
                 side_effect=AssertionError("activation"),
             ),
         ):
-            project = native_datasets.execute_with_project_functions(
-                project_spec, lambda _: self.fail("source"), case / "python", SCHEMA
+            project = native_datasets.execute_with_source_provider(
+                project_spec, lambda _: self.fail("source")
             )
             ordinary = native_datasets.execute_with_source_provider(
                 ordinary_spec, lambda _: self.fail("source")
@@ -1221,7 +1221,7 @@ class InstalledReferences(unittest.TestCase):
                 ],
             },
         )
-        case = ROOT / "specification-functions"
+        case = ROOT / "specification-adlb"
         spec = load_specification(case / "spec.yaml", SCHEMA).specification
         for capability in (
             None,
@@ -1232,13 +1232,13 @@ class InstalledReferences(unittest.TestCase):
             with (
                 patch.object(yamaa_native, "reference_capabilities", capability),
                 patch.object(
-                    native_datasets,
-                    "activate_project",
+                    __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                    "verify_versions",
                     side_effect=AssertionError("activation"),
                 ),
             ):
-                actual = native_datasets.execute_with_project_functions(
-                    spec, lambda _: self.fail("source"), case / "python", SCHEMA
+                actual = native_datasets.execute_with_source_provider(
+                    spec, lambda _: self.fail("source")
                 )
             self.assertEqual(actual.result.status, "unsupported")
             self.assertEqual(
@@ -1389,7 +1389,7 @@ class InstalledReferences(unittest.TestCase):
             "specification-adlb",
             "specification-windows",
             "specification-lookup",
-            "specification-functions",
+            "specification-adlb",
         ):
             with self.subTest(case=name):
                 case = ROOT / name
@@ -1455,9 +1455,9 @@ class InstalledReferences(unittest.TestCase):
                         side_effect=AssertionError("reference donor scope"),
                     ),
                 ):
-                    if name == "specification-functions":
-                        actual = native_datasets.execute_with_project_functions(
-                            spec, provider, case / "python", SCHEMA, cache=None
+                    if name == "specification-adlb":
+                        actual = native_datasets.execute_with_source_provider(
+                            spec, provider
                         )
                     else:
                         actual = native_datasets.execute_with_source_provider(
@@ -1472,18 +1472,18 @@ class InstalledReferences(unittest.TestCase):
 
     def test_missing_service_precedes_activation_and_data(self):
         """Older installations refuse explicitly before any host execution effects."""
-        case = ROOT / "specification-functions"
+        case = ROOT / "specification-adlb"
         spec = load_specification(case / "spec.yaml", SCHEMA).specification
         with (
             patch.object(yamaa_native, "_compile_reference_catalog", None),
             patch.object(
-                native_datasets,
-                "activate_project",
+                __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                "verify_versions",
                 side_effect=AssertionError("activation"),
             ),
         ):
-            actual = native_datasets.execute_with_project_functions(
-                spec, lambda _: self.fail("source"), case / "python", SCHEMA
+            actual = native_datasets.execute_with_source_provider(
+                spec, lambda _: self.fail("source")
             )
         self.assertEqual(actual.result.status, "unsupported")
         self.assertEqual(
@@ -1661,7 +1661,7 @@ class InstalledReferences(unittest.TestCase):
 
     def test_intermediate_capability_precedes_activation_and_data(self):
         """The previous query set cannot enter intermediate planning in either frontend."""
-        case = ROOT / "specification-functions"
+        case = ROOT / "specification-adlb"
         project_spec = load_specification(case / "spec.yaml", SCHEMA).specification
         ordinary_spec = load_specification(
             ROOT / "specification-adlb" / "spec.yaml", SCHEMA
@@ -1675,13 +1675,13 @@ class InstalledReferences(unittest.TestCase):
                 ),
             ),
             patch.object(
-                native_datasets,
-                "activate_project",
+                __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                "verify_versions",
                 side_effect=AssertionError("activation"),
             ),
         ):
-            project = native_datasets.execute_with_project_functions(
-                project_spec, lambda _: self.fail("source"), case / "python", SCHEMA
+            project = native_datasets.execute_with_source_provider(
+                project_spec, lambda _: self.fail("source")
             )
             ordinary = native_datasets.execute_with_source_provider(
                 ordinary_spec, lambda _: self.fail("source")
@@ -1697,7 +1697,7 @@ class InstalledReferences(unittest.TestCase):
 
     def test_key_capability_precedes_activation_and_data(self):
         """The previous query set cannot enter key planning in either frontend."""
-        case = ROOT / "specification-functions"
+        case = ROOT / "specification-adlb"
         project_spec = load_specification(case / "spec.yaml", SCHEMA).specification
         ordinary_spec = load_specification(
             ROOT / "specification-adlb" / "spec.yaml", SCHEMA
@@ -1711,13 +1711,13 @@ class InstalledReferences(unittest.TestCase):
                 ),
             ),
             patch.object(
-                native_datasets,
-                "activate_project",
+                __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                "verify_versions",
                 side_effect=AssertionError("activation"),
             ),
         ):
-            project = native_datasets.execute_with_project_functions(
-                project_spec, lambda _: self.fail("source"), case / "python", SCHEMA
+            project = native_datasets.execute_with_source_provider(
+                project_spec, lambda _: self.fail("source")
             )
             ordinary = native_datasets.execute_with_source_provider(
                 ordinary_spec, lambda _: self.fail("source")

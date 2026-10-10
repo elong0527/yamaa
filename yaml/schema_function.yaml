@@ -6,10 +6,6 @@ expressions:
             type: identifier
             required: true
             description: See REQ-1085.
-        - contract_version:
-            type: function_contract_version
-            required: true
-            description: See REQ-1085.
         - args:
             type: "dict[identifier, function_arg]"
             default: {}

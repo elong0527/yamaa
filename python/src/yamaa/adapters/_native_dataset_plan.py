@@ -248,7 +248,10 @@ def admit(
             elif not (payload is None or type(payload) in (str, bool, int, float)):
                 reject("literal_representation", path)
         elif operation == "function" and allow_functions:
-            from yamaa.functions.invocation import AuthoredValueError, runtime_value
+            from yamaa.adapters._authored_scalar import (
+                AuthoredValueError,
+                runtime_value,
+            )
 
             if grouped or any(
                 row.group_by is not None for row in specification.rows or ()
@@ -757,7 +760,22 @@ def lower(
         if op == "literal":
             expression = {"literal": literal(value)}
         elif op == "function":
-            from yamaa.adapters._native_project_functions import authored
+            from yamaa.adapters._authored_scalar import runtime_value
+            from yamaa.models.values import MISSING, DateTimeValue, DateValue
+
+            def authored(value):
+                scalar = runtime_value(value)
+                if scalar is MISSING:
+                    return {"missing": None}
+                if isinstance(scalar, (DateValue, DateTimeValue)):
+                    kind = "date" if isinstance(scalar, DateValue) else "datetime"
+                    return {
+                        kind: {
+                            "text": scalar.to_text(),
+                            "precision": scalar.collected_precision,
+                        }
+                    }
+                return literal(scalar)
 
             if functions is None:
                 raise ValueError("native project functions require activated bindings")

@@ -2,9 +2,11 @@
 
 import copy
 import json
+import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from yamaa.adapters.conformance import (
@@ -16,7 +18,7 @@ from yamaa.adapters.conformance import (
     read_report,
     write_report,
 )
-from yamaa.adapters.observations import observe_scalar
+from yamaa.adapters.observations import CallbackObservation, observe_scalar
 
 ROOT = Path(__file__).parents[3]
 EXAMPLES = ROOT / "benchmarks"
@@ -32,7 +34,6 @@ def reports(tmp_path_factory):
             output_dir=destination / name,
         )
         for name in (
-            "adam-adsl-bmi",
             "schema-verification-log",
             "schema-parquet",
             "sdtm-dm-race-ethnicity",
@@ -48,7 +49,7 @@ def changed(report, mutate):
 
 
 def test_host_and_backend_identity_do_not_change_portable_observations(reports):
-    reference = reports["adam-adsl-bmi"]
+    reference = reports["schema-verification-log"]
     # Protocol compatibility only: this does not claim an R/Rust execution.
     candidate = reference.model_copy(
         update={
@@ -62,18 +63,31 @@ def test_host_and_backend_identity_do_not_change_portable_observations(reports):
     assert compare_example(candidate, EXAMPLES / candidate.example).backend == "rust"
 
 
-def test_study_callbacks_exclude_vectors_and_missing_short_circuits(reports):
-    report = reports["adam-adsl-bmi"]
-    assert report.outcome == "success"
-    assert len(report.callbacks) == 4
-    assert [call.function for call in report.callbacks] == ["bmi"] * 4
-    assert all(call.specification == "spec.yaml" for call in report.callbacks)
-    # Values independently specified by the fixture's first study row.
-    assert report.callbacks[0].arguments == (
-        ("weight_kg", observe_scalar(81.0)),
-        ("height_cm", observe_scalar(180.0)),
-        ("cm_per_m", observe_scalar(100)),
+@pytest.fixture
+def callback_report(reports):
+    # Independently authored protocol input, not evidence of reference execution.
+    # Actual versionless callbacks and activation vectors are qualified by the
+    # installed shared public environment suite.
+    return reports["schema-verification-log"].model_copy(
+        update={
+            "callbacks": tuple(
+                CallbackObservation(
+                    specification="spec.yaml",
+                    function="protocol_fixture",
+                    contract_version="component-fixture",
+                    arguments=(("value", observe_scalar(value)),),
+                )
+                for value in (1.0, 2.0)
+            )
+        }
     )
+
+
+def test_callback_protocol_keeps_order_and_exact_arguments(callback_report):
+    assert [call.arguments for call in callback_report.callbacks] == [
+        (("value", observe_scalar(1.0)),),
+        (("value", observe_scalar(2.0)),),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -88,8 +102,10 @@ def test_study_callbacks_exclude_vectors_and_missing_short_circuits(reports):
         "source_reads",
     ],
 )
-def test_observation_drift_fails_even_when_artifacts_are_identical(reports, mutation):
-    reference = reports["adam-adsl-bmi"]
+def test_observation_drift_fails_even_when_artifacts_are_identical(
+    callback_report, mutation
+):
+    reference = callback_report
 
     def mutate(payload):
         if mutation == "callback_count":
@@ -132,9 +148,22 @@ def test_verification_ledger_records_held_and_violated_checks(reports):
     assert not compare_reports(report, candidate).passed
 
 
-def test_checks_are_observed_without_requesting_a_sidecar(reports):
-    report = reports["adam-adsl-bmi"]
-    assert report.verifications
+def test_checks_are_observed_without_requesting_a_sidecar(tmp_path):
+    case = tmp_path / "case"
+    shutil.copytree(EXAMPLES / "schema-verification-log", case)
+    path = case / "spec.yaml"
+    document = yaml.safe_load(path.read_text())
+    del document["output"]["warning_log"]
+    del document["output"]["verification_log"]
+    # Warning declarations require a warning log. Use a held error check for
+    # this independent no-sidecar case; all three fixture ages are nonnegative.
+    document["columns"][1]["verifications"][1]["range"] = {"min": 0, "max": 250}
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+    report = execute_example(
+        case, schema_root=ROOT / "yaml", output_dir=tmp_path / "out"
+    )
+    assert report.outcome == "success", report
+    assert len(report.verifications) == 4
     assert [artifact.name for artifact in report.artifacts] == ["adsl"]
 
 
@@ -171,7 +200,7 @@ def test_portable_diagnostics_are_compared(reports):
 
 @pytest.mark.parametrize("outcome", ["unsupported", "error"])
 def test_equal_non_executions_cannot_establish_parity(reports, outcome):
-    report = reports["adam-adsl-bmi"].model_copy(update={"outcome": outcome})
+    report = reports["schema-verification-log"].model_copy(update={"outcome": outcome})
     assert not compare_reports(report, report).passed
 
 
@@ -190,7 +219,7 @@ def test_float_transport_preserves_bits_and_missing_differs_from_empty_text():
 
 @pytest.mark.parametrize("mutation", ["version", "missing_observations"])
 def test_old_or_incomplete_reports_fail_explicitly(reports, tmp_path, mutation):
-    payload = reports["adam-adsl-bmi"].model_dump(mode="json")
+    payload = reports["schema-verification-log"].model_dump(mode="json")
     if mutation == "version":
         payload["report_version"] = "0.1.0-draft"
     else:
@@ -202,15 +231,15 @@ def test_old_or_incomplete_reports_fail_explicitly(reports, tmp_path, mutation):
 
 
 def test_report_names_keep_different_backends_separate(reports, tmp_path):
-    report = reports["adam-adsl-bmi"]
+    report = reports["schema-verification-log"]
     other = report.model_copy(update={"runtime": "r", "backend": "rust"})
     assert write_report(report, tmp_path) != write_report(other, tmp_path)
     assert read_report(write_report(other, tmp_path)) == other
 
 
 def test_cli_fails_when_reference_observations_differ(reports, tmp_path):
-    report = reports["adam-adsl-bmi"]
-    candidate = changed(report, lambda data: data["callbacks"].pop())
+    report = reports["schema-verification-log"]
+    candidate = changed(report, lambda data: data["verifications"].pop())
     reference_dir = tmp_path / "references"
     write_report(candidate, reference_dir)
     assert (

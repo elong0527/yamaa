@@ -6,7 +6,6 @@ from contextlib import ExitStack
 from unittest.mock import patch
 
 import installed_datasets
-import installed_project_functions
 from yamaa import _native as yamaa_native
 
 
@@ -78,13 +77,6 @@ class InstalledProfile(unittest.TestCase):
         # keep their own no-binding rejection, even within this replay suite.
         self.replay(
             installed_datasets.InstalledDatasetCallbacks,
-            ("execute_dataset_functions",),
-        )
-
-    def test_project_activation_and_independent_csv(self):
-        """Keep activation-before-data, original CSV bytes, cache behavior and fatal callback identity."""
-        self.replay(
-            installed_project_functions.InstalledProjectFunctions,
             ("execute_dataset_functions",),
         )
 

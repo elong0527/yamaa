@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import runpy
+import shutil
+import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from yamaa import yamaa_domain
-from yamaa.functions import execute_with_project_functions, select_project_root
+from yamaa import domain, yamaa_domain
 from yamaa.io import ProjectResources, load_source_tables
 from yamaa.io.csv import fixed_point
 from yamaa.planning import ExecutionDiagnostic
@@ -101,16 +103,21 @@ def _negative_diagnostic(
     def provide(datasets):
         return load_source_tables(datasets, resources)
 
-    # REQ-0663: the runner selects the project root, so a negative example
-    # that commits one is executed against it rather than reported as an
-    # unimplemented call.
-    project_root = select_project_root(example)
-    if project_root is None:
-        result = execute_with_source_provider(loaded.specification, provide)
-    else:
-        result = execute_with_project_functions(
-            loaded.specification, provide, project_root, SCHEMA_ROOT
+    if example.name == "negative-function-contract":
+        with tempfile.TemporaryDirectory(prefix="yamaa-negative-project-") as temporary:
+            staged = Path(temporary).resolve() / example.name
+            shutil.copytree(example, staged)
+            shutil.copyfile(
+                EXAMPLES.parent / "python/uv.lock", staged / "python/uv.lock"
+            )
+            checked = domain(
+                staged / "spec.yaml", environment=staged / "python/environment.yaml"
+            )
+            row = checked.issues.row(0, named=True)
+        return SimpleNamespace(
+            requirement=row["requirement"], spec_paths=tuple(row["spec_paths"])
         )
+    result = execute_with_source_provider(loaded.specification, provide)
     if isinstance(result, ExecutionUnsupported):
         return None
     assert isinstance(result, ExecutionFailure)
@@ -205,8 +212,14 @@ def _read_expected(path: Path, schema: pl.Schema) -> pl.DataFrame:
 def test_positive_example_outputs_match_expected_artifacts(
     runner: Path,
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     example = runner.parent
+    if (example / "python/environment.yaml").exists():
+        staged = tmp_path / example.name
+        shutil.copytree(example, staged)
+        shutil.copyfile(EXAMPLES.parent / "python/uv.lock", staged / "python/uv.lock")
+        example = staged
     expected = {
         path.stem: path
         for path in sorted(

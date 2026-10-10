@@ -5,7 +5,7 @@ Authors@R: person("Ming-Chun", "Chen", email = "hellomingchun@gmail.com", role =
 Description: Builds a bounded set of clinical data specifications through the
     shared Rust engine and returns owned data frames and structured issues.
     Includes native qualification interfaces while full migration coverage,
-    environment activation and release API consolidation remain in progress.
+    producer workflows and release API consolidation remain in progress.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.6.1)

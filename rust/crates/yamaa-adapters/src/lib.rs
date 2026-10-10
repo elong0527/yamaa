@@ -96,3 +96,7 @@ pub mod project_codelist_diagnostics;
 pub mod project_activation_diagnostics;
 
 pub mod project_activation_observations;
+
+#[cfg(any(unix, windows))]
+pub mod project_application;
+pub mod project_check;

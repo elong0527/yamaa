@@ -1,5 +1,6 @@
 //! Immutable admitted dataset model, independent of execution and host effects.
 pub use crate::bound_expression::BoundNumeric;
+use crate::bound_expression::Read;
 use crate::{
     bound_expression::{BindingError, BoundPredicate},
     reduction::NumericReducer,
@@ -15,7 +16,7 @@ mod functions;
 pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, FunctionInput};
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
-pub use intermediates::{Intermediate, SourceSchemas};
+pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
 #[path = "dataset_lookup.rs"]
 mod lookup;
 #[path = "dataset_selection.rs"]
@@ -28,6 +29,8 @@ pub use windows::{OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    /// Only the first TRUE branch is evaluated; FALSE and UNKNOWN continue.
+    Case(Vec<CaseBranch>),
     Literal(Value),
     /// Compiled scalar arithmetic over statically bound source/completed output reads.
     Compute(BoundNumeric),
@@ -71,6 +74,12 @@ pub enum Expression {
         column: Option<usize>,
         text: String,
     },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CaseBranch {
+    pub when: Option<BoundPredicate>,
+    pub assignment: alloc::boxed::Box<Assignment>,
 }
 
 /// Choose the first or last record in declared stable source order.
@@ -276,6 +285,34 @@ fn validate_assignment(
     output: &TableSchema,
     mode: &RowMode,
 ) -> Result<(), PlanError> {
+    validate_assignment_at(
+        assignment,
+        available,
+        source,
+        secondary,
+        intermediates,
+        output,
+        mode,
+        0,
+        &mut 65_536,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn validate_assignment_at(
+    assignment: &Assignment,
+    available: &mut [bool],
+    source: &TableSchema,
+    secondary: &[SecondarySource],
+    intermediates: &[Intermediate],
+    output: &TableSchema,
+    mode: &RowMode,
+    depth: usize,
+    remaining: &mut usize,
+) -> Result<(), PlanError> {
+    if depth > 64 || *remaining == 0 {
+        return Err(PlanError::InvalidColumns);
+    }
+    *remaining -= 1;
     if assignment.path.is_empty() {
         return Err(PlanError::EmptyPath);
     }
@@ -286,23 +323,71 @@ fn validate_assignment(
         return Err(PlanError::DuplicateAssignment);
     }
     match &assignment.expression {
+        Expression::Case(branches) => {
+            if branches.is_empty() || branches.len() > 1024 || branches[0].when.is_none() {
+                return Err(PlanError::InvalidColumns);
+            }
+            for (index, branch) in branches.iter().enumerate() {
+                if branch.assignment.column != assignment.column
+                    || branch.when.is_none() && index + 1 != branches.len()
+                {
+                    return Err(PlanError::InvalidColumns);
+                }
+                if let Some(when) = &branch.when {
+                    when.validate(
+                        source.columns().len(),
+                        available,
+                        matches!(mode, RowMode::Groups(_)),
+                    )
+                    .map_err(PlanError::Filter)?;
+                }
+                validate_assignment_at(
+                    &branch.assignment,
+                    available,
+                    source,
+                    secondary,
+                    intermediates,
+                    output,
+                    mode,
+                    depth + 1,
+                    remaining,
+                )?;
+                available[assignment.column] = false;
+            }
+        }
         // REQ-0211/0213 convert one derived value at execution, including
         // literals. Eager conversion would invent failures for empty templates
         // and move runtime conversion conditions into the planning phase.
         Expression::Literal(_) => {}
-        Expression::Compute(expression) => expression
-            .validate(
-                source.columns().len(),
-                available,
-                matches!(mode, RowMode::Groups(_)),
-            )
-            .map_err(|error| match error {
-                crate::bound_expression::ScopeError::GroupedSource => PlanError::NonGroupSource,
-                crate::bound_expression::ScopeError::InvalidSource => PlanError::InvalidSource,
-                crate::bound_expression::ScopeError::UnavailableColumn => {
-                    PlanError::UnavailableColumn
+        Expression::Compute(expression) => {
+            for binding in expression.bindings() {
+                if let crate::bound_expression::Read::Intermediate { index, column } = binding.read
+                {
+                    let item = intermediates
+                        .get(index)
+                        .ok_or(PlanError::InvalidIntermediate)?;
+                    if !matches!(mode, RowMode::Keys) {
+                        return Err(PlanError::InvalidIntermediate);
+                    }
+                    intermediates::validate_read(
+                        item, column, source, secondary, available, output,
+                    )?;
                 }
-            })?,
+            }
+            expression
+                .validate(
+                    source.columns().len(),
+                    available,
+                    matches!(mode, RowMode::Groups(_)),
+                )
+                .map_err(|error| match error {
+                    crate::bound_expression::ScopeError::GroupedSource => PlanError::NonGroupSource,
+                    crate::bound_expression::ScopeError::InvalidSource => PlanError::InvalidSource,
+                    crate::bound_expression::ScopeError::UnavailableColumn => {
+                        PlanError::UnavailableColumn
+                    }
+                })?;
+        }
         Expression::Function(function) => function.validate(source, available, mode)?,
         Expression::ProjectFunction(function) => function.validate(source, available, mode)?,
         Expression::FirstAvailable(selection) => selection.validate(source, available, mode)?,
@@ -313,16 +398,7 @@ fn validate_assignment(
             let item = intermediates
                 .get(*index)
                 .ok_or(PlanError::InvalidIntermediate)?;
-            lookup::validate(
-                &Lookup {
-                    source: item.source,
-                    column: *column,
-                    keys: item.keys.clone(),
-                },
-                secondary,
-                available,
-                output,
-            )?;
+            intermediates::validate_read(item, *column, source, secondary, available, output)?;
         }
         Expression::RowLookup(lookup) => lookup::validate_row(lookup, source, secondary, mode)?,
         Expression::Lookup(lookup) => {
@@ -412,6 +488,37 @@ fn validate_assignment(
     Ok(())
 }
 
+// Recursively preserve key-phase authority through selected case branches.
+fn key_expression(expression: &Expression) -> bool {
+    match expression {
+        Expression::Literal(_) | Expression::Source(_) | Expression::Column(_) => true,
+        Expression::Compute(expression) => expression
+            .bindings()
+            .iter()
+            .all(|binding| !matches!(binding.read, Read::Intermediate { .. })),
+        Expression::Case(branches) => branches
+            .iter()
+            .all(|branch| key_expression(&branch.assignment.expression)),
+        _ => false,
+    }
+}
+fn key_grain_source_read(expression: &Expression) -> bool {
+    match expression {
+        Expression::Source(_) => true,
+        Expression::Compute(expression) => expression.reads_source(),
+        Expression::Function(function) => function.reads_source(),
+        Expression::ProjectFunction(function) => function.reads_source(),
+        Expression::Case(branches) => branches.iter().any(|branch| {
+            branch.when.as_ref().is_some_and(|predicate| {
+                predicate
+                    .bindings()
+                    .iter()
+                    .any(|binding| matches!(binding.read, Read::Source(_)))
+            }) || key_grain_source_read(&branch.assignment.expression)
+        }),
+        _ => false,
+    }
+}
 impl DatasetPlan {
     /// Admit the complete single-source plan before any source data is accessed.
     /// Every template completes the same row-phase columns. Remaining assignments
@@ -473,7 +580,7 @@ impl DatasetPlan {
             primary: source,
             secondary,
         } = sources;
-        intermediates::validate(&intermediates, &secondary, &output)?;
+        intermediates::validate(&intermediates, &secondary, &source, &output)?;
         for (index, relation) in secondary.iter().enumerate() {
             if relation.name.is_empty()
                 || secondary[..index]
@@ -501,17 +608,7 @@ impl DatasetPlan {
             for assignment in &template.assignments {
                 if keyed
                     && (!keys.contains(&assignment.column)
-                        || matches!(
-                            assignment.expression,
-                            Expression::FirstAvailable(_)
-                                | Expression::Collect { .. }
-                                | Expression::Window(_)
-                                | Expression::Lookup(_)
-                                | Expression::RowLookup(_)
-                                | Expression::Function(_)
-                                | Expression::ProjectFunction(_)
-                                | Expression::Intermediate { .. }
-                        ))
+                        || !key_expression(&assignment.expression))
                 {
                     return Err(PlanError::InvalidKeyMode);
                 }
@@ -545,23 +642,7 @@ impl DatasetPlan {
             }
             row_columns = Some(available.clone());
             for assignment in &columns {
-                if keyed && matches!(assignment.expression, Expression::Source(_)) {
-                    // A key combination reads all its feeding records, never a chosen first row.
-                    return Err(PlanError::InvalidKeyMode);
-                }
-                if keyed
-                    && matches!(&assignment.expression, Expression::Compute(expression) if expression.reads_source())
-                {
-                    return Err(PlanError::InvalidKeyMode);
-                }
-                if keyed
-                    && matches!(&assignment.expression, Expression::Function(function) if function.reads_source())
-                {
-                    return Err(PlanError::InvalidKeyMode);
-                }
-                if keyed
-                    && matches!(&assignment.expression, Expression::ProjectFunction(function) if function.reads_source())
-                {
+                if keyed && key_grain_source_read(&assignment.expression) {
                     return Err(PlanError::InvalidKeyMode);
                 }
                 validate_assignment(

@@ -253,10 +253,37 @@ impl Declarations {
                 .collect::<Vec<_>>();
             let pairs_declared = item.keys.as_ref().unwrap_or(&default_keys);
             let mut pairs = Vec::new();
+            let mut record_keys = Vec::new();
+            let primary = schemas[driver];
+            let primary_prefix = format!("{}.", sources[driver].name);
             // Reference planning reports types before missing donor/output fields.
             for (field, name) in pairs_declared {
                 let donor = schema.columns().iter().position(|c| c.name == *field);
                 let target = output.columns().iter().position(|c| c.name == *name);
+                if let Some(field) = name.strip_prefix(&primary_prefix) {
+                    if let (Some(source_column), Some(driver_column)) = (
+                        donor,
+                        primary.columns().iter().position(|c| c.name == field),
+                    ) {
+                        let expected = primary.columns()[driver_column].kind;
+                        let actual = schema.columns()[source_column].kind;
+                        if expected != actual {
+                            findings.push(BindFinding::Lookup(LookupFinding::key_type(
+                                &format!("{}.key", item.path),
+                                &item.name,
+                                name,
+                                expected,
+                                actual,
+                            )));
+                            failed = true;
+                        }
+                        record_keys.push(crate::dataset::RecordMatchKey {
+                            source_column,
+                            driver_column,
+                            identifier: name.clone(),
+                        });
+                    }
+                }
                 if let (Some(source_column), Some(output_column)) = (donor, target) {
                     let actual = schema.columns()[source_column].kind;
                     let expected = output.columns()[output_column].kind;
@@ -289,7 +316,11 @@ impl Declarations {
                 }
             }
             for (_, name) in pairs_declared {
-                if !output.columns().iter().any(|c| c.name == *name) {
+                if !output.columns().iter().any(|c| c.name == *name)
+                    && !name
+                        .strip_prefix(&primary_prefix)
+                        .is_some_and(|field| primary.columns().iter().any(|c| c.name == field))
+                {
                     findings.push(BindFinding::Lookup(LookupFinding::reference(
                         &format!("{}.key", item.path),
                         name,
@@ -362,6 +393,7 @@ impl Declarations {
                     item.source
                 },
                 keys: pairs,
+                record_keys,
                 filter,
                 selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
                 no_match: item.no_match.clone(),

@@ -21,8 +21,8 @@ explained in [Schema introduction](schema-intro.md).
 | [`schema_expression_date.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_date.yaml) | Temporal expressions: `date_diff`, `study_day`, `date_impute`, `date_precision`, `datetime_impute`, `datetime_precision`, `to_date`, `to_epoch_day` (Temporal operations) |
 | [`schema_expression_window.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_window.yaml) | Window expressions over constructed output rows: `row_number`, `rank`, `row_value`, `previous_non_missing`, `locf`, `baseline_flag` |
 | [`schema_expression_odm.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_odm.yaml) | The `odm` item read over the fixed ODM schema (Name binding) |
-| [`schema_function.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_function.yaml) | The `function` extension point: logical name, contract version, arguments (Project functions) |
-| [`schema_environment.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_environment.yaml) | The project environment: runtime, function contracts, bindings, conformance vectors (Project functions) |
+| [`schema_function.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_function.yaml) | The `function` extension point: logical name and named arguments (Project functions) |
+| [`schema_environment.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_environment.yaml) | The project environment: packaging lock, versionless installed functions, inline tests, codelists and submission metadata (Project functions) |
 | [`schema_verification.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_verification.yaml) | Dataset and column verifications (Verification) |
 | [`schema_metadata.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_metadata.yaml) | Governed dataset and column metadata (Submission metadata) |
 | [`schema_define.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_define.yaml) | Define-XML composition inputs (Define-XML) |

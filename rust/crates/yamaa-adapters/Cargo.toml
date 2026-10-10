@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
 yamaa-engine = { path = "../yamaa-engine" }
+toml = { version = "=0.9.8", default-features = false, features = ["parse", "std", "serde"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.145", features = ["arbitrary_precision"] }
 # Same parser revision used by the existing Python/R yaml12 packages. Keep

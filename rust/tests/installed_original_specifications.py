@@ -1052,7 +1052,6 @@ class OriginalSpecifications(unittest.TestCase):
     def test_unsupported_preparation_has_no_source_effect(self):
         source = (ROOT / "cases" / CASES[0] / "spec.yaml").read_bytes()
         for candidate in (
-            source.replace(b"100 * (AVAL - BASE) / BASE", b"LN(AVAL)"),
             source.replace(b"input/lb.csv", b"input/lb.unknown"),
         ):
             with self.subTest(source=candidate):
@@ -1062,6 +1061,14 @@ class OriginalSpecifications(unittest.TestCase):
                 self.assertEqual(
                     json.loads(str(raised.exception))["outcome"]["status"], "unsupported"
                 )
+
+    def test_approved_math_preparation_has_no_source_effect(self):
+        source = (ROOT / "cases" / CASES[0] / "spec.yaml").read_bytes()
+        for expression in (b"LN(AVAL)", b"EXP(AVAL)", b"POWER(AVAL, 2)"):
+            with self.subTest(expression=expression):
+                candidate = source.replace(b"100 * (AVAL - BASE) / BASE", expression)
+                self.assertNotEqual(candidate, source)
+                self.assertIsNotNone(yamaa_native._prepare_specification(modules(), 0, "spec.yaml", candidate))
 
 
 class ParquetOriginalOutput(unittest.TestCase):
@@ -1543,7 +1550,7 @@ class PublicDomains(unittest.TestCase):
         result=yamaa.domain("absent.yaml",environment="absent-environment.yaml")
         self.assertIsNone(result._native.observations())
         self.assertIsNone(result.output)
-        self.assertEqual(result.issues["condition"].to_list(),["unsupported_operation"])
+        self.assertEqual(result.issues["condition"].to_list(),["engine_rejected"])
         self.assertEqual(yamaa.check("absent.yaml",environment="absent-environment.yaml").issues.rows(),result.issues.rows())
         for path in ("x" * 65537, "\u00e9" * 32769):
             refused = yamaa.domain(path)
@@ -1553,7 +1560,7 @@ class PublicDomains(unittest.TestCase):
             self.assertEqual(refused.issues["condition"].to_list(), [condition])
             self.assertEqual(json.loads(refused.issues["context"][0]), context)
             self.assertEqual(yamaa.check(path).issues.rows(), refused.issues.rows())
-            self.assertEqual(yamaa.domain(path, environment=path).issues["condition"].to_list(), ["unsupported_operation"])
+            self.assertEqual(yamaa.domain(path, environment=path).issues["condition"].to_list(), ["engine_rejected"])
         with self.assertRaises(yamaa.DomainError): result.save()
         for function in (yamaa.domain,yamaa.check):
             with self.assertRaises(TypeError): function(None)

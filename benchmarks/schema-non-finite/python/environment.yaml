@@ -1,14 +1,50 @@
-schema_version: "1.0"
-version: "1.0.0"
-
-runtime:
-  language: python
-  artifact:
-    reference: org.example/yamaa/numeric-constants-python:1.0.0
-
+schema_version: '1.0'
+language: python
+lock: uv.lock
 functions:
   numeric_constant:
-    contract: contracts.yaml
-    binding:
-      call: projectconstants.numeric_constant
-    conformance: conformance/numeric_constant.yaml
+    function: yamaa_benchmarks.numeric_constant
+    description: Return the numeric constant the named kind spells.
+    may_return_missing: true
+    params:
+    - name: kind
+      type: str
+    returns: float
+    tests:
+    - id: unit
+      covers:
+      - normal
+      - numeric-comparison
+      args:
+        kind: one
+      result: 1.0
+    - id: zero-boundary
+      covers:
+      - boundary
+      args:
+        kind: zero
+      result: 0.0
+    - id: positive-infinity-is-not-a-value
+      covers:
+      - nullable-output
+      args:
+        kind: positive-infinity
+      result: null
+    - id: negative-infinity-is-not-a-value
+      covers:
+      - nullable-output
+      args:
+        kind: negative-infinity
+      result: null
+    - id: not-a-number-is-not-a-value
+      covers:
+      - nullable-output
+      args:
+        kind: nan
+      result: null
+    - id: missing-kind-short-circuits
+      covers:
+      - short-circuit-missing:kind
+      args:
+        kind: null
+      result: null

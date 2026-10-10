@@ -93,7 +93,18 @@ pub fn resources(written: &str) -> Result<(Resources, String), Error> {
         .as_ref()
         .and_then(|path| path.parent())
         .unwrap_or(&parent);
-    let mut resources = Resources::new(text(root)?, text(&parent)?, &[]).map_err(Error::Path)?;
+    // Retain the caller's spelling as well as the physical root (for example
+    // macOS /var and /private/var). Resources verifies both against the same
+    // directory descriptor; this admits no additional physical root.
+    let root_spelling = if configuration.is_some() {
+        root
+    } else {
+        absolute
+            .parent()
+            .ok_or(Error::Path(ResourceError::InvalidPath))?
+    };
+    let mut resources =
+        Resources::new(text(root_spelling)?, text(&parent)?, &[]).map_err(Error::Path)?;
     if configuration.is_some() {
         let depth = parent
             .strip_prefix(root)

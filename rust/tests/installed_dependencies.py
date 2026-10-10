@@ -271,7 +271,7 @@ class InstalledDependencies(unittest.TestCase):
             "specification-adlb",
             "specification-windows",
             "specification-lookup",
-            "specification-functions",
+            "specification-adlb",
         ):
             with self.subTest(case=name):
                 case = ROOT / name
@@ -317,9 +317,9 @@ class InstalledDependencies(unittest.TestCase):
                         side_effect=AssertionError("Python scheduling algorithm"),
                     ),
                 ):
-                    if name == "specification-functions":
-                        actual = native_datasets.execute_with_project_functions(
-                            spec, provider, case / "python", SCHEMA, cache=None
+                    if name == "specification-adlb":
+                        actual = native_datasets.execute_with_source_provider(
+                            spec, provider
                         )
                     else:
                         actual = native_datasets.execute_with_source_provider(
@@ -337,7 +337,7 @@ class InstalledDependencies(unittest.TestCase):
 
     def test_missing_compiler_precedes_activation_and_data(self):
         """An older native installation cannot silently fall back after host effects."""
-        case = ROOT / "specification-functions"
+        case = ROOT / "specification-adlb"
         spec = load_specification(case / "spec.yaml", SCHEMA).specification
         for service, operation in (
             ("analyze_dependencies", "native_dependency_analysis"),
@@ -346,13 +346,13 @@ class InstalledDependencies(unittest.TestCase):
             with (
                 patch.object(yamaa_native, service, None),
                 patch.object(
-                    native_datasets,
-                    "activate_project",
+                    __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                    "verify_versions",
                     side_effect=AssertionError("activation"),
                 ),
             ):
-                actual = native_datasets.execute_with_project_functions(
-                    spec, lambda _: self.fail("source read"), case / "python", SCHEMA
+                actual = native_datasets.execute_with_source_provider(
+                    spec, lambda _: self.fail("source read")
                 )
             self.assertEqual(actual.result.status, "unsupported")
             self.assertEqual(

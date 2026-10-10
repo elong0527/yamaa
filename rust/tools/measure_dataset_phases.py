@@ -21,7 +21,6 @@ CASES = (
     "adam-adlb-ordered-sum",
     "schema-window-functions",
     "schema-lookup",
-    "schema-functions",
 )
 MODES = ("reference", "native", "native-profile")
 
@@ -56,13 +55,11 @@ def sample(root, case_name, mode):
     from yamaa.specification import load_specification
 
     if mode == "reference":
-        from yamaa.functions.execution import execute_with_project_functions
         from yamaa.runtime import execute_with_source_provider
     else:
         from yamaa import _native as yamaa_native
         from yamaa.adapters import native_datasets
         from yamaa.adapters.native_datasets import (
-            execute_with_project_functions,
             execute_with_source_provider,
         )
     seconds["package_imports"] = (time.perf_counter_ns() - started) / 1e9
@@ -117,7 +114,6 @@ def sample(root, case_name, mode):
         if mode == "native-profile":
             for name, label in (
                 ("admit", "specification_admission"),
-                ("activate_project", "project_activation"),
                 ("plan_execution", "host_planning"),
                 ("lower", "host_lowering"),
                 ("_source_ipc", "host_arrow_encoding"),
@@ -139,20 +135,7 @@ def sample(root, case_name, mode):
                 stack.enter_context(
                     patch.object(yamaa_native, name, wrap("native_call", profile))
                 )
-        if case_name == "schema-functions":
-            run = timed(
-                "run_total",
-                execute_with_project_functions,
-                specification,
-                provider,
-                case / "python",
-                schema,
-                cache=None,
-            )
-        else:
-            run = timed(
-                "run_total", execute_with_source_provider, specification, provider
-            )
+        run = timed("run_total", execute_with_source_provider, specification, provider)
     result = run if mode == "reference" else run.result
     if result.status != "success":
         raise RuntimeError(f"{case_name}/{mode}: {result}")
@@ -172,8 +155,7 @@ def sample(root, case_name, mode):
         "expected_csv_equal": True,
         "output_rows": result.table.frame.height,
         "installed_versions": {
-            name: version(name)
-            for name in ("yamaa", "polars", "pyarrow")
+            name: version(name) for name in ("yamaa", "polars", "pyarrow")
         },
         "module_origins": origins,
     }

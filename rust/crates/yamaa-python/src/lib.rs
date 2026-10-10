@@ -265,6 +265,10 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     module.add_function(wrap_pyfunction!(domain_entry::_domain_file, module)?)?;
     module.add_function(wrap_pyfunction!(domain_entry::_check_file, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        domain_entry::_check_project_metadata,
+        module
+    )?)?;
     #[cfg(any(unix, windows))]
     {
         module.add_class::<file_specification::Specification>()?;

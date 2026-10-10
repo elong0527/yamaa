@@ -43,11 +43,6 @@ from yamaa.adapters.observations import (
     VerificationObservation,
 )
 from yamaa.application import prepare_workflow
-from yamaa.functions import (
-    FunctionActivationError,
-    select_project_root,
-)
-from yamaa.functions.execution import activate_workflow_functions
 from yamaa.io import (
     Artifact,
     ArtifactTarget,
@@ -363,28 +358,11 @@ def _execute(
             diagnostics=tuple(_observe_diagnostic(item) for item in error.diagnostics),
         )
 
-    # REQ-0663: the runner selects the project root, and this runner selects
-    # the one the example offers for the language it speaks. An example
-    # offering none stays portable and reports `function` as unimplemented.
-    try:
-        environment_root = select_project_root(entry.parent)
-        activated = (
-            activate_workflow_functions(workflow, environment_root, schema_root)
-            if environment_root is not None
-            else None
-        )
-    except FunctionActivationError as error:
-        return _report(
-            name,
-            "failure",
-            diagnostics=tuple(_observe_diagnostic(item) for item in error.diagnostics),
-        )
-
     observer = observer or RunObservations(entry)
     execution = execute_workflow(
         workflow,
         ObservedResources(resources, observer, entry.parent),
-        dispatcher=None if activated is None else observer.dispatcher(activated),
+        dispatcher=None,
         hooks=observer.hooks(),
         event=observer.event,
     )

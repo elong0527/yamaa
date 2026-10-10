@@ -1,14 +1,129 @@
-schema_version: "1.0"
-version: "1.0.0"
-
-runtime:
-  language: python
-  artifact:
-    reference: org.example/yamaa/ratio-python:1.0.0
-
+schema_version: '1.0'
+language: python
+lock: uv.lock
 functions:
   project_ratio:
-    contract: contracts.yaml
-    binding:
-      call: projectratio.project_ratio
-    conformance: conformance/project_ratio.yaml
+    function: yamaa_benchmarks.project_ratio
+    description: Divide one measure by another, scale the quotient to a percentage
+      when asked, round it, and add an adjustment.
+    params:
+    - name: numerator
+      type: float
+    - name: denominator
+      type: float
+    - name: decimals
+      type: int
+      required: false
+      default: 2
+    - name: adjust
+      type: float
+      accepts_missing: true
+    - name: as_percent
+      type: bool
+    returns: float
+    tests:
+    - id: ordinary
+      covers:
+      - normal
+      - numeric-comparison
+      args:
+        numerator: 10.0
+        denominator: 4.0
+        decimals: 2
+        adjust: 0.0
+        as_percent: false
+      result: 2.5
+    - id: zero-numerator-boundary
+      covers:
+      - boundary
+      - numeric-comparison
+      args:
+        numerator: 0.0
+        denominator: 5.0
+        decimals: 2
+        adjust: 0.0
+        as_percent: false
+      result: 0.0
+    - id: default-decimals
+      covers:
+      - default:decimals
+      - numeric-comparison
+      args:
+        numerator: 7.0
+        denominator: 2.0
+        adjust: 0.0
+        as_percent: false
+      result: 3.5
+    - id: accepted-missing-adjust
+      covers:
+      - accepted-missing:adjust
+      - numeric-comparison
+      args:
+        numerator: 9.0
+        denominator: 4.0
+        decimals: 2
+        adjust: null
+        as_percent: false
+      result: 2.25
+    - id: missing-numerator-short-circuits
+      covers:
+      - short-circuit-missing:numerator
+      args:
+        numerator: null
+        denominator: 4.0
+        decimals: 2
+        adjust: 0.0
+        as_percent: false
+      result: null
+    - id: missing-denominator-short-circuits
+      covers:
+      - short-circuit-missing:denominator
+      args:
+        numerator: 10.0
+        denominator: null
+        decimals: 2
+        adjust: 0.0
+        as_percent: false
+      result: null
+    - id: missing-decimals-short-circuits
+      covers:
+      - short-circuit-missing:decimals
+      args:
+        numerator: 10.0
+        denominator: 4.0
+        decimals: null
+        adjust: 0.0
+        as_percent: false
+      result: null
+    - id: percent-true
+      covers:
+      - boolean-true:as_percent
+      - numeric-comparison
+      args:
+        numerator: 1.0
+        denominator: 2.0
+        decimals: 2
+        adjust: 0.0
+        as_percent: true
+      result: 50.0
+    - id: percent-false
+      covers:
+      - boolean-false:as_percent
+      - numeric-comparison
+      args:
+        numerator: 1.0
+        denominator: 2.0
+        decimals: 2
+        adjust: 0.0
+        as_percent: false
+      result: 0.5
+    - id: missing-flag-short-circuits
+      covers:
+      - short-circuit-missing:as_percent
+      args:
+        numerator: 1.0
+        denominator: 2.0
+        decimals: 2
+        adjust: 0.0
+        as_percent: null
+      result: null

@@ -7,7 +7,7 @@ use crate::{
 };
 use crate::{
     column_dependencies,
-    numeric_compiler::{compile_numeric, CompileError, CompiledNumeric},
+    numeric_compiler::{compile_numeric_with_policy, CompileError, CompiledNumeric},
     numeric_parser::ParseError,
     reference_binding::{self, Catalog},
     schema::{Document, DocumentNode as N, SpecificationDocument},
@@ -43,6 +43,8 @@ pub use windows::WindowFinding;
 #[path = "specification_functions.rs"]
 mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
+#[path = "specification_cases.rs"]
+mod cases;
 #[path = "specification_terminology.rs"]
 mod terminology;
 
@@ -248,6 +250,7 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    Case(Vec<cases::Branch>),
     ProjectFunction(usize),
     Literal(crate::value::Value),
     Window(alloc::boxed::Box<windows::Declaration>),
@@ -705,6 +708,9 @@ impl PreparedSpecification {
             let value = d
                 .field(column, "derivation")
                 .and_then(|id| d.field(id, "value"));
+            if let Some(value) = value {
+                cases::charge(d, value, &mut numeric_bytes, limits.numeric_bytes, 0)?;
+            }
             let operands = value
                 .and_then(|id| d.field(id, "first_available"))
                 .and_then(|id| d.field(id, "sources"))
@@ -765,6 +771,7 @@ impl PreparedSpecification {
                 }
                 for &(_, declaration) in declarations {
                     let value = field(d, declaration, "value")?;
+                    cases::charge(d, value, &mut numeric_bytes, limits.numeric_bytes, 0)?;
                     for operation in ["compute", "aggregate"] {
                         if let Some(expr) =
                             d.field(value, operation).and_then(|id| d.field(id, "expr"))
@@ -797,7 +804,59 @@ impl PreparedSpecification {
                 }
             }
         }
-        let findings = preflight(spec)?;
+        let mut findings = preflight(spec)?;
+        let columns = sequence(d, field(d, root, "columns")?)?;
+        let output = TableSchema::new(
+            columns
+                .iter()
+                .map(|&id| {
+                    Ok(Column {
+                        name: text(d, field(d, id, "name")?)?.into(),
+                        kind: match text(d, field(d, id, "type")?)? {
+                            "str" => ColumnType::Str,
+                            "int" => ColumnType::Int,
+                            "float" => ColumnType::Float,
+                            "date" => ColumnType::Date,
+                            "datetime" => ColumnType::DateTime,
+                            _ => return Err(PrepareError::Internal),
+                        },
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+        .map_err(PrepareError::OutputSchema)?;
+        let project = match functions
+            .map(|functions| functions::prepare(d, columns, functions))
+            .transpose()
+        {
+            Ok(project) => project,
+            Err(PrepareError::Invalid(errors)) => {
+                findings.extend(errors);
+                None
+            }
+            Err(error) => return Err(error),
+        };
+        let mut column_verifications = columns
+            .iter()
+            .enumerate()
+            .map(|(column, &id)| {
+                verifications::Verifications::prepare_column(d, &output, id, column)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if let Some(catalogue) = catalogue {
+            match terminology::apply(
+                d,
+                columns,
+                &output,
+                catalogue,
+                terminology_limits,
+                &mut column_verifications,
+            ) {
+                Ok(()) => (),
+                Err(PrepareError::Invalid(errors)) => findings.extend(errors),
+                Err(error) => return Err(error),
+            }
+        }
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
@@ -938,28 +997,6 @@ impl PreparedSpecification {
             .map(|&id| text(d, id).map(String::from))
             .collect::<Result<Vec<_>, _>>()?;
         let columns = sequence(d, field(d, root, "columns")?)?;
-        let project = functions
-            .map(|functions| functions::prepare(d, columns, functions))
-            .transpose()?;
-        let output = TableSchema::new(
-            columns
-                .iter()
-                .map(|&id| {
-                    Ok(Column {
-                        name: text(d, field(d, id, "name")?)?.into(),
-                        kind: match text(d, field(d, id, "type")?)? {
-                            "str" => ColumnType::Str,
-                            "int" => ColumnType::Int,
-                            "float" => ColumnType::Float,
-                            "date" => ColumnType::Date,
-                            "datetime" => ColumnType::DateTime,
-                            _ => return Err(PrepareError::Internal),
-                        },
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-        )
-        .map_err(PrepareError::OutputSchema)?;
         let names = output
             .columns()
             .iter()
@@ -1002,23 +1039,6 @@ impl PreparedSpecification {
                 }
                 None => None,
             };
-            let mut column_verifications = columns
-                .iter()
-                .enumerate()
-                .map(|(column, &id)| {
-                    verifications::Verifications::prepare_column(d, &output, id, column)
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            if let Some(catalogue) = catalogue {
-                terminology::apply(
-                    d,
-                    columns,
-                    &output,
-                    catalogue,
-                    terminology_limits,
-                    &mut column_verifications,
-                )?;
-            }
             return Ok(Self {
                 project_calls: project.map(|p| p.calls),
                 sources,
@@ -1035,13 +1055,9 @@ impl PreparedSpecification {
             });
         }
         let mut declarations = Vec::new();
-        let mut column_verifications = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
             let prefix = format!("columns.{}", output.columns()[column].name);
 
-            column_verifications.push(verifications::Verifications::prepare_column(
-                d, &output, id, column,
-            )?);
             let derivation = d
                 .field(id, "derivation")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -1054,6 +1070,14 @@ impl PreparedSpecification {
             let op = text(d, op)?;
             let path = format!("{prefix}.derivation.{op}");
             let operation = match op {
+                "case" => Some(Operation::Case(cases::prepare(
+                    d,
+                    payload,
+                    &path,
+                    project.as_ref(),
+                    &intermediates,
+                    0,
+                )?)),
                 "function" if project.is_some() => Some(Operation::ProjectFunction(
                     *project
                         .as_ref()
@@ -1135,7 +1159,12 @@ impl PreparedSpecification {
                         }
                     }
                     let expr = text(d, field(d, payload, "expr")?)?;
-                    match compile_numeric(expr, &path, Default::default()) {
+                    match compile_numeric_with_policy(
+                        expr,
+                        &path,
+                        Default::default(),
+                        crate::numeric_compiler::MathPolicy::PortableLibmV1,
+                    ) {
                         Ok(compiled) => Some(Operation::Compute(compiled)),
                         Err(error @ CompileError::Parse(ParseError::Grammar { .. })) => {
                             Some(Operation::InvalidNumeric {
@@ -1170,16 +1199,6 @@ impl PreparedSpecification {
         }
         if !extra.is_empty() {
             return Err(PrepareError::Unsupported(extra));
-        }
-        if let Some(catalogue) = catalogue {
-            terminology::apply(
-                d,
-                columns,
-                &output,
-                catalogue,
-                terminology_limits,
-                &mut column_verifications,
-            )?;
         }
         Ok(Self {
             project_calls: project.map(|p| p.calls),
@@ -1435,6 +1454,16 @@ impl PreparedSpecification {
                 Ok(binding)
             };
             let expression = match &declaration.operation {
+                Operation::Case(branches) => cases::bind(
+                    self,
+                    branches,
+                    column,
+                    &catalog,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
                 Operation::ProjectFunction(call) => {
                     let calls = self.project_calls.as_ref().ok_or(BindError::Internal)?;
                     let record = self.keys.contains(&column);
@@ -1597,7 +1626,9 @@ impl PreparedSpecification {
                 Operation::Compute(compiled) => {
                     // The reference emits expression-local qualification findings first,
                     // then validates bare references, preserving written occurrence order.
-                    for identifier in compiled.identifiers().filter(|name| name.contains('.')) {
+                    for identifier in compiled.identifiers().filter(|name| {
+                        name.contains('.') && self.intermediates.reference(name).is_none()
+                    }) {
                         findings.push(BindFinding::QualifiedNumericReference {
                             path: reference_path.clone(),
                             expression: compiled.expression().into(),
@@ -1605,6 +1636,39 @@ impl PreparedSpecification {
                         });
                     }
                     let mut bindings = Vec::new();
+                    for name in compiled
+                        .identifiers()
+                        .filter(|name| self.intermediates.reference(name).is_some())
+                    {
+                        let (index, field) = self
+                            .intermediates
+                            .reference(name)
+                            .ok_or(BindError::Internal)?;
+                        if let Some(item) = &intermediates[index] {
+                            edges.extend(item.keys.iter().map(|key| key.output_column));
+                            if let Some(column) = secondary[item.source]
+                                .schema
+                                .columns()
+                                .iter()
+                                .position(|c| c.name == field)
+                            {
+                                bindings.push(Binding {
+                                    name: name.into(),
+                                    read: Read::Intermediate { index, column },
+                                });
+                            } else {
+                                findings.push(BindFinding::UnknownReference {
+                                    path: reference_path.clone(),
+                                    name: name.into(),
+                                });
+                            }
+                        } else {
+                            findings.push(BindFinding::UnknownReference {
+                                path: reference_path.clone(),
+                                name: name.into(),
+                            });
+                        }
+                    }
                     for name in compiled.identifiers().filter(|name| !name.contains('.')) {
                         if let Some(binding) = bind(name, &mut findings)? {
                             let read = match binding {

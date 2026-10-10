@@ -109,6 +109,44 @@ fn invalid(finding: FunctionFinding) -> PreflightFinding {
     PreflightFinding::ProjectFunction(finding)
 }
 
+fn collect_calls(
+    d: &Document,
+    value: usize,
+    path: &str,
+    depth: usize,
+    requests: &mut Vec<(usize, String)>,
+) -> Result<(), PrepareError> {
+    if depth > 64 || path.len() > 65_536 {
+        return Err(PrepareError::Limit("function_calls"));
+    }
+    if let Some(node) = d.field(value, "function") {
+        if requests.len() >= 1024 {
+            return Err(PrepareError::Limit("function_calls"));
+        }
+        requests.push((node, format!("{path}.function")));
+    }
+    if let Some(case) = d.field(value, "case") {
+        let branches = sequence(d, case)?;
+        if branches.len() > 1024 {
+            return Err(PrepareError::Limit("function_calls"));
+        }
+        for (index, &branch) in branches.iter().enumerate() {
+            for name in ["then", "otherwise"] {
+                if let Some(value) = d.field(branch, name) {
+                    collect_calls(
+                        d,
+                        value,
+                        &format!("{path}.case[{index}].{name}"),
+                        depth + 1,
+                        requests,
+                    )?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn prepare(
     d: &Document,
     columns: &[usize],
@@ -145,13 +183,18 @@ pub(super) fn prepare(
     }
     let mut requests = Vec::new();
     for &column in columns {
-        if let Some(node) = d
+        if let Some(value) = d
             .field(column, "derivation")
             .and_then(|id| d.field(id, "value"))
-            .and_then(|id| d.field(id, "function"))
         {
             let name = text(d, field(d, column, "name")?)?;
-            requests.push((node, format!("columns.{name}.derivation.function")));
+            collect_calls(
+                d,
+                value,
+                &format!("columns.{name}.derivation"),
+                0,
+                &mut requests,
+            )?;
         }
     }
     let has_rows = present(d, d.root(), "rows");
@@ -162,17 +205,14 @@ pub(super) fn prepare(
         }
         for (row, &node) in rows.iter().enumerate() {
             for &(name, derivation) in mapping(d, field(d, node, "derivations")?)? {
-                if let Some(node) = d
-                    .field(derivation, "value")
-                    .and_then(|id| d.field(id, "function"))
-                {
-                    if requests.len() >= 1024 {
-                        return Err(PrepareError::Limit("function_calls"));
-                    }
-                    requests.push((
-                        node,
-                        format!("rows[{row}].derivations.{}.function", text(d, name)?),
-                    ));
+                if let Some(value) = d.field(derivation, "value") {
+                    collect_calls(
+                        d,
+                        value,
+                        &format!("rows[{row}].derivations.{}", text(d, name)?),
+                        0,
+                        &mut requests,
+                    )?;
                 }
             }
         }

@@ -12,21 +12,22 @@ status: normative
 
 <a id="req-0926"></a>
 
-**REQ-0926.** A codelist is declared once in the study document and carries an
-`id`. A column names that `id` through `submission.codelist`. Columns share
+**REQ-0926.** A domain-build codelist is declared once in an environment codelist source
+and carries an `id` that is unique across all captured sources. A column names that `id` through `submission.codelist`. Columns share
 one codelist statement.
 
 <a id="req-0927"></a>
 
 **REQ-0927.** `name` is the codelist's human-readable name and is unique across
-the document's codelists. `id` and `name` are separate. `id` is what a
+all environment codelist sources. `id` and `name` are separate. `id` is what a
 specification writes, and `name` is what a reader sees.
 
 <a id="req-0928"></a>
 
-**REQ-0928.** `standard` names a declared standard of type `CT` and states which
-published terminology this codelist is drawn from. A codelist that omits
-`standard` is sponsor-defined rather than unknown. Exactly one of published
+**REQ-0928.** `standard` belongs to a codelist source and states its terminology name,
+publishing set (`ADaM`, `CDASH`, `DEFINE-XML`, `SDTM`, or `SEND`) and
+version once for every list in that source. A source that omits `standard`
+is sponsor-defined rather than unknown. Exactly one of published
 or sponsor-defined holds for any codelist.
 
 <a id="req-0929"></a>
@@ -66,7 +67,7 @@ codelist is an error.
 
 **REQ-0934.** `extended` marks an item the sponsor added to a published list.
 `extended` defaults to false and may be true only on an `extensible` codelist
-that declares `standard`. Adding a value to a list that admits no additions
+whose source declares `standard`. Adding a value to a list that admits no additions
 is a contradiction rather than an extension.
 
 <a id="req-0935"></a>

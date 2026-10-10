@@ -351,10 +351,6 @@ fn unsupported_operations_handlers_and_metadata_are_refused_before_binding() {
         std::fs::read_to_string(root.join("benchmarks/negative-zero-division/spec.yaml")).unwrap();
     for (written, feature) in [
         (
-            raw.replace("100 * (AVAL - BASE) / BASE", "LN(AVAL)"),
-            "numeric_function",
-        ),
-        (
             raw.replace("input/lb.csv", "{path: input/lb.csv, ordinal: RECNO}"),
             "ordinal",
         ),

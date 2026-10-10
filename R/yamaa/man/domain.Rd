@@ -13,7 +13,7 @@ yamaa_check(specification, environment = NULL)
 }
 \arguments{
 \item{specification}{One domain-specification path.}
-\item{environment}{Optional environment path. Unsupported environments are issues.}
+\item{environment}{Optional study environment path for functions and codelists.}
 \item{x}{A lossless signed 64-bit output vector.}
 \item{...}{Unused arguments.}
 }

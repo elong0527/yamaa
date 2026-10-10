@@ -8,7 +8,7 @@ use crate::{
     specification_source::{CapturedSchema, Source},
 };
 use std::sync::Arc;
-use yamaa_core::{project_environment::LockKind, project_function::Language};
+use yamaa_core::project_function::Language;
 use yamaa_engine::project_activation::ActivationPort;
 
 #[derive(Debug)]
@@ -24,8 +24,8 @@ pub struct FileProject {
     resources: Resources,
 }
 impl FileProject {
-    /// Candidate schemas are explicit retained capabilities. Public entry points
-    /// continue using their shipped closure until the format migration qualifies.
+    /// Schemas are retained capabilities; public entry points use the shipped
+    /// domain and environment closures.
     pub fn prepare(
         mut resources: Resources,
         specification: &str,
@@ -47,7 +47,6 @@ impl FileProject {
             host,
             &mut Metadata {
                 resources: &mut resources,
-                host,
             },
             Default::default(),
         )
@@ -76,6 +75,12 @@ impl FileProject {
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }
+    pub(crate) fn publication_target(
+        &self,
+    ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {
+        self.resources
+            .publication_target(self.run.compiled().output_path())
+    }
     pub fn build<A: ActivationPort>(
         &mut self,
         activation: &mut A,
@@ -96,7 +101,6 @@ impl FileProject {
 
 struct Metadata<'a> {
     resources: &'a mut Resources,
-    host: Language,
 }
 impl CapturePort for Metadata<'_> {
     type Error = ResourceError;
@@ -117,14 +121,10 @@ impl CapturePort for Metadata<'_> {
             bytes: bytes.to_vec(),
         };
         Ok(match request.kind {
-            // The installed host supplies its lock codec; decoding/version
-            // verification still occurs only at the engine's activation gate.
             Kind::Lock => Reply::Lock {
+                kind: crate::project_lock::kind(&source.bytes)
+                    .map_err(|_| ResourceError::InvalidLock)?,
                 source,
-                kind: match self.host {
-                    Language::Python => LockKind::Uv,
-                    Language::R => LockKind::Renv,
-                },
             },
             Kind::Function | Kind::Codelist => Reply::Document(source),
         })

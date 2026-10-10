@@ -209,11 +209,8 @@ class NumericSyntax(unittest.TestCase):
     def run_frontend(self, spec, project):
         """Both entrypoints must stop before activation or the forbidden source provider."""
         if project:
-            return r.native_datasets.execute_with_project_functions(
-                spec,
-                lambda _: self.fail("source"),
-                r.ROOT / "specification-functions" / "python",
-                r.SCHEMA,
+            return r.native_datasets.execute_with_source_provider(
+                spec, lambda _: self.fail("source")
             )
         return r.native_datasets.execute_with_source_provider(
             spec, lambda _: self.fail("source")
@@ -238,8 +235,10 @@ class NumericSyntax(unittest.TestCase):
                     self.subTest(text=text, project=project),
                     forbid_reference_syntax(),
                     patch.object(
-                        r.native_datasets,
-                        "activate_project",
+                        __import__(
+                            "yamaa._locked_functions", fromlist=["verify_versions"]
+                        ),
+                        "verify_versions",
                         side_effect=AssertionError("activation"),
                     ),
                 ):
@@ -275,8 +274,10 @@ class NumericSyntax(unittest.TestCase):
                     self.subTest(text=text, project=project),
                     forbid_reference_syntax(),
                     patch.object(
-                        r.native_datasets,
-                        "activate_project",
+                        __import__(
+                            "yamaa._locked_functions", fromlist=["verify_versions"]
+                        ),
+                        "verify_versions",
                         side_effect=AssertionError("activation"),
                     ),
                 ):
@@ -307,8 +308,10 @@ class NumericSyntax(unittest.TestCase):
                     self.subTest(project=project, error=error),
                     forbid_reference_syntax(),
                     patch.object(
-                        r.native_datasets,
-                        "activate_project",
+                        __import__(
+                            "yamaa._locked_functions", fromlist=["verify_versions"]
+                        ),
+                        "verify_versions",
                         side_effect=AssertionError("activation"),
                     ),
                     patch.object(yamaa_native, "analyze_numeric", invoke),
@@ -327,8 +330,10 @@ class NumericSyntax(unittest.TestCase):
                     self.subTest(resource=resource, project=project),
                     forbid_reference_syntax(),
                     patch.object(
-                        r.native_datasets,
-                        "activate_project",
+                        __import__(
+                            "yamaa._locked_functions", fromlist=["verify_versions"]
+                        ),
+                        "verify_versions",
                         side_effect=AssertionError("activation"),
                     ),
                     self.assertRaises(NativeNumericLimitError) as error,

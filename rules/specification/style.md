@@ -41,7 +41,8 @@ it.
 **REQ-1281.** The fields of a mapping are written in the order the schema
 declares them for its class. This applies to the root of the
 specification and to each input dataset, the output, each named
-intermediate, each column, and each row template. The root declares its
+intermediate, each column, each row template and each separately authored
+`function_definition_class`. The root declares its
 fields in reading order:
 
 - what the specification is (`schema_version`, `parents`, `domain`,

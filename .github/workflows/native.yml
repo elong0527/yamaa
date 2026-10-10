@@ -176,10 +176,11 @@ jobs:
       - name: Install build tools
         run: |
           rustup toolchain install 1.90.0 --profile minimal
-          python -m pip install maturin==1.9.6
+          python -m pip install maturin==1.9.6 hatchling==1.27.0
       - name: Build wheel and source archive
         run: |
           (cd python && maturin build --release --sdist --out "${RUNNER_TEMP}/native-dist")
+          python -m pip wheel --no-deps --no-build-isolation rust/tests/project-programs/python --wheel-dir "${RUNNER_TEMP}/project-dist"
           mkdir -p "${RUNNER_TEMP}/reference-dist"
           cp "${RUNNER_TEMP}"/native-dist/*.whl "${RUNNER_TEMP}/reference-dist/"
       - name: Preserve the reference host wheel
@@ -187,6 +188,12 @@ jobs:
         with:
           name: native-reference-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/reference-dist
+          if-no-files-found: error
+      - name: Preserve installed project program
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-project-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/project-dist
           if-no-files-found: error
       - name: Preserve distributions
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -234,6 +241,10 @@ jobs:
         with:
           name: native-reference-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/reference-dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-project-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/project-dist
       - name: Record source revision and table requirements
         run: |
           echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
@@ -264,6 +275,8 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_original_specifications.py" installed_original_specifications.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_file_resources.py" installed_file_resources.py
           python "${GITHUB_WORKSPACE}/rust/tools/stage_specification_inputs.py" specification-original
+          python "${GITHUB_WORKSPACE}/rust/tools/stage_project_inputs.py" project-original
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_environment.py" installed_public_environment.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_yaml.py" installed_yaml.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.tsv" yaml_transport.tsv
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema_loading.py" installed_schema_loading.py
@@ -320,13 +333,13 @@ jobs:
       - name: Install the wheel
         if: matrix.form == 'wheel'
         working-directory: ${{ runner.temp }}
-        run: python -m pip install --no-deps -r table-requirements.txt native-dist/*.whl
+        run: python -m pip install --no-deps -r table-requirements.txt native-dist/*.whl project-dist/*.whl
       - name: Rebuild and install from the source archive
         if: matrix.form == 'source'
         working-directory: ${{ runner.temp }}
         run: |
           python -m pip install --no-deps -r table-requirements.txt
-          python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz
+          python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz project-dist/*.whl
       - name: Qualify the installed package outside checkout
         working-directory: ${{ runner.temp }}
         env:
@@ -436,6 +449,7 @@ jobs:
         run: |
           mkdir -p native-r-library
           R CMD build --no-build-vignettes --no-manual native-stage/yamaa
+          R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.2.0.tar.gz
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/scalars.R" scalars.R
@@ -452,6 +466,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/predicate_execution.R" predicate_execution.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/schema.R" schema.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/original_specifications.R" original_specifications.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_environment.R" public_environment.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/inheritance.R" inheritance.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/yaml.R" yaml.R
           YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
@@ -464,6 +479,7 @@ jobs:
         working-directory: ${{ runner.temp }}
         env:
           _R_CHECK_CRAN_INCOMING_REMOTE_: 'false'
+          R_LIBS: ${{ runner.temp }}/native-r-library
         run: |
           mkdir native-r-check
           cd native-r-check

@@ -7,12 +7,10 @@ import unittest
 from pathlib import Path
 
 import yamaa
-from yamaa import _native as yamaa_native
 from installed_functions import parameter, request
+from yamaa import _native as yamaa_native
 from yamaa.adapters.native_functions import invoke_function
-from yamaa.functions.invocation import BoundFunction
-from yamaa.functions.models import FunctionBinding, FunctionContract
-from yamaa.models.values import DateTimeValue, DateValue, ValueResult
+from yamaa.models.values import DateTimeValue, DateValue
 
 
 def invoke(req, callback):
@@ -77,21 +75,6 @@ class InstalledTemporalResults(unittest.TestCase):
                 del callback
                 gc.collect()
                 self.assertEqual(effects, [1])
-                contract = FunctionContract(
-                    contract_version="1",
-                    implementation_version="2",
-                    description="Independent temporal result truth",
-                    params=[],
-                    returns=kind,
-                    binding=FunctionBinding(call="artifact.example"),
-                    conformance="unused.yaml",
-                )
-                reference = BoundFunction(
-                    "example", contract, lambda _value=value: _value
-                ).invoke({})
-                self.assertIsInstance(reference, ValueResult)
-                self.assertEqual(reference.value.to_text(), text)
-                self.assertEqual(reference.value.collected_precision, precision)
                 self.assertEqual(
                     actual,
                     {
@@ -115,7 +98,7 @@ class InstalledTemporalResults(unittest.TestCase):
                 "datetime",
                 "2024-02-29T12:34:56",
                 "day",
-                dt.datetime(2024, 2, 29, 12, 34, 56),  # noqa: DTZ001 - zone-free contract
+                dt.datetime(2024, 2, 29, 12, 34, 56),
             ),
         ]:
             req = request(

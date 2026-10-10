@@ -5,15 +5,11 @@ from __future__ import annotations
 import datetime
 import os
 import struct
-from dataclasses import replace
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
-from yamaa.functions.activation import ActivatedEnvironment
-from yamaa.functions.evaluator import function_dispatcher
-from yamaa.functions.models import binding_arguments
 from yamaa.models import TypedTable
 from yamaa.runtime import ExecutionHooks, ExecutionSuccess
 from yamaa.verification import check_column, check_dataset
@@ -145,30 +141,6 @@ class RunObservations:
     def event(self, event: str, path: Path) -> None:
         if event == "sources":
             self.current = self.specification_name(path)
-
-    def dispatcher(self, activated: ActivatedEnvironment):
-        def observed(bound):
-            def invoke(**arguments):
-                mapping = binding_arguments(bound.contract)
-                self.callbacks.append(
-                    CallbackObservation(
-                        specification=self.current,
-                        function=bound.name,
-                        contract_version=bound.contract.contract_version,
-                        arguments=tuple(
-                            (param.name, observe_scalar(arguments[mapping[param.name]]))
-                            for param in bound.contract.params
-                        ),
-                    )
-                )
-                return bound.target(**arguments)
-
-            return replace(bound, target=invoke)
-
-        functions = {
-            name: observed(bound) for name, bound in activated.functions.items()
-        }
-        return function_dispatcher(replace(activated, functions=functions))
 
     def _check(self, check, args, records):
         observed = []

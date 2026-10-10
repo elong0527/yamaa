@@ -23,6 +23,22 @@ pub fn capture() -> Result<Arc<CapturedSchema>, Error> {
     )
 }
 
+/// Admit the separately versioned environment root with its exact shared module.
+pub fn capture_environment() -> Result<Arc<CapturedSchema>, Error> {
+    CapturedSchema::admit_root(
+        data::ENVIRONMENT_MODULES
+            .iter()
+            .map(|(name, source)| Source {
+                identity: (*name).into(),
+                bytes: source.as_bytes().to_vec(),
+            })
+            .collect(),
+        0,
+        "environment_class",
+        Default::default(),
+    )
+}
+
 /// Prepare either original document form without host semantic selection.
 pub fn prepare<P: InheritancePort>(
     source: Source,

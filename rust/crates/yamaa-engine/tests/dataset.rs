@@ -4644,6 +4644,7 @@ fn named_plan(
 fn named_item() -> yamaa_engine::dataset::Intermediate {
     use yamaa_engine::dataset::{Intermediate, Keep, MatchKey, OrderTerm, SourceSelection};
     Intermediate {
+        record_keys: Vec::new(),
         identifier: "SELECTED".into(),
         path: "intermediates[0]".into(),
         source: 0,
@@ -6679,4 +6680,167 @@ fn first_available_skips_unselected_reads_and_does_not_fallback_after_conversion
         matches!(*chosen.execute(&source, limits()).unwrap_err(),ExecutionError::Conversion { ref path, output_row:0, .. } if path=="columns.V")
     );
     assert!(source.reads.borrow().iter().all(|&(_, column)| column != 2));
+}
+
+/// UNKNOWN continues; inactive branches cannot read a failing donor. Selected
+/// string literals are converted once by the owning output assignment.
+#[test]
+fn ordered_cases_are_lazy_and_convert_the_selected_raw_value() {
+    use yamaa_engine::dataset::CaseBranch;
+    let mut source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("FLAG", ColumnType::Int),
+            ("BAD", ColumnType::Str),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Int(1), Value::Str("bad".into())],
+            vec![Value::Int(2), Value::Int(-1), Value::Str("bad".into())],
+            vec![Value::Int(3), Value::Missing, Value::Str("bad".into())],
+        ],
+    );
+    source.fail = Some((0, 2));
+    let never = filter(
+        Node::Compare {
+            operator: Comparison::Equal,
+            left: Scalar::Literal(Value::Int(0)),
+            right: Scalar::Literal(Value::Int(1)),
+        },
+        vec![],
+    );
+    let branch = |when, expression| CaseBranch {
+        when,
+        assignment: Box::new(assign(2, expression)),
+    };
+    let plan = DatasetPlan::new(
+        source.schema.clone(),
+        schema(&[
+            ("ID", ColumnType::Int),
+            ("FLAG", ColumnType::Int),
+            ("V", ColumnType::Int),
+        ]),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![
+                assign(0, Expression::Source(0)),
+                assign(1, Expression::Source(1)),
+            ],
+            filter: None,
+        }],
+        vec![assign(
+            2,
+            Expression::Case(vec![
+                branch(
+                    Some(positive(Read::Column(1))),
+                    Expression::Literal(Value::Str("7".into())),
+                ),
+                branch(Some(never), Expression::Source(2)),
+                branch(None, Expression::Literal(Value::Int(8))),
+            ]),
+        )],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(
+        plan.execute(&source, limits()).unwrap().dataset.rows(),
+        &[
+            vec![Value::Int(1), Value::Int(1), Value::Int(7)],
+            vec![Value::Int(2), Value::Int(-1), Value::Int(8)],
+            vec![Value::Int(3), Value::Missing, Value::Int(8)]
+        ]
+    );
+    assert!(source.reads.borrow().iter().all(|&(_, column)| column < 2));
+}
+
+/// Matching uses the driver's raw code even when the output code has another
+/// value. Conflicting raw readings are a collection failure, never first-row wins.
+#[test]
+fn named_record_matching_keeps_raw_driver_keys_independent_of_output_columns() {
+    use yamaa_engine::dataset::RecordMatchKey;
+    let driver = table(
+        &[("ID", ColumnType::Int), ("RAW", ColumnType::Str)],
+        vec![
+            vec![Value::Int(1), Value::Str("RAW".into())],
+            vec![Value::Int(1), Value::Str("RAW".into())],
+        ],
+    );
+    let right = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("CODE", ColumnType::Str),
+            ("ORD", ColumnType::Int),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Str("RAW".into()), Value::Int(1)],
+            vec![Value::Int(1), Value::Str("OUTPUT".into()), Value::Int(2)],
+        ],
+    );
+    let mut item = named_item();
+    item.keys.clear();
+    item.record_keys = vec![RecordMatchKey {
+        source_column: 1,
+        driver_column: 1,
+        identifier: "DRIVER.RAW".into(),
+    }];
+    use yamaa_engine::dataset::{SecondarySource, SourceSchemas};
+    let plan = DatasetPlan::new_with_intermediates(
+        SourceSchemas {
+            primary: driver.schema.clone(),
+            secondary: vec![SecondarySource {
+                name: "OTHER".into(),
+                schema: right.schema.clone(),
+            }],
+        },
+        vec![item],
+        schema(&[
+            ("ID", ColumnType::Int),
+            ("CODE", ColumnType::Str),
+            ("V", ColumnType::Int),
+        ]),
+        vec![RowTemplate {
+            mode: RowMode::Keys,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        vec![
+            assign(1, Expression::Literal(Value::Str("OUTPUT".into()))),
+            assign(
+                2,
+                Expression::Intermediate {
+                    index: 0,
+                    column: 2,
+                },
+            ),
+        ],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(
+        plan.execute_observed_sources(&driver, &[&right], limits())
+            .result
+            .unwrap()
+            .dataset
+            .rows(),
+        &[vec![
+            Value::Int(1),
+            Value::Str("OUTPUT".into()),
+            Value::Int(1)
+        ]]
+    );
+    let conflict = table(
+        &[("ID", ColumnType::Int), ("RAW", ColumnType::Str)],
+        vec![
+            vec![Value::Int(1), Value::Str("RAW".into())],
+            vec![Value::Int(1), Value::Str("OTHER".into())],
+        ],
+    );
+    assert!(matches!(
+        *plan
+            .execute_observed_sources(&conflict, &[&right], limits())
+            .result
+            .unwrap_err(),
+        ExecutionError::MultipleValues { .. }
+    ));
 }

@@ -49,7 +49,7 @@ owns the sequence of a run.
 | [Windows](https://github.com/elong0527/yamaa/blob/main/rules/operations/windows.md) | normative | Partition constructed output rows and compute ranks, neighbors, and baseline selections. |
 | [Text operations](https://github.com/elong0527/yamaa/blob/main/rules/operations/text.md) | normative | Apply casing, inline mapping, templates, and portable regular expressions. |
 | [Temporal operations](https://github.com/elong0527/yamaa/blob/main/rules/operations/temporal.md) | normative | Compute calendar differences, study days, date completion, and precision. |
-| [Project functions](https://github.com/elong0527/yamaa/blob/main/rules/operations/functions.md) | normative | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
+| [Project functions](https://github.com/elong0527/yamaa/blob/main/rules/operations/functions.md) | normative | Verify installed packages against the held lock and validate function inputs, results, and inline activation tests. |
 
 ## Storage
 

@@ -431,7 +431,6 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/functions.R",
-        "python/tests/native/test_function_invocation_vectors.py",
         "rust/crates/yamaa-engine/tests/function_invocation.rs",
         "rust/tests/installed_functions.py"
       ]
@@ -1195,6 +1194,20 @@
       "path": "rust/tests/installed_file_resources.py",
       "staged_path": "installed_file_resources.py",
       "level": "compile"
+    },
+    {
+      "id": "python/public-environment",
+      "runtime": "python",
+      "path": "rust/tests/installed_public_environment.py",
+      "staged_path": "installed_public_environment.py",
+      "level": "shared_run"
+    },
+    {
+      "id": "r/public-environment",
+      "runtime": "r",
+      "path": "R/yamaa/tests/public_environment.R",
+      "staged_path": "public_environment.R",
+      "level": "shared_run"
     }
   ],
   "support_files": [

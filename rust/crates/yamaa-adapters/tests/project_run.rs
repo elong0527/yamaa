@@ -798,7 +798,7 @@ fn lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports() {
         }],
     )
     .unwrap();
-    assert_eq!(result.issues()[0].condition, "project_environment_invalid");
+    assert_eq!(result.issues()[0].condition, "runtime_artifact_mismatch");
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&result.issues()[0].context).unwrap(),
         serde_json::json!({"source":"study/environment.yaml","entry":"study/environment.yaml","lock_source":"held/uv.lock","lock":"../uv.lock","package":"project","reason":"distribution_not_identified","expected":[],"actual":null})

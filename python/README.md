@@ -627,43 +627,33 @@ uv run --project python --isolated --extra test pytest \
 
 ## Project functions
 
-A specification names a logical function and a project supplies the code, so
-running one needs a project root the runner selects:
+Pass the study environment explicitly to the public SDK:
 
 ```python
-from yamaa.functions import execute_with_project_functions
+import yamaa
 
-result = execute_with_project_functions(
-    specification,
-    lambda datasets: load_source_tables(datasets, resources),
-    "python/tests/projects/bmi-python",  # the selected project root
-    "yaml",
-)
+checked = yamaa.check("spec.yaml", environment="python/environment.yaml")
+result = yamaa.domain("spec.yaml", environment="python/environment.yaml")
+result.save()
 ```
 
-The root's `environment.yaml` is resolved and validated on its own, the
-calls the specification writes are held to the contracts it provides, its
-artifact is resolved and read, and every activation vector runs -- all
-before a source is read. Only then does the
-run execute, with `function` registered on the dispatcher every other
-operation already uses.
+`environment=` names a YAML metadata file. Paths written in that file resolve
+relative to its containing directory. It declares the host language, packaging
+lock, versionless function definitions with inline tests, shared codelists, and
+optional submission metadata. Function implementations belong to ordinary
+installed packages; the SDK does not install packages or load an artifact tree.
 
-`python/tests/projects/bmi-python` implements in Python the same logical
-`bmi` contract the committed `adam-adsl-bmi` example implements in
-R. The two roots calculate one contract fingerprint and run byte-identical
-vectors, and `benchmarks/adam-adsl-bmi/spec.yaml` is unchanged
-between them, which is the portability R018 exists for. This runner refuses
-that example's own R project root under REQ-0667 rather than running it.
+`check()` captures metadata and returns static issues without importing project
+code, verifying installed versions, running function tests, or reading study data.
+Each `domain()` build verifies the installed packages used by its calls against
+the held lock, binds callable signatures, and runs every test for the called
+functions before reading study data. Unused definitions stay inactive. Failed
+locks or tests stop the build; activation success is never cached between builds.
 
-See the [project function documentation](src/yamaa/functions/README.md) for
-the artifact resolver, reference-based runtime identity, and what each stage
-owns.
-
-Run this component's focused tests from the repository root:
-
-```bash
-uv run --project python --isolated --extra test pytest python/tests/functions
-```
+The five original function studies have equivalent Python and R environments.
+Their installed qualification is in `rust/tests/installed_public_environment.py`
+and `R/yamaa/tests/public_environment.R`; the same original positive CSV truth is
+used by both hosts. See `rust/tests/project-programs/README.md` for setup and staging.
 
 ## Verified tables and published artifacts
 

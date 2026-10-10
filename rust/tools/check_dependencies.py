@@ -13,6 +13,7 @@ ALLOWED = {
         "yamaa-engine",
         "serde",
         "serde_json",
+        "toml",
         "saphyr-parser",
         "num-bigint",
         "arrow-array",

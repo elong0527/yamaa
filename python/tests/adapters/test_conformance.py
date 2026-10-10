@@ -581,7 +581,6 @@ class TestUnsupportedAndMissingPrerequisites:
         # A positive example must still execute, so it fails here.
         example = copy_example(PORTABLE, tmp_path)
         shutil.rmtree(example / "python")
-        (example / "environment.yaml").unlink()
 
         report = run(example, tmp_path)
         verdict = compare_example(report, example)
@@ -591,13 +590,16 @@ class TestUnsupportedAndMissingPrerequisites:
         assert not verdict.passed
         assert kinds(verdict) == {"outcome"}
 
-    def test_a_selected_project_root_executes_the_call(self, tmp_path: Path) -> None:
-        # The same example with its `python/` root in place: this runner
-        # selects the root for the language it speaks and runs it.
+    def test_reference_runner_explicitly_refuses_retired_project_calls(
+        self, tmp_path: Path
+    ) -> None:
+        # Public installed native routes qualify the replacement environment.
+        # This reference-assisted component runner must not imply parity.
         report = run(EXAMPLES / PORTABLE, tmp_path)
 
-        assert report.outcome == "success", report
-        assert compare_example(report, EXAMPLES / PORTABLE).passed
+        assert report.outcome == "unsupported", report
+        assert report.unsupported[0].operation == "function"
+        assert not compare_example(report, EXAMPLES / PORTABLE).passed
 
     @pytest.mark.parametrize("outcome", ["unsupported", "error", "success"])
     def test_only_a_semantic_failure_satisfies_a_negative_example(

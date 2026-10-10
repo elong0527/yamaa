@@ -12,7 +12,7 @@ disagreement requires investigation rather than automatic golden regeneration.
 | `yamaa.yamaa_domain` | Explicit schema, project and data roots; optional project configuration and study document; one cached workflow execution. |
 | `DomainRun` | `spec`, declaration-ordered `inputs` and `input` alias, Polars `output`, `issues`, warning and verification logs; returned frames are independent copies. Failed runs have no accepted output. |
 | `DomainRun.save` / `DomainRunError` | Explicit publication only, output gates, requested transport extension, atomic replacement, and structured issues on unsuccessful runs. |
-| `functions.run_with_project_functions` | Explicit host-function project root; all required bindings validated and activated before study-source reads; exact types/defaults/missing behavior and fatal callback failures. |
+| `yamaa.domain` / `yamaa.check` with `environment=` | Shared original-file preparation, static diagnostics without code/data, fresh lock verification and called-function tests before each build, retained issues/output and explicit publication. The superseded `functions` runner, artifact resolver and activation cache are retired under #1757. |
 | `ExpressionDispatcher` | Caller-supplied supported-operation registry and nested dispatch. An unsupported extension must be reported before execution, never silently ignored or retried with another backend. |
 | `ExecutionHooks` | Column, key, dataset and output hooks; existing three-argument verification hooks and records-aware hooks. |
 | `specification.load_specification` | Strict current-schema validation, normalized models and portable diagnostic paths. Python model compatibility must be decided before replacing exposed objects with Rust wrappers. |
@@ -58,6 +58,8 @@ backend before a run has side effects; never fall back after invoking callbacks.
 Unsupported coverage is explicit, and reference reports are observations rather
 than replacements for independently committed expected artifacts.
 
-Artifact identities use `runtime.artifact.reference`; contract fingerprints are
-canonical RFC 8785 JSON; activation keys join identities; snapshots compare held
-bytes. Do not introduce content hashes during migration.
+Public environment functions use the ordinary packages installed in the uv/renv
+locked host. yamaa does not resolve artifacts or cache activation; every build
+repeats called-function tests. Resource snapshots compare held bytes directly.
+Keep AGENTS.md unchanged: only the existing `python/uv.lock` carries tool hashes;
+do not introduce content hashes or new digest-bearing locks during migration.
