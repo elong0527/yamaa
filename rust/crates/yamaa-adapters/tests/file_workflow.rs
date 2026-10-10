@@ -1235,3 +1235,182 @@ fn selected_configured_paths_keep_absolute_environment_policy_and_early_owned_re
         b"schema_version: '1.0'\n"
     );
 }
+
+#[test]
+fn known_entry_limits_refuse_before_the_first_environment_read_in_both_routes() {
+    use file_workflow::SelectionError;
+    use std::sync::Arc;
+    use yamaa_adapters::file_graph::Error as G;
+    let study = Study::new();
+    // A malformed environment would produce a raw decode refusal if entered.
+    study.write("environment.yaml", "[");
+    let schema = shipped_schema::capture().unwrap();
+    let environment_schema = shipped_schema::capture_environment().unwrap();
+    let oversized = "x".repeat(65_537);
+    for (entry, limits, expected) in [
+        (
+            "root.yaml",
+            Limits {
+                graph: yamaa_core::producer_graph::Limits {
+                    nodes: 0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            "producer_graph_nodes",
+        ),
+        (
+            "root.yaml",
+            Limits {
+                schema_modules: 0,
+                ..Default::default()
+            },
+            "producer_graph_schema_modules",
+        ),
+        (
+            "root.yaml",
+            Limits {
+                schema_bytes: 0,
+                ..Default::default()
+            },
+            "producer_graph_schema_bytes",
+        ),
+        (
+            oversized.as_str(),
+            Limits::default(),
+            "producer_graph_identity_bytes",
+        ),
+        // First request spellings fit exactly; the sealed entry spelling does
+        // not. This refusal must precede even the environment root inspection.
+        (
+            "root.yaml",
+            Limits {
+                graph: yamaa_core::producer_graph::Limits {
+                    text_bytes: "root.yaml".len() + "environment.yaml".len(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            "resource_limit",
+        ),
+        (
+            "root.yaml",
+            Limits {
+                graph: yamaa_core::producer_graph::Limits {
+                    work: "root.yaml".len() + "environment.yaml".len(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            "resource_limit",
+        ),
+    ] {
+        for selection in [false, true] {
+            let resources = Resources::new(&study.path(""), &study.path(""), &[]).unwrap();
+            let error = if selection {
+                match file_workflow::select_with_resources(
+                    resources,
+                    entry,
+                    "environment.yaml",
+                    Language::Python,
+                    Arc::clone(&schema),
+                    Arc::clone(&environment_schema),
+                    limits,
+                ) {
+                    Err(SelectionError::Preparation(error)) => error,
+                    _ => panic!("selection must refuse the known entry limit"),
+                }
+            } else {
+                match file_workflow::prepare_with_resources(
+                    resources,
+                    entry,
+                    "environment.yaml",
+                    Language::Python,
+                    Arc::clone(&schema),
+                    Arc::clone(&environment_schema),
+                    limits,
+                ) {
+                    Err(error) => error,
+                    Ok(_) => panic!("static preparation must refuse the known entry limit"),
+                }
+            };
+            let Error::Admission(owner) = &error else {
+                panic!("original pre-capture admission owner: {error:?}")
+            };
+            match owner.error() {
+                G::Limit(name) => assert_eq!(*name, expected),
+                G::Resource(yamaa_adapters::file_resources::Error::Limit) => {
+                    assert_eq!(expected, "resource_limit")
+                }
+                other => panic!("original typed cause: {other:?}"),
+            }
+            assert_eq!(owner.capture_reads(), 0);
+            assert_eq!(owner.entry(), Some(entry));
+            assert_eq!(owner.environment(), Some("environment.yaml"));
+            assert!(Arc::ptr_eq(owner.specification_schema(), &schema));
+            assert!(Arc::ptr_eq(owner.environment_schema(), &environment_schema));
+            assert!(owner.retained_sources(16, 131072).unwrap().is_empty());
+            assert!(
+                matches!(producer_check::rejected(&error, Language::Python), Err(producer_check::Error::Original(original)) if std::ptr::eq(original, &error))
+            );
+        }
+    }
+}
+
+#[test]
+fn known_entry_refusal_keeps_preexisting_raw_captures_and_both_schemas_after_files_drop() {
+    use file_workflow::SelectionError;
+    use std::sync::Arc;
+    let study = Study::new();
+    let original = b"version: '1.0'\ndata_roots: []\n";
+    study.write(
+        "captured-config.yaml",
+        std::str::from_utf8(original).unwrap(),
+    );
+    let mut resources = Resources::new(&study.path(""), &study.path(""), &[]).unwrap();
+    let (held, _) = resources.capture("captured-config.yaml", 65536).unwrap();
+    let schema = shipped_schema::capture().unwrap();
+    let environment_schema = shipped_schema::capture_environment().unwrap();
+    let rejection = file_workflow::select_with_resources(
+        resources,
+        "root.yaml",
+        "environment.yaml",
+        Language::Python,
+        Arc::clone(&schema),
+        Arc::clone(&environment_schema),
+        Limits {
+            graph: yamaa_core::producer_graph::Limits {
+                nodes: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    let Err(SelectionError::Preparation(error @ Error::Admission(_))) = rejection else {
+        panic!("owned known entry refusal")
+    };
+    let Error::Admission(owner) = &error else {
+        unreachable!()
+    };
+    assert_eq!(owner.capture_reads(), 1); // existing config only, no new read
+    assert!(Arc::ptr_eq(owner.specification_schema(), &schema));
+    assert!(Arc::ptr_eq(owner.environment_schema(), &environment_schema));
+    assert!(owner.retained_sources(0, 0).is_err());
+    let path = study.path("captured-config.yaml");
+    drop(schema);
+    drop(environment_schema);
+    drop(study);
+    let sources = owner.retained_sources(16, 65536).unwrap();
+    assert_eq!(sources.len(), 1);
+    assert_eq!(sources[0].0, path);
+    assert_eq!(sources[0].1.as_ref(), original);
+    assert!(Arc::ptr_eq(&sources[0].1, &held));
+    assert!(matches!(
+        owner.error(),
+        yamaa_adapters::file_graph::Error::Limit("producer_graph_nodes")
+    ));
+    assert!(
+        matches!(producer_check::rejected(&error, Language::Python), Err(producer_check::Error::Original(original)) if std::ptr::eq(original, &error))
+    );
+    assert_eq!(owner.capture_reads(), 1);
+}

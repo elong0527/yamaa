@@ -14,6 +14,7 @@ pub enum Error {
     Configuration(crate::file_configuration::Error),
     Schema(crate::specification_source::Error),
     Environment(Box<RejectedEnvironment>),
+    Admission(Box<RejectedAdmission>),
     Graph(Box<RejectedGraph>),
 }
 /// Even an early root decode or metadata transport failure retains the original
@@ -25,6 +26,55 @@ pub struct RejectedEnvironment {
     specification_schema: Arc<CapturedSchema>,
     environment_schema: Arc<CapturedSchema>,
     resources: Resources,
+}
+/// Known entry/schema refusal before the first environment read. Original
+/// resource captures and both schema capabilities remain owned without a
+/// fabricated environment capture or graph document.
+pub struct RejectedAdmission {
+    error: crate::file_graph::Error,
+    entry: Option<String>,
+    environment: Option<String>,
+    specification_schema: Arc<CapturedSchema>,
+    environment_schema: Arc<CapturedSchema>,
+    resources: Resources,
+}
+impl std::fmt::Debug for RejectedAdmission {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RejectedAdmission")
+            .field("error", &self.error)
+            .field("entry", &self.entry)
+            .field("environment", &self.environment)
+            .field("capture_reads", &self.capture_reads())
+            .finish_non_exhaustive()
+    }
+}
+impl RejectedAdmission {
+    pub fn error(&self) -> &crate::file_graph::Error {
+        &self.error
+    }
+    pub fn entry(&self) -> Option<&str> {
+        self.entry.as_deref()
+    }
+    pub fn environment(&self) -> Option<&str> {
+        self.environment.as_deref()
+    }
+    pub fn specification_schema(&self) -> &Arc<CapturedSchema> {
+        &self.specification_schema
+    }
+    pub fn environment_schema(&self) -> &Arc<CapturedSchema> {
+        &self.environment_schema
+    }
+    pub fn capture_reads(&self) -> usize {
+        self.resources.capture_reads()
+    }
+    pub fn retained_sources(
+        &self,
+        aliases: usize,
+        text: usize,
+    ) -> Result<crate::file_resources::RetainedSources, crate::file_resources::RetentionFailure>
+    {
+        self.resources.retain_sources(aliases, text)
+    }
 }
 impl RejectedEnvironment {
     pub fn error(&self) -> &file_project::Error {
@@ -74,6 +124,7 @@ impl std::fmt::Debug for Error {
             Self::Configuration(error) => f.debug_tuple("Configuration").field(error).finish(),
             Self::Schema(error) => f.debug_tuple("Schema").field(error).finish(),
             Self::Environment(error) => f.debug_tuple("Environment").field(error).finish(),
+            Self::Admission(error) => f.debug_tuple("Admission").field(error).finish(),
             Self::Graph(error) => f.debug_tuple("Graph").field(error).finish(),
         }
     }
@@ -136,7 +187,7 @@ pub fn prepare_with_resources(
     environment_schema: Arc<CapturedSchema>,
     limits: Limits,
 ) -> Result<FileGraph, Error> {
-    let (resources, environment) = capture_environment(
+    let (resources, environment, entry) = capture_environment(
         resources,
         entry,
         environment,
@@ -145,7 +196,8 @@ pub fn prepare_with_resources(
         environment_schema,
         limits,
     )?;
-    FileGraph::prepare(resources, entry, environment, specification_schema, limits)
+    FileGraph::capture_admitted_entry(resources, entry, environment)
+        .and_then(FileGraph::prepare_captured)
         .map_err(Error::Graph)
 }
 
@@ -189,7 +241,7 @@ pub fn select_with_resources(
     environment_schema: Arc<CapturedSchema>,
     limits: Limits,
 ) -> Result<Selected, SelectionError> {
-    let (resources, environment) = capture_environment(
+    let (resources, environment, entry) = capture_environment(
         resources,
         entry,
         environment,
@@ -199,9 +251,8 @@ pub fn select_with_resources(
         limits,
     )
     .map_err(SelectionError::Preparation)?;
-    let entry =
-        FileGraph::capture_entry(resources, entry, environment, specification_schema, limits)
-            .map_err(|error| SelectionError::Preparation(Error::Graph(error)))?;
+    let entry = FileGraph::capture_admitted_entry(resources, entry, environment)
+        .map_err(|error| SelectionError::Preparation(Error::Graph(error)))?;
     if entry.is_producer() {
         FileGraph::prepare_captured(entry)
             .map(|graph| Selected::Producer(Box::new(graph)))
@@ -221,10 +272,15 @@ fn capture_environment(
     specification_schema: Arc<CapturedSchema>,
     environment_schema: Arc<CapturedSchema>,
     limits: Limits,
-) -> Result<(Resources, crate::project_source::OwnedEnvironment), Error> {
-    let mut owned_entry = None;
-    let mut owned_environment = None;
-    let result = (|| {
+) -> Result<
+    (
+        Resources,
+        crate::project_source::OwnedEnvironment,
+        crate::file_graph::AdmittedEntry,
+    ),
+    Error,
+> {
+    let paths = (|| {
         resources
             .ensure_metadata_budget(MetadataLimits {
                 bytes: limits.captured_bytes,
@@ -238,21 +294,53 @@ fn capture_environment(
                 file_project::Error::Resource(crate::file_resources::Error::Limit),
             )?)
             .map_err(file_project::Error::Resource)?;
-        owned_entry = Some(entry.to_owned());
-        owned_environment = Some(environment.to_owned());
-        file_project::capture_environment(
-            &mut resources,
-            environment,
-            host,
-            Arc::clone(&environment_schema),
-        )
+        Ok((entry.to_owned(), environment.to_owned()))
     })();
-    match result {
-        Ok(environment) => Ok((resources, environment)),
+    let (owned_entry, owned_environment) = match paths {
+        Ok(paths) => paths,
+        Err(error) => {
+            return Err(Error::Environment(Box::new(RejectedEnvironment {
+                error,
+                entry: None,
+                environment: None,
+                specification_schema,
+                environment_schema,
+                resources,
+            })))
+        }
+    };
+    // Known root/schema limits and its written identity ownership are admitted
+    // before crossing the first environment capture boundary. The sealed token
+    // is consumed later; neither selection nor graph collection charges it again.
+    let admission = match crate::file_graph::admit_entry(
+        &mut resources,
+        entry,
+        Arc::clone(&specification_schema),
+        limits,
+    ) {
+        Ok(admitted) => admitted,
+        Err(error) => {
+            return Err(Error::Admission(Box::new(RejectedAdmission {
+                error,
+                entry: Some(owned_entry),
+                environment: Some(owned_environment),
+                specification_schema,
+                environment_schema,
+                resources,
+            })))
+        }
+    };
+    match file_project::capture_environment(
+        &mut resources,
+        environment,
+        host,
+        Arc::clone(&environment_schema),
+    ) {
+        Ok(environment) => Ok((resources, environment, admission)),
         Err(error) => Err(Error::Environment(Box::new(RejectedEnvironment {
             error,
-            entry: owned_entry,
-            environment: owned_environment,
+            entry: Some(owned_entry),
+            environment: Some(owned_environment),
             specification_schema,
             environment_schema,
             resources,

@@ -11,7 +11,13 @@ path policy for the environment. A cumulative metadata scope admits existing
 configuration captures, environment/lock/definition bytes, preparation copies,
 snapshots, aliases, text and work before the first environment root read. Its
 limits cannot replace an existing policy or reset spent admission. Both static
-graph preparation and selection use the same environment capture service.
+graph preparation and selection use the same environment capture service. Known
+root node, schema module/byte, written identity and entry ownership limits are
+also admitted before that first read. A private admission token carries the paid
+entry spelling, schema and limits into the later capture without charging or
+replacing them again. Its schema-source scan reserves work before traversal.
+An early refusal retains the exact native cause, request spellings, both schemas
+and any preexisting raw captures without fabricating an environment or document.
 
 The original entry is captured and inherited once with its retained schema. A
 complete borrowed scan of the original materialized input declarations reserves

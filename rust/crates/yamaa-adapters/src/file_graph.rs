@@ -105,6 +105,13 @@ pub(crate) struct CapturedEntry {
     limits: Limits,
     producer: bool,
 }
+/// Entry/schema limits and written identity ownership admitted before capture.
+/// Private fields prevent an unadmitted request from entering the shared transfer.
+pub(crate) struct AdmittedEntry {
+    written: String,
+    schema: Arc<CapturedSchema>,
+    limits: Limits,
+}
 impl CapturedEntry {
     pub(crate) fn is_producer(&self) -> bool {
         self.producer
@@ -141,16 +148,40 @@ impl FileGraph {
         schema: Arc<CapturedSchema>,
         limits: Limits,
     ) -> Result<CapturedEntry, Box<RejectedGraph>> {
-        let mut entry = None;
+        let admitted = match admit_entry(&mut resources, written, Arc::clone(&schema), limits) {
+            Ok(admitted) => admitted,
+            Err(error) => {
+                let (_, environment) = environment.into_parts();
+                return Err(Box::new(RejectedGraph {
+                    error,
+                    entry: None,
+                    origin: None,
+                    documents: Vec::new(),
+                    schema,
+                    environment,
+                    resources,
+                }));
+            }
+        };
+        Self::capture_admitted_entry(resources, admitted, environment)
+    }
+    pub(crate) fn capture_admitted_entry(
+        mut resources: Resources,
+        admitted: AdmittedEntry,
+        environment: OwnedEnvironment,
+    ) -> Result<CapturedEntry, Box<RejectedGraph>> {
+        let AdmittedEntry {
+            written,
+            schema,
+            limits,
+        } = admitted;
         let mut document = None;
         let result = (|| {
-            admit_entry(&mut resources, written, &schema, limits)?;
-            entry = Some(written.to_owned());
             document = Some(
                 file_preparation::prepare_document_from(
                     &mut resources,
                     None,
-                    written,
+                    &written,
                     Some(Arc::clone(&schema)),
                 )
                 .map_err(Error::Document)?,
@@ -186,7 +217,7 @@ impl FileGraph {
         match result {
             Ok(producer) => Ok(CapturedEntry {
                 resources,
-                written: entry.expect("admitted entry"),
+                written,
                 environment,
                 schema,
                 document: document.expect("captured entry"),
@@ -197,7 +228,7 @@ impl FileGraph {
                 let (_, environment) = environment.into_parts();
                 Err(Box::new(RejectedGraph {
                     error,
-                    entry,
+                    entry: Some(written),
                     origin: None,
                     documents: document.into_iter().map(Arc::new).collect(),
                     schema,
@@ -363,26 +394,17 @@ fn collect(
         schema,
     )
 }
-fn admit_entry(
+pub(crate) fn admit_entry(
     resources: &mut Resources,
     written: &str,
-    schema: &Arc<CapturedSchema>,
+    schema: Arc<CapturedSchema>,
     limits: Limits,
-) -> Result<(), Error> {
+) -> Result<AdmittedEntry, Error> {
     if limits.graph.nodes == 0 {
         return Err(Error::Limit("producer_graph_nodes"));
     }
     if schema.sources().len() > limits.schema_modules {
         return Err(Error::Limit("producer_graph_schema_modules"));
-    }
-    let mut schema_bytes = 0;
-    for source in schema.sources() {
-        charge(
-            &mut schema_bytes,
-            source.bytes.len(),
-            limits.schema_bytes,
-            "producer_graph_schema_bytes",
-        )?;
     }
     resources
         .ensure_metadata_budget(MetadataLimits {
@@ -392,13 +414,29 @@ fn admit_entry(
             work: limits.graph.work,
         })
         .map_err(Error::Resource)?;
+    resources
+        .charge_work(schema.sources().len())
+        .map_err(Error::Resource)?;
+    let mut schema_bytes = 0;
+    for source in schema.sources() {
+        charge(
+            &mut schema_bytes,
+            source.bytes.len(),
+            limits.schema_bytes,
+            "producer_graph_schema_bytes",
+        )?;
+    }
     if written.len() > crate::specification_source::Limits::default().identity_bytes {
         return Err(Error::Limit("producer_graph_identity_bytes"));
     }
     resources
         .charge_metadata_text(written.len())
         .map_err(Error::Resource)?;
-    Ok(())
+    Ok(AdmittedEntry {
+        written: written.to_owned(),
+        schema,
+        limits,
+    })
 }
 fn collect_nodes(
     resources: &mut Resources,
