@@ -5,7 +5,8 @@ runtime or study authority. Each canonical identity owns one admitted document;
 every producer candidate borrows that owner. Missing, duplicate, replaced or
 unreachable nodes refuse. Adapter references share one retained `Arc` owner,
 including diamonds and distinct authored aliases to the same producer. Native
-recursive resource resolution remains #1741; identities here are supplied facts.
+recursive resource resolution is the separate #1867 boundary described below;
+identities in this supplied-document boundary remain facts.
 
 Core reuses the #1858 producer declaration validator. It checks contracts,
 authored paths, sole type authority and artifact identities before iterative
@@ -40,8 +41,31 @@ declarations still report `unsupported_operation` and cannot save. This boundary
 does not qualify workflow execution, whole-graph activation, serialized ingestion,
 publication, #1741 acceptance or full migration.
 
-The next #1741 implementation must resolve native nodes under approved roots,
-activate the complete required selection before study data, project validated
+`file_graph::FileGraph` captures a recursive native closure under the caller's
+already selected approved descriptors. It reuses the ordinary source/inheritance
+preparation path with each original declaring source and spelling. An iterative
+frontier owns one prepared `Arc` per canonical document; every alias verifies its
+own metadata witness and reuses that owner. Schema, consumer input and producer
+output origins remain independent. Artifact locations use the existing lexical
+first-anchor publication policy, including absent targets. No artifact is opened,
+captured or created. Metadata retains existing fallback/link/containment policy.
+
+The native capture scope bounds node/edge ownership, snapshots and aliases, raw
+bytes plus preparation copies, retained path text and actual capture/reread work.
+Alias verification and final whole-prefix snapshot verification consume work even
+when they create no new capture. Native ownership text/work are deducted before
+complete adapter/core admission; byte equality remains direct. A bounded temporary
+document preparation frame precedes aggregate model-node ownership admission.
+Resource limits retain their own typed refusal; changed cached bytes remain an
+original `Changed` failure. A rejected owner retains its original schema,
+environment, successful document prefix, raw captured metadata (including failed
+entry/parent decoding), and typed node/declaration-associated rejection. Immutable
+evidence remains available after source files disappear, without resource authority.
+
+This native boundary remains metadata-only and ordinary installed producer
+execution remains refused. See [its qualification scope](planning/1867-qualification.md).
+The next #1741 implementation must activate the complete required selection before
+study data, project validated
 handles into local slots, execute each producer once, decode its retained
 serialized artifact and preserve whole attempts and explicit ordered save.
 Its independent truth remains `1.234/2.345 -> CSV 1.23/2.35 -> consumer 2.46/4.70`,

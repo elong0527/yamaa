@@ -112,14 +112,33 @@ all 23 final-head checks, 16 native jobs, completed review and 40 artifact audit
 passed. Its merged source equals the qualified head. This slice does not supply
 producer execution or consumer re-ingestion.
 
-The next #1741 prerequisite is [#1863 complete producer graph metadata](https://github.com/elong0527/yamaa/issues/1863).
-Its bounded implementation is being qualified: one canonical document per node,
+The [#1863 complete producer graph metadata](https://github.com/elong0527/yamaa/issues/1863)
+prerequisite is qualified: one canonical document per node,
 complete acyclic closure, deterministic producer-first order, one compilation per
 node and explicit local-to-graph function slots against one owned environment.
 Cross-branch schema/snapshot and producer metadata conflicts refuse. This capability
 still exposes metadata and execution denial only; it grants no native resources,
 activation, producer execution, ingestion or publication authority. See
-[the boundary](../PRODUCER_GRAPH.md) and [qualification scope](1863-qualification.md).
+[the boundary](../PRODUCER_GRAPH.md) and [qualification record](1863-qualification.md).
+[#1865](https://github.com/elong0527/yamaa/pull/1865) merged as
+`4bfa2d8300539b598f71cb26991914301cd088a1` after all 23 final-head checks,
+16 native jobs, complete assessed review and 40 artifact audits passed. Its
+merged source equals the qualified head directly. Linux/macOS pass 1,037 Rust
+tests per mode; Windows passes 1,028, across 125 targets each. Six installed Python
+forms and both exercised R forms pass their complete supplemental suites.
+
+The next native prerequisite is [#1867 producer graph capture](https://github.com/elong0527/yamaa/issues/1867).
+It must capture each original recursive producer document once under approved
+descriptor roots, retain independent authored origins and rejection evidence,
+and supply artifact location facts while prospective outputs remain absent.
+The implementation now captures a canonical closure iteratively through shared
+source/inheritance preparation, verifies aliases and whole-prefix snapshots,
+bounds capture/copies/text/work, and retains original raw failure evidence.
+Component filesystem tests cover diamonds, separate inherited origins, absent
+artifacts, mismatch/cycle/missing/binding failures, limits, fallback, links,
+changed snapshots and literal-backslash Unix roots. Full qualification is in
+progress; this boundary grants no workflow execution authority. See
+[the qualification scope](1867-qualification.md).
 
 See [the closing qualification record](1757-qualification.md) for actual local
 results and the distinction between those results and the CI platform matrix.
@@ -134,10 +153,12 @@ Continue with the following acceptance gates in the
    is closed by #1859 with its complete qualification above.
 2. [#1860 CSV precision](https://github.com/elong0527/yamaa/issues/1860) is closed
    by #1862 with complete qualification above.
-3. Qualify #1863's complete static graph prerequisite, then complete #1741's
+3. #1863 is closed by #1865 with complete qualification above. Complete #1867's
+   native graph capture prerequisite, then #1741's
    producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.
+   Settle #1866's publication lifecycle decision before closing #1741 acceptance.
 4. Complete #1758's shared Define-XML/Dataset-JSON implementation and three
    submission fixtures before retiring the old schema and generator.
 5. Close the remaining language/API gaps in #1751/#1752/#1754 and the executable
@@ -157,6 +178,14 @@ downstream effects. See the [decision record](1757-maintainer-decisions.md) and
 [math policy](../MATH_POLICY.md). Release representations, Windows R scope, Cargo
 reproducibility and performance budgets retain their decisions and qualification
 gates; numerical approval does not close them.
+
+[#1866](https://github.com/elong0527/yamaa/issues/1866) records one unanswered
+workflow publication decision. The existing build computes the graph in memory
+before explicit Save publishes held bytes. #1741's literal publication-failure
+wording cannot prevent dependent execution already completed before Save.
+The recommendation preserves this lifecycle and stops dependent publication on a
+producer Save failure while retaining completed execution evidence. No answer or
+acceptance change is inferred; independent graph preparation can continue.
 
 AGENTS.md still permits tool hashes only in the existing `python/uv.lock`.
 Additional digest-bearing lock files are not authorized. The verified existing
