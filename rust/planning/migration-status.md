@@ -247,8 +247,15 @@ sample observations. See [the result contract](../PRODUCER_PUBLIC_RESULTS.md) an
 [qualification record](1883-qualification.md). Producer publication remains
 #1741 and awaits #1866; no graph publisher or Save capability is supplied.
 
-The active independent submission prerequisite is
-[#1888 bounded typed submission declarations](https://github.com/elong0527/yamaa/issues/1888).
+The [#1888 bounded typed submission declarations](https://github.com/elong0527/yamaa/issues/1888)
+prerequisite is qualified by [#1891](https://github.com/elong0527/yamaa/pull/1891),
+merged as `854b6bf4de3723654b413d98fa2464a26fab43f9`. Its merged source directly
+equals qualified head `28af585550b8bafade330d028406c5f654dcb330`. All 22 applicable
+contexts, 16 native jobs, complete assessed ten-file review, 40 artifact audits
+and a fresh protected guard pass. Actual modes pass 1,143 Rust cases on Linux/macOS
+and 1,129 on Windows across 130 targets. Six Python forms pass 26 suites each;
+both exercised R hosts pass 20 and strict Status OK. All 14 packages pass 4,574
+direct byte comparisons, with 29 evidence rows and 30,033 PortableLibmV1 samples.
 Core declaration decoding now retains a complete closed owned study/section
 model, authored section/specification/document order, existing defaults and
 overrides, and original normalized field occurrence facts. Whole count, text,
@@ -256,9 +263,21 @@ escaping, depth, work and finding capacities are admitted before ownership;
 refusals preserve the exact borrowed input without a fitting diagnostic prefix.
 Sixteen independently authored cases cover all families, scalar/shape failures,
 limits and retention after the original document drops. See
-[the declaration contract](../SUBMISSION_DECLARATIONS.md). Final qualification
-and reviewed exact-head CI remain required before #1888 closes. This metadata
-model provides no execution, rendering, artifact-read or publication authority.
+[the declaration contract](../SUBMISSION_DECLARATIONS.md) and
+[qualification record](1888-qualification.md). This metadata model provides no
+execution, rendering, artifact-read or publication authority.
+
+The active independent #1758 prerequisite is
+[#1893 specification submission declarations](https://github.com/elong0527/yamaa/issues/1893).
+Its closed metadata owner retains dataset and ordered columns, existing defaults,
+plain/structured alternatives, document/page references, arbitrary-width integer
+declarations and normalized occurrence facts. Complete non-owning resource and
+structural admission precedes model or finding growth. Independent core cases
+cover every current vocabulary, order/default/null/shape distinctions, cumulative
+limits and retention after input deletion. See
+[the boundary](../SPECIFICATION_SUBMISSION_DECLARATIONS.md). Full qualification
+and reviewed exact-head CI remain required before #1893 closes. Semantic
+composition, original inherited capture and generators remain #1758.
 [#1887](https://github.com/elong0527/yamaa/issues/1887) separately asks whether an
 explicit source-system-version override should preserve existing XML/JSON bytes:
 installed packages are 0.2.0, while independent expected metadata declares 1.0.
@@ -284,7 +303,8 @@ Continue with the following acceptance gates in the
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.
    Settle #1866's publication lifecycle decision before closing #1741 acceptance.
-4. Complete #1888's bounded typed submission declarations, then #1758's shared
+4. #1888 is closed by #1891. Complete #1893's bounded specification submission
+   declarations, then #1758's shared
    Define-XML/Dataset-JSON implementation and three submission fixtures before retiring the old schema and generator.
 5. Close the remaining language/API gaps in #1751/#1752/#1754 and the executable
    inventory, migrate every supported benchmark runner, and qualify complete

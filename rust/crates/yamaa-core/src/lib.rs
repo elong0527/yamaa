@@ -36,6 +36,7 @@ pub mod reference_scope;
 pub mod resource;
 pub mod schema;
 pub mod specification;
+pub mod specification_submission_document;
 pub mod submission_document;
 pub mod temporal;
 pub mod typed_csv;
