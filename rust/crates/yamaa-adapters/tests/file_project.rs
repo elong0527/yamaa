@@ -80,6 +80,22 @@ impl Drop for Study {
 }
 const DOMAIN: &str = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
 
+#[test]
+fn public_preparation_accepts_native_absolute_environment_paths_without_study_reads() {
+    let study = Study::new();
+    study.write("yamaa-project.yaml", "version: '1.0'\ndata_roots: []\n");
+    let project = yamaa_adapters::project_application::prepare(
+        &study.text("entry/domain.yaml"),
+        &study.text("env/environment.yaml"),
+        Language::Python,
+    )
+    .unwrap();
+    assert!(project.run().check_diagnostics().is_empty());
+    assert!(!study.0.join("entry/input.csv").exists());
+    // Configuration, entry, environment, lock, function and codelist metadata only.
+    assert_eq!(project.capture_reads(), 6);
+}
+
 #[derive(Default)]
 struct Activation {
     trace: Vec<&'static str>,

@@ -31,15 +31,12 @@ pub fn prepare(
             crate::file_resources::Error::InvalidPath,
         ))
     })?;
-    let environment = environment
-        .to_str()
-        .ok_or(Error::Project(file_project::Error::Resource(
-            crate::file_resources::Error::InvalidPath,
-        )))?;
+    let environment = crate::file_resources::caller_path(&environment)
+        .map_err(|error| Error::Project(file_project::Error::Resource(error)))?;
     FileProject::prepare(
         resources,
         &entry,
-        environment,
+        &environment,
         host,
         crate::shipped_schema::capture().map_err(Error::Schema)?,
         crate::shipped_schema::capture_environment().map_err(Error::Schema)?,

@@ -56,7 +56,7 @@ reference. The broader inventory retains every route and its actual result.
 
 ## Qualification and remaining scope
 
-Local qualification passes 986 shared Rust tests in each of debug and optimized
+Local qualification passes 987 shared Rust tests in each of debug and optimized
 `release-test`, strict workspace Clippy, 48 Rust tooling tests, 411 repository
 validator tests, dependency/release-API guards, rule/style checks and Python
 formatting/lint. Both installed Python forms pass all 24 supplemental suites;
@@ -90,3 +90,10 @@ the actual installed public environment suites retain activation/data ordering
 coverage. Focused regressions, both rebuilt Python forms and strict R source
 checking cover these corrections. The Windows R release-scope decision is
 tracked separately in [#1857](https://github.com/elong0527/yamaa/issues/1857).
+
+Windows CI identified that public `environment=` absolutization produced native
+backslashes while resource requests require portable separators. Caller-owned
+absolute paths now use the existing Windows drive/UNC conversion; authored YAML
+paths retain strict validation. A shared regression admits an absolute metadata
+path with no study source present and counts metadata-only captures. The existing
+installed absolute-path and five-study public tests exercise the real host API.
