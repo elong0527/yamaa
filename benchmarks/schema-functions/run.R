@@ -1,4 +1,4 @@
 library(yamaa)
 
-test <- run_with_project_functions("spec.yaml", project_root = "r")$output
+test <- yamaa_domain("spec.yaml", environment = "r/environment.yaml")$output
 test

@@ -338,18 +338,73 @@ fn evaluate<T: TableAccess + ?Sized>(
     limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    let value = evaluate_raw(table, assignment, candidate, plan, row, limits, state)?;
+    finish(
+        value,
+        assignment,
+        candidate,
+        plan,
+        row,
+        state.budget,
+        state.handlers,
+    )
+}
+
+fn evaluate_raw<T: TableAccess + ?Sized>(
+    table: &T,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    limits: Limits,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
     if let Expression::Intermediate { index, column } = assignment.expression {
         state.budget.work(1, 1)?;
-        let value = intermediates::read(index, column, assignment, candidate, plan, row, state)?;
-        return finish(
-            value,
-            assignment,
-            candidate,
-            plan,
-            row,
-            state.budget,
-            state.handlers,
-        );
+        let value = intermediates::read(
+            index, column, assignment, candidate, plan, row, table, state,
+        )?;
+        return Ok(value);
+    }
+    if let Expression::Case(branches) = &assignment.expression {
+        for branch in branches {
+            state.budget.work(1, 1)?;
+            let selected = match &branch.when {
+                None => true,
+                Some(when) => {
+                    let source_row = candidate.members[0];
+                    let truth = crate::dataset_predicate::evaluate(
+                        when,
+                        table,
+                        source_row,
+                        &candidate.values,
+                        state.budget.predicate(),
+                    )
+                    .map_err(|error| match error.kind {
+                        yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                            Box::new(predicate_limit(limit))
+                        }
+                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                    })?;
+                    truth == yamaa_core::predicate::Truth::True
+                }
+            };
+            if selected {
+                return evaluate_raw(
+                    table,
+                    &branch.assignment,
+                    candidate,
+                    plan,
+                    row,
+                    limits,
+                    state,
+                );
+            }
+        }
+        return Ok(Value::Missing);
+    }
+    if let Expression::Compute(expression) = &assignment.expression {
+        return numeric::evaluate(expression, table, candidate, plan, row, assignment, state);
     }
     let EvaluationState {
         budget,
@@ -402,8 +457,8 @@ fn evaluate<T: TableAccess + ?Sized>(
             }
             value.clone()
         }
-        Expression::Compute(expression) => {
-            numeric::evaluate(expression, table, candidate, plan, row, budget)?
+        Expression::Compute(_) | Expression::Case(_) => {
+            unreachable!("recursive evaluation handled above")
         }
         Expression::Column(column) => {
             let value = &candidate.values[*column];
@@ -554,7 +609,7 @@ fn evaluate<T: TableAccess + ?Sized>(
             }
         },
     };
-    finish(value, assignment, candidate, plan, row, budget, handlers)
+    Ok(value)
 }
 
 /// Convert and account one completed result before publishing its column slot.

@@ -132,6 +132,62 @@ fn source() -> TableSchema {
     .unwrap()
 }
 
+fn case_document(when: &str, expression: &str) -> SpecificationDocument {
+    use Tree::*;
+    operation_document(
+        "case",
+        List(vec![
+            Map(vec![
+                ("when", Text(when)),
+                (
+                    "then",
+                    Map(vec![("compute", Map(vec![("expr", Text(expression))]))]),
+                ),
+            ]),
+            Map(vec![(
+                "otherwise",
+                Map(vec![("literal", Scalar(N::Integer("1".into())))]),
+            )]),
+        ]),
+        "input.csv",
+    )
+}
+
+#[test]
+fn case_grammar_findings_retain_their_original_nested_paths() {
+    let prepared = PreparedSpecification::prepare(&case_document("ID >", "1")).unwrap();
+    let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
+        panic!("predicate grammar finding")
+    };
+    let diagnostics = findings[0].diagnostics(prepared.source()).unwrap();
+    assert_eq!(
+        diagnostics[0].spec_paths,
+        ["columns.VALUE.derivation.case[0].when"]
+    );
+    assert!(matches!(findings[0], BindFinding::Predicate(_)));
+    let prepared = PreparedSpecification::prepare(&case_document("ID > 0", "ID +")).unwrap();
+    let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
+        panic!("numeric grammar finding")
+    };
+    let diagnostics = findings[0].diagnostics(prepared.source()).unwrap();
+    assert_eq!(
+        diagnostics[0].spec_paths,
+        ["columns.VALUE.derivation.case[0].then.compute.expr"]
+    );
+    assert!(matches!(findings[0], BindFinding::Numeric { .. }));
+}
+
+#[test]
+fn non_key_case_predicate_source_scope_is_refused_before_study_authority() {
+    let Err(PrepareError::Unsupported(features)) =
+        PreparedSpecification::prepare(&case_document("SRC.ID > 0", "1"))
+    else {
+        panic!("unsupported implicit-group record read")
+    };
+    assert_eq!(features[0].operation, "case_source_predicate");
+    assert_eq!(features[0].path, "columns.VALUE.derivation.case[0].when");
+}
+
 #[test]
 fn compiler_owns_bound_plan_without_an_engine_or_source_port() {
     let prepared = PreparedSpecification::prepare(&document("ID + 1 / 0", "input.csv")).unwrap();

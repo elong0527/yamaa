@@ -5,10 +5,7 @@ use crate::{
     project_lock::{Finding, Reason},
     project_source::CapturedEnvironment,
 };
-use yamaa_core::{
-    diagnostic::{ConditionCode, ContextValue, Diagnostic},
-    value::Value,
-};
+use yamaa_core::{diagnostic::ContextValue, value::Value};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -142,14 +139,8 @@ pub fn issues_with_limit(
         ]
         .into();
         result.push(
-            Issue::from_core(Diagnostic {
-                code: ConditionCode::ProjectEnvironmentInvalid,
-                spec_paths: vec!["lock".into()],
-                context,
-                source_span: None,
-                operand_route: None,
-            })
-            .map_err(|_| Error::Projection)?,
+            Issue::from_core(yamaa_core::application_issue::lock_mismatch(context))
+                .map_err(|_| Error::Projection)?,
         );
     }
     if !crate::issue_rows::within_limit(&result, maximum) {

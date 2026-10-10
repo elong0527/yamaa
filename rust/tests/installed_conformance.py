@@ -7,8 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from yamaa import _native as yamaa_native
 from pydantic import ValidationError
+from yamaa import _native as yamaa_native
 from yamaa.adapters.conformance import (
     ExampleReport,
     compare_example,
@@ -42,8 +42,6 @@ class NativeConformance(unittest.TestCase):
             "schema-inheritance",
             "negative-zero-division",
             "negative-integer-overflow",
-            "schema-functions",
-            "schema-non-finite",
         ):
             with self.subTest(name=name):
                 reference = self.run_example(name, "python")
@@ -57,10 +55,6 @@ class NativeConformance(unittest.TestCase):
                 )
                 self.assertTrue(compare_reports(reference, native).passed)
                 self.assertTrue(native.source_reads)
-                if name == "schema-functions":
-                    self.assertEqual(len(native.callbacks), 20)
-                if name == "schema-non-finite":
-                    self.assertEqual(len(native.callbacks), 3)
         self.assertFalse(yamaa_native.engine_info()["execution_supported"])
 
     def test_unsupported_run_reaches_neither_source_nor_activation(self):
@@ -69,10 +63,6 @@ class NativeConformance(unittest.TestCase):
                 "yamaa.adapters.native_conformance.load_source_tables",
                 side_effect=AssertionError("source reached"),
             ) as sources,
-            patch(
-                "yamaa.adapters.native_conformance.activate_project",
-                side_effect=AssertionError("activation reached"),
-            ) as activation,
         ):
             report = self.run_example("adam-adsl-bmi")
         self.assertEqual(report.outcome, "unsupported")
@@ -82,14 +72,13 @@ class NativeConformance(unittest.TestCase):
         self.assertEqual(report.source_reads, ())
         self.assertEqual(report.callbacks, ())
         sources.assert_not_called()
-        activation.assert_not_called()
 
     def test_native_route_never_invokes_reference_executor(self):
         with patch(
             "yamaa.planning.workflow.execute_with_source_provider",
             side_effect=AssertionError("reference fallback"),
         ) as fallback:
-            report = self.run_example("schema-functions")
+            report = self.run_example("schema-lookup")
         self.assertEqual(report.outcome, "success", report.error)
         fallback.assert_not_called()
 
@@ -119,10 +108,10 @@ class NativeConformance(unittest.TestCase):
             "yamaa.adapters.native_datasets._output_table",
             side_effect=RuntimeError("materialization failed"),
         ):
-            report = self.run_example("schema-functions")
+            report = self.run_example("schema-lookup")
         self.assertEqual(report.outcome, "error")
         self.assertIn("materialization failed", report.error)
-        self.assertEqual(len(report.callbacks), 20)
+        self.assertEqual(report.callbacks, ())
         self.assertTrue(report.source_reads)
         self.assertFalse(report.artifacts)
 
@@ -149,9 +138,9 @@ class NativeConformance(unittest.TestCase):
             "yamaa.adapters.conformance._published",
             side_effect=RuntimeError("publication failed"),
         ):
-            report = self.run_example("schema-functions", "python")
+            report = self.run_example("schema-lookup", "python")
         self.assertEqual(report.outcome, "error")
-        self.assertEqual(len(report.callbacks), 20)
+        self.assertEqual(report.callbacks, ())
         self.assertTrue(report.source_reads)
 
     def test_capture_failure_is_visible_without_rereading(self):
@@ -167,7 +156,7 @@ class NativeConformance(unittest.TestCase):
         self.assertEqual(capture.call_count, 1)
 
     def test_old_report_cannot_imply_empty_new_source_observations(self):
-        payload = self.run_example("schema-functions").model_dump(mode="json")
+        payload = self.run_example("schema-lookup").model_dump(mode="json")
         payload.pop("source_reads")
         with self.assertRaises(ValidationError):
             ExampleReport.model_validate_json(json.dumps(payload))

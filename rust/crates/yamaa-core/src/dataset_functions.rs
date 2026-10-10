@@ -123,6 +123,9 @@ impl<S> BoundFunction<S> {
     ) -> Result<(), PlanError> {
         for argument in &self.arguments {
             match &argument.input {
+                FunctionInput::Read(Read::Intermediate { .. }) => {
+                    return Err(PlanError::InvalidIntermediate)
+                }
                 FunctionInput::Read(Read::Source(column)) => {
                     if *column >= source.columns().len() {
                         return Err(PlanError::InvalidSource);

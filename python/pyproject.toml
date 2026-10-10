@@ -29,6 +29,7 @@ test = [
 ]
 
 [dependency-groups]
+benchmark = ["yamaa-benchmarks"]
 # Harbor runs the agent evaluations in evaluations/harbor/. Install it with
 # `uv sync --project python --group harbor`; the package never imports it.
 harbor = ["harbor==0.23.0"]
@@ -49,3 +50,6 @@ testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py311"
+
+[tool.uv.sources]
+yamaa-benchmarks = { path = "../rust/tests/project-programs/python", editable = true }

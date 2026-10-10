@@ -698,6 +698,13 @@ a submission.
 | --- | --- |
 | `Scope` | Governed submission metadata. [Submission metadata](metadata.md) defines what each field means, which combinations a standard admits, and what the derivation graph refutes. [Controlled terminology](terminology.md) owns the codelist a binding names, and [Define-XML](define-xml.md) composes these declarations with a study document into one Define-XML 2.1 document. Every identifier here names an object the study document declares. A specification validates on its own with the names unresolved; [Define-XML](define-xml.md) resolves them when the specification joins a document. |
 
+<a id="req-1296"></a>
+
+**REQ-1296.** Dataset `submission.has_no_data` defaults to false and records
+that the submitted dataset has no data. It is carried for submission
+composition; it does not suppress domain execution or replace row-count checks.
+
+
 ## Error conditions
 
 <a id="req-0909"></a>

@@ -22,7 +22,7 @@ pub fn rejected(stage: &str, code: &str) -> Failure {
             .expect("application issue"),
     ]
 }
-fn resource_failure(stage: &str, error: &crate::file_resources::Error) -> Failure {
+pub(crate) fn resource_failure(stage: &str, error: &crate::file_resources::Error) -> Failure {
     use crate::file_resources::Error as E;
     let code = match error {
         E::Missing => "resource_missing",
@@ -34,6 +34,7 @@ fn resource_failure(stage: &str, error: &crate::file_resources::Error) -> Failur
         E::OutsideRoots => "resource_outside_roots",
         E::Symlink => "resource_link",
         E::Changed => "resource_changed",
+        E::InvalidLock => "invalid_packaging_lock",
         E::Limit => "resource_limit",
     };
     rejected(stage, code)
@@ -68,7 +69,7 @@ fn publication_failure(error: &crate::file_publication::Error) -> Failure {
     }
     vec![Issue::from_core(finding).expect("application issue")]
 }
-fn preparation_failure(message: String) -> Failure {
+pub(crate) fn preparation_failure(message: String) -> Failure {
     let Ok(value) = serde_json::from_str::<Value>(&message) else {
         return rejected("prepare", "resource_boundary");
     };
@@ -126,6 +127,39 @@ pub struct Domain {
     published: Option<Value>,
 }
 impl Domain {
+    /// Use the same owned output and anchored save gate for project reports.
+    pub fn from_project(
+        result: BuildResult,
+        project: &crate::file_project::FileProject,
+    ) -> Result<Self, Failure> {
+        let (target, publication_issues) = if result.output().is_some() {
+            match project.publication_target() {
+                Ok(target) => (Some(target), Vec::new()),
+                Err(error) => (None, resource_failure("output", &error)),
+            }
+        } else {
+            (None, Vec::new())
+        };
+        let output = result
+            .output()
+            .map(|bytes| {
+                let table = crate::public_table::PublicTable::decode(bytes)
+                    .map_err(|_| rejected("build", "output_projection"))?;
+                let bytes = table
+                    .ipc()
+                    .map_err(|_| rejected("build", "output_projection"))?;
+                Ok::<_, Failure>((table, bytes))
+            })
+            .transpose()?;
+        Ok(Self {
+            result,
+            output,
+            target,
+            publication_issues,
+            declared: project.run().compiled().output_path().into(),
+            published: None,
+        })
+    }
     pub fn output(&self) -> Option<&[u8]> {
         self.output.as_ref().map(|(_, bytes)| bytes.as_slice())
     }

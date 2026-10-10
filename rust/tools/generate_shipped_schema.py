@@ -30,6 +30,13 @@ def render():
         while '"' + delimiter in content:
             delimiter += "#"
         lines.append(f'    ("{module.name}", r{delimiter}"{content}"{delimiter}),')
+    lines += ["];", "#[rustfmt::skip]", "pub(super) const ENVIRONMENT_MODULES: &[(&str, &str)] = &["]
+    for module in [SOURCE / "schema_environment.yaml", SOURCE / "schema_shared.yaml"]:
+        content = module.read_bytes().decode("ascii")
+        delimiter = "#"
+        while '"' + delimiter in content:
+            delimiter += "#"
+        lines.append(f'    ("{module.name}", r{delimiter}"{content}"{delimiter}),')
     return "\n".join([*lines, "];", ""])
 
 

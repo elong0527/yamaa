@@ -61,6 +61,27 @@ pub struct Finding {
 // All Value floats are finite by construction; structural equality is reflexive.
 impl Eq for Finding {}
 impl Finding {
+    /// Borrow variable-size diagnostic inputs before a formatter allocates them.
+    pub fn visit_diagnostic_text(&self, mut visit: impl FnMut(&str)) {
+        for text in [&self.path, &self.column, &self.codelist] {
+            visit(text);
+        }
+        if let Cause::ValuesConflict {
+            verification,
+            codelist_values,
+            allowed_values,
+        } = &self.cause
+        {
+            visit(verification);
+            for value in codelist_values.iter().chain(allowed_values) {
+                visit(match value {
+                    Value::Str(text) => text,
+                    // Every other admitted scalar has bounded canonical text.
+                    _ => "0123456789012345678901234567890123456789012345678901234567890123",
+                });
+            }
+        }
+    }
     pub fn cause(&self) -> &Cause {
         &self.cause
     }

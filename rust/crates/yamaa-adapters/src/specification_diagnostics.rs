@@ -213,6 +213,7 @@ pub(crate) fn type_name(kind: yamaa_core::value::ColumnType) -> &'static str {
 #[path = "specification_inheritance_diagnostics.rs"]
 mod inherited;
 pub use inherited::failure as inheritance_failure;
+pub use inherited::failure_ref as inheritance_failure_ref;
 
 #[path = "specification_schema_diagnostics.rs"]
 mod captured_schema;

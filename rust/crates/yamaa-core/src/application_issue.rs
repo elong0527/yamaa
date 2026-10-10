@@ -5,6 +5,18 @@ use crate::{
 };
 use alloc::{string::String, vec, vec::Vec};
 
+/// Format classified installed-package disagreement. Packaging tools supply the
+/// facts; this owns the stable normative issue identity without comparing versions.
+pub fn lock_mismatch(context: crate::diagnostic::Context) -> Diagnostic {
+    Diagnostic {
+        code: ConditionCode::ProjectLockMismatch,
+        spec_paths: vec!["lock".into()],
+        context,
+        source_span: None,
+        operand_route: None,
+    }
+}
+
 pub fn unsupported(operation: &str, path: Option<&str>) -> Diagnostic {
     Diagnostic {
         code: ConditionCode::ApplicationUnsupported,

@@ -16,6 +16,11 @@ enum RowOperation {
     ProjectFunction(usize),
     Output(String),
     Source(String),
+    Compute(CompiledNumeric),
+    InvalidNumeric {
+        expression: String,
+        error: CompileError,
+    },
     InvalidAggregate {
         expression: String,
         error: crate::aggregate_parser::GrammarFailure,
@@ -109,6 +114,33 @@ fn declaration(
             }
         }
         "literal" => RowOperation::Literal(literal(d, payload, &path)?),
+        "compute" => {
+            closed_fields(d, payload, &["expr"], &path)?;
+            let expression = text(d, field(d, payload, "expr")?)?;
+            match compile_numeric_with_policy(
+                expression,
+                &path,
+                Default::default(),
+                crate::numeric_compiler::MathPolicy::PortableLibmV1,
+            ) {
+                Ok(compiled) => RowOperation::Compute(compiled),
+                Err(error @ CompileError::Parse(ParseError::Grammar { .. })) => {
+                    RowOperation::InvalidNumeric {
+                        expression: expression.into(),
+                        error,
+                    }
+                }
+                Err(CompileError::Unsupported { .. }) => {
+                    return Err(unsupported("numeric_function", &path))
+                }
+                Err(error) => {
+                    return Err(PrepareError::Numeric {
+                        path: format!("{path}.expr"),
+                        error,
+                    })
+                }
+            }
+        }
         "aggregate" if grouped => {
             closed_fields(d, payload, &["expr"], &path)?;
             let expression = text(d, field(d, payload, "expr")?)?;
@@ -855,6 +887,82 @@ impl Rows {
                     }
                 }
                 RowOperation::Literal(value) => Some(Expression::Literal(value.clone())),
+                RowOperation::InvalidNumeric { expression, error } => {
+                    findings.push(BindFinding::Numeric {
+                        path: format!("{}.expr", declaration.path),
+                        expression: expression.clone(),
+                        error: error.clone(),
+                    });
+                    None
+                }
+                RowOperation::Compute(compiled) => {
+                    let before = findings.len();
+                    let mut bindings = Vec::new();
+                    for identifier in compiled.identifiers() {
+                        let path = format!("{}.expr", declaration.path);
+                        if identifier.contains('.') {
+                            let scoped = reference_scope::validate(
+                                &catalog,
+                                identifier,
+                                None,
+                                Scope {
+                                    drivers: &[name],
+                                    current_driver: false,
+                                    reach: Reach::Scalar,
+                                    joined: false,
+                                    phase,
+                                },
+                                Default::default(),
+                            )
+                            .map_err(BindError::Catalog)?;
+                            if !scoped.is_empty() {
+                                findings.extend(scoped.into_iter().map(|finding| {
+                                    BindFinding::QualifiedReference {
+                                        path: path.clone(),
+                                        name: identifier.into(),
+                                        row: row.map(String::from),
+                                        finding,
+                                    }
+                                }));
+                            } else if let Some(column) = resolve(identifier, &path, findings) {
+                                bindings.push(Binding {
+                                    name: identifier.into(),
+                                    read: Read::Source(column),
+                                });
+                            }
+                        } else if let Some(finding) = catalog
+                            .validate_output(identifier, None, available, &[0])
+                            .map_err(BindError::Catalog)?
+                        {
+                            findings.push(BindFinding::OutputReference {
+                                path,
+                                name: identifier.into(),
+                                finding,
+                            });
+                        } else if let Some(reference_binding::Binding::Output { column, .. }) =
+                            catalog.bind(identifier).map_err(BindError::Catalog)?
+                        {
+                            edges.push(column);
+                            bindings.push(Binding {
+                                name: identifier.into(),
+                                read: Read::Column(column),
+                            });
+                        } else {
+                            findings.push(BindFinding::UnknownReference {
+                                path,
+                                name: identifier.into(),
+                            });
+                        }
+                    }
+                    if before == findings.len() {
+                        Some(Expression::Compute(
+                            BoundNumeric::new(compiled.clone(), bindings)
+                                .map_err(BindError::InvalidNumericBinding)?,
+                        ))
+                    } else {
+                        None
+                    }
+                }
                 RowOperation::InvalidAggregate { expression, error } => {
                     findings.push(BindFinding::Aggregate {
                         path: declaration.path.clone(),

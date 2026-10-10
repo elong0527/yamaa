@@ -72,7 +72,6 @@ columns:
     derivation:
       function:
         name: numeric_constant
-        contract_version: "1.0.0"
         args:
           kind: {literal: positive-infinity}
 
@@ -82,7 +81,6 @@ columns:
     derivation:
       function:
         name: numeric_constant
-        contract_version: "1.0.0"
         args:
           kind: {literal: negative-infinity}
 
@@ -92,6 +90,5 @@ columns:
     derivation:
       function:
         name: numeric_constant
-        contract_version: "1.0.0"
         args:
           kind: {literal: nan}

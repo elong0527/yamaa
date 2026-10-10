@@ -256,8 +256,10 @@ class AggregateSyntax(unittest.TestCase):
                     self.subTest(text=text, project=project),
                     forbid_reference_syntax(),
                     patch.object(
-                        r.native_datasets,
-                        "activate_project",
+                        __import__(
+                            "yamaa._locked_functions", fromlist=["verify_versions"]
+                        ),
+                        "verify_versions",
                         side_effect=AssertionError("activation"),
                     ),
                 ):
@@ -283,11 +285,8 @@ class AggregateSyntax(unittest.TestCase):
     def run_frontend(self, spec, project):
         """Both production entrypoints must stop before the forbidden source provider."""
         if project:
-            return r.native_datasets.execute_with_project_functions(
-                spec,
-                lambda _: self.fail("source"),
-                r.ROOT / "specification-functions" / "python",
-                r.SCHEMA,
+            return r.native_datasets.execute_with_source_provider(
+                spec, lambda _: self.fail("source")
             )
         return r.native_datasets.execute_with_source_provider(
             spec, lambda _: self.fail("source")
@@ -307,8 +306,10 @@ class AggregateSyntax(unittest.TestCase):
                     self.subTest(project=project, error=error),
                     forbid_reference_syntax(),
                     patch.object(
-                        r.native_datasets,
-                        "activate_project",
+                        __import__(
+                            "yamaa._locked_functions", fromlist=["verify_versions"]
+                        ),
+                        "verify_versions",
                         side_effect=AssertionError("activation"),
                     ),
                     patch.object(yamaa_native, "analyze_aggregate", invoke),
@@ -323,8 +324,8 @@ class AggregateSyntax(unittest.TestCase):
             with (
                 forbid_reference_syntax(),
                 patch.object(
-                    r.native_datasets,
-                    "activate_project",
+                    __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                    "verify_versions",
                     side_effect=AssertionError("activation"),
                 ),
                 self.assertRaises(NativeAggregateLimitError) as failure,

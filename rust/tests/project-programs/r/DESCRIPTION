@@ -1,0 +1,8 @@
+Package: yamaabenchmarks
+Version: 1.0.0
+Title: Project Calculations for yamaa Benchmarks
+Description: Ordinary installed project functions shared by the original
+    function benchmark specifications.
+Authors@R: person("yamaa", "contributors", role = c("aut", "cre"), email = "yamaa@example.org")
+License: MIT + file LICENSE
+Encoding: UTF-8

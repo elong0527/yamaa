@@ -16,6 +16,7 @@ from yamaa.adapters.conformance import (
 from yamaa.adapters.qualification import (
     Batch,
     KnownGap,
+    ManifestEntry,
     MissingRoute,
     load_inventory,
     main,
@@ -179,6 +180,88 @@ def test_missing_reference_cannot_qualify_native(suite, tmp_path):
         "infrastructure_failure"
     }
     assert result.errors
+
+
+def retire_lookup_reference(examples):
+    path = examples / "execution-manifest.yaml"
+    path.write_text(
+        path.read_text().replace(
+            "schema-lookup: {status: executable, runtimes: [python]}",
+            "schema-lookup: {status: executable, runtimes: [python], "
+            "reference_retired_by: '#1757'}",
+        )
+    )
+
+
+def test_retired_reference_remains_visible_without_a_baseline_gate(suite):
+    examples, reference = suite
+    retire_lookup_reference(examples)
+    (Path(reference.reports_dir) / "schema-lookup.python.python.json").unlink()
+    inventory = qualify(examples, "revision-a", (reference,))
+    assert not inventory.errors
+    assert inventory.manifest.examples["schema-lookup"].reference_retired_by == "#1757"
+    assert len(inventory.coverage) == 6
+    assert (
+        next(
+            row
+            for row in rows(inventory, "python", "python")
+            if row.example == "schema-lookup"
+        ).result
+        == "not_exercised"
+    )
+
+
+def test_retirement_cannot_qualify_native_without_portable_reference(suite, tmp_path):
+    examples, reference = suite
+    native = native_copy(suite, tmp_path)
+    retire_lookup_reference(examples)
+    (Path(reference.reports_dir) / "schema-lookup.python.python.json").unlink()
+    inventory = qualify(examples, "revision-a", (reference, native))
+    row = next(
+        row
+        for row in rows(inventory, "python", "rust")
+        if row.example == "schema-lookup"
+    )
+    assert row.result == "infrastructure_failure"
+    assert row.blockers == ("passing_reference_required",)
+    assert inventory.errors
+
+
+def test_retirement_does_not_hide_a_supplied_reference_regression(suite):
+    examples, reference = suite
+    retire_lookup_reference(examples)
+    path = Path(reference.reports_dir) / "schema-lookup.python.python.json"
+    write_report(
+        read_report(path).model_copy(update={"outcome": "error", "error": "failure"}),
+        path.parent,
+    )
+    inventory = qualify(examples, "revision-a", (reference,))
+    assert inventory.errors
+    assert (
+        next(
+            row
+            for row in rows(inventory, "python", "python")
+            if row.example == "schema-lookup"
+        ).result
+        == "infrastructure_failure"
+    )
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {
+            "status": "executable",
+            "runtimes": ["python"],
+            "reference_retired_by": "1757",
+        },
+        {"status": "blocked", "blocked_by": "#1", "reference_retired_by": "#1757"},
+        {"status": "executable", "runtimes": ["r"], "reference_retired_by": "#1757"},
+    ],
+)
+def test_reference_retirement_requires_an_issue_and_executable_python_entry(entry):
+    with pytest.raises(ValueError):
+        ManifestEntry.model_validate(entry)
 
 
 @pytest.mark.parametrize(

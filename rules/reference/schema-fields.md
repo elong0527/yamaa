@@ -161,47 +161,85 @@ requirement link for behavior. It is not an additional semantic contract.
 | Field or value type | Type | Required | Default | Constraints | Contract |
 | --- | --- | --- | --- | --- | --- |
 | `environment_class.schema_version` | `"str"` | `true` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
-| `environment_class.version` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1080](../operations/functions.md#req-1080) |
-| `environment_class.runtime` | `"project_runtime_class"` | `true` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
-| `environment_class.functions` | `"dict[identifier, function_contract_class]"` | `true` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
-| `project_runtime_class.language` | `"str"` | `true` | Absent | `{"values": ["r", "python"]}` | [REQ-1081](../operations/functions.md#req-1081) |
-| `project_runtime_class.artifact` | `"runtime_artifact_class"` | `true` | Absent | -- | [REQ-1081](../operations/functions.md#req-1081) |
-| `runtime_artifact_class.reference` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1082](../operations/functions.md#req-1082) |
-| `function_contract_class.contract` | `"path"` | `false` | Absent | -- | Schema constraint |
-| `function_contract_class.contract_version` | `"function_contract_version"` | `false` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
-| `function_contract_class.implementation_version` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1083](../operations/functions.md#req-1083) |
-| `function_contract_class.description` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1083](../operations/functions.md#req-1083) |
-| `function_contract_class.comparison_decimals` | `"int"` | `false` | `4` | -- | [REQ-1083](../operations/functions.md#req-1083) |
-| `function_contract_class.may_return_missing` | `"bool"` | `false` | `false` | -- | [REQ-1083](../operations/functions.md#req-1083) |
-| `function_contract_class.params` | `"list[function_parameter_class]"` | `false` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
-| `function_contract_class.returns` | `"column_type"` | `false` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
-| `function_contract_class.binding` | `"function_binding_class"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
-| `function_contract_class.conformance` | `"path"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
-| `shared_function_contract_class.contract_version` | `"function_contract_version"` | `true` | Absent | -- | Schema constraint |
-| `shared_function_contract_class.description` | `"str"` | `true` | Absent | `{"min_length": 1}` | Schema constraint |
-| `shared_function_contract_class.comparison_decimals` | `"int"` | `false` | `4` | -- | Schema constraint |
-| `shared_function_contract_class.may_return_missing` | `"bool"` | `false` | `false` | -- | Schema constraint |
-| `shared_function_contract_class.params` | `"list[function_parameter_class]"` | `true` | Absent | -- | Schema constraint |
-| `shared_function_contract_class.returns` | `"column_type"` | `true` | Absent | -- | Schema constraint |
-| `function_parameter_class.name` | `"identifier"` | `true` | Absent | -- | Schema constraint |
-| `function_parameter_class.type` | `"function_param_type"` | `true` | Absent | -- | Schema constraint |
-| `function_parameter_class.required` | `"bool"` | `false` | `true` | -- | Schema constraint |
-| `function_parameter_class.default` | `"function_value"` | `false` | Absent | -- | Schema constraint |
-| `function_parameter_class.accepts_missing` | `"bool"` | `false` | `false` | -- | Schema constraint |
-| `function_binding_class.call` | `"qualified_callable"` | `true` | Absent | -- | [REQ-1084](../operations/functions.md#req-1084) |
-| `function_binding_class.args` | `"dict[identifier, host_argument_name]"` | `false` | Absent | -- | [REQ-1084](../operations/functions.md#req-1084) |
-| `function_conformance_class.schema_version` | `"str"` | `true` | Absent | -- | Schema constraint |
-| `function_conformance_class.function` | `"identifier"` | `true` | Absent | -- | Schema constraint |
-| `function_conformance_class.contract_version` | `"function_contract_version"` | `true` | Absent | -- | Schema constraint |
-| `function_conformance_class.cases` | `"list[function_conformance_case_class]"` | `true` | Absent | -- | Schema constraint |
-| `function_conformance_case_class.id` | `"function_case_id"` | `true` | Absent | -- | Schema constraint |
-| `function_conformance_case_class.covers` | `"list[function_coverage]"` | `true` | Absent | -- | Schema constraint |
-| `function_conformance_case_class.args` | `"dict[identifier, function_value]"` | `true` | Absent | -- | Schema constraint |
-| `function_conformance_case_class.result` | `"function_value"` | `true` | Absent | -- | Schema constraint |
-| `qualified_callable` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
-| `host_argument_name` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
-| `function_case_id` | `"str"` | `false` | Absent | `{"pattern": "^[a-z][a-z0-9-]*$"}` | Schema constraint |
-| `function_coverage` | `"str"` | `false` | Absent | `{"pattern": "^(normal\|boundary\|nullable-output\|numeric-comparison\|(default\|accepted-missing\|short-circuit-missing\|boolean-true\|boolean-false):[A-Za-z_][A-Za-z0-9_]*)$"}` | Schema constraint |
+| `environment_class.language` | `"str"` | `false` | Absent | `{"values": ["python", "r"]}` | [REQ-1080](../operations/functions.md#req-1080) |
+| `environment_class.lock` | `"path"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
+| `environment_class.functions` | `"dict[identifier, function_definition]"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
+| `environment_class.codelists` | `"list[codelist_source]"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
+| `environment_class.study` | `"study_class"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
+| `environment_class.sdtm` | `"submission_section_class"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
+| `environment_class.adam` | `"submission_section_class"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
+| `environment_class.send` | `"submission_section_class"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
+| `function_definition` | `["path", "function_definition_class"]` | `false` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_definition_class.function` | `"qualified_callable"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_definition_class.description` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_definition_class.params` | `"list[function_parameter_class]"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_definition_class.returns` | `"column_type"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_definition_class.may_return_missing` | `"bool"` | `false` | `false` | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_definition_class.comparison_decimals` | `"int"` | `false` | `4` | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_definition_class.tests` | `"list[function_test_class]"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_parameter_class.name` | `"identifier"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_parameter_class.type` | `"function_param_type"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_parameter_class.required` | `"bool"` | `false` | `true` | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_parameter_class.default` | `"function_value"` | `false` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_parameter_class.accepts_missing` | `"bool"` | `false` | `false` | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `qualified_callable` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-0669](../operations/functions.md#req-0669) |
+| `function_case_id` | `"str"` | `false` | Absent | `{"pattern": "^[a-z][a-z0-9-]*$"}` | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_coverage` | `"str"` | `false` | Absent | `{"pattern": "^(normal\|boundary\|nullable-output\|numeric-comparison\|(default\|accepted-missing\|short-circuit-missing\|boolean-true\|boolean-false):[A-Za-z_][A-Za-z0-9_]*)$"}` | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_test_class.id` | `"function_case_id"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_test_class.covers` | `"list[function_coverage]"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_test_class.args` | `"dict[identifier, function_value]"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_test_class.result` | `"function_value"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `codelist_source` | `["path", "codelist_source_class"]` | `false` | Absent | -- | [REQ-0928](../submission/terminology.md#req-0928) |
+| `codelist_source_class.standard` | `"terminology_standard_class"` | `false` | Absent | -- | [REQ-0928](../submission/terminology.md#req-0928) |
+| `codelist_source_class.codelists` | `"list[codelist_class]"` | `true` | Absent | -- | [REQ-0928](../submission/terminology.md#req-0928) |
+| `terminology_standard_class.name` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-0928](../submission/terminology.md#req-0928) |
+| `terminology_standard_class.publishing_set` | `"str"` | `true` | Absent | `{"values": ["ADaM", "CDASH", "DEFINE-XML", "SDTM", "SEND"]}` | [REQ-0928](../submission/terminology.md#req-0928) |
+| `terminology_standard_class.version` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-0928](../submission/terminology.md#req-0928) |
+| `study_class.id` | `"define_id"` | `true` | Absent | -- | [REQ-1062](../submission/define-xml.md#req-1062) |
+| `study_class.name` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1062](../submission/define-xml.md#req-1062) |
+| `study_class.description` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1062](../submission/define-xml.md#req-1062) |
+| `study_class.protocol_name` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1062](../submission/define-xml.md#req-1062) |
+| `metadata_version_class.id` | `"define_id"` | `true` | Absent | -- | [REQ-1063](../submission/define-xml.md#req-1063) |
+| `metadata_version_class.name` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1063](../submission/define-xml.md#req-1063) |
+| `metadata_version_class.description` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1063](../submission/define-xml.md#req-1063) |
+| `codelist_class.id` | `"identifier"` | `true` | Absent | -- | [REQ-1077](../submission/terminology.md#req-1077) |
+| `codelist_class.name` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1077](../submission/terminology.md#req-1077) |
+| `codelist_class.data_type` | `"str"` | `false` | `"text"` | `{"values": ["text", "integer", "float"]}` | [REQ-1077](../submission/terminology.md#req-1077) |
+| `codelist_class.extensible` | `"bool"` | `false` | `false` | -- | [REQ-1077](../submission/terminology.md#req-1077) |
+| `codelist_class.alias` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1077](../submission/terminology.md#req-1077) |
+| `codelist_class.format_name` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1077](../submission/terminology.md#req-1077) |
+| `codelist_class.items` | `"list[codelist_item_class]"` | `false` | Absent | -- | [REQ-1077](../submission/terminology.md#req-1077) |
+| `codelist_class.external` | `"external_codelist_class"` | `false` | Absent | -- | [REQ-1077](../submission/terminology.md#req-1077) |
+| `codelist_item_class.value` | `"literal_value"` | `true` | Absent | -- | [REQ-1078](../submission/terminology.md#req-1078) |
+| `codelist_item_class.decode` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1078](../submission/terminology.md#req-1078) |
+| `codelist_item_class.rank` | `"int"` | `false` | Absent | -- | [REQ-1078](../submission/terminology.md#req-1078) |
+| `codelist_item_class.alias` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1078](../submission/terminology.md#req-1078) |
+| `codelist_item_class.extended` | `"bool"` | `false` | `false` | -- | [REQ-1078](../submission/terminology.md#req-1078) |
+| `external_codelist_class.dictionary` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1079](../submission/terminology.md#req-1079) |
+| `external_codelist_class.version` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1079](../submission/terminology.md#req-1079) |
+| `external_codelist_class.href` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1079](../submission/terminology.md#req-1079) |
+| `define_id` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"}` | [REQ-1068](../submission/define-xml.md#req-1068) |
+| `relative_href` | `"str"` | `false` | Absent | `{"pattern": "^(?!/)(?!.*(^\|/)\\.\\.(/\|$))[^\\\\]+$"}` | [REQ-1070](../submission/define-xml.md#req-1070) |
+| `language_tag` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$"}` | [REQ-1073](../submission/define-xml.md#req-1073) |
+| `standard_name` | `"str"` | `false` | Absent | `{"values": ["ADaMIG", "ADaMIG-MD", "BIMO", "CDISC/NCI", "SDTMIG", "SDTMIG-AP", "SDTMIG-MD", "SENDIG", "SENDIG-AR", "SENDIG-DART", "SENDIG-GENETOX"]}` | [REQ-1074](../submission/define-xml.md#req-1074) |
+| `submission_section_class.standard` | `"implementation_guide_class"` | `true` | Absent | -- | Schema constraint |
+| `submission_section_class.specs` | `"list[path]"` | `true` | Absent | -- | Schema constraint |
+| `submission_section_class.define` | `"path"` | `true` | Absent | -- | Schema constraint |
+| `submission_section_class.documents` | `"list[document_class]"` | `false` | Absent | -- | Schema constraint |
+| `submission_section_class.dataset_json` | `"bool"` | `false` | `false` | -- | Schema constraint |
+| `submission_section_class.context` | `"str"` | `false` | `"Submission"` | `{"values": ["Submission", "Other"]}` | Schema constraint |
+| `submission_section_class.xml_lang` | `"language_tag"` | `false` | `"en"` | -- | Schema constraint |
+| `submission_section_class.file_oid` | `"define_id"` | `false` | Absent | -- | Schema constraint |
+| `submission_section_class.metadata_version` | `"metadata_version_class"` | `false` | Absent | -- | Schema constraint |
+| `submission_section_class.originator` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
+| `submission_section_class.stylesheet` | `"relative_href"` | `false` | Absent | -- | Schema constraint |
+| `implementation_guide_class.name` | `"standard_name"` | `true` | Absent | -- | Schema constraint |
+| `implementation_guide_class.version` | `"str"` | `true` | Absent | `{"min_length": 1}` | Schema constraint |
+| `implementation_guide_class.status` | `"str"` | `true` | Absent | `{"values": ["Draft", "Final"]}` | Schema constraint |
+| `document_class.id` | `"identifier"` | `true` | Absent | -- | [REQ-1065](../submission/define-xml.md#req-1065) |
+| `document_class.kind` | `"str"` | `true` | Absent | `{"values": ["annotated_crf", "supplemental", "other"]}` | [REQ-1065](../submission/define-xml.md#req-1065) |
+| `document_class.link` | `"relative_href"` | `true` | Absent | -- | [REQ-1065](../submission/define-xml.md#req-1065) |
+| `document_class.title` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1065](../submission/define-xml.md#req-1065) |
 
 ## schema_expression_aggregate.yaml
 
@@ -374,7 +412,6 @@ requirement link for behavior. It is not an additional semantic contract.
 | Field or value type | Type | Required | Default | Constraints | Contract |
 | --- | --- | --- | --- | --- | --- |
 | `expressions.function.name` | `"identifier"` | `true` | Absent | -- | [REQ-1085](../operations/functions.md#req-1085) |
-| `expressions.function.contract_version` | `"function_contract_version"` | `true` | Absent | -- | [REQ-1085](../operations/functions.md#req-1085) |
 | `expressions.function.args` | `"dict[identifier, function_arg]"` | `false` | `{}` | -- | [REQ-1085](../operations/functions.md#req-1085) |
 | `function_arg` | `["variable", "int", "float", "bool", "null", "function_string_literal_class", "function_date_literal_class", "function_datetime_literal_class"]` | `false` | Absent | -- | [REQ-1086](../operations/functions.md#req-1086) |
 
@@ -382,6 +419,7 @@ requirement link for behavior. It is not an additional semantic contract.
 
 | Field or value type | Type | Required | Default | Constraints | Contract |
 | --- | --- | --- | --- | --- | --- |
+| `submission_dataset_class.has_no_data` | `"bool"` | `false` | `false` | -- | [REQ-1296](../submission/metadata.md#req-1296) |
 | `submission_dataset_class.label` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1130](../submission/metadata.md#req-1130) |
 | `submission_dataset_class.class` | `"dataset_class_name"` | `true` | Absent | -- | [REQ-1130](../submission/metadata.md#req-1130) |
 | `submission_dataset_class.subclass` | `"dataset_subclass_name"` | `false` | Absent | -- | [REQ-1130](../submission/metadata.md#req-1130) |
@@ -440,7 +478,6 @@ requirement link for behavior. It is not an additional semantic contract.
 | `path` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
 | `project_path` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1151](../storage/resources.md#req-1151) |
 | `identifier` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}` | [REQ-1046](../specification/structure.md#req-1046) |
-| `function_contract_version` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1087](../operations/functions.md#req-1087) |
 | `function_param_type` | `"str"` | `false` | Absent | `{"values": ["str", "int", "float", "bool", "date", "datetime"]}` | Schema constraint |
 | `function_string_literal_class.literal` | `"str"` | `true` | Absent | -- | Schema constraint |
 | `function_date_literal_class.date` | `"str"` | `true` | Absent | -- | Schema constraint |

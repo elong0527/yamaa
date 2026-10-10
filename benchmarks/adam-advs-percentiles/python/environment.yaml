@@ -1,14 +1,32 @@
-schema_version: "1.0"
-version: "1.0.0"
-
-runtime:
-  language: python
-  artifact:
-    reference: org.example/yamaa/growth-percentile-python:1.0.0
-
+schema_version: '1.0'
+language: python
+lock: uv.lock
 functions:
   normal_cdf:
-    contract: contracts.yaml
-    binding:
-      call: projectgrowth.normal_cdf
-    conformance: conformance/normal_cdf.yaml
+    function: yamaa_benchmarks.normal_cdf
+    description: Calculate the standard normal cumulative probability.
+    params:
+    - name: q
+      type: float
+    returns: float
+    tests:
+    - id: centre
+      covers:
+      - normal
+      - numeric-comparison
+      args:
+        q: 0.0
+      result: 0.5
+    - id: lower-tail-boundary
+      covers:
+      - boundary
+      - numeric-comparison
+      args:
+        q: -8.0
+      result: 6.22096057427178e-16
+    - id: missing-short-circuits
+      covers:
+      - short-circuit-missing:q
+      args:
+        q: null
+      result: null

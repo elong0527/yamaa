@@ -175,6 +175,16 @@ def test_invalid_markers_and_missing_versions_do_not_become_installed_version_ch
             verify(raw, ["math.sqrt"], {"yamaa": "0.2.0"}, {}, [])
 
 
+def test_uncalled_dynamic_package_can_omit_version_but_called_package_cannot():
+    raw = (
+        lock(("yamaa", "0.2.0", None))
+        + b'\n[[package]]\nname = "program"\nsource = {editable = "program"}\n'
+    )
+    assert verify(raw, ["math.sqrt"], {"yamaa": "0.2.0"}, {}, []) == ()
+    with pytest.raises(m.InvalidLock, match="called package has no locked version"):
+        verify(raw, ["program.value"], {"yamaa": "0.2.0"}, {"program": ["program"]}, [])
+
+
 def test_original_metadata_exception_and_interrupt_identity_are_preserved():
     for original in [RuntimeError("opaque metadata error"), KeyboardInterrupt("stop")]:
 

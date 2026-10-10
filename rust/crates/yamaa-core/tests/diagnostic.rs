@@ -179,6 +179,27 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     }
     reached.extend(project_functions::reached());
     reached.extend(project_environment::reached());
+    let lock = yamaa_core::application_issue::lock_mismatch(
+        [(
+            "package".into(),
+            ContextValue::Scalar(Value::Str("project".into())),
+        )]
+        .into(),
+    );
+    assert_eq!(
+        (
+            lock.definition().phase,
+            lock.definition().condition,
+            lock.definition().requirement
+        ),
+        ("validation", "runtime_artifact_mismatch", Some("REQ-0697"))
+    );
+    assert_eq!(lock.spec_paths, ["lock"]);
+    assert_eq!(
+        lock.context["package"],
+        ContextValue::Scalar(Value::Str("project".into()))
+    );
+    reached.insert(lock.code);
     reached.extend(project_codelist_binding::reached());
     reached.extend(preflight::reached());
     reached.extend(preflight::output_reached());

@@ -31,12 +31,16 @@
 
 #' Build a domain through the shared Rust engine
 #' @param specification One domain-specification path.
-#' @param environment Optional environment path. Unsupported environments are issues.
+#' @param environment Optional study environment path for functions and codelists.
 #' @return An owned result with output, issues, declared logs and a save method.
 #' @export
 yamaa_domain <- function(specification, environment = NULL) {
   args <- .domain_arguments(specification, environment)
-  handle <- .domain_reply(.Call(wrap__domain_file, args[[1L]], args[[2L]], args[[3L]]))
+  capabilities <- .yamaa_locked_host_capabilities()
+  handle <- .domain_reply(.Call(wrap__domain_file, args[[1L]], args[[2L]], args[[3L]],
+    list(capabilities$verify, capabilities$resolve, .project_condition_details)))
+  interrupted <- .domain_reply(.Call(wrap__domain_interrupt, handle))
+  if (!is.null(interrupted)) stop(interrupted)
   result <- new.env(parent = emptyenv())
   makeActiveBinding("output", local({ h <- handle; function(value) {
     if (!missing(value)) stop("output is read only", call. = FALSE)

@@ -1,0 +1,32 @@
+schema_version: '1.0'
+language: r
+lock: renv.lock
+functions:
+  normal_cdf:
+    function: yamaabenchmarks::normal_cdf
+    description: Calculate the standard normal cumulative probability.
+    params:
+    - name: q
+      type: float
+    returns: float
+    tests:
+    - id: centre
+      covers:
+      - normal
+      - numeric-comparison
+      args:
+        q: 0.0
+      result: 0.5
+    - id: lower-tail-boundary
+      covers:
+      - boundary
+      - numeric-comparison
+      args:
+        q: -8.0
+      result: 6.22096057427178e-16
+    - id: missing-short-circuits
+      covers:
+      - short-circuit-missing:q
+      args:
+        q: null
+      result: null

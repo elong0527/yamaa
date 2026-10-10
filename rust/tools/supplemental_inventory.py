@@ -67,6 +67,7 @@ def load_catalog(root, catalog_path):
         if suite["runtime"] not in ("python", "r") or suite["level"] not in (
             "component",
             "compile",
+            "shared_run",
         ):
             raise ValueError(f"invalid suite route or level: {suite['id']}")
         if (

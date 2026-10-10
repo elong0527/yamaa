@@ -40,7 +40,7 @@ impl Study {
         }
         let study = Self(fs::canonicalize(path).unwrap());
         study.write("env/environment.yaml", "schema_version: '1.0'\nlanguage: python\nlock: ../uv.lock\nfunctions: {id: id.yaml}\ncodelists: [ct.yaml]\n");
-        study.write("uv.lock", "version = 1\n");
+        study.write("uv.lock", "version = 1\npackage = []\n");
         study.write("env/id.yaml", "function: program.id\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n");
         study.write(
             "env/ct.yaml",
@@ -79,6 +79,22 @@ impl Drop for Study {
     }
 }
 const DOMAIN: &str = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
+
+#[test]
+fn public_preparation_accepts_native_absolute_environment_paths_without_study_reads() {
+    let study = Study::new();
+    study.write("yamaa-project.yaml", "version: '1.0'\ndata_roots: []\n");
+    let project = yamaa_adapters::project_application::prepare(
+        &study.text("entry/domain.yaml"),
+        &study.text("env/environment.yaml"),
+        Language::Python,
+    )
+    .unwrap();
+    assert!(project.run().check_diagnostics().is_empty());
+    assert!(!study.0.join("entry/input.csv").exists());
+    // Configuration, entry, environment, lock, function and codelist metadata only.
+    assert_eq!(project.capture_reads(), 6);
+}
 
 #[derive(Default)]
 struct Activation {
@@ -192,7 +208,10 @@ fn native_project_retains_metadata_and_reuses_exact_snapshots_with_fresh_activat
         captures.root().source().bytes,
         fs::read(study.0.join("env/environment.yaml")).unwrap()
     );
-    assert_eq!(captures.lock().unwrap().source.bytes, b"version = 1\n");
+    assert_eq!(
+        captures.lock().unwrap().source.bytes,
+        b"version = 1\npackage = []\n"
+    );
     assert_eq!(captures.captures().len(), 2);
     assert_eq!(captures.captures()[0].origin, Origin::Function("id".into()));
     assert!(captures.captures()[0]
@@ -321,7 +340,7 @@ fn installed_port_factory_borrows_the_exact_prepared_lock_on_each_build() {
             functions: &[ProjectFunctionIdentity],
         ) -> Result<(), Self::Error> {
             assert_eq!(self.lock.as_ptr(), self.expected);
-            assert_eq!(self.lock, b"version = 1\n");
+            assert_eq!(self.lock, b"version = 1\npackage = []\n");
             self.inner.verify_lock(language, lock, functions)
         }
         fn bind(

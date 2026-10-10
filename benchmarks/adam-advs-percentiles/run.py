@@ -1,5 +1,4 @@
 import yamaa
-from yamaa.functions import run_with_project_functions
 
-advs = run_with_project_functions("spec.yaml", project_root="python").output
+advs = yamaa.domain("spec.yaml", environment="python/environment.yaml").output
 advs

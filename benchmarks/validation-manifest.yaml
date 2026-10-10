@@ -194,9 +194,9 @@ fixtures:
     validator: temporal_contract
   negative-function-contract:
     rule: R018
-    condition: function_contract_mismatch
+    condition: invalid_function_argument
     spec_paths:
-      - columns.RESULT.derivation.function.contract_version
+      - columns.RESULT.derivation.function.args
     validator: project_function
   negative-greatest-mixed:
     rule: R007

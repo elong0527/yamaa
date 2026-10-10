@@ -16,13 +16,12 @@ columns:
     label: Identifier
     derivation: SOURCE.ID
 
-  # Intentionally asks for contract 2.0.0 of project_value; environment.yaml
-  # supplies only 1.0.0, so the call is rejected before any data is read.
+  # The required numeric argument is deliberately omitted, so static
+  # checking rejects the call before any project code or study data is read.
   - name: RESULT
     type: float
     label: Project Function Result
     derivation:
       function:
         name: project_value
-        contract_version: "2.0.0"
-        args: {x: SOURCE.VALUE}
+        args: {}

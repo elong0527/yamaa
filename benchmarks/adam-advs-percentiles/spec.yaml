@@ -89,7 +89,6 @@ columns:
         - otherwise:
             function:
               name: normal_cdf
-              contract_version: "1.0.0"
               args:
                 q: ZNUM
 

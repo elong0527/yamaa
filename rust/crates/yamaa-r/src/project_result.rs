@@ -3,7 +3,7 @@ use crate::specification_service::boundary;
 use extendr_api::prelude::*;
 
 #[cfg(unix)]
-mod platform {
+pub(crate) mod platform {
     use super::*;
     use crate::{file_project::platform::HeldAttempt, project_activation::Error as HostError};
     use std::{
@@ -17,10 +17,10 @@ mod platform {
         project_report::{self, Classified},
         specification_report::BuildResult,
     };
-    struct HeldResult {
-        attempt: Rc<HeldAttempt>,
-        formatted: Option<BuildResult>,
-        refusal: &'static str,
+    pub(crate) struct HeldResult {
+        pub(crate) attempt: Rc<HeldAttempt>,
+        pub(crate) formatted: Option<BuildResult>,
+        pub(crate) refusal: &'static str,
     }
     thread_local! {
         static RESULTS: RefCell<BTreeMap<usize, Weak<HeldResult>>> = const { RefCell::new(BTreeMap::new()) };
@@ -99,6 +99,25 @@ mod platform {
     ) -> std::result::Result<Robj, String> {
         let fields = crate::specification_result::fields(&metadata)?;
         let attempt = crate::file_project::platform::attempt(&handle)?;
+        let state = format(attempt, &fields, &formatter);
+        let handle = ExternalPtr::new(Handle {
+            state: Rc::new(state),
+            identity: Cell::new(0),
+        });
+        let id = crate::specification_service::address(handle.as_robj())?;
+        handle.identity.set(id);
+        RESULTS.with(|handles| {
+            handles
+                .borrow_mut()
+                .insert(id, Rc::downgrade(&handle.state));
+        });
+        Ok(handle.into_robj())
+    }
+    pub(crate) fn format(
+        attempt: Rc<HeldAttempt>,
+        fields: &[String],
+        formatter: &Function,
+    ) -> HeldResult {
         let mut failures = Vec::new();
         yamaa_adapters::project_attempt::visit_host_failures(&attempt.inner, |_, error| {
             failures.push(error)
@@ -108,8 +127,8 @@ mod platform {
         let mut refusal = "";
         for failure in &failures {
             let projection = match failure {
-                HostError::Host(condition) => ordinary(condition, &formatter, false),
-                HostError::Representation(condition) => ordinary(condition, &formatter, true),
+                HostError::Host(condition) => ordinary(condition, formatter, false),
+                HostError::Representation(condition) => ordinary(condition, formatter, true),
                 HostError::Scalar(reason) => Some(CallbackError::Rejected {
                     reason: (*reason).into(),
                     returned: None,
@@ -154,7 +173,7 @@ mod platform {
             match project_report::build_result(
                 &attempt.run,
                 &attempt.inner,
-                crate::specification_result::identity(&fields),
+                crate::specification_result::identity(fields),
                 &facts,
             ) {
                 Ok(result) => Some(result),
@@ -175,22 +194,11 @@ mod platform {
         } else {
             None
         };
-        let handle = ExternalPtr::new(Handle {
-            state: Rc::new(HeldResult {
-                attempt,
-                formatted,
-                refusal,
-            }),
-            identity: Cell::new(0),
-        });
-        let id = crate::specification_service::address(handle.as_robj())?;
-        handle.identity.set(id);
-        RESULTS.with(|handles| {
-            handles
-                .borrow_mut()
-                .insert(id, Rc::downgrade(&handle.state));
-        });
-        Ok(handle.into_robj())
+        HeldResult {
+            attempt,
+            formatted,
+            refusal,
+        }
     }
     pub(super) fn status(handle: Robj) -> std::result::Result<Robj, String> {
         let state = resolve(&handle)?;

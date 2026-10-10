@@ -49,6 +49,7 @@ macro_rules! conditions {
 
 conditions! {
     ProjectEnvironmentInvalid => ("validation", "project_environment_invalid", Some("REQ-0695")),
+    ProjectLockMismatch => ("validation", "runtime_artifact_mismatch", Some("REQ-0697")),
     RunnerLanguageMismatch => ("validation", "runner_language_mismatch", Some("REQ-0696")),
     CodelistDuplicateIdentifier => ("validation", "duplicate_define_identifier", Some("REQ-0948")),
     CodelistInvalidShape => ("validation", "codelist_shape_invalid", Some("REQ-0947")),

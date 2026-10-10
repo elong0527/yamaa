@@ -141,6 +141,27 @@ pub(super) fn prepare(
     })
 }
 impl Result {
+    pub(super) fn into_application(
+        self,
+        project: &yamaa_adapters::file_project::FileProject,
+    ) -> (
+        Attempt,
+        std::result::Result<
+            yamaa_adapters::file_application::Domain,
+            Vec<yamaa_adapters::issue_rows::Issue>,
+        >,
+    ) {
+        let result = match self.formatted {
+            Some(formatted) => {
+                yamaa_adapters::file_application::Domain::from_project(formatted.inner, project)
+            }
+            None => Err(yamaa_adapters::file_application::rejected(
+                "build",
+                self.refusal,
+            )),
+        };
+        (self.carrier, result)
+    }
     fn report(&self) -> PyResult<&specification_result::BuildResult> {
         self.formatted.as_ref().ok_or_else(|| {
             PyValueError::new_err(
@@ -152,7 +173,7 @@ impl Result {
 #[pymethods]
 impl Result {
     /// Preserve the original control-flow payload even after a refused formatter.
-    fn propagate_interrupt(&self, py: Python<'_>) -> PyResult<()> {
+    pub(super) fn propagate_interrupt(&self, py: Python<'_>) -> PyResult<()> {
         let state = self.carrier.inner.try_lock().map_err(|_| {
             PyRuntimeError::new_err("native project attempt is already borrowed or poisoned")
         })?;

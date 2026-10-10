@@ -1,10 +1,19 @@
 # Portable math policy for the shared engine
 
-Status: experimental scalar candidate for [#1585](https://github.com/elong0527/yamaa/issues/1585).
-The [#1740 decision proposal](https://github.com/elong0527/yamaa/issues/1740) is
-unratified. This document describes the existing prototype and qualification
-evidence, not approval of production numerical behavior or Python bit parity.
-The default compiler is unchanged.
+Status: numerical choice approved for implementation and qualification on
+2026-10-10; production qualification remains pending under
+[#1740](https://github.com/elong0527/yamaa/issues/1740),
+[#1742](https://github.com/elong0527/yamaa/issues/1742) and
+[#1585](https://github.com/elong0527/yamaa/issues/1585).
+The maintainer accepted the pinned `PortableLibmV1` recommendation and its
+documented historical Python differences, including downstream effects, by
+replying "agree with your recommendation" in the Rust migration assessment.
+The [decision record](planning/1757-maintainer-decisions.md) retains the approved
+scope and implementation defaults. This approval selects the implementation to
+qualify; it does not establish Python bit parity or complete release acceptance.
+The public original-document compiler now selects this approved policy in root,
+row and nested case compute contexts. The private normalized prototype and
+`numeric/1` qualification protocol retain their explicit experimental selectors.
 
 ## Current prototype and target release API
 
@@ -23,8 +32,9 @@ host lock pins the package release; rollback pins a prior release before a fresh
 run. There is no mid-run policy change or semantic fallback. `PortableLibmV1` is
 an internal candidate label, not an additional public version argument or
 mandatory result field. Qualification reports retain exact release/build/artifact
-evidence. Selecting the release behavior still requires the decision in #1740,
-followed by implementation and installed qualification before transition.
+evidence. The numerical choice is approved. #1757 qualifies original public Python/R
+function studies against unchanged positive truth; #1742 retains full release
+qualification and transition.
 
 PortableLibmV1 uses libm 0.2.16 with default features disabled, Rust 1.90.0 and
 ordinary binary64 arithmetic without reassociation or fast-math. The default
@@ -38,9 +48,9 @@ they must not become a public per-run selector.
 
 The shared core is the intended authority for both host bindings. Routing through
 one implementation avoids separately reproducing the host's math algorithms.
-Installed Python/R scalar probes already exercise the bounded protocol. Shared
-original-YAML execution of these functions in every compute context remains a
-separate gate; scalar probe evidence cannot close it.
+Installed Python/R scalar probes already exercise the bounded protocol. The public original-YAML compiler selects the same policy in every compute
+context. Installed benchmark evidence and the independent semantic/assessment
+corpus remain separate from full release acceptance.
 
 ## Semantics preserved
 
@@ -65,9 +75,9 @@ REQ-0435 acknowledges last-place differences; REQ-0436 requires shared R/Python
 results, and REQ-0438 preserves written association. These do not make differences
 from the current Python reference behavior-neutral. #1620 measured hundreds of
 one-ULP differences per function, with different counts on supported OS targets.
-The PortableLibmV1 experiment uses the pinned shared implementation. It does not
-change Python production evaluation, regenerate goldens, enable a dataset backend
-or claim that old and new runs will have identical output.
+The approved PortableLibmV1 implementation uses the pinned shared algorithm.
+The public compiler uses the approved shared algorithm. Historical Python
+comparisons remain exact; positive benchmark expected truth is unchanged.
 
 A one-ULP change can affect a dependent predicate, integral conversion, rounding,
 verification or canonical CSV field. Legacy comparisons stay exact and retain
@@ -90,14 +100,17 @@ There is no claim here that libm or platform math is universally correctly round
   mathematical accuracy. Independent high-precision accuracy analysis, difficult
   boundary cases and broader POWER domains remain qualification work.
 - Before host/dataset exposure, compare both bindings exactly, assess downstream
-  predicates/conversion/rounding/CSV changes, decide migration behavior explicitly,
-  and qualify all existing benchmark goldens without rewriting their expected truth.
+  predicates/conversion/rounding/CSV changes under the approved compatibility
+  decision, and qualify all existing benchmark goldens without rewriting their
+  expected truth. Retain difficult-domain accuracy evidence and every historical
+  mismatch class with its disposition; sampled portability is not an accuracy
+  certificate.
 - Decimal rounding is shared by both policies; numeric completed-result conversion
   and handler accounting is now a qualified engine service (31 shared Python/Rust
   cases, CI on all native targets). Normalized specification dispatch, host
   diagnostics, remaining handlers, Cargo locking and full
-  dataset execution remain separate gates. Default callers stay on ReferenceSubset
-  until the corresponding release decisions are made.
+  dataset execution remain separate gates. The private `compile_numeric` default
+  stays on ReferenceSubset; public original-document execution uses PortableLibmV1.
 
 
 ## numeric-math-v1 input specification

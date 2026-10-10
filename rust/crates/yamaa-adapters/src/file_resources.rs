@@ -27,6 +27,7 @@ pub enum Error {
     InvalidRoot,
     InvalidBase,
     InvalidPath,
+    InvalidLock,
     OutsideRoots,
     Symlink,
     Changed,
@@ -40,6 +41,7 @@ impl Error {
             Self::NotRegularFile => "resource path is not a regular file",
             Self::InvalidRoot => "invalid approved resource root",
             Self::InvalidBase => "invalid resource base directory",
+            Self::InvalidLock => "invalid packaging lock syntax",
             Self::InvalidPath => "invalid resource path spelling",
             Self::OutsideRoots => "resource path outside approved roots",
             Self::Symlink => "resource path contains a symbolic link",
@@ -723,6 +725,16 @@ fn directory_segments(path: &Path) -> Option<Segments> {
             rooted_segments(text)
         }
     }
+}
+/// Convert an absolute caller-owned native path to the resource spelling. YAML
+/// paths still enter `anchors` unchanged and keep their strict separator rules.
+pub(crate) fn caller_path(path: &Path) -> Result<String, Error> {
+    #[cfg(unix)]
+    let text = path.to_str().ok_or(Error::InvalidPath)?.to_owned();
+    #[cfg(windows)]
+    let text = path_text(&directory_segments(path).ok_or(Error::InvalidPath)?);
+    bounded(&text)?;
+    Ok(text)
 }
 fn rooted_segments(path: &str) -> Option<Segments> {
     #[cfg(windows)]

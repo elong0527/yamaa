@@ -23,6 +23,83 @@ fn context<const N: usize>(fields: [(&str, V); N]) -> Context {
 }
 
 impl PreflightFinding {
+    /// Charge held variable-size fields before allocating a diagnostic or JSON.
+    /// This visits facts only; it does not revalidate the rejected document.
+    pub fn visit_diagnostic_text(&self, mut visit: impl FnMut(&str)) {
+        use super::FunctionCause;
+        match self {
+            Self::ProjectFunction(finding) => {
+                visit(&finding.path);
+                visit(&finding.function);
+                if let Some(argument) = &finding.argument {
+                    visit(argument);
+                }
+                match &finding.cause {
+                    FunctionCause::UnknownReference(identifier) => visit(identifier),
+                    FunctionCause::RowPhase { identifier, row } => {
+                        visit(identifier);
+                        visit(row);
+                    }
+                    FunctionCause::UnknownFunction
+                    | FunctionCause::UnknownArgument
+                    | FunctionCause::DuplicateArgument
+                    | FunctionCause::MissingRequiredArgument
+                    | FunctionCause::ArgumentType { .. }
+                    | FunctionCause::Scalar(_) => (),
+                }
+            }
+            Self::ProjectCodelist(finding) => finding.visit_diagnostic_text(visit),
+            Self::RowPhase {
+                path,
+                identifier,
+                row,
+            } => {
+                visit(path);
+                visit(identifier);
+                visit(row);
+            }
+            Self::UndeclaredRowColumn { column, .. }
+            | Self::MissingDerivation { column }
+            | Self::UndeclaredKey { column, .. } => visit(column),
+            Self::DuplicateRowDefault { column, rows }
+            | Self::MissingRowDerivation { column, rows } => {
+                visit(column);
+                for row in rows {
+                    visit(row);
+                }
+            }
+            Self::InvalidGroup { row, groups, .. } => {
+                visit(row);
+                for group in groups {
+                    visit(group);
+                }
+            }
+            Self::GroupReference {
+                row, name, dataset, ..
+            } => {
+                visit(row);
+                visit(name);
+                visit(dataset);
+            }
+            Self::RowDriverUnavailable { row, dataset, .. } => {
+                visit(row);
+                if let Some(dataset) = dataset {
+                    visit(dataset);
+                }
+            }
+            Self::DriverUnavailable { dataset } => {
+                if let Some(dataset) = dataset {
+                    visit(dataset);
+                }
+            }
+            Self::DomainInputCollision { domain } => visit(domain),
+            Self::RedundantSourceType { dataset, field, .. } => {
+                visit(dataset);
+                visit(field);
+            }
+            Self::ConflictingRowConstruction => (),
+        }
+    }
     /// Preserve the compiler's ordered findings and authored paths. This does not
     /// perform validation again, consult a source, or choose a host representation.
     pub fn diagnostic(&self) -> Diagnostic {

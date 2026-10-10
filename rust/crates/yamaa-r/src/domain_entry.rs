@@ -11,6 +11,10 @@ use yamaa_adapters::issue_rows::Issue;
 struct State {
     #[cfg(unix)]
     result: Option<yamaa_adapters::file_application::Domain>,
+    #[cfg(unix)]
+    project: Option<Rc<crate::file_project::platform::HeldAttempt>>,
+    #[cfg(unix)]
+    _preparation: Option<yamaa_adapters::project_application::Error>,
     issues: Vec<Issue>,
 }
 thread_local! { static HANDLES:RefCell<BTreeMap<usize,Weak<RefCell<State>>>>=const { RefCell::new(BTreeMap::new()) }; }
@@ -70,7 +74,12 @@ fn unavailable() -> Vec<Issue> {
     .expect("application issue")]
 }
 #[extendr]
-fn domain_file(specification: Raw, environment_path: Robj, version: Raw) -> List {
+fn domain_file(
+    specification: Raw,
+    environment_path: Robj,
+    version: Raw,
+    capabilities: List,
+) -> List {
     boundary(|| {
         let specification = text(&specification)?;
         let environment = environment(&environment_path)?;
@@ -78,6 +87,87 @@ fn domain_file(specification: Raw, environment_path: Robj, version: Raw) -> List
         let version = text(&version)?;
         #[cfg(unix)]
         {
+            if let Some(environment) = environment {
+                if capabilities.len() != 3 {
+                    return Err("invalid project host capabilities".into());
+                }
+                let verify = capabilities
+                    .elt(0)
+                    .map_err(|_| "missing lock capability")?
+                    .as_function()
+                    .ok_or("invalid lock capability")?;
+                let resolve = capabilities
+                    .elt(1)
+                    .map_err(|_| "missing binding capability")?
+                    .as_function()
+                    .ok_or("invalid binding capability")?;
+                let formatter = capabilities
+                    .elt(2)
+                    .map_err(|_| "missing condition capability")?
+                    .as_function()
+                    .ok_or("invalid condition capability")?;
+                let mut project = match yamaa_adapters::project_application::prepare(
+                    specification,
+                    environment,
+                    yamaa_core::project_function::Language::R,
+                ) {
+                    Ok(project) => project,
+                    Err(error) => {
+                        return store(State {
+                            result: None,
+                            project: None,
+                            issues: yamaa_adapters::project_application::failure(
+                                &error,
+                                yamaa_core::project_function::Language::R,
+                            ),
+                            _preparation: Some(error),
+                        })
+                    }
+                };
+                let inner = project.build_with(|run| {
+                    crate::project_activation::Port::new(
+                        run.captured_environment()
+                            .lock()
+                            .map_or(&[], |lock| &lock.source.bytes),
+                        verify,
+                        resolve,
+                    )
+                });
+                let attempt = Rc::new(crate::file_project::platform::HeldAttempt {
+                    inner,
+                    run: project.retained_run(),
+                });
+                let fields =
+                    [version, yamaa_core::VERSION, "domain", specification, "."].map(str::to_owned);
+                let formatted = crate::project_result::platform::format(
+                    Rc::clone(&attempt),
+                    &fields,
+                    &formatter,
+                );
+                let result = match formatted.formatted {
+                    Some(result) => {
+                        yamaa_adapters::file_application::Domain::from_project(result, &project)
+                    }
+                    None => Err(yamaa_adapters::file_application::rejected(
+                        "build",
+                        formatted.refusal,
+                    )),
+                };
+                return store(match result {
+                    Ok(result) => State {
+                        result: Some(result),
+                        project: Some(attempt),
+                        _preparation: None,
+                        issues: Vec::new(),
+                    },
+                    Err(issues) => State {
+                        result: None,
+                        project: Some(attempt),
+                        _preparation: None,
+                        issues,
+                    },
+                });
+            }
             let result = yamaa_adapters::file_application::domain(
                 yamaa_engine::domain_entry::Request {
                     specification,
@@ -95,17 +185,21 @@ fn domain_file(specification: Raw, environment_path: Robj, version: Raw) -> List
             store(match result {
                 Ok(result) => State {
                     result: Some(result),
+                    project: None,
+                    _preparation: None,
                     issues: Vec::new(),
                 },
                 Err(issues) => State {
                     result: None,
+                    project: None,
+                    _preparation: None,
                     issues,
                 },
             })
         }
         #[cfg(not(unix))]
         {
-            let _ = (specification, environment, version);
+            let _ = (specification, environment, version, capabilities);
             store(State {
                 issues: unavailable(),
             })
@@ -121,6 +215,13 @@ fn check_file(specification: Raw, environment_path: Robj, version: Raw) -> List 
         let version = text(&version)?;
         #[cfg(unix)]
         {
+            if let Some(environment) = environment {
+                return crate::issue_frame::frame(&yamaa_adapters::project_application::check(
+                    specification,
+                    environment,
+                    yamaa_core::project_function::Language::R,
+                ));
+            }
             let issues = yamaa_adapters::file_application::check(
                 yamaa_engine::domain_entry::Request {
                     specification,
@@ -211,6 +312,29 @@ fn domain_save(handle: Robj) -> List {
         Ok(list!(saved = false, failed = true).into_robj())
     })
 }
+#[extendr]
+fn domain_interrupt(handle: Robj) -> List {
+    boundary(|| {
+        let state = resolve(&handle)?;
+        let state = state
+            .try_borrow()
+            .map_err(|_| "domain result already borrowed")?;
+        #[cfg(unix)]
+        if let Some(attempt) = &state.project {
+            let mut interrupted = None;
+            yamaa_adapters::project_attempt::visit_host_failures(&attempt.inner, |_, error| {
+                if let crate::project_activation::Error::Interrupt(condition) = error {
+                    if interrupted.is_none() {
+                        interrupted = Some(condition.clone());
+                    }
+                }
+            });
+            return Ok(interrupted.unwrap_or_else(|| r!(NULL)));
+        }
+        let _ = state;
+        Ok(r!(NULL))
+    })
+}
 extendr_module! {
     mod domain_entry;
     fn domain_file;
@@ -219,4 +343,5 @@ extendr_module! {
     fn domain_output;
     fn domain_observations;
     fn domain_save;
+    fn domain_interrupt;
 }

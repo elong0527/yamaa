@@ -634,17 +634,11 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0665](../operations/functions.md#req-0665) | `operations/functions.md` | R018-4 |
 | [REQ-0666](../operations/functions.md#req-0666) | `operations/functions.md` | R018-5 |
 | [REQ-0667](../operations/functions.md#req-0667) | `operations/functions.md` | R018-6 |
-| [REQ-0668](../operations/functions.md#req-0668) | `operations/functions.md` | R018-7 |
-| [REQ-0669](../operations/functions.md#req-0669) | `operations/functions.md` | R018-8 |
-| [REQ-0670](../operations/functions.md#req-0670) | `operations/functions.md` | R018-9 |
-| [REQ-0671](../operations/functions.md#req-0671) | `operations/functions.md` | R018-10 |
-| [REQ-0672](../operations/functions.md#req-0672) | `operations/functions.md` | R018-11 |
-| [REQ-0673](../operations/functions.md#req-0673) | `operations/functions.md` | R018-12 |
-| [REQ-0674](../operations/functions.md#req-0674) | `operations/functions.md` | R018-13 |
-| [REQ-0675](../operations/functions.md#req-0675) | `operations/functions.md` | R018-14 |
+| [REQ-0668](../operations/functions.md#req-0668) | `operations/functions.md` | R018-7, R018-10, R018-38 |
+| [REQ-0669](../operations/functions.md#req-0669) | `operations/functions.md` | R018-8, R018-9 |
 | [REQ-0676](../operations/functions.md#req-0676) | `operations/functions.md` | R018-15 |
 | [REQ-0677](../operations/functions.md#req-0677) | `operations/functions.md` | R018-16 |
-| [REQ-0678](../operations/functions.md#req-0678) | `operations/functions.md` | R018-17 |
+| [REQ-0678](../operations/functions.md#req-0678) | `operations/functions.md` | R018-17, R018-11 |
 | [REQ-0679](../operations/functions.md#req-0679) | `operations/functions.md` | R018-18 |
 | [REQ-0680](../operations/functions.md#req-0680) | `operations/functions.md` | R018-19 |
 | [REQ-0681](../operations/functions.md#req-0681) | `operations/functions.md` | R018-20 |
@@ -652,20 +646,19 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0683](../operations/functions.md#req-0683) | `operations/functions.md` | R018-22 |
 | [REQ-0684](../operations/functions.md#req-0684) | `operations/functions.md` | R018-23 |
 | [REQ-0685](../operations/functions.md#req-0685) | `operations/functions.md` | R018-24 |
-| [REQ-0686](../operations/functions.md#req-0686) | `operations/functions.md` | R018-25 |
+| [REQ-0686](../operations/functions.md#req-0686) | `operations/functions.md` | R018-25, R018-12 |
 | [REQ-0687](../operations/functions.md#req-0687) | `operations/functions.md` | R018-26 |
 | [REQ-0688](../operations/functions.md#req-0688) | `operations/functions.md` | R018-27 |
 | [REQ-0689](../operations/functions.md#req-0689) | `operations/functions.md` | R018-28 |
-| [REQ-0690](../operations/functions.md#req-0690) | `operations/functions.md` | R018-29 |
+| [REQ-0690](../operations/functions.md#req-0690) | `operations/functions.md` | R018-29, R018-14 |
 | [REQ-0691](../operations/functions.md#req-0691) | `operations/functions.md` | R018-30 |
-| [REQ-0692](../operations/functions.md#req-0692) | `operations/functions.md` | R018-31 |
+| [REQ-0692](../operations/functions.md#req-0692) | `operations/functions.md` | R018-31, R018-13 |
 | [REQ-0693](../operations/functions.md#req-0693) | `operations/functions.md` | R018-32 |
 | [REQ-0694](../operations/functions.md#req-0694) | `operations/functions.md` | R018-33 |
 | [REQ-0695](../operations/functions.md#req-0695) | `operations/functions.md` | R018-34 |
 | [REQ-0696](../operations/functions.md#req-0696) | `operations/functions.md` | R018-35 |
 | [REQ-0697](../operations/functions.md#req-0697) | `operations/functions.md` | R018-36 |
 | [REQ-0698](../operations/functions.md#req-0698) | `operations/functions.md` | R018-37 |
-| [REQ-0699](../operations/functions.md#req-0699) | `operations/functions.md` | R018-38 |
 | [REQ-0700](../operations/functions.md#req-0700) | `operations/functions.md` | R018-39 |
 | [REQ-0701](../operations/functions.md#req-0701) | `operations/functions.md` | R018-40 |
 | [REQ-0702](../operations/functions.md#req-0702) | `operations/functions.md` | R018-41 |
@@ -1038,13 +1031,9 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1078](../submission/terminology.md#req-1078) | `submission/terminology.md` | Schema prose |
 | [REQ-1079](../submission/terminology.md#req-1079) | `submission/terminology.md` | Schema prose |
 | [REQ-1080](../operations/functions.md#req-1080) | `operations/functions.md` | Schema prose |
-| [REQ-1081](../operations/functions.md#req-1081) | `operations/functions.md` | Schema prose |
-| [REQ-1082](../operations/functions.md#req-1082) | `operations/functions.md` | Schema prose |
 | [REQ-1083](../operations/functions.md#req-1083) | `operations/functions.md` | Schema prose |
-| [REQ-1084](../operations/functions.md#req-1084) | `operations/functions.md` | Schema prose |
 | [REQ-1085](../operations/functions.md#req-1085) | `operations/functions.md` | Schema prose |
 | [REQ-1086](../operations/functions.md#req-1086) | `operations/functions.md` | Schema prose |
-| [REQ-1087](../operations/functions.md#req-1087) | `operations/functions.md` | Schema prose |
 | [REQ-1088](../operations/aggregation.md#req-1088) | `operations/aggregation.md` | Schema prose |
 | [REQ-1089](../operations/aggregation.md#req-1089) | `operations/aggregation.md` | Schema prose |
 | [REQ-1091](../operations/aggregation.md#req-1091) | `operations/aggregation.md` | Schema prose |
@@ -1243,3 +1232,4 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1293](../storage/ingestion.md#req-1293) | `storage/ingestion.md` | Schema prose |
 | [REQ-1294](../storage/ingestion.md#req-1294) | `storage/ingestion.md` | Schema prose |
 | [REQ-1295](../storage/ingestion.md#req-1295) | `storage/ingestion.md` | Schema prose |
+| [REQ-1296](../submission/metadata.md#req-1296) | `submission/metadata.md` | Schema prose |

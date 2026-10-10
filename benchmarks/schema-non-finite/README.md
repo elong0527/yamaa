@@ -27,10 +27,9 @@ each hold one non-finite value.
 **Note:** a quoted spelling such as `'.inf'` remains text unless
 converted to a numeric type.
 
-**Engines:** `numeric_constant` is implemented in both runtimes under
-one contract (`python/contracts.yaml`, checked against
-`python/conformance/numeric_constant.yaml`): Python in
-`python/runtime/projectconstants.py` and R in `environment.R`. Both
-return the same three non-finite constants.
+**Engines:** `numeric_constant` belongs to the ordinary installed packages
+in `rust/tests/project-programs`. The explicit `python/environment.yaml` and
+`r/environment.yaml` carry equivalent versionless definitions and inline tests.
+Both return the same three non-finite constants.
 
 **Standard:** ADaM | **Domain:** ADSL

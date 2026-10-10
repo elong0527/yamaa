@@ -73,6 +73,18 @@ def check_manifest(manifest, actual_examples=None):
                 )
         else:
             errors.append(f"{name}: unknown status {status!r}")
+        if "reference_retired_by" in entry:
+            retirement = entry["reference_retired_by"]
+            if (
+                not isinstance(retirement, str)
+                or BLOCKED_BY_PATTERN.fullmatch(retirement) is None
+                or status != "executable"
+                or "python" not in entry.get("runtimes", [])
+            ):
+                errors.append(
+                    f"{name}: reference_retired_by requires an issue '#N' "
+                    "and an executable Python entry"
+                )
     return errors
 
 

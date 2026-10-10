@@ -1,4 +1,4 @@
 library(yamaa)
 
-adsl <- run_with_project_functions("spec.yaml", project_root = "r")$output
+adsl <- yamaa_domain("spec.yaml", environment = "r/environment.yaml")$output
 adsl

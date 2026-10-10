@@ -1976,6 +1976,30 @@ class TestExecutionManifestGate(unittest.TestCase):
             ],
         )
 
+    def test_reference_retirement_requires_an_issue_and_executable_python_entry(self):
+        entries = (
+            {'status': 'executable', 'runtimes': ['python'], 'reference_retired_by': 1757},
+            {'status': 'executable', 'runtimes': ['python'], 'reference_retired_by': '1757'},
+            {'status': 'blocked', 'blocked_by': '#1', 'reference_retired_by': '#1757'},
+            {'status': 'executable', 'runtimes': ['r'], 'reference_retired_by': '#1757'},
+        )
+        for entry in entries:
+            with self.subTest(entry=entry):
+                errors = EXECUTION_CHECK.check_manifest(
+                    {'version': '1.0', 'examples': {'one': entry}}, ['one']
+                )
+                self.assertEqual(len(errors), 1)
+                self.assertIn('reference_retired_by', errors[0])
+        self.assertEqual(
+            EXECUTION_CHECK.check_manifest(
+                {'version': '1.0', 'examples': {'one': {
+                    'status': 'executable', 'runtimes': ['python'],
+                    'reference_retired_by': '#1757',
+                }}}, ['one']
+            ),
+            [],
+        )
+
     def test_valid_minimal_manifest_passes(self):
         document = {
             'version': '1.0',
@@ -2191,601 +2215,71 @@ class TestValidationManifest(unittest.TestCase):
 
 
 class TestProjectFunctionEnvironment(unittest.TestCase):
-    def setUp(self):
+    def test_invalid_authored_language_reaches_native_schema_diagnostics(self):
+        for language in (7, 'julia', []):
+            with self.subTest(language=language), tempfile.TemporaryDirectory() as temporary:
+                case = Path(temporary) / 'benchmarks' / 'project'
+                case.mkdir(parents=True)
+                (case / 'spec.yaml').write_text('schema_version: "1.0"\n')
+                environment = case / 'environment.yaml'
+                environment.write_text(yaml.safe_dump({'schema_version': '1.0', 'language': language}))
+                errors = VALIDATOR.validate_spec_functions_against(
+                    {}, 'project.spec', case / 'spec.yaml', {}, [], {}, environment)
+                self.assertTrue(errors)
+                self.assertTrue(any('language' in str(error) for error in errors))
+
+    def test_malformed_environment_is_reported_without_entering_native_check(self):
+        for content in (b'language: [', b'language: r\nlanguage: python\n', b'- r\n', b'\xff'):
+            with self.subTest(content=content), tempfile.TemporaryDirectory() as temporary:
+                case = Path(temporary) / 'benchmarks' / 'project'
+                case.mkdir(parents=True)
+                environment = case / 'environment.yaml'
+                environment.write_bytes(content)
+                with patch('yamaa._native._check_project_metadata') as native:
+                    errors = VALIDATOR.validate_spec_functions_against(
+                        {}, 'project.spec', case / 'spec.yaml', {}, [], {}, environment)
+                self.assertEqual(len(errors), 1)
+                self.assertIn(str(environment), str(errors[0]))
+                native.assert_not_called()
+
+    def test_pathless_native_rejections_are_reported_at_the_environment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            case = Path(temporary) / 'benchmarks' / 'project'
+            case.mkdir(parents=True)
+            (case / 'spec.yaml').write_text('schema_version: "1.0"\n')
+            environment = case / 'environment.yaml'
+            environment.write_text('language: r\n')
+            with patch('yamaa._native._check_project_metadata', return_value=[
+                ('validation', 'engine_rejected', None, [], '{"stage":"environment","code":"invalid_packaging_lock"}'),
+            ]):
+                errors = VALIDATOR.validate_spec_functions_against(
+                    {}, 'project.spec', case / 'spec.yaml', {}, [], {}, environment)
+            self.assertEqual(len(errors), 1)
+            self.assertIn(str(environment), str(errors[0]))
+            self.assertIn('engine_rejected', str(errors[0]))
+
+    def test_authoritative_versionless_environment_and_call_shapes(self):
         root = TOOL_PATH.parents[3]
-        self.spec_schema, spec_errors = VALIDATOR.build_schema_env(root)
-        self.environment_schema, environment_errors = (
-            VALIDATOR.build_schema_env(root, 'schema_environment.yaml')
-        )
-        self.assertEqual(spec_errors, [])
-        self.assertEqual(environment_errors, [])
-
-    def contract(self):
-        return {
-            'contract_version': '1.0.0',
-            'implementation_version': '2026.1',
-            'description': 'Test a numeric value.',
-            'params': [
-                {
-                    'name': 'x',
-                    'type': 'float',
-                    'accepts_missing': False,
-                },
-                {
-                    'name': 'enabled',
-                    'type': 'bool',
-                    'required': False,
-                    'default': True,
-                },
-            ],
-            'returns': 'float',
-            'binding': {
-                'call': 'projectstats::test_value',
-                'args': {'x': 'x', 'enabled': 'enabled'},
-            },
-            'conformance': 'conformance/test-value.yaml',
-        }
-
-    def write_project(self, root, contract=None):
-        root.mkdir(parents=True, exist_ok=True)
-        conformance = root / 'conformance'
-        conformance.mkdir()
-        (conformance / 'test-value.yaml').write_text(
-            'schema_version: "1.0"\n'
-            'function: test_value\n'
-            'contract_version: "1.0.0"\n'
-            'cases:\n'
-            '  - id: ordinary\n'
-            '    covers: [normal, numeric-comparison, boolean-true:enabled]\n'
-            '    args: {x: 1.0, enabled: true}\n'
-            '    result: 1.0\n'
-            '  - id: boundary\n'
-            '    covers: [boundary, numeric-comparison, boolean-false:enabled]\n'
-            '    args: {x: 0.0, enabled: false}\n'
-            '    result: 0.0\n'
-            '  - id: default-enabled\n'
-            '    covers: [default:enabled, numeric-comparison]\n'
-            '    args: {x: 2.0}\n'
-            '    result: 2.0\n'
-            '  - id: missing-x-short-circuits\n'
-            '    covers: [short-circuit-missing:x]\n'
-            '    args: {x: null, enabled: true}\n'
-            '    result: null\n'
-            '  - id: missing-enabled-short-circuits\n'
-            '    covers: [short-circuit-missing:enabled]\n'
-            '    args: {x: 1.0, enabled: null}\n'
-            '    result: null\n'
-        )
-        document = {
-            'schema_version': '1.0',
-            'version': '2026.1',
-            'runtime': {
-                'language': 'r',
-                'artifact': {'reference': 'org.example/test-r:2026.1'},
-            },
-            'functions': {'test_value': contract or self.contract()},
-        }
-        environment_path = root / 'environment.yaml'
-        environment_path.write_text(yaml.safe_dump(document, sort_keys=False))
-        return document, environment_path
-
-    def test_validates_environment_and_missing_short_circuit_vectors(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            document, environment_path = self.write_project(Path(temp_dir))
-
-            errors = VALIDATOR.validate_project_environment(
-                document,
-                'environment.yaml',
-                environment_path,
-                self.environment_schema,
-            )
-
+        environment, errors = VALIDATOR.build_schema_env(root, 'schema_environment.yaml')
         self.assertEqual(errors, [])
+        source = yaml.safe_load((root / 'benchmarks/adam-adsl-bmi/python/environment.yaml').read_text())
+        self.assertEqual(VALIDATOR.validate_type(source, ['environment_class'], environment, 'environment'), [])
+        source['version'] = '1.0.0'
+        self.assertTrue(VALIDATOR.validate_type(source, ['environment_class'], environment, 'environment'))
 
-    def test_rejects_optional_without_default_and_implicit_widening(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            contract = self.contract()
-            contract['params'][0]['required'] = False
-            contract['params'][1]['type'] = 'float'
-            document, environment_path = self.write_project(
-                Path(temp_dir), contract
-            )
-
-            errors = VALIDATOR.validate_project_environment(
-                document,
-                'environment.yaml',
-                environment_path,
-                self.environment_schema,
-            )
-
-        message = '\n'.join(errors)
-        self.assertIn('optional parameter requires', message)
-        self.assertIn("expected exact type 'float', got 'bool'", message)
-
-    def test_rejects_runtime_specific_or_incomplete_binding(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            contract = self.contract()
-            contract['binding'] = {
-                'call': 'projectstats.test_value',
-                'args': {'x': 'x'},
-            }
-            document, environment_path = self.write_project(
-                Path(temp_dir), contract
-            )
-
-            errors = VALIDATOR.validate_project_environment(
-                document,
-                'environment.yaml',
-                environment_path,
-                self.environment_schema,
-            )
-
-        message = '\n'.join(errors)
-        self.assertIn('not fully qualified for runtime', message)
-        self.assertIn("missing=['enabled']", message)
-
-    def test_contract_fingerprint_excludes_implementation_binding(self):
-        first = self.contract()
-        second = copy.deepcopy(first)
-        second['implementation_version'] = '2026.2'
-        second['description'] = 'A differently worded description.'
-        second['binding']['call'] = 'otherproject::test_value'
-
-        first_id = VALIDATOR.function_contract_fingerprint(
-            'test_value', first
-        )
-        second_id = VALIDATOR.function_contract_fingerprint(
-            'test_value', second
-        )
-        second['comparison_decimals'] = 5
-        changed_id = VALIDATOR.function_contract_fingerprint(
-            'test_value', second
-        )
-
-        self.assertEqual(first_id, second_id)
-        self.assertNotEqual(first_id, changed_id)
-
-    def test_call_requires_exact_version_and_argument_type(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            project = Path(temp_dir)
-            self.write_project(project)
-            spec_path = project / 'spec.yaml'
-            spec = {
-                'columns': [
-                    {'name': 'A', 'type': 'int'},
-                    {
-                        'name': 'B',
-                        'type': 'float',
-                        'derivation': {
-                            'function': {
-                                'name': 'test_value',
-                                'contract_version': '2.0.0',
-                                'args': {'x': 'A'},
-                            }
-                        },
-                    },
-                ]
-            }
-
-            errors = VALIDATOR.validate_spec_functions(
-                spec, 'spec.yaml', spec_path, self.spec_schema
-            )
-
-        message = '\n'.join(errors)
-        self.assertIn('function_contract_mismatch', message)
-        self.assertIn("expected exact type 'float', got 'int'", message)
-
-    def test_function_call_can_defer_implementation_environment(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            spec_path = Path(temp_dir) / 'spec.yaml'
-            spec = {
-                'columns': [
-                    {
-                        'name': 'RESULT',
-                        'type': 'float',
-                        'derivation': {
-                            'function': {
-                                'name': 'non_finite_value',
-                                'contract_version': '1.0.0',
-                                'args': {
-                                    'kind': {'literal': 'positive-infinity'}
-                                },
-                            }
-                        },
-                    }
-                ]
-            }
-
-            errors = VALIDATOR.validate_spec_functions(
-                spec, 'spec.yaml', spec_path, self.spec_schema
-            )
-
-        self.assertEqual(errors, [])
-
-    def test_function_arguments_do_not_admit_nested_expressions(self):
-        expression = {
-            'function': {
-                'name': 'test_value',
-                'contract_version': '1.0.0',
-                'args': {'x': {'compute': {'expr': '1 + 1'}}},
-            }
-        }
-
-        errors = VALIDATOR.validate_type(
-            expression, ['expression'], self.spec_schema, 'derivation'
-        )
-
-        self.assertTrue(errors)
-
-    def test_malformed_environment_stops_before_semantic_validation(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            document, environment_path = self.write_project(Path(temp_dir))
-            document['runtime']['language'] = []
-
-            errors = VALIDATOR.validate_project_environment(
-                document,
-                'environment.yaml',
-                environment_path,
-                self.environment_schema,
-            )
-
-        self.assertTrue(errors)
-        self.assertIn('expected str', '\n'.join(errors))
-
-    def test_malformed_argument_keys_report_without_sorting_crash(self):
-        errors = VALIDATOR.validate_function_arguments(
-            {1: 1.0, 'other': 1.0, 'x': 1.0},
-            [{'name': 'x', 'type': 'float'}],
-            'function.args',
-        )
-
-        self.assertEqual(len(errors), 1)
-        self.assertIn("unknown argument 'other'", errors[0])
-
-    def test_short_circuit_vector_must_return_missing(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            document, environment_path = self.write_project(root)
-            vector_path = root / 'conformance' / 'test-value.yaml'
-            vectors = yaml.safe_load(vector_path.read_text())
-            vectors['cases'][3]['result'] = 1.0
-            vector_path.write_text(
-                yaml.safe_dump(vectors, sort_keys=False)
-            )
-
-            errors = VALIDATOR.validate_project_environment(
-                document,
-                'environment.yaml',
-                environment_path,
-                self.environment_schema,
-            )
-
-        self.assertIn(
-            'short-circuiting case must return missing', '\n'.join(errors)
-        )
-
-    def test_requires_inferable_conformance_coverage(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            document, environment_path = self.write_project(root)
-            vector_path = root / 'conformance' / 'test-value.yaml'
-            vectors = yaml.safe_load(vector_path.read_text())
-            vectors['cases'] = vectors['cases'][:1]
-            vector_path.write_text(
-                yaml.safe_dump(vectors, sort_keys=False)
-            )
-
-            errors = VALIDATOR.validate_project_environment(
-                document,
-                'environment.yaml',
-                environment_path,
-                self.environment_schema,
-            )
-
-        message = '\n'.join(errors)
-        self.assertIn('missing required coverage', message)
-        self.assertIn('default:enabled', message)
-        self.assertIn('short-circuit-missing:x', message)
-
-    def test_accepting_missing_and_nullable_output_have_distinct_coverage(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            contract = self.contract()
-            contract['params'] = [
-                {'name': 'x', 'type': 'float', 'accepts_missing': True}
-            ]
-            contract['may_return_missing'] = True
-            contract['binding']['args'] = {'x': 'x'}
-            document, environment_path = self.write_project(root, contract)
-            vectors = {
-                'schema_version': '1.0',
-                'function': 'test_value',
-                'contract_version': '1.0.0',
-                'cases': [
-                    {
-                        'id': 'ordinary',
-                        'covers': ['normal', 'numeric-comparison'],
-                        'args': {'x': 1.0},
-                        'result': 1.0,
-                    },
-                    {
-                        'id': 'boundary',
-                        'covers': ['boundary', 'numeric-comparison'],
-                        'args': {'x': 0.0},
-                        'result': 0.0,
-                    },
-                    {
-                        'id': 'accepted-missing',
-                        'covers': ['accepted-missing:x'],
-                        'args': {'x': None},
-                        'result': 0.0,
-                    },
-                    {
-                        'id': 'nullable-result',
-                        'covers': ['nullable-output'],
-                        'args': {'x': 2.0},
-                        'result': None,
-                    },
-                ],
-            }
-            vector_path = root / 'conformance' / 'test-value.yaml'
-            vector_path.write_text(
-                yaml.safe_dump(vectors, sort_keys=False)
-            )
-
-            errors = VALIDATOR.validate_project_environment(
-                document,
-                'environment.yaml',
-                environment_path,
-                self.environment_schema,
-            )
-
-        self.assertEqual(errors, [])
-
-    def test_python_host_arguments_are_identifiers_and_not_keywords(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            document, environment_path = self.write_project(Path(temp_dir))
-            document['runtime']['language'] = 'python'
-            binding = document['functions']['test_value']['binding']
-            binding['call'] = 'projectstats.test_value'
-            binding['args'] = {'x': 'class', 'enabled': 'lower.tail'}
-
-            errors = VALIDATOR.validate_project_environment(
-                document,
-                'environment.yaml',
-                environment_path,
-                self.environment_schema,
-            )
-
-        message = '\n'.join(errors)
-        self.assertIn("host argument 'class'", message)
-        self.assertIn("host argument 'lower.tail'", message)
-        self.assertTrue(
-            VALIDATOR.valid_host_argument_name('r', 'lower.tail')
-        )
-        self.assertFalse(VALIDATOR.valid_host_argument_name('r', 'function'))
-
-    def test_repository_compares_same_name_and_version_fingerprints(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            examples = root / 'benchmarks'
-            self.write_project(examples / 'project-a')
-            changed = self.contract()
-            changed['comparison_decimals'] = 5
-            self.write_project(examples / 'project-b', changed)
-
-            errors = (
-                VALIDATOR.validate_repository_function_fingerprints(
-                    root, self.environment_schema
-                )
-            )
-
-        self.assertEqual(len(errors), 1)
-        self.assertIn('function_contract_mismatch', errors[0])
-
-    def test_fingerprint_distinguishes_exact_default_scalar_types(self):
-        float_contract = self.contract()
-        float_contract['params'][1] = {
-            'name': 'threshold',
-            'type': 'float',
-            'required': False,
-            'default': 1.0,
-        }
-        int_contract = copy.deepcopy(float_contract)
-        int_contract['params'][1]['type'] = 'int'
-        int_contract['params'][1]['default'] = 1
-
-        float_id = VALIDATOR.function_contract_fingerprint(
-            'test_value', float_contract
-        )
-        int_id = VALIDATOR.function_contract_fingerprint(
-            'test_value', int_contract
-        )
-
-        self.assertNotEqual(float_id, int_id)
-
-    def test_fingerprint_has_a_stable_cross_language_golden_value(self):
-        contract = {
-            'contract_version': '1.0.0',
-            'implementation_version': 'ignored',
-            'description': 'Ignored by the logical fingerprint.',
-            'params': [
-                {
-                    'name': 'threshold',
-                    'type': 'float',
-                    'required': False,
-                    'default': 1.0,
-                    'accepts_missing': False,
-                },
-                {
-                    'name': 'enabled',
-                    'type': 'bool',
-                    'required': False,
-                    'default': True,
-                    'accepts_missing': True,
-                },
-            ],
-            'returns': 'float',
-            'comparison_decimals': 4,
-        }
-
-        fingerprint = VALIDATOR.function_contract_fingerprint(
-            'score', contract
-        )
-
-        self.assertEqual(
-            fingerprint,
-            '{"comparison_decimals":"4","contract_version":"1.0.0",'
-            '"format":"yamaa-r018-contract-v1","may_return_missing":false,'
-            '"name":"score","params":[{"accepts_missing":false,"default":'
-            '{"present":true,"value":{"type":"float",'
-            '"value":"3ff0000000000000"}},"name":"threshold",'
-            '"required":false,"type":"float"},{"accepts_missing":true,'
-            '"default":{"present":true,"value":{"type":"bool",'
-            '"value":true}},"name":"enabled","required":false,'
-            '"type":"bool"}],"returns":"float"}',
-        )
-        self.assertEqual(
-            VALIDATOR.canonical_function_value(1.0, 'float'),
-            {'type': 'float', 'value': '3ff0000000000000'},
-        )
-
-    def test_non_finite_function_values_are_missing(self):
-        for value in (math.inf, -math.inf, math.nan):
-            with self.subTest(value=value):
-                self.assertIsNone(VALIDATOR.function_value_type(value))
-                self.assertFalse(
-                    VALIDATOR.function_value_matches(value, 'float')
-                )
-                self.assertTrue(
-                    VALIDATOR.function_value_matches(
-                        value, 'float', accepts_missing=True
-                    )
-                )
-                self.assertEqual(
-                    VALIDATOR.canonical_function_value(value, 'float'),
-                    {'type': 'missing'},
-                )
-
-    def test_non_finite_default_has_the_missing_fingerprint(self):
-        non_finite = self.contract()
-        non_finite['params'][1] = {
-            'name': 'threshold',
-            'type': 'float',
-            'required': False,
-            'default': math.inf,
-            'accepts_missing': True,
-        }
-        missing = copy.deepcopy(non_finite)
-        missing['params'][1]['default'] = None
-
-        self.assertEqual(
-            VALIDATOR.function_contract_fingerprint('score', non_finite),
-            VALIDATOR.function_contract_fingerprint('score', missing),
-        )
-
-    def cutoff_contract(self):
-        return {
-            'contract_version': '1.0.0',
-            'implementation_version': '1.0.0',
-            'description': 'Return the reference date.',
-            'params': [
-                {
-                    'name': 'cutoff',
-                    'type': 'date',
-                    'required': False,
-                    'default': {'date': '2020-01-01'},
-                },
-            ],
-            'returns': 'date',
-            'binding': {
-                'call': 'projectdates.cutoff',
-                'args': {'cutoff': 'cutoff'},
-            },
-            'conformance': 'conformance/cutoff.yaml',
-        }
-
-    def test_valid_temporal_literal_accepts_r016_forms(self):
-        valid = [
-            ('date', '2020-01-01'),
-            ('date', '2021-06-30'),
-            ('datetime', '2020-01-01T10:20'),
-            ('datetime', '2020-01-01T10:20:30'),
-        ]
-        invalid = [
-            ('date', 'not-a-date'),
-            ('date', '2020-1-1'),
-            ('date', '2020-13-01'),
-            ('date', '2020-02-30'),
-            ('date', '2020-01-01T10:00:00'),
-            ('datetime', '2020-01-01'),
-            ('datetime', '2020-01-01T25:00:00'),
-            ('datetime', '2020-02-30T10:00:00'),
-            ('datetime', '2020-01-01T10:20:61'),
-            ('float', '2020-01-01'),
-            ('date', 20200101),
-        ]
-        for kind, text in valid:
-            with self.subTest(kind=kind, text=text):
-                self.assertTrue(
-                    VALIDATOR.valid_temporal_literal(kind, text)
-                )
-        for kind, text in invalid:
-            with self.subTest(kind=kind, text=text):
-                self.assertFalse(
-                    VALIDATOR.valid_temporal_literal(kind, text)
-                )
-
-    def test_function_value_type_resolves_tagged_temporal_values(self):
-        self.assertEqual(
-            VALIDATOR.function_value_type({'date': '2020-01-01'}), 'date'
-        )
-        self.assertEqual(
-            VALIDATOR.function_value_type(
-                {'datetime': '2021-06-30T10:20'}
-            ),
-            'datetime',
-        )
-        self.assertEqual(
-            VALIDATOR.function_value_type({'date': '2020-13-01'}),
-            '<invalid>',
-        )
-
-    def test_temporal_contract_default_validates(self):
-        contract = self.cutoff_contract()
-        fingerprint = VALIDATOR.function_contract_fingerprint(
-            'cutoff', contract
-        )
-        self.assertTrue(fingerprint.startswith('{"comparison_decimals"'))
-        self.assertEqual(
-            VALIDATOR.canonical_function_value(
-                {'date': '2020-01-01'}, 'date'
-            ),
-            {'type': 'date', 'value': '2020-01-01'},
-        )
-        bad_default = copy.deepcopy(contract)
-        bad_default['params'][0]['default'] = {'date': '2020-13-01'}
-        with self.assertRaises(ValueError):
-            VALIDATOR.function_contract_fingerprint('cutoff', bad_default)
-
-    def test_temporal_call_argument_validates(self):
-        contract = self.cutoff_contract()
-        self.assertEqual(
-            VALIDATOR.validate_function_arguments(
-                {'cutoff': {'date': '2021-06-30'}},
-                contract['params'],
-                'call.args',
-            ),
-            [],
-        )
-        errors = VALIDATOR.validate_function_arguments(
-            {'cutoff': {'date': '2021-13-40'}},
-            contract['params'],
-            'call.args',
-        )
-        self.assertEqual(len(errors), 1)
-        self.assertIn('invalid_function_argument', errors[0])
-        self.assertIn("got '<invalid>'", errors[0])
+    def test_original_function_studies_use_explicit_equivalent_environments(self):
+        root = TOOL_PATH.parents[3]
+        for name in ('adam-adsl-bmi', 'adam-advs-percentiles', 'schema-functions', 'schema-non-finite', 'negative-function-contract'):
+            with self.subTest(name=name):
+                study = root / 'benchmarks' / name
+                python = yaml.safe_load((study / 'python/environment.yaml').read_text())
+                r = yaml.safe_load((study / 'r/environment.yaml').read_text())
+                for definition in python['functions'].values():
+                    definition.pop('function')
+                for definition in r['functions'].values():
+                    definition.pop('function')
+                self.assertEqual(python['functions'], r['functions'])
+                self.assertNotIn('contract_version', (study / 'spec.yaml').read_text())
 
 
 class TestRuleMetadata(unittest.TestCase):

@@ -18,142 +18,45 @@ status: normative
 
 <a id="req-0662"></a>
 
-**REQ-0662.** A portable specification may declare a logical `function` call
-before project code is implemented. Specification authoring and structural
-validation do not select a project root and do not require an
-`environment.yaml`. They validate the call's closed schema shape, including its
-logical name, exact requested contract version, and permitted argument leaves.
-Contract existence, signature, argument types, missing permissions, and return
-type checks wait until an implementation environment is supplied. Omission does
-not create or maintain an environment implicitly.
+**REQ-0662.** A portable specification may declare a logical `function` call before project code exists. Structural authoring validates its versionless `name` and closed argument-leaf shape. Contract-dependent checks require an explicitly supplied environment. Omission never creates an environment implicitly.
 
 <a id="req-0663"></a>
 
-**REQ-0663.** When actual project code is validated, activated, or executed, the
-runner receives one explicitly selected project root. It resolves exactly
-`environment.yaml` at that root before reading specification data. A
-specification cannot name, replace, extend, or override that environment.
+**REQ-0663.** The caller supplies one environment file through `environment=` to `domain` or `check`. Every path declared there resolves relative to that file under the admitted resource policy. A specification cannot select, replace or override the environment. No adjacent environment or language subdirectory is discovered implicitly.
 
 <a id="req-0664"></a>
 
-**REQ-0664.** An environment is validated independently against
-`schema_environment.yaml`. Its `schema_version` selects that schema bundle and
-the separate `version` identifies the complete environment content. Once an
-implementation stage is requested for a specification containing a `function`
-expression, missing, unreadable, structurally invalid, or ambiguous environment
-resolution fails before code activation or execution.
+**REQ-0664.** The environment is independently admitted against `schema_environment.yaml`. `schema_version` selects the schema bundle. There is no environment content version. Missing, unreadable or invalid supplied metadata fails before activation or study reads.
 
-### One immutable runtime
+### Installed runtime
 
 <a id="req-0665"></a>
 
-**REQ-0665.** `runtime.language` is exactly `r` or `python`. It applies to every
-function in the project. An environment cannot contain language-specific sub-
-environments, parallel R and Python bindings, or language choices per function.
+**REQ-0665.** `language` is exactly `r` or `python` and applies to every function definition. It is required when `functions` is present. Parallel bindings and per-function language choices are invalid.
 
 <a id="req-0666"></a>
 
-**REQ-0666.** `runtime.artifact.reference` names one organization-resolvable
-runtime artifact. The artifact covers callable project code and all transitive
-dependencies, and every file it carries is a regular file beneath its own root.
-Only code inside that artifact participates in function resolution. A global
-library, process search path, working directory, user profile, or ambient
-package installation is not a fallback.
+**REQ-0666.** `lock` names the packaging lock for the running environment: uv TOML for Python or renv JSON for R. It is required when `functions` is present. The packaging tool manages installation, code and transitive dependencies; yamaa neither vendors, resolves, pins nor caches project code. Captured bytes establish lock format independently of the filename.
 
 <a id="req-0667"></a>
 
-**REQ-0667.** The runner must support the declared language and must resolve the
-artifact before activation. A runner-language mismatch, or an artifact that
-cannot be resolved and read, fails before specification data is read.
+**REQ-0667.** Static checking rejects a host-language mismatch or a lock format incompatible with `language`, without importing project code or reading study data. On each build that calls a function, before any study read, the host verifies the installed version of yamaa and every called function package against the captured lock. Standard-library/base-package functions are exempt. This is a called-package check; a full environment audit belongs to uv or renv.
 
-### Logical contracts
+### Function definitions
 
 <a id="req-0668"></a>
 
-**REQ-0668.** `functions` is a non-empty mapping from logical function names to
-contracts. Each name has one contract and one binding in an environment.
-A call contains that logical `name` and an exact `contract_version`. No call
-contains a runtime-specific callable name.
+**REQ-0668.** `functions` maps unique logical names to one definition each, either inline or through a path. A specification call contains only logical `name` and `args`. It contains no implementation language, callable name or contract version.
 
 <a id="req-0669"></a>
 
-**REQ-0669.** A contract declares:
+**REQ-0669.** A definition contains a qualified `function`, non-empty `description`, closed ordered `params`, scalar `returns`, `may_return_missing` (default false), `comparison_decimals` (default four), and inline `tests`. A definition file contains that one definition and does not repeat its logical name or schema version. Definition and test paths use the declaring-file resource policy; a definition is not split into contract, binding and conformance documents.
 
-- a `contract_version` identifying its language-neutral behavior;
-- a separate `implementation_version` identifying this project's binding,
-  defaulting to the environment `version` when omitted;
-- one closed ordered `params` list;
-- one [Types and conversion](../values/types.md) `returns` type;
-- whether an invoked binding `may_return_missing`;
-- `comparison_decimals`, defaulting to four; and
-- one conformance-vector path.
 
-A function entry may name a shared contract document in `contract` instead of
-declaring the language-neutral fields inline. The named document holds
-`contract_version`, `description`, `comparison_decimals`, `may_return_missing`,
-`params`, and `returns` once for every project that implements the contract;
-the entry keeps `implementation_version`, `binding`, and the
-conformance-vector path. A `contract` path is project-root-local, following
-the same local normalized inside-the-root rule as a conformance path.
-Declaring a contract both inline and by reference, or by reference to a
-document that does not define the entry's function name, is invalid.
 
-<a id="req-0670"></a>
 
-**REQ-0670.** Changing meaning, parameter order or names, parameter types,
-requiredness, defaults, missing behavior, return semantics, or effective
-comparison precision requires a new `contract_version`. Changing only project
-code without changing the logical contract changes `implementation_version` and
-the runtime artifact identity instead.
 
-<a id="req-0671"></a>
 
-**REQ-0671.** For comparison across projects, implementations calculate a
-contract fingerprint. Its payload is the following logical object, called
-`yamaa-r018-contract-v1`:
-
-```text
-format, name, contract_version, params, returns,
-may_return_missing, comparison_decimals
-```
-
-<a id="req-0672"></a>
-
-**REQ-0672.** `params` is an array in declared order. Each entry has `name`,
-`type`, the effective `required` and `accepts_missing` Booleans, and `default`.
-An absent default is `{present: false}`. A present default is `{present: true,
-value: typed-value}`. A typed value is encoded as follows:
-
-| Logical value | Canonical object |
-|---|---|
-| missing | `{type: "missing"}` |
-| `str` | `{type: "str", value: text}` |
-| `int` | `{type: "int", value: base-10-string}` |
-| finite `float` | `{type: "float", value: binary64}` |
-| `bool` | `{type: "bool", value: JSON-Boolean}` |
-| `date` or `datetime` | `{type: type-name, value: canonical-temporal-text}` |
-
-<a id="req-0673"></a>
-
-**REQ-0673.** [Types and conversion](../values/types.md) normalizes non-finite values before encoding a default or
-other typed value. This table has no non-finite representation. A binary64
-value is 16 lowercase hexadecimal big-endian bits.
-
-<a id="req-0674"></a>
-
-**REQ-0674.** `comparison_decimals` is its non-negative base-10 string. The
-fingerprint is that object as UTF-8 JSON under the JSON Canonicalization
-Scheme in RFC 8785, and is compared as that text. Strings use their
-[Text values](../values/text.md) value. Parameters retain their declared order. Object member order
-comes only from canonical JSON.
-
-<a id="req-0675"></a>
-
-**REQ-0675.** The runtime language, artifact, binding, description, and
-implementation version are excluded. Repository validation requires every
-discovered logical-name and contract-version pair to have the same calculated
-fingerprint. Projects do not claim the same logical function contract unless
-these fingerprints are identical.
 
 ### Parameters and arguments
 
@@ -216,20 +119,11 @@ therefore does not require `may_return_missing: true`.
 
 <a id="req-0683"></a>
 
-**REQ-0683.** `binding.call` is a statically written fully qualified callable in
-the selected runtime: an R package-qualified name such as `projectbmi::bmi`, or
-a Python module-qualified name such as `orgstats.normal_cdf`. The environment
-also maps every logical parameter name to one unique host argument name. An
-omitted `binding.args` maps each logical parameter to the same-named host
-argument. The mapping must exactly cover the logical signature. A Python host name is an
-ASCII identifier and not a Python keyword. An R host name is an unquoted
-syntactic R name and not a reserved word, `...`, or a `..n` positional name.
+**REQ-0683.** `function` is a statically written fully qualified callable, such as `projectbmi.bmi` or `projectbmi::bmi`. Parameter names match the installed callable's concrete closed named signature exactly. No argument-name mapping or computed name is permitted. Normal installed module or namespace resolution runs only after the lock gate passes.
 
 <a id="req-0684"></a>
 
-**REQ-0684.** Inline code, anonymous functions, evaluation, shell commands,
-script paths, computed callable names, executable argument transforms, and
-lookup outside the verified artifact are invalid.
+**REQ-0684.** Inline code, anonymous functions, evaluation, shell commands, script paths, executable argument transforms and variadic signatures are invalid. Project code is an ordinary package installed by the packaging tool.
 
 <a id="req-0685"></a>
 
@@ -259,18 +153,13 @@ are not admitted. Results may use those same representations or an unclassed
 R integer/character scalar of the corresponding exact logical type. Double and
 logical scalars remain `float` and `bool`; there is no numeric or text coercion.
 R `date` and `datetime` use the Date and explicitly UTC POSIXct representations
-fixed by [Temporal values](../values/temporal.md#req-0563). This host mapping adds
-no logical type and does not change a function's contract fingerprint.
+fixed by [Temporal values](../values/temporal.md#req-0563). This host mapping adds no logical type.
 
 ### Activation conformance
 
 <a id="req-0687"></a>
 
-**REQ-0687.** Every logical contract names a language-neutral YAML conformance
-document. It identifies the same logical name and contract version and contains
-uniquely named cases. A case supplies `covers`, logical arguments, and one
-expected scalar result. Its arguments obey the same signature, exact-type,
-default, and missing rules as a specification call.
+**REQ-0687.** Every definition contains inline `tests`. Each uniquely named case declares `covers`, logical `args`, and one expected `result`. Tests obey the same exact types, defaults and missing permissions as specification calls. They do not repeat a logical name or contract version.
 
 <a id="req-0688"></a>
 
@@ -300,16 +189,11 @@ input is the contract semantic boundary. Activation checks the declared result.
 
 <a id="req-0690"></a>
 
-**REQ-0690.** A project claiming the same contract in another language runs the
-same vector content.
+**REQ-0690.** Equivalent projects in another language carry the same logical parameter declarations, comparison policy and test content. Qualified callable names and packaging locks differ by host.
 
 <a id="req-0691"></a>
 
-**REQ-0691.** Activation loads the verified artifact and runs all vectors before
-any specification may execute. Success may be cached only for the exact
-combination of environment version, artifact reference, contract fingerprints,
-every implementation version, and the complete vector-content identity. Any
-change invalidates the cache and requires activation again.
+**REQ-0691.** Every build with called functions verifies the lock, binds the called functions and runs every case of every called function before any study data is read. Ordinary independent failures collect; an original host interrupt aborts immediately. There is no activation cache. Empty selection performs no lock verification or code execution.
 
 ### Numeric conformance and rounding
 
@@ -335,68 +219,18 @@ differences.
 
 <a id="req-1080"></a>
 
-**REQ-1080.** The `environment_class` fields have these meanings:
+**REQ-1080.** The `environment_class` fields have these meanings: `schema_version` selects the schema; `language`, `lock`, and `functions` declare installed code; `codelists` supplies study terminology; `study` and `sdtm`, `adam`, `send` carry submission metadata for [Define-XML](../submission/define-xml.md). A submission section requires `study`. Domain builds do not open submission document links or generate a Define-XML artifact.
 
-| Field | Meaning |
-| --- | --- |
-| `environment_class.schema_version` | Schema bundle this environment is written against. |
-| `environment_class.version` | Version of the complete project-environment content. |
-| `environment_class.runtime` | One language and immutable artifact used by every binding. |
-| `environment_class.functions` | Logical contracts and singular bindings available to specifications. |
 
-<a id="req-1081"></a>
-
-**REQ-1081.** The `project_runtime_class` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `project_runtime_class.language` | Sole implementation language selected by the project. |
-| `project_runtime_class.artifact` | Immutable runtime containing project code and dependencies. |
-
-<a id="req-1082"></a>
-
-**REQ-1082.** The `runtime_artifact_class` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `runtime_artifact_class.reference` | Organization-resolvable name of the immutable runtime artifact. |
 
 <a id="req-1083"></a>
 
-**REQ-1083.** The `function_contract_class` fields have these meanings:
+**REQ-1083.** The `function_definition_class` fields hold the qualified `function`, `description`, ordered `params`, scalar `returns`, nullable result permission, comparison precision and inline `tests` described by REQ-0669. Each `function_test_class` holds `id`, `covers`, `args` and `result`. The parameter class holds `name`, `type`, `required`, `default` and `accepts_missing`.
 
-| Field | Meaning |
-| --- | --- |
-| `function_contract_class.contract` | Project-root-local path of a shared contract document; exactly one of this and the inline contract fields (`contract_version`, `description`, `comparison_decimals`, `may_return_missing`, `params`, `returns`) is present. |
-| `function_contract_class.contract_version` | Exact version of the language-neutral logical contract. |
-| `function_contract_class.implementation_version` | Version of the selected language implementation; defaults to the environment `version` when omitted. |
-| `function_contract_class.description` | Human-readable statement of what the function computes. |
-| `function_contract_class.comparison_decimals` | Decimal places used only for cross-project numeric comparison. |
-| `function_contract_class.may_return_missing` | Whether an invoked binding may deliberately return missing. |
-| `function_contract_class.params` | Closed ordered logical signature. |
-| `function_contract_class.returns` | Scalar [Types and conversion](../values/types.md) type returned before column conversion. |
-| `function_contract_class.binding` | Sole callable binding in the project runtime language. |
-| `function_contract_class.conformance` | Language-neutral vectors required for environment activation. |
-
-<a id="req-1084"></a>
-
-**REQ-1084.** The `function_binding_class` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `function_binding_class.call` | Statically written callable inside the immutable runtime. |
-| `function_binding_class.args` | Complete mapping from logical to host argument names; omitted means each logical parameter maps to the same-named host argument. |
 
 <a id="req-1085"></a>
 
-**REQ-1085.** The `expressions.function` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `expressions.function.name` | Function name resolved in the project environment. |
-| `expressions.function.contract_version` | Exact logical contract version required from the environment. |
-| `expressions.function.args` | Named arguments passed to the function. |
-| `Result` | Calls a logical function once per row when an implementation is supplied. Vectorization is valid only when equivalent to logical row-wise calls. [Project functions](functions.md) defines environment resolution, validation, and invocation. |
+**REQ-1085.** `expressions.function.name` selects a logical function from the supplied environment; `args` supplies its named argument leaves. The result is one scalar for one logical row under the shared invocation lifecycle.
 
 <a id="req-1086"></a>
 
@@ -406,13 +240,6 @@ differences.
 | --- | --- |
 | `function_arg` | Named variable or scalar literal leaf; arbitrary nesting is not allowed. |
 
-<a id="req-1087"></a>
-
-**REQ-1087.** The `function_contract_version` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `function_contract_version` | Exact logical contract version required by a function call. |
 
 ## Error conditions
 
@@ -423,15 +250,11 @@ binding, or result requirements: fail under [Project functions](functions.md).
 
 <a id="req-0694"></a>
 
-**REQ-0694.** No usable `environment.yaml` when implementation validation,
-activation, or execution is requested at the selected root:
-`project_environment_missing`.
+**REQ-0694.** A supplied environment that cannot be read: `project_environment_missing`. A call without an implementation environment cannot execute.
 
 <a id="req-0695"></a>
 
-**REQ-0695.** An invalid environment, contract,
-binding, vector document, or duplicate logical declaration:
-`project_environment_invalid`.
+**REQ-0695.** An invalid environment, definition, test or duplicate logical declaration: `project_environment_invalid`. Static checking returns every independently inferable finding before activation.
 
 <a id="req-0696"></a>
 
@@ -440,18 +263,13 @@ language: `runner_language_mismatch`.
 
 <a id="req-0697"></a>
 
-**REQ-0697.** Missing or mismatched
-immutable artifact: `runtime_artifact_mismatch`.
+**REQ-0697.** A missing, invalid, ambiguous or mismatched installed called-package version: `runtime_artifact_mismatch`. The historical condition name remains stable; its context identifies the package, expected lock versions and observed installed version.
 
 <a id="req-0698"></a>
 
 **REQ-0698.** A call naming no
 declared logical function: `unknown_project_function`.
 
-<a id="req-0699"></a>
-
-**REQ-0699.** A call with
-exact contract version is unavailable: `function_contract_mismatch`.
 
 <a id="req-0700"></a>
 
@@ -477,6 +295,4 @@ not converted.
 
 <a id="req-0704"></a>
 
-**REQ-0704.** Each failure identifies the logical function, contract version,
-implementation version when available, and original host context when a binding
-was invoked.
+**REQ-0704.** Each invocation failure identifies its logical function, qualified callable, authored source and path, and original host context when code ran. Original host error and interrupt objects remain retained independently of human-readable issue formatting.

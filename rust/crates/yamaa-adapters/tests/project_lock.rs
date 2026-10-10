@@ -1,5 +1,20 @@
 use yamaa_adapters::project_lock::{decode_renv, Error, RenvLock};
 #[test]
+fn uv_classification_allows_unresolved_versions_but_validates_written_identities() {
+    let dynamic = b"version = 1\n[[package]]\nname = 'program'\nsource = {editable = 'program'}\n";
+    assert_eq!(
+        yamaa_adapters::project_lock::kind(dynamic).unwrap(),
+        yamaa_core::project_environment::LockKind::Uv
+    );
+    for invalid in [
+        "version = 1\n[[package]]\nversion = '1.0'\n",
+        "version = 1\n[[package]]\nname = 'program'\nversion = 1\n",
+        "version = 1\n[[package]]\nname = 'program'\nversion = ''\n",
+    ] {
+        assert!(yamaa_adapters::project_lock::kind(invalid.as_bytes()).is_err());
+    }
+}
+#[test]
 fn renv_metadata_preserves_exact_names_versions_and_ignores_unrelated_tool_metadata() {
     let raw=br#"{"R":{"Version":"4.6.1","Repositories":[{"Name":"CRAN","URL":"https://example.invalid"}]},"Packages":{"yamaa":{"Package":"yamaa","Version":"0.2.0","Source":"Local"},"projectbmi":{"Package":"projectbmi","Version":"1.2-0","Source":"Repository"}}}"#;
     assert_eq!(

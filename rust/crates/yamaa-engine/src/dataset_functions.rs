@@ -164,6 +164,9 @@ fn supplied<T: TableAccess + ?Sized>(
             continue;
         }
         let value = match &argument.input {
+            FunctionInput::Read(Read::Intermediate { .. }) => {
+                unreachable!("function admission rejects intermediate reads")
+            }
             FunctionInput::Collect { .. } => unreachable!("collected input was resolved above"),
             FunctionInput::Literal(value) => ValueRef::from(value),
             FunctionInput::Read(Read::Column(column)) => ValueRef::from(&candidate.values[*column]),

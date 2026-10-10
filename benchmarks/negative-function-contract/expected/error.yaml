@@ -1,9 +1,9 @@
 phase: validation
-condition: function_contract_mismatch
+condition: invalid_function_argument
 spec_paths:
-  - columns.RESULT.derivation.function.contract_version
-requirement: REQ-0699
+  - columns.RESULT.derivation.function.args
+requirement: REQ-0700
 context:
   function: project_value
-  requested: "2.0.0"
-  available: "1.0.0"
+  argument: x
+  cause: missing_required_argument

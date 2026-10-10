@@ -84,12 +84,6 @@
     "reference_assisted_run"
   ],
   [
-    "negative-function-contract",
-    "python",
-    "rust",
-    "reference_assisted_run"
-  ],
-  [
     "negative-impute-day-rule",
     "python",
     "rust",
@@ -396,12 +390,6 @@
     "reference_assisted_run"
   ],
   [
-    "schema-functions",
-    "python",
-    "rust",
-    "reference_assisted_run"
-  ],
-  [
     "schema-inheritance",
     "python",
     "rust",
@@ -421,12 +409,6 @@
   ],
   [
     "schema-lookup",
-    "python",
-    "rust",
-    "reference_assisted_run"
-  ],
-  [
-    "schema-non-finite",
     "python",
     "rust",
     "reference_assisted_run"

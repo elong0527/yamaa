@@ -7,8 +7,9 @@ Assessed 2026-10-09 against main
 The goal is to complete one shared Rust implementation behind Python and R,
 qualify the supported original-document benchmark and public API matrix, and
 retire superseded implementations after their replacements pass. The migration
-is active; this assessment does not authorize release cutover or resolve the
-explicitly open policy decisions.
+is active; this assessment does not authorize release cutover. The numerical
+choice was subsequently approved on 2026-10-10. The #1757 closing change implements
+the public environment path; full release qualification remains separate.
 
 ## Delivered and qualified
 
@@ -68,17 +69,32 @@ report. Installed witnesses cover exact output/save bytes, failed-save gates,
 ordinary failures and original interrupts after the first attempt handle is
 collected. Report quota refusal keeps all 360 original failures; Python error
 rendering also refuses reentrant mutable access without deadlocking.
-The next integration gate carries these results into public
-`domain(..., environment=...)` / `check(..., environment=...)`. Authoritative
-environment/function formats and the five locked function benchmarks have not
-yet been replaced. Installed public-environment qualification remains pending.
+The #1757 closing change now connects these retained results to public
+`domain(..., environment=...)` and `check(..., environment=...)` in Python and R.
+The shipped environment/function schemas and rules use ordinary installed code,
+versionless calls, uv/renv locks and inline function tests. Static checking grants
+no code or study-data authority; each build freshly verifies called packages and
+runs all called-function cases before study reads. Environment codelists compile
+and run at the existing column verification boundary.
 
+All five function benchmarks have equivalent Python/R environments. Four retain
+their exact original CSV truth; the fifth independently specifies a missing
+required argument (REQ-0700), replacing the removed contract-version error.
+Installed shared public suites replace the three obsolete function-specific
+reference-assisted qualification rows. The wider inventory continues to expose
+unsupported reference routes; it does not count them as shared execution.
+The obsolete artifact resolvers, contract fingerprints, cached activation and
+vendored benchmark code are removed. The old submission schema/generator and
+three Define-XML fixtures remain for #1758. Approved resource-root configuration
+also remains until its own path-policy decision.
+
+See [the closing qualification record](1757-qualification.md) for actual local
+results and the distinction between those results and the CI platform matrix.
 Continue with the following acceptance gates in the
 [serial implementation order](migration-order.md):
 
-1. Finish #1757's public environment lifecycle, authoritative formats,
-   terminology scope and five installed Python/R function benchmarks. Preserve
-   #1753's complete issue and observation contracts and #1755's port order.
+1. Review and merge the #1757 closing change after its installed platform gates
+   pass; retain #1753's issue/observation contracts and #1755's port ordering.
 2. Complete #1741's producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.
@@ -94,13 +110,18 @@ Continue with the following acceptance gates in the
 ## Decisions still separate from implementation
 
 The pending declaring-file-only path policy has not been adopted: current
-approved roots, configuration and fallback behavior remain. The numerical policy,
-release representations, Windows R scope, Cargo reproducibility and performance
-budgets still require their explicit decisions and qualification.
+approved roots, configuration and fallback behavior remain. The maintainer
+approved pinned `PortableLibmV1` for implementation and qualification on
+2026-10-10, accepting the documented historical Python differences and their
+downstream effects. See the [decision record](1757-maintainer-decisions.md) and
+[math policy](../MATH_POLICY.md). Release representations, Windows R scope, Cargo
+reproducibility and performance budgets retain their decisions and qualification
+gates; numerical approval does not close them.
 
 AGENTS.md still permits tool hashes only in the existing `python/uv.lock`.
 Additional digest-bearing lock files are not authorized. The verified existing
 UV-lock and hash-free renv restore paths allow independent locked-package work
-without changing that convention. Keep old submission and reference assessment
-paths until their replacements qualify, and keep acceptance issues open until
-their own complete criteria are fulfilled.
+without changing that convention. The maintainer approved continuing along those
+paths on 2026-10-10, with no additional digest-bearing lock files. Keep old
+submission and reference assessment paths until their replacements qualify, and
+keep acceptance issues open until their own complete criteria are fulfilled.

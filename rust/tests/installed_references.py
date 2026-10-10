@@ -461,12 +461,9 @@ class InstalledReferences(unittest.TestCase):
         )
 
     def test_match_value_capability_precedes_activation_and_data(self):
-        """The previous installed query set refuses both frontends before side effects."""
-        case = ROOT / "specification-functions"
-        project_spec = load_specification(case / "spec.yaml", SCHEMA).specification
-        ordinary_spec = load_specification(
-            ROOT / "specification-adlb" / "spec.yaml", SCHEMA
-        ).specification
+        """The previous installed query set refuses the component frontend before side effects."""
+        case = ROOT / "specification-adlb"
+        ordinary_spec = load_specification(case / "spec.yaml", SCHEMA).specification
         with (
             patch.object(
                 yamaa_native,
@@ -475,26 +472,17 @@ class InstalledReferences(unittest.TestCase):
                     '{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations"]}'
                 ),
             ),
-            patch.object(
-                native_datasets,
-                "activate_project",
-                side_effect=AssertionError("activation"),
-            ),
         ):
-            project = native_datasets.execute_with_project_functions(
-                project_spec, lambda _: self.fail("source"), case / "python", SCHEMA
-            )
-            ordinary = native_datasets.execute_with_source_provider(
+            actual = native_datasets.execute_with_source_provider(
                 ordinary_spec, lambda _: self.fail("source")
             )
-        for actual in (ordinary, project):
-            self.assertEqual(actual.result.status, "unsupported")
-            self.assertEqual(
-                [(f.operation, f.spec_path) for f in actual.result.features],
-                [("native_match_value_typing", "$")],
-            )
-            self.assertEqual(actual.result.handler_counts, ())
-            self.assertEqual(actual.verifications, ())
+        self.assertEqual(actual.result.status, "unsupported")
+        self.assertEqual(
+            [(f.operation, f.spec_path) for f in actual.result.features],
+            [("native_match_value_typing", "$")],
+        )
+        self.assertEqual(actual.result.handler_counts, ())
+        self.assertEqual(actual.verifications, ())
 
     def test_key_truth_against_default_rules(self):
         """Replay independent comparison/inference truth through the retained default rules."""
@@ -1221,7 +1209,7 @@ class InstalledReferences(unittest.TestCase):
                 ],
             },
         )
-        case = ROOT / "specification-functions"
+        case = ROOT / "specification-adlb"
         spec = load_specification(case / "spec.yaml", SCHEMA).specification
         for capability in (
             None,
@@ -1232,13 +1220,13 @@ class InstalledReferences(unittest.TestCase):
             with (
                 patch.object(yamaa_native, "reference_capabilities", capability),
                 patch.object(
-                    native_datasets,
-                    "activate_project",
+                    __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                    "verify_versions",
                     side_effect=AssertionError("activation"),
                 ),
             ):
-                actual = native_datasets.execute_with_project_functions(
-                    spec, lambda _: self.fail("source"), case / "python", SCHEMA
+                actual = native_datasets.execute_with_source_provider(
+                    spec, lambda _: self.fail("source")
                 )
             self.assertEqual(actual.result.status, "unsupported")
             self.assertEqual(
@@ -1389,7 +1377,6 @@ class InstalledReferences(unittest.TestCase):
             "specification-adlb",
             "specification-windows",
             "specification-lookup",
-            "specification-functions",
         ):
             with self.subTest(case=name):
                 case = ROOT / name
@@ -1455,14 +1442,9 @@ class InstalledReferences(unittest.TestCase):
                         side_effect=AssertionError("reference donor scope"),
                     ),
                 ):
-                    if name == "specification-functions":
-                        actual = native_datasets.execute_with_project_functions(
-                            spec, provider, case / "python", SCHEMA, cache=None
-                        )
-                    else:
-                        actual = native_datasets.execute_with_source_provider(
-                            spec, provider
-                        )
+                    actual = native_datasets.execute_with_source_provider(
+                        spec, provider
+                    )
                 self.assertEqual(actual.result.status, "success")
                 self.assertEqual(events, ["source", "compile"])
                 self.assertEqual(
@@ -1472,18 +1454,18 @@ class InstalledReferences(unittest.TestCase):
 
     def test_missing_service_precedes_activation_and_data(self):
         """Older installations refuse explicitly before any host execution effects."""
-        case = ROOT / "specification-functions"
+        case = ROOT / "specification-adlb"
         spec = load_specification(case / "spec.yaml", SCHEMA).specification
         with (
             patch.object(yamaa_native, "_compile_reference_catalog", None),
             patch.object(
-                native_datasets,
-                "activate_project",
+                __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                "verify_versions",
                 side_effect=AssertionError("activation"),
             ),
         ):
-            actual = native_datasets.execute_with_project_functions(
-                spec, lambda _: self.fail("source"), case / "python", SCHEMA
+            actual = native_datasets.execute_with_source_provider(
+                spec, lambda _: self.fail("source")
             )
         self.assertEqual(actual.result.status, "unsupported")
         self.assertEqual(
@@ -1660,12 +1642,9 @@ class InstalledReferences(unittest.TestCase):
         )
 
     def test_intermediate_capability_precedes_activation_and_data(self):
-        """The previous query set cannot enter intermediate planning in either frontend."""
-        case = ROOT / "specification-functions"
-        project_spec = load_specification(case / "spec.yaml", SCHEMA).specification
-        ordinary_spec = load_specification(
-            ROOT / "specification-adlb" / "spec.yaml", SCHEMA
-        ).specification
+        """The previous query set cannot enter intermediate planning in the component frontend."""
+        case = ROOT / "specification-adlb"
+        ordinary_spec = load_specification(case / "spec.yaml", SCHEMA).specification
         with (
             patch.object(
                 yamaa_native,
@@ -1674,34 +1653,22 @@ class InstalledReferences(unittest.TestCase):
                     '{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation"]}'
                 ),
             ),
-            patch.object(
-                native_datasets,
-                "activate_project",
-                side_effect=AssertionError("activation"),
-            ),
         ):
-            project = native_datasets.execute_with_project_functions(
-                project_spec, lambda _: self.fail("source"), case / "python", SCHEMA
-            )
-            ordinary = native_datasets.execute_with_source_provider(
+            actual = native_datasets.execute_with_source_provider(
                 ordinary_spec, lambda _: self.fail("source")
             )
-        for actual in (ordinary, project):
-            self.assertEqual(actual.result.status, "unsupported")
-            self.assertEqual(
-                [(f.operation, f.spec_path) for f in actual.result.features],
-                [("native_intermediate_reference_validation", "$")],
-            )
-            self.assertEqual(actual.result.handler_counts, ())
-            self.assertEqual(actual.verifications, ())
+        self.assertEqual(actual.result.status, "unsupported")
+        self.assertEqual(
+            [(f.operation, f.spec_path) for f in actual.result.features],
+            [("native_intermediate_reference_validation", "$")],
+        )
+        self.assertEqual(actual.result.handler_counts, ())
+        self.assertEqual(actual.verifications, ())
 
     def test_key_capability_precedes_activation_and_data(self):
-        """The previous query set cannot enter key planning in either frontend."""
-        case = ROOT / "specification-functions"
-        project_spec = load_specification(case / "spec.yaml", SCHEMA).specification
-        ordinary_spec = load_specification(
-            ROOT / "specification-adlb" / "spec.yaml", SCHEMA
-        ).specification
+        """The previous query set cannot enter key planning in the component frontend."""
+        case = ROOT / "specification-adlb"
+        ordinary_spec = load_specification(case / "spec.yaml", SCHEMA).specification
         with (
             patch.object(
                 yamaa_native,
@@ -1710,26 +1677,17 @@ class InstalledReferences(unittest.TestCase):
                     '{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation"]}'
                 ),
             ),
-            patch.object(
-                native_datasets,
-                "activate_project",
-                side_effect=AssertionError("activation"),
-            ),
         ):
-            project = native_datasets.execute_with_project_functions(
-                project_spec, lambda _: self.fail("source"), case / "python", SCHEMA
-            )
-            ordinary = native_datasets.execute_with_source_provider(
+            actual = native_datasets.execute_with_source_provider(
                 ordinary_spec, lambda _: self.fail("source")
             )
-        for actual in (ordinary, project):
-            self.assertEqual(actual.result.status, "unsupported")
-            self.assertEqual(
-                [(f.operation, f.spec_path) for f in actual.result.features],
-                [("native_key_relations", "$")],
-            )
-            self.assertEqual(actual.result.handler_counts, ())
-            self.assertEqual(actual.verifications, ())
+        self.assertEqual(actual.result.status, "unsupported")
+        self.assertEqual(
+            [(f.operation, f.spec_path) for f in actual.result.features],
+            [("native_key_relations", "$")],
+        )
+        self.assertEqual(actual.result.handler_counts, ())
+        self.assertEqual(actual.verifications, ())
 
     def test_compile_failure_then_explicit_retry(self):
         """Compiler errors are propagated once and cannot poison a later planning attempt."""

@@ -2,9 +2,10 @@ version: "1.0"
 
 # Execution manifest for #101: every benchmark exactly once.
 # status is executable or blocked, and an executable entry names the
-# runtimes that reproduce what it committed. Python reproduces every
-# benchmark today, through `yamaa.adapters.conformance`; the R engine is
-# #200 and joins `runtimes` benchmark by benchmark as it lands.
+# runtimes that reproduce what it committed. The reference Python runner covers
+# entries without reference_retired_by. #1757's five project studies instead
+# qualify through the installed Python/R public environment suites; their retired
+# reference routes remain visible in the inventory and cannot qualify native runs.
 examples:
   schema-source-ordinal:
     status: executable
@@ -162,6 +163,7 @@ examples:
   adam-adsl-bmi:
     status: executable
     runtimes: ['python']
+    reference_retired_by: '#1757'
   adam-adsl-completion-flag:
     status: executable
     runtimes: ['python']
@@ -243,6 +245,7 @@ examples:
   adam-advs-percentiles:
     status: executable
     runtimes: ['python']
+    reference_retired_by: '#1757'
   adam-advs-map:
     status: executable
     runtimes: ['python']
@@ -435,6 +438,7 @@ examples:
   negative-function-contract:
     status: executable
     runtimes: ['python']
+    reference_retired_by: '#1757'
   negative-greatest-mixed:
     status: executable
     runtimes: ['python']
@@ -702,6 +706,7 @@ examples:
   schema-functions:
     status: executable
     runtimes: ['python']
+    reference_retired_by: '#1757'
   schema-shorthand:
     status: executable
     runtimes: ['python']
@@ -921,6 +926,7 @@ examples:
   schema-non-finite:
     status: executable
     runtimes: ['python']
+    reference_retired_by: '#1757'
   schema-window-functions:
     status: executable
     runtimes: ['python']

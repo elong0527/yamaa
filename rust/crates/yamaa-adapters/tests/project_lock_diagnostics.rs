@@ -127,8 +127,8 @@ fn complete_classified_host_facts_preserve_order_and_held_lock_origins_without_r
     ];
     for (record, (reason, versions, actual)) in records.iter().zip(expected) {
         assert_eq!(record.phase, "validation");
-        assert_eq!(record.condition, "project_environment_invalid");
-        assert_eq!(record.requirement.as_deref(), Some("REQ-0695"));
+        assert_eq!(record.condition, "runtime_artifact_mismatch");
+        assert_eq!(record.requirement.as_deref(), Some("REQ-0697"));
         assert_eq!(record.spec_paths, ["lock"]);
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&record.context).unwrap(),

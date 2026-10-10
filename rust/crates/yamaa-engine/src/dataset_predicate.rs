@@ -54,6 +54,9 @@ impl<T: TableAccess + ?Sized> Resolver for RowResolver<'_, T> {
         };
         let binding = &self.bindings[index];
         match binding.read {
+            Read::Intermediate { .. } => {
+                unreachable!("predicate admission rejects intermediate reads")
+            }
             Read::Source(column) => self
                 .table
                 .cell(self.source_row, column)

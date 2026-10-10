@@ -82,6 +82,12 @@ def stage(destination: Path):
         WORKSPACE / "crates/yamaa-adapters/tests/fixtures/environment-candidate",
         resources / "specification-environment-candidate",
     )
+    project_spec = importlib.util.spec_from_file_location(
+        "stage_project_inputs", Path(__file__).with_name("stage_project_inputs.py")
+    )
+    project_helper = importlib.util.module_from_spec(project_spec)
+    project_spec.loader.exec_module(project_helper)
+    project_helper.stage(resources / "project-original")
     print(destination)
 
 

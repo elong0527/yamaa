@@ -1081,14 +1081,14 @@ dir.create(file.path(directory,"absent"))
 stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(file.path(directory,"absent/output.csv")),charToRaw("ID\n-9223372036854775808\n9223372036854775807\n")))
 refused <- yamaa_domain("absent.yaml",environment="absent-environment.yaml")
 stopifnot(is.null(domain_observations(refused)))
-stopifnot(is.null(refused$output),identical(refused$issues$condition,"unsupported_operation"),identical(refused$issues,yamaa_check("absent.yaml",environment="absent-environment.yaml")$issues))
+stopifnot(is.null(refused$output),identical(refused$issues$condition,"engine_rejected"),identical(refused$issues,yamaa_check("absent.yaml",environment="absent-environment.yaml")$issues))
 stopifnot(inherits(tryCatch(yamaa_domain(NULL),error=identity),"error"))
 for(path in c(strrep("x",65537L),strrep("\u00e9",32769L))) {
   refused <- yamaa_domain(path)
   stopifnot(is.null(refused$output),identical(refused$issues$condition,"engine_rejected"),
             identical(refused$issues$context,'{"code":"resource_path","stage":"prepare"}'),
             identical(yamaa_check(path)$issues,refused$issues),
-            identical(yamaa_domain(path,environment=path)$issues$condition,"unsupported_operation"))
+            identical(yamaa_domain(path,environment=path)$issues$condition,"engine_rejected"))
 }
 unlink(directory,recursive=TRUE)
 cat("public check without study data, full-range integers, retained save retry and environment refusal passed\n")
@@ -1136,10 +1136,6 @@ local({
   propagate <- get(".project_result_propagate_interrupt",ns)
   names <- c("schema.yaml",sort(setdiff(list.files(file.path(root,"schema"),pattern="[.]yaml$"),"schema.yaml")))
   modules <- setNames(lapply(file.path(root,"schema",names),rawfile),names)
-  old <- "        - contract_version:\n            type: function_contract_version\n            required: true\n            description: See REQ-1085.\n"
-  text <- rawToChar(modules[["schema_function.yaml"]])
-  stopifnot(grepl(old,text,fixed=TRUE))
-  modules[["schema_function.yaml"]] <- charToRaw(sub(old,"",text,fixed=TRUE))
   envroot <- system.file("specification-environment-candidate",package="yamaa",mustWork=TRUE)
   names <- c("schema_environment.yaml","schema_shared.yaml")
   envmodules <- setNames(lapply(file.path(envroot,names),rawfile),names)

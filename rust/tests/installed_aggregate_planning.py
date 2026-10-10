@@ -112,53 +112,35 @@ class InstalledAggregatePlanning(unittest.TestCase):
                         "OTHER": grouped_count_source()["SRC"],
                     },
                 )
-                for project in (False, True):
-                    with (
-                        self.subTest(expr=expr, project=project),
-                        patch.object(
-                            r.native_datasets,
-                            "activate_project",
-                            side_effect=AssertionError("activation"),
-                        ),
-                    ):
-                        run = (
-                            r.native_datasets.execute_with_project_functions(
-                                spec,
-                                lambda _: self.fail("source"),
-                                r.ROOT / "specification-functions" / "python",
-                                r.SCHEMA,
-                            )
-                            if project
-                            else r.native_datasets.execute_with_source_provider(
-                                spec, lambda _: self.fail("source")
-                            )
+                run = r.native_datasets.execute_with_source_provider(
+                    spec, lambda _: self.fail("source")
+                )
+                self.assertEqual(run.result.status, "failure")
+                self.assertEqual(run.result.diagnostics, reference.diagnostics)
+                self.assertEqual(
+                    [
+                        (
+                            d.condition,
+                            d.requirement,
+                            d.spec_paths,
+                            dict(d.context),
                         )
-                        self.assertEqual(run.result.status, "failure")
-                        self.assertEqual(run.result.diagnostics, reference.diagnostics)
-                        self.assertEqual(
-                            [
-                                (
-                                    d.condition,
-                                    d.requirement,
-                                    d.spec_paths,
-                                    dict(d.context),
-                                )
-                                for d in run.result.diagnostics
-                            ],
-                            [
-                                (
-                                    "invalid_aggregate_context",
-                                    "REQ-0329",
-                                    ("rows[0].derivations.PRESENT.aggregate",),
-                                    {
-                                        "expr": expr,
-                                        "reason": f"a grouped row aggregate reads 'SRC', not {relation!r}",
-                                    },
-                                )
-                            ],
+                        for d in run.result.diagnostics
+                    ],
+                    [
+                        (
+                            "invalid_aggregate_context",
+                            "REQ-0329",
+                            ("rows[0].derivations.PRESENT.aggregate",),
+                            {
+                                "expr": expr,
+                                "reason": f"a grouped row aggregate reads 'SRC', not {relation!r}",
+                            },
                         )
-                        self.assertEqual(run.result.handler_counts, ())
-                        self.assertEqual(run.verifications, ())
+                    ],
+                )
+                self.assertEqual(run.result.handler_counts, ())
+                self.assertEqual(run.verifications, ())
 
     def test_count_binding_uses_its_row_driver(self):
         """Input order never selects the driver; unsupported multiple drivers stay unsupported."""
@@ -248,8 +230,8 @@ class InstalledAggregatePlanning(unittest.TestCase):
                 yamaa_native, "dataset_capabilities", lambda: json.dumps(capabilities)
             ),
             patch.object(
-                r.native_datasets,
-                "activate_project",
+                __import__("yamaa._locked_functions", fromlist=["verify_versions"]),
+                "verify_versions",
                 side_effect=AssertionError("activation"),
             ),
         ):
@@ -258,11 +240,8 @@ class InstalledAggregatePlanning(unittest.TestCase):
                 r.native_datasets.execute_with_source_provider(
                     spec, lambda _: self.fail("source")
                 ),
-                r.native_datasets.execute_with_project_functions(
-                    spec,
-                    lambda _: self.fail("source"),
-                    r.ROOT / "specification-functions" / "python",
-                    r.SCHEMA,
+                r.native_datasets.execute_with_source_provider(
+                    spec, lambda _: self.fail("source")
                 ),
             ]
         for run in results:
@@ -569,12 +548,9 @@ class InstalledAggregatePlanning(unittest.TestCase):
         )
 
     def test_previous_capability_refuses_before_activation_or_source(self):
-        """Both frontends refuse the preceding query set before host side effects."""
-        case = r.ROOT / "specification-functions"
-        project = r.load_specification(case / "spec.yaml", r.SCHEMA).specification
-        ordinary = r.load_specification(
-            r.ROOT / "specification-adlb" / "spec.yaml", r.SCHEMA
-        ).specification
+        """The component frontend refuses before source access."""
+        case = r.ROOT / "specification-adlb"
+        ordinary = r.load_specification(case / "spec.yaml", r.SCHEMA).specification
         with (
             patch.object(
                 yamaa_native,
@@ -583,28 +559,17 @@ class InstalledAggregatePlanning(unittest.TestCase):
                     '{"protocol":"reference-analysis/1","features":["binding","output_validation","qualified_validation","intermediate_validation","key_relations","match_value_typing"]}'
                 ),
             ),
-            patch.object(
-                r.native_datasets,
-                "activate_project",
-                side_effect=AssertionError("activation"),
-            ),
         ):
-            outcomes = [
-                r.native_datasets.execute_with_project_functions(
-                    project, lambda _: self.fail("source"), case / "python", r.SCHEMA
-                ),
-                r.native_datasets.execute_with_source_provider(
-                    ordinary, lambda _: self.fail("source")
-                ),
-            ]
-        for run in outcomes:
-            self.assertEqual(run.result.status, "unsupported")
-            self.assertEqual(
-                [(f.operation, f.spec_path) for f in run.result.features],
-                [("native_relation_binding", "$")],
+            run = r.native_datasets.execute_with_source_provider(
+                ordinary, lambda _: self.fail("source")
             )
-            self.assertEqual(run.result.handler_counts, ())
-            self.assertEqual(run.verifications, ())
+        self.assertEqual(run.result.status, "unsupported")
+        self.assertEqual(
+            [(f.operation, f.spec_path) for f in run.result.features],
+            [("native_relation_binding", "$")],
+        )
+        self.assertEqual(run.result.handler_counts, ())
+        self.assertEqual(run.verifications, ())
 
 
 if __name__ == "__main__":

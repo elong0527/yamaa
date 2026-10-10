@@ -264,6 +264,7 @@ class SubmissionDataset(_StrictModel):
     structure: str
     repeating: bool
     reference_data: bool = False
+    has_no_data: bool = False
     domain: str | None = None
     comment: SubmissionComment | None = None
 

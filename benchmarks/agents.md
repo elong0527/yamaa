@@ -55,22 +55,17 @@ line:
     <domain> <- yamaa_domain("<entry spec>")$output
     <domain>
 
-A benchmark whose entry calls a project function names the root that
-implements it, because the runner chooses the root and the specification
-cannot:
+A benchmark whose entry calls a project function supplies its environment file
+explicitly. The qualification stager copies the existing Python packaging lock
+into each isolated study; each R study carries a hash-free renv lock. Functions
+are ordinary installed packages under `program/`.
 
     import yamaa
-    from yamaa.functions import run_with_project_functions
 
-    <domain> = run_with_project_functions("<entry spec>", project_root="python").output
+    <domain> = yamaa.domain("<entry spec>", environment="python/environment.yaml").output
     <domain>
 
-The R twin names the R root instead:
-
-    library(yamaa)
-
-    <domain> <- run_with_project_functions("<entry spec>", project_root = "r")$output
-    <domain>
+The R twin passes `environment = "r/environment.yaml"` to `yamaa_domain`.
 
 The variable is the domain in lowercase (for example `adsl`), and the entry
 spec is `spec.yaml`, or the file no other file parents for multi-level
@@ -146,25 +141,20 @@ for another reason.
 
 ## A benchmark that needs project code
 
-A `function` call names a logical contract and a project supplies the code,
-so a benchmark that uses one carries the project roots that implement it.
-One environment declares one language, so a benchmark demonstrating a
-contract in more than one runtime keeps a second root beside the spec, in a
-directory named for its language. The contract document and the conformance
-vectors are shared between them: two roots claiming one contract calculate
-one fingerprint and run byte-identical vectors, and nothing in `spec.yaml`
-changes between them.
+A `function` call names a logical function with arguments only. A benchmark
+passes an explicit environment file that declares its host language, packaging
+lock and inline or file-backed function definitions and tests. Equivalent
+Python/R examples carry equivalent definitions, independently written in each
+host's syntax, and share the unchanged specification and expected outputs.
 
-A runner selects the root for the language it speaks -- `select_project_root`
-states the rule, and `run.py` names it outright. `adam-adsl-bmi`
-carries both roots, and
-`test_the_committed_r_project_root_is_refused_by_this_runner` is the runner
-refusing the R one.
-
-Only code inside the pinned artifact answers for a binding, the host
-standard library included, so a `runtime/` module carries the arithmetic it
-needs rather than importing it. `adam-advs-percentiles` is the worked
-example.
+Function implementations are ordinary installed packages. The benchmark program
+packages live in `rust/tests/project-programs/`; no vendored runtime artifact,
+contract fingerprint or activation cache is used. The five original function
+studies are copied outside the checkout by `rust/tools/stage_project_inputs.py`.
+It copies the sole existing `python/uv.lock` beside each Python environment;
+committed R locks contain versions without hashes. Each runner names its
+`python/environment.yaml` or `r/environment.yaml` explicitly. The subdirectories
+are fixture organization, not implicit project-root selection.
 
 An expected failure before a dataset is completed replaces the CSV with
 `expected/error.yaml`, unless the intended artifact is useful as a forward
