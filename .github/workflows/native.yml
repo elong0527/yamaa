@@ -177,12 +177,24 @@ jobs:
         run: |
           rustup toolchain install 1.90.0 --profile minimal
           python -m pip install maturin==1.9.6 hatchling==1.27.0
+      - name: Generate Python caches before packaging
+        run: |
+          python -m compileall -q -f -o 0 -o 1 python/src/yamaa
+          python -m compileall -q -f -b python/src/yamaa
+          python - <<'PYTHON'
+          from pathlib import Path
+          source = Path("python/src/yamaa")
+          (source / "__pycache__" / "package-check.txt").write_text("generated cache\n", encoding="utf-8")
+          (source / "package-check.pyo").write_bytes(b"generated legacy bytecode\n")
+          PYTHON
       - name: Build wheel and source archive
         run: |
           (cd python && maturin build --release --sdist --out "${RUNNER_TEMP}/native-dist")
           python -m pip wheel --no-deps --no-build-isolation rust/tests/project-programs/python --wheel-dir "${RUNNER_TEMP}/project-dist"
           mkdir -p "${RUNNER_TEMP}/reference-dist"
           cp "${RUNNER_TEMP}"/native-dist/*.whl "${RUNNER_TEMP}/reference-dist/"
+      - name: Check Python distribution contents
+        run: python rust/tools/check_python_package_hygiene.py "${RUNNER_TEMP}/native-dist"
       - name: Preserve the reference host wheel
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:

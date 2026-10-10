@@ -41,6 +41,10 @@ manifest-path = "../rust/crates/yamaa-python/Cargo.toml"
 python-source = "src"
 # A source archive must rebuild the extension rather than carry editable binaries.
 exclude = [
+  # Imports and tests must not change distribution contents. Applies to both formats.
+  "**/__pycache__/**",
+  "**/*.pyc",
+  "**/*.pyo",
   {path = "src/yamaa/_native*.pyd", format = "sdist"},
   {path = "src/yamaa/_native*.so", format = "sdist"},
 ]
