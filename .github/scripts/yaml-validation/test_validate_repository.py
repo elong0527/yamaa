@@ -115,6 +115,14 @@ class TestYamlLoader(unittest.TestCase):
                 Loader=VALIDATOR.UniqueKeyLoader,
             )
 
+    def test_unanchored_merge_keys_raise_the_intended_diagnostic(self):
+        with self.assertRaises(yaml.YAMLError) as raised:
+            yaml.load(
+                "merged: {<<: 1}\n",
+                Loader=VALIDATOR.UniqueKeyLoader,
+            )
+        self.assertIn("YAML merge keys are not allowed", str(raised.exception))
+
     def test_explicit_tags_are_rejected(self):
         with self.assertRaises(yaml.YAMLError):
             yaml.load(

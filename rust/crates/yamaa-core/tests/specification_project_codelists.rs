@@ -98,6 +98,20 @@ fn explicit_catalogue_does_not_open_other_submission_or_reserved_metadata_routes
     }
 }
 #[test]
+fn root_metadata_rejects_the_governed_has_no_data_key() {
+    let doc = spec("SEX", "str", None, false, Some("root_metadata"));
+    let Err(PrepareError::Unsupported(features)) =
+        PreparedSpecification::prepare_with_environment(&doc, &environment(false))
+    else {
+        panic!("root metadata.has_no_data must be rejected");
+    };
+    assert!(
+        features.iter().any(|feature| feature.operation == "reserved_metadata_key"
+            && feature.path == "metadata.has_no_data"),
+        "unexpected unsupported features: {features:?}"
+    );
+}
+#[test]
 fn compiler_terminology_quota_refuses_the_entire_environment_plan() {
     let doc = spec("SEX", "str", None, false, None);
     assert!(matches!(
