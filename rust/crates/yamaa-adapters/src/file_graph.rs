@@ -237,7 +237,7 @@ fn collect(
         )?;
     }
     resources
-        .admit_metadata_budget(MetadataLimits {
+        .ensure_metadata_budget(MetadataLimits {
             bytes: limits.captured_bytes,
             snapshots: limits.snapshots,
             text: limits.graph.text_bytes,

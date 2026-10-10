@@ -425,6 +425,27 @@ impl PreparedDocument {
     pub fn parents(&self) -> &[CapturedParent] {
         &self.parents
     }
+    /// Borrow the contributing original layer for a diagnostic field. Logical
+    /// descendants retain their nearest composed ancestor's source. A missing
+    /// inheritance origin remains unavailable rather than inventing one.
+    pub fn declaring_source(&self, path: &str) -> Option<&str> {
+        match self.inheritance() {
+            None => Some(&self.source.identity),
+            Some(inherited) => {
+                let origin = inherited
+                    .provenance()
+                    .iter()
+                    .filter(|origin| {
+                        path == origin.path
+                            || path
+                                .strip_prefix(&origin.path)
+                                .is_some_and(|suffix| suffix.starts_with(['.', '[']))
+                    })
+                    .max_by_key(|origin| origin.path.len())?;
+                Some(&inherited.layers().get(origin.layer)?.source.identity)
+            }
+        }
+    }
 
     /// Resolve an input's authored path against held source provenance. Composition
     /// may have rebased the executable path; diagnostics must not disclose that

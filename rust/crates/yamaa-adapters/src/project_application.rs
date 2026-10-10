@@ -21,17 +21,7 @@ pub fn prepare(
 ) -> Result<FileProject, Error> {
     let (resources, entry) =
         crate::file_configuration::resources(specification).map_err(Error::Configuration)?;
-    if environment.is_empty() || environment.len() > 65536 || environment.contains('\0') {
-        return Err(Error::Project(file_project::Error::Resource(
-            crate::file_resources::Error::InvalidPath,
-        )));
-    }
-    let environment = std::path::absolute(environment).map_err(|_| {
-        Error::Project(file_project::Error::Resource(
-            crate::file_resources::Error::InvalidPath,
-        ))
-    })?;
-    let environment = crate::file_resources::caller_path(&environment)
+    let environment = environment_path(environment)
         .map_err(|error| Error::Project(file_project::Error::Resource(error)))?;
     FileProject::prepare(
         resources,
@@ -42,6 +32,14 @@ pub fn prepare(
         crate::shipped_schema::capture_environment().map_err(Error::Schema)?,
     )
     .map_err(Error::Project)
+}
+pub(crate) fn environment_path(environment: &str) -> Result<String, crate::file_resources::Error> {
+    use crate::file_resources::Error;
+    if environment.is_empty() || environment.len() > 65536 || environment.contains('\0') {
+        return Err(Error::InvalidPath);
+    }
+    let environment = std::path::absolute(environment).map_err(|_| Error::InvalidPath)?;
+    crate::file_resources::caller_path(&environment)
 }
 fn refused(stage: &str) -> Failure {
     file_application::rejected(stage, "issue_projection")
@@ -140,10 +138,87 @@ fn environment_failure(
     projected.unwrap_or_else(|_| refused("environment"))
 }
 pub fn check(specification: &str, environment: &str, host: Language) -> Failure {
-    match prepare(specification, environment, host) {
-        Ok(project) => {
-            crate::project_check::prepared(project.run()).unwrap_or_else(|_| refused("check"))
+    match crate::file_workflow::prepare(specification, environment, host) {
+        Ok(graph) => crate::producer_check::prepared(&graph).unwrap_or_else(|_| refused("check")),
+        Err(error) => {
+            crate::producer_check::rejected(&error, host).unwrap_or_else(|error| match error {
+                crate::producer_check::Error::Original(
+                    crate::file_workflow::Error::Configuration(error),
+                ) => match error {
+                    crate::file_configuration::Error::Path(error) => {
+                        file_application::resource_failure("prepare", error)
+                    }
+                    _ => file_application::rejected("prepare", "project_configuration"),
+                },
+                crate::producer_check::Error::Original(crate::file_workflow::Error::Schema(_)) => {
+                    file_application::rejected("prepare", "shipped_schema")
+                }
+                crate::producer_check::Error::Original(error) => workflow_failure(error),
+                crate::producer_check::Error::Projection(_) => refused("check"),
+            })
         }
-        Err(error) => failure(&error, host),
     }
+}
+fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
+    use crate::{file_graph::Error as G, file_preparation::Error as D, file_workflow::Error as W};
+    match error {
+        W::Environment(environment) => match environment.error() {
+            file_project::Error::Resource(error) => {
+                file_application::resource_failure("environment", error)
+            }
+            file_project::Error::Environment(EnvironmentFailure::Interrupted { error, .. }) => {
+                file_application::resource_failure("environment", error)
+            }
+            file_project::Error::Environment(EnvironmentFailure::Root(_)) => {
+                file_application::rejected("environment", "environment_boundary")
+            }
+            _ => file_application::rejected("environment", "metadata_boundary"),
+        },
+        W::Graph(graph) => match graph.error() {
+            G::Resource(error) | G::Document(D::Resource(error)) => {
+                file_application::resource_failure("prepare", error)
+            }
+            G::Document(D::Preparation(error)) => preparation_boundary(error),
+            G::Document(D::Compile(_)) => refused("prepare"),
+            G::Graph(crate::producer_graph::Error::Graph(
+                yamaa_core::producer_graph::Error::Compilation {
+                    error: PrepareError::Limit(_),
+                    ..
+                },
+            )) => file_application::rejected("check", "compilation_limit"),
+            G::Graph(crate::producer_graph::Error::Graph(
+                yamaa_core::producer_graph::Error::Compilation { .. },
+            )) => file_application::rejected("check", "compilation_boundary"),
+            _ => file_application::rejected("check", "metadata_boundary"),
+        },
+        _ => file_application::rejected("prepare", "metadata_boundary"),
+    }
+}
+// Semantic findings have already passed the complete producer_check preflight.
+// These entry failures encode fixed boundary codes without cloning diagnostics,
+// source bytes or an inherited arena. Opaque transport causes remain retained.
+fn preparation_boundary(
+    error: &crate::specification_source::InheritanceError<crate::file_resources::Error>,
+) -> Failure {
+    use crate::specification_source::{Error as S, InheritanceError as I};
+    let I::Entry(source) = error else {
+        return refused("prepare");
+    };
+    if matches!(source, S::Findings(_) | S::Decode { .. }) {
+        // Decode semantic rows are handled by the bounded static projection;
+        // only its fixed internal/limit refusal reaches this fallback.
+        if !matches!(
+            source,
+            S::Decode {
+                error: crate::yaml_decode::DecodeFailure::Internal
+                    | crate::yaml_decode::DecodeFailure::Limit(_),
+                ..
+            }
+        ) {
+            return refused("prepare");
+        }
+    }
+    crate::specification_diagnostics::inheritance_failure_ref(error)
+        .map(file_application::preparation_failure)
+        .unwrap_or_else(|_| refused("prepare"))
 }

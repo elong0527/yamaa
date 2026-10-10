@@ -188,11 +188,48 @@ writeLines(c("schema_version: '1.0'", "domain: CONS", "keys: [ID]",
   "output: {path: consumer.csv, columns: [ID]}"), "spec.yaml")
 checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
 failed <- yamaa_domain("spec.yaml", environment = "environment.yaml")
-for (result in list(checked, failed)) stopifnot(
-  identical(result$issues$condition, "unsupported_operation"),
-  identical(result$issues$spec_paths, list("input.P.schema")))
+stopifnot(nrow(checked$issues) == 0L,
+  identical(failed$issues$condition, "unsupported_operation"),
+  identical(failed$issues$spec_paths, list("input.P.schema")))
 stopifnot(is.null(failed$output), !file.exists("produced.csv"), !file.exists("consumer.csv"),
   inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"))
 cat("public R producer execution remains explicitly unsupported after graph metadata admission\n")
+graph_document <- function(input, base, output, invalid = FALSE) c(
+  "schema_version: '1.0'", "domain: TEST", "keys: [ID]", paste0("base: ", base),
+  paste0("input: ", input), "columns:",
+  paste0("  - {name: ID, type: int, label: Identifier, derivation: ", base, ".ID}"),
+  "  - name: VALUE", "    type: str", "    label: Value", paste0("    derivation: ", base, ".VALUE"),
+  if (invalid) '    verifications: [{matches: {pattern: "\\u00e9("}}]',
+  paste0("output: {path: ", output, ", columns: [ID, VALUE]}"))
+dir.create("parents")
+writeLines(graph_document("{RAW: ../never-read.csv}", "RAW", "../leaf.csv", TRUE), "parents/base.yaml")
+writeLines(c("schema_version: '1.0'", "parents: [parents/base.yaml]", "domain: LEAF"), "leaf.yaml")
+writeLines(graph_document("{P: {path: leaf.csv, schema: './leaf.yaml'}}", "P", "left.csv"), "left.yaml")
+writeLines(graph_document("{P: {path: leaf.csv, schema: leaf.yaml}}", "P", "right.csv"), "right.yaml")
+writeLines(graph_document("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}", "L", "consumer.csv", TRUE), "spec.yaml")
+for (attempt in 1:2) {
+  checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
+  expected_context <- vapply(c("spec.yaml", "leaf.yaml"), function(source) paste0(
+    '{', if (source == "leaf.yaml") paste0('"declaring_sources":["', normalizePath("parents/base.yaml", winslash = "/"), '"],'),
+    '"entry":"', normalizePath("spec.yaml", winslash = "/"), '","pattern":"\u00e9(","source":"',
+    normalizePath(source, winslash = "/"), '"}'), character(1), USE.NAMES = FALSE)
+  stopifnot(identical(checked$issues$phase, rep("validation", 2L)),
+    identical(checked$issues$condition, rep("invalid_regex", 2L)),
+    identical(checked$issues$requirement, rep("REQ-0827", 2L)),
+    identical(checked$issues$spec_paths, rep(list("columns.VALUE.verifications[0].matches.pattern"), 2L)),
+    identical(checked$issues$context, expected_context))
+}
+writeLines(graph_document("{P: {path: wrong.csv, schema: leaf.yaml}}", "P", "consumer.csv"), "spec.yaml")
+checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
+stopifnot(identical(checked$issues$condition, "producer_output_path_mismatch"),
+  identical(checked$issues$requirement, "REQ-0534"),
+  identical(checked$issues$spec_paths, list(c("input.P.path", "input.P.schema"))))
+writeLines(graph_document("{P: {path: leaf.csv, schema: leaf.yaml, types: {ID: int}}}", "P", "consumer.csv"), "spec.yaml")
+checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
+stopifnot(identical(checked$issues$condition, "redundant_field_type"),
+  identical(checked$issues$requirement, "REQ-0523"),
+  identical(checked$issues$spec_paths, list("input.P.types.ID")),
+  !any(file.exists(c("never-read.csv", "leaf.csv", "left.csv", "right.csv", "consumer.csv", "wrong.csv"))))
+cat("public R original inherited diamond checks are complete with no study/publication effects\n")
 setwd(previous)
 cat("public R environment static diagnostics, lock/test failure ordering and no data reads passed\n")
