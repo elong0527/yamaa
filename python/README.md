@@ -151,7 +151,7 @@ through the keyed-join contract documented below, not through dispatch.
 | `mapping` | R007, R019 | an inline dictionary lookup on a string source |
 | `compute` | R010 | one scalar numeric formula in the closed grammar |
 | `round_half_away_from_zero` | R010 | the source rounded half away from zero to the declared digits |
-| `first_available` | R007 | the first non-missing source, else `default` |
+| `first_available` | R007 | the first non-missing source, else `missing` |
 | `greatest`, `least` | R007, R019 | the row-wise extreme of comparable sources |
 | `case` | R004, R007 | the first true branch, then `otherwise`, else missing |
 | `flag` | R004, R007 | the one-predicate shorthand for a `case` returning a flag value |
@@ -512,7 +512,7 @@ coarser keys when declared, the applicable keys otherwise -- and
 ```python
 plan = plan_execution(specification, sources)
 for join in plan.resolved_joins:
-    print(join.spec_path, join.dataset, join.keys)
+    print(join.spec_path, join.dataset, join.key)
 ```
 
 Run this component's focused tests from the repository root:
