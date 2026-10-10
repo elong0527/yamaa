@@ -464,7 +464,7 @@ jobs:
           mkdir -p native-r-library
           R CMD build --no-build-vignettes --no-manual native-stage/yamaa
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
-          R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.2.0.tar.gz
+          R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.3.0.tar.gz
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_builds.R" producer_builds.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_producers.R" public_producers.R
@@ -489,7 +489,7 @@ jobs:
             --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
             --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
             --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
-            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.2.0.tar.gz" \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.3.0.tar.gz" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Check R source package outside checkout
         working-directory: ${{ runner.temp }}
@@ -500,7 +500,7 @@ jobs:
           mkdir native-r-check
           cd native-r-check
           git -C "${GITHUB_WORKSPACE}" rev-parse HEAD > source-revision.txt
-          R CMD check --no-manual ../yamaa_0.2.0.tar.gz
+          R CMD check --no-manual ../yamaa_0.3.0.tar.gz
           python -c 'from pathlib import Path; lines = Path("yamaa.Rcheck/00check.log").read_text().splitlines(); assert "Status: OK" in lines, "R package check has unresolved findings"'
       - name: Preserve R package check
         if: always()
@@ -524,7 +524,7 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: native-r-${{ matrix.os }}
-          path: ${{ runner.temp }}/yamaa_0.2.0.tar.gz
+          path: ${{ runner.temp }}/yamaa_0.3.0.tar.gz
 
   public-cohort:
     name: public-cohort-complete-runs
