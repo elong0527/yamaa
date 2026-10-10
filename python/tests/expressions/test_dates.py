@@ -91,8 +91,20 @@ def test_a_year_zero_month_prefix_is_invalid_date_text() -> None:
         {"S": "0000-01"},
     )
     assert impute.condition.condition == "invalid_date_text"
+    assert impute.condition.requirement == "REQ-0588"
+    assert impute.condition.context == {
+        "operation": "date_impute",
+        "source": "S",
+        "value": "0000-01",
+    }
     precision = _condition("date_precision", {"source": "S"}, {"S": "0000-01"})
     assert precision.condition.condition == "invalid_date_text"
+    assert precision.condition.requirement == "REQ-0588"
+    assert precision.condition.context == {
+        "operation": "date_precision",
+        "source": "S",
+        "value": "0000-01",
+    }
 
 
 def test_precision_is_read_from_a_value_or_from_the_text_it_came_from() -> None:
