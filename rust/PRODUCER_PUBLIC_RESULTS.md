@@ -2,7 +2,8 @@
 
 Issue [#1883](https://github.com/elong0527/yamaa/issues/1883) connects the explicit
 environment path of Python `domain` and R `yamaa_domain` to qualified original
-workflow selection. This implementation is awaiting complete qualification.
+workflow selection. PR #1885 is fully qualified and merged; see
+[the qualification record](planning/1883-qualification.md).
 Final workflow and ordered publication acceptance remain
 [#1741](https://github.com/elong0527/yamaa/issues/1741), with unanswered lifecycle
 decision [#1866](https://github.com/elong0527/yamaa/issues/1866) separate.
