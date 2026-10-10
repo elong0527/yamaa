@@ -413,6 +413,8 @@ mod publication {
                     OutputFinding::DuplicateColumn { .. } => "duplicate",
                     OutputFinding::UndeclaredColumn { .. } => "undeclared",
                     OutputFinding::InternalKey { .. } => "internal",
+                    OutputFinding::InvalidDecimals { .. } => "precision",
+                    OutputFinding::DecimalsNotApplicable { .. } => "precision_profile",
                 })
                 .collect();
             Ok("rejected")

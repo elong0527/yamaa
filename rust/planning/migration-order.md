@@ -1,8 +1,14 @@
 # Shared Rust migration implementation order
 
 The concise [current migration assessment](migration-status.md) records the
-qualified implementation frontier and remaining acceptance gates as of 2026-10-09.
+qualified implementation frontier and remaining acceptance gates as of 2026-10-10.
 The historical evidence below retains each slice's original scope and provenance.
+
+The current serial order follows merged #1757/#1858: qualify #1860 shared CSV
+precision, then #1741 producer workflows, #1758 submission outputs and the
+remaining language/API/release gates. #1857 retains the separate Windows R release
+decision. Numerical policy and reuse of existing UV/hash-free R locks were approved
+on 2026-10-10; the historical decision requests below do not reopen them.
 
 Reconciled 2026-10-08 against main `ebf1f9e7f15bc16839501eaa48d2d9dde6b71521`
 and issues #1585, #1739-#1742, #1751-#1755, #1757 and #1758.

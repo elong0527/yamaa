@@ -95,8 +95,19 @@ comparison now have shared portable causes. Ordinary check/build routes still
 reject producer schemas, and the metadata result explicitly refuses an execution
 capability. Its 25 independent contract/compiler/engine/adapter tests establish
 admission only. Native graph preparation, producer execution and serialized
-rounded consumer ingestion remain #1741. See [the boundary contract](../PRODUCER_ADMISSION.md)
+rounded consumer ingestion remain #1741. [#1859](https://github.com/elong0527/yamaa/pull/1859)
+merged as `ffe4a5a2da53596d2c54207f03efa08635545418` and closed #1858 after all
+22 final-head checks, 16 native jobs, completed review and 40 artifact audits passed.
+The merged source equals its qualified head. See [the boundary contract](../PRODUCER_ADMISSION.md)
 and [the qualification record](1858-qualification.md).
+
+The #1860 output prerequisite now admits shared CSV `output.decimals` and formats
+the exact binary64 fraction with genuine ties away from zero. Precision affects
+serialized bytes only; retained tables and same-node calculations stay unrounded.
+Portable invalid/Parquet diagnostics, arbitrary-width metadata quotas and explicit
+failed-save gates retain their existing lifecycle. See [the precision contract](../CSV_PRECISION.md)
+and [its qualification record](1860-qualification.md). This slice is being qualified;
+it does not supply producer execution or consumer re-ingestion.
 
 See [the closing qualification record](1757-qualification.md) for actual local
 results and the distinction between those results and the CI platform matrix.
@@ -107,18 +118,19 @@ Continue with the following acceptance gates in the
    merged as `aff53fb65df5b9d6a45d8cf203fa0b9b52f1176a`. All 26 final-head
    checks, all 16 native jobs, completed review and 40 artifact audits pass.
    The merged source equals the qualified head. Retain #1753's observation
-   contracts and #1755's port ordering. Complete the explicit
-   [#1858 producer compiler prerequisite](https://github.com/elong0527/yamaa/issues/1858)
-   before claiming #1741 workflow execution.
-2. Complete #1741's producer workflow: compile the graph once, activate before
+   contracts and #1755's port ordering. #1858's producer compiler prerequisite
+   is closed by #1859 with its complete qualification above.
+2. Complete [#1860 CSV precision](https://github.com/elong0527/yamaa/issues/1860)
+   admission and output qualification as one PR before #1741.
+3. Complete #1741's producer workflow: compile the graph once, activate before
    data, execute producers once, serialize rounded outputs before consumer
    ingestion, retain failures and publish only through explicit successful save.
-3. Complete #1758's shared Define-XML/Dataset-JSON implementation and three
+4. Complete #1758's shared Define-XML/Dataset-JSON implementation and three
    submission fixtures before retiring the old schema and generator.
-4. Close the remaining language/API gaps in #1751/#1752/#1754 and the executable
+5. Close the remaining language/API gaps in #1751/#1752/#1754 and the executable
    inventory, migrate every supported benchmark runner, and qualify complete
    output, issues, logs and exact saved bytes through both installed public APIs.
-5. Complete #1740/#1742's numerical, reproducibility, platform and representative
+6. Complete #1740/#1742's numerical, reproducibility, platform and representative
    performance gates. Remove duplicate evaluators and superseded APIs only after
    the approved complete supported matrix passes.
 

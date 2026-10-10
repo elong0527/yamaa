@@ -27,6 +27,25 @@ impl OutputFinding {
                     ),
                 ],
             ),
+            Self::InvalidDecimals { value } => (
+                C::OutputInvalidDecimals,
+                "output.decimals".into(),
+                vec![
+                    (
+                        "expected",
+                        V::Scalar(Value::Str("a non-negative integer".into())),
+                    ),
+                    ("actual", V::Integer(value.clone())),
+                ],
+            ),
+            Self::DecimalsNotApplicable { path } => (
+                C::OutputDecimalsNotApplicable,
+                "output.decimals".into(),
+                vec![
+                    ("path", V::Scalar(Value::Str(path.clone()))),
+                    ("profile", V::Scalar(Value::Str("parquet".into()))),
+                ],
+            ),
             Self::DuplicateColumn { position, name } => (
                 C::OutputDuplicateColumn,
                 format!("output.columns[{position}]"),

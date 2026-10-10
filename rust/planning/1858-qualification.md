@@ -22,9 +22,16 @@ socket test was rerun with its required local socket permission.
 After pre-merge review, repeated producer identities now reject contradictory
 contracts or original snapshots, and undeclared/schema-less adapter metadata
 retains the portable REQ-0534 cause. Explicit-null schema retains its earlier
-REQ-0287 structural refusal. Corrected package forms are being qualified again.
-PR #1859 platform jobs, completed review and final-head artifact auditing remain
-required before merge; local component results do not substitute for them.
+REQ-0287 structural refusal. Corrected final local package forms and their direct
+source audits pass. [PR #1859](https://github.com/elong0527/yamaa/pull/1859) merged
+as `ffe4a5a2da53596d2c54207f03efa08635545418` after all 22 final-head checks,
+all 16 native jobs, full review and all 40 artifact audits passed. The merged
+source equals qualified head `ccd8ea8aca3d64668009a32fe28bc7235e9d7cee` directly.
+Linux/macOS pass 1,012 tests per debug/optimized run; Windows passes 1,003, with
+nine Unix-specific cases excluded. All six installed Python forms pass 24 suites
+and 13 public methods; both R forms pass 18 suites and strict 18-script checks.
+The bounded public cohort retains 96 passing tuples and 12 explicitly unqualified
+Windows R tuples. The broader inventory retains its existing five native gaps.
 
 The sealed metadata result retains original consumer/producer/parent documents
 and separate schema-link, consumer-artifact and producer-output layer origins.
@@ -37,3 +44,4 @@ Define-XML implementation changes. #1741 must qualify native graph/resource
 preparation, recursive dependency validation, producer-once execution, rounded
 serialization before consumer ingestion, retained failures, activation before
 study reads, and explicit successful save through both installed public hosts.
+#1860 separately supplies declared CSV precision before that workflow slice.

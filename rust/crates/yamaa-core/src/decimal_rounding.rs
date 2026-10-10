@@ -14,20 +14,7 @@ pub(crate) fn round_finite(value: f64, digits: i64) -> f64 {
         return 0.0;
     }
     let bits = value.to_bits();
-    let exponent = ((bits >> 52) & 0x7ff) as i32;
-    let fraction = bits & ((1u64 << 52) - 1);
-    let (mantissa, shift) = if exponent == 0 {
-        (fraction, -1074)
-    } else {
-        (fraction | (1u64 << 52), exponent - 1075)
-    };
-    let mut numerator = BigUint::from(mantissa);
-    let mut denominator = BigUint::from(1u32);
-    if shift >= 0 {
-        numerator <<= shift as usize;
-    } else {
-        denominator <<= (-shift) as usize;
-    }
+    let (mut numerator, mut denominator) = binary64_fraction(value);
     let power = BigUint::from(10u32).pow(digits.unsigned_abs() as u32);
     if digits >= 0 {
         numerator *= &power;
@@ -52,4 +39,25 @@ pub(crate) fn round_finite(value: f64, digits: i64) -> f64 {
     } else {
         result
     }
+}
+
+/// The magnitude of a finite binary64, with denominator at most 2^1,074.
+/// Rounding policies choose their own interval over this exact fraction.
+pub(crate) fn binary64_fraction(value: f64) -> (BigUint, BigUint) {
+    let bits = value.to_bits();
+    let exponent = ((bits >> 52) & 0x7ff) as i32;
+    let fraction = bits & ((1u64 << 52) - 1);
+    let (mantissa, shift) = if exponent == 0 {
+        (fraction, -1074)
+    } else {
+        (fraction | (1u64 << 52), exponent - 1075)
+    };
+    let mut numerator = BigUint::from(mantissa);
+    let mut denominator = BigUint::from(1u32);
+    if shift >= 0 {
+        numerator <<= shift as usize;
+    } else {
+        denominator <<= (-shift) as usize;
+    }
+    (numerator, denominator)
 }

@@ -110,5 +110,70 @@ for (context in c("column", "row", "case")) {
   stopifnot(nrow(result$issues) == 0L, identical(result$output$RESULT, 9),
     isTRUE(result$save()), identical(rawfile('test.csv'), charToRaw('ID,RESULT\n01,9\n')))
 }
+precision_dir <- file.path(work, "csv-precision"); dir.create(precision_dir)
+setwd(precision_dir)
+precision_study <- function(decimals = "2", path = "rounded.csv") {
+  writeLines(c("schema_version: '1.0'", "language: r"), "environment.yaml")
+  writeLines(c("ID,VALUE,INT", "1,0.125,7", "2,-0.125,-7", "3,2.675,0",
+    "4,-0.004,9", "5,1.234,1", "6,2.345,2", "7,,3", "8,25,4"), "input.csv")
+  precision <- if (is.null(decimals)) "" else paste0(", decimals: ", decimals)
+  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+    "input: {SRC: {path: input.csv, types: {ID: int, VALUE: float, INT: int}}}",
+    paste0("output: {path: ", path, ", columns: [ID, VALUE, DOUBLE, EMPTY, INT]", precision, "}"),
+    "columns:", "  - {name: ID, type: int, derivation: SRC.ID}",
+    "  - {name: VALUE, type: float, derivation: SRC.VALUE}",
+    "  - {name: DOUBLE, type: float, derivation: {compute: {expr: 'VALUE + VALUE'}}}",
+    "  - {name: EMPTY, type: str, derivation: {literal: ''}}",
+    "  - {name: INT, type: int, derivation: SRC.INT}",
+    "verifications: [{assert: {when: 'ID = 5', require: 'DOUBLE = 2.468'}}]"), "spec.yaml")
+}
+precision_study()
+expected <- charToRaw(paste0('ID,VALUE,DOUBLE,EMPTY,INT\n1,0.13,0.25,"",7\n2,-0.13,-0.25,"",-7\n',
+  '3,2.67,5.35,"",0\n4,0.00,-0.01,"",9\n5,1.23,2.47,"",1\n',
+  '6,2.35,4.69,"",2\n7,,,"",3\n8,25.00,50.00,"",4\n'))
+stopifnot(nrow(yamaa_check("spec.yaml", environment = "environment.yaml")$issues) == 0L)
+rounded <- yamaa_domain("spec.yaml", environment = "environment.yaml")
+stopifnot(nrow(rounded$issues) == 0L,
+  identical(rounded$output$VALUE, c(0.125, -0.125, 2.675, -0.004, 1.234, 2.345, NA_real_, 25)),
+  identical(rounded$output$DOUBLE, c(0.25, -0.25, 5.35, -0.008, 2.468, 4.69, NA_real_, 50)),
+  !file.exists("rounded.csv"), isTRUE(rounded$save()), identical(rawfile("rounded.csv"), expected))
+unlink("rounded.csv")
+precision_study(NULL)
+ordinary <- yamaa_domain("spec.yaml", environment = "environment.yaml")
+stopifnot(nrow(ordinary$issues) == 0L, identical(ordinary$output, rounded$output))
+precision_study("5000")
+writeLines(c("ID,VALUE,INT", "1,0.125,7"), "input.csv")
+large <- yamaa_domain("spec.yaml", environment = "environment.yaml")
+expected <- charToRaw(paste0('ID,VALUE,DOUBLE,EMPTY,INT\n1,0.125', strrep("0", 4997L),
+  ',0.25', strrep("0", 4998L), ',"",7\n'))
+stopifnot(nrow(large$issues) == 0L, isTRUE(large$save()), identical(rawfile("rounded.csv"), expected))
+unlink("rounded.csv")
+precision_study("999999999999999999999999999999")
+stopifnot(nrow(yamaa_check("spec.yaml", environment = "environment.yaml")$issues) == 0L)
+failed <- yamaa_domain("spec.yaml", environment = "environment.yaml")
+stopifnot(is.null(failed$output), identical(failed$issues$condition, "engine_rejected"),
+  inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"), !file.exists("rounded.csv"))
+for (case in list(c("-9223372036854775809", "rounded.csv", "invalid_field_type", "REQ-0744"),
+                  c("2", "rounded.parquet", "decimals_not_applicable", "REQ-0762"))) {
+  precision_study(case[[1L]], case[[2L]])
+  failed <- yamaa_domain("spec.yaml", environment = "environment.yaml")
+  stopifnot(is.null(failed$output), identical(failed$issues$condition, case[[3L]]),
+    identical(failed$issues$requirement, case[[4L]]),
+    identical(failed$issues$spec_paths, list("output.decimals")),
+    inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"), !file.exists(case[[2L]]))
+  if (case[[1L]] == "-9223372036854775809") stopifnot(grepl(
+    '"actual":-9223372036854775809', observations(failed), fixed = TRUE))
+}
+for (invalid in c("true", "2.0", "'2'")) {
+  precision_study(invalid)
+  checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
+  stopifnot(nrow(checked$issues) == 1L, identical(checked$issues$spec_paths, list("output.decimals")))
+}
+precision_study("-1")
+writeLines(sub("VALUE + VALUE", "1 / 0", readtext("spec.yaml"), fixed = TRUE), "spec.yaml")
+failed <- yamaa_domain("spec.yaml", environment = "environment.yaml")
+stopifnot(is.null(failed$output), identical(failed$issues$condition, "division_by_zero"),
+  inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"), !file.exists("rounded.csv"))
+cat("public R CSV precision preserves unrounded tables, exact saved bytes and failure gates\n")
 setwd(previous)
 cat("public R environment static diagnostics, lock/test failure ordering and no data reads passed\n")
