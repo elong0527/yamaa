@@ -89,7 +89,7 @@ async def publish_job_leaderboards(submissions: list[dict]) -> list[dict]:
             raise RuntimeError("Harbor returned duplicate leaderboard identities")
         if existing:
             board = await client.get(leaderboard_id=existing[0].id)
-            for key in ("yamaa_commit", "image_reference"):
+            for key in ("yamaa_commit", "image_reference", "verifier_image_reference"):
                 actual = (
                     board.metadata_schema.get("properties", {})
                     .get(key, {})

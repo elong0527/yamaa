@@ -492,7 +492,7 @@ def test_runner_uploads_only_model_jobs_after_execution(tmp_path, monkeypatch, a
     task = build.build_task(
         build.ROOT / "benchmarks/adam-adsl-age-group",
         tmp_path / "tasks",
-        build.IMAGE,
+        None,
         "test",
         "python",
     )

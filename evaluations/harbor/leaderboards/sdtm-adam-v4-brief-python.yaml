@@ -4,147 +4,151 @@
 # attempt counts and at least `attempts` attempts each, at the tasks' own
 # timeouts, so every row answers
 # the same question. Metrics are computed from the listed tasks only.
-# This board is the whole Python track: every buildable SDTM and ADaM
-# benchmark with a prompt, each requiring `/app/output/result.py`.
-grading_protocol: "3"
-image_reference: yamaa-harbor-env:0.7
-package: yamaa/yamaa-sdtm-adam-python
+# What each prompt tier keeps is in evaluations/harbor/prompts/README.md;
+# rows rank by complete task pass rate first; cell accuracy is secondary.
+# This board is the whole Python track on the brief prompts: every buildable
+# derivation benchmark, including BIMO, each requiring `/app/output/result.py`.
+grading_protocol: "4"
+image_reference: yamaa-harbor-agent-python:0.8
+verifier_image_reference: yamaa-harbor-verifier-python:0.8
+package: yamaa/yamaa-sdtm-adam-brief-python
 tasks:
-  - adam-adae-death-python
-  - adam-adae-occurrence-flags-python
-  - adam-adae-onset-emergence-python
-  - adam-adae-partial-dates-python
-  - adam-adae-post-index-python
-  - adam-adae-prior-serious-event-python
-  - adam-adae-protocol-review-python
-  - adam-adae-query-flags-python
-  - adam-adae-review-order-python
-  - adam-adae-serious-events-python
-  - adam-adae-serious-sequence-python
-  - adam-adae-severity-python
-  - adam-adae-severity-override-python
-  - adam-adae-severity-rank-python
-  - adam-adae-text-cleanup-python
-  - adam-adae-worsening-emergence-python
-  - adam-adae-worst-severity-python
-  - adam-adce-worst-toxicity-python
-  - adam-adcm-atc-classes-python
-  - adam-adcm-on-treatment-python
-  - adam-adeg-derived-intervals-python
-  - adam-adex-cumulative-dose-python
-  - adam-adex-dose-reduction-python
-  - adam-adex-uncollected-python
-  - adam-adfa-fever-python
-  - adam-adlb-bds-python
-  - adam-adlb-closest-visit-python
-  - adam-adlb-end-of-treatment-python
-  - adam-adlb-lymphocytes-python
-  - adam-adlb-mean-python
-  - adam-adlb-ordered-sum-python
-  - adam-adlb-reported-precision-python
-  - adam-adlb-shift-criteria-python
-  - adam-adlb-supplb-padded-key-python
-  - adam-adlbc-row-window-python
-  - adam-adlbc-window-chain-python
-  - adam-adoe-study-eye-python
-  - adam-adqs-missed-visit-locf-python
-  - adam-adqs-multi-scale-scoring-python
-  - adam-adqs-subscale-score-python
-  - adam-adrs-best-response-python
-  - adam-adrs-composite-response-python
-  - adam-adrs-confirmed-response-python
-  - adam-adrs-measurable-disease-python
-  - adam-adrs-response-prep-python
-  - adam-adrs-response-records-python
-  - adam-adsl-age-group-python
-  - adam-adsl-alive-date-python
-  - adam-adsl-analysis-age-python
-  - adam-adsl-bmi-python
-  - adam-adsl-completion-flag-python
-  - adam-adsl-country-region-python
-  - adam-adsl-crossover-periods-python
-  - adam-adsl-demographics-python
-  - adam-adsl-disposition-python
-  - adam-adsl-dose-adjustment-python
-  - adam-adsl-duration-python
-  - adam-adsl-flag-chain-python
-  - adam-adsl-investigator-comment-python
-  - adam-adsl-new-therapy-python
-  - adam-adsl-randomization-python
-  - adam-adsl-rescue-med-python
-  - adam-adsl-site-parse-python
-  - adam-adsl-treatment-python
-  - adam-adtr-nadir-python
-  - adam-adtr-sum-python
-  - adam-adtte-dor-python
-  - adam-adtte-first-ae-python
-  - adam-adtte-os-python
-  - adam-adtte-pfs-python
-  - adam-adtte-pro-deterioration-python
-  - adam-advs-bmi-python
-  - adam-advs-bsa-python
-  - adam-advs-carryforward-python
-  - adam-advs-first-observed-carry-python
-  - adam-advs-locf-python
-  - adam-advs-locf-record-python
-  - adam-advs-map-python
-  - adam-advs-percentiles-python
-  - adam-advs-prior-result-python
-  - adam-advs-window-table-python
-  - adam-advs-windows-python
-  - sdtm-ae-coding-python
-  - sdtm-ae-meddra-hierarchy-python
-  - sdtm-ae-odm-repeated-python
-  - sdtm-ae-partial-dates-python
-  - sdtm-ae-seriousness-python
-  - sdtm-cm-collected-medications-python
-  - sdtm-cm-odm-repeated-python
-  - sdtm-cm-whodrug-coding-python
-  - sdtm-dm-age-python
-  - sdtm-dm-arms-python
-  - sdtm-dm-basic-python
-  - sdtm-dm-dates-python
-  - sdtm-dm-death-python
-  - sdtm-dm-metadata-python
-  - sdtm-dm-race-ethnicity-python
-  - sdtm-ds-multi-form-disposition-python
-  - sdtm-ds-reasons-python
-  - sdtm-ds-sequence-python
-  - sdtm-ec-collected-exposure-python
-  - sdtm-ex-combination-python
-  - sdtm-ex-from-ec-python
-  - sdtm-ex-intervals-python
-  - sdtm-fa-event-findings-python
-  - sdtm-fa-odm-multitest-python
-  - sdtm-fa-reactogenicity-diary-python
-  - sdtm-lb-character-results-python
-  - sdtm-lb-compartments-python
-  - sdtm-lb-findings-python
-  - sdtm-lb-grading-python
-  - sdtm-lb-lab-specific-ranges-python
-  - sdtm-lb-last-observation-before-exposure-python
-  - sdtm-lb-metadata-python
-  - sdtm-lb-multiform-python
-  - sdtm-lb-ranges-python
-  - sdtm-mh-ongoing-conditions-python
-  - sdtm-mh-prespecified-conditions-python
-  - sdtm-pr-procedures-python
-  - sdtm-qs-questionnaire-items-python
-  - sdtm-relrec-dataset-level-python
-  - sdtm-relrec-links-python
-  - sdtm-rs-timepoint-response-python
-  - sdtm-se-subject-elements-python
-  - sdtm-suppmh-linkage-python
-  - sdtm-suppmh-qualifiers-python
-  - sdtm-sv-subject-visits-python
-  - sdtm-tr-tumor-measurements-python
-  - sdtm-tu-tumor-identification-python
-  - sdtm-vs-collected-form-python
-  - sdtm-vs-epoch-from-subject-elements-python
-  - sdtm-vs-planned-time-points-python
-  - sdtm-vs-replicates-python
-  - sdtm-vs-study-day-python
-  - sdtm-vs-units-python
+  - adam-adae-death-brief-python
+  - adam-adae-occurrence-flags-brief-python
+  - adam-adae-onset-emergence-brief-python
+  - adam-adae-partial-dates-brief-python
+  - adam-adae-post-index-brief-python
+  - adam-adae-prior-serious-event-brief-python
+  - adam-adae-protocol-review-brief-python
+  - adam-adae-query-flags-brief-python
+  - adam-adae-review-order-brief-python
+  - adam-adae-serious-events-brief-python
+  - adam-adae-serious-sequence-brief-python
+  - adam-adae-severity-brief-python
+  - adam-adae-severity-override-brief-python
+  - adam-adae-severity-rank-brief-python
+  - adam-adae-text-cleanup-brief-python
+  - adam-adae-worsening-emergence-brief-python
+  - adam-adae-worst-severity-brief-python
+  - adam-adce-worst-toxicity-brief-python
+  - adam-adcm-atc-classes-brief-python
+  - adam-adcm-on-treatment-brief-python
+  - adam-adeg-derived-intervals-brief-python
+  - adam-adex-cumulative-dose-brief-python
+  - adam-adex-dose-reduction-brief-python
+  - adam-adex-uncollected-brief-python
+  - adam-adfa-fever-brief-python
+  - adam-adlb-bds-brief-python
+  - adam-adlb-closest-visit-brief-python
+  - adam-adlb-end-of-treatment-brief-python
+  - adam-adlb-lymphocytes-brief-python
+  - adam-adlb-mean-brief-python
+  - adam-adlb-ordered-sum-brief-python
+  - adam-adlb-reported-precision-brief-python
+  - adam-adlb-shift-criteria-brief-python
+  - adam-adlb-supplb-padded-key-brief-python
+  - adam-adlbc-row-window-brief-python
+  - adam-adlbc-window-chain-brief-python
+  - adam-adoe-study-eye-brief-python
+  - adam-adqs-missed-visit-locf-brief-python
+  - adam-adqs-multi-scale-scoring-brief-python
+  - adam-adqs-subscale-score-brief-python
+  - adam-adrs-best-response-brief-python
+  - adam-adrs-composite-response-brief-python
+  - adam-adrs-confirmed-response-brief-python
+  - adam-adrs-measurable-disease-brief-python
+  - adam-adrs-response-prep-brief-python
+  - adam-adrs-response-records-brief-python
+  - adam-adsl-age-group-brief-python
+  - adam-adsl-alive-date-brief-python
+  - adam-adsl-analysis-age-brief-python
+  - adam-adsl-bmi-brief-python
+  - adam-adsl-completion-flag-brief-python
+  - adam-adsl-country-region-brief-python
+  - adam-adsl-crossover-periods-brief-python
+  - adam-adsl-demographics-brief-python
+  - adam-adsl-disposition-brief-python
+  - adam-adsl-dose-adjustment-brief-python
+  - adam-adsl-duration-brief-python
+  - adam-adsl-flag-chain-brief-python
+  - adam-adsl-investigator-comment-brief-python
+  - adam-adsl-new-therapy-brief-python
+  - adam-adsl-randomization-brief-python
+  - adam-adsl-rescue-med-brief-python
+  - adam-adsl-site-parse-brief-python
+  - adam-adsl-treatment-brief-python
+  - adam-adtr-nadir-brief-python
+  - adam-adtr-sum-brief-python
+  - adam-adtte-dor-brief-python
+  - adam-adtte-first-ae-brief-python
+  - adam-adtte-os-brief-python
+  - adam-adtte-pfs-brief-python
+  - adam-adtte-pro-deterioration-brief-python
+  - adam-advs-bmi-brief-python
+  - adam-advs-bsa-brief-python
+  - adam-advs-carryforward-brief-python
+  - adam-advs-first-observed-carry-brief-python
+  - adam-advs-locf-brief-python
+  - adam-advs-locf-record-brief-python
+  - adam-advs-map-brief-python
+  - adam-advs-percentiles-brief-python
+  - adam-advs-prior-result-brief-python
+  - adam-advs-window-table-brief-python
+  - adam-advs-windows-brief-python
+  - bimo-clinsite-site-level-brief-python
+  - sdtm-ae-coding-brief-python
+  - sdtm-ae-meddra-hierarchy-brief-python
+  - sdtm-ae-odm-repeated-brief-python
+  - sdtm-ae-partial-dates-brief-python
+  - sdtm-ae-seriousness-brief-python
+  - sdtm-cm-collected-medications-brief-python
+  - sdtm-cm-odm-repeated-brief-python
+  - sdtm-cm-whodrug-coding-brief-python
+  - sdtm-dm-age-brief-python
+  - sdtm-dm-arms-brief-python
+  - sdtm-dm-basic-brief-python
+  - sdtm-dm-dates-brief-python
+  - sdtm-dm-death-brief-python
+  - sdtm-dm-metadata-brief-python
+  - sdtm-dm-race-ethnicity-brief-python
+  - sdtm-ds-multi-form-disposition-brief-python
+  - sdtm-ds-reasons-brief-python
+  - sdtm-ds-sequence-brief-python
+  - sdtm-ec-collected-exposure-brief-python
+  - sdtm-ex-combination-brief-python
+  - sdtm-ex-from-ec-brief-python
+  - sdtm-ex-intervals-brief-python
+  - sdtm-fa-event-findings-brief-python
+  - sdtm-fa-odm-multitest-brief-python
+  - sdtm-fa-reactogenicity-diary-brief-python
+  - sdtm-lb-character-results-brief-python
+  - sdtm-lb-compartments-brief-python
+  - sdtm-lb-findings-brief-python
+  - sdtm-lb-grading-brief-python
+  - sdtm-lb-lab-specific-ranges-brief-python
+  - sdtm-lb-last-observation-before-exposure-brief-python
+  - sdtm-lb-metadata-brief-python
+  - sdtm-lb-multiform-brief-python
+  - sdtm-lb-ranges-brief-python
+  - sdtm-mh-ongoing-conditions-brief-python
+  - sdtm-mh-prespecified-conditions-brief-python
+  - sdtm-pr-procedures-brief-python
+  - sdtm-qs-questionnaire-items-brief-python
+  - sdtm-relrec-dataset-level-brief-python
+  - sdtm-relrec-links-brief-python
+  - sdtm-rs-timepoint-response-brief-python
+  - sdtm-se-subject-elements-brief-python
+  - sdtm-suppmh-linkage-brief-python
+  - sdtm-suppmh-qualifiers-brief-python
+  - sdtm-sv-subject-visits-brief-python
+  - sdtm-tr-tumor-measurements-brief-python
+  - sdtm-tu-tumor-identification-brief-python
+  - sdtm-vs-collected-form-brief-python
+  - sdtm-vs-epoch-from-subject-elements-brief-python
+  - sdtm-vs-planned-time-points-brief-python
+  - sdtm-vs-replicates-brief-python
+  - sdtm-vs-study-day-brief-python
+  - sdtm-vs-units-brief-python
 attempts: 1
 
 # The Harbor Hub definition, in the shape `harbor hub leaderboard create
@@ -152,21 +156,22 @@ attempts: 1
 # it with the rows built from the jobs, ready to create once the dataset is
 # published and the jobs uploaded.
 harbor:
-  name: sdtm-adam-v3-python
-  title: yamaa SDTM and ADaM v3 (Python)
+  name: sdtm-adam-v4-brief-python
+  title: yamaa derivation v4, brief prompts (Python)
   description: >-
-    Every buildable yamaa SDTM and ADaM benchmark (133 tasks), solved
-    in Python. An agent gets the Python system prompt, the benchmark's
-    prompt and input datasets, with no internet but the model's API. A task
-    passes when its output matches every golden cell, the verifier's rerun
-    of `/app/output/result.py` from a clean state writes the same output,
-    the held-out rerun and required changed-input challenges pass, and
-    the agent used no R and no web tool. One row per model variant.
+    Every buildable yamaa derivation benchmark, including BIMO (136 tasks), solved in
+    Python. An agent gets the Python system prompt, the benchmark's brief
+    prompt (the full prompt without its rules) and input datasets, with no
+    internet but the model's API. A task passes when its output matches
+    every golden cell, the verifier's rerun of `/app/output/result.py` from
+    a clean state writes the same output, the held-out rerun and required
+    changed-input challenges pass, and the agent used only the required language throughout the workflow and no web tool.
+    One row per model variant.
   visibility: private
   metadata_schema:
     type: object
     required: [agent, agent_version, model, variant, date, attempts, job,
-      grading_protocol, image_reference, yamaa_commit, agent_configuration]
+      grading_protocol, image_reference, verifier_image_reference, yamaa_commit, agent_configuration]
     properties:
       agent:
         type: string
@@ -206,11 +211,14 @@ harbor:
         description: Harbor version from the job's lock.json
       grading_protocol:
         type: string
-        const: "3"
+        const: "4"
         description: Version of the grading and submission isolation protocol
       image_reference:
         type: string
-        description: Base image reference recorded by the verifier
+        description: Agent image reference recorded in preserved task evidence
+      verifier_image_reference:
+        type: string
+        description: Separate verifier image reference recorded in preserved task evidence
       yamaa_commit:
         type: [string, "null"]
         description: >-

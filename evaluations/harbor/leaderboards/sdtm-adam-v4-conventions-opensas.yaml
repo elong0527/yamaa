@@ -8,8 +8,9 @@
 # rows rank by complete task pass rate first; cell accuracy is secondary.
 # This board covers 134 confident derivation cases on conventions prompts;
 # exclusions are in build.py OPENSAS_EXCLUSIONS. Each task requires `/app/output/result.sas`.
-grading_protocol: "3"
-image_reference: yamaa-harbor-env:0.7
+grading_protocol: "4"
+image_reference: yamaa-harbor-agent-opensas:0.8
+verifier_image_reference: yamaa-harbor-verifier-opensas:0.8
 package: yamaa/yamaa-sdtm-adam-conventions-opensas
 tasks:
   - adam-adae-death-conventions-opensas
@@ -153,8 +154,8 @@ attempts: 1
 # it with the rows built from the jobs, ready to create once the dataset is
 # published and the jobs uploaded.
 harbor:
-  name: sdtm-adam-v3-conventions-opensas
-  title: yamaa derivation v3, conventions prompts (opensas)
+  name: sdtm-adam-v4-conventions-opensas
+  title: yamaa derivation v4, conventions prompts (opensas)
   description: >-
     The 134 confident yamaa derivation benchmarks, including BIMO, solved with opensas v0.6.6.
     An agent gets the opensas system prompt, the benchmark's conventions prompt
@@ -168,7 +169,7 @@ harbor:
   metadata_schema:
     type: object
     required: [agent, agent_version, model, variant, date, attempts, job,
-      grading_protocol, image_reference, yamaa_commit, agent_configuration]
+      grading_protocol, image_reference, verifier_image_reference, yamaa_commit, agent_configuration]
     properties:
       agent:
         type: string
@@ -208,11 +209,14 @@ harbor:
         description: Harbor version from the job's lock.json
       grading_protocol:
         type: string
-        const: "3"
+        const: "4"
         description: Version of the grading and submission isolation protocol
       image_reference:
         type: string
-        description: Base image reference recorded by the verifier
+        description: Agent image reference recorded in preserved task evidence
+      verifier_image_reference:
+        type: string
+        description: Separate verifier image reference recorded in preserved task evidence
       yamaa_commit:
         type: [string, "null"]
         description: >-

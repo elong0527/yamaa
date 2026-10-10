@@ -211,7 +211,7 @@ def test_published_boards_pin_the_task_commit_and_runtime(tmp_path):
     properties = created["metadata_schema"]["properties"]
     assert created["name"].endswith(run["yamaa_commit"])
     assert properties["yamaa_commit"]["const"] == run["yamaa_commit"]
-    assert properties["image_reference"]["const"] == build.IMAGE
+    assert properties["image_reference"]["const"] == board["image_reference"]
     changed = {**run, "yamaa_commit": "fedcba9876543210fedcba9876543210fedcba98"}
     with pytest.raises(SystemExit, match="same task commit"):
         leaderboard.rows_for(board, [run, changed])
@@ -224,9 +224,7 @@ def test_published_boards_pin_the_task_commit_and_runtime(tmp_path):
 
 def test_run_snapshot_survives_rebuilding_tasks(tmp_path):
     runner = _load("run")
-    task = build.build_task(
-        AGE_GROUP, tmp_path / "tasks", build.IMAGE, "test", "python"
-    )
+    task = build.build_task(AGE_GROUP, tmp_path / "tasks", None, "test", "python")
     config = {"tasks": [{"path": str(task)}]}
     saved = runner.preserve_tasks(config, tmp_path / "job")
     shutil.rmtree(task)
@@ -261,9 +259,7 @@ def test_runner_restores_evidence_after_verifier_reset(tmp_path, monkeypatch):
     job_module = pytest.importorskip("harbor.job")
     hooks = pytest.importorskip("harbor.trial.hooks")
     runner = _load("run")
-    task = build.build_task(
-        AGE_GROUP, tmp_path / "tasks", build.IMAGE, "test", "python"
-    )
+    task = build.build_task(AGE_GROUP, tmp_path / "tasks", None, "test", "python")
     job_dir = tmp_path / "jobs" / "test"
     verifier = job_dir / "trial" / "verifier"
 

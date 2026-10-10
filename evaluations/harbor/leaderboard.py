@@ -190,7 +190,7 @@ def _task_commit(config: dict, trial: Path) -> str | None:
 def collect(job_dir: Path) -> dict:
     """The facts of one Harbor job that a leaderboard row is built from."""
     trials = []
-    protocols, images = set(), set()
+    protocols, images, verifier_images = set(), set(), set()
     default_resources = True
     default_network = True
     default_verifier = True
@@ -213,6 +213,7 @@ def collect(job_dir: Path) -> dict:
         commits.add(_task_commit(config, path.parent))
         protocols.add(metadata.get("grading_protocol"))
         images.add(metadata.get("image_reference"))
+        verifier_images.add(metadata.get("verifier_image_reference"))
         default_resources = default_resources and _default_resources(config)
         default_network = default_network and _default_network(config)
         default_verifier = default_verifier and _default_verifier(config)
@@ -339,6 +340,7 @@ def collect(job_dir: Path) -> dict:
         "default_verifier": default_verifier,
         "grading_protocols": protocols,
         "image_references": images,
+        "verifier_image_references": verifier_images,
         "evidence_problems": evidence_problems,
         "status": "display",
         "leaderboards": [],
@@ -434,6 +436,14 @@ def run_problems(run: dict, board: dict) -> list[str]:
         board["image_reference"]
     }:
         found.append("the job does not use this board's runtime image reference")
+    if len(run.get("verifier_image_references", set())) != 1 or None in run.get(
+        "verifier_image_references", set()
+    ):
+        found.append("the job needs one preserved verifier image reference")
+    if board.get("verifier_image_reference") and run.get(
+        "verifier_image_references"
+    ) != {board["verifier_image_reference"]}:
+        found.append("the job does not use this board's verifier image reference")
     found.extend(run.get("evidence_problems", []))
     return found
 
@@ -574,6 +584,9 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
                     "yamaa_commit": run.get("yamaa_commit"),
                     "grading_protocol": next(iter(run["grading_protocols"])),
                     "image_reference": next(iter(run["image_references"])),
+                    "verifier_image_reference": next(
+                        iter(run["verifier_image_references"])
+                    ),
                 },
                 "metrics": metrics(trials),
                 "status": run["status"],
@@ -591,9 +604,10 @@ def definition_for(board: dict, rows: list[dict], package: str) -> dict:
         commit = rows[0]["metadata"]["yamaa_commit"]
         release["name"] += f"-{commit}"
         release["metadata_schema"]["properties"]["yamaa_commit"]["const"] = commit
-        release["metadata_schema"]["properties"]["image_reference"]["const"] = rows[0][
-            "metadata"
-        ]["image_reference"]
+        for key in ("image_reference", "verifier_image_reference"):
+            release["metadata_schema"]["properties"][key]["const"] = rows[0][
+                "metadata"
+            ][key]
     return {"package": package, **release}
 
 

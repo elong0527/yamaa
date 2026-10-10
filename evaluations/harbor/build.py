@@ -69,13 +69,19 @@ TIERS = {
 # written from the benchmark's full prompt and inputs alone.
 SOLUTIONS = HERE / "solutions"
 REPO = "https://github.com/elong0527/yamaa"
-# One Harbor Hub dataset per language: <prefix>-r and <prefix>-python.
+# One Harbor Hub dataset per language and prompt tier.
 DATASET_PREFIX = "yamaa/yamaa-sdtm-adam"
-IMAGE = "yamaa-harbor-env:0.7"
+AGENT_IMAGES = {
+    language: f"yamaa-harbor-agent-{language}:0.8"
+    for language in ("r", "python", "opensas")
+}
+VERIFIER_IMAGES = {
+    language: f"yamaa-harbor-verifier-{language}:0.8" for language in AGENT_IMAGES
+}
 # What the verifier checks, recorded in every task and required by the
 # leaderboards: 3 adds changed derivation values, replayed partial credit and
-# complete job evidence, so scores under an older protocol do not mix.
-GRADING_PROTOCOL = "3"
+# complete job evidence; 4 isolates language images and records both runtime references.
+GRADING_PROTOCOL = "4"
 OPENCODE_VERSION = "1.18.33"
 # Build output and Harbor job directories stay outside the repository, whose
 # validators read every file in the tree.
@@ -112,6 +118,7 @@ LANGUAGES = {
         "runner": "opensas",
     },
 }
+INTERPRETER_COMMANDS = ("R", "Rscript", "r", "python", "python3", "opensas")
 DEFAULT_LANGUAGES = ("r", "python")
 # Prepared sources remain available for these cases, but they cannot yet
 # earn a correct Harbor score on native inputs with opensas v0.6.6.
@@ -128,6 +135,63 @@ SETUP_HOSTS = (
     "registry.npmjs.org",
 )
 WEB_TOOLS_DENIED = {"webfetch": "deny", "websearch": "deny"}
+FOREIGN_COMMANDS = {
+    "r": ("python*", "pip*", "ipython*", "jupyter*", "uv", "uvx", "opensas", "sas"),
+    "python": ("R", "Rscript", "r", "opensas", "sas"),
+    "opensas": (
+        "R",
+        "Rscript",
+        "r",
+        "python*",
+        "pip*",
+        "ipython*",
+        "jupyter*",
+        "uv",
+        "uvx",
+    ),
+}
+OTHER_RUNTIMES = (
+    "lua*",
+    "node",
+    "nodejs",
+    "npm",
+    "npx",
+    "bunx",
+    "deno",
+    "bun",
+    "perl",
+    "ruby",
+    "julia",
+    "php",
+    "java",
+    "javac",
+    "gcc",
+    "g++",
+    "clang*",
+    "cc",
+    "c++",
+    "rustc",
+    "cargo",
+    "zig",
+    "go",
+)
+
+
+def tool_permissions(language: str | None) -> dict:
+    """Prevent common foreign-runtime calls; the independent audit remains required."""
+    permissions = dict(WEB_TOOLS_DENIED)
+    if language is not None:
+        commands = {"*": "allow"}
+        for program in (*FOREIGN_COMMANDS[language], *OTHER_RUNTIMES):
+            for prefix in (program, f"*/{program}"):
+                commands[prefix] = "deny"
+                commands[f"{prefix} *"] = "deny"
+        for install in ("pip install*", "pip3 install*", "uv pip install*", "npm *"):
+            commands[install] = "deny"
+        permissions["bash"] = commands
+    return permissions
+
+
 SETUP_TIMEOUT_SEC = 900.0
 NULL_TOKENS = {"", "NA", "NaN", "nan", ".", "NULL", "None"}
 
@@ -340,7 +404,8 @@ def task_toml(
     language: str,
     tier: str = "full",
     *,
-    image: str = IMAGE,
+    image: str | None = None,
+    verifier_image: str | None = None,
     challenge_required: bool = False,
 ) -> str:
     standard, lifecycle = tags["standard"], tags["lifecycle"]
@@ -353,7 +418,7 @@ artifacts = ["/app", "/logs/agent/trajectory.json"]
 
 [task]
 name = "yamaa/{task_name(benchmark, language, tier)}"
-version = "0.3.0"
+version = "0.4.0"
 description = "Create the {domain} {noun} of the yamaa benchmark {benchmark} in {label}{source}."
 keywords = ["cdisc", "{standard.lower()}", "clinical-data"]
 
@@ -366,7 +431,8 @@ domain = "{domain}"
 lifecycle = "{lifecycle}"
 yamaa_commit = "{commit}"
 grading_protocol = "{GRADING_PROTOCOL}"
-image_reference = {json.dumps(image)}
+image_reference = {json.dumps(image or AGENT_IMAGES[language])}
+verifier_image_reference = {json.dumps(verifier_image or VERIFIER_IMAGES[language])}
 challenge_required = {str(challenge_required).lower()}
 publicly_indexed = true
 
@@ -653,12 +719,16 @@ The harness is described in
 def build_task(
     benchmark: Path,
     tasks: Path,
-    image: str,
+    image: str | None,
     commit: str,
     language: str,
     tier: str = "full",
+    *,
+    verifier_image: str | None = None,
 ) -> Path:
     contract = contract_for(benchmark, language)
+    image = image or AGENT_IMAGES[language]
+    verifier_image = verifier_image or VERIFIER_IMAGES[language]
     # The held-out and changed-input reruns compute their answers with the
     # reference, so a task cannot be graded without one.
     reference = reference_solution(benchmark, language)
@@ -684,6 +754,7 @@ def build_task(
         language,
         tier,
         image=image,
+        verifier_image=verifier_image,
         challenge_required=contract["challenge_required"],
     )
     (task / "task.toml").write_text(task_text)
@@ -730,7 +801,7 @@ def build_task(
     (task / "tests" / "reference").mkdir()
     shutil.copyfile(reference, task / "tests" / "reference" / script)
     (task / "tests" / "Dockerfile").write_text(
-        f"FROM {image}\n"
+        f"FROM {verifier_image}\n"
         "COPY --chmod=755 test.sh /tests/test.sh\n"
         "COPY grade.py sandbox.py contract.json task.toml /tests/\n"
         "COPY input/ /tests/input/\n"
@@ -767,6 +838,10 @@ def job_config(
     jobs_dir: Path,
     dataset: str | None = None,
 ) -> dict:
+    languages = {task_language(task) for task in tasks}
+    if len(languages) > 1:
+        raise BuildError("one model job must have exactly one language")
+    permissions = tool_permissions(next(iter(languages), None))
     provider = model.partition("/")[0]
     known_host, known_key = PROVIDERS.get(provider, (None, None))
     host, key = api_host or known_host, key_env or known_key
@@ -782,7 +857,7 @@ def job_config(
             "lsp": False,
             "formatter": False,
             "snapshot": False,
-            "permission": dict(WEB_TOOLS_DENIED),
+            "permission": permissions,
         },
     }
     if variant:
@@ -806,7 +881,7 @@ def job_config(
                 "kwargs": kwargs,
                 "env": {
                     key: "${" + key + "}",
-                    "OPENCODE_PERMISSION": json.dumps(WEB_TOOLS_DENIED),
+                    "OPENCODE_PERMISSION": json.dumps(permissions),
                     "OPENCODE_DISABLE_MODELS_FETCH": "1",
                     "OPENCODE_DISABLE_AUTOUPDATE": "1",
                     "OPENCODE_DISABLE_LSP_DOWNLOAD": "1",
@@ -832,10 +907,11 @@ def build_selection(
     *,
     languages: list[str],
     tasks_dir: Path,
-    image: str,
+    image: str | None,
     commit: str,
     strict: bool,
     tiers: tuple[str, ...] = ("full",),
+    verifier_image: str | None = None,
 ) -> tuple[list[Path], list[str]]:
     """One task per benchmark per prompt tier per language.
 
@@ -851,7 +927,13 @@ def build_selection(
                 try:
                     tasks.append(
                         build_task(
-                            BENCHMARKS / name, tasks_dir, image, commit, language, tier
+                            BENCHMARKS / name,
+                            tasks_dir,
+                            image,
+                            commit,
+                            language,
+                            tier,
+                            verifier_image=verifier_image,
                         )
                     )
                 except BuildError as exc:
@@ -894,9 +976,15 @@ def main() -> None:
         default=DATASET_PREFIX,
         help="Harbor Hub dataset name, before -[<tier>-]<language>",
     )
-    parser.add_argument("--image", default=IMAGE)
+    parser.add_argument("--image", help="agent image override; requires one --language")
+    parser.add_argument(
+        "--verifier-image", help="verifier image override; requires one --language"
+    )
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
+
+    if (args.image or args.verifier_image) and len(args.language) != 1:
+        parser.error("image overrides require exactly one language")
 
     names = args.benchmarks or sorted(p.parent.name for p in PROMPTS.glob("*/full.md"))
     commit = git_commit()
@@ -917,6 +1005,7 @@ def main() -> None:
         languages=args.language,
         tasks_dir=tasks_dir,
         image=args.image,
+        verifier_image=args.verifier_image,
         commit=commit,
         strict=args.benchmarks is not None,
         tiers=tuple(args.prompt),
