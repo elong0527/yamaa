@@ -2221,7 +2221,8 @@ requirements:
   REQ-1151: {"file": "storage/resources.md", "sources": ["schema_shared.yaml:project_path.description"]}
   REQ-1152: {"file": "execution/verification.md", "sources": ["schema_verification.yaml:comment:43"]}
   # REQ-1153 and REQ-1155 named verifications the schema never registered;
-  # their CDISC needs stay open in #1780.
+  # both operators remain retired by the decision recorded in #1780.
+  # Retain their CDISC provenance without scheduling replacement operators.
   REQ-1153: {"file": "execution/verification.md", "sources": ["cdisc:adam-conformance-rules-5.0:code-decode-bijection"], "retired": true, "replacement": []}
   REQ-1154: {"file": "execution/verification.md", "sources": ["schema_verification.yaml:dataset_verifications.row_count.when.description"]}
   REQ-1155: {"file": "execution/verification.md", "sources": ["cdisc:adam-conformance-rules-5.0:usubjid-membership"], "retired": true, "replacement": []}
