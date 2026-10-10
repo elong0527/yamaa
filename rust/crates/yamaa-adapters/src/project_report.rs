@@ -18,6 +18,8 @@ use yamaa_engine::{
 
 /// Facts refer to the exact payload in this attempt, never to an error string or
 /// an ordinal supplied by a host. No classifier callback receives authority.
+/// Address-based facts require a non-zero-sized host payload; opaque zero-sized
+/// failures remain held and can be reported only without classification facts.
 pub enum Classified<'a, E> {
     Lock {
         failure: &'a E,
@@ -353,6 +355,11 @@ pub fn build_result<'a, C, E>(
 ) -> Result<BuildResult, Error<'a, C, E>> {
     if facts.len() > 65_536 {
         return Err(report::Error::OutputLimit.into());
+    }
+    // Distinct zero-sized values can share an address. Never grant one fact
+    // authority over another held failure merely because their pointers agree.
+    if std::mem::size_of::<E>() == 0 && !facts.is_empty() {
+        return Err(invalid());
     }
     let mut held = std::collections::BTreeSet::new();
     crate::project_attempt::visit_host_failures(attempt, |_, error| {

@@ -852,3 +852,80 @@ fn lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports() {
     assert_eq!(study.capture_reads(), 0);
     assert_eq!(*activation.trace.borrow(), ["lock", "bind", "case", "case"]);
 }
+
+#[test]
+fn zero_sized_host_failures_remain_opaque_and_never_accept_address_classification() {
+    use yamaa_adapters::{
+        project_function_diagnostics::HostDetails,
+        project_report::{self, Classified, Error},
+        specification_report,
+    };
+    struct EmptyFailure;
+    struct RejectLock;
+    impl ActivationPort for RejectLock {
+        type Handle = ();
+        type Error = EmptyFailure;
+        fn verify_lock(
+            &mut self,
+            _: Language,
+            _: &LockReference,
+            _: &[ProjectFunctionIdentity],
+        ) -> Result<(), EmptyFailure> {
+            Err(EmptyFailure)
+        }
+        fn bind(
+            &mut self,
+            _: &ProjectFunctionIdentity,
+            _: &LogicalSignature,
+        ) -> Result<(), EmptyFailure> {
+            panic!("rejected lock grants no binding authority")
+        }
+        fn is_interrupt(&self, _: &EmptyFailure) -> bool {
+            false
+        }
+        fn invoke(&mut self, _: &(), _: &[Argument<'_>]) -> Result<Value, HostError<EmptyFailure>> {
+            panic!("rejected lock grants no invocation authority")
+        }
+    }
+    let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+    let (_, mut study) = ports();
+    let attempt = run.execute_with_ports(&mut RejectLock, &mut study);
+    let Err(BoundaryFailure::Activation(Failure::Lock(original))) = &attempt.boundary else {
+        panic!("held original zero-sized lock failure")
+    };
+    assert!(matches!(
+        project_report::build_result(&run, &attempt, report_identity(), &[]),
+        Err(Error::Opaque(_))
+    ));
+    let foreign = EmptyFailure;
+    for facts in [
+        vec![Classified::Lock {
+            failure: original,
+            findings: &[],
+        }],
+        vec![Classified::Lock {
+            failure: &foreign,
+            findings: &[],
+        }],
+        vec![Classified::Host {
+            failure: original,
+            details: HostDetails::Exception {
+                class: "Error",
+                message: "foreign facts",
+                truncated: false,
+            },
+        }],
+    ] {
+        assert!(matches!(
+            project_report::build_result(&run, &attempt, report_identity(), &facts),
+            Err(Error::Report(
+                specification_report::Error::InvalidObservation
+            ))
+        ));
+    }
+    assert!(matches!(
+        attempt.boundary,
+        Err(BoundaryFailure::Activation(Failure::Lock(_)))
+    ));
+    assert_eq!(study.capture_reads(), 0);
+}

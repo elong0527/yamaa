@@ -6,7 +6,16 @@ use yamaa_core::{
     specification::{PreparedSpecification, SourceDeclaration},
 };
 
-pub trait RunView {
+mod sealed {
+    pub trait Sealed {}
+    impl Sealed for crate::specification_run::PreparedRun {}
+    impl Sealed for crate::project_run::PreparedRun {}
+    impl<T: super::RunView + ?Sized> Sealed for std::sync::Arc<T> {}
+}
+
+/// A coherent view supplied only by the two prepared-run services or an Arc.
+/// External callers cannot mix unrelated source, document and compiler facts.
+pub trait RunView: sealed::Sealed {
     fn document(&self) -> &PreparedDocument;
     fn compiled(&self) -> &PreparedSpecification;
     fn check_diagnostics(&self) -> Vec<Diagnostic>;
