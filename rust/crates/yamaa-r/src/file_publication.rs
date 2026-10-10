@@ -2,7 +2,7 @@
 use crate::specification_service::boundary;
 use extendr_api::prelude::*;
 #[cfg(unix)]
-mod platform {
+pub(super) mod platform {
     use super::*;
     use crate::specification_service::address;
     use std::{
@@ -39,6 +39,12 @@ mod platform {
     }
     pub(super) fn save(result: Robj, handle: Robj) -> std::result::Result<Robj, String> {
         let result = crate::specification_result::resolve(&result)?;
+        save_result(&result, handle)
+    }
+    pub(crate) fn save_result(
+        result: &yamaa_adapters::specification_report::BuildResult,
+        handle: Robj,
+    ) -> std::result::Result<Robj, String> {
         let publisher = resolve(&handle)?;
         let mut publisher = publisher
             .try_borrow_mut()

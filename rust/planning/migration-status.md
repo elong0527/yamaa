@@ -62,11 +62,16 @@ project bounded lossless activation evidence without repeating host effects.
 The shared Rust project report formatter now borrows a whole retained attempt,
 including classified activation failures, source reads, codelist values and
 completed-check prefixes. It uses the ordinary output/save gate and matches
-independent complete truth for sixteen original benchmark documents. The next
-integration gate carries these results into owned installed SDK results and
-public `domain(..., environment=...)` / `check(..., environment=...)`. Authoritative environment/function formats and
-the five locked function benchmarks have not yet been replaced. Installed public-environment
-qualification remains pending.
+independent complete truth for sixteen original benchmark documents. Private
+Python/R result carriers now retain the original whole attempt beside a complete
+report. Installed witnesses cover exact output/save bytes, failed-save gates,
+ordinary failures and original interrupts after the first attempt handle is
+collected. Report quota refusal keeps all 360 original failures; Python error
+rendering also refuses reentrant mutable access without deadlocking.
+The next integration gate carries these results into public
+`domain(..., environment=...)` / `check(..., environment=...)`. Authoritative
+environment/function formats and the five locked function benchmarks have not
+yet been replaced. Installed public-environment qualification remains pending.
 
 Continue with the following acceptance gates in the
 [serial implementation order](migration-order.md):

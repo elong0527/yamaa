@@ -273,7 +273,7 @@ fn bounded(text: &str) -> (String, bool) {
     (text[..end].into(), end != text.len())
 }
 /// Secondary __str__ failures cannot replace the original host exception class.
-fn exception(py: Python<'_>, error: PyErr) -> CallbackError {
+pub(super) fn exception(py: Python<'_>, error: PyErr) -> CallbackError {
     let (class, class_truncated) = error
         .get_type(py)
         .name()

@@ -1126,6 +1126,14 @@ local({
   reads <- get(".file_project_reads",ns)
   build <- get(".file_project_build",ns)
   observations <- get(".file_project_observations",ns)
+  result <- get(".file_project_result",ns)
+  result_status <- get(".project_result_status",ns)
+  result_output <- get(".project_result_output",ns)
+  result_issues <- get(".project_result_issues",ns)
+  retained <- get(".project_result_retained",ns)
+  result_report <- get(".project_result_observations",ns)
+  result_save <- get(".project_result_save",ns)
+  propagate <- get(".project_result_propagate_interrupt",ns)
   names <- c("schema.yaml",sort(setdiff(list.files(file.path(root,"schema"),pattern="[.]yaml$"),"schema.yaml")))
   modules <- setNames(lapply(file.path(root,"schema",names),rawfile),names)
   old <- "        - contract_version:\n            type: function_contract_version\n            required: true\n            description: See REQ-1085.\n"
@@ -1145,6 +1153,13 @@ local({
   project <- prepare(directory,directory,"domain.yaml","environment.yaml",modules,envmodules)
   stopifnot(identical(status(project),"ready"))
   first <- build(project); first_observed <- observations(first)
+  metadata <- list(as.character(getRversion()),"0.1.0","owned-project","domain.yaml",directory)
+  complete <- result(first,metadata)
+  stopifnot(identical(result_status(complete),"complete"),is.raw(result_output(complete)),nrow(result_issues(complete))==0L)
+  published <- list()
+  saved <- result_save(complete,function(path,content) { published[[length(published)+1L]] <<- list(path,content);TRUE })
+  stopifnot(identical(published,list(list("result.csv",charToRaw("ID,V\n1,1\n")))),
+            grepl('"outcome":"success"',saved,fixed=TRUE))
   stopifnot(identical(first_observed$engine_succeeded,TRUE),identical(first_observed$host_failures,list()))
   stopifnot(identical(first_observed$prepared_sources[[1L]]$bytes,rawfile(file.path(directory,"domain.yaml"))),
             identical(first_observed$prepared_sources[[2L]]$bytes,rawfile(file.path(directory,"environment.yaml"))))
@@ -1160,7 +1175,13 @@ local({
   stopifnot(identical(changed$engine_succeeded,FALSE),identical(observations(first),first_observed))
   rejected <- prepare(directory,directory,"domain.yaml","environment.yaml",modules,envmodules)
   before <- reads(rejected)
-  failed <- observations(build(rejected))
+  failed_attempt <- build(rejected)
+  failed <- observations(failed_attempt)
+  rejected_result <- result(failed_attempt,metadata)
+  failed_publish <- 0L
+  forbidden_publish <- function(...) { failed_publish <<- failed_publish+1L;TRUE }
+  stopifnot(identical(result_status(rejected_result),"complete"),is.null(result_output(rejected_result)),nrow(result_issues(rejected_result))>0L,
+            inherits(tryCatch(result_save(rejected_result,forbidden_publish),error=identity),"error"),identical(failed_publish,0L))
   stopifnot(identical(failed$engine_succeeded,FALSE),identical(reads(rejected),before),
             identical(failed$host_failures[[1L]]$stage,"lock"),
             identical(failed$host_failures[[1L]]$facts$findings[[1L]]$reason,"version_mismatch"))
@@ -1188,6 +1209,20 @@ local({
     reply <- .Call(native_build,checked,capabilities$verify,capabilities$resolve)
     stopifnot(is.null(reply$error))
     attempted <- observations(reply$value)
+    held <- result(reply$value,metadata)
+    rm(reply);invisible(gc())
+    stopifnot(all(vapply(retained(held)$host_failures,function(failure) identical(failure$facts$condition,original),logical(1))))
+    if(mode=="interrupt") {
+      stopifnot(identical(result_status(held),"activation_boundary"),
+                identical(tryCatch(propagate(held),interrupt=identity),original),
+                inherits(tryCatch(result_report(held),error=identity),"error"))
+    } else {
+      issues <- result_issues(held)
+      stopifnot(identical(result_status(held),"complete"),is.null(result_output(held)),nrow(issues)>0L,
+                grepl('"host_error":"original_error"',issues$context[1L],fixed=TRUE),
+                grepl(paste("original",mode),issues$context[1L],fixed=TRUE),
+                inherits(tryCatch(result_save(held,forbidden_publish),error=identity),"error"),identical(failed_publish,0L))
+    }
     stopifnot(identical(attempted$engine_succeeded,FALSE),length(attempted$host_failures)>0L,
       all(vapply(attempted$host_failures,function(failure) identical(failure$facts$condition,original),logical(1))))
     if(mode=="live") stopifnot(identical(invocations,3L),reads(checked)==before+1L,
@@ -1195,10 +1230,33 @@ local({
     else stopifnot(identical(reads(checked),before),identical(attempted$host_failures[[1L]]$stage,"conformance"))
     if(mode=="interrupt") stopifnot(identical(invocations,1L),identical(attempted$host_failures[[1L]]$facts$kind,"interrupt"))
   }
+  # The complete aggregate report can exceed its quota while all actual
+  # ordinary failures remain retained after the original handles are collected.
+  cases <- vapply(seq_len(358L),function(index) paste0("      - {id: quota",index,", covers: [normal], args: {x: 7}, result: 7}\n"),"")
+  writeBin(charToRaw(paste0(rawToChar(rawfile(file.path(directory,"environment.yaml"))),paste0(cases,collapse=""))),file.path(directory,"wide-environment.yaml"))
+  large <- structure(list(message=paste(rep("x",8192L),collapse=""),call=NULL,token=new.env()),class=c("large_error","error","condition"))
+  host$.yamaa_resolve_locked_function <- function(call,parameters) function(x) stop(large)
+  capabilities <- factory()
+  wide <- prepare(directory,directory,"domain.yaml","wide-environment.yaml",modules,envmodules)
+  stopifnot(identical(status(wide),"ready"))
+  before <- reads(wide)
+  reply <- .Call(native_build,wide,capabilities$verify,capabilities$resolve)
+  stopifnot(is.null(reply$error),identical(reads(wide),before),length(observations(reply$value)$host_failures)==360L)
+  limited <- result(reply$value,metadata)
+  rm(reply,wide);invisible(gc())
+  stopifnot(identical(result_status(limited),"report_limit"),length(retained(limited)$host_failures)==360L,
+    all(vapply(retained(limited)$host_failures,function(failure) identical(failure$facts$condition,large),logical(1))),
+    inherits(tryCatch(result_save(limited,forbidden_publish),error=identity),"error"),identical(failed_publish,0L))
   writeBin(charToRaw("[changed"),file.path(directory,"domain.yaml"))
   writeBin(charToRaw("[changed"),file.path(directory,"environment.yaml"))
   rm(project); invisible(gc())
   stopifnot(identical(observations(first),first_observed))
+  rm(first);invisible(gc())
+  stopifnot(identical(retained(complete),first_observed),is.raw(result_output(complete)),nrow(result_issues(complete))==0L)
+  publisher <- get(".file_publisher_port",ns)(file.path(directory,"retained.csv"),"result.csv")
+  get(".project_result_save_file",ns)(complete,publisher$handle)
+  stopifnot(identical(rawfile(file.path(directory,"retained.csv")),charToRaw("ID,V\n1,1\n")))
+  cat("owned installed R project results retain complete reports, exact saves and original conditions after attempt collection passed\n")
   cat("owned installed R project runs retain fresh activation, held lock/source, i64/missing evidence, original conditions/interrupts, lock rejection and registered handle authority passed\n")
 })
 

@@ -675,6 +675,31 @@
         "_DomainResult.observations",
         "_DomainResult.output",
         "_DomainResult.save",
+        "_ProjectAttempt",
+        "_ProjectAttempt.activation",
+        "_ProjectAttempt.engine_succeeded",
+        "_ProjectAttempt.failure_facts",
+        "_ProjectAttempt.host_failures",
+        "_ProjectAttempt.prepared_sources",
+        "_ProjectAttempt.result",
+        "_ProjectAttempt.study_snapshot",
+        "_ProjectResult",
+        "_ProjectResult.activation",
+        "_ProjectResult.failure_facts",
+        "_ProjectResult.host_failures",
+        "_ProjectResult.issues",
+        "_ProjectResult.observations",
+        "_ProjectResult.output",
+        "_ProjectResult.prepared_sources",
+        "_ProjectResult.propagate_interrupt",
+        "_ProjectResult.report_status",
+        "_ProjectResult.save",
+        "_ProjectResult.save_file",
+        "_ProjectResult.study_snapshot",
+        "_ProjectSpecification",
+        "_ProjectSpecification.build",
+        "_ProjectSpecification.capture_reads",
+        "_ProjectSpecification.preparation_status",
         "_ReferenceCatalog",
         "_ReferenceCatalog.analyze",
         "_Schema",
@@ -692,6 +717,7 @@
         "_compile_schema",
         "_domain_file",
         "_prepare_document",
+        "_prepare_file_project",
         "_prepare_inherited_specification",
         "_prepare_specification",
         "_profile_dataset_functions",
@@ -721,7 +747,112 @@
       "disposition": "remove_public",
       "issue": "#1751",
       "rationale": "Fold native distribution into yamaa and remove standalone component probes after qualification consumers migrate. Private handle methods are inventoried but are not release promises.",
-      "overrides": {}
+      "overrides": {
+        "_ProjectAttempt": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectAttempt.activation": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectAttempt.engine_succeeded": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectAttempt.failure_facts": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectAttempt.host_failures": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectAttempt.prepared_sources": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectAttempt.result": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectAttempt.study_snapshot": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult.activation": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult.failure_facts": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult.host_failures": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult.issues": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult.observations": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult.output": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult.prepared_sources": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult.propagate_interrupt": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult.report_status": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult.save": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult.save_file": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectResult.study_snapshot": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectSpecification": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectSpecification.build": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectSpecification.capture_reads": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_ProjectSpecification.preparation_status": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        },
+        "_prepare_file_project": {
+          "disposition": "internal",
+          "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
+        }
+      }
     },
     "R/yamaa/NAMESPACE": {
       "names": [

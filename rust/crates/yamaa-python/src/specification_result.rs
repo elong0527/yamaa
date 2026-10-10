@@ -208,11 +208,11 @@ impl specification_report::ArtifactPort for FileTarget<'_> {
 }
 #[pymethods]
 impl BuildResult {
-    fn issues(&self) -> Vec<IssueRow> {
+    pub(super) fn issues(&self) -> Vec<IssueRow> {
         issue_rows(self.inner.issues())
     }
     #[cfg(any(unix, windows))]
-    fn save_file(&self, declared: &str, target: &str) -> PyResult<String> {
+    pub(super) fn save_file(&self, declared: &str, target: &str) -> PyResult<String> {
         let mut publisher = FileTarget { declared, target };
         self.inner
             .save(&mut publisher)
@@ -226,13 +226,13 @@ impl BuildResult {
                 }
             })
     }
-    fn output<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyBytes>> {
+    pub(super) fn output<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyBytes>> {
         self.inner.output().map(|bytes| PyBytes::new(py, bytes))
     }
-    fn observations(&self) -> String {
+    pub(super) fn observations(&self) -> String {
         self.inner.observations().to_string()
     }
-    fn save(&self, publish: &Bound<'_, PyAny>) -> PyResult<String> {
+    pub(super) fn save(&self, publish: &Bound<'_, PyAny>) -> PyResult<String> {
         if !publish.is_callable() {
             return Err(pyo3::exceptions::PyTypeError::new_err(
                 "publish must be callable",
