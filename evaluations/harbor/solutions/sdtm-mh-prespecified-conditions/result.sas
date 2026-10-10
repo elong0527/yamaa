@@ -14,8 +14,11 @@ data odm;
   input StudyOID : $char1024. MetaDataVersionOID : $char1024. SubjectKey : $char1024. StudyEventOID : $char1024. StudyEventRepeatKey : $char1024. ItemGroupOID : $char1024. ItemGroupRepeatKey : $char1024. ItemOID : $char1024. Value : $char1024.;
 run;
 
-proc sql; create table checklist as select a.*,b.MHTERM,b.SORTORD from odm a inner join mh_items b on a.ItemOID=b.ItemOID; quit;
-data checklistout; set checklist; length DOMAIN $2 STUDYID USUBJID MHCAT MHPRESP MHOCCUR MHSTAT $1024; DOMAIN='MH'; STUDYID=StudyOID; USUBJID=SubjectKey; MHCAT='DISEASE-SPECIFIC HISTORY'; MHPRESP='Y'; MHOCCUR=Value; MHSTAT=''; if missing(Value) then MHSTAT='NOT DONE'; SECTION=0; ORD=input(SORTORD,best32.); VISITORD=0; REP=0; run;
+data authored; set odm; ordinal=_n_; run;
+proc sql; create table checklist as select a.*,b.MHTERM,b.SORTORD from authored a inner join mh_items b on a.ItemOID=b.ItemOID; quit;
+proc sort data=checklist; by StudyOID SubjectKey ItemOID ordinal; run;
+data checklistlast; set checklist; by StudyOID SubjectKey ItemOID; if last.ItemOID; run;
+data checklistout; set checklistlast; length DOMAIN $2 STUDYID USUBJID MHCAT MHPRESP MHOCCUR MHSTAT $1024; DOMAIN='MH'; STUDYID=StudyOID; USUBJID=SubjectKey; MHCAT='DISEASE-SPECIFIC HISTORY'; MHPRESP='Y'; MHOCCUR=''; MHSTAT='NOT DONE'; if Value in ('Y','N') then do; MHOCCUR=Value; MHSTAT=''; end; SECTION=0; ORD=input(SORTORD,best32.); VISITORD=0; REP=0; run;
 data volunteered; set odm; where ItemOID='IT.MH.MHTERM' and not missing(Value); length DOMAIN $2 STUDYID USUBJID MHTERM MHCAT MHPRESP MHOCCUR MHSTAT $1024; DOMAIN='MH'; STUDYID=StudyOID; USUBJID=SubjectKey; MHTERM=Value; MHCAT='GENERAL HISTORY'; MHPRESP=''; MHOCCUR=''; MHSTAT=''; SECTION=1; ORD=0; VISITORD=0; if StudyEventOID='BASELINE' then VISITORD=1; REP=input(ItemGroupRepeatKey,best32.); run;
 data prepared; set checklistout volunteered; run;
 proc sort data=prepared; by STUDYID USUBJID SECTION ORD VISITORD REP; run;

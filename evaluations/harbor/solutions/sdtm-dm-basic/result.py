@@ -10,7 +10,7 @@ import polars as pl
 
 odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
 
-wide = odm.filter(pl.col("ItemGroupOID") == "IG.DM").pivot(
+wide = odm.pivot(
     index=["StudyOID", "SubjectKey"],
     on="ItemOID",
     values="Value",

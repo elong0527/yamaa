@@ -68,7 +68,7 @@ sv = pl.read_csv("/app/input/sv.csv", infer_schema=False).with_columns(
 windows = {"SCREENING": -1, "BASELINE": 0, "WEEK 2": 2, "WEEK 4": 4}
 keys = ["STUDYID", "USUBJID", "PARAMCD"]
 covered = framed.select(*keys, "AVISIT").drop_nulls().unique()
-top = framed.group_by(keys).agg(pl.col("VSSEQ").max().alias("TOP"))
+top = framed.group_by("STUDYID", "USUBJID").agg(pl.col("VSSEQ").max().alias("TOP"))
 
 expected = (
     sv.filter(pl.col("VISIT").is_in(list(windows)))
@@ -78,7 +78,7 @@ expected = (
         AVISITN=pl.col("VISIT").replace_strict(windows, return_dtype=pl.Int64),
     )
     .join(covered, on=[*keys, "AVISIT"], how="anti")
-    .join(top, on=keys, how="left")
+    .join(top, on=["STUDYID", "USUBJID"], how="left")
     .sort([*keys, "VISITNUM"])
     .with_columns(
         VSSEQ=pl.col("TOP").fill_null(0)

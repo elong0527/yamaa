@@ -74,7 +74,7 @@ for row in wide.to_dicts():
     out = build_row(event, row["DTC"], row["COMP"], row["REASON"], row["REASONCD"])
     if out is None:
         continue
-    usubjid = f"{study}-{subj}" if not subj.startswith(study) else subj
+    usubjid = f"{study}-{subj}"
     records.append(
         {
             "STUDYID": study,

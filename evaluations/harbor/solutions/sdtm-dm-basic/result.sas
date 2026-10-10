@@ -13,7 +13,6 @@ data wide;
   length SEX AGE ARM $1024;
   retain SEX AGE ARM;
   set ordered;
-  where ItemGroupOID='IG.DM';
   by StudyOID SubjectKey;
   if first.SubjectKey then do;
     SEX=''; AGE=''; ARM='';

@@ -21,6 +21,9 @@ checklist_oids <- intersect(items$ItemOID, unique(odm$ItemOID))
 
 checklist <- odm |>
   filter(ItemOID %in% checklist_oids) |>
+  group_by(StudyOID, SubjectKey, ItemOID) |>
+  slice_tail(n = 1) |>
+  ungroup() |>
   left_join(items |> select(ItemOID, MHTERM, SORTORD), by = "ItemOID") |>
   mutate(
     answered = Value %in% c("Y", "N"),

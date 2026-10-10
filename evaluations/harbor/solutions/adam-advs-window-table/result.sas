@@ -18,8 +18,8 @@ proc sql;
   create table candidates as select a.*,b.AVISIT,b.AVISITN,b.AWTARGET,a.ADY-b.AWTARGET as AWTDIFF from advs_raw as a left join awindow as b
     on a.STUDYID=b.STUDYID and not missing(a.ADY) and not missing(b.AWLO) and not missing(b.AWHI) and a.ADY>=b.AWLO and a.ADY<=b.AWHI;
 quit;
-data ordered; set candidates; distance=abs(AWTDIFF); run;
-proc sort data=ordered; by STUDYID USUBJID PARAMCD AVISITN distance VSSEQ; run;
+data ordered; set candidates; distance=abs(AWTDIFF); nodistance=missing(distance); run;
+proc sort data=ordered; by STUDYID USUBJID PARAMCD AVISITN nodistance distance VSSEQ; run;
 data result; length ANL01FL $1; set ordered; by STUDYID USUBJID PARAMCD AVISITN; if first.AVISITN and not missing(AVISITN) then ANL01FL='Y'; run;
 
 proc sql;

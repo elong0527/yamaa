@@ -43,11 +43,7 @@ subjects <- odm |>
   distinct(StudyOID, SubjectKey) |>
   mutate(
     STUDYID = StudyOID,
-    USUBJID = ifelse(
-      str_starts(SubjectKey, fixed(StudyOID)),
-      SubjectKey,
-      paste(StudyOID, SubjectKey, sep = "-")
-    )
+    USUBJID = SubjectKey
   )
 
 race_distinct <- odm |>

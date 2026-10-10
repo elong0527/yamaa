@@ -14,14 +14,17 @@ odm <- read_csv(
   col_types = cols(.default = col_character())
 )
 
-dm <- odm |>
-  filter(ItemGroupOID == "IG.DM") |>
+wide <- odm |>
   pivot_wider(
     id_cols = c(StudyOID, SubjectKey),
     names_from = ItemOID,
     values_from = Value,
     values_fn = first
-  ) |>
+  )
+for (column in c("IT.DM.SEX", "IT.DM.AGE", "IT.DM.ARM")) {
+  if (!column %in% names(wide)) wide[[column]] <- NA_character_
+}
+dm <- wide |>
   mutate(
     DOMAIN = "DM",
     STUDYID = StudyOID,

@@ -69,7 +69,6 @@ dm <- dm_raw |>
   left_join(ae_sum, by = c("STUDYID", "USUBJID")) |>
   mutate(
     DOMAIN = "DM",
-    RFICDTC = suppressWarnings(as.Date(RFICDTC)),
     RFSTDTC = RFXSTDTC,
     RFPENDTC = pmax(RFXENDTC, DS_MAX, AE_MAX, na.rm = TRUE),
     RFPENDTC = as.Date(ifelse(is.infinite(as.numeric(RFPENDTC)), NA, RFPENDTC), origin = "1970-01-01"),

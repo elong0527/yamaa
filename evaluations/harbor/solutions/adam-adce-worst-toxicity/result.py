@@ -32,7 +32,7 @@ adce = ce.with_columns(
 # earliest date, then lowest sequence, so at most one per subject.
 best = (
     adce.filter(pl.col("ATOXGRN").is_not_null())
-    .sort(["ATOXGRN", "ASTDT", "CESEQ"], descending=[True, False, False])
+    .sort(["ATOXGRN", "ASTDT", "CESEQ"], descending=[True, False, False], nulls_last=True)
     .unique("USUBJID", keep="first", maintain_order=True)
     .select("USUBJID", "CESEQ")
     .with_columns(BEST=pl.lit("Y"))

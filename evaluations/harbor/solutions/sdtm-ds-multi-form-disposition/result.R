@@ -64,11 +64,7 @@ ds <- wide |>
   mutate(
     DOMAIN = "DS",
     STUDYID = StudyOID,
-    USUBJID = ifelse(
-      startsWith(SubjectKey, StudyOID),
-      SubjectKey,
-      paste(StudyOID, SubjectKey, sep = "-")
-    ),
+    USUBJID = paste(StudyOID, SubjectKey, sep = "-"),
     DSSTDTC = suppressWarnings(as.Date(na_if(DTC, ""))),
     DSTERM = na_if(DSTERM, ""),
     DSDECOD = na_if(DSDECOD, "")

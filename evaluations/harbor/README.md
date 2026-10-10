@@ -240,6 +240,32 @@ uv run --project python --no-sync harbor run \
 	-y
 ```
 
+The R, Python and opensas references follow the full prompt on edge cases
+as well as on the committed inputs. `test_harbor_reference_edges.py` uses
+temporary inputs with independent assertions; it never rewrites a prompt,
+input fixture or expected output. The reference-solutions job requires all
+three runtimes and grades their original outputs as well as those witnesses.
+
+Where the full prompt is silent, the references share these choices:
+
+- A missing sort date or target distance follows known values; the stated
+  sequence tie-break still applies among otherwise equal records. Missing
+  ages likewise follow known ages in the subject ranking.
+- Only `AESER = N` is non-serious. Missing seriousness leaves the prior and
+  first serious-event fields empty, while the previous-event field still
+  follows collected sequence.
+- A repeated checklist item uses its last row in collected input order,
+  including an unanswered last row; it still produces one checklist record.
+- Reported laboratory results from an unrecognized study event remain in
+  LB with no visit label or number.
+- Lab age bands include their lower bound and exclude their upper bound.
+  When effective-date ranges overlap, the latest applicable start wins,
+  followed by the highest applicable age-band start. An exact remaining tie
+  keeps the first range in collected order. Effective end dates are inclusive.
+
+The alive-date input naming discrepancy from #1889 was corrected separately
+in #1890. Its existing prompts already name `adsl.csv`.
+
 `smoke.py` does both checks offline in one step: it builds the tasks,
 probes the verifier sandbox (`probe.py`: the script cannot read the golden
 files, change the inputs or the grader's logs, or leave a process

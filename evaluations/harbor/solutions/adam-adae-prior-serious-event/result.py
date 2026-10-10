@@ -29,8 +29,8 @@ for subject, group in ae.sort(["USUBJID", "AESEQ"]).group_by("USUBJID", maintain
         earlier_all = [r["AESEQ"] for r in rows if r["AESEQ"] < seq]
         prev_seq = max(earlier_all) if earlier_all else None
         prev_term = by_seq.get(prev_seq, {}).get("AEDECOD") if prev_seq else None
-        is_serious = row["AESER"] == "Y"
-        # A serious event leaves its own prior and first fields empty. A
+        is_nonserious = row["AESER"] == "N"
+        # Only an explicit N receives prior and first serious-event fields. A
         # serious event with no coded term still counts for the flag and
         # the sequence number, while the term fields stay empty.
         records.append(
@@ -41,12 +41,12 @@ for subject, group in ae.sort(["USUBJID", "AESEQ"]).group_by("USUBJID", maintain
                 "AEDECOD": row["AEDECOD"],
                 "AESER": row["AESER"],
                 "PRIOR_SAEFL": None
-                if is_serious or prior_seq is None
+                if not is_nonserious or prior_seq is None
                 else "Y",
-                "PRIOR_SAEDECOD": None if is_serious else prior_term,
-                "PRIOR_SAESEQ": None if is_serious else prior_seq,
-                "FIRST_SAEDECOD": None if is_serious else first_term,
-                "FIRST_SAESEQ": None if is_serious else first_seq,
+                "PRIOR_SAEDECOD": None if not is_nonserious else prior_term,
+                "PRIOR_SAESEQ": None if not is_nonserious else prior_seq,
+                "FIRST_SAEDECOD": None if not is_nonserious else first_term,
+                "FIRST_SAESEQ": None if not is_nonserious else first_seq,
                 "PREV_AEDECOD": prev_term,
             }
         )

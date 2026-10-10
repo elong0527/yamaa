@@ -56,7 +56,7 @@ sv <- read_csv(
 windows <- c("SCREENING" = -1L, "BASELINE" = 0L, "WEEK 2" = 2L, "WEEK 4" = 4L)
 
 top <- framed |>
-  group_by(STUDYID, USUBJID, PARAMCD) |>
+  group_by(STUDYID, USUBJID) |>
   summarise(top_seq = max(VSSEQ), .groups = "drop")
 
 expected <- sv |>
@@ -68,7 +68,7 @@ expected <- sv |>
     filter(framed, !is.na(AVISIT)),
     by = c("STUDYID", "USUBJID", "PARAMCD", "AVISIT")
   ) |>
-  left_join(top, by = c("STUDYID", "USUBJID", "PARAMCD")) |>
+  left_join(top, by = c("STUDYID", "USUBJID")) |>
   group_by(STUDYID, USUBJID, PARAMCD) |>
   arrange(VISITNUM, .by_group = TRUE) |>
   mutate(

@@ -26,9 +26,9 @@ test_meta = {
     "TS_CAMP_NONLES": ("CAMPPRO", "Cathelicidin Protein", "ANTIMICROBIAL PEPTIDE", "TAPE STRIP", "NON-LESIONAL", "ng/mL"),
 }
 visit_meta = {
-    "SCRN": ("SCREENING", "1"),
-    "BL": ("BASELINE", "2"),
-    "D21": ("DAY 21", "3"),
+    "SCRN": ("SCREENING", 1.0),
+    "BL": ("BASELINE", 2.0),
+    "D21": ("DAY 21", 3.0),
 }
 
 
@@ -51,22 +51,20 @@ for row in odm.to_dicts():
 rows = []
 for (studyid, subj, event_oid, _group_oid, group_rep), values in groups.items():
     event_short = event_oid.split(".")[-1]
-    if event_short not in visit_meta and event_short != "UNSCH":
-        continue
     # The collection date from the date item on the same form.
     lbdtc = None
     for oid, val in values.items():
         if oid.split(".")[-1].endswith("DTC") and _present(val):
             lbdtc = str(val).strip()
     if event_short == "UNSCH":
-        visit, visitnum = "UNSCHEDULED", f"2.0{group_rep}"
+        visit, visitnum = "UNSCHEDULED", 2 + float(group_rep) / 100
     else:
-        visit, visitnum = visit_meta[event_short]
+        visit, visitnum = visit_meta.get(event_short, (None, None))
     for oid, val in values.items():
         rkey = _result_key(oid)
         if rkey is None:
             continue
-        text = str(val).strip() if _present(val) else ""
+        text = str(val) if _present(val) else ""
         # An item with no reported value produces no record.
         if text == "":
             continue
@@ -94,6 +92,10 @@ for (studyid, subj, event_oid, _group_oid, group_rep), values in groups.items():
                 }
             )
         else:
+            try:
+                number = float(text)
+            except ValueError:
+                number = None
             rows.append(
                 {
                     "DOMAIN": "LB",
@@ -109,7 +111,7 @@ for (studyid, subj, event_oid, _group_oid, group_rep), values in groups.items():
                     "LBORRES": text,
                     "LBORRESU": unit,
                     "LBSTRESC": text,
-                    "LBSTRESN": text,
+                    "LBSTRESN": number,
                     "LBSTRESU": unit,
                     "LBSTAT": None,
                     "LBDTC": lbdtc,
@@ -140,7 +142,7 @@ lb = (
             "USUBJID": pl.String,
             "LBSEQ": pl.String,
             "VISIT": pl.String,
-            "VISITNUM": pl.String,
+            "VISITNUM": pl.Float64,
             "LBTESTCD": pl.String,
             "LBTEST": pl.String,
             "LBCAT": pl.String,
@@ -149,7 +151,7 @@ lb = (
             "LBORRES": pl.String,
             "LBORRESU": pl.String,
             "LBSTRESC": pl.String,
-            "LBSTRESN": pl.String,
+            "LBSTRESN": pl.Float64,
             "LBSTRESU": pl.String,
             "LBSTAT": pl.String,
             "LBDTC": pl.String,

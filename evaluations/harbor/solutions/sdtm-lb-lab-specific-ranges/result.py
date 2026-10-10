@@ -42,7 +42,7 @@ def age_years(birth, collected):
     return years
 
 
-ranges = lbrange.to_dicts()
+ranges = sorted(lbrange.to_dicts(), key=lambda r: (r["EFFSTDT"], r["AGELO"]), reverse=True)
 
 rows = []
 for (subj, repkey), lab in labs.items():
@@ -64,7 +64,7 @@ for (subj, repkey), lab in labs.items():
         for rg in ranges:
             if rg["LBNAM"] != lbnam or rg["LBTESTCD"] != code or rg["SEX"] != sex:
                 continue
-            if not (rg["AGELO"] <= age <= rg["AGEHI"]):
+            if not (rg["AGELO"] <= age < rg["AGEHI"]):
                 continue
             eff_start = rg["EFFSTDT"]
             eff_end = rg["EFFENDT"] if rg["EFFENDT"] not in (None, "") else None

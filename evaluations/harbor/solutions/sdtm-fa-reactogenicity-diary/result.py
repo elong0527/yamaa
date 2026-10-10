@@ -31,7 +31,7 @@ def is_local(reaction, catsrc):
 
 
 rows = []
-for r in diary.to_dicts():
+for r in diary.filter(pl.col("REACTION") != "TEMPERATURE").to_dicts():
     study, subj = r["STUDYID"], r["USUBJID"]
     day, tpt, dtc = r["DIARYDAY"], r["TPT"], r["DTC"]
     reaction = r["REACTION"]
@@ -67,7 +67,7 @@ for r in diary.to_dicts():
         )
         continue
     occur = r["OCCUR"] if r["OCCUR"] not in (None, "") else None
-    sev = r["SEV"] if r["SEV"] not in (None, "") else None
+    sev = (r["SEV"] if r["SEV"] not in (None, "") else None) if occur == "Y" else "NONE"
     diam = r["DIAMETER"] if r["DIAMETER"] not in (None, "") else None
     unit = r["DIAMUNIT"] if r["DIAMUNIT"] not in (None, "") else None
     rows.append(

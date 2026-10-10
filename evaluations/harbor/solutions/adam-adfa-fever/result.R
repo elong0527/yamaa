@@ -38,7 +38,7 @@ adfa <- vs |>
   ) |>
   # Number each subject's records 1, 2, 3 ... in assessment-date order,
   # the collected sequence breaking ties on the same date.
-  arrange(USUBJID, VSDTC, VSSEQ) |>
+  arrange(STUDYID, USUBJID, ADT, VSSEQ) |>
   group_by(STUDYID, USUBJID) |>
   mutate(ASEQ = row_number()) |>
   ungroup() |>

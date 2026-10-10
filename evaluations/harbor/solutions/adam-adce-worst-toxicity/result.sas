@@ -10,11 +10,11 @@ run;
 
 data graded;
   length ASEV $1024;
-  set ce; ASEV=CESEV;
+  set ce; NODATE=missing(ASTDT); ASEV=CESEV;
   select(ASEV); when('MILD') ASEVN=1; when('MODERATE') ASEVN=2; when('SEVERE') ASEVN=3; otherwise ASEVN=.; end;
   ATOXGRN=ASEVN;
 run;
-proc sort data=graded(where=(not missing(ATOXGRN))) out=eligible; by STUDYID USUBJID descending ATOXGRN ASTDT CESEQ; run;
+proc sort data=graded(where=(not missing(ATOXGRN))) out=eligible; by STUDYID USUBJID descending ATOXGRN NODATE ASTDT CESEQ; run;
 data worst; set eligible; by STUDYID USUBJID; if first.USUBJID; keep STUDYID USUBJID CESEQ; run;
 proc sql; create table result as select a.*,case when not missing(b.CESEQ) then 'Y' else '' end as AOCCFL from graded as a left join worst as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.CESEQ=b.CESEQ; quit;
 
