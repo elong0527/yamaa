@@ -912,6 +912,16 @@
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
       ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/schema-verification-log.json",
+      "family": "verification_logs",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/verification_logs.rs",
+        "rust/tests/installed_verification_logs.py",
+        "R/yamaa/tests/verification_logs.R"
+      ]
     }
   ],
   "suites": [
@@ -1249,6 +1259,20 @@
       "runtime": "r",
       "path": "R/yamaa/tests/public_environment.R",
       "staged_path": "public_environment.R",
+      "level": "shared_run"
+    },
+    {
+      "id": "python/verification-logs",
+      "runtime": "python",
+      "path": "rust/tests/installed_verification_logs.py",
+      "staged_path": "installed_verification_logs.py",
+      "level": "shared_run"
+    },
+    {
+      "id": "r/verification-logs",
+      "runtime": "r",
+      "path": "R/yamaa/tests/verification_logs.R",
+      "staged_path": "verification_logs.R",
       "level": "shared_run"
     }
   ],
@@ -1752,6 +1776,10 @@
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/environment-candidate/schema_shared.yaml",
       "role": "input"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/verification_logs_reference.md",
+      "role": "documentation"
     }
   ]
 }

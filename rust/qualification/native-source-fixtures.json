@@ -1,0 +1,10 @@
+{
+  "format": "yamaa-native-source-fixtures/1",
+  "files": [
+    "benchmarks/schema-verification-log/spec.yaml",
+    "benchmarks/schema-verification-log/input/dm.csv",
+    "benchmarks/schema-verification-log/expected/adsl.csv",
+    "benchmarks/schema-verification-log/expected/adsl-checks.csv",
+    "benchmarks/schema-verification-log/expected/adsl-warnings.csv"
+  ]
+}
