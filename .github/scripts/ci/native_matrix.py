@@ -46,25 +46,33 @@ def plan(event, run_id):
 
 
 def compare_cohorts(matrix, root, revision):
+    # The pinned download action flattens a single match, including a pattern.
+    python_artifacts = len(matrix["include"])
+    r_artifacts = len(
+        {row["os"] for row in matrix["include"] if row["os"] in R_PLATFORMS}
+    )
+    downloaded = Path("cohort-input")
     for combination in matrix["include"]:
         platform = combination["os"]
         version = combination["python"]
         form = combination["form"]
-        python_evidence = (
-            Path("cohort-input")
-            / f"native-qualification-{platform}-{version}-{form}"
-            / form
+        python_directory = (
+            downloaded
+            if python_artifacts == 1
+            else downloaded / f"native-qualification-{platform}-{version}-{form}"
         )
+        python_evidence = python_directory / form
         output = Path("public-cohort") / platform / version / form
         r_evidence = []
         if platform in R_PLATFORMS:
+            r_directory = (
+                downloaded
+                if r_artifacts == 1
+                else downloaded / f"native-r-qualification-{platform}"
+            )
             r_evidence = [
                 "--r-evidence",
-                str(
-                    Path("cohort-input")
-                    / f"native-r-qualification-{platform}"
-                    / "r-source"
-                ),
+                str(r_directory / "r-source"),
             ]
         for tool, fixtures, destination in (
             ("qualify_public_cohort.py", root / "benchmarks", output),
