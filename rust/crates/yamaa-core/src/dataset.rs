@@ -713,7 +713,7 @@ fn validate_assignment_at(
             if !matches!(mode, RowMode::Keys) {
                 return Err(PlanError::InvalidLookup);
             }
-            lookup::validate(bound, secondary, available, output)?;
+            lookup::validate_source(bound, secondary, available, output)?;
             let width = secondary[bound.source].schema.columns().len();
             if let Some(filter) = filter {
                 filter
