@@ -178,3 +178,96 @@ fn column_and_case_scopes_use_the_shared_dispatch_with_distinct_nested_values() 
     let f = bespoke(source, b"ID\na\n");
     assert_eq!(saved(&f), b"ID,VALUE,TEXT\na,10,prefix:a\n");
 }
+
+#[test]
+fn distinct_stored_drivers_group_in_their_own_schemas_and_complete_global_windows() {
+    let source = r#"schema_version: '1.0'
+domain: TEST
+keys: [ID, SECTION]
+input:
+  ALPHA: {path: input.csv, types: {ID: int, S: int}}
+  BETA: {path: beta.csv, types: {OTHER: int, AMOUNT: float}}
+output: {path: output.csv, columns: [ID, SECTION, SEQ, GLOBAL, TOTAL]}
+columns:
+- {name: ID, type: int}
+- {name: SECTION, type: str}
+- {name: SEQ, type: int}
+- {name: GLOBAL, type: int, derivation: {row_number: {window: {order_by: [ID, SECTION]}}}}
+- {name: TOTAL, type: float}
+rows:
+- id: records
+  dataset: ALPHA
+  filter: 'ID > 1'
+  derivations:
+    ID: ALPHA.ID
+    SECTION: {literal: A}
+    SEQ: {row_number: {window: {order_by: [{variable: ID, direction: desc}]}}}
+    TOTAL: {literal: 0}
+- id: groups
+  dataset: BETA
+  group_by: [BETA.OTHER]
+  derivations:
+    ID: BETA.OTHER
+    SECTION: {literal: B}
+    SEQ: {row_number: {window: {order_by: [{variable: ID, direction: desc}]}}}
+    TOTAL: {aggregate: {expr: 'SUM(BETA.AMOUNT)'}}
+"#;
+    let fixture = bespoke(source, b"ID,S\n3,7\n1,8\n2,9\n");
+    fs::write(
+        fixture.0.join("beta.csv"),
+        b"PAD,OTHER,AMOUNT\nx,10,3\ny,7,5\nz,10,4\n",
+    )
+    .unwrap();
+    assert_eq!(
+        saved(&fixture),
+        b"ID,SECTION,SEQ,GLOBAL,TOTAL\n3,A,1,2,0\n2,A,2,1,0\n10,B,1,4,7\n7,B,2,3,5\n"
+    );
+}
+
+#[test]
+fn record_filter_promotes_numeric_defaults_and_their_complete_dependencies() {
+    let fixture = bespoke(
+        r#"schema_version: '1.0'
+domain: TEST
+keys: [ID, SECTION]
+input: {SRC: {path: input.csv, types: {I: int}}}
+output: {path: output.csv, columns: [ID, SECTION, VALUE]}
+columns:
+- {name: ID, type: int}
+- {name: SECTION, type: str, derivation: {literal: S}}
+- {name: VALUE, type: float, derivation: {compute: {expr: 'POWER(ID, 2)'}}}
+rows:
+- id: selected
+  filter: 'VALUE > 4'
+  derivations: {ID: SRC.I}
+"#,
+        b"I\n1\n3\n2\n4\n",
+    );
+    assert_eq!(saved(&fixture), b"ID,SECTION,VALUE\n3,S,9\n4,S,16\n");
+}
+
+#[test]
+fn grouped_filters_read_completed_windows_before_discarding_candidate_groups() {
+    let fixture = bespoke(
+        r#"schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: {path: input.csv, types: {I: int, V: float}}}
+output: {path: output.csv, columns: [ID, TOTAL, SEQ]}
+columns:
+- {name: ID, type: int}
+- {name: TOTAL, type: float}
+- {name: SEQ, type: int}
+rows:
+- id: selected
+  group_by: [SRC.I]
+  filter: 'SEQ = 2 AND TOTAL = 7'
+  derivations:
+    ID: SRC.I
+    TOTAL: {aggregate: {expr: 'SUM(SRC.V)'}}
+    SEQ: {row_number: {window: {order_by: [{variable: ID, direction: desc}]}}}
+"#,
+        b"I,V\n3,8\n2,3\n1,5\n2,4\n",
+    );
+    assert_eq!(saved(&fixture), b"ID,TOTAL,SEQ\n2,7,2\n");
+}

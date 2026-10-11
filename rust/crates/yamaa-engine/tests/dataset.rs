@@ -3134,7 +3134,7 @@ fn numbering_ignores_temporal_precision_for_ties_and_handles_empty_scope() {
 }
 
 #[test]
-fn numbering_admits_complete_dependencies_only_in_key_grain_column_phase() {
+fn numbering_admits_complete_dependencies_in_completed_column_phase() {
     use yamaa_engine::dataset::{OrderTerm, Window, WindowKind};
     let source = table(&[("ID", ColumnType::Int)], vec![]);
     let window = Window {
@@ -3168,10 +3168,7 @@ fn numbering_admits_complete_dependencies_only_in_key_grain_column_phase() {
         )
     };
     assert!(build(window.clone(), RowMode::Keys, false).is_ok());
-    assert_eq!(
-        build(window.clone(), RowMode::Records, false),
-        Err(PlanError::InvalidWindow)
-    );
+    let record_plan = build(window.clone(), RowMode::Records, false).unwrap();
     assert_eq!(
         build(window.clone(), RowMode::Keys, true),
         Err(PlanError::InvalidKeyMode)
@@ -3197,6 +3194,24 @@ fn numbering_admits_complete_dependencies_only_in_key_grain_column_phase() {
         Err(PlanError::InvalidWindow)
     );
     assert!(source.reads.borrow().is_empty());
+    let records = table(
+        &[("ID", ColumnType::Int)],
+        vec![
+            vec![Value::Int(9)],
+            vec![Value::Int(2)],
+            vec![Value::Int(7)],
+        ],
+    );
+    let result = record_plan.execute(&records, limits()).unwrap();
+    assert_eq!(
+        result.dataset.rows(),
+        &[
+            vec![Value::Int(9), Value::Int(3)],
+            vec![Value::Int(2), Value::Int(1)],
+            vec![Value::Int(7), Value::Int(2)],
+        ]
+    );
+    assert_eq!(*records.reads.borrow(), vec![(0, 0), (1, 0), (2, 0)]);
 }
 
 #[test]

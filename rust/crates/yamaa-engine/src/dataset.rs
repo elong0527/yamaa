@@ -27,6 +27,8 @@ mod key_grain;
 mod lookup;
 #[path = "dataset_numeric.rs"]
 mod numeric;
+#[path = "dataset_row_drivers.rs"]
+mod row_drivers;
 #[path = "dataset_row_windows.rs"]
 mod row_windows;
 #[path = "dataset_scalar.rs"]
@@ -1034,13 +1036,17 @@ impl Executor<'_> {
             candidates = key_grain::construct(self, table, limits, &mut budget, handlers)?;
         } else {
             for template in self.plan.templates() {
+                let table =
+                    row_drivers::Driver::new(table, secondary, template.mode.source_index());
+                let table = &table;
                 let first = candidates.len();
                 let deferred = yamaa_core::dataset::window_stages(
                     &template.assignments,
                     self.plan.output().columns().len(),
                     self.plan.intermediates(),
                 );
-                let groups = match &template.mode {
+                let groups = match template.mode.local_mode() {
+                    RowMode::Driver { .. } => unreachable!("plan admission rejects nested drivers"),
                     RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
                     RowMode::Records => {
                         // Admit the known cardinality before materializing record memberships.
@@ -1094,7 +1100,11 @@ impl Executor<'_> {
                         )?;
                         candidate.completed[assignment.column] = true;
                     }
-                    if let Some(filter) = &template.filter {
+                    if let Some(filter) = template
+                        .filter
+                        .as_ref()
+                        .filter(|_| !matches!(template.mode.local_mode(), RowMode::Groups(_)))
+                    {
                         let source_row = candidate.members[0];
                         let truth = crate::dataset_predicate::evaluate(
                             filter,
@@ -1132,6 +1142,15 @@ impl Executor<'_> {
                         intermediates: &mut intermediate_run,
                     },
                 )?;
+                if matches!(template.mode.local_mode(), RowMode::Groups(_)) {
+                    row_windows::filter_groups(
+                        table,
+                        template,
+                        &mut candidates,
+                        first,
+                        &mut budget,
+                    )?;
+                }
             }
         }
         let mut completed = vec![false; self.plan.output().columns().len()];

@@ -3,7 +3,7 @@ use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
         Assignment, CaseBranch, DatasetPlan, Expression, FirstAvailable, OrderTerm, RowMode,
-        RowTemplate, SelectionRead, SelectionSource, Window, WindowKind,
+        RowTemplate, SecondarySource, SelectionRead, SelectionSource, Window, WindowKind,
     },
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
@@ -337,4 +337,77 @@ fn unselected_nested_function_requires_activation_before_every_table_method() {
         ExecutionError::FunctionBinding { slot: 0 }
     ));
     assert!(table.reads.borrow().is_empty());
+}
+
+#[test]
+fn distinct_driver_failure_retains_its_source_coordinate_payload_and_entered_prefix() {
+    let primary = Table {
+        schema: schema(&[("ID", ColumnType::Int)]),
+        rows: vec![vec![Value::Int(1)], vec![Value::Int(2)]],
+        reads: RefCell::default(),
+        failure: None,
+    };
+    let payload: Rc<str> = "secondary retained failure".into();
+    let secondary = Table {
+        schema: schema(&[
+            ("PAD", ColumnType::Str),
+            ("ID", ColumnType::Int),
+            ("VALUE", ColumnType::Float),
+        ]),
+        rows: vec![
+            vec![Value::Str("x".into()), Value::Int(10), Value::float(3.0)],
+            vec![Value::Str("y".into()), Value::Int(20), Value::float(4.0)],
+        ],
+        reads: RefCell::default(),
+        failure: Some((1, 2, payload.clone())),
+    };
+    let assignments = |id, value| {
+        vec![
+            assign(0, Expression::Source(id), "rows.ID.source"),
+            assign(1, value, "rows.VALUE.source"),
+        ]
+    };
+    let plan = DatasetPlan::new_with_sources(
+        primary.schema.clone(),
+        vec![SecondarySource {
+            name: "SECOND".into(),
+            schema: secondary.schema.clone(),
+        }],
+        schema(&[("ID", ColumnType::Int), ("VALUE", ColumnType::Float)]),
+        vec![
+            RowTemplate {
+                mode: RowMode::Records,
+                assignments: assignments(0, Expression::Literal(Value::float(1.0))),
+                filter: None,
+            },
+            RowTemplate {
+                mode: RowMode::Driver {
+                    source: 1,
+                    mode: Box::new(RowMode::Records),
+                },
+                assignments: assignments(1, Expression::Source(2)),
+                filter: None,
+            },
+        ],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    let attempt = plan.execute_observed_sources(&primary, &[&secondary], limits());
+    let error = attempt.result.unwrap_err();
+    let ExecutionError::Cell {
+        path,
+        source_row,
+        error: CellError::Access(actual),
+    } = *error
+    else {
+        panic!("original cell cause")
+    };
+    assert_eq!(path, "rows.VALUE.source");
+    assert_eq!(source_row, 1);
+    assert!(Rc::ptr_eq(&actual, &payload));
+    assert_eq!(*primary.reads.borrow(), [(0, 0), (1, 0)]);
+    assert_eq!(*secondary.reads.borrow(), [(0, 1), (0, 2), (1, 1), (1, 2)]);
+    assert!(attempt.retained_verifications.is_empty());
 }
