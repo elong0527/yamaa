@@ -17,13 +17,13 @@ preserve_workspace = _BACKEND_MODULE.preserve_workspace
 def _make_workspace(root: Path) -> Path:
     workspace = root / "rust"
     (workspace / "crates" / "foo" / "src").mkdir(parents=True)
-    (workspace / "Cargo.toml").write_text('[workspace]\nmembers = ["crates/foo"]\n')
-    (workspace / "Cargo.lock").write_text("lock-bytes")
-    (workspace / "rust-toolchain.toml").write_text("toolchain-bytes")
-    (workspace / "crates" / "foo" / "Cargo.toml").write_text(
-        '[package]\nname = "foo"\n'
+    (workspace / "Cargo.toml").write_bytes(b'[workspace]\nmembers = ["crates/foo"]\n')
+    (workspace / "Cargo.lock").write_bytes(b"lock-bytes")
+    (workspace / "rust-toolchain.toml").write_bytes(b"toolchain-bytes")
+    (workspace / "crates" / "foo" / "Cargo.toml").write_bytes(
+        b'[package]\nname = "foo"\n'
     )
-    (workspace / "crates" / "foo" / "src" / "lib.rs").write_text("pub fn f() {}\n")
+    (workspace / "crates" / "foo" / "src" / "lib.rs").write_bytes(b"pub fn f() {}\n")
     return workspace
 
 
