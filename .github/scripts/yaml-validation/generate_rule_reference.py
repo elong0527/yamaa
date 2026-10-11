@@ -74,7 +74,11 @@ def generated(root):
             ]
         )
         for name, descriptor in descriptors(document, classes=classes):
-            target = prose.get(f"{path.name}:{name}.description")
+            # New declarations cite their actual field; older rewrite records
+            # retain the historical description address.
+            target = prose.get(f"{path.name}:{name}") or prose.get(
+                f"{path.name}:{name}.description"
+            )
             entry = migration["requirements"].get(target, {})
             if entry.get("retired"):
                 replacement = entry["replacement"]
