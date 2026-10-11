@@ -164,6 +164,25 @@ pub(super) fn admit<E>(
             }
         }
         Expression::SourceBinding { source, .. } => admit(source, functions)?,
+        Expression::Case(branches) => {
+            for branch in branches {
+                admit(&branch.assignment, functions)?;
+            }
+        }
+        Expression::Extreme { operands, .. }
+        | Expression::StrConcat { operands, .. }
+        | Expression::StrTemplate { operands, .. }
+        | Expression::Imputation { operands, .. }
+        | Expression::Temporal { operands, .. } => {
+            for operand in operands {
+                admit(operand, functions)?;
+            }
+        }
+        Expression::StrContains { source, .. }
+        | Expression::StrExtract { source, .. }
+        | Expression::StrCase { source, .. }
+        | Expression::StrPad { source, .. }
+        | Expression::Round { source, .. } => admit(source, functions)?,
         Expression::FirstAvailable(selection) => {
             for operand in selection.sources() {
                 if let yamaa_core::dataset::SelectionRead::Expression(source) = &operand.read {
