@@ -509,7 +509,6 @@
         "_ReferenceCatalog.analyze",
         "_Schema",
         "_Schema.analyze",
-        "_Schema.traverse_inheritance",
         "_Specification",
         "_Specification.build",
         "_Specification.check_issues",
@@ -548,8 +547,7 @@
         "reference_capabilities",
         "scalar_round_trip",
         "table_round_trip",
-        "table_snapshot",
-        "traverse_inheritance"
+        "table_snapshot"
       ],
       "disposition": "remove_public",
       "issue": "#1751",

@@ -57,10 +57,19 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/inheritance_preparation_reference.json",
+      "family": "inheritance",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/inheritance_capture.rs"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv",
       "family": "inheritance",
       "level": "compile",
       "consumers": [
+        "rust/crates/yamaa-adapters/tests/inheritance_capture.rs",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
@@ -73,7 +82,6 @@
       "consumers": [
         "R/yamaa/tests/inheritance.R",
         "rust/crates/yamaa-adapters/tests/inheritance_transport.rs",
-        "rust/tests/installed_inheritance.py",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
@@ -86,7 +94,6 @@
       "consumers": [
         "R/yamaa/tests/inheritance.R",
         "rust/crates/yamaa-adapters/tests/inheritance_transport.rs",
-        "rust/tests/installed_inheritance.py",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"

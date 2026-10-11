@@ -14,7 +14,7 @@ and codec interfaces are native traits; adapters translate values and errors.
 | `specification_output::OutputReport` | engine | Portable JSON report formatter; native test fake | Observation or report-budget failure before publication |
 | `specification_output::ArtifactPort` | engine | Python/R publication bridges; Unix explicit-target Rust/Python/R publisher; native test fake | Original opaque publication error, without retry |
 | `TableAccess` | core | Immutable Arrow snapshots, core normalized CSV tables and engine output tables; test fakes | Bounds or original opaque cell-access error |
-| `inheritance::SourcePort` | engine | Existing inheritance bridge; Unix native captured-file port | Source failure or traversal resource limit |
+| `inheritance::SourcePort` | engine | Typed inheritance capture adapter; native captured-file port; remaining R JSON compatibility probe | Source failure or traversal resource limit |
 | `project_activation::ActivationPort` | engine | Python/R locked-package adapters; native fakes | Original lock, binding, conformance or interrupt failure |
 | `project_preparation::CapturePort` | engine | Adapter native file metadata capture; shared scripted native fake | Original capture/interrupt payload, bounded source/byte/identity refusal or malformed native reply kind |
 | `project_preparation::DecodePort` | engine | Adapter captured YAML/schema codec; shared scripted native fake | Original structural failure with retained source/context; closed environment/function/codelist target |
@@ -69,8 +69,11 @@ Captured schema closure, standalone preparation and raw inheritance capture/reba
 now use the dedicated engine services described below. Authored-origin lookup and
 class preparation remain separate migration work. Existing engine inheritance
 trait implementations remain codec/resource adapters. The
-experimental inheritance JSON callback and other component probes remain pending
-retirement after their complete public qualification consumers are preserved.
+Python inheritance JSON callbacks are retired after their qualification consumers
+move to typed native preparation and retained-arena oracles. The R JSON callback
+probe and shared transport remain for owner-coordinated retirement; Python-only
+removal does not close the No JSON host callback criterion. Other schema query
+component probes and custom/reference resolver dispositions remain unchanged.
 
 This internal check is vocabulary admission, not the complete public `check`
 contract in #1751. Binding findings that depend on source schemas, and existing
@@ -416,7 +419,9 @@ Sync requirements. A later failure retains the completed raw-parent catalog;
 opaque failures stop immediately, with no independent-error collection or retry.
 The adapter retains its public InheritancePort/CapturedParent/SourceFailure and
 InheritanceError shapes through reexports and a physical decoder implementation.
-Existing callers and installed Python/R callback protocols are unchanged.
+The existing typed Python/R native preparation callbacks retain their signatures.
+Python module/snapshot inheritance JSON source callbacks are retired; the R-only
+component JSON bridge remains separately scheduled for removal.
 
 Authored-origin lookup helpers and the native Parents spelling cache remain
 separate migration work. The post-success
@@ -499,9 +504,10 @@ prepare_class convenience delegate and all standalone/inherited dispatch. It no
 longer calls core query/normalization in these live entry points. The former private
 two-caller cloning failure helper is removed when its callers move to the engine.
 No source capture, activation, study or publication capability is added here.
-The decoded schema/1 transports and host _Schema/interpret_schema/inheritance
-component probes remain unchanged for planned #1751 retirement, rather than being
-refactored. Dispatch, authored/producer-origin helpers, native alias/cache/entry-base
+The decoded schema/1 transports and host _Schema.analyze/interpret_schema
+component probes remain for planned #1751 retirement. Python inheritance JSON
+callbacks are removed; R registration/export and shared transport removal remain
+owner-coordinated work. Dispatch, authored/producer-origin helpers, native alias/cache/entry-base
 policy and other owners' scanner/report/log/Define/Save/Windows work remain separate
 #1754 debt; this move does not claim whole-issue closure.
 
