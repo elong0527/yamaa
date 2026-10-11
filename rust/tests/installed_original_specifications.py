@@ -1469,7 +1469,7 @@ class PublicDomains(unittest.TestCase):
             shutil.copytree(
                 ROOT
                 / "cases"
-                / "negative-round-half-away-from-zero-non-numeric-source",
+                / "negative-rounding-source",
                 negative,
             )
             shutil.rmtree(negative / "input")

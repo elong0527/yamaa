@@ -10,6 +10,8 @@ from pathlib import Path
 REPOSITORY = Path(__file__).resolve().parents[2]
 CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter", "negative-paired-dates", "negative-not-missing-age", "negative-implausible-age", "negative-invalid-sex", "negative-sex-code", "negative-matches-bad-pattern")
 ROUNDING_CASES = ("schema-round-half-away-from-zero-ties", "negative-round-half-away-from-zero-non-numeric-source")
+# Archive aliases shorten installed paths without changing original fixture identities or bytes.
+CASE_DIRECTORY_NAMES = {"negative-round-half-away-from-zero-non-numeric-source": "negative-rounding-source"}
 # The current specification schema closure, not other standalone schema roots.
 # Missing/new includes fail shared bundle admission; no runtime parser is used here.
 SCHEMA_MODULES = (
@@ -235,7 +237,7 @@ def stage(destination: Path):
     for name in SCHEMA_MODULES:
         shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
     for name in CASES + ROUNDING_CASES:
-        shutil.copytree(REPOSITORY / "benchmarks" / name, destination / "cases" / name)
+        shutil.copytree(REPOSITORY / "benchmarks" / name, destination / "cases" / CASE_DIRECTORY_NAMES.get(name, name))
     shutil.copytree(
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specs",
         destination / "expected",

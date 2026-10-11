@@ -1273,7 +1273,7 @@ local({
   stopifnot(nrow(expected)==16L,nrow(result$issues)==0L,identical(result$output,expected),
             identical(rawfile(entry),written),!file.exists(file.path(case,"adsl.csv")))
   stopifnot(identical(result$save(),TRUE),identical(read.csv(file.path(case,"adsl.csv"),colClasses=c("character","character",rep("numeric",4L)),na.strings="",check.names=FALSE),expected))
-  case_name <- "negative-round-half-away-from-zero-non-numeric-source"
+  case_name <- "negative-rounding-source"
   stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
   case <- file.path(directory,case_name)
   unlink(file.path(case,"input"),recursive=TRUE)

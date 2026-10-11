@@ -31,7 +31,8 @@ existing recovery and accounting rules. Operand plans are admitted before table
 access, with the dataset's existing depth and node budgets.
 
 `schema-round-half-away-from-zero-ties` keeps its original YAML and independent
-16-row expected CSV. Public Python and R witnesses compare every output column,
+16-row expected CSV. Its negative fixture uses a shorter installed-directory alias
+to fit portable R archive paths; source and expected bytes remain unchanged. Public Python and R witnesses compare every output column,
 row, type, missing value and saved CSV against that existing truth. The original
 negative fixture is checked with its study input removed and its complete error
 fields compared. Python semantic fallback imports are forbidden; R runs with
