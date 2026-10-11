@@ -1706,6 +1706,8 @@ columns:
         from polars.testing import assert_frame_equal
 
         truth = json.loads((ROOT / "text-template-reference.json").read_text())
+        with (ROOT / "text-template-directories.tsv").open(newline="", encoding="ascii") as stream:
+            directories = {row["case"]: row["directory"] for row in csv.DictReader(stream, delimiter="\t")}
 
         def issues(result):
             records = result.issues.to_dicts()
@@ -1746,7 +1748,7 @@ columns:
                 if "specification" not in value:
                     continue
                 case = root / name
-                shutil.copytree(ROOT / "text-template-cases" / name, case)
+                shutil.copytree(ROOT / "text-template-cases" / directories[name], case)
                 result = yamaa.domain(case / "spec.yaml")
                 self.assertEqual(issues(result), value.get("findings", []), name)
                 observations = result._native.observations()

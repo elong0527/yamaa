@@ -17,6 +17,11 @@ EXTRACTION_CASES = ("adam-adae-text-cleanup", "negative-str-uncaptured-group")
 TEMPLATE_CASES = ("adam-adsl-site-parse", "negative-subject-reference")
 # Archive aliases shorten installed paths without changing original fixture identities or bytes.
 CASE_DIRECTORY_NAMES = {"negative-round-half-away-from-zero-non-numeric-source": "negative-rounding-source"}
+# Only archive directories are shortened; independent capture labels remain exact.
+TEMPLATE_DIRECTORY_NAMES = {
+    "type-before-later-invalid-declaration": "type-before-invalid",
+    "unknown-before-later-invalid-declaration": "unknown-before-invalid",
+}
 # The current specification schema closure, not other standalone schema roots.
 # Missing/new includes fail shared bundle admission; no runtime parser is used here.
 SCHEMA_MODULES = (
@@ -77,6 +82,12 @@ def stage_text_template_truth(destination: Path):
         for name, value in capture.items():
             if "handler_counts" in value:
                 writer.writerow((name, json.dumps(value["handler_counts"], sort_keys=True, separators=(",", ":"))))
+    with (destination / "text-template-directories.tsv").open("w", newline="", encoding="ascii") as stream:
+        writer = csv.writer(stream, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE, quotechar=None)
+        writer.writerow(("case", "directory"))
+        for name, value in capture.items():
+            if "specification" in value:
+                writer.writerow((name, TEMPLATE_DIRECTORY_NAMES.get(name, name)))
     root = destination / "text-template-cases"
     root.mkdir()
     with (destination / "text-template-diagnostics.tsv").open("w", newline="", encoding="ascii") as stream:
@@ -85,7 +96,7 @@ def stage_text_template_truth(destination: Path):
         for name, value in capture.items():
             if "specification" not in value:
                 continue
-            case = root / name
+            case = root / TEMPLATE_DIRECTORY_NAMES.get(name, name)
             case.mkdir()
             (case / "spec.yaml").write_text(json.dumps(value["specification"], ensure_ascii=True) + "\n", encoding="ascii", newline="\n")
             (case / "input.csv").write_text(value["input"], encoding="utf-8", newline="\n")

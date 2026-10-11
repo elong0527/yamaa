@@ -1492,6 +1492,8 @@ local({
   on.exit(unlink(directory,recursive=TRUE),add=TRUE)
   rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
   handlers <- read.delim(file.path(root,"text-template-handlers.tsv"),quote="",colClasses="character",check.names=FALSE)
+  paths <- read.delim(file.path(root,"text-template-directories.tsv"),quote="",colClasses="character",check.names=FALSE)
+  directories <- setNames(paths$directory,paths$case)
   check_handlers <- function(result,name) {
     observed <- get(".domain_observations",asNamespace("yamaa"))(result)
     expected <- handlers$handlers[handlers$case==name]
@@ -1520,21 +1522,25 @@ local({
   failures <- read.delim(file.path(root,"text-template-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
   failures$requirement[!nzchar(failures$requirement)] <- NA_character_
   for(name in unique(failures$case)) {
-    stopifnot(file.copy(file.path(root,"text-template-cases",name),directory,recursive=TRUE))
-    case <- file.path(directory,name);result <- yamaa_domain(file.path(case,"spec.yaml"));actual <- result$issues
+    stopifnot(file.copy(file.path(root,"text-template-cases",directories[[name]]),directory,recursive=TRUE))
+    case <- file.path(directory,name)
+    if(directories[[name]]!=name) stopifnot(file.rename(file.path(directory,directories[[name]]),case))
+    result <- yamaa_domain(file.path(case,"spec.yaml"));actual <- result$issues
     expected <- failures[failures$case==name,];check_handlers(result,name)
     stopifnot(nrow(actual)==nrow(expected),identical(actual$phase,expected$phase),identical(actual$condition,expected$condition),
       identical(actual$requirement,expected$requirement),identical(actual$spec_paths,lapply(expected$spec_path,identity)),
       identical(actual$context,expected$context),is.null(result$output),
       inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(case,"output.csv")))
   }
-  cases <- list.dirs(file.path(root,"text-template-cases"),recursive=FALSE,full.names=FALSE)
+  cases <- sort(paths$case)
   for(name in cases) {
     if(name %in% failures$case || name=="nul-value") next
     # NUL scalar materialization is qualified at pure/native-codec and Python
     # boundaries; the existing R character facade does not admit embedded NUL.
-    stopifnot(file.copy(file.path(root,"text-template-cases",name),directory,recursive=TRUE))
-    case <- file.path(directory,name);result <- yamaa_domain(file.path(case,"spec.yaml"));check_handlers(result,name)
+    stopifnot(file.copy(file.path(root,"text-template-cases",directories[[name]]),directory,recursive=TRUE))
+    case <- file.path(directory,name)
+    if(directories[[name]]!=name) stopifnot(file.rename(file.path(directory,directories[[name]]),case))
+    result <- yamaa_domain(file.path(case,"spec.yaml"));check_handlers(result,name)
     stopifnot(nrow(result$issues)==0L,!file.exists(file.path(case,"output.csv")),identical(result$save(),TRUE),
       identical(rawfile(file.path(case,"output.csv")),rawfile(file.path(case,"expected.csv"))))
     if(name=="empty-template") stopifnot(identical(result$output$RESULT,""))
