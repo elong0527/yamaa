@@ -514,3 +514,52 @@ fn first_available_admits_every_operand_before_any_source_access() {
     )
     .is_ok());
 }
+
+#[test]
+fn driver_wrappers_admit_only_selected_record_or_group_schema_coordinates() {
+    use yamaa_core::dataset::SecondarySource;
+    let primary = schema(&[("ID", ColumnType::Int)]);
+    let donor = schema(&[("PAD", ColumnType::Str), ("ID", ColumnType::Int)]);
+    let output = schema(&[("ID", ColumnType::Int)]);
+    let make = |mode, column| {
+        DatasetPlan::new_with_sources(
+            primary.clone(),
+            vec![SecondarySource {
+                name: "DONOR".into(),
+                schema: donor.clone(),
+            }],
+            output.clone(),
+            vec![RowTemplate {
+                mode,
+                assignments: vec![assign(0, Expression::Source(column))],
+                filter: None,
+            }],
+            vec![],
+            vec![0],
+            vec![],
+        )
+    };
+    let selected = |source, mode| RowMode::Driver {
+        source,
+        mode: Box::new(mode),
+    };
+    assert!(make(selected(1, RowMode::Records), 1).is_ok());
+    assert!(make(selected(1, RowMode::Groups(vec![1])), 1).is_ok());
+    assert_eq!(make(RowMode::Records, 1), Err(PlanError::InvalidSource));
+    assert_eq!(
+        make(selected(1, RowMode::Records), 2),
+        Err(PlanError::InvalidSource)
+    );
+    assert_eq!(
+        make(selected(1, RowMode::Groups(vec![0])), 1),
+        Err(PlanError::NonGroupSource)
+    );
+    for mode in [
+        selected(0, RowMode::Records),
+        selected(2, RowMode::Records),
+        selected(1, RowMode::Keys),
+        selected(1, selected(1, RowMode::Records)),
+    ] {
+        assert_eq!(make(mode, 0), Err(PlanError::InvalidSource));
+    }
+}

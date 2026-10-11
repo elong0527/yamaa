@@ -37,6 +37,8 @@ pub use source_expressions::SourceFinding;
 mod column_checks;
 #[path = "specification_logs.rs"]
 mod logs;
+#[path = "specification_row_drivers.rs"]
+mod row_drivers;
 #[path = "specification_row_intermediates.rs"]
 mod row_intermediates;
 #[path = "specification_rows.rs"]
@@ -1569,9 +1571,7 @@ impl PreparedSpecification {
         }
         let source = schemas[self.driver];
         if let Some(rows) = &self.rows {
-            if !self.intermediates.is_empty() {
-                rows.admit_sources(schemas, &self.output)?;
-            }
+            rows.admit_sources(schemas, &self.output)?;
             let mut findings = Vec::new();
             let (secondary, intermediates) = self.intermediates.bind(
                 &self.sources,
