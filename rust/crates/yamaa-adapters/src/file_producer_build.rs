@@ -153,6 +153,7 @@ impl<E, R, RE> Attempt<E, R, RE> {
 /// build. Arbitrary public Attempt records cannot be promoted to this owner.
 pub struct OwnedAttempt<E> {
     attempt: crate::producer_report::NativeAttempt<E>,
+    logs: Arc<[crate::producer_report::NodeLogs]>,
     publication: Option<Arc<crate::producer_publication::Publication>>,
     publication_refusal: Option<&'static str>,
 }
@@ -163,6 +164,9 @@ impl<E> std::ops::Deref for OwnedAttempt<E> {
     }
 }
 impl<E> OwnedAttempt<E> {
+    pub(crate) fn logs(&self) -> &Arc<[crate::producer_report::NodeLogs]> {
+        &self.logs
+    }
     pub(crate) fn publication(&self) -> Option<&Arc<crate::producer_publication::Publication>> {
         self.publication.as_ref()
     }
@@ -221,6 +225,7 @@ impl FileBuild {
         let provenance = Arc::clone(&self.provenance);
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
         let (attempt, publication) = self.build_actual(activation, &mut report, limits);
+        let logs = report.take_logs().into();
         let (publication, publication_refusal) = if attempt.accepted() {
             match publication {
                 Ok(prepared) => (
@@ -241,6 +246,7 @@ impl FileBuild {
         };
         OwnedAttempt {
             attempt,
+            logs,
             publication,
             publication_refusal,
         }

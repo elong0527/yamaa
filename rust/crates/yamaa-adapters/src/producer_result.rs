@@ -17,6 +17,8 @@ pub struct RootResult {
     observations: Value,
     issues: Vec<Issue>,
     output: Option<(PublicTable, Vec<u8>)>,
+    root: usize,
+    logs: Arc<[crate::producer_report::NodeLogs]>,
     publication: Option<Arc<crate::producer_publication::Publication>>,
     publication_refusal: Option<&'static str>,
     base_issues: usize,
@@ -35,6 +37,27 @@ impl RootResult {
     }
     pub fn output_table(&self) -> Option<&PublicTable> {
         self.output.as_ref().map(|(table, _)| table)
+    }
+    fn held_log(&self, warning: bool) -> Option<&crate::verification_logs::HeldLog> {
+        if warning && self.output.is_none() {
+            return None;
+        }
+        let logs = &self.logs.iter().find(|logs| logs.node == self.root)?.logs;
+        (if warning {
+            &logs.warning
+        } else {
+            &logs.verification
+        })
+        .as_ref()
+    }
+    pub fn verification_log(&self) -> Option<&[u8]> {
+        self.held_log(false).map(|log| log.ipc())
+    }
+    pub fn warning_log(&self) -> Option<&[u8]> {
+        self.held_log(true).map(|log| log.ipc())
+    }
+    pub fn log_table(&self, warning: bool) -> Option<&PublicTable> {
+        self.held_log(warning).map(|log| log.table())
     }
     /// Retain the original operational failure and actual entered prefix beside
     /// the unchanged build owner. Reading evidence grants no publication port.
@@ -225,6 +248,8 @@ pub fn prepare_classified<'a, E>(
         base_issues: issues.len(),
         issues,
         output,
+        root: attempt.provenance.metadata().root(),
+        logs: Arc::from([]),
         publication: None,
         publication_refusal: None,
         latest: None,
@@ -241,6 +266,7 @@ pub fn prepare_owned_classified<'a, E>(
     facts: &[Classified<'a, E>],
 ) -> Result<RootResult, Error<'a, E>> {
     let mut result = prepare_classified(attempt, id, maximum, facts)?;
+    result.logs = Arc::clone(attempt.logs());
     if result.output.is_some() {
         result.publication = attempt.publication().cloned();
         result.publication_refusal = attempt.publication_refusal();
