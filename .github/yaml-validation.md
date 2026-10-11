@@ -132,7 +132,7 @@ The validation ensures:
     recorded identifiers, and a rejected text must fail with the recorded
     condition. A vector set that stops covering one of a contract's named
     categories fails the same way. The R parser replays the same files in the
-    `grammar-conformance` workflow.
+    R package workflow, which also runs on shared grammar changes.
 
 11. **Study documents**: `yaml/schema_define.yaml` is the study-document
     entry point R026 defines. Its own YAML syntax, and the syntax of every

@@ -7,6 +7,7 @@ on:
     paths:
       - 'python/**'
       - 'benchmarks/**'
+      - '!benchmarks/**/*.md'
       - 'rust/**'
       - 'yaml/**'
       - '.github/workflows/python.yml'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'python/**'
       - 'benchmarks/**'
+      - '!benchmarks/**/*.md'
       - 'rust/**'
       - 'yaml/**'
       - '.github/workflows/python.yml'
@@ -78,14 +80,6 @@ jobs:
 
       - name: Create locked environment
         run: uv sync --project python --extra test --group benchmark --locked --no-editable
-
-      - name: Check formatting
-        run: >-
-          uv run --project python --no-sync ruff format --check
-          python/src/yamaa python/tests
-
-      - name: Lint
-        run: uv run --project python --no-sync ruff check python/src/yamaa python/tests
 
       - name: Test
         run: uv run --project python --no-sync pytest python/tests

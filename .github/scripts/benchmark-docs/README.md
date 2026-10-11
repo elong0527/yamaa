@@ -17,8 +17,8 @@ uv run --with-requirements .github/scripts/benchmark-docs/requirements.txt pytho
 
 Pass benchmark names instead of `--all` to regenerate only those pages, and
 `--check` to compare bytes without writing. Pinned dependencies and sorted,
-ASCII, timestamp-free output make generation byte-reproducible; the `Benchmark
-dashboards` workflow proves it across two time zones and hash seeds. The
+ASCII, timestamp-free output make generation byte-reproducible; the repository
+validation job proves it across two time zones and hash seeds on affected PRs. The
 generator only displays expected artifacts, it never executes yamaa; comments
 are giscus threads keyed by directory name, with the category ID in `GISCUS`.
 

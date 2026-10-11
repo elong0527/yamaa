@@ -6,10 +6,12 @@ on:
     branches: [main]
     paths:
       - 'R/**'
+      - 'yaml/grammar/**'
       - '.github/workflows/r.yml'
   pull_request:
     paths:
       - 'R/**'
+      - 'yaml/grammar/**'
       - '.github/workflows/r.yml'
 
 concurrency:
@@ -46,6 +48,8 @@ jobs:
           Rscript -e 'd <- read.dcf("R/cdiscbuilder/DESCRIPTION"); deps <- paste(d[1, c("Imports", "Suggests")], collapse=","); packages <- trimws(gsub("\\s*\\([^)]*\\)", "", strsplit(deps, ",")[[1]])); install.packages(unique(c(packages, "pkgload")), Ncpus=2)'
       - name: Run the complete R package suite
         run: |
+          # Keep shared grammar replay explicit so missing fixtures cannot skip it.
+          Rscript R/cdiscbuilder/inst/conformance/grammar_conformance.R
           Rscript R/cdiscbuilder/inst/conformance/package_tests.R 2>&1 | tee "${RUNNER_TEMP}/r-package-tests.log"
       - name: Preserve test results and dependency versions
         if: always()
