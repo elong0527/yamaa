@@ -22,13 +22,17 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
                 register(&branch.assignment.expression, counter);
             }
         }
-        Expression::Imputation { operands, .. } | Expression::Temporal { operands, .. } => {
+        Expression::Extreme { operands, .. }
+        | Expression::StrConcat { operands, .. }
+        | Expression::Imputation { operands, .. }
+        | Expression::Temporal { operands, .. } => {
             for operand in operands {
                 register(&operand.expression, counter);
             }
         }
         Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
+        | Expression::StrContains { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::Round { source, .. } => register(&source.expression, counter),
         _ => (),

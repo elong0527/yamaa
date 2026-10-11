@@ -34,6 +34,7 @@ pub mod producer_graph;
 pub mod reference_binding;
 pub mod reference_scope;
 pub mod resource;
+pub mod scalar_language;
 pub mod schema;
 pub mod specification;
 pub mod specification_submission_document;
