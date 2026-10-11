@@ -43,6 +43,15 @@ remain canonical decimal text with a distinct type. Absent source geometry stays
 absent. Original opaque resolver errors have no normative projection: the caller
 retains the error and its identity rather than manufacturing `unknown_field`.
 
+Key-grain distinct-value conflicts, implicit lookup zero/duplicate matches,
+baseline ties and present nonnumeric reduction arguments now project through
+five core dataset causes. The engine borrows its retained typed failure and
+admits the complete diagnostic before any path or context copy, preserving
+original error precedence and table effects. Counts that exceed i64 remain
+mathematical diagnostic integers. Matched keys, identities and partition
+observations stay attached to the original attempted run; the dataset/1 adapter
+serializes the common finding with its established context representation.
+
 ## Registry identity and compatibility
 
 Each `ConditionCode` names one semantic cause and maps to one phase, public

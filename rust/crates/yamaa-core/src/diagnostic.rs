@@ -10,6 +10,10 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
 use crate::{numeric_parser::SourceSpan, value::Value};
 
+#[path = "diagnostic_dataset.rs"]
+mod dataset;
+pub use dataset::DatasetFinding;
+
 #[path = "diagnostic_grammar.rs"]
 mod grammar;
 #[path = "diagnostic_numeric.rs"]
@@ -20,6 +24,42 @@ pub use project_lock::{
     lock_diagnostics, lock_diagnostics_with_limit, LockDiagnosticError, LockFinding, LockOrigins,
     LockReason, MAX_LOCK_DIAGNOSTIC_BYTES,
 };
+
+/// Context projection failures are resource/representation refusals, never a
+/// replacement semantic cause. Admission precedes every owned context copy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProjectionError {
+    Limit,
+    InvalidContext,
+}
+
+pub const MAX_PROJECTION_BYTES: usize = 16_777_216;
+
+pub(crate) struct ProjectionBudget(usize);
+impl ProjectionBudget {
+    pub(crate) fn new(maximum: usize) -> Result<Self, ProjectionError> {
+        Ok(Self(
+            maximum.checked_sub(256).ok_or(ProjectionError::Limit)?,
+        ))
+    }
+    pub(crate) fn charge(&mut self, bytes: usize) -> Result<(), ProjectionError> {
+        self.0 = self.0.checked_sub(bytes).ok_or(ProjectionError::Limit)?;
+        Ok(())
+    }
+    pub(crate) fn text(&mut self, text: &str) -> Result<(), ProjectionError> {
+        self.charge(
+            text.len()
+                .checked_mul(6)
+                .and_then(|n| n.checked_add(2))
+                .ok_or(ProjectionError::Limit)?,
+        )
+    }
+    pub(crate) fn field(&mut self, name: &str, text: &str) -> Result<(), ProjectionError> {
+        self.text(name)?;
+        self.text(text)?;
+        self.charge(2)
+    }
+}
 
 /// A cause's canonical public vocabulary, including explicit application refusals.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -67,9 +107,15 @@ conditions! {
     InvalidFunctionArgument => ("validation", "invalid_function_argument", Some("REQ-0700")),
     ApplicationUnsupported => ("planning", "unsupported_operation", None),
     ApplicationRejected => ("engine", "engine_rejected", None),
+    DatasetMultipleValues => ("derivation", "multiple_values_per_key", Some("REQ-0075")),
+    DatasetUnmatchedKey => ("join", "unmatched_key", Some("REQ-0124")),
+    DatasetMultipleMatches => ("join", "multiple_matches", Some("REQ-0127")),
+    DatasetBaselineAmbiguity => ("derivation", "ambiguous_baseline", Some("REQ-0322")),
+    DatasetReductionInputType => ("validation", "incompatible_input_type", Some("REQ-0510")),
     NumericUnknownField => ("validation", "unknown_field", Some("REQ-0443")),
     NumericInputType => ("validation", "incompatible_input_type", Some("REQ-0444")),
     RoundingDigitsType => ("validation", "incompatible_input_type", Some("REQ-0418")),
+    DeclarativeRoundingInput => ("validation", "incompatible_input_type", Some("REQ-0418")),
     IntegerOverflow => ("derivation", "integer_overflow", Some("REQ-0434")),
     DivisionByZero => ("derivation", "division_by_zero", Some("REQ-0430")),
     SqrtOfNegative => ("derivation", "sqrt_of_negative", Some("REQ-0431")),
