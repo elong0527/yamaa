@@ -45,11 +45,15 @@ The validation ensures:
    cross-field checks enforce base selection, complete and exclusive
    derivation coverage, record-lookup field pairing, verification bounds and
    IDs, and declared CSV fields. Every declared source path and producing
-   specification is resolved under R021: it must be a relative path with no
-   rooted form, URI scheme, parent traversal, `.` or empty segment, or
-   trailing separator; no component may be a symbolic link; the file must
-   exist, be a regular file, and canonicalize inside the approved project
-   root, which defaults to the entry specification's directory. A dataset
+   specification is resolved under R021 from its original declaring file
+   (REQ-0780), with no root/configuration discovery or fallback. Absolute local
+   paths and `../`/`.` segments are allowed (REQ-0774/0778); URI schemes,
+   backslashes, empty segments and trailing separators are rejected. Components
+   below the selected declaring directory or filesystem anchor must not be
+   symbolic links, and the target must exist and be a regular file. The old
+   `negative-path-absolute` and `negative-path-parent-escape` containment verdicts
+   and four resolved-spec YAML outputs are explicitly reference-only history;
+   structural checks still cover their authored files and expected contracts. A dataset
    path whose extension names no R023 profile is rejected from the written
    path, before the source is read. Each accepted physical file is read once
    as one immutable byte snapshot, shared by every declaration that reaches
