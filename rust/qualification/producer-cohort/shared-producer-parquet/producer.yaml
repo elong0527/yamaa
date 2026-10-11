@@ -1,0 +1,11 @@
+schema_version: "1.0"
+domain: PRODUCED
+input: {SEED: seed.csv}
+base: SEED
+keys: [ID]
+output: {path: produced.parquet, columns: [ID]}
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: {source: SEED.ID}

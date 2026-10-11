@@ -36,6 +36,12 @@ impl FileSpecification {
     pub fn prepare(mut resources: Resources, written: &str) -> Result<Self, Error> {
         let document = prepare_document(&mut resources, written, None)?;
         let run = PreparedRun::prepare(document).map_err(Error::Compile)?;
+        let findings = crate::verification_logs::location_findings(&resources, &run);
+        if !findings.is_empty() {
+            return Err(Error::Compile(crate::specification_run::Error::Prepare(
+                yamaa_core::specification::PrepareError::Invalid(findings),
+            )));
+        }
         Ok(Self { run, resources })
     }
     pub fn run(&self) -> &PreparedRun {
@@ -47,10 +53,16 @@ impl FileSpecification {
     pub(crate) fn publication_target(
         &self,
     ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {
+        self.publication_field_target("path")
+    }
+    pub(crate) fn publication_field_target(
+        &self,
+        field: &str,
+    ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {
         let origin = self
             .run
             .document()
-            .written_output_origin()
+            .written_output_field_origin(field)
             .ok_or(ResourceError::InvalidPath)?;
         self.resources
             .publication_target_from(origin.declaring_source, origin.written)

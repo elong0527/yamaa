@@ -11,6 +11,7 @@ use yamaa_core::{
     table::{TableAccess, ValueRef},
     value::Value as Scalar,
 };
+use yamaa_engine::specification_run::SourceOrigin;
 
 pub struct Identity<'a> {
     pub runtime: &'a str,
@@ -336,10 +337,16 @@ pub(crate) fn envelope_sources_projected<T: TableAccess>(
             )?);
         }
     }
-    let reads = sources.iter().map(|source| {
-        if !partial && source.read.snapshots_created.is_none() { return Err(Error::InvalidObservation); }
-        Ok(json!({"base_directory":id.base_directory,"path":source.read.source.path,"outcome":if source.read.captured {"captured"} else if partial && source.read.snapshots_created.is_none() {"attempted"} else {"failure"},"condition":source.read.failure.map(|failure| failure.code().definition().condition),"snapshots_created":source.read.snapshots_created}))
-    }).collect::<Result<Vec<_>,Error>>()?;
+    let mut reads = Vec::new();
+    for source in sources
+        .iter()
+        .filter(|source| source.read.origin == Some(SourceOrigin::Resource))
+    {
+        if !partial && source.read.snapshots_created.is_none() {
+            return Err(Error::InvalidObservation);
+        }
+        reads.push(json!({"base_directory":id.base_directory,"path":source.read.source.path,"outcome":if source.read.captured {"captured"} else if partial && source.read.snapshots_created.is_none() {"attempted"} else {"failure"},"condition":source.read.failure.map(|failure| failure.code().definition().condition),"snapshots_created":source.read.snapshots_created}));
+    }
     Ok(
         json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,
         "outcome":"failure","artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],
@@ -394,13 +401,118 @@ pub struct BuildResult {
     prepared: yamaa_engine::specification_output::PreparedOutput<Value>,
     table: Option<Vec<u8>>,
     issues: Vec<crate::issue_rows::Issue>,
+    verification: Option<crate::verification_logs::HeldLog>,
+    warning: Option<crate::verification_logs::HeldLog>,
 }
 impl BuildResult {
+    pub(crate) fn reject_host_output(&mut self) -> Result<(), Error> {
+        if self.verification.is_none() {
+            return Err(Error::InvalidObservation);
+        }
+        let mut budget = crate::report_projection::Budget::new(16_777_216);
+        budget.json(self.prepared.prepared_report())?;
+        self.prepared = rejected_output(
+            self.prepared.prepared_report().clone(),
+            &Error::InvalidObservation,
+            "output",
+        )?;
+        self.table = None;
+        self.warning = None;
+        self.issues = self.prepared.prepared_report()["diagnostics"]
+            .as_array()
+            .ok_or(Error::InvalidObservation)?
+            .iter()
+            .cloned()
+            .map(crate::issue_rows::Issue::from_diagnostic)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| Error::InvalidObservation)?;
+        if !crate::issue_rows::within_limit(
+            &self.issues,
+            crate::specification_check::MAX_ISSUE_BYTES,
+        ) {
+            return Err(Error::OutputLimit);
+        }
+        Ok(())
+    }
     pub fn output(&self) -> Option<&[u8]> {
         self.table.as_deref()
     }
     pub fn issues(&self) -> &[crate::issue_rows::Issue] {
         &self.issues
+    }
+    pub fn verification_log(&self) -> Option<&[u8]> {
+        self.verification.as_ref().map(|log| log.ipc())
+    }
+    pub fn warning_log(&self) -> Option<&[u8]> {
+        self.warning.as_ref().map(|log| log.ipc())
+    }
+    pub(crate) fn log_table(&self, warning: bool) -> Option<&crate::public_table::PublicTable> {
+        (if warning {
+            &self.warning
+        } else {
+            &self.verification
+        })
+        .as_ref()
+        .map(|log| log.table())
+    }
+    /// Failed results have only an explicit diagnostic publication capability.
+    /// Warning and primary artifacts require the accepted primary owner.
+    pub(crate) fn publication_items(&self) -> Vec<(&str, &[u8], &Value)> {
+        let mut items = Vec::new();
+        if let Some(log) = &self.verification {
+            items.push((log.path(), log.bytes(), log.observation()));
+        }
+        if self.output().is_some() {
+            if let Some(log) = &self.warning {
+                items.push((log.path(), log.bytes(), log.observation()));
+            }
+            if let Some(artifact) = self.prepared.artifact() {
+                items.push((
+                    artifact.path(),
+                    artifact.bytes(),
+                    self.prepared.prepared_report()["artifacts"]
+                        .as_array()
+                        .expect("prepared artifacts")
+                        .last()
+                        .expect("primary artifact"),
+                ));
+            }
+        }
+        items
+    }
+    pub(crate) fn publication_observations(
+        &self,
+        completed: usize,
+        budget: &mut crate::report_projection::Budget,
+    ) -> Result<Value, Error> {
+        let items = self.publication_items();
+        if completed > items.len() || items.len() > 3 {
+            return Err(Error::InvalidObservation);
+        }
+        let original = self.prepared.prepared_report();
+        budget.json(original)?;
+        for (_, _, value) in items.iter().take(completed) {
+            budget.json(value)?;
+        }
+        // Do not clone prospective artifacts merely to discard them. The
+        // complete actual prefix is admitted before any report ownership grows.
+        let mut report = Value::Object(
+            original
+                .as_object()
+                .ok_or(Error::InvalidObservation)?
+                .iter()
+                .filter(|(name, _)| name.as_str() != "artifacts")
+                .map(|(name, value)| (name.clone(), value.clone()))
+                .collect(),
+        );
+        report["artifacts"] = Value::Array(
+            items
+                .into_iter()
+                .take(completed)
+                .map(|(_, _, value)| value.clone())
+                .collect(),
+        );
+        bounded(report)
     }
     /// Build-phase observations exclude later save requests and their artifacts.
     pub fn observations(&self) -> Value {
@@ -413,7 +525,15 @@ impl BuildResult {
         &self,
         publisher: &mut P,
     ) -> Result<&Value, yamaa_engine::specification_output::SaveError<P::Error>> {
-        self.prepared.save(publisher)
+        for (path, bytes, _) in self.publication_items() {
+            publisher
+                .publish(path, bytes)
+                .map_err(yamaa_engine::specification_output::SaveError::Publish)?;
+        }
+        if self.output().is_none() {
+            return Err(yamaa_engine::specification_output::SaveError::FailedBuild);
+        }
+        Ok(self.prepared.prepared_report())
     }
 }
 
@@ -439,26 +559,48 @@ pub(crate) fn prepare_result(
     observations: Value,
 ) -> Result<BuildResult, Error> {
     use yamaa_engine::specification_output::{self as output, CompleteError as E};
-    let prepared = output::prepare(
-        run.compiled(),
-        execution,
-        8 * 1024 * 1024,
-        &mut Report {
-            run,
-            id,
-            value: Some(observations),
-        },
-        &mut Encoder(
-            run.compiled().output_profile(),
-            run.compiled().output_decimals(),
-        ),
-    )
-    .map_err(|error| match error {
-        E::Report(e) | E::Encode(e) => e,
-        E::Projection => Error::InvalidObservation,
-        E::OutputLimit => Error::OutputLimit,
-        E::Publish(never) => match never {},
-    })?;
+    let success = execution.is_some() && run.compiled().output_findings().is_empty();
+    let logs = crate::verification_logs::prepare(run, &observations, success)?;
+    let verification = logs.verification;
+    let mut warning = logs.warning;
+    let mut copy_budget = crate::report_projection::Budget::new(16_777_216);
+    copy_budget.json(&observations)?;
+    let prepared = if let Some(error) = logs.failure {
+        rejected_output(observations, &error, "log")
+    } else {
+        let fallback = observations.clone();
+        output::prepare(
+            run.compiled(),
+            execution,
+            8 * 1024 * 1024,
+            &mut Report {
+                run,
+                id,
+                value: Some(observations),
+            },
+            &mut Encoder(
+                run.compiled().output_profile(),
+                run.compiled().output_decimals(),
+            ),
+        )
+        .map_err(|error| match error {
+            E::Report(e) | E::Encode(e) => e,
+            E::Projection => Error::InvalidObservation,
+            E::OutputLimit => Error::OutputLimit,
+            E::Publish(never) => match never {},
+        })
+        .or_else(|error| {
+            if verification.is_some() {
+                rejected_output(fallback, &error, "output")
+            } else {
+                Err(error)
+            }
+        })
+    };
+    let mut prepared = prepared?;
+    if prepared.artifact().is_none() {
+        warning = None;
+    }
     let table = prepared
         .artifact()
         .map(|artifact| {
@@ -471,7 +613,44 @@ pub(crate) fn prepare_result(
                 _ => Error::InvalidObservation,
             })
         })
-        .transpose()?;
+        .transpose();
+    let table = match table {
+        Ok(table) => table,
+        Err(error) => {
+            if verification.is_none() {
+                return Err(error);
+            }
+            // Host-view preparation grants no output authority. Preserve the
+            // completed verification capability and revoke warning/primary.
+            copy_budget.json(prepared.prepared_report())?;
+            prepared = rejected_output(prepared.prepared_report().clone(), &error, "output")?;
+            warning = None;
+            None
+        }
+    };
+    // Retain complete prospective artifact observations in publication order.
+    // Ordinary build observations strip them until an actual Save enters them.
+    if verification.is_some() || warning.is_some() {
+        copy_budget.json(prepared.prepared_report())?;
+        for log in verification.iter().chain(warning.iter()) {
+            copy_budget.json(log.observation())?;
+        }
+        let mut report = prepared.prepared_report().clone();
+        let Value::Array(primary) = std::mem::take(&mut report["artifacts"]) else {
+            return Err(Error::InvalidObservation);
+        };
+        let mut artifacts = Vec::new();
+        if let Some(log) = &verification {
+            artifacts.push(log.observation().clone());
+        }
+        if let Some(log) = &warning {
+            artifacts.push(log.observation().clone());
+        }
+        artifacts.extend(primary);
+        report["artifacts"] = Value::Array(artifacts);
+        let report = bounded(report)?;
+        prepared.replace_report(report);
+    }
     let issues = prepared.prepared_report()["diagnostics"]
         .as_array()
         .ok_or(Error::InvalidObservation)?
@@ -487,7 +666,37 @@ pub(crate) fn prepare_result(
         prepared,
         table,
         issues,
+        verification,
+        warning,
     })
+}
+
+fn rejected_output(
+    mut report: Value,
+    error: &Error,
+    stage: &str,
+) -> Result<yamaa_engine::specification_output::PreparedOutput<Value>, Error> {
+    let reason = match (stage, error) {
+        ("log", Error::OutputLimit) => "log_output_limit",
+        ("log", _) => "log_output_projection",
+        (_, Error::OutputLimit) => "output_limit",
+        _ => "output_projection",
+    };
+    let diagnostic = specification_diagnostics::portable_diagnostic(
+        yamaa_core::application_issue::rejected("output", reason),
+    )
+    .ok_or(Error::InvalidObservation)?;
+    let Value::Array(mut diagnostics) = std::mem::take(&mut report["diagnostics"]) else {
+        return Err(Error::InvalidObservation);
+    };
+    diagnostics.push(diagnostic);
+    set_diagnostics(&mut report, diagnostics);
+    report["outcome"] = json!("failure");
+    report["nodes"][0]["outcome"] = json!("failure");
+    report["artifacts"] = json!([]);
+    Ok(yamaa_engine::specification_output::PreparedOutput::failed(
+        bounded(report)?,
+    ))
 }
 impl<E> From<Error> for CompleteError<E> {
     fn from(error: Error) -> Self {
@@ -519,6 +728,7 @@ pub(crate) fn check_observations(
             .as_str()
             .ok_or(Error::InvalidObservation)?;
         let failed = count(record, "failed_count")?;
+        let severity = run.compiled().verification_severity(path).name();
         let mut detail = Value::Null;
         if failed > 0 {
             let mut keys = Vec::new();
@@ -625,9 +835,11 @@ pub(crate) fn check_observations(
                 json!(&keys[..keys.len().min(5)])
             };
             let diagnostic = json!({"phase":if output_phase {"output"} else {"verification"},"condition":condition,"spec_paths":[path],"requirement":record["requirement"],"context":context});
-            diagnostics.push(diagnostic.clone());
+            if severity == "error" {
+                diagnostics.push(diagnostic.clone());
+            }
             detail = diagnostic;
-            detail["severity"] = json!("error");
+            detail["severity"] = json!(severity);
             detail["offending_keys"] = json!(keys);
             detail["log_context"] = log_context;
         }
@@ -639,7 +851,7 @@ pub(crate) fn check_observations(
                     .strip_suffix("_failed")
                     .ok_or(Error::InvalidObservation)?
             };
-            observations.push(json!({"specification":id.specification,"spec_path":path,"check":check,"target":run.compiled().verification_target(path),"requirement":record["requirement"],"verification_id":run.compiled().verification_identity(path),"severity":"error","evaluated_count":count(record,"evaluated_count")?,"failure":detail}));
+            observations.push(json!({"specification":id.specification,"spec_path":path,"check":check,"target":run.compiled().verification_target(path),"requirement":record["requirement"],"verification_id":run.compiled().verification_identity(path),"severity":severity,"evaluated_count":count(record,"evaluated_count")?,"failure":detail}));
         }
     }
     Ok((observations, diagnostics))
@@ -663,34 +875,16 @@ pub fn complete<E, P: ArtifactPort>(
     id: Identity<'_>,
     publisher: &mut P,
 ) -> Result<Value, CompleteError<P::Error>> {
-    use yamaa_engine::specification_output::{self as output, CompleteError as E};
-    let execution = attempt
-        .result
-        .as_ref()
-        .ok()
-        .and_then(|response| response.execution.as_ref());
-    let observations = observations(run, attempt, &id)?;
-    output::complete(
-        run.compiled(),
-        execution,
-        8 * 1024 * 1024,
-        &mut Report {
-            run,
-            id,
-            value: Some(observations),
-        },
-        &mut Encoder(
-            run.compiled().output_profile(),
-            run.compiled().output_decimals(),
-        ),
-        publisher,
-    )
-    .map_err(|error| match error {
-        E::Report(error) | E::Encode(error) => CompleteError::Report(error),
-        E::Projection => CompleteError::Report(Error::InvalidObservation),
-        E::OutputLimit => CompleteError::Report(Error::OutputLimit),
-        E::Publish(error) => CompleteError::Publish(error),
-    })
+    let result = build_result(run, attempt, id)?;
+    let items = result.publication_items();
+    let mut budget = crate::report_projection::Budget::new(16_777_216);
+    let report = result.publication_observations(items.len(), &mut budget)?;
+    for (path, bytes, _) in &items {
+        publisher
+            .publish(path, bytes)
+            .map_err(CompleteError::Publish)?;
+    }
+    Ok(report)
 }
 
 struct Encoder<'a>(Option<&'static str>, Option<&'a str>);

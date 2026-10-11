@@ -54,11 +54,13 @@ pub mod specification_source;
 pub mod specification_run;
 pub mod specification_run_view;
 
+pub mod source_diagnostics;
 pub mod specification_diagnostics;
 
 pub mod issue_rows;
 pub mod specification_check;
 pub mod specification_report;
+mod verification_logs;
 
 pub mod typed_csv;
 

@@ -1655,14 +1655,14 @@ fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
             .unwrap();
     assert_eq!(actual["verifications"], json!([]));
     assert_eq!(actual["diagnostics"][0]["condition"], "missing_key");
-    // Even a later unsupported operation prevents all source requests; it is
-    // not hidden behind an earlier language declaration finding.
-    let unsupported = format!("{written}  - row_count: {{min: 1, severity: warning}}\n");
+    // Warning-log admission scans all declarations before granting study ports,
+    // even when an earlier payload finding remains deferred.
+    let missing_log = format!("{written}  - row_count: {{min: 1, severity: warning}}\n");
     assert!(matches!(
-        PreparedRun::prepare(prepare(&schema, unsupported.as_bytes())),
+        PreparedRun::prepare(prepare(&schema, missing_log.as_bytes())),
         Err(yamaa_adapters::specification_run::Error::Prepare(
-            yamaa_engine::specification::PrepareError::Unsupported(_)
-        ))
+            yamaa_engine::specification::PrepareError::Invalid(findings)
+        )) if findings.iter().any(|finding| finding.diagnostic().definition().condition == "missing_warning_log")
     ));
 }
 
@@ -3480,9 +3480,14 @@ fn deferred_column_findings_stop_later_payload_compilation_but_keep_vocabulary_a
         PreparedRun::prepare(document).expect("the earlier finding remains deferred");
         let document = prepare(&schema, raw(first, "warning").as_bytes());
         assert!(matches!(PreparedRun::prepare(document),
-            Err(Error::Prepare(PrepareError::Unsupported(items)))
-                if items.iter().any(|item| item.operation == "verification_severity"
-                    && item.path == "columns.V.verifications[1].matches")));
+            Err(Error::Prepare(PrepareError::Invalid(items)))
+                if items.iter().any(|item| item.diagnostic().definition().condition == "missing_warning_log")));
+        let with_log = raw(first, "warning").replace(
+            "columns: [ID, V]}",
+            "columns: [ID, V], warning_log: warnings.csv}",
+        );
+        PreparedRun::prepare(prepare(&schema, with_log.as_bytes()))
+            .expect("later large pattern is still not compiled after the earlier deferred finding");
     }
     for (first, later_severity, index) in [
         (
@@ -3494,10 +3499,15 @@ fn deferred_column_findings_stop_later_payload_compilation_but_keep_vocabulary_a
     ] {
         let document = prepare(&schema, raw(first, later_severity).as_bytes());
         let expected = format!("columns.V.verifications[{index}].matches");
-        assert!(matches!(PreparedRun::prepare(document),
-            Err(Error::Prepare(PrepareError::Unsupported(items)))
-                if items.iter().any(|item| item.operation == "verification_severity"
-                    && item.path == expected)));
+        // Without an earlier deferred finding, the first large payload reaches
+        // its own regex budget and still grants no study authority.
+        assert!(
+            matches!(
+                PreparedRun::prepare(document),
+                Err(Error::Prepare(PrepareError::Limit(_)))
+            ),
+            "{expected}"
+        );
     }
 }
 #[test]

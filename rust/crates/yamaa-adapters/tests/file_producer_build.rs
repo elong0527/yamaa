@@ -1788,9 +1788,7 @@ fn native_complete_reports_pin_independent_rounded_truth_and_union_after_all_own
                 {"name":"producer","profile":"csv","columns":["ID","VALUE"],"types":["int","float"],"row_count":2,"records":["ID,VALUE","1,1.23","2,2.35"],"byte_length":23,"content":"ID,VALUE\n1,1.23\n2,2.35\n","specification":producer},
                 {"name":"root","profile":"csv","columns":["ID","VALUE"],"types":["int","float"],"row_count":2,"records":["ID,VALUE","1,2.46","2,4.70"],"byte_length":23,"content":"ID,VALUE\n1,2.46\n2,4.70\n","specification":consumer}],
             "tables":tables,"diagnostics":[],"unsupported":[],"handler_counts":[],"verifications":[],"callbacks":[],"error":null,
-            "source_reads":[{"base_directory":study.path("producer"),"path":"../raw/raw.csv","outcome":"captured","condition":null,"snapshots_created":created,"specification":producer},
-                {"base_directory":study.path("consumer"),"path":"../generated/producer.csv","outcome":"captured","condition":null,"snapshots_created":0,"specification":consumer},
-                {"base_directory":study.path("consumer"),"path":"../generated/producer.csv","outcome":"captured","condition":null,"snapshots_created":0,"specification":consumer}]});
+            "source_reads":[{"base_directory":study.path("producer"),"path":"../raw/raw.csv","outcome":"captured","condition":null,"snapshots_created":created,"specification":producer}]});
         assert_eq!(observed, expected);
         assert_eq!(
             attempt_report(attempt, report_id(), 16_777_216).unwrap(),

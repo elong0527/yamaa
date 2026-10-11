@@ -363,7 +363,7 @@ impl Declarations {
                         item.filter_text.as_deref().expect("written predicate"),
                         position.character,
                         failure,
-                    )));
+                    )?));
                     // A syntax rejection does not remove the declaration's schema.
                     None
                 }

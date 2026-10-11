@@ -1271,7 +1271,11 @@ impl Executor<'_> {
             };
             records.push(record);
         }
-        if records.iter().any(|record| record.failed_count != 0) {
+        if records.iter().any(|record| {
+            record.failed_count != 0
+                && self.plan.verification_severity(&record.path)
+                    == yamaa_core::dataset::VerificationSeverity::Error
+        }) {
             return Err(Box::new(ExecutionError::VerificationFailures(
                 core::mem::take(records),
             )));
@@ -1407,10 +1411,11 @@ impl Executor<'_> {
                         _ => unreachable!("column check vocabulary is admitted in core"),
                     }
                 }
-                if records[start..]
-                    .iter()
-                    .any(|record| record.failed_count != 0)
-                {
+                if records[start..].iter().any(|record| {
+                    record.failed_count != 0
+                        && self.plan.verification_severity(&record.path)
+                            == yamaa_core::dataset::VerificationSeverity::Error
+                }) {
                     return Err(Box::new(ExecutionError::VerificationFailures(
                         core::mem::take(records),
                     )));

@@ -16,7 +16,8 @@ use yamaa_core::{
 };
 
 use crate::{
-    dataset, function_invocation, specification_output as output, specification_run as run,
+    dataset, function_invocation, project_preparation as metadata, specification_output as output,
+    specification_run as run,
 };
 
 mod ports;
@@ -32,6 +33,18 @@ pub enum Event {
     },
     Decode {
         source: SourceDeclaration,
+        bytes: Vec<u8>,
+    },
+    MetadataCapture {
+        kind: metadata::Kind,
+        declaring_source: String,
+        written: String,
+        remaining_bytes: usize,
+        remaining_identity_bytes: usize,
+    },
+    MetadataDecode {
+        target: metadata::DecodeTarget,
+        identity: String,
         bytes: Vec<u8>,
     },
     Schema,
@@ -84,6 +97,34 @@ impl PartialEq for Event {
                     byte_limit: b,
                 },
             ) => left == right && a == b,
+            (
+                Self::MetadataCapture {
+                    kind: a,
+                    declaring_source: b,
+                    written: c,
+                    remaining_bytes: d,
+                    remaining_identity_bytes: e,
+                },
+                Self::MetadataCapture {
+                    kind: v,
+                    declaring_source: w,
+                    written: x,
+                    remaining_bytes: y,
+                    remaining_identity_bytes: z,
+                },
+            ) => a == v && b == w && c == x && d == y && e == z,
+            (
+                Self::MetadataDecode {
+                    target: a,
+                    identity: b,
+                    bytes: c,
+                },
+                Self::MetadataDecode {
+                    target: x,
+                    identity: y,
+                    bytes: z,
+                },
+            ) => a == x && b == y && c == z,
             (
                 Self::Decode {
                     source: left,
