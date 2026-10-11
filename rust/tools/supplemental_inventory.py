@@ -153,7 +153,9 @@ writeLines(c(as.character(getRversion()), as.character(packageVersion("yamaa")),
 """
     # Windows Rscript can fail while forwarding multiline -e expressions.
     # A real script uses the same public calls as the installed R suites.
-    with tempfile.TemporaryDirectory(prefix="yamaa-r-metadata-", dir=staged_root) as work:
+    with tempfile.TemporaryDirectory(
+        prefix="yamaa-r-metadata-", dir=staged_root
+    ) as work:
         script = Path(work) / "metadata.R"
         script.write_text(code, encoding="utf-8")
         lines = subprocess.check_output(
