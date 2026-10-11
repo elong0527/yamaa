@@ -312,46 +312,37 @@ loaded = load_source_tables(datasets, resources)
 dm = loaded["DM"].table
 ```
 
-### Keeping code and data in different places
+### Current public resource paths
 
-A study that keeps its data outside its specifications says so in its own
-`yamaa-project.yaml`, at the top of the study:
+The replacement `yamaa.domain` and `yamaa.check` routes resolve each relative
+resource from the YAML file that declares it. An inherited layer keeps its own
+location, and environment lock/function/codelist paths start at the environment
+file. The caller explicitly supplies entry and environment arguments using
+ordinary host path resolution.
+
+A study can name data beside its specification, in a parent directory, or at
+an absolute local location:
 
 ```yaml
-version: "1.0"
-data_roots:
-  - /data/pilot7
+input:
+  DM: ../data/dm.csv
+  LBREF: /data/pilot7/reference/lbref.csv
+output:
+  path: ../results/adsl.csv
 ```
 
-A run finds that file by walking up from the entry specification, and the
-directory holding it is the project root. Data may then be declared by a
-rooted path:
+A missing resource fails at that named location. The public routes neither
+search for `yamaa-project.yaml` nor use its `data_roots`, and they do not retry
+from an entry directory, configured root or the process working directory.
+OS permissions and the caller's sandbox govern access. URI schemes, symbolic
+links below the retained anchor and non-regular resources remain rejected.
+Native capture retains bounded immutable bytes, and explicit Save publishes
+already serialized held bytes at the original output declaration.
 
-```python
-from yamaa.io import ProjectResources, approve_roots
-
-approved = approve_roots("study/adam/adsl/spec.yaml")
-resources = ProjectResources(approved.project_root, data_roots=approved.data_roots)
-datasets = {"LBREF": DatasetSource(path="/data/pilot7/reference/lbref.csv")}
-```
-
-A rooted path naming no approved root fails as `resource_path_not_relative`,
-and the failure names the written path alone. A study that ships no
-configuration behaves exactly as before: the entry file's directory is the
-project root and nothing outside it can be read.
-
-The roots are fixed before any specification is read, and only the entry
-study's own configuration contributes to them. A layer inherited under R017
-never widens them, so an organization template cannot redirect where a study
-reads from. A runner keeps the last word over a study it did not write:
-
-```python
-# Cap what the configuration may approve; a root outside these fails the run.
-approve_roots(entry, data_roots=["/data"])
-
-# Decline the configuration's roots entirely, as a packaging run does.
-approve_roots(entry, read_project_configuration=False)
-```
+The `ProjectResources`/`approve_roots` helpers in the retained reference engine
+and private explicit-root qualification probes keep their historical policy
+until the coordinated reference transition. That history does not describe
+replacement public resource resolution.
 
 The reader accepts the fixed `.csv` profile only. It parses the retained byte
 snapshot in memory, preserves source row and header order, and reads a field
@@ -377,7 +368,8 @@ uv run --project python --isolated --extra test pytest python/tests/io
 
 ## Minimal YAML execution
 
-Load and execute one domain specification with the user-facing facade:
+The retained reference engine can load and execute one domain specification
+through its historical facade:
 
 ```python
 from yamaa import yamaa_domain
@@ -394,9 +386,11 @@ print(pilot.issues)  # stable Polars issue table
 pilot.save("expected.parquet")
 ```
 
-`yamaa_domain` searches upward from the specification for `schema.yaml`; a
-specification kept elsewhere supplies `schema_root=`. Project and data roots
-follow the same R021 configuration rules as the lower-level resource API.
+In the retained reference engine, `yamaa_domain` searches upward from the
+specification for `schema.yaml`; a specification kept elsewhere supplies
+`schema_root=`. Its project and data roots follow the historical R021
+configuration rules. The replacement `domain` and `check` routes use the
+declaring-file policy described above.
 Loading, source capture, and execution happen once. The facade writes nothing
 until `save` is called: without an argument it uses the specification's
 `output.path`, while an explicit `.csv` or `.parquet` path selects that output

@@ -134,6 +134,145 @@ class PublicEnvironment(unittest.TestCase):
         for name in ("never-read.csv", "leaf.csv", "left.csv", "right.csv", "consumer.csv", "wrong.csv"):
             self.assertFalse(Path(name).exists())
 
+    def test_declaring_file_paths_ignore_configuration_and_save_held_bytes(self):
+        os.chdir(self.directory)
+        for name in ("entry", "shared", "outputs"):
+            Path(name).mkdir()
+        Path("yamaa-project.yaml").write_text("[invalid configuration")
+        Path("shared/environment.yaml").write_text(
+            "schema_version: '1.0'\nlanguage: python\n"
+        )
+        Path("entry/spec.yaml").write_text(
+            "schema_version: '1.0'\nparents: ../shared/base.yaml\ndomain: CHILD\n"
+        )
+        Path("shared/base.yaml").write_text(
+            "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\n"
+            "columns: [{name: ID, type: int, derivation: SRC.ID}]\n"
+            "output: {path: ../outputs/held.csv, columns: [ID]}\n"
+        )
+        Path("entry/data.csv").write_text("ID\n999\n")
+        Path("shared/data.csv").write_text("ID\n7\n")
+        with (
+            patch.object(
+                host, "verify_versions", side_effect=AssertionError("unused lock")
+            ),
+            patch.object(
+                host, "resolve_callable", side_effect=AssertionError("unused binding")
+            ),
+        ):
+            checked = yamaa.check(
+                "entry/spec.yaml", environment="shared/environment.yaml"
+            )
+            result = yamaa.domain(
+                "entry/spec.yaml", environment="shared/environment.yaml"
+            )
+        self.assertTrue(checked.issues.is_empty(), checked.issues)
+        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.output["ID"].to_list(), [7])
+        self.assertFalse(Path("outputs/held.csv").exists())
+        before = self.report(result)
+        self.assertNotIn("yamaa-project.yaml", json.dumps(before))
+        # Save uses the already serialized bytes and retained output location.
+        # No specification, environment or input reread can supply this truth.
+        for name in ("entry/spec.yaml", "shared/base.yaml", "shared/environment.yaml"):
+            Path(name).unlink()
+        Path("shared/data.csv").write_text("ID\n8\n")
+        self.assertTrue(result.save())
+        self.assertEqual(Path("outputs/held.csv").read_bytes(), b"ID\n7\n")
+        self.assertEqual(self.report(result)["source_reads"], before["source_reads"])
+
+    def test_absolute_local_paths_and_missing_declaring_file_input_have_no_fallback(
+        self,
+    ):
+        os.chdir(self.directory)
+        for name in ("entry", "shared", "outputs"):
+            Path(name).mkdir()
+        Path("environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
+        Path("shared/data.csv").write_text("ID\n7\n")
+        source = (self.directory.resolve() / "shared/../shared/./data.csv").as_posix()
+        output = (self.directory.resolve() / "outputs/absolute.csv").as_posix()
+        document = (
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            "columns: [{name: ID, type: int, derivation: SRC.ID}]\n"
+            "input: {SRC: %s}\noutput: {path: %s, columns: [ID]}\n"
+        )
+        Path("entry/spec.yaml").write_text(
+            document % (json.dumps(source), json.dumps(output))
+        )
+        result = yamaa.domain("entry/spec.yaml", environment="environment.yaml")
+        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.output["ID"].to_list(), [7])
+        self.assertFalse(Path(output).exists())
+        self.assertTrue(result.save())
+        self.assertEqual(Path(output).read_bytes(), b"ID\n7\n")
+        Path(output).unlink()
+        # A configured data root and a parent file must never rescue the absent
+        # path beside the declaring specification.
+        Path("yamaa-project.yaml").write_text("version: '1.0'\ndata_roots: [shared]\n")
+        Path("data.csv").write_text("ID\n999\n")
+        Path("shared/directory.csv").mkdir()
+        for input_path, condition in (
+            ("data.csv", "resource_path_missing"),
+            ("../shared/directory.csv", "resource_path_not_regular_file"),
+        ):
+            Path("entry/spec.yaml").write_text(
+                document % (json.dumps(input_path), json.dumps(output))
+            )
+            failed = yamaa.domain("entry/spec.yaml", environment="environment.yaml")
+            self.assertIsNone(failed.output)
+            self.assertEqual(failed.issues["condition"].to_list(), [condition])
+            self.assertEqual(
+                failed.issues["spec_paths"].to_list(), [["input.SRC.path"]]
+            )
+            with self.assertRaises(yamaa.DomainError):
+                failed.save()
+            self.assertFalse(Path(output).exists())
+
+    def test_external_codelists_keep_environment_locations_and_missing_files_fail_there(self):
+        os.chdir(self.directory)
+        for name in ("entry", "environment", "terminology", "outputs"):
+            Path(name).mkdir()
+        Path("yamaa-project.yaml").write_text("[ignored configuration")
+        Path("entry/spec.yaml").write_text(
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            "input: {SRC: {path: data.csv, types: {ID: str}}}\n"
+            "columns: [{name: ID, type: str, derivation: SRC.ID, "
+            "submission: {codelist: IDENTIFIERS}}]\n"
+            "output: {path: ../outputs/ids.csv, columns: [ID]}\n"
+        )
+        Path("entry/data.csv").write_text("ID\n01\n")
+        terminology = "codelists: [{id: IDENTIFIERS, name: Identifiers, items: [{value: '01'}]}]\n"
+        Path("terminology/ids.yaml").write_text(terminology)
+        # An unrelated same-name document cannot change which codelist is used.
+        Path("entry/ids.yaml").write_text("[unrelated document")
+        for written in ("../terminology/ids.yaml", (self.directory.resolve() / "terminology/ids.yaml").as_posix()):
+            with self.subTest(written=written):
+                Path("environment/env.yaml").write_text(
+                    "schema_version: '1.0'\nlanguage: python\ncodelists: [" + json.dumps(written) + "]\n"
+                )
+                checked = yamaa.check("entry/spec.yaml", environment="environment/env.yaml")
+                result = yamaa.domain("entry/spec.yaml", environment="environment/env.yaml")
+                self.assertTrue(checked.issues.is_empty(), checked.issues)
+                self.assertTrue(result.issues.is_empty(), result.issues)
+                self.assertEqual(result.output["ID"].to_list(), ["01"])
+                self.assertTrue(self.report(result)["verifications"])
+                self.assertFalse(Path("outputs/ids.csv").exists())
+                self.assertTrue(result.save())
+                self.assertEqual(Path("outputs/ids.csv").read_bytes(), b"ID\n01\n")
+                Path("outputs/ids.csv").unlink()
+        Path("environment/env.yaml").write_text(
+            "schema_version: '1.0'\nlanguage: python\ncodelists: [ids.yaml]\n"
+        )
+        # Even a valid codelist at the process/entry location must not rescue it.
+        Path("ids.yaml").write_text(terminology)
+        Path("entry/ids.yaml").write_text(terminology)
+        with patch.object(host, "verify_versions", side_effect=AssertionError("unexpected activation")):
+            failed = yamaa.domain("entry/spec.yaml", environment="environment/env.yaml")
+        self.assertIsNone(failed.output)
+        self.assertFalse(failed.issues.is_empty())
+        self.assertIsNone(failed._native.observations())
+        self.assertFalse(Path("outputs/ids.csv").exists())
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="yamaa-public-environment-")
         self.addCleanup(self.temporary.cleanup)

@@ -456,7 +456,7 @@ class InstalledProducerBuilds(unittest.TestCase):
             )
         self.assertEqual(prepared.preparation_status(), "environment_failure")
         sources = prepared.rejected_sources()
-        self.assertEqual(len(sources), 2)
+        self.assertEqual(len(sources), 1)
         self.assertEqual(
             next(
                 bytes
@@ -465,11 +465,8 @@ class InstalledProducerBuilds(unittest.TestCase):
             ),
             b"schema_version: '1.0'\nlanguage: [\n",
         )
-        self.assertEqual(
-            next(
-                bytes for name, bytes in sources if name.endswith("/yamaa-project.yaml")
-            ),
-            b"version: '1.0'\n",
+        self.assertFalse(
+            any(name.endswith("/yamaa-project.yaml") for name, _ in sources)
         )
         with self.assertRaises(ValueError):
             prepared.build(METADATA)

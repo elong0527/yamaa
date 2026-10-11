@@ -1263,7 +1263,7 @@ environment_class:
     - r
     description: See REQ-1080.
 - lock:
-    type: path
+    type: project_path
     description: See REQ-1080.
 - functions:
     type: dict[identifier, function_definition]
@@ -1285,7 +1285,7 @@ environment_class:
     description: See REQ-1080.
 function_definition:
   type:
-  - path
+  - project_path
   - function_definition_class
   description: See REQ-1083.
 function_definition_class:
@@ -1369,7 +1369,7 @@ function_test_class:
     description: See REQ-1083.
 codelist_source:
   type:
-  - path
+  - project_path
   - codelist_source_class
   description: See REQ-0928.
 codelist_source_class:

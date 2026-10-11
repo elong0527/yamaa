@@ -89,9 +89,12 @@ reference-assisted qualification rows. The wider inventory continues to expose
 unsupported reference routes; it does not count them as shared execution.
 The obsolete artifact resolvers, contract fingerprints, cached activation and
 vendored benchmark code are removed. The old submission schema/generator and
-three Define-XML fixtures remain for #1758. Approved resource-root configuration
-also remains pending implementation of the approved declaring-file path policy
-under #1905.
+three Define-XML fixtures remain for #1758. The #1905 declaring-file candidate
+removes root-configuration discovery and fallback from replacement public routes.
+Relative paths retain each declaring layer; absolute and parent-relative local
+paths use the same native kind, link and held-byte snapshot checks in both hosts.
+Private explicit-root probes retain historical qualification behavior. Final-head
+review, installed platform evidence and remaining release gates are separate.
 
 The #1858 producer compiler prerequisite adds a separate sealed metadata boundary
 with retained producer identities and authored layer paths. Ordered output

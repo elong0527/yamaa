@@ -42,8 +42,10 @@ inheritance rebased executable paths. Output is an atomic top-level field in the
 existing shared layer composition.
 
 Resolved location facts grant no filesystem authority. This prerequisite neither
-resolves nor verifies them through native resources, and it does not change the
-approved root/fallback policy. #1741 must connect the closed native resource and
+resolves nor verifies them through native resources. Its historical
+explicit-root qualification is separate from the declaring-file policy in
+[#1905](https://github.com/elong0527/yamaa/issues/1905), which the replacement
+public routes apply to original producer and consumer declarations. #1741 must connect the closed native resource and
 graph preparation boundary, validate recursive dependencies, compile producer
 execution, activate before study reads, execute each producer once, serialize its
 rounded output, ingest held serialized bytes in each consumer, retain failures,

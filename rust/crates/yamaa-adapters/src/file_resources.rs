@@ -1,4 +1,4 @@
-//! Descriptor-anchored bytes under caller-selected approved roots.
+//! Descriptor-anchored bytes with retained local-path and snapshot authority.
 //! Captured equality compares retained bytes. This module interprets no study data.
 #[cfg(windows)]
 use crate::windows_file::{Directory as OwnedFd, Kind as FileType};
@@ -71,7 +71,9 @@ struct Root {
     spellings: Vec<Segments>,
 }
 struct Anchor {
-    root: usize,
+    descriptor: OwnedFd,
+    #[cfg(windows)]
+    canonical: Segments,
     key: Segments,
     remainder: Segments,
 }
@@ -118,6 +120,7 @@ fn changed(error: Error) -> Error {
 
 pub struct Resources {
     roots: Vec<Root>,
+    local_paths: bool,
     base: Segments,
     snapshots: Vec<Snapshot>,
     by_path: BTreeMap<Segments, usize>,
@@ -135,22 +138,14 @@ pub struct RetentionFailure {
     pub retained: RetainedSources,
 }
 impl Resources {
-    /// Only native entry configuration may add roots, before entry/model capture.
-    /// Keep the selected primary descriptor and captured configuration immutable.
-    pub(crate) fn with_configuration_roots(mut self, roots: &[String]) -> Result<Self, Error> {
-        if self.roots.len() != 1
-            || self.roots.len().saturating_add(roots.len()) > MAX_ROOTS
-            || self
-                .by_path
-                .keys()
-                .any(|path| path.last().map(String::as_str) != Some("yamaa-project.yaml"))
-        {
-            return Err(Error::InvalidRoot);
-        }
-        for written in roots {
-            self.roots.push(selected_root(written)?);
-        }
-        Ok(self)
+    /// Public entry paths select their existing parent once. Document paths
+    /// resolve at their declaring file without configuration or fallback roots.
+    /// The retained parent admits caller-owned aliases; every declared component
+    /// outside it is walked from its filesystem root with the same link checks.
+    pub fn for_entry(base: &str) -> Result<Self, Error> {
+        let mut resources = Self::new(base, base, &[])?;
+        resources.local_paths = true;
+        Ok(resources)
     }
     /// The first root is the project root; later roots retain fallback order.
     pub fn new(root: &str, base: &str, data_roots: &[String]) -> Result<Self, Error> {
@@ -169,6 +164,7 @@ impl Resources {
         let base = directory_segments(&path).ok_or(Error::InvalidBase)?;
         Ok(Self {
             roots,
+            local_paths: false,
             base,
             snapshots: Vec::new(),
             by_path: BTreeMap::new(),
@@ -419,7 +415,7 @@ impl Resources {
     pub fn resolve(&self, written: &str) -> Result<String, Error> {
         Ok(path_text(&self.open(written)?.key))
     }
-    /// A lexical declaration location under the approved first-anchor policy.
+    /// A lexical declaration location under the selected resolution policy.
     /// The target may be absent. This fact opens no file and grants no byte or
     /// publication authority; declaring identities come from this reader.
     pub fn location_from(&self, declaring: &str, written: &str) -> Result<String, Error> {
@@ -438,19 +434,18 @@ impl Resources {
             .next()
             .ok_or(Error::OutsideRoots)
     }
-    /// Publication names the declaration's first anchor, including absent targets.
-    /// Retain its selected physical root; parent traversal is checked at save.
-    pub(crate) fn publication_target(
+    /// Publication holds the declaration location, including absent targets.
+    /// Retain its physical descriptor; the parent chain is checked at save.
+    /// Retain the original declaring-layer location without rebasing through
+    /// another entry. The declaring identity comes from this reader.
+    pub(crate) fn publication_target_from(
         &self,
+        declaring: &str,
         written: &str,
     ) -> Result<crate::file_publication::AnchoredTarget, Error> {
-        let anchor = self.declaration_anchor(&self.base, written)?;
-        let descriptor = self.roots[anchor.root]
-            .descriptor
-            .try_clone()
-            .map_err(|_| Error::Unreadable)?;
+        let anchor = self.declaration_anchor(&file_base(declaring)?, written)?;
         Ok(crate::file_publication::AnchoredTarget::new(
-            descriptor,
+            anchor.descriptor,
             anchor.remainder,
             path_text(&anchor.key),
         ))
@@ -463,15 +458,19 @@ impl Resources {
     ) -> Result<(Arc<[u8]>, bool), Error> {
         self.capture_at(file_base(declaring)?, written, maximum)
     }
-    /// Keep the same selected roots and captures for data declared by this entry.
+    /// Keep the same path authority and captures for data declared by this entry.
     pub fn select_entry_base(&mut self, identity: &str) -> Result<(), Error> {
         let base = file_base(identity)?;
         // This is a canonical identity returned by the reader, not an authored
         // path. Selected physical root names can contain a literal backslash on
-        // Unix. Keep canonical containment and descriptor/link checks intact.
+        // Unix. Keep the canonical identity and descriptor/link checks intact.
         let mut segments = rooted_segments(identity).ok_or(Error::InvalidPath)?;
         let marker = segments.remove(0);
-        let anchor = self.relative_anchor(&[marker], &segments.join("/"))?;
+        let anchor = if self.local_paths {
+            self.local_anchor(&[marker], &segments.join("/"))?
+        } else {
+            self.relative_anchor(&[marker], &segments.join("/"))?
+        };
         self.open_anchor(anchor).map_err(|error| match error {
             WalkError::NoEntry => Error::Missing,
             WalkError::Failure(error) => error,
@@ -668,9 +667,23 @@ impl Resources {
         }
         if rooted.as_ref().map_or_else(
             || written.split('/').any(str::is_empty),
-            |s| s.len() == 1 || s[1..].iter().any(|s| s.is_empty() || s == "." || s == ".."),
+            |s| {
+                s.len() == 1
+                    || s[1..]
+                        .iter()
+                        .any(|s| s.is_empty() || (!self.local_paths && (s == "." || s == "..")))
+            },
         ) {
             return Err(Error::InvalidPath);
+        }
+        if self.local_paths {
+            let (start, relative) = match &rooted {
+                Some(segments) => (&segments[..1], segments[1..].join("/")),
+                None => (base, written.to_owned()),
+            };
+            return self
+                .local_anchor(start, &relative)
+                .map(|anchor| vec![anchor]);
         }
         if let Some(segments) = rooted {
             let mut selected = None;
@@ -710,6 +723,49 @@ impl Resources {
             Ok(anchors)
         }
     }
+    fn local_anchor(&self, start: &[String], written: &str) -> Result<Anchor, Error> {
+        let mut resolved = start.to_vec();
+        for segment in written.split('/') {
+            match segment {
+                "." => {}
+                ".." if resolved.len() > 1 => {
+                    resolved.pop();
+                }
+                ".." => {}
+                value => resolved.push(value.into()),
+            }
+        }
+        for (index, root) in self.roots.iter().enumerate() {
+            for spelling in &root.spellings {
+                if within(&resolved, spelling) {
+                    return self.anchor(index, resolved[spelling.len()..].to_vec());
+                }
+            }
+        }
+        // UNC resources outside the caller-selected directory are not a new
+        // network-resource capability under the local-path decision.
+        if resolved[0].starts_with("//") {
+            return Err(Error::InvalidPath);
+        }
+        let root_path = path_text(&resolved[..1]);
+        if !Path::new(&root_path).is_absolute() {
+            return Err(Error::InvalidPath);
+        }
+        let root = selected_root(&root_path)?;
+        let remainder = resolved[1..].to_vec();
+        if remainder.is_empty() {
+            return Err(Error::NotRegularFile);
+        }
+        let mut key = root.canonical.clone();
+        key.extend_from_slice(&remainder);
+        Ok(Anchor {
+            descriptor: root.descriptor,
+            #[cfg(windows)]
+            canonical: root.canonical,
+            key,
+            remainder,
+        })
+    }
     fn relative_anchor(&self, start: &[String], written: &str) -> Result<Anchor, Error> {
         let mut resolved = start.to_vec();
         for segment in written.split('/') {
@@ -740,7 +796,12 @@ impl Resources {
         let mut key = self.roots[root].canonical.clone();
         key.extend_from_slice(&remainder);
         Ok(Anchor {
-            root,
+            descriptor: self.roots[root]
+                .descriptor
+                .try_clone()
+                .map_err(|_| Error::Unreadable)?,
+            #[cfg(windows)]
+            canonical: self.roots[root].canonical.clone(),
             key,
             remainder,
         })
@@ -761,7 +822,7 @@ impl Resources {
     #[cfg(unix)]
     fn open_anchor(&self, anchor: Anchor) -> Result<Opened, WalkError> {
         self.charge_work(anchor.remainder.len().checked_mul(4).ok_or(Error::Limit)?)?;
-        let root = &self.roots[anchor.root].descriptor;
+        let root = &anchor.descriptor;
         let mut directories = Vec::new();
         let mut links = Vec::new();
         let mut file = None;
@@ -843,10 +904,10 @@ impl Resources {
     #[cfg(windows)]
     fn open_anchor(&self, anchor: Anchor) -> Result<Opened, WalkError> {
         self.charge_work(anchor.remainder.len().checked_mul(4).ok_or(Error::Limit)?)?;
-        let root = &self.roots[anchor.root].descriptor;
+        let root = &anchor.descriptor;
         let mut directories = Vec::new();
         let mut witnesses = Vec::new();
-        let mut canonical = self.roots[anchor.root].canonical.clone();
+        let mut canonical = anchor.canonical.clone();
         let mut file = None;
         for (index, name) in anchor.remainder.iter().enumerate() {
             let parent = directories.last().unwrap_or(root);
@@ -1359,5 +1420,111 @@ mod metadata_budget_tests {
         );
         assert_eq!(resources.metadata_usage().0, 3);
         assert_eq!(resources.captured_sources().next().unwrap().1, b"abc");
+    }
+}
+
+#[cfg(test)]
+mod declaring_publication_tests {
+    use super::*;
+    use std::{
+        fs,
+        path::PathBuf,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    struct Study(PathBuf);
+    impl Study {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "yamaa-layer-publication-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            for name in ["entry/out", "shared/out"] {
+                fs::create_dir_all(path.join(name)).unwrap();
+            }
+            fs::write(path.join("entry/root.yaml"), b"entry").unwrap();
+            fs::write(path.join("shared/base.yaml"), b"parent").unwrap();
+            Self(fs::canonicalize(path).unwrap())
+        }
+        fn text(&self, name: &str) -> String {
+            self.0
+                .join(name)
+                .to_str()
+                .unwrap()
+                .replace('\\', "/")
+                .trim_start_matches("//?/")
+                .to_owned()
+        }
+        fn resources(&self) -> Resources {
+            Resources::for_entry(&self.text("entry")).unwrap()
+        }
+    }
+    impl Drop for Study {
+        fn drop(&mut self) {
+            fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+
+    #[test]
+    fn identical_output_spellings_publish_at_each_original_layer_without_metadata_rereads() {
+        let study = Study::new();
+        let resources = study.resources();
+        let entry = resources.resolve("root.yaml").unwrap();
+        let parent = resources
+            .resolve_from(&entry, "../shared/base.yaml")
+            .unwrap();
+        let entry_target = resources
+            .publication_target_from(&entry, "out/held.csv")
+            .unwrap();
+        let parent_target = resources
+            .publication_target_from(&parent, "out/held.csv")
+            .unwrap();
+        fs::remove_file(study.0.join("entry/root.yaml")).unwrap();
+        fs::remove_file(study.0.join("shared/base.yaml")).unwrap();
+        assert!(!study.0.join("entry/out/held.csv").exists());
+        assert!(!study.0.join("shared/out/held.csv").exists());
+        parent_target
+            .publisher("out/held.csv")
+            .unwrap()
+            .publish("out/held.csv", b"ID\n7\n")
+            .unwrap();
+        entry_target
+            .publisher("out/held.csv")
+            .unwrap()
+            .publish("out/held.csv", b"ID\n8\n")
+            .unwrap();
+        assert_eq!(
+            fs::read(study.0.join("shared/out/held.csv")).unwrap(),
+            b"ID\n7\n"
+        );
+        assert_eq!(
+            fs::read(study.0.join("entry/out/held.csv")).unwrap(),
+            b"ID\n8\n"
+        );
+        assert_eq!(resources.capture_reads(), 0);
+    }
+
+    #[test]
+    fn outside_layer_publication_refuses_linked_parent_substitution() {
+        let study = Study::new();
+        let resources = study.resources();
+        let parent = resources.resolve("../shared/base.yaml").unwrap();
+        let target = resources
+            .publication_target_from(&parent, "out/held.csv")
+            .unwrap();
+        fs::rename(study.0.join("shared/out"), study.0.join("shared/moved")).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("../entry/out", study.0.join("shared/out")).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir("../entry/out", study.0.join("shared/out")).unwrap();
+        assert!(matches!(
+            target.publisher("out/held.csv"),
+            Err(crate::file_publication::Error::InvalidTarget)
+        ));
+        assert!(!study.0.join("entry/out/held.csv").exists());
+        assert!(!study.0.join("shared/moved/held.csv").exists());
+        assert_eq!(resources.capture_reads(), 0);
     }
 }

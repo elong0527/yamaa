@@ -8,64 +8,16 @@ status: normative
 
 ## Requirements
 
-### The approved roots
-
-<a id="req-0767"></a>
-
-**REQ-0767.** A run receives exactly one **approved project root**: an existing
-local directory fixed for the whole run. The root is the directory holding the
-**project configuration** of [REQ-0768](resources.md#req-0768). A run whose entry file sits under no
-project configuration, and whose runner names no root, uses the directory
-holding the entry file. A runner may name the root.
-
-<a id="req-0768"></a>
-
-**REQ-0768.** A **project configuration** is one `yamaa-project.yaml` file. A run
-finds it by walking up from the entry file to the first directory that holds
-one, and reads it once, before any specification. The file's directory is the
-project root. A runner that names the root takes only the configuration at
-that root.
-
-<a id="req-0769"></a>
-
-**REQ-0769.** A run may also receive **approved data roots**: existing local
-directories that a rooted path may name. They come from the project
-configuration's `data_roots`, from the runner, or from both. Without approved
-data roots, only the project root is approved. Every approved root is
-canonicalized and opened when selected; later changes to its parent path do
-not redirect reads.
-
-<a id="req-0770"></a>
-
-**REQ-0770.** The approved roots are fixed before any specification is read. **No
-specification field, no layer [Specification composition](../specification/composition.md) reaches, and no value a specification reads
-contributes to the roots.** Only the entry project's own configuration and the
-runner do. A producing specification reached through `dataset_class.schema`
-uses the same approved roots, never its own configuration. When
-[Project functions](../operations/functions.md) also selects a project root
-for an implementation environment, it must be the same directory; a mismatch
-fails before code activation. An approved data root holds readable data, not
-activatable code.
-
-<a id="req-0771"></a>
-
-**REQ-0771.** A runner bounds what a project configuration may approve. A runner
-that names data roots makes them the **ceiling**: each root the configuration
-declares resolves inside one of them, or the run fails before it reads a
-specification. A runner may also decline the configuration's data roots
-entirely; every source then resolves inside the project root.
+### Declaring files
 
 <a id="req-0772"></a>
 
-**REQ-0772.** The entry file resolves inside the approved project root. A layer
-[Specification composition](../specification/composition.md) reaches contributes declarations that are read against the same approved
-roots. A layer stored outside the project root contributes a `project_path`
-that [Specification composition](../specification/composition.md) rebases to the entry file, and the rebased form must satisfy this
-contract. A relative path from such a layer is read from the layer's
-directory only when that location resolves inside an approved root; otherwise
-the approved project root is its first anchor under
-[REQ-0781](resources.md#req-0781). A rooted path it writes is decided against
-the approved roots like any other.
+**REQ-0772.** The caller explicitly supplies the entry file and any implementation
+environment file. These caller arguments follow ordinary host path resolution.
+Every document-declared relative path resolves from the file that writes it,
+including an inherited layer or a producing specification. Composition retains
+the original declaring file and written spelling. No project configuration is
+discovered or read to select resource locations.
 
 ### The written form
 
@@ -78,8 +30,10 @@ decided before the filesystem is consulted. A malformed path fails validation.
 
 <a id="req-0774"></a>
 
-**REQ-0774.** A rooted path may name a host location only inside an approved
-root under [REQ-0781](#req-0781).
+**REQ-0774.** An absolute local path may name any location permitted by the
+operating system and the caller's sandbox. yamaa does not require that location
+to lie under a project root or data root. This rule adds no URI or network
+resource protocol.
 
 <a id="req-0775"></a>
 
@@ -99,19 +53,10 @@ separator. An empty path has one empty segment and is invalid.
 <a id="req-0778"></a>
 
 **REQ-0778.** A `..` segment climbs to the parent directory and a `.` segment
-  stays put. A relative path may contain both. Both resolve textually
-  before the filesystem is consulted. A traversal that stays inside the
-  approved project root names one file by one spelling. The canonical
-  resolved path below is the snapshot identity. A traversal that climbs
-  above the anchor keeps resolving textually against the anchor's canonical
-  segments. It is re-anchored at the approved root the resolved location
-  sits under ([REQ-0781](resources.md#req-0781)). An explicitly approved
-  data root is therefore reachable by a relative spelling. A traversal that
-  resolves inside no approved root fails as `resource_path_outside_project`.
-  An escape fails identically on every platform whether or not anything
-  exists where it points. A rooted path writes neither. It already names its
-  location; a dot segment there would only obscure which approved root it
-  names.
+stays put. Relative and absolute paths may contain both. They resolve textually
+before the filesystem is consulted. A relative path starts at the canonical
+directory of its declaring file. Traversal may leave that directory without a
+yamaa containment failure. A parent step at a filesystem root stays at that root.
 
 <a id="req-0779"></a>
 
@@ -122,71 +67,43 @@ repository-authored value.
 
 <a id="req-0780"></a>
 
-**REQ-0780.** A relative `project_path` resolves relative to the directory of
-the layer that writes it, as [Name binding](../specification/binding.md) and [Source ingestion](ingestion.md) require. In a resolved
-specification it is relative to the entry file. [Specification composition](../specification/composition.md) has already
-rebased it, and the rebased form names that same location. When that
-resolution reaches no entry, the run retries the path exactly as its layer
-wrote it. It retries first against the approved project root, then
-against each approved data root in run order. The first success wins.
-The retry needs the layer's own spelling, which the rebased form no
-longer shows, so it is taken from the
-provenance [Specification composition](../specification/composition.md) keeps. A rooted `project_path` resolves against the approved root it
-names and is unaffected by rebasing, which leaves it exactly as written.
-This contract reads that written form.
+**REQ-0780.** A relative `project_path` resolves only from the directory of
+the file that writes it, as [Name binding](../specification/binding.md) and
+[Source ingestion](ingestion.md) require. An inherited declaration keeps that
+location. Rebasing in a resolved specification names the same location from the
+entry file; it does not change the original declaring file or written spelling.
+A rooted path names its absolute local location. A missing entry fails there.
+There is no retry from the entry directory, a project root, a data root or the
+process working directory.
 
 <a id="req-0781"></a>
 
-**REQ-0781.** Every resolution has an **anchor**. A relative path is anchored
-first at the approved root that the location it names from the writing
-layer's directory sits under -- the approved project root when the layer is
-inside it. If that location is inside no approved root and the writing layer's
-directory is outside every approved root too, it is not an anchor. The
-run reads nothing there, and the path begins at the next anchor. Only a
-resolution that reaches no entry advances to the next anchor: the approved
-project root, then the approved data roots in run order. A later anchor that
-the written path climbs out of is skipped. Any other condition -- a symlink, a
-non-regular file, a traversal from a writing directory inside an approved root
-that leaves every approved root, a rejected written form -- is terminal. The
-writing layer's directory therefore wins when the entry exists under both it
-and another anchor, the project root wins over every data root, and the first
-declared data root wins among data roots. A traversal that climbs above an
-anchor's root is re-anchored at the approved root whose canonical leading
-segments the resolved location repeats. When one approved root lies inside
-another, the longest match wins. This re-anchoring is exactly as for a
-rooted path. A traversal that resolves inside no approved root fails as
-`resource_path_outside_project` ([REQ-0778](resources.md#req-0778)). A
-rooted path is anchored at the approved root whose leading segments it
-repeats. Those segments are in either the spelling the runner used or that
-root's canonical spelling. They are compared segment by segment before the
-filesystem is consulted. When one approved root lies inside another, the
-longest match wins. A rooted path that repeats no approved root's leading
-segments names no location this run approved and fails as
-`resource_path_not_relative`: it is relative to nothing the runner allowed.
+**REQ-0781.** Every resolved location has a physical directory **anchor** and
+retained component witnesses. The caller's entry parent is canonicalized and
+opened once; aliases the caller used for that selected directory retain the
+same authority. A declaration outside that parent is walked from its filesystem
+root. The anchor is an IO consistency mechanism, not an application containment
+policy or fallback search location. Python and R use the same resolution and
+native traversal rules on every supported platform.
 
 <a id="req-1246"></a>
 
-**REQ-1246.** The approved project root is the anchor after the writing
-layer's directory. A layer shared by several studies can therefore declare
-an input dataset once, while each study keeps the stored file under its
-own project root. That one declaration holds the dataset's identifier,
-field types, and empty-string convention. A study
-whose project configuration sits in its own directory makes that directory its
-project root. A shared layer's `input/dm.csv` that is absent beside the shared
-layer then reads that study's `input/dm.csv`. No specification field chooses
-an anchor, and every anchor is an approved root fixed under
-[REQ-0770](resources.md#req-0770), so the retry never reaches a location the
-run did not approve.
+**REQ-1246.** A shared layer's `input/dm.csv` names the file beside that shared
+layer. If that file is absent, a study's own `input/dm.csv` is not substituted.
+The study must explicitly supply a declaration that names its own file.
+`yamaa-project.yaml` and old project/data-root settings do not affect this
+resolution. Missing-file diagnostics retain the original declaring field and
+written path.
 
 <a id="req-1247"></a>
 
-**REQ-1247.** A relative `path` that names an artifact the run itself
-produces, through the `schema` link of [Source ingestion](ingestion.md),
-denotes the location of its first anchor. That file does not exist until its
-producer publishes it, so there is no missing entry to retry, and the
-producer's `output.path` must publish to that location. The producing
-specification that `schema` names already exists, and it resolves like any
-other relative path.
+**REQ-1247.** A path that names an artifact the run itself produces, through the
+`schema` link of [Source ingestion](ingestion.md), denotes its declaration's
+location even before that file exists. The producer's `output.path` must name
+the same location. The producing specification that `schema` names already
+exists and resolves from the file that declares that link. Workflow execution
+consumes held serialized producer bytes; explicit Save publishes those bytes
+under [Publication](publication.md).
 
 <a id="req-0782"></a>
 
@@ -197,25 +114,18 @@ component is a regular file.
 <a id="req-0783"></a>
 
 **REQ-0783.** **No component below the anchor is a symbolic link**, including
-one whose target is inside an approved root. A link is a second name for a
-file. A boundary that admits a link must re-derive containment every time
-the link changes. The link a validator followed is not necessarily the
-link a reader follows. The anchor itself is exempt. It is not a name the
-specification chose. The runner selected it, and the run canonicalized and
-opened it before reading any specification. Every walk begins at that open
-directory. No name above the anchor can therefore be swapped between
-validation and ingestion. This is the boundary the approved project root has
-always drawn. The approved project root's own canonical form is taken once,
-and the no-link rejection begins below it. As a result, a rooted path moves
-the anchor without moving the boundary. A run therefore treats a location
-spelled through a linked system directory like any other approved root.
+one whose target is otherwise readable. The caller-selected entry parent is
+exempt: its canonical directory and descriptor are selected before any
+specification is read. Declared paths do not select exempt directories. A path
+outside that parent retains the no-link check on every component below its
+filesystem root. Each walk verifies the retained directory and file entries so
+that a name substitution cannot redirect a read or publication silently.
 
 <a id="req-0784"></a>
 
-**REQ-0784.** After the walk, the canonical resolved file is inside the
-canonical anchor. The written-form checks and symbolic-link rejection already
-imply this. The check must fail closed rather than silently pass a boundary
-defect.
+**REQ-0784.** The canonical resolved identity agrees with the directory
+descriptor and component witnesses the walk accepted. The check fails closed
+on an inconsistent witness. It does not enforce a project/data-root boundary.
 
 <a id="req-0785"></a>
 
@@ -264,7 +174,7 @@ when content does.
 
 | Field | Meaning |
 | --- | --- |
-| `project_path` | Stored resource a run reads; [Resource resolution](resources.md) fixes its written form and confines it to a root the runner approved. |
+| `project_path` | Local resource a run reads or publishes; a relative spelling starts at its original declaring file and an absolute spelling names its local location under [Resource resolution](resources.md). |
 
 ## Error conditions
 
@@ -272,23 +182,24 @@ when content does.
 
 **REQ-0790.** A failure names the written path exactly as the specification
 wrote it, the declaring field, and one condition below. A message does not
-contain an approved root, a canonical path, a symbolic link's target, or any
-other host path the specification did not itself write. A rooted written path
-is a host path, but it is the one the specification supplied, so repeating it
-discloses nothing its writer did not already state. The approved roots stay
-unnamed even when the failure is that a path named none of them. Those
-are the values a rejected specification is probing for.
+contain a canonical path, a symbolic link's target, or any other host path the
+specification did not itself write. An absolute written path supplied by the
+specification may be repeated. Resolved paths retained as provenance
+are not substituted for the authored path in these diagnostics.
 
 | Condition | Rejects |
 |---|---|
 | `resource_path_uri_scheme` | a URI scheme, including `file:` and `https:` |
 | `resource_path_not_normalized` | a form [REQ-0776](resources.md#req-0776) through [REQ-0778](resources.md#req-0778) rejects |
-| `resource_path_not_relative` | a rooted path that names no approved root |
-| `resource_path_outside_project` | a traversal that resolves inside no approved root |
 | `resource_path_symlink` | a symbolic link at any component below the anchor |
-| `resource_path_missing` | a path that reaches no entry |
+| `resource_path_missing` | a path that reaches no entry at its declared location |
 | `resource_path_not_regular_file` | a directory, FIFO, socket, or device |
 | `resource_path_content_changed` | content that changed after validation |
+
+`resource_path_not_relative` and `resource_path_outside_project` are historical
+conditions from the retired containment policy. The replacement route emits
+neither for an absolute path or parent traversal that leaves an entry directory.
+Their old observations remain in the reference qualification record.
 
 <a id="req-0791"></a>
 
@@ -301,26 +212,3 @@ written path reports one condition on every platform.
 **REQ-0792.** Every condition above is decided before any data is read and
 reports under the `validation` phase, except `resource_path_content_changed`,
 which reports under `ingest`.
-
-<a id="req-0793"></a>
-
-**REQ-0793.** An approved root that does not exist, is not a directory, or,
-  for the approved project root, differs from an [Project functions](../operations/functions.md) project root: fail.
-
-<a id="req-0794"></a>
-
-**REQ-0794.** An entry file outside the approved project root: fail.
-
-<a id="req-0795"></a>
-
-**REQ-0795.** Fail before any specification is read when a project
-configuration:
-
-- is not a mapping;
-- carries an unknown field;
-- declares a `data_roots` that is not a list of existing local
-  directories; or
-- declares one outside a ceiling the runner named.
-
-A malformed configuration is a run that was never configured, not a run
-with fewer roots.

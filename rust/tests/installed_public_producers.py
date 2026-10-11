@@ -171,8 +171,8 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
         self.assertFalse((self.root / "generated").exists())
         shutil.rmtree(self.root)
         sources = dict(self.entered(result).retained_sources())
-        self.assertEqual(len(sources), 11)
-        self.assertIn(b"version: '1.0'\n", sources.values())
+        self.assertEqual(len(sources), 10)
+        self.assertFalse(any(name.endswith("/yamaa-project.yaml") for name in sources))
         self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
 
     def test_consumer_only_bad_binding_precedes_all_study_and_runtime_effects(self):

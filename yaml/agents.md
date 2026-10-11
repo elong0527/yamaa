@@ -88,12 +88,12 @@ values (`case`), never predicates.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.
-- Declare every source path as a relative file inside the example directory.
-  An example is validated with its own directory as the only approved root
-  and carries no `yamaa-project.yaml`, so a rooted path names no approved
-  location here, and it belongs with a URL, a parent traversal, and a symbolic
-  link in a negative example. A rooted path is for a study that declares a
-  data root, not for a fixture this repository carries.
+- Keep ordinary examples portable: declare source paths relative to the YAML
+  file that writes them and store their fixtures beside that file. Dedicated
+  path-policy tests may exercise parent-directory segments and temporary
+  absolute local paths as positive cases. URI schemes, symbolic links,
+  non-regular resources and missing files remain negative cases. A
+  `yamaa-project.yaml` does not change document resource locations.
 - Write every fixture under the source profile its extension selects. CSV
   fixtures follow the [CSV profile](../rules/storage/csv.md): UTF-8 without a
   byte-order mark, comma-separated

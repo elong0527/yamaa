@@ -721,11 +721,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0764](../storage/publication.md#req-0764) | `storage/publication.md` | R020-47 |
 | [REQ-0765](../storage/csv.md#req-0765) | `storage/csv.md` | R020-48 |
 | [REQ-0766](../storage/csv.md#req-0766) | `storage/csv.md` | R020-49 |
-| [REQ-0767](../storage/resources.md#req-0767) | `storage/resources.md` | R021-1 |
-| [REQ-0768](../storage/resources.md#req-0768) | `storage/resources.md` | R021-2 |
-| [REQ-0769](../storage/resources.md#req-0769) | `storage/resources.md` | R021-3 |
-| [REQ-0770](../storage/resources.md#req-0770) | `storage/resources.md` | R021-4 |
-| [REQ-0771](../storage/resources.md#req-0771) | `storage/resources.md` | R021-5 |
 | [REQ-0772](../storage/resources.md#req-0772) | `storage/resources.md` | R021-6 |
 | [REQ-0773](../storage/resources.md#req-0773) | `storage/resources.md` | R021-7 |
 | [REQ-0774](../storage/resources.md#req-0774) | `storage/resources.md` | R021-8 |
@@ -734,7 +729,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0777](../storage/resources.md#req-0777) | `storage/resources.md` | R021-11 |
 | [REQ-0778](../storage/resources.md#req-0778) | `storage/resources.md` | R021-12 |
 | [REQ-0779](../storage/resources.md#req-0779) | `storage/resources.md` | R021-13 |
-| [REQ-0780](../storage/resources.md#req-0780) | `storage/resources.md` | R021-14 |
+| [REQ-0780](../storage/resources.md#req-0780) | `storage/resources.md` | R021-14, R021-1, R021-2, R021-3, R021-4, R021-5, R021-27, R021-28, R021-29 |
 | [REQ-0781](../storage/resources.md#req-0781) | `storage/resources.md` | R021-15 |
 | [REQ-0782](../storage/resources.md#req-0782) | `storage/resources.md` | R021-16 |
 | [REQ-0783](../storage/resources.md#req-0783) | `storage/resources.md` | R021-17 |
@@ -747,9 +742,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0790](../storage/resources.md#req-0790) | `storage/resources.md` | R021-24 |
 | [REQ-0791](../storage/resources.md#req-0791) | `storage/resources.md` | R021-25 |
 | [REQ-0792](../storage/resources.md#req-0792) | `storage/resources.md` | R021-26 |
-| [REQ-0793](../storage/resources.md#req-0793) | `storage/resources.md` | R021-27 |
-| [REQ-0794](../storage/resources.md#req-0794) | `storage/resources.md` | R021-28 |
-| [REQ-0795](../storage/resources.md#req-0795) | `storage/resources.md` | R021-29 |
 | [REQ-0796](../operations/text.md#req-0796) | `operations/text.md` | R022-1 |
 | [REQ-0797](../operations/text.md#req-0797) | `operations/text.md` | R022-2 |
 | [REQ-0798](../operations/text.md#req-0798) | `operations/text.md` | R022-3 |
