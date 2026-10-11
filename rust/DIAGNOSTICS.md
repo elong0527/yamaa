@@ -397,3 +397,16 @@ error precedence, selected function/case order, whole-report quotas, signed-zero
 comparisons and original host payload identity. Complete existing activation,
 invocation and project report expectations remain unchanged. The frozen literal
 seed is unchanged; the migrated binding site is removed from the active allowlist.
+
+## Retained codelist observation context
+
+Core admits every retained codelist record, full row identity and offending value
+before constructing the borrowed diagnostic tree. It validates the selected
+compiled check, exact registered metadata, record counts, row positions, key
+geometry, missing-value exclusions and the aggregate escaping budget. Column,
+codelist, count, complete keys and values context belong to core; engine supplies
+retained views without a table read, callback or check retry. The adapter encodes
+these admitted facts and retains the exact final envelope byte admission.
+Existing complete reports, repeated projection, retained-value pointers and failed
+output observations remain unchanged. This removes three additional active
+adapter literal sites while retaining the immutable bootstrap seed.
