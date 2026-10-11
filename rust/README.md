@@ -304,7 +304,7 @@ outside `rust/`. Test both a wheel install and a separate install from the Pytho
 source archive. `tests/installed_python.py` and the R package's
 `tests/installation.R` assert the installed capabilities and resource contents.
 
-CI builds Python 3.12/3.14 on Linux x86_64, macOS arm64, and Windows x86_64;
+CI qualifies CPython 3.12-3.14 on Linux x86_64, macOS arm64 and Windows x64;
 the stable ABI wheel targets Python 3.12+. The R 4.6.1 source-package matrix
 includes Linux x86_64, macOS arm64 and Windows x86_64. Windows uses Rtools45 and
 the GNU Rust target; its required installed evidence is described in

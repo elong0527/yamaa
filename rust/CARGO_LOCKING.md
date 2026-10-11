@@ -21,9 +21,10 @@ update.
 `python/yamaa_build_backend.py` delegates Python wheel, editable and metadata
 hooks to maturin. Its sdist hook restores the original root workspace manifest
 and includes missing workspace member sources after maturin creates the archive.
-Restoration admits only a member's `Cargo.toml` and `src/**/*.rs` library sources;
-local notes, generated files and symlinks are excluded or refused. Additional
-build scripts or resources require a reviewed source-membership policy update.
+Restoration admits a member's `Cargo.toml`, optional `build.rs` and
+`src/**/*.rs` library sources. Local notes, generated files and symlinks are
+excluded or refused. Additional resources require a reviewed source-membership
+policy update.
 The lock remains unchanged. The backend refuses missing or contradictory locks,
 missing manifests, invalid archive roots and duplicate archive entries before
 replacing the archive.
