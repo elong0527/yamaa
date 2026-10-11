@@ -129,6 +129,8 @@ conditions! {
     NumericInputType => ("validation", "incompatible_input_type", Some("REQ-0444")),
     RoundingDigitsType => ("validation", "incompatible_input_type", Some("REQ-0418")),
     DeclarativeRoundingInput => ("validation", "incompatible_input_type", Some("REQ-0418")),
+    TemporalOperand => ("validation", "incompatible_input_type", Some("REQ-0606")),
+    TemporalBounds => ("validation", "value_not_permitted", Some("REQ-0613")),
     IntegerOverflow => ("derivation", "integer_overflow", Some("REQ-0434")),
     DivisionByZero => ("derivation", "division_by_zero", Some("REQ-0430")),
     SqrtOfNegative => ("derivation", "sqrt_of_negative", Some("REQ-0431")),

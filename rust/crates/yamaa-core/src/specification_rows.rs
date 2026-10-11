@@ -18,6 +18,7 @@ enum RowOperation {
     Source(String),
     Compute(CompiledNumeric),
     Round(crate::dataset::Rounding),
+    Temporal(crate::dataset::Temporal),
     InvalidNumeric {
         expression: String,
         error: CompileError,
@@ -115,6 +116,14 @@ fn declaration(
             }
         }
         "literal" => RowOperation::Literal(literal(d, payload, &path)?),
+        "date_diff" | "study_day" | "to_epoch_day" => {
+            let mut features = Vec::new();
+            let operation = temporal::prepare(d, payload, op, &path, None, None, &mut features)?;
+            if !features.is_empty() {
+                return Err(PrepareError::Unsupported(features));
+            }
+            RowOperation::Temporal(operation)
+        }
         "round_half_away_from_zero" => {
             let mut features = Vec::new();
             let rounding = rounding::prepare(d, payload, &path, None, None, &mut features)?;
@@ -229,6 +238,16 @@ fn default_reads(
         "literal" => {}
         "source" => reference(text(d, field(d, payload, "variable")?)?),
         "round_half_away_from_zero" => reference(text(d, field(d, payload, "source")?)?),
+        "date_diff" | "study_day" | "to_epoch_day" => {
+            let fields: &[&str] = match operation {
+                "date_diff" => &["start", "end"],
+                "study_day" => &["date", "reference"],
+                _ => &["source"],
+            };
+            for &name in fields {
+                reference(text(d, field(d, payload, name)?)?);
+            }
+        }
         "function" => {
             if let Some(project) = project {
                 let call = project
@@ -897,6 +916,17 @@ impl Rows {
                     }
                 }
                 RowOperation::Literal(value) => Some(Expression::Literal(value.clone())),
+                RowOperation::Temporal(operation) => temporal::bind_row(
+                    operation,
+                    declaration.column,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                )?,
                 RowOperation::Round(rounding) => rounding::bind_row(
                     rounding,
                     declaration.column,

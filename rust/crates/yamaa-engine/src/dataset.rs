@@ -415,6 +415,26 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
             .apply(ValueRef::from(&value))
             .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)));
     }
+    if let Expression::Temporal {
+        operands,
+        operation,
+    } = &assignment.expression
+    {
+        state.budget.work(1, 1)?;
+        let mut dates = Vec::with_capacity(operands.len());
+        for (index, operand) in operands.iter().enumerate() {
+            let value = evaluate_raw(table, operand, candidate, plan, row, limits, state)?;
+            dates.push(
+                operation
+                    .operand(index, ValueRef::from(&value))
+                    .expect("dataset admission fixes operand index")
+                    .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)))?,
+            );
+        }
+        return Ok(operation
+            .apply(&dates)
+            .expect("dataset admission fixes temporal arity"));
+    }
     if let Expression::Compute(expression) = &assignment.expression {
         return numeric::evaluate(expression, table, candidate, plan, row, assignment, state);
     }
@@ -469,7 +489,10 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
             }
             value.clone()
         }
-        Expression::Compute(_) | Expression::Case(_) | Expression::Round { .. } => {
+        Expression::Compute(_)
+        | Expression::Case(_)
+        | Expression::Round { .. }
+        | Expression::Temporal { .. } => {
             unreachable!("recursive evaluation handled above")
         }
         Expression::Column(column) => {

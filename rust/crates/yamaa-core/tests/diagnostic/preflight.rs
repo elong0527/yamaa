@@ -558,3 +558,76 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
     }
     reached
 }
+
+pub(super) fn temporal_reached() -> BTreeSet<ConditionCode> {
+    let mut fields = base(
+        "TEST",
+        inputs(),
+        vec![
+            column("ID", Some(source())),
+            column(
+                "DIFF",
+                Some(Map(vec![(
+                    "value",
+                    Map(vec![(
+                        "date_diff",
+                        Map(vec![
+                            ("start", Text("ID")),
+                            ("end", Text("ID")),
+                            ("unit", Text("month")),
+                            ("bounds", Text("inclusive")),
+                        ]),
+                    )]),
+                )])),
+            ),
+        ],
+        vec![Text("ID")],
+    );
+    fields.push(("base", Text("SRC")));
+    let mut nodes = Vec::new();
+    let root = Map(fields).append(&mut nodes);
+    let document = Document::new(nodes, root, Default::default()).unwrap();
+    let model =
+        SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
+            .unwrap()
+            .unwrap();
+    let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&model) else {
+        panic!("temporal preflight rejection")
+    };
+    assert_eq!(findings.len(), 3);
+    let bounds = findings[0].diagnostic();
+    assert_eq!(bounds.definition().requirement, Some("REQ-0613"));
+    assert_eq!(
+        bounds.spec_paths,
+        ["columns.DIFF.derivation.date_diff.bounds"]
+    );
+    assert_eq!(
+        bounds.context,
+        [
+            ("value".into(), text("inclusive")),
+            ("permitted".into(), texts(&["exclusive"]))
+        ]
+        .into()
+    );
+    let mut reached = BTreeSet::new();
+    reached.insert(bounds.code);
+    for (finding, field) in findings[1..].iter().zip(["start", "end"]) {
+        let diagnostic = finding.diagnostic();
+        assert_eq!(diagnostic.definition().requirement, Some("REQ-0606"));
+        assert_eq!(
+            diagnostic.spec_paths,
+            [format!("columns.DIFF.derivation.date_diff.{field}")]
+        );
+        assert_eq!(
+            diagnostic.context,
+            [
+                ("source".into(), text("ID")),
+                ("expected".into(), text("date")),
+                ("actual".into(), text("int"))
+            ]
+            .into()
+        );
+        reached.insert(diagnostic.code);
+    }
+    reached
+}
