@@ -89,9 +89,9 @@ impl BindFinding {
     /// Every retained original-document binding family uses the common projection.
     pub fn diagnostics(&self, source: &SourceDeclaration) -> Option<Vec<Diagnostic>> {
         let (code, path, values) = match self {
-            Self::TextExtract(diagnostic) | Self::Predicate(diagnostic) => {
-                return Some(vec![diagnostic.clone()])
-            }
+            Self::TextTemplate(diagnostic)
+            | Self::TextExtract(diagnostic)
+            | Self::Predicate(diagnostic) => return Some(vec![diagnostic.clone()]),
             Self::ProjectFunction(finding) => return Some(vec![finding.diagnostic()]),
             Self::Source(finding) => return Some(vec![finding.diagnostic()]),
             Self::Window(finding) => return Some(vec![finding.diagnostic()]),

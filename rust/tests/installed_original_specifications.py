@@ -1698,6 +1698,70 @@ columns:
             self.assertIsNone(rejected._native.observations())
             self.assertFalse((case / "adlb.csv").exists())
 
+    def test_public_text_template_original_bytes_and_complete_reference_witnesses(self):
+        import shutil
+
+        import polars as pl
+        import yamaa
+        from polars.testing import assert_frame_equal
+
+        truth = json.loads((ROOT / "text-template-reference.json").read_text())
+
+        def issues(result):
+            records = result.issues.to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
+            return records
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            case = root / "adam-adsl-site-parse"
+            shutil.copytree(ROOT / "cases" / case.name, case)
+            entry = case / "spec.yaml"
+            written = entry.read_bytes()
+            held = case / "held"
+            (case / "input").rename(held)
+            self.assertEqual(issues(yamaa.check(entry)), [])
+            held.rename(case / "input")
+            result = yamaa.domain(entry)
+            self.assertEqual(issues(result), [])
+            expected = pl.read_csv(case / "expected/adsl.csv", infer_schema=False)
+            assert_frame_equal(result.output, expected)
+            self.assertEqual(json.loads(result._native.observations())["handler_counts"], truth[case.name]["handler_counts"])
+            self.assertEqual(entry.read_bytes(), written)
+            self.assertFalse((case / "adsl.csv").exists())
+            self.assertTrue(result.save())
+            self.assertEqual((case / "adsl.csv").read_bytes(), (case / "expected/adsl.csv").read_bytes())
+            self.assertEqual((case / "adsl.csv").read_bytes(), truth[case.name]["csv"].encode("utf-8"))
+            negative = root / "negative-subject-reference"
+            shutil.copytree(ROOT / "cases" / negative.name, negative)
+            shutil.rmtree(negative / "input")
+            for result in [yamaa.check(negative / "spec.yaml"), yamaa.domain(negative / "spec.yaml")]:
+                self.assertEqual(issues(result), truth[negative.name]["findings"])
+            self.assertIsNone(result.output)
+            self.assertIsNone(result._native.observations())
+            with self.assertRaises(yamaa.DomainError):
+                result.save()
+            for name, value in truth.items():
+                if "specification" not in value:
+                    continue
+                case = root / name
+                shutil.copytree(ROOT / "text-template-cases" / name, case)
+                result = yamaa.domain(case / "spec.yaml")
+                self.assertEqual(issues(result), value.get("findings", []), name)
+                observations = result._native.observations()
+                if observations is not None and "handler_counts" in value:
+                    self.assertEqual(json.loads(observations)["handler_counts"], value["handler_counts"], name)
+                if "csv" in value:
+                    self.assertFalse((case / "output.csv").exists())
+                    self.assertTrue(result.save())
+                    self.assertEqual((case / "output.csv").read_bytes(), value["csv"].encode("utf-8"), name)
+                else:
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.DomainError):
+                        result.save()
+                    self.assertFalse((case / "output.csv").exists())
+
     def test_public_text_extract_original_bytes_and_complete_reference_witnesses(self):
         import shutil
 

@@ -30,6 +30,7 @@ impl PreflightFinding {
         match self {
             Self::Imputation(diagnostic)
             | Self::TextCase(diagnostic)
+            | Self::TextTemplate(diagnostic)
             | Self::TextExtract(diagnostic) => {
                 diagnostic.spec_paths.iter().for_each(|path| visit(path));
                 fn values(value: &V, visit: &mut impl FnMut(&str)) {
@@ -134,6 +135,7 @@ impl PreflightFinding {
         let (code, paths, context): (C, Vec<String>, Context) = match self {
             Self::Imputation(diagnostic)
             | Self::TextCase(diagnostic)
+            | Self::TextTemplate(diagnostic)
             | Self::TextExtract(diagnostic) => return diagnostic.clone(),
             Self::RoundingInput {
                 path,

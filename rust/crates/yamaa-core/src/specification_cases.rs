@@ -29,6 +29,7 @@ pub(super) fn prepare(
     record: bool,
     depth: usize,
     extraction: &str_extract::Prepared,
+    templates: &str_template::Prepared,
 ) -> Result<Vec<Branch>, PrepareError> {
     if depth > 64 || path.len() > 65_536 {
         return Err(PrepareError::Limit("case_depth"));
@@ -100,7 +101,9 @@ pub(super) fn prepare(
                 record,
                 depth + 1,
                 extraction,
+                templates,
             )?),
+            "str_template" => Operation::StrTemplate(templates.get(payload)?),
             "str_extract" => Operation::StrExtract(extraction.get(payload)?),
             "str_case" => {
                 let mut features = Vec::new();
@@ -333,6 +336,17 @@ pub(super) fn bind(
                     Err(_) => return Err(BindError::Internal),
                 }
             }
+            Operation::StrTemplate(operation) => str_template::bind(
+                operation,
+                column,
+                &spec.keys,
+                catalog,
+                &spec.intermediates,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
             Operation::StrExtract(operation) => str_extract::bind(
                 operation,
                 column,
