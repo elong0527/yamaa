@@ -21,8 +21,9 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
         }
         Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
+        | Expression::StrExtract { source, .. }
         | Expression::Round { source, .. } => register(&source.expression, counter),
-        Expression::Temporal { operands, .. } => {
+        Expression::Temporal { operands, .. } | Expression::StrTemplate { operands, .. } => {
             for source in operands {
                 register(&source.expression, counter);
             }
