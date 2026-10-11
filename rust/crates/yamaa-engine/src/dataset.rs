@@ -1339,11 +1339,12 @@ impl Executor<'_> {
                         offending_rows,
                     }
                 }
-                Check::RowCount { min, max } => {
-                    budget.work(1, 1)?;
-                    let count = dataset.rows.len() as i128;
-                    let failed = min.is_some_and(|min| count < i128::from(min))
-                        || max.is_some_and(|max| count > i128::from(max));
+                Check::RowCount { .. } | Check::WideRowCount { .. } => {
+                    budget.work(1, verification.check.row_count_work())?;
+                    let failed = !verification
+                        .check
+                        .row_count_accepts(dataset.rows.len())
+                        .unwrap_or(false);
                     CheckRecord {
                         path: verification.path.clone(),
                         condition: "row_count_failed",

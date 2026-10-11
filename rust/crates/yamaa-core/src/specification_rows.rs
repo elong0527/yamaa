@@ -659,9 +659,6 @@ impl Rows {
                             | Err(predicate_compiler::Error::Parse(
                                 crate::predicate_parser::ParseError::Grammar { .. },
                             )) => {}
-                            Err(predicate_compiler::Error::UnsupportedLiteral { .. }) => {
-                                return Err(unsupported("predicate_literal", &path))
-                            }
                             Err(predicate_compiler::Error::Parse(
                                 crate::predicate_parser::ParseError::UnsupportedRegex { .. },
                             )) => return Err(unsupported("predicate_regex", &path)),

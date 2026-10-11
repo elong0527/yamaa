@@ -18,6 +18,9 @@ pub use compiler::{
 #[path = "dataset_conversion.rs"]
 mod conversion;
 pub use conversion::ConversionHandler;
+#[path = "dataset_count.rs"]
+mod count;
+pub use count::{CountBoundError, RowCountBound, MAX_COUNT_BOUND_BYTES};
 #[path = "dataset_flag.rs"]
 mod flags;
 pub use flags::{
@@ -281,6 +284,45 @@ pub enum Check {
         min: Option<i64>,
         max: Option<i64>,
     },
+    /// Exact authored count bounds retained as canonical decimal integers.
+    WideRowCount {
+        min: Option<RowCountBound>,
+        max: Option<RowCountBound>,
+    },
+}
+
+impl Check {
+    /// Shared mathematical count comparison for legacy probes and specifications.
+    pub fn row_count_accepts(&self, count: usize) -> Option<bool> {
+        use core::cmp::Ordering;
+        Some(match self {
+            Self::RowCount { min, max } => {
+                let count = count as i128;
+                !min.is_some_and(|min| count < i128::from(min))
+                    && !max.is_some_and(|max| count > i128::from(max))
+            }
+            Self::WideRowCount { min, max } => {
+                min.as_ref()
+                    .is_none_or(|min| min.compare_count(count) != Ordering::Greater)
+                    && max
+                        .as_ref()
+                        .is_none_or(|max| max.compare_count(count) != Ordering::Less)
+            }
+            _ => return None,
+        })
+    }
+
+    pub fn row_count_work(&self) -> usize {
+        match self {
+            Self::WideRowCount { min, max } => min
+                .iter()
+                .chain(max)
+                .map(|bound| bound.decimal().len())
+                .sum::<usize>()
+                .max(1),
+            _ => 1,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -970,6 +1012,13 @@ impl DatasetPlan {
                     }
                 }
                 Check::RowCount { min, max } => {
+                    if (min.is_none() && max.is_none())
+                        || matches!((min, max), (Some(a), Some(b)) if a > b)
+                    {
+                        return Err(PlanError::InvalidBounds);
+                    }
+                }
+                Check::WideRowCount { min, max } => {
                     if (min.is_none() && max.is_none())
                         || matches!((min, max), (Some(a), Some(b)) if a > b)
                     {

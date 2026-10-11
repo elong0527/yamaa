@@ -193,9 +193,6 @@ impl Declaration {
                     | Err(predicate_compiler::Error::Parse(
                         crate::predicate_parser::ParseError::Grammar { .. },
                     )) => {}
-                    Err(predicate_compiler::Error::UnsupportedLiteral { .. }) => {
-                        reject(extra, "predicate_literal", filter_path)
-                    }
                     Err(predicate_compiler::Error::Parse(
                         crate::predicate_parser::ParseError::UnsupportedRegex { .. },
                     )) => reject(extra, "predicate_regex", filter_path),

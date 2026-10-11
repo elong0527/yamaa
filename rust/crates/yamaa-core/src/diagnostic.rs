@@ -268,6 +268,7 @@ conditions! {
     PredicateContainsExpectedText => ("validation", "incompatible_input_type", Some("REQ-1244")),
     PredicateDanglingEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
     PredicateInvalidExpression => ("validation", "invalid_predicate", Some("REQ-0188")),
+    PredicateIntegerOverflow => ("parse", "integer_overflow", Some("REQ-0014")),
     PredicateInvalidEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
     PredicateInvalidRegex => ("validation", "invalid_predicate", Some("REQ-1244")),
     RegexInvalidPattern => ("validation", "invalid_regex", Some("REQ-0827")),

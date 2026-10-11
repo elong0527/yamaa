@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use crate::{
     predicate::{self, Node, Plan, Scalar},
-    predicate_parser::{self, ParsedKind as K, ParsedPredicate, SourceSpan, TemporalKind},
+    predicate_parser::{self, ParsedKind as K, ParsedPredicate, TemporalKind},
     value::Value,
 };
 
@@ -14,20 +14,10 @@ pub struct Limits {
     pub plan: predicate::Limits,
 }
 
-/// Valid literals outside the current scalar carrier remain explicitly unsupported.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UnsupportedLiteral {
-    WideInteger,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
     Parse(predicate_parser::ParseError),
     Plan(predicate::PlanError),
-    UnsupportedLiteral {
-        kind: UnsupportedLiteral,
-        span: SourceSpan,
-    },
     /// Parser/compiler structural disagreement, never a language diagnostic.
     Internal,
 }
@@ -63,10 +53,7 @@ fn scalar(parsed: &ParsedPredicate, index: usize) -> Result<Scalar, Error> {
         K::Null => Value::Missing,
         K::Boolean(value) => Value::Bool(*value),
         K::Number { fractional: false } => {
-            Value::Int(written.parse().map_err(|_| Error::UnsupportedLiteral {
-                kind: UnsupportedLiteral::WideInteger,
-                span: node.span,
-            })?)
+            Value::Int(written.parse().map_err(|_| Error::Internal)?)
         }
         K::Number { fractional: true } => {
             let value: f64 = written.parse().map_err(|_| Error::Internal)?;

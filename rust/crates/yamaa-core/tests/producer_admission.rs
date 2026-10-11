@@ -332,7 +332,7 @@ fn unrelated_unsupported_consumer_vocabulary_is_not_stripped() {
         true,
     );
     assert!(
-        matches!(prepare("/consumer.yaml",&consumer,&[candidate(&source)],None,Limits::default()),Err(Error::Compilation(PrepareError::Unsupported(features))) if features.iter().any(|f| f.path=="filter" && f.operation == "predicate_literal"))
+        matches!(prepare("/consumer.yaml",&consumer,&[candidate(&source)],None,Limits::default()),Err(Error::Compilation(PrepareError::Unsupported(features))) if features.iter().any(|f| f.path=="parents" && f.operation == "parents"))
     );
 }
 #[test]

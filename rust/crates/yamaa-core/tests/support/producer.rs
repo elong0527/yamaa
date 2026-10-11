@@ -34,7 +34,7 @@ pub fn document(
     input: Tree<'_>,
     columns: &[(&str, &str, Option<&str>)],
     output: &[&str],
-    unsupported_filter: bool,
+    unsupported_parent: bool,
 ) -> SpecificationDocument {
     use Tree::*;
     let first = match &input {
@@ -81,8 +81,8 @@ pub fn document(
             ]),
         ),
     ];
-    if unsupported_filter {
-        fields.push(("filter", Text("SRC.ID = 9223372036854775808")));
+    if unsupported_parent {
+        fields.push(("parents", List(vec![Text("parent.yaml")])));
     }
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);

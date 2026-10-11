@@ -1,8 +1,8 @@
 use std::{collections::BTreeMap, convert::Infallible};
 use yamaa_core::{
     predicate::{self, Resolver, Truth},
-    predicate_compiler::{compile, Error, Limits, UnsupportedLiteral},
-    predicate_parser::ParseError,
+    predicate_compiler::{compile, Error, Limits},
+    predicate_parser::{GrammarFailure, ParseError},
     value::{Selection, Value},
 };
 
@@ -116,13 +116,24 @@ fn whole_expression_grammar_and_carrier_limits_precede_execution() {
         "FALSE AND X = 9223372036854775808",
         "X = -9223372036854775809",
     ] {
-        let Err(Error::UnsupportedLiteral { kind: actual, span }) =
-            compile(text, "site", Limits::default())
+        let Err(Error::Parse(ParseError::Grammar {
+            failure, position, ..
+        })) = compile(text, "site", Limits::default())
         else {
             panic!("expected literal rejection")
         };
-        assert_eq!(actual, UnsupportedLiteral::WideInteger);
-        assert!(text[span.start..span.end].parse::<f64>().is_ok());
+        assert_eq!(failure, GrammarFailure::IntegerOverflow);
+        assert_eq!(
+            position.character,
+            text.find("9223372036854775808")
+                .unwrap_or_else(|| text.find("-9223372036854775809").unwrap())
+        );
+        let finding = failure
+            .original_diagnostic("site", text, position.character)
+            .unwrap();
+        assert_eq!(finding.definition().condition, "integer_overflow");
+        assert_eq!(finding.definition().phase, "parse");
+        assert_eq!(finding.definition().requirement, Some("REQ-0014"));
     }
     let limits = Limits {
         plan: predicate::Limits {

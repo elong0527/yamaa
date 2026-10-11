@@ -369,6 +369,14 @@ fn invalid_verifications_are_rejected() {
             min: Some(2),
             max: Some(1),
         },
+        Check::WideRowCount {
+            min: None,
+            max: None,
+        },
+        Check::WideRowCount {
+            min: Some(yamaa_core::dataset::RowCountBound::new("999999999999999999999").unwrap()),
+            max: Some(yamaa_core::dataset::RowCountBound::new("999999999999999999998").unwrap()),
+        },
     ] {
         assert_eq!(
             DatasetPlan::new(

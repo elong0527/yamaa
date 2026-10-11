@@ -125,9 +125,6 @@ impl Declarations {
                     Default::default(),
                 );
                 match &compiled {
-                    Err(predicate_compiler::Error::UnsupportedLiteral { .. }) => {
-                        reject(extra, "predicate_literal", format!("{path}.filter"))
-                    }
                     Err(predicate_compiler::Error::Parse(
                         crate::predicate_parser::ParseError::Grammar { .. },
                     ))

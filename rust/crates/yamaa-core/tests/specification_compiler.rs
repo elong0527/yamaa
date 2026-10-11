@@ -648,11 +648,11 @@ fn wide_row_recovery_is_unsupported_at_its_authored_path_before_binding() {
 }
 
 #[test]
-fn row_filter_unsupported_carriers_reject_during_preparation_including_dead_branches() {
+fn row_filter_carrier_findings_remain_normative_including_dead_branches() {
     use Tree::*;
-    for filter in [
-        "FALSE AND ID = 9223372036854775808",
-        "TRUE OR ID = -9223372036854775809",
+    for (filter, position) in [
+        ("FALSE AND ID = 9223372036854775808", "15"),
+        ("TRUE OR ID = -9223372036854775809", "13"),
     ] {
         let rows = List(vec![Map(vec![
             ("id", Text("first")),
@@ -684,13 +684,32 @@ fn row_filter_unsupported_carriers_reject_during_preparation_including_dead_bran
             None,
             Some(rows),
         );
-        let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&document)
-        else {
-            panic!("unsupported predicate carrier must reject before a study port can be supplied");
+        let prepared = PreparedSpecification::prepare(&document).unwrap();
+        let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
+            panic!("predicate overflow must remain a deferred normative finding");
         };
-        assert_eq!(features.len(), 1);
-        assert_eq!(features[0].operation, "predicate_literal");
-        assert_eq!(features[0].path, "rows[0].filter");
+        let [BindFinding::Lookup(finding)] = findings.as_slice() else {
+            panic!("unexpected carrier findings: {findings:?}");
+        };
+        let diagnostic = finding.diagnostic();
+        assert_eq!(
+            diagnostic.code,
+            yamaa_core::diagnostic::ConditionCode::PredicateIntegerOverflow
+        );
+        assert_eq!(diagnostic.spec_paths, ["rows[0].filter"]);
+        assert_eq!(diagnostic.definition().phase, "parse");
+        assert_eq!(diagnostic.definition().requirement, Some("REQ-0014"));
+        assert_eq!(diagnostic.context.len(), 2);
+        assert_eq!(
+            diagnostic.context["predicate"],
+            yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                filter.into()
+            ))
+        );
+        assert_eq!(
+            diagnostic.context["position"],
+            yamaa_core::diagnostic::ContextValue::Integer(position.into())
+        );
     }
 }
 
@@ -805,7 +824,7 @@ fn grouped_filter_promotes_a_row_local_default_without_claiming_ungrouped_promot
 }
 
 #[test]
-fn source_filters_charge_compilation_before_admission_and_reject_unimplemented_literals() {
+fn source_filters_charge_compilation_before_admission_and_retain_carrier_findings() {
     let document = operation_document(
         "source",
         Tree::Map(vec![
@@ -832,12 +851,35 @@ fn source_filters_charge_compilation_before_admission_and_reject_unimplemented_l
         ]),
         "input.csv",
     );
-    let Err(PrepareError::Unsupported(findings)) = PreparedSpecification::prepare(&document) else {
-        panic!("unimplemented literal must reject before ingestion");
+    let prepared = PreparedSpecification::prepare(&document).unwrap();
+    let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
+        panic!("source predicate overflow must remain a deferred normative finding");
     };
-    assert!(findings
-        .iter()
-        .any(|finding| finding.operation == "predicate_literal"));
+    let [BindFinding::Source(finding)] = findings.as_slice() else {
+        panic!("unexpected source carrier findings: {findings:?}");
+    };
+    let diagnostic = finding.diagnostic();
+    assert_eq!(
+        diagnostic.code,
+        yamaa_core::diagnostic::ConditionCode::PredicateIntegerOverflow
+    );
+    assert_eq!(diagnostic.definition().phase, "parse");
+    assert_eq!(diagnostic.definition().requirement, Some("REQ-0014"));
+    assert_eq!(
+        diagnostic.spec_paths,
+        ["columns.VALUE.derivation.source.filter"]
+    );
+    assert_eq!(diagnostic.context.len(), 2);
+    assert_eq!(
+        diagnostic.context["predicate"],
+        yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+            "SRC.ID = 9223372036854775808".into()
+        ))
+    );
+    assert_eq!(
+        diagnostic.context["position"],
+        yamaa_core::diagnostic::ContextValue::Integer("9".into())
+    );
 }
 
 #[test]

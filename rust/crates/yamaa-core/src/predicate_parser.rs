@@ -20,6 +20,7 @@ pub enum TemporalKind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GrammarFailure {
     InvalidExpression,
+    IntegerOverflow,
     InvalidEscape,
     InvalidTemporal {
         kind: TemporalKind,
@@ -176,6 +177,20 @@ pub fn parse_predicate(text: &str, limits: ParseLimits) -> Result<ParsedPredicat
     let root = parser.disjunction(1)?;
     if parser.token().kind != TokenKind::End {
         return Err(parser.invalid("unexpected trailing token"));
+    }
+    // Admit the entire grammar before enforcing the shared integer carrier.
+    // Later syntax errors cannot be hidden by an earlier overflowing literal.
+    for node in &parser.nodes {
+        if matches!(node.kind, ParsedKind::Number { fractional: false })
+            && text[node.span.start..node.span.end].parse::<i64>().is_err()
+        {
+            return Err(grammar(
+                text,
+                node.span.start,
+                GrammarFailure::IntegerOverflow,
+                "integer literal is outside the signed 64-bit range",
+            ));
+        }
     }
     let mut seen = BTreeSet::new();
     let identifiers = parser

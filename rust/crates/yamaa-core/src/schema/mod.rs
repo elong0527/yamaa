@@ -35,6 +35,7 @@ pub use diagnostic_projection::{
     SchemaDiagnosticBudget, SchemaDiagnosticContext, SchemaDiagnosticError, SchemaDiagnosticReport,
     SchemaDiagnosticValue, MAX_SCHEMA_DIAGNOSTIC_BYTES,
 };
+pub(crate) use document::canonical_integer;
 pub use document::{
     Document, DocumentError, DocumentKind, DocumentLimits, DocumentNode, DocumentResource,
     ScalarKey,

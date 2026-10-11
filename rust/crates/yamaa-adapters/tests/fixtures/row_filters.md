@@ -8,4 +8,12 @@ Truth covers comparisons, boolean composition, missing/unknown values, empty inp
 
 Qualified lookup state, broader row derivations and default dependencies remain unsupported. Ungrouped filter promotion of a column default not already selected by a template remains explicitly unsupported pending reconciliation: REQ-1260 names grouped filters as the promoting context, while the reference also promotes ungrouped filter reads. This slice retains that gap without fabricating a phase failure for those forms. Public frontend and warning-severity gates remain open.
 
-`row_filter_admission.tsv` pins two complete unsupported envelopes before any port can be supplied, including literals behind constant boolean branches. Their independent reference runs instead report derivation integer overflow, with an absent requirement identifier; this slice does not claim that failure family is qualified. Parser and executable-plan resource rejection likewise occurs during preparation.
+`row_filter_admission.tsv` now retains two independently authored complete
+failure reports for integer literals behind constant boolean branches. The
+approved REQ-0014 predicate carrier rule requires `integer_overflow` during
+parsing, with the complete predicate and character position. The findings remain
+deferred until source ingestion, preserve the source table and failed-save gate,
+and cannot be hidden by boolean short circuiting. The historical reference
+reports derivation overflow with an absent requirement; that reference remains
+unqualified for this family. Benchmark expected files are unchanged. Parser and
+executable-plan resource refusals remain implementation policies.
