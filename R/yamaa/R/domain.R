@@ -54,9 +54,6 @@ yamaa_domain <- function(specification, environment = NULL) {
   result$warning_log <- NULL
   result$save <- local({ h <- handle; function() {
     reply <- .domain_reply(.Call(wrap__domain_save, h))
-    if (isTRUE(reply$unsupported)) stop(structure(list(
-      message = "producer workflow publication is not supported", call = NULL),
-      class = c("yamaa_domain_error", "error", "condition")))
     if (reply$failed) stop(structure(list(message = "cannot save a failed build", call = NULL),
       class = c("yamaa_domain_error", "error", "condition")))
     reply$saved

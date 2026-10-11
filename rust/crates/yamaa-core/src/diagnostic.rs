@@ -97,6 +97,7 @@ conditions! {
     OutputDuplicateColumn => ("validation", "duplicate_identifier", Some("REQ-0234")),
     OutputUndeclaredColumn => ("validation", "undeclared_column", Some("REQ-0234")),
     OutputInternalKey => ("validation", "internal_column_in_keys", Some("REQ-0220")),
+    OutputPublicationFailed => ("output", "publication_failed", Some("REQ-0764")),
     NumericInvalidExpression => ("validation", "invalid_numeric_expression", Some("REQ-0439")),
     NumericProhibitedConstruct => ("validation", "prohibited_construct", Some("REQ-0441")),
     NumericProhibitedFunction => ("validation", "prohibited_function", Some("REQ-0440")),
