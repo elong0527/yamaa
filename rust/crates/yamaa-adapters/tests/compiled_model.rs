@@ -371,7 +371,7 @@ fn all_six_original_yaml_documents_compile_against_independent_model_expectation
                     .columns()
                     .iter()
                     .filter_map(|assignment| match &assignment.expression {
-                        Expression::Window(window) => Some(window.kind.clone()),
+                        Expression::Window(window) => Some(window.kind),
                         _ => None,
                     })
                     .collect::<Vec<_>>();
