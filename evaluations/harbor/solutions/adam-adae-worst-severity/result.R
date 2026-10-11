@@ -14,7 +14,7 @@ adae_raw <- read_csv(
 
 adae <- adae_raw |>
   mutate(
-    AESEVN = case_when(
+    ASEVN = case_when(
       AESEV == "MILD" ~ 1L,
       AESEV == "MODERATE" ~ 2L,
       AESEV == "SEVERE" ~ 3L
@@ -25,18 +25,18 @@ adae <- adae_raw |>
 # by earliest date, then lowest sequence. Only a treatment-emergent event
 # with a graded severity is eligible.
 best <- adae |>
-  filter(TRTEMFL == "Y", !is.na(AESEVN)) |>
-  arrange(USUBJID, AEDECOD, desc(AESEVN), ASTDT, AESEQ) |>
+  filter(TRTEMFL == "Y", !is.na(ASEVN)) |>
+  arrange(USUBJID, AEDECOD, desc(ASEVN), ASTDT, AESEQ) |>
   distinct(USUBJID, AEDECOD, .keep_all = TRUE) |>
   select(USUBJID, AEDECOD, AESEQ) |>
   mutate(BEST = "Y")
 
 adae <- adae |>
   left_join(best, by = c("USUBJID", "AEDECOD", "AESEQ")) |>
-  mutate(AWSEVFL = BEST) |>
+  mutate(AOCCPIFL = BEST) |>
   select(
     STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL,
-    AESEVN, AWSEVFL
+    ASEVN, AOCCPIFL
   )
 
 dir.create("/app/output", showWarnings = FALSE)
