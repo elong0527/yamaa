@@ -282,7 +282,12 @@ def stage_row_intermediate_truth(destination: Path):
                          "spec_paths":["rows[1].dataset"], "context":{"operation":"row_driver"}}]
             success = False
         elif name == "adam-adlb-end-of-treatment":
-            findings = reference["eot_native_gates"]
+            # The unmodified row-only capture retains the old flag gate. Flags
+            # now admits this exact declaration; all four EOT scope gates stay held.
+            findings = list(reference["eot_native_gates"])
+            assert len(findings) == 5
+            assert findings.pop() == {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                                      "spec_paths":["columns.EOTFL.derivation.flag"], "context":{"operation":"flag"}}
             success = False
         if success:
             (directory / "expected.csv").write_text(case["csv"], encoding="utf-8", newline="\n")

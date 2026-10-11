@@ -1834,6 +1834,12 @@ columns:
                     shutil.copytree(ROOT / "row-cases" / name, current)
                     entry = current / "spec.yaml"
                     expected = json.loads((current / "findings.json").read_text(encoding="ascii"))
+                    if name == "adam-adlb-end-of-treatment":
+                        gates = list(reference["eot_native_gates"])
+                        self.assertEqual(len(gates), 5)
+                        self.assertEqual(gates.pop(), {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                            "spec_paths":["columns.EOTFL.derivation.flag"], "context":{"operation":"flag"}})
+                        self.assertEqual(expected, gates)
                     result = yamaa.domain(entry)
                     self.assertEqual(issues(result), expected)
                     observations = result._native.observations()
