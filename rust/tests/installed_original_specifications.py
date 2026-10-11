@@ -547,7 +547,7 @@ class OriginalSpecifications(unittest.TestCase):
     def test_original_mapping_cut_complete_reports_and_exact_csv(self):
         with (ROOT / "original-mapping-cut.tsv").open(encoding="ascii") as stream:
             cases = list(csv.DictReader(stream, delimiter="\t"))
-        self.assertEqual(len(cases), 20)
+        self.assertEqual(len(cases), 21)
         def no_port(*_):
             self.fail("standalone mapping/cut reached an inheritance port")
         for row in cases:

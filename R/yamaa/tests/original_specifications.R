@@ -891,7 +891,7 @@ cat("original mapping/cut admission complete findings before ports passed\n")
 
 # Original mapping and cut operations have independently authored complete truth.
 mapping_cut_truth <- read.delim(file.path(root,"original-mapping-cut.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
-stopifnot(nrow(mapping_cut_truth)==20L)
+stopifnot(nrow(mapping_cut_truth)==21L)
 for(i in seq_len(nrow(mapping_cut_truth))) {
   row <- mapping_cut_truth[i,,drop=FALSE]
   handle <- prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port)
