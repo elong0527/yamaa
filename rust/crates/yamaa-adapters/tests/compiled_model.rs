@@ -362,8 +362,30 @@ fn all_six_original_yaml_documents_compile_against_independent_model_expectation
                     .iter()
                     .find(|assignment| assignment.column == 5)
                     .unwrap();
-                assert!(
-                    matches!(&total.expression, Expression::Reduce { column: 6, reducer: yamaa_core::reduction::NumericReducer::Sum, text, .. } if text == "SUM(LB.LBSTRESN)")
+                let Expression::Aggregate(aggregate) = &total.expression else {
+                    panic!("the authored grouped SUM is a bound aggregate");
+                };
+                assert_eq!(
+                    aggregate.relation(),
+                    &yamaa_core::dataset::AggregateRelation::CurrentGroup
+                );
+                assert_eq!(aggregate.expression().expression(), "SUM(LB.LBSTRESN)");
+                assert_eq!(
+                    aggregate.bindings(),
+                    [yamaa_core::dataset::AggregateBinding {
+                        name: "LB.LBSTRESN".into(),
+                        column: 6,
+                    }]
+                );
+                assert_eq!(aggregate.expression().reductions().len(), 1);
+                let reduction = &aggregate.expression().reductions()[0];
+                assert_eq!(
+                    reduction.reducer,
+                    yamaa_core::aggregate_parser::Reducer::Sum
+                );
+                assert_eq!(
+                    reduction.operand,
+                    yamaa_core::aggregate_compiler::AggregateOperand::Value("LB.LBSTRESN".into())
                 );
             }
             "schema-window-functions" => {

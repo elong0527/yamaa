@@ -87,6 +87,8 @@ conditions:
   missing_required_field: {phases: [validation]}
   missing_value_required: {phases: [validation]}
   missing_warning_log: {phases: [validation]}
+  # REQ-0504; also emitted by the retained aggregate reference validator.
+  mixed_relations: {phases: [validation]}
   month_not_permitted: {phases: [validation]}
   month_out_of_range: {phases: [validation]}
   month_required: {phases: [validation]}
