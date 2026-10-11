@@ -54,6 +54,7 @@ pub mod specification_source;
 pub mod specification_run;
 pub mod specification_run_view;
 
+pub mod source_diagnostics;
 pub mod specification_diagnostics;
 
 pub mod issue_rows;
