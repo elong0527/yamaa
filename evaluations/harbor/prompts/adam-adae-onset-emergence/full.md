@@ -18,9 +18,10 @@ exposure at all is never treatment-emergent. Emergence is decided at
 the moment, not the day: events starting earlier and later on the day
 of first exposure fall on opposite sides.
 
-AOCCFL is Y on the subject's earliest treatment-emergent event, ordered
-by onset moment with the lower AESEQ settling ties at the same second.
-All other rows have no value.
+AOCCFL is Y on the subject's earliest treatment-emergent event with a
+known onset, ordered by onset moment with the lower AESEQ settling ties
+at the same second. Events with missing onset are excluded from this
+selection. All other rows have no value.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adae.csv.
