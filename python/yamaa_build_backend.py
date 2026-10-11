@@ -95,17 +95,20 @@ def native_test_fixtures(workspace: Path):
 
 
 def member_sources(member_root: Path):
-    """Restore only the Cargo manifest and Rust library sources, without links."""
+    """Restore the Cargo manifest, build script and Rust sources, without links."""
     manifest = member_root / "Cargo.toml"
+    build_script = member_root / "build.rs"
     sources = member_root / "src"
     if member_root.parent.is_symlink() or member_root.is_symlink():
         raise ValueError("restored workspace members must not be symlinks")
     if not manifest.is_file():
         raise ValueError("restored workspace member is missing Cargo.toml")
-    for path in (manifest, sources):
+    for path in (manifest, build_script, sources):
         if path.is_symlink():
             raise ValueError("restored workspace sources must not be symlinks")
     yield manifest
+    if build_script.is_file():
+        yield build_script
     for path in sorted(sources.rglob("*")):
         if path.is_symlink():
             raise ValueError("restored workspace sources must not be symlinks")
