@@ -53,6 +53,7 @@ pub mod regex;
 
 pub mod reduction;
 pub mod table;
+pub mod text_pad;
 
 pub mod project_call_binding;
 pub mod project_call_document;

@@ -1698,6 +1698,55 @@ columns:
             self.assertIsNone(rejected._native.observations())
             self.assertFalse((case / "adlb.csv").exists())
 
+    def test_public_string_padding_complete_independent_outputs_findings_and_effects(self):
+        import shutil
+        import yamaa
+        reference = json.loads((ROOT / "text-pad-reference.json").read_text(encoding="utf-8"))
+        def issues(result):
+            records = result.issues.to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
+            return records
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, case in reference.items():
+                current = root / name
+                shutil.copytree(ROOT / "text-pad-cases" / name, current)
+                entry = current / "spec.yaml"
+                if name == "width-noninteger":
+                    (current / "input.csv").unlink()
+                result = yamaa.domain(entry)
+                if "csv" in case:
+                    self.assertEqual(issues(result), [], name)
+                    self.assertEqual(result.output.write_csv().encode(), case["csv"].encode(), name)
+                    self.assertFalse((current / "output.csv").exists())
+                    self.assertEqual(json.loads(result._native.observations())["handler_counts"], case["handlers"], name)
+                    self.assertTrue(result.save())
+                    self.assertEqual((current / "output.csv").read_bytes(), case["csv"].encode(), name)
+                else:
+                    expected = json.loads(json.dumps(case["findings"]))
+                    if name == "width-noninteger":
+                        # Preserve complete loader evidence and expose the existing
+                        # schema source/entry gap separately from normative equality.
+                        for field in ("source", "entry"):
+                            self.assertEqual(expected[0]["context"].pop(field), "/private/tmp/yamaa-root-text-pad-audit/width-noninteger/spec.yaml")
+                        self.assertEqual(issues(yamaa.check(entry)), expected)
+                        self.assertIsNone(result._native.observations())
+                    else:
+                        self.assertEqual(json.loads(result._native.observations())["handler_counts"], case["handlers"], name)
+                    self.assertEqual(issues(result), expected, name)
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.DomainError):
+                        result.save()
+                    self.assertFalse((current / "output.csv").exists())
+            original = root / "negative-str-pad-width"
+            shutil.copytree(ROOT / "cases" / original.name, original)
+            shutil.rmtree(original / "input")
+            expected = [{"phase":"validation", "condition":"invalid_field_type", "requirement":"REQ-0287", "spec_paths":["columns.IDVARVAL.derivation.str_pad.width"], "context":{"expected":"int", "actual":"str"}}]
+            for result in (yamaa.check(original / "spec.yaml"), yamaa.domain(original / "spec.yaml")):
+                self.assertEqual(issues(result), expected)
+            self.assertFalse((original / "input").exists())
+
     def test_public_domain_all_original_issues_outputs_and_saved_bytes(self):
         import datetime
         import shutil

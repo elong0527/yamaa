@@ -113,6 +113,21 @@ pub(super) fn prepare(
                 }
                 Operation::StrCase(operation)
             }
+            "str_pad" => {
+                let mut features = Vec::new();
+                let operation = str_pad::prepare(
+                    d,
+                    payload,
+                    &result_path,
+                    None,
+                    Some(intermediates),
+                    &mut features,
+                )?;
+                if !features.is_empty() {
+                    return Err(PrepareError::Unsupported(features));
+                }
+                Operation::StrPad(operation)
+            }
             "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision"
             | "to_date" => {
                 let mut features = Vec::new();
@@ -214,6 +229,49 @@ pub(super) fn prepare(
     }
     Ok(branches)
 }
+/// A width defect shares its derivation's authored declaration-validation order
+/// with predicate and numeric grammar defects, before any reference binding.
+/// Consumers without a width defect retain their existing binding checkpoint.
+pub(super) fn padding_findings(operation: &Operation, findings: &mut Vec<BindFinding>) -> bool {
+    fn has_width_error(operation: &Operation) -> bool {
+        match operation {
+            Operation::StrPad(operation) => operation.has_width_error(),
+            Operation::Case(branches) => branches
+                .iter()
+                .any(|branch| has_width_error(&branch.operation)),
+            _ => false,
+        }
+    }
+    fn append(operation: &Operation, path: &str, findings: &mut Vec<BindFinding>) {
+        match operation {
+            Operation::StrPad(operation) => str_pad::declaration_findings(operation, findings),
+            Operation::InvalidNumeric { expression, error } => {
+                findings.push(BindFinding::Numeric {
+                    path: format!("{path}.expr"),
+                    expression: expression.clone(),
+                    error: error.clone(),
+                })
+            }
+            Operation::Case(branches) => {
+                for branch in branches {
+                    if let Some(Err(diagnostic)) = &branch.when {
+                        findings.push(BindFinding::Predicate(diagnostic.clone()));
+                    }
+                    append(&branch.operation, &branch.path, findings);
+                }
+            }
+            _ => (),
+        }
+    }
+    if !has_width_error(operation) {
+        return false;
+    }
+    // A top-level numeric declaration cannot also contain padding. Its path is
+    // only needed for the branch-owned InvalidNumeric cases visited by append.
+    append(operation, "", findings);
+    true
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
     spec: &PreparedSpecification,
@@ -224,6 +282,7 @@ pub(super) fn bind(
     intermediates: &[Option<Intermediate>],
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
+    declarations_reported: bool,
 ) -> Result<Option<Expression>, BindError> {
     let start = findings.len();
     let mut result = Vec::new();
@@ -235,7 +294,9 @@ pub(super) fn bind(
                 let plan = match compiled {
                     Ok(plan) => plan,
                     Err(diagnostic) => {
-                        findings.push(BindFinding::Predicate(diagnostic.clone()));
+                        if !declarations_reported {
+                            findings.push(BindFinding::Predicate(diagnostic.clone()));
+                        }
                         return Ok(None);
                     }
                 };
@@ -273,11 +334,13 @@ pub(super) fn bind(
             .flatten();
         let expression = match branch.operation.as_ref() {
             Operation::InvalidNumeric { expression, error } => {
-                findings.push(BindFinding::Numeric {
-                    path: format!("{}.expr", branch.path),
-                    expression: expression.clone(),
-                    error: error.clone(),
-                });
+                if !declarations_reported {
+                    findings.push(BindFinding::Numeric {
+                        path: format!("{}.expr", branch.path),
+                        expression: expression.clone(),
+                        error: error.clone(),
+                    });
+                }
                 None
             }
             Operation::Literal(value) => Some(Expression::Literal(value.clone())),
@@ -290,6 +353,7 @@ pub(super) fn bind(
                 intermediates,
                 edges,
                 findings,
+                declarations_reported,
             )?,
             Operation::ProjectFunction(call) => {
                 let calls = spec.project_calls.as_ref().ok_or(BindError::Internal)?;
@@ -330,6 +394,17 @@ pub(super) fn bind(
                 }
             }
             Operation::StrCase(operation) => str_case::bind(
+                operation,
+                column,
+                &spec.keys,
+                catalog,
+                &spec.intermediates,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
+            Operation::StrPad(operation) => str_pad::bind(
                 operation,
                 column,
                 &spec.keys,

@@ -23,7 +23,9 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
                 register(&source.expression, counter);
             }
         }
-        Expression::Round { source, .. } => register(&source.expression, counter),
+        Expression::Round { source, .. } | Expression::StrPad { source, .. } => {
+            register(&source.expression, counter)
+        }
         _ => (),
     }
 }

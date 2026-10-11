@@ -20,6 +20,7 @@ enum RowOperation {
     Round(crate::dataset::Rounding),
     Temporal(crate::dataset::Temporal),
     StrCase(crate::text_case::StringCase),
+    StrPad(str_pad::Declaration),
     Imputation(crate::dataset::Imputation),
     InvalidNumeric {
         expression: String,
@@ -125,6 +126,14 @@ fn declaration(
                 return Err(PrepareError::Unsupported(features));
             }
             RowOperation::StrCase(operation)
+        }
+        "str_pad" => {
+            let mut features = Vec::new();
+            let operation = str_pad::prepare(d, payload, &path, None, None, &mut features)?;
+            if !features.is_empty() {
+                return Err(PrepareError::Unsupported(features));
+            }
+            RowOperation::StrPad(operation)
         }
         "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision" | "to_date" => {
             let mut features = Vec::new();
@@ -866,7 +875,8 @@ impl Rows {
                           row: Option<&str>,
                           available: Option<&[usize]>,
                           edges: &mut Vec<usize>,
-                          findings: &mut Vec<BindFinding>|
+                          findings: &mut Vec<BindFinding>,
+                          declarations_reported: bool|
          -> Result<Option<Assignment>, BindError> {
             let expression = match &declaration.operation {
                 RowOperation::ProjectFunction(call) => {
@@ -935,6 +945,17 @@ impl Rows {
                     edges,
                     findings,
                 )?,
+                RowOperation::StrPad(operation) => str_pad::bind_row(
+                    operation,
+                    declaration.column,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                )?,
                 RowOperation::Imputation(operation) => imputation::bind_row(
                     operation,
                     declaration.column,
@@ -969,11 +990,13 @@ impl Rows {
                     findings,
                 )?,
                 RowOperation::InvalidNumeric { expression, error } => {
-                    findings.push(BindFinding::Numeric {
-                        path: format!("{}.expr", declaration.path),
-                        expression: expression.clone(),
-                        error: error.clone(),
-                    });
+                    if !declarations_reported {
+                        findings.push(BindFinding::Numeric {
+                            path: format!("{}.expr", declaration.path),
+                            expression: expression.clone(),
+                            error: error.clone(),
+                        });
+                    }
                     None
                 }
                 RowOperation::Compute(compiled) => {
@@ -1199,6 +1222,29 @@ impl Rows {
                 .collect::<Vec<_>>();
             let mut graph = alloc::vec![Vec::new(); output.columns().len()];
             let mut assignments = BTreeMap::new();
+            // Reference planning validates one complete row template's authored
+            // derivations before resolving any of that template's references.
+            let declarations_reported = template.declarations.iter().any(|declaration| {
+                matches!(&declaration.operation,
+                    RowOperation::StrPad(operation) if operation.has_width_error())
+            });
+            if declarations_reported {
+                for declaration in &template.declarations {
+                    match &declaration.operation {
+                        RowOperation::StrPad(operation) => {
+                            str_pad::declaration_findings(operation, &mut findings);
+                        }
+                        RowOperation::InvalidNumeric { expression, error } => {
+                            findings.push(BindFinding::Numeric {
+                                path: format!("{}.expr", declaration.path),
+                                expression: expression.clone(),
+                                error: error.clone(),
+                            });
+                        }
+                        _ => (),
+                    }
+                }
+            }
             for declaration in &template.declarations {
                 if let Some(value) = assignment(
                     declaration,
@@ -1207,6 +1253,7 @@ impl Rows {
                     Some(&available),
                     &mut graph[declaration.column],
                     &mut findings,
+                    declarations_reported,
                 )? {
                     assignments.insert(declaration.column, value);
                 }
@@ -1306,6 +1353,9 @@ impl Rows {
         let mut columns = Vec::new();
         let mut dependencies = alloc::vec![None; output.columns().len()];
         for declaration in &self.columns {
+            if let RowOperation::StrPad(operation) = &declaration.operation {
+                str_pad::declaration_findings(operation, &mut findings);
+            }
             let mut edges = Vec::new();
             if let Some(value) = assignment(
                 declaration,
@@ -1316,6 +1366,7 @@ impl Rows {
                 None,
                 &mut edges,
                 &mut findings,
+                false,
             )? {
                 columns.push(value);
             }

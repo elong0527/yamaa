@@ -1433,6 +1433,51 @@ local({
   cat("public ASCII string case matches independent exact outputs and original negatives; original sentence fixture retains output.order_by blocker without Python passed\n")
 })
 
+local({
+  directory <- tempfile("public-string-padding-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  cases <- file.path(root,"text-pad-cases")
+  findings <- read.delim(file.path(root,"text-pad-findings.tsv"),quote="",colClasses="character",check.names=FALSE)
+  for(name in list.dirs(cases,full.names=FALSE,recursive=FALSE)) {
+    stopifnot(file.copy(file.path(cases,name),directory,recursive=TRUE))
+    case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
+    if(name=="width-noninteger") unlink(file.path(case,"input.csv"))
+    result <- yamaa_domain(entry)
+    expected_csv <- file.path(case,"expected.csv")
+    if(file.exists(expected_csv)) {
+      stopifnot(nrow(result$issues)==0L,!is.null(result$output),!file.exists(file.path(case,"output.csv")),
+        identical(result$save(),TRUE),identical(rawfile(file.path(case,"output.csv")),rawfile(expected_csv)))
+    } else {
+      expected <- findings[findings$case==name,]
+      actual <- result$issues
+      stopifnot(nrow(actual)==nrow(expected),is.null(result$output),identical(actual$phase,expected$phase),
+        identical(actual$condition,expected$condition),identical(actual$requirement,expected$requirement),
+        identical(actual$context,expected$context))
+      for(index in seq_len(nrow(expected))) {
+        # Each captured padding cause has one independently authored full path.
+        stopifnot(identical(paste0('["',actual$spec_paths[[index]],'"]'),expected$spec_paths[[index]]))
+      }
+      stopifnot(inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(case,"output.csv")))
+      if(name=="width-noninteger") stopifnot(identical(yamaa_check(entry)$issues,actual),
+        is.null(get(".domain_observations",asNamespace("yamaa"))(result)),!file.exists(file.path(case,"input.csv")))
+    }
+    observed <- get(".domain_observations",asNamespace("yamaa"))(result)
+    if(!is.null(observed)) {
+      report <- rawToChar(observed)
+      ledgers <- regmatches(report,gregexpr('"handler_counts":\\[[^]]*\\]',report))[[1L]]
+      stopifnot(identical(ledgers,rep('"handler_counts":[]',2L)))
+    }
+  }
+  stopifnot(file.copy(file.path(root,"cases","negative-str-pad-width"),directory,recursive=TRUE))
+  case <- file.path(directory,"negative-str-pad-width");unlink(file.path(case,"input"),recursive=TRUE)
+  entry <- file.path(case,"spec.yaml");checked <- yamaa_check(entry)$issues;rejected <- yamaa_domain(entry)
+  stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,"invalid_field_type"),
+    identical(checked$requirement,"REQ-0287"),identical(checked$spec_paths,list("columns.IDVARVAL.derivation.str_pad.width")),
+    identical(checked$context,'{"actual":"str","expected":"int"}'),identical(rejected$issues,checked),
+    is.null(rejected$output),!file.exists(file.path(case,"input")))
+  cat("public canonical scalar padding matches complete independent CSV and findings with missing passthrough, no handlers and original width failure before input without Python passed\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

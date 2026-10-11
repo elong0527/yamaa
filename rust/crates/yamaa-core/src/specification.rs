@@ -51,6 +51,8 @@ mod imputation;
 mod rounding;
 #[path = "specification_str_case.rs"]
 mod str_case;
+#[path = "specification_str_pad.rs"]
+mod str_pad;
 #[path = "specification_temporal.rs"]
 mod temporal;
 #[path = "specification_terminology.rs"]
@@ -184,6 +186,7 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    Padding(crate::diagnostic::Diagnostic),
     Predicate(crate::diagnostic::Diagnostic),
     ProjectFunction(FunctionFinding),
     Source(SourceFinding),
@@ -285,6 +288,7 @@ enum Operation {
     Round(crate::dataset::Rounding),
     Temporal(crate::dataset::Temporal),
     StrCase(crate::text_case::StringCase),
+    StrPad(str_pad::Declaration),
     Imputation(crate::dataset::Imputation),
     /// Reference planning emits formula diagnostics after source ingestion.
     InvalidNumeric {
@@ -951,6 +955,7 @@ impl PreparedSpecification {
         rounding::declaration_findings(d, columns, &output, &mut findings)?;
         temporal::declaration_findings(d, columns, &output, &mut findings)?;
         imputation::declaration_findings(d, columns, &output, &mut findings)?;
+        str_pad::declaration_admission(d, columns, &output)?;
         str_case::declaration_findings(d, columns, &output, &mut findings)?;
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
@@ -1281,6 +1286,14 @@ impl PreparedSpecification {
                     Some(&intermediates),
                     &mut extra,
                 )?)),
+                "str_pad" => Some(Operation::StrPad(str_pad::prepare(
+                    d,
+                    payload,
+                    &path,
+                    Some(driver),
+                    Some(&intermediates),
+                    &mut extra,
+                )?)),
                 "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision"
                 | "to_date" => Some(Operation::Imputation(imputation::prepare(
                     d,
@@ -1599,6 +1612,8 @@ impl PreparedSpecification {
         let mut assignments = BTreeMap::new();
         let mut dependencies = Vec::new();
         for (column, declaration) in self.declarations.iter().enumerate() {
+            let declarations_reported =
+                cases::padding_findings(&declaration.operation, &mut findings);
             let mut edges = Vec::new();
             let path = &declaration.path;
             let reference_path = if matches!(
@@ -1645,6 +1660,7 @@ impl PreparedSpecification {
                     &intermediates,
                     &mut edges,
                     &mut findings,
+                    declarations_reported,
                 )?,
                 Operation::ProjectFunction(call) => {
                     let calls = self.project_calls.as_ref().ok_or(BindError::Internal)?;
@@ -1697,6 +1713,17 @@ impl PreparedSpecification {
                     &mut findings,
                 )?,
                 Operation::StrCase(operation) => str_case::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
+                Operation::StrPad(operation) => str_pad::bind(
                     operation,
                     column,
                     &self.keys,

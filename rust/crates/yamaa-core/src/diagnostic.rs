@@ -119,6 +119,7 @@ conditions! {
     NumericUnknownField => ("validation", "unknown_field", Some("REQ-0443")),
     NumericInputType => ("validation", "incompatible_input_type", Some("REQ-0444")),
     RoundingDigitsType => ("validation", "incompatible_input_type", Some("REQ-0418")),
+    StrPadWidth => ("validation", "invalid_field_type", Some("REQ-1261")),
     DeclarativeRoundingInput => ("validation", "incompatible_input_type", Some("REQ-0418")),
     TemporalOperand => ("validation", "incompatible_input_type", Some("REQ-0606")),
     ImputationMonthNotPermitted => ("validation", "month_not_permitted", Some("REQ-0592")),

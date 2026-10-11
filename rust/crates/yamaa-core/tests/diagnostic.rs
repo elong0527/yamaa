@@ -15,6 +15,8 @@ mod dataset;
 mod temporal_imputation;
 #[path = "diagnostic/text_case.rs"]
 mod text_case;
+#[path = "diagnostic/text_pad.rs"]
+mod text_pad;
 struct Bindings;
 #[path = "diagnostic/binding.rs"]
 mod binding;
@@ -440,6 +442,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(preflight::temporal_reached());
     reached.extend(temporal_imputation::reached());
     reached.extend(text_case::reached());
+    reached.extend(text_pad::reached());
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());
     reached.extend(parquet::reached());

@@ -27,6 +27,8 @@ mod lookup;
 mod numeric;
 #[path = "dataset_text_case.rs"]
 mod str_case;
+#[path = "dataset_text_pad.rs"]
+mod str_pad;
 #[path = "dataset_windows.rs"]
 mod windows;
 
@@ -428,6 +430,11 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
             source, operation, table, candidate, plan, row, limits, state,
         );
     }
+    if let Expression::StrPad { source, operation } = &assignment.expression {
+        return str_pad::evaluate(
+            source, operation, table, candidate, plan, row, limits, state,
+        );
+    }
     if let Expression::Imputation {
         operands,
         operation,
@@ -516,7 +523,8 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
         | Expression::Round { .. }
         | Expression::Temporal { .. }
         | Expression::Imputation { .. }
-        | Expression::StrCase { .. } => {
+        | Expression::StrCase { .. }
+        | Expression::StrPad { .. } => {
             unreachable!("recursive evaluation handled above")
         }
         Expression::Column(column) => {

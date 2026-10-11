@@ -38,6 +38,7 @@ pub use imputation::{
 #[path = "dataset_temporal.rs"]
 mod temporal;
 pub use crate::text_case::StringCase;
+pub use crate::text_pad::StringPad;
 pub use temporal::{CalendarUnit, DateBounds, InvalidTemporal, Temporal, TemporalKind};
 #[path = "dataset_selection.rs"]
 mod selection;
@@ -52,6 +53,10 @@ pub enum Expression {
     StrCase {
         source: alloc::boxed::Box<Assignment>,
         operation: StringCase,
+    },
+    StrPad {
+        source: alloc::boxed::Box<Assignment>,
+        operation: StringPad,
     },
     /// Only the first TRUE branch is evaluated; FALSE and UNKNOWN continue.
     Case(Vec<CaseBranch>),
@@ -474,6 +479,9 @@ fn validate_assignment_at(
             }
         }
         Expression::StrCase {
+            source: operand, ..
+        }
+        | Expression::StrPad {
             source: operand, ..
         } => {
             if operand.column != assignment.column {
