@@ -37,6 +37,27 @@ the Python/native runtimes. Specification, input, expected-output, and SDK
 changes still trigger runtime coverage. Native PR runs use six jobs on every
 platform; full main runs use 30, including the selection job.
 
+Before merging changes to native code, R glue, package builds or native CI,
+dispatch the complete matrix on the current PR head:
+
+```sh
+gh workflow run native.yml --ref <branch>
+gh run list --workflow native.yml --branch <branch> --event workflow_dispatch
+gh run view <run-id>
+```
+
+The same dispatch is available in GitHub Actions under **Native installation
+prototype**, **Run workflow**, selecting the PR branch. Dispatch runs the same
+eighteen Python lanes, three R hosts and comparison gates as a main push. Require
+every lane, including Windows R, to pass on that exact head before merging, then
+retain the combined main run for work-package acceptance. A sampled PR run does
+not replace this gate.
+
+The shared-crates step also runs
+`cargo test --locked -p yamaa-engine --features test-support` on every selected
+Rust platform. This enables both `project_preparation` and `test_support`
+integration binaries, which a plain default-feature test invocation omits.
+
 Scripts locate repository data relative to their own files, so they can also
 run locally from any working directory. Keep tests and shared helpers beside
 the scripts they exercise.
