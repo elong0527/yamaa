@@ -19,7 +19,9 @@ def locked_metadata(workspace: Path) -> str:
     )
 
 
-def check_archive(path: Path, lock: bytes, manifest: bytes) -> None:
+def check_archive(
+    path: Path, lock: bytes, manifest: bytes, toolchain: bytes | None = None
+) -> None:
     with tarfile.open(path, "r:gz") as archive:
         members = [
             m
@@ -29,11 +31,19 @@ def check_archive(path: Path, lock: bytes, manifest: bytes) -> None:
         if len(members) != 1:
             raise ValueError(f"{path.name}: expected exactly one canonical Cargo.lock")
         member = members[0]
-        parts = PurePosixPath(member.name).parts
-        if len(parts) < 2 or parts[1:] not in {
-            ("rust", "Cargo.lock"),
-            ("src", "rust", "Cargo.lock"),
-        }:
+        location = PurePosixPath(member.name)
+        parts = member.name.split("/")
+        if (
+            location.is_absolute()
+            or "\\" in member.name
+            or ":" in parts[0]
+            or any(part in {"", ".", ".."} for part in parts)
+            or tuple(parts[1:])
+            not in {
+                ("rust", "Cargo.lock"),
+                ("src", "rust", "Cargo.lock"),
+            }
+        ):
             raise ValueError(f"{path.name}: unexpected Cargo.lock location")
         if not member.isfile():
             raise ValueError(f"{path.name}: Cargo.lock must be a regular file")
@@ -49,6 +59,17 @@ def check_archive(path: Path, lock: bytes, manifest: bytes) -> None:
             raise ValueError(
                 f"{path.name}: workspace manifest differs from the canonical bytes"
             )
+        if toolchain is not None:
+            toolchain_name = str(location.with_name("rust-toolchain.toml"))
+            declarations = [m for m in archive.getmembers() if m.name == toolchain_name]
+            if len(declarations) != 1 or not declarations[0].isfile():
+                raise ValueError(
+                    f"{path.name}: expected one regular Rust toolchain declaration"
+                )
+            if archive.extractfile(declarations[0]).read() != toolchain:
+                raise ValueError(
+                    f"{path.name}: Rust toolchain differs from the canonical bytes"
+                )
 
 
 def main():
@@ -58,11 +79,12 @@ def main():
     args = parser.parse_args()
     lock = (WORKSPACE / "Cargo.lock").read_bytes()
     manifest = (WORKSPACE / "Cargo.toml").read_bytes()
+    toolchain = (WORKSPACE / "rust-toolchain.toml").read_bytes()
     metadata = locked_metadata(WORKSPACE)
     for archive in args.archives:
-        check_archive(archive, lock, manifest)
+        check_archive(archive, lock, manifest, toolchain)
         print(
-            f"{archive.name}: canonical Cargo.lock and workspace manifest bytes retained"
+            f"{archive.name}: canonical lock, workspace manifest and toolchain bytes retained"
         )
     if args.output_dir:
         args.output_dir.mkdir(parents=True, exist_ok=True)

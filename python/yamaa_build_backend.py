@@ -9,11 +9,32 @@ import tomllib
 from pathlib import Path, PurePosixPath
 
 
+def member_sources(member_root: Path):
+    """Restore only the Cargo manifest and Rust library sources, without links."""
+    manifest = member_root / "Cargo.toml"
+    sources = member_root / "src"
+    if member_root.parent.is_symlink() or member_root.is_symlink():
+        raise ValueError("restored workspace members must not be symlinks")
+    if not manifest.is_file():
+        raise ValueError("restored workspace member is missing Cargo.toml")
+    for path in (manifest, sources):
+        if path.is_symlink():
+            raise ValueError("restored workspace sources must not be symlinks")
+    yield manifest
+    for path in sorted(sources.rglob("*")):
+        if path.is_symlink():
+            raise ValueError("restored workspace sources must not be symlinks")
+        if path.is_file() and path.suffix == ".rs":
+            yield path
+
+
 def preserve_workspace(archive: Path, workspace: Path) -> None:
     """Keep all lock members without adding an R dependency to the Python binary."""
     manifest = (workspace / "Cargo.toml").read_bytes()
     members = tomllib.loads(manifest.decode())["workspace"]["members"]
     lock = (workspace / "Cargo.lock").read_bytes()
+    toolchain = workspace / "rust-toolchain.toml"
+    toolchain_bytes = toolchain.read_bytes()
     temporary = None
     try:
         with tarfile.open(archive, "r:gz") as source:
@@ -21,6 +42,14 @@ def preserve_workspace(archive: Path, workspace: Path) -> None:
             names = {entry.name for entry in entries}
             if len(names) != len(entries):
                 raise ValueError("source archive contains duplicate members")
+            if any(
+                PurePosixPath(name).is_absolute()
+                or "\\" in name
+                or ":" in name.split("/")[0]
+                or any(part in {"", ".", ".."} for part in name.rstrip("/").split("/"))
+                for name in names
+            ):
+                raise ValueError("source archive has an invalid package root")
             roots = {PurePosixPath(name).parts[0] for name in names}
             if len(roots) != 1:
                 raise ValueError("source archive must have one package root")
@@ -39,24 +68,44 @@ def preserve_workspace(archive: Path, workspace: Path) -> None:
             if source.extractfile(lock_name).read() != lock:
                 raise ValueError("source archive changed the canonical Cargo.lock")
 
+            toolchain_name = f"{root}/rust/rust-toolchain.toml"
             additions = []
+            if toolchain_name in names:
+                entry = source.getmember(toolchain_name)
+                if (
+                    not entry.isfile()
+                    or source.extractfile(entry).read() != toolchain_bytes
+                ):
+                    raise ValueError(
+                        "source archive changed the Rust toolchain declaration"
+                    )
+            else:
+                additions.append((toolchain_name, toolchain))
             for member in members:
-                parts = PurePosixPath(member).parts
-                if len(parts) != 2 or parts[0] != "crates":
+                parts = member.split("/")
+                if (
+                    len(parts) != 2
+                    or parts[0] != "crates"
+                    or parts[1] in {"", ".", ".."}
+                ):
                     raise ValueError(f"unsupported workspace member: {member}")
                 member_root = workspace / member
                 if f"{root}/rust/{member}/Cargo.toml" in names:
                     continue
-                for path in sorted(member_root.rglob("*")):
+                for path in member_sources(member_root):
                     relative = path.relative_to(member_root)
-                    if {"target", "__pycache__"}.intersection(relative.parts):
-                        continue
-                    if path.name == "Cargo.lock" or path.suffix in {".pyc", ".pyo"}:
-                        continue
-                    if path.is_file():
-                        additions.append(
-                            (f"{root}/rust/{member}/{relative.as_posix()}", path)
-                        )
+                    name = f"{root}/rust/{member}/{relative.as_posix()}"
+                    if name in names:
+                        entry = source.getmember(name)
+                        if (
+                            not entry.isfile()
+                            or source.extractfile(entry).read() != path.read_bytes()
+                        ):
+                            raise ValueError(
+                                "source archive changed a restored member source"
+                            )
+                    else:
+                        additions.append((name, path))
 
             with tempfile.NamedTemporaryFile(
                 dir=archive.parent, suffix=".tar.gz", delete=False

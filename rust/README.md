@@ -259,13 +259,14 @@ The native execution flag still means specification/dataset support and remains
 false. No default backend, existing production Python behavior or benchmark golden
 changes are implied by this normalized numeric prototype.
 
-Rust 1.90.0, PyO3 0.27.2, extendr 0.9.0, and Maturin 1.9.6 are pinned. Cargo's
-generated lockfile is ignored: the repository's current no-hashing rule permits
-only `python/uv.lock` as a packaging exception. Consequently, transitive Cargo
-dependencies are **not reproducibly locked** in this slice. Source distributions
-may contain Cargo-generated packaging checksums; these are never runtime,
-contract, or resource identities. A reviewed lockfile policy remains a step 3
-release gate. Do not claim reproducible release builds from this prototype.
+Rust 1.90.0, PyO3 0.27.2, extendr 0.9.0, and Maturin 1.9.6 are pinned. The
+canonical `rust/Cargo.lock` pins the transitive Cargo dependency resolution and
+is retained unchanged in both source packages under the approved packaging-tool
+exception. Cargo-managed checksums remain packaging metadata; runtime, contract
+and resource identities still use direct canonical or byte comparisons. See
+[CARGO_LOCKING.md](CARGO_LOCKING.md) for locked build commands and retained
+toolchain evidence. Complete installed platform qualification remains a release
+gate; the lock alone does not establish binary reproducibility.
 
 ## Development and installation checks
 
@@ -306,9 +307,12 @@ the stable ABI wheel targets Python 3.12+. It builds R 4.6.1 on Linux x86_64 and
 macOS arm64. R Windows native installation and other architectures are not
 qualified by this slice. The existing Windows Python engine remains supported.
 
-The initial hosted installation matrix passed. Next gates: settle transitive
-dependency locking, complete typed evaluation/grammar/diagnostics, then add
-Arrow tables and host callbacks. No performance or language-parity claim is made.
+The initial hosted installation matrix passed. Transitive dependency locking,
+typed evaluation/grammar/diagnostics, Arrow tables and host callbacks now have
+dedicated qualification evidence. Complete installed platform coverage and the
+remaining release gates are tracked in
+[planning/release-readiness.md](planning/release-readiness.md).
+No performance or language-parity claim is made.
 
 Local `R CMD check --no-manual --no-build-vignettes` passes installation and
 tests, but reports one compiled-code warning for Rust's linked `_abort` symbol.
