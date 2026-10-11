@@ -12,7 +12,7 @@ acceptance gates.
 | Producer lifecycle | Build the graph in memory; explicit Save publishes retained bytes in producer-first order. | [#1741](https://github.com/elong0527/yamaa/issues/1741); decision [#1866](https://github.com/elong0527/yamaa/issues/1866). |
 | Submission version | Optional section-level `source_system_version`, defaulting to the actual installed yamaa version. | [#1758](https://github.com/elong0527/yamaa/issues/1758); decision [#1887](https://github.com/elong0527/yamaa/issues/1887). |
 | Windows R | Required in the first shared Rust release. | [#1903](https://github.com/elong0527/yamaa/issues/1903), [#1742](https://github.com/elong0527/yamaa/issues/1742); decision [#1857](https://github.com/elong0527/yamaa/issues/1857). |
-| First-release support matrix | CPython 3.12–3.14 and R 4.6.1 on Linux x86_64, macOS arm64 and Windows x64; Python wheel/source and R source packages. Other combinations are excluded from this first release. | [#1742](https://github.com/elong0527/yamaa/issues/1742); installed Windows R [#1903](https://github.com/elong0527/yamaa/issues/1903). |
+| First-release support matrix | CPython 3.12-3.14 and R 4.6.1 on Linux x86_64, macOS arm64 and Windows x64; Python wheel/source and R source packages. Other combinations are excluded from this first release. | [#1742](https://github.com/elong0527/yamaa/issues/1742); installed Windows R [#1903](https://github.com/elong0527/yamaa/issues/1903). |
 | Static check result | Diagnostic issues only. | [#1751](https://github.com/elong0527/yamaa/issues/1751). |
 | R integer output | A lossless full-range `yamaa_int64_vector`, with missingness separate from every signed 64-bit value. | [#1751](https://github.com/elong0527/yamaa/issues/1751). |
 | Diagnostic context | JSON text in both Python and R. | [#1751](https://github.com/elong0527/yamaa/issues/1751). |
@@ -54,8 +54,8 @@ The approved complete target and explicit exclusions are recorded below.
 
 ## First-release support matrix
 
-The maintainer selected “Use this matrix and explicitly exclude other
-combinations for the first release” in response to the implementation
+The maintainer selected "Use this matrix and explicitly exclude other
+combinations for the first release" in response to the implementation
 conversation's support-scope question. This resolves the B15 scope decision;
 installed qualification remains required.
 
