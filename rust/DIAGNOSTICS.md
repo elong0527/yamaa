@@ -160,13 +160,23 @@ and quota refusal without a provider retry or binding/invocation effect; a
 non-Clone, non-Debug, non-Send activation witness checks that identity directly.
 
 The unchanged lookup reports and predicate syntax fixtures pin existing mappings
-and richer parser context. One independently captured malformed window predicate
-also matches a complete original failed report. Three additional independently
-observed original predicate reports have existing parity gaps: invalid ESCAPE uses
-a different reference requirement; regex and temporal failures have additional
-native context. `tests/fixtures/predicate_diagnostics.md` records those observations.
-Those forms are not newly qualified, and locked truth is not regenerated to hide
-the gaps. REQ-0192's temporal grammar wording remains a separate reconciliation.
+and richer parser context. Three independently captured malformed window
+predicates now match complete original failed reports, including regex and date
+rejection with the reference predicate/position fields. Core retains their rich
+immutable parser facts and standalone syntax still emits those details.
+`tests/fixtures/predicate_diagnostics.md` records capture provenance and the
+remaining ESCAPE conflict: the unchanged reference reports REQ-0188 while the
+native locked fixture and rule assign REQ-0191. Neither observation is rewritten.
+REQ-0192's temporal grammar wording remains a separate reconciliation.
+
+Native predicate evaluation now resolves all five semantic causes through the
+core registry and projects their complete typed facts and explicit structural
+route labels. Whole-envelope quota admission precedes copying authored paths,
+identifiers and routes. Opaque resolver errors and resource failures remain
+borrowed with their original identities, including under a zero projection
+quota. Non-Clone, non-Debug source witnesses prove repeated inspection cannot
+reread cells, run assignments or visit a later source record. The two written
+BETWEEN value reads and upper resolver failure retain their original precedence.
 
 Nine unchanged original corpus documents now replay through the private route.
 Three negative window/row documents retain actual reference capture/ingestion

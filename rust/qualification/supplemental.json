@@ -114,6 +114,14 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/predicate_context_diagnostics.tsv",
+      "family": "predicate",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/predicate_diagnostics.rs"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/predicate_syntax.tsv",
       "family": "predicate",
       "level": "compile",

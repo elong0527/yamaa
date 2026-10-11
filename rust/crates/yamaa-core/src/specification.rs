@@ -156,6 +156,7 @@ pub enum PreflightFinding {
 #[derive(Debug)]
 pub enum BindError {
     Internal,
+    PredicateDiagnosticLimit,
     SourceCount,
     PredicatePolicy(crate::predicate_compiler::Error),
     InvalidPredicateBinding(crate::bound_expression::BindingError),

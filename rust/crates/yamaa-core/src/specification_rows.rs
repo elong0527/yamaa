@@ -1097,7 +1097,7 @@ impl Rows {
                         text,
                         position.character,
                         failure,
-                    )));
+                    )?));
                     None
                 }
                 Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
