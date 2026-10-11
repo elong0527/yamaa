@@ -4,7 +4,8 @@ use crate::{issue_rows::Issue, project_function_diagnostics as invocation};
 use serde_json::{json, Map, Value as Json};
 use std::collections::BTreeSet;
 use yamaa_core::{
-    project_function::Function, project_function_result::results_match, value::Value,
+    diagnostic::ConditionCode, project_function::Function, project_function_result::results_match,
+    value::Value,
 };
 use yamaa_engine::{
     function_invocation::FailureKind,
@@ -299,7 +300,14 @@ pub fn test_issues_with_limit<'a, E>(
                 context["reason"] = json!("the case produced a different result");
             }
         }
-        issues.push(Issue::from_diagnostic(json!({"phase":"validation","condition":"function_conformance_failed","requirement":"REQ-0703","spec_paths":[path],"context":context})).map_err(|_|Error::InvalidContext)?);
+        let mapping = ConditionCode::FunctionConformanceFailed.definition();
+        issues.push(
+            Issue::from_diagnostic(json!({
+                "phase":mapping.phase, "condition":mapping.condition,
+                "requirement":mapping.requirement, "spec_paths":[path], "context":context,
+            }))
+            .map_err(|_| Error::InvalidContext)?,
+        );
     }
     finish(issues, maximum)
 }

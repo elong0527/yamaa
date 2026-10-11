@@ -11,21 +11,18 @@ stays with the study's project, and derive `AGE` from it.
 
 - `common/spec_common.yaml` is the shared level, kept in its own
   directory as it would be when several studies inherit it. It names
-  the demographics file `input/dm.csv`, gives the `AGE` field type,
+  the demographics file `../input/dm.csv`, gives the `AGE` field type,
   and declares every column;
 - `spec_study.yaml` is the entry: it names the shared level as its
   parent and declares the complete output;
 - `input/dm.csv` sits at the project root (this benchmark's
   directory), not beside the shared level.
 
-The chain resolves to `expected/spec_resolved.yaml`, the default view in
-the specification dropdown.
+**Note:** paths resolve from the directory of the file that declares them.
+The shared level writes `../input/dm.csv`, which reaches the study's input
+from `common/`. The engine resolves that declaring-file path once.
 
-**Note:** a path is read from the directory of the file that writes it
-first, so the resolved chain states it as `common/input/dm.csv`.
-Nothing is stored there, so the run reads the path as the shared level
-wrote it, `input/dm.csv`, from the project root instead, which is where
-each study keeps its own data. A file stored beside the shared level
-would still win.
+`expected/spec_resolved.yaml` retains the historical reference view. It is
+excluded from public conformance until cutover under #1973 item 14.
 
 **Standard:** ADaM | **Domain:** ADSL

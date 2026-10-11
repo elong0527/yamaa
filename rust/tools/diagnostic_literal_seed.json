@@ -1,0 +1,277 @@
+{
+  "rust/crates/yamaa-adapters/src/dataset_failure_diagnostic.rs:58": {
+    "path": "rust/crates/yamaa-adapters/src/dataset_failure_diagnostic.rs",
+    "source": "assert_eq!(value[\"condition\"], \"multiple_values_per_key\");",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/dataset_failure_diagnostic.rs:59": {
+    "path": "rust/crates/yamaa-adapters/src/dataset_failure_diagnostic.rs",
+    "source": "assert_eq!(value[\"requirement\"], \"REQ-0075\");",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/dataset_transport.rs:1371": {
+    "path": "rust/crates/yamaa-adapters/src/dataset_transport.rs",
+    "source": "condition: \"allowed_values_failed\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/dataset_transport.rs:1372": {
+    "path": "rust/crates/yamaa-adapters/src/dataset_transport.rs",
+    "source": "requirement: \"REQ-0957\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/dataset_transport.rs:1401": {
+    "path": "rust/crates/yamaa-adapters/src/dataset_transport.rs",
+    "source": "requirement: \"REQ-0376\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/dataset_transport.rs:1414": {
+    "path": "rust/crates/yamaa-adapters/src/dataset_transport.rs",
+    "source": "\"REQ-0376\"",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/file_application.rs:55": {
+    "path": "rust/crates/yamaa-adapters/src/file_application.rs",
+    "source": "E::Io(_) => \"publication_failed\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/file_application.rs:699": {
+    "path": "rust/crates/yamaa-adapters/src/file_application.rs",
+    "source": "assert_eq!(failures[0].condition, \"engine_rejected\");",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:107": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"value_not_permitted\",",
+    "occurrences": 4
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:108": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"REQ-1074\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:134": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"submission_metadata_missing\",",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:135": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"REQ-1015\",",
+    "occurrences": 4
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:142": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"missing_required_field\",",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:212": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"artifact_outside_document\",",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:213": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"REQ-1229\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:220": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"artifact_path_collision\",",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:221": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"REQ-1195\",",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:236": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"dataset_json_path_collision\",",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:237": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"REQ-1226\",",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:250": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"REQ-1021\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:641": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"publication_failed\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:642": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "Some(\"REQ-0764\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:655": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "\"REQ-1072\",",
+    "occurrences": 3
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:816": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "assert_eq!(result.issues()[0].condition, \"publication_failed\");",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/file_define.rs:817": {
+    "path": "rust/crates/yamaa-adapters/src/file_define.rs",
+    "source": "assert_eq!(result.issues()[0].requirement.as_deref(), Some(\"REQ-0764\"));",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/issue_rows.rs:116": {
+    "path": "rust/crates/yamaa-adapters/src/issue_rows.rs",
+    "source": "\"phase\":\"derivation\", \"condition\":\"integer_overflow\", \"requirement\":null,",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/issue_rows.rs:141": {
+    "path": "rust/crates/yamaa-adapters/src/issue_rows.rs",
+    "source": "let valid = json!({\"phase\":\"validation\",\"condition\":\"unknown_field\",\"requirement\":\"REQ-0103\",\"spec_paths\":[\"input.SRC\"],\"context\":{}});",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/producer_report.rs:1073": {
+    "path": "rust/crates/yamaa-adapters/src/producer_report.rs",
+    "source": "json!({\"phase\":\"validation\",\"condition\":\"producer_contract_mismatch\",\"requirement\":\"REQ-0535\",\"spec_paths\":[\"input.P.schema\",\"input.P.path\"],\"context\":{\"dataset\":\"P\",\"expected\":[\"ID\",\"VALUE\"],\"actual\":[\"VALUE\",\"ID\"],\"missing\":[],\"extra\":[],\"reordered\":true}})",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/producer_result.rs:1160": {
+    "path": "rust/crates/yamaa-adapters/src/producer_result.rs",
+    "source": ".any(|issue| issue.requirement.as_deref() == Some(\"REQ-0764\")));",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-adapters/src/producer_result.rs:158": {
+    "path": "rust/crates/yamaa-adapters/src/producer_result.rs",
+    "source": "(false, \"publication_failed\", Some(*node))",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/producer_result.rs:267": {
+    "path": "rust/crates/yamaa-adapters/src/producer_result.rs",
+    "source": "(false, \"publication_failed\", Some(failure.request))",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/producer_result.rs:997": {
+    "path": "rust/crates/yamaa-adapters/src/producer_result.rs",
+    "source": ".filter(|issue| issue.requirement.as_deref() == Some(\"REQ-0764\"))",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/project_activation_diagnostics.rs:162": {
+    "path": "rust/crates/yamaa-adapters/src/project_activation_diagnostics.rs",
+    "source": "\"phase\":\"validation\", \"condition\":\"project_environment_invalid\", \"requirement\":\"REQ-0695\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/project_activation_diagnostics.rs:302": {
+    "path": "rust/crates/yamaa-adapters/src/project_activation_diagnostics.rs",
+    "source": "issues.push(Issue::from_diagnostic(json!({\"phase\":\"validation\",\"condition\":\"function_conformance_failed\",\"requirement\":\"REQ-0703\",\"spec_paths\":[path],\"context\":context})).map_err(|_|Error::InvalidContext)?);",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/project_codelist_diagnostics.rs:68": {
+    "path": "rust/crates/yamaa-adapters/src/project_codelist_diagnostics.rs",
+    "source": "if matches!(check, Some(Check::Codelist { .. })) || record.requirement == \"REQ-0957\" {",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/project_codelist_diagnostics.rs:81": {
+    "path": "rust/crates/yamaa-adapters/src/project_codelist_diagnostics.rs",
+    "source": "|| record.condition != \"allowed_values_failed\"",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/project_codelist_diagnostics.rs:82": {
+    "path": "rust/crates/yamaa-adapters/src/project_codelist_diagnostics.rs",
+    "source": "|| record.requirement != \"REQ-0957\"",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_check.rs:104": {
+    "path": "rust/crates/yamaa-adapters/src/specification_check.rs",
+    "source": "let expected = r#\"[{\"condition\":\"invalid_regex\",\"context\":\"{\\\"pattern\\\":\\\"\u00e9(\\\"}\",\"phase\":\"validation\",\"requirement\":\"REQ-0827\",\"spec_paths\":[\"columns.V.verifications[0].matches.pattern\"]}]\"#;",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_diagnostics.rs:217": {
+    "path": "rust/crates/yamaa-adapters/src/specification_diagnostics.rs",
+    "source": "if finding[\"condition\"] == \"non_ascii_source\" {",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_report.rs:754": {
+    "path": "rust/crates/yamaa-adapters/src/specification_report.rs",
+    "source": "if condition == \"row_count_failed\" {",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_report.rs:758": {
+    "path": "rust/crates/yamaa-adapters/src/specification_report.rs",
+    "source": "\"row_count_failed\" => {",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_report.rs:761": {
+    "path": "rust/crates/yamaa-adapters/src/specification_report.rs",
+    "source": "\"unique_failed\" => {",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_report.rs:773": {
+    "path": "rust/crates/yamaa-adapters/src/specification_report.rs",
+    "source": "\"missing_key\" => {",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_report.rs:781": {
+    "path": "rust/crates/yamaa-adapters/src/specification_report.rs",
+    "source": "\"duplicate_key\" => json!({\"duplicate_count\":failed}),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_report.rs:782": {
+    "path": "rust/crates/yamaa-adapters/src/specification_report.rs",
+    "source": "\"assert_failed\" | \"all_or_none_failed\" => json!({\"failure_count\":failed}),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_report.rs:783": {
+    "path": "rust/crates/yamaa-adapters/src/specification_report.rs",
+    "source": "\"not_missing_failed\"",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_report.rs:784": {
+    "path": "rust/crates/yamaa-adapters/src/specification_report.rs",
+    "source": "| \"allowed_values_failed\"",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_report.rs:785": {
+    "path": "rust/crates/yamaa-adapters/src/specification_report.rs",
+    "source": "| \"range_failed\"",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_report.rs:786": {
+    "path": "rust/crates/yamaa-adapters/src/specification_report.rs",
+    "source": "| \"length_failed\"",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_report.rs:787": {
+    "path": "rust/crates/yamaa-adapters/src/specification_report.rs",
+    "source": "| \"matches_failed\" => {",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/specification_report.rs:847": {
+    "path": "rust/crates/yamaa-adapters/src/specification_report.rs",
+    "source": "let check = if condition == \"length_failed\" {",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/yaml_transport.rs:192": {
+    "path": "rust/crates/yamaa-adapters/src/yaml_transport.rs",
+    "source": "json!({\"condition\":\"non_ascii_source\",\"spec_paths\":[\"$\"],\"context\":{\"line\":1,\"column\":4}}),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/yaml_transport.rs:196": {
+    "path": "rust/crates/yamaa-adapters/src/yaml_transport.rs",
+    "source": "json!({\"condition\":\"invalid_text\",\"spec_paths\":[\"$.x\"],\"context\":{\"code_point\":\"U+D800\",\"offset\":1}}),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/yaml_transport.rs:81": {
+    "path": "rust/crates/yamaa-adapters/src/yaml_transport.rs",
+    "source": "\"condition\":\"non_ascii_source\", \"spec_paths\":[\"$\"],",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-adapters/src/yaml_transport.rs:90": {
+    "path": "rust/crates/yamaa-adapters/src/yaml_transport.rs",
+    "source": "\"condition\":\"invalid_text\", \"spec_paths\":[issue.path],",
+    "occurrences": 1
+  }
+}

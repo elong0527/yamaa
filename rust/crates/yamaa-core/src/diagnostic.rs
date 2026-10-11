@@ -122,6 +122,7 @@ conditions! {
     CodelistExtensionNotAdmitted => ("validation", "codelist_extension_not_admitted", Some("REQ-0952")),
     UnknownProjectFunction => ("validation", "unknown_project_function", Some("REQ-0698")),
     InvalidFunctionArgument => ("validation", "invalid_function_argument", Some("REQ-0700")),
+    FunctionConformanceFailed => ("validation", "function_conformance_failed", Some("REQ-0703")),
     ApplicationUnsupported => ("planning", "unsupported_operation", None),
     ApplicationRejected => ("engine", "engine_rejected", None),
     DatasetMultipleValues => ("derivation", "multiple_values_per_key", Some("REQ-0075")),
