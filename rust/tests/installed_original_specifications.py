@@ -2252,5 +2252,42 @@ columns:
             self.assertFalse((root / "src.csv").exists())
             self.assertFalse((root / "result.csv").exists())
 
+    def test_public_intermediate_applicable_keys_and_complete_declaration_findings(self):
+        import yamaa
+        body = "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, PARAM]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: float, SEQ: int}}\noutput: {path: result.csv, columns: [ID, PARAM, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: PARAM, type: str, derivation: {literal: only}}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n"
+        def findings(result):
+            return [dict(phase=phase, condition=condition, requirement=requirement,
+                         spec_paths=paths, context=json.loads(context))
+                    for phase, condition, requirement, paths, context in result.issues.rows()]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = root / "spec.yaml"
+            entry.write_text(body)
+            (root / "src.csv").write_text("ID\n2\n1\n3\n")
+            (root / "donor.csv").write_text("SEQ,ID,A,B\n1,1,first,\n1,1,tied,second\n0,2,two,both\n")
+            result = yamaa.domain(entry)
+            self.assertEqual(findings(result), [])
+            self.assertEqual(json.loads(result._native.observations())["handler_counts"], [{'spec_path': 'columns.A.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.A.derivation.source.no_match', 'handler': 'no_match', 'count': 1}, {'spec_path': 'columns.B.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.B.derivation.source.no_match', 'handler': 'no_match', 'count': 1}])
+            self.assertTrue(result.save())
+            self.assertEqual((root / "result.csv").read_bytes(), b'ID,PARAM,A,B\n2,only,two,both\n1,only,first,\n3,only,,\n')
+        for remove, condition, context in [
+            ("    order_by: [DONOR.SEQ]\n    keep: first\n", "rename_only_intermediate", {"intermediate":"P", "dataset":"DONOR"}),
+            ("    keep: first\n", "unpaired_fields", {"intermediate":"P", "declared":["order_by"], "missing":["keep"]}),
+            ("    order_by: [DONOR.SEQ]\n", "unpaired_fields", {"intermediate":"P", "declared":["keep"], "missing":["order_by"]}),
+        ]:
+            with self.subTest(condition=condition, context=context), tempfile.TemporaryDirectory() as directory:
+                entry = Path(directory) / "spec.yaml"
+                entry.write_text(body.replace(remove, ""))
+                expected = [{"phase":"validation", "condition":condition,
+                             "requirement":"REQ-1248" if condition == "rename_only_intermediate" else "REQ-0119",
+                             "spec_paths":["intermediates[0]"], "context":context}]
+                self.assertEqual(findings(yamaa.check(entry)), expected)
+                result = yamaa.domain(entry)
+                self.assertEqual(findings(result), expected)
+                self.assertIsNone(result.output)
+                self.assertIsNone(result._native.observations())
+                with self.assertRaises(yamaa.DomainError): result.save()
+                self.assertFalse((entry.parent / "src.csv").exists())
+
 if __name__ == "__main__":
     unittest.main()
