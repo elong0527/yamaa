@@ -110,7 +110,6 @@ def stage_text_pad_truth(destination: Path):
                 writer.writerow((name, index, finding["phase"], finding["condition"], finding["requirement"], json.dumps(finding["spec_paths"], separators=(",", ":")), json.dumps(context, sort_keys=True, separators=(",", ":"))))
 
 
-
 def stage_flag_truth(destination: Path):
     """Retain complete independent captures and emit literal installed R truth."""
     original = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json"
@@ -178,6 +177,61 @@ def stage_flag_truth(destination: Path):
         "# Independent original CSV/findings/handlers; no candidate execution.\n"
         "# Held: generic case REQ-0103/0189 and recursive report context PR1933.\n"
         "flag_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
+
+def stage_row_intermediate_truth(destination: Path):
+    """Materialize unchanged originals and complete independently captured row truth."""
+    original = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json"
+    shutil.copy2(original, destination / "row-intermediate-reference.json")
+    reference = json.loads(original.read_text(encoding="ascii"))
+    root = destination / "row-cases"
+    root.mkdir()
+    cases = dict(reference["cases"], **reference["originals"])
+    def text(value):
+        return json.dumps(value, ensure_ascii=True)
+    def strings(values):
+        return "c(" + ",".join("NA_character_" if value is None else text(value) for value in values) + ")" if values else "character()"
+    entries = []
+    for name, case in cases.items():
+        directory = root / name
+        directory.mkdir()
+        if name in reference["originals"]:
+            # The full copied original keeps its source/expected fixtures unchanged.
+            shutil.copytree(REPOSITORY / "benchmarks" / name, directory, dirs_exist_ok=True)
+            assert (directory / "spec.yaml").read_bytes() == case["specification"].encode()
+            for filename, source in case["inputs"].items():
+                assert (directory / "input" / filename).read_bytes() == source.encode()
+        else:
+            (directory / "spec.yaml").write_text(case["specification"], encoding="utf-8", newline="\n")
+            for filename, source in case["inputs"].items():
+                (directory / filename).write_text(source, encoding="utf-8", newline="\n")
+        findings = case["findings"]
+        success = "csv" in case
+        if name == "different-row-drivers":
+            findings = [{"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                         "spec_paths":["rows[1].dataset"], "context":{"operation":"row_driver"}}]
+            success = False
+        elif name == "adam-adlb-end-of-treatment":
+            findings = reference["eot_native_gates"]
+            success = False
+        if success:
+            (directory / "expected.csv").write_text(case["csv"], encoding="utf-8", newline="\n")
+            if name in reference["originals"]:
+                assert case["csv"] == case["expected_csv"]
+        (directory / "findings.json").write_text(json.dumps(findings, ensure_ascii=True, sort_keys=True) + "\n", encoding="ascii")
+        fields = []
+        for field in ("phase", "condition", "requirement", "spec_paths", "context"):
+            values = [finding[field] for finding in findings]
+            if field == "spec_paths":
+                literal = "list(" + ",".join(strings(paths) for paths in values) + ")"
+            else:
+                if field == "context":
+                    values = [json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")) for value in values]
+                literal = strings(values)
+            fields.append(field + "=" + literal)
+        ledger = case.get("handler_counts", [])
+        output = "adlb.csv" if name in reference["originals"] else "result.csv"
+        entries.append(text(name) + "=list(issues=list(" + ",".join(fields) + "),success=" + ("TRUE" if success else "FALSE") + ",output=" + text(output) + ",ledger=" + text(json.dumps(ledger, sort_keys=True, separators=(",", ":"))) + ")")
+    (destination / "row-intermediate-truth.R").write_text("# Complete independent row-context truth; EOT and distinct sources remain gated.\nrow_intermediate_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
 
 def stage_inheritance_replay(destination: Path):
     """Translate existing graph inputs to raw JSON/YAML, preserving independent outcomes."""
@@ -383,7 +437,7 @@ def stage(destination: Path):
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.tsv", destination / "original-row-conversion-handlers.tsv")
     for name in SCHEMA_MODULES:
         shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
-    for name in CASES + ROUNDING_CASES + TEMPORAL_CASES + IMPUTATION_CASES + TEXT_CASES + PAD_CASES + FLAG_POSITIVE_CASES + FLAG_NEGATIVE_CASES:
+    for name in (*CASES, *ROUNDING_CASES, *TEMPORAL_CASES, *IMPUTATION_CASES, *TEXT_CASES, *PAD_CASES, *FLAG_POSITIVE_CASES, *FLAG_NEGATIVE_CASES, "schema-verification-log"):
         shutil.copytree(REPOSITORY / "benchmarks" / name, destination / "cases" / CASE_DIRECTORY_NAMES.get(name, name))
     shutil.copytree(
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specs",
@@ -405,6 +459,7 @@ def stage(destination: Path):
     stage_text_case_truth(destination)
     stage_text_pad_truth(destination)
     stage_flag_truth(destination)
+    stage_row_intermediate_truth(destination)
 
 
 if __name__ == "__main__":

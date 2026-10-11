@@ -18,10 +18,19 @@ pub use dataset::DatasetFinding;
 mod inheritance;
 pub use inheritance::InheritanceFinding;
 
+#[path = "diagnostic_source.rs"]
+mod source;
+pub use source::{admit_source_diagnostics, ParquetFinding, SourceDiagnosticReport, SourceFinding};
+
 #[path = "diagnostic_grammar.rs"]
 mod grammar;
 #[path = "diagnostic_numeric.rs"]
 mod numeric;
+#[path = "diagnostic_predicate.rs"]
+mod predicate;
+pub use predicate::{
+    PredicateDiagnosticError, PredicateGrammarDiagnosticError, MAX_PREDICATE_DIAGNOSTIC_BYTES,
+};
 #[path = "diagnostic_project_lock.rs"]
 mod project_lock;
 pub use project_lock::{
@@ -174,6 +183,9 @@ conditions! {
     ProducerRedundantSourceType => ("validation", "redundant_field_type", Some("REQ-0523")),
     ProducerContractMismatch => ("validation", "producer_contract_mismatch", Some("REQ-0535")),
     OutputUnknownProfile => ("validation", "unknown_artifact_profile", Some("REQ-0760")),
+    MissingWarningLog => ("validation", "missing_warning_log", Some("REQ-0391")),
+    WarningLogPathCollision => ("validation", "artifact_path_collision", Some("REQ-0756")),
+    VerificationLogPathCollision => ("validation", "artifact_path_collision", Some("REQ-1180")),
     OutputInvalidDecimals => ("validation", "invalid_field_type", Some("REQ-0744")),
     OutputDecimalsNotApplicable => ("validation", "decimals_not_applicable", Some("REQ-0762")),
     OutputDuplicateColumn => ("validation", "duplicate_identifier", Some("REQ-0234")),
@@ -233,6 +245,10 @@ conditions! {
     PredicateUnknownField => ("validation", "unknown_field", Some("REQ-0189")),
     PredicateUnresolvableName => ("validation", "unresolvable_name", Some("REQ-0189")),
     PredicateInputType => ("validation", "incompatible_input_type", Some("REQ-0190")),
+    PredicateIncompatiblePair => ("validation", "incompatible_input_type", Some("REQ-0190")),
+    PredicateExpectedText => ("validation", "incompatible_input_type", Some("REQ-0190")),
+    PredicateContainsExpectedText => ("validation", "incompatible_input_type", Some("REQ-1244")),
+    PredicateDanglingEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
     PredicateInvalidExpression => ("validation", "invalid_predicate", Some("REQ-0188")),
     PredicateInvalidEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
     PredicateInvalidRegex => ("validation", "invalid_predicate", Some("REQ-1244")),

@@ -1814,6 +1814,52 @@ columns:
                             for path, original in retained.items():
                                 self.assertEqual(path.read_bytes(), original)
 
+    def test_public_common_row_intermediates_complete_original_and_independent_truth(self):
+        import shutil
+        import yamaa
+        reference = json.loads((ROOT / "row-intermediate-reference.json").read_text(encoding="ascii"))
+        cases = dict(reference["cases"], **reference["originals"])
+        def issues(result):
+            records = result.issues.to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
+            return records
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, case in cases.items():
+                with self.subTest(name=name):
+                    current = root / name
+                    shutil.copytree(ROOT / "row-cases" / name, current)
+                    entry = current / "spec.yaml"
+                    expected = json.loads((current / "findings.json").read_text(encoding="ascii"))
+                    result = yamaa.domain(entry)
+                    self.assertEqual(issues(result), expected)
+                    observations = result._native.observations()
+                    if observations is not None:
+                        self.assertEqual(json.loads(observations)["handler_counts"], case.get("handler_counts", []))
+                    output = current / ("adlb.csv" if name in reference["originals"] else "result.csv")
+                    self.assertFalse(output.exists())
+                    if not expected:
+                        self.assertIsNotNone(result.output)
+                        expected_csv = (current / "expected.csv").read_bytes()
+                        self.assertEqual(result.output.write_csv().encode(), expected_csv)
+                        self.assertTrue(result.save())
+                        self.assertEqual(output.read_bytes(), expected_csv)
+                        self.assertTrue(result.save())
+                        self.assertEqual(output.read_bytes(), expected_csv)
+                    else:
+                        self.assertIsNone(result.output)
+                        with self.assertRaises(yamaa.DomainError):
+                            result.save()
+                        self.assertFalse(output.exists())
+                    if name in ("unknown-row-driver", "omitted-row-driver", "different-row-drivers", "adam-adlb-end-of-treatment"):
+                        self.assertEqual(issues(yamaa.check(entry)), expected)
+            # Public Check admits metadata without inspecting missing study files.
+            original = root / "adam-adlb-supplb-padded-key"
+            shutil.rmtree(original / "input")
+            self.assertEqual(issues(yamaa.check(original / "spec.yaml")), [])
+            self.assertFalse((original / "input").exists())
+
     def test_public_domain_all_original_issues_outputs_and_saved_bytes(self):
         import datetime
         import shutil

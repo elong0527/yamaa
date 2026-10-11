@@ -148,7 +148,7 @@ class PublicProducers(unittest.TestCase):
             self.assertIn(RAW, dict(held.retained_sources()).values())
             observed = self.observe(result)
             self.assertEqual(observed["outcome"], "success")
-            self.assertEqual(len(observed["source_reads"]), 3)
+            self.assertEqual(len(observed["source_reads"]), 1)
             self.assertEqual([item["content"].encode() for item in observed["artifacts"]], [PRODUCED, CONSUMED])
             self.assertEqual(observed["activation"]["lock"], "verified")
             self.assertEqual([item["case"] for item in observed["activation"]["tests"]], ["normal", "boundary", "missing"])

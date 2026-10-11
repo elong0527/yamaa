@@ -205,7 +205,9 @@ R installs as `yamaa`. Its archive embeds the shared workspace through
 `tools/stage_r_package.py`; stage `R/yamaa` before building the template. Installed
 runtime tests need no repository, Cargo or Python. The legacy `cdiscbuilder`
 sources remain only for migration assessment until the full release surface
-qualifies. Environment/functions, logs and full benchmark coverage remain open.
+qualifies. [Governed verification logs](VERIFICATION_LOGS.md) now use retained
+native check records and explicit ordered Save. Broader language, API and full
+benchmark qualification remain open.
 
 The bootstrap resource is embedded in the binary and tested after installation
 outside the checkout. This tests packaging only, not discovery of study resources.

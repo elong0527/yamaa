@@ -197,3 +197,269 @@ fn study_day_epoch_and_nested_row_cases_execute_typed_driver_operands_and_missin
         assert_eq!(fs::read(study.0.join("result.csv")).unwrap(), expected);
     }
 }
+
+#[test]
+fn row_temporal_replay_independent_reference_preserves_defaults_and_post_capture_types() {
+    // Complete independent captures, including absent-input/type-error double faults.
+    let reference: serde_json::Value = serde_json::from_str(r###"{
+  "bare-default-to_epoch_day": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      to_epoch_day:\n        source: D1\n",
+    "inputs": {
+      "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
+    },
+    "findings": [],
+    "handler_counts": [],
+    "csv": "ID,D1,D2,EP\na,1970-01-01,1970-01-01,0\nb,2000-01-01,1970-01-01,10957\n"
+  },
+  "missing-input-row-invalid-to_epoch_day": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      to_epoch_day:\n        source: SRC.D\n",
+    "inputs": {},
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "resource_path_missing",
+        "spec_paths": [
+          "input.SRC.path"
+        ],
+        "requirement": "REQ-0785",
+        "context": {
+          "dataset": "SRC",
+          "path": "src.csv"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  "row-invalid-to_epoch_day": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      to_epoch_day:\n        source: SRC.D\n",
+    "inputs": {
+      "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
+    },
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "rows[0].derivations.EP.to_epoch_day.source"
+        ],
+        "requirement": "REQ-0606",
+        "context": {
+          "source": "SRC.D",
+          "expected": "date",
+          "actual": "str"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  "bare-default-study_day": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      study_day:\n        date: D2\n        reference: D1\n",
+    "inputs": {
+      "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
+    },
+    "findings": [],
+    "handler_counts": [],
+    "csv": "ID,D1,D2,EP\na,1970-01-01,1970-01-01,1\nb,2000-01-01,1970-01-01,-10957\n"
+  },
+  "missing-input-row-invalid-study_day": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      study_day:\n        date: SRC.D\n        reference: SRC.D\n",
+    "inputs": {},
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "resource_path_missing",
+        "spec_paths": [
+          "input.SRC.path"
+        ],
+        "requirement": "REQ-0785",
+        "context": {
+          "dataset": "SRC",
+          "path": "src.csv"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  "row-invalid-study_day": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      study_day:\n        date: SRC.D\n        reference: SRC.D\n",
+    "inputs": {
+      "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
+    },
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "rows[0].derivations.EP.study_day.date"
+        ],
+        "requirement": "REQ-0606",
+        "context": {
+          "source": "SRC.D",
+          "expected": "date",
+          "actual": "str"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "rows[0].derivations.EP.study_day.reference"
+        ],
+        "requirement": "REQ-0606",
+        "context": {
+          "source": "SRC.D",
+          "expected": "date",
+          "actual": "str"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  "bare-default-date_diff": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      date_diff:\n        start: D1\n        end: D2\n        unit: day\n        bounds: exclusive\n",
+    "inputs": {
+      "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
+    },
+    "findings": [],
+    "handler_counts": [],
+    "csv": "ID,D1,D2,EP\na,1970-01-01,1970-01-01,0\nb,2000-01-01,1970-01-01,-10957\n"
+  },
+  "missing-input-row-invalid-date_diff": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      date_diff:\n        start: SRC.D\n        end: SRC.D\n        unit: day\n        bounds: exclusive\n",
+    "inputs": {},
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "resource_path_missing",
+        "spec_paths": [
+          "input.SRC.path"
+        ],
+        "requirement": "REQ-0785",
+        "context": {
+          "dataset": "SRC",
+          "path": "src.csv"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  "row-invalid-date_diff": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      date_diff:\n        start: SRC.D\n        end: SRC.D\n        unit: day\n        bounds: exclusive\n",
+    "inputs": {
+      "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
+    },
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "rows[0].derivations.EP.date_diff.start"
+        ],
+        "requirement": "REQ-0606",
+        "context": {
+          "source": "SRC.D",
+          "expected": "date",
+          "actual": "str"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "rows[0].derivations.EP.date_diff.end"
+        ],
+        "requirement": "REQ-0606",
+        "context": {
+          "source": "SRC.D",
+          "expected": "date",
+          "actual": "str"
+        }
+      }
+    ],
+    "handler_counts": []
+  },
+  "nested-default-to_epoch_day": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\n  - NEXT\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\n  derivation:\n    to_epoch_day:\n      source: D1\n- name: NEXT\n  type: int\nrows:\n- id: dates\n  derivations:\n    NEXT:\n      compute:\n        expr: EP + 1\n",
+    "inputs": {
+      "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
+    },
+    "findings": [],
+    "handler_counts": [],
+    "csv": "ID,D1,D2,EP,NEXT\na,1970-01-01,1970-01-01,0,1\nb,2000-01-01,1970-01-01,10957,10958\n"
+  },
+  "nested-default-study_day": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\n  - NEXT\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\n  derivation:\n    study_day:\n      date: D2\n      reference: D1\n- name: NEXT\n  type: int\nrows:\n- id: dates\n  derivations:\n    NEXT:\n      compute:\n        expr: EP + 1\n",
+    "inputs": {
+      "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
+    },
+    "findings": [],
+    "handler_counts": [],
+    "csv": "ID,D1,D2,EP,NEXT\na,1970-01-01,1970-01-01,1,2\nb,2000-01-01,1970-01-01,-10957,-10956\n"
+  },
+  "nested-default-date_diff": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\n  - NEXT\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\n  derivation:\n    date_diff:\n      start: D1\n      end: D2\n      unit: day\n      bounds: exclusive\n- name: NEXT\n  type: int\nrows:\n- id: dates\n  derivations:\n    NEXT:\n      compute:\n        expr: EP + 1\n",
+    "inputs": {
+      "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
+    },
+    "findings": [],
+    "handler_counts": [],
+    "csv": "ID,D1,D2,EP,NEXT\na,1970-01-01,1970-01-01,0,1\nb,2000-01-01,1970-01-01,-10957,-10956\n"
+  }
+}"###).unwrap();
+    for (name, truth) in reference.as_object().unwrap() {
+        let study = Study::new("adam-adsl-duration", false);
+        fs::write(
+            study.0.join("spec.yaml"),
+            truth["specification"].as_str().unwrap(),
+        )
+        .unwrap();
+        for (name, bytes) in truth["inputs"].as_object().unwrap() {
+            fs::write(study.0.join(name), bytes.as_str().unwrap()).unwrap();
+        }
+        let path = study.path();
+        let result = file_application::domain(
+            Request {
+                specification: &path,
+                environment: None,
+            },
+            identity(&path),
+        );
+        let (issues, mut success) = match result {
+            Ok(result) => (result.issues().to_vec(), Some(result)),
+            Err(issues) => (issues, None),
+        };
+        let actual: Vec<_> = issues
+            .iter()
+            .map(|finding| {
+                serde_json::json!({
+                    "phase": finding.phase, "condition": finding.condition,
+                    "requirement": finding.requirement, "spec_paths": finding.spec_paths,
+                    "context": serde_json::from_str::<serde_json::Value>(&finding.context).unwrap()
+                })
+            })
+            .collect();
+        assert_eq!(serde_json::json!(actual), truth["findings"], "{name}");
+        assert!(!study.0.join("result.csv").exists(), "{name}");
+        if let Some(csv) = truth["csv"].as_str() {
+            let result = success.as_mut().unwrap();
+            assert!(result.output_table().is_some());
+            assert_eq!(
+                result.observations()["handler_counts"],
+                truth["handler_counts"],
+                "{name}"
+            );
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read(study.0.join("result.csv")).unwrap(),
+                csv.as_bytes(),
+                "{name}"
+            );
+        } else {
+            if let Some(result) = success.as_mut() {
+                assert!(result.output_table().is_none(), "{name}");
+                assert!(result.save().is_err(), "{name}");
+            }
+            assert!(!study.0.join("result.csv").exists(), "{name}");
+        }
+    }
+}

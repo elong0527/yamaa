@@ -1,0 +1,1496 @@
+{
+  "reference_module": "/private/tmp/yamaa-closeout-local/python-venv/lib/python3.14/site-packages/yamaa/__init__.py",
+  "originals": {
+    "adam-adlb-supplb-padded-key": {
+      "entry": "/private/tmp/yamaa-root-text-padding/benchmarks/adam-adlb-supplb-padded-key/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADLB\nkeys: [STUDYID, USUBJID, LBSEQ]\ninput:\n  LB: {path: input/lb.csv, types: {LBSEQ: int}}\n  SUPPLB: input/supplb.csv\n\noutput:\n  path: adlb.csv\n  columns: [STUDYID, USUBJID, LBSEQ, QVAL, QVAL_NAMED]\n\nintermediates:\n  - id: SUP_EP\n    dataset: SUPPLB\n    key:\n      STUDYID: LB.STUDYID\n      USUBJID: LB.USUBJID\n      IDVARVAL: {str_pad: {source: LBSEQ, width: 8}}\n    no_match: null\n\ncolumns:\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: LB.STUDYID}\n\n  - name: USUBJID\n    type: str\n    label: Subject Identifier\n    derivation: LB.USUBJID\n\n  - {name: LBSEQ, type: int, label: Sequence Number, derivation: LB.LBSEQ}\n  - {name: QVAL, type: str, label: Supplemental Value}\n\n  - name: QVAL_NAMED\n    type: str\n    label: Supplemental Value by Named Intermediate\n    derivation: SUP_EP.QVAL\n\nrows:\n  - id: low_sequence\n    dataset: LB\n    filter: \"LB.LBSEQ < 200\"\n    derivations: {QVAL: SUP_EP.QVAL}\n\n  - id: high_sequence\n    dataset: LB\n    filter: \"LB.LBSEQ >= 200\"\n    derivations: {QVAL: SUP_EP.QVAL}\n\nverifications:\n  - row_count:\n      min: 6\n      max: 6\n",
+      "inputs": {
+        "lb.csv": "STUDYID,USUBJID,LBSEQ\nYAMAA-01,YAMAA-01-101,7\nYAMAA-01,YAMAA-01-101,200\nYAMAA-01,YAMAA-01-101,259\nYAMAA-01,YAMAA-01-102,259\nYAMAA-01,YAMAA-01-103,42\nYAMAA-01,YAMAA-01-104,311\n",
+        "supplb.csv": "STUDYID,USUBJID,IDVARVAL,QVAL\nYAMAA-01,YAMAA-01-101,       7,OTHER\nYAMAA-01,YAMAA-01-101,     200,BOUND\nYAMAA-01,YAMAA-01-101,     259,EP\nYAMAA-01,YAMAA-01-101,     999,ORPHAN\nYAMAA-01,YAMAA-01-102,     259,SHARED\nYAMAA-01,YAMAA-01-102,00000259,ZEROPAD\nYAMAA-01,YAMAA-01-103,      42,SINGLE\n"
+      },
+      "expected_csv": "STUDYID,USUBJID,LBSEQ,QVAL,QVAL_NAMED\nYAMAA-01,YAMAA-01-101,7,OTHER,OTHER\nYAMAA-01,YAMAA-01-103,42,SINGLE,SINGLE\nYAMAA-01,YAMAA-01-101,200,BOUND,BOUND\nYAMAA-01,YAMAA-01-101,259,EP,EP\nYAMAA-01,YAMAA-01-102,259,SHARED,SHARED\nYAMAA-01,YAMAA-01-104,311,,\n",
+      "handler_counts": [
+        {
+          "spec_path": "rows[0].derivations.QVAL.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        },
+        {
+          "spec_path": "rows[1].derivations.QVAL.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        },
+        {
+          "spec_path": "columns.QVAL_NAMED.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,LBSEQ,QVAL,QVAL_NAMED\nYAMAA-01,YAMAA-01-101,7,OTHER,OTHER\nYAMAA-01,YAMAA-01-103,42,SINGLE,SINGLE\nYAMAA-01,YAMAA-01-101,200,BOUND,BOUND\nYAMAA-01,YAMAA-01-101,259,EP,EP\nYAMAA-01,YAMAA-01-102,259,SHARED,SHARED\nYAMAA-01,YAMAA-01-104,311,,\n",
+      "rows": [
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-101",
+          "LBSEQ": 7,
+          "QVAL": "OTHER",
+          "QVAL_NAMED": "OTHER"
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-103",
+          "LBSEQ": 42,
+          "QVAL": "SINGLE",
+          "QVAL_NAMED": "SINGLE"
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-101",
+          "LBSEQ": 200,
+          "QVAL": "BOUND",
+          "QVAL_NAMED": "BOUND"
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-101",
+          "LBSEQ": 259,
+          "QVAL": "EP",
+          "QVAL_NAMED": "EP"
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-102",
+          "LBSEQ": 259,
+          "QVAL": "SHARED",
+          "QVAL_NAMED": "SHARED"
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-104",
+          "LBSEQ": 311,
+          "QVAL": null,
+          "QVAL_NAMED": null
+        }
+      ],
+      "trace": [
+        {
+          "event": "verify_uniqueness_begin"
+        },
+        {
+          "event": "verify_uniqueness_end",
+          "failure_count": 0
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-101",
+            "LBSEQ": 7
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUP_EP",
+          "record_position": 0,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-101",
+            "LBSEQ": 200
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUP_EP",
+          "record_position": 1,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-101",
+            "LBSEQ": 259
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUP_EP",
+          "record_position": 2,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-102",
+            "LBSEQ": 259
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUP_EP",
+          "record_position": 4,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-103",
+            "LBSEQ": 42
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUP_EP",
+          "record_position": 6,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-104",
+            "LBSEQ": 311
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUP_EP",
+          "record_position": null,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-101",
+            "LBSEQ": 7
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUP_EP",
+          "record_position": 0,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-101",
+            "LBSEQ": 200
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUP_EP",
+          "record_position": 1,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-101",
+            "LBSEQ": 259
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUP_EP",
+          "record_position": 2,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-102",
+            "LBSEQ": 259
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUP_EP",
+          "record_position": 4,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-103",
+            "LBSEQ": 42
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUP_EP",
+          "record_position": 6,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-104",
+            "LBSEQ": 311
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUP_EP",
+          "record_position": null,
+          "condition": null,
+          "spec_path": null
+        }
+      ]
+    },
+    "adam-adlb-end-of-treatment": {
+      "entry": "/private/tmp/yamaa-root-text-padding/benchmarks/adam-adlb-end-of-treatment/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADLB\nkeys: [STUDYID, USUBJID, LBSEQ]\ninput:\n  LB: {path: input/lb.csv, types: {LBSEQ: int, VISITNUM: int, LBSTRESN: float}}\n  SUPPLB: input/supplb.csv\nbase: LB\n\noutput:\n  path: adlb.csv\n  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, VISITNUM, AVAL, ENDPOINT, EOTFL]\n\nintermediates:\n  # The protocol endpoint qualifier, one supplemental record per\n  # laboratory record. The supplemental key is the laboratory sequence\n  # number written as eight-character, space-padded text.\n  - id: SUPP_EP\n    dataset: SUPPLB\n    key:\n      STUDYID: LB.STUDYID\n      USUBJID: LB.USUBJID\n      IDVARVAL: {str_pad: {source: LB.LBSEQ, width: 8}}\n    filter: \"SUPPLB.QNAM = 'ENDPOINT'\"\n    no_match: null\n    verifications:\n      - unique: [STUDYID, USUBJID, IDVARVAL]\n\n  # Every laboratory record carries its own endpoint qualifier before the\n  # window ranks the records of each subject and test: the endpoint\n  # record first, then the latest visit.\n  - id: EOT_RANK\n    dataset: LB\n    key: [STUDYID, USUBJID, LBSEQ]\n    derivations:\n      ENDPOINT: SUPP_EP.QVAL\n      EOT_SEQ:\n        row_number:\n          window:\n            group_by: [LB.USUBJID, LB.LBTESTCD]\n            order_by:\n              - {variable: ENDPOINT, direction: desc}\n              - {variable: LB.VISITNUM, direction: desc}\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: LB.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n\n  - name: LBSEQ\n    type: int\n    label: Sequence Number\n    derivation: LB.LBSEQ\n\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: LB.LBTESTCD\n\n  - name: VISITNUM\n    type: int\n    label: Visit Number\n    derivation: LB.VISITNUM\n\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation: LB.LBSTRESN\n\n  - name: ENDPOINT\n    type: str\n    label: Protocol Endpoint Record\n    derivation: EOT_RANK.ENDPOINT\n\n  - name: EOTFL\n    type: str\n    label: End of Treatment Record Flag\n    derivation:\n      flag: \"EOT_RANK.EOT_SEQ = 1\"\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, LBSEQ]\n  - row_count:\n      min: 12\n      max: 12\n",
+      "inputs": {
+        "lb.csv": "STUDYID,USUBJID,LBSEQ,LBTESTCD,VISITNUM,LBSTRESN\nYAMAA-01,YAMAA-01-101,1,ALB,1,4\nYAMAA-01,YAMAA-01-101,2,ALB,2,4.2\nYAMAA-01,YAMAA-01-101,3,ALB,3,4.1\nYAMAA-01,YAMAA-01-101,4,CREAT,1,80\nYAMAA-01,YAMAA-01-101,5,CREAT,2,82\nYAMAA-01,YAMAA-01-101,6,CREAT,3,85\nYAMAA-01,YAMAA-01-102,1,ALB,1,3.9\nYAMAA-01,YAMAA-01-102,2,ALB,2,4\nYAMAA-01,YAMAA-01-103,1,ALB,1,4.3\nYAMAA-01,YAMAA-01-104,1,ALB,1,\nYAMAA-01,YAMAA-01-104,2,ALB,2,4.4\nYAMAA-01,YAMAA-01-105,1,CREAT,3,95\n",
+        "supplb.csv": "STUDYID,RDOMAIN,USUBJID,IDVAR,IDVARVAL,QNAM,QLABEL,QVAL\nYAMAA-01,LB,YAMAA-01-101,LBSEQ,       2,ENDPOINT,Protocol Endpoint Record,Y\nYAMAA-01,LB,YAMAA-01-101,LBSEQ,       2,LBTMSHI,Result to Upper Limit Ratio,0.9\nYAMAA-01,LB,YAMAA-01-102,LBSEQ,       1,LBTMSHI,Result to Upper Limit Ratio,0.8\nYAMAA-01,LB,YAMAA-01-103,LBSEQ,       7,ENDPOINT,Protocol Endpoint Record,Y\nYAMAA-01,LB,YAMAA-01-104,LBSEQ,       1,ENDPOINT,Protocol Endpoint Record,Y\nYAMAA-01,LB,YAMAA-01-105,LBSEQ,       1,ENDPOINT,Protocol Endpoint Record,Y\n"
+      },
+      "expected_csv": "STUDYID,USUBJID,LBSEQ,LBTESTCD,VISITNUM,AVAL,ENDPOINT,EOTFL\nYAMAA-01,YAMAA-01-101,1,ALB,1,4,,\nYAMAA-01,YAMAA-01-101,2,ALB,2,4.2,Y,Y\nYAMAA-01,YAMAA-01-101,3,ALB,3,4.1,,\nYAMAA-01,YAMAA-01-101,4,CREAT,1,80,,\nYAMAA-01,YAMAA-01-101,5,CREAT,2,82,,\nYAMAA-01,YAMAA-01-101,6,CREAT,3,85,,Y\nYAMAA-01,YAMAA-01-102,1,ALB,1,3.9,,\nYAMAA-01,YAMAA-01-102,2,ALB,2,4,,Y\nYAMAA-01,YAMAA-01-103,1,ALB,1,4.3,,Y\nYAMAA-01,YAMAA-01-104,1,ALB,1,,Y,Y\nYAMAA-01,YAMAA-01-104,2,ALB,2,4.4,,\nYAMAA-01,YAMAA-01-105,1,CREAT,3,95,Y,Y\n",
+      "handler_counts": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,LBSEQ,LBTESTCD,VISITNUM,AVAL,ENDPOINT,EOTFL\nYAMAA-01,YAMAA-01-101,1,ALB,1,4.0,,\nYAMAA-01,YAMAA-01-101,2,ALB,2,4.2,Y,Y\nYAMAA-01,YAMAA-01-101,3,ALB,3,4.1,,\nYAMAA-01,YAMAA-01-101,4,CREAT,1,80.0,,\nYAMAA-01,YAMAA-01-101,5,CREAT,2,82.0,,\nYAMAA-01,YAMAA-01-101,6,CREAT,3,85.0,,Y\nYAMAA-01,YAMAA-01-102,1,ALB,1,3.9,,\nYAMAA-01,YAMAA-01-102,2,ALB,2,4.0,,Y\nYAMAA-01,YAMAA-01-103,1,ALB,1,4.3,,Y\nYAMAA-01,YAMAA-01-104,1,ALB,1,,Y,Y\nYAMAA-01,YAMAA-01-104,2,ALB,2,4.4,,\nYAMAA-01,YAMAA-01-105,1,CREAT,3,95.0,Y,Y\n",
+      "rows": [
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-101",
+          "LBSEQ": 1,
+          "LBTESTCD": "ALB",
+          "VISITNUM": 1,
+          "AVAL": 4.0,
+          "ENDPOINT": null,
+          "EOTFL": null
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-101",
+          "LBSEQ": 2,
+          "LBTESTCD": "ALB",
+          "VISITNUM": 2,
+          "AVAL": 4.2,
+          "ENDPOINT": "Y",
+          "EOTFL": "Y"
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-101",
+          "LBSEQ": 3,
+          "LBTESTCD": "ALB",
+          "VISITNUM": 3,
+          "AVAL": 4.1,
+          "ENDPOINT": null,
+          "EOTFL": null
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-101",
+          "LBSEQ": 4,
+          "LBTESTCD": "CREAT",
+          "VISITNUM": 1,
+          "AVAL": 80.0,
+          "ENDPOINT": null,
+          "EOTFL": null
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-101",
+          "LBSEQ": 5,
+          "LBTESTCD": "CREAT",
+          "VISITNUM": 2,
+          "AVAL": 82.0,
+          "ENDPOINT": null,
+          "EOTFL": null
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-101",
+          "LBSEQ": 6,
+          "LBTESTCD": "CREAT",
+          "VISITNUM": 3,
+          "AVAL": 85.0,
+          "ENDPOINT": null,
+          "EOTFL": "Y"
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-102",
+          "LBSEQ": 1,
+          "LBTESTCD": "ALB",
+          "VISITNUM": 1,
+          "AVAL": 3.9,
+          "ENDPOINT": null,
+          "EOTFL": null
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-102",
+          "LBSEQ": 2,
+          "LBTESTCD": "ALB",
+          "VISITNUM": 2,
+          "AVAL": 4.0,
+          "ENDPOINT": null,
+          "EOTFL": "Y"
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-103",
+          "LBSEQ": 1,
+          "LBTESTCD": "ALB",
+          "VISITNUM": 1,
+          "AVAL": 4.3,
+          "ENDPOINT": null,
+          "EOTFL": "Y"
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-104",
+          "LBSEQ": 1,
+          "LBTESTCD": "ALB",
+          "VISITNUM": 1,
+          "AVAL": null,
+          "ENDPOINT": "Y",
+          "EOTFL": "Y"
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-104",
+          "LBSEQ": 2,
+          "LBTESTCD": "ALB",
+          "VISITNUM": 2,
+          "AVAL": 4.4,
+          "ENDPOINT": null,
+          "EOTFL": null
+        },
+        {
+          "STUDYID": "YAMAA-01",
+          "USUBJID": "YAMAA-01-105",
+          "LBSEQ": 1,
+          "LBTESTCD": "CREAT",
+          "VISITNUM": 3,
+          "AVAL": 95.0,
+          "ENDPOINT": "Y",
+          "EOTFL": "Y"
+        }
+      ],
+      "trace": [
+        {
+          "event": "verify_uniqueness_begin"
+        },
+        {
+          "event": "verify_uniqueness_end",
+          "failure_count": 0
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "EOT_RANK",
+          "current": {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-101",
+            "LBSEQ": 1
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "augment_begin",
+          "intermediate": "EOT_RANK",
+          "donor_records": 12
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUPP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-101",
+            "LB.LBSEQ": 1
+          },
+          "resolver": "_IntermediateDerivationResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUPP_EP",
+          "record_position": null,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUPP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-101",
+            "LB.LBSEQ": 2
+          },
+          "resolver": "_IntermediateDerivationResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUPP_EP",
+          "record_position": 0,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUPP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-101",
+            "LB.LBSEQ": 3
+          },
+          "resolver": "_IntermediateDerivationResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUPP_EP",
+          "record_position": null,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUPP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-101",
+            "LB.LBSEQ": 4
+          },
+          "resolver": "_IntermediateDerivationResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUPP_EP",
+          "record_position": null,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUPP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-101",
+            "LB.LBSEQ": 5
+          },
+          "resolver": "_IntermediateDerivationResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUPP_EP",
+          "record_position": null,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUPP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-101",
+            "LB.LBSEQ": 6
+          },
+          "resolver": "_IntermediateDerivationResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUPP_EP",
+          "record_position": null,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUPP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-102",
+            "LB.LBSEQ": 1
+          },
+          "resolver": "_IntermediateDerivationResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUPP_EP",
+          "record_position": null,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUPP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-102",
+            "LB.LBSEQ": 2
+          },
+          "resolver": "_IntermediateDerivationResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUPP_EP",
+          "record_position": null,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUPP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-103",
+            "LB.LBSEQ": 1
+          },
+          "resolver": "_IntermediateDerivationResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUPP_EP",
+          "record_position": null,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUPP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-104",
+            "LB.LBSEQ": 1
+          },
+          "resolver": "_IntermediateDerivationResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUPP_EP",
+          "record_position": 4,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUPP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-104",
+            "LB.LBSEQ": 2
+          },
+          "resolver": "_IntermediateDerivationResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUPP_EP",
+          "record_position": null,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "SUPP_EP",
+          "current": {
+            "LB.STUDYID": "YAMAA-01",
+            "LB.USUBJID": "YAMAA-01-105",
+            "LB.LBSEQ": 1
+          },
+          "resolver": "_IntermediateDerivationResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "SUPP_EP",
+          "record_position": 5,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "augment_end",
+          "intermediate": "EOT_RANK",
+          "result": "tuple"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "EOT_RANK",
+          "record_position": 0,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "EOT_RANK",
+          "current": {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-101",
+            "LBSEQ": 2
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "EOT_RANK",
+          "record_position": 1,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "EOT_RANK",
+          "current": {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-101",
+            "LBSEQ": 3
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "EOT_RANK",
+          "record_position": 2,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "EOT_RANK",
+          "current": {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-101",
+            "LBSEQ": 4
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "EOT_RANK",
+          "record_position": 3,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "EOT_RANK",
+          "current": {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-101",
+            "LBSEQ": 5
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "EOT_RANK",
+          "record_position": 4,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "EOT_RANK",
+          "current": {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-101",
+            "LBSEQ": 6
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "EOT_RANK",
+          "record_position": 5,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "EOT_RANK",
+          "current": {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-102",
+            "LBSEQ": 1
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "EOT_RANK",
+          "record_position": 6,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "EOT_RANK",
+          "current": {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-102",
+            "LBSEQ": 2
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "EOT_RANK",
+          "record_position": 7,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "EOT_RANK",
+          "current": {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-103",
+            "LBSEQ": 1
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "EOT_RANK",
+          "record_position": 8,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "EOT_RANK",
+          "current": {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-104",
+            "LBSEQ": 1
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "EOT_RANK",
+          "record_position": 9,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "EOT_RANK",
+          "current": {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-104",
+            "LBSEQ": 2
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "EOT_RANK",
+          "record_position": 10,
+          "condition": null,
+          "spec_path": null
+        },
+        {
+          "event": "select_begin",
+          "intermediate": "EOT_RANK",
+          "current": {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-105",
+            "LBSEQ": 1
+          },
+          "resolver": "RowResolver"
+        },
+        {
+          "event": "select_end",
+          "intermediate": "EOT_RANK",
+          "record_position": 11,
+          "condition": null,
+          "spec_path": null
+        }
+      ]
+    }
+  },
+  "cases": {
+    "common-driver-no-base": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "inputs": {
+        "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
+        "donor.csv": "K,V\nx,X\ny,Y\n"
+      },
+      "handler_counts": [
+        {
+          "spec_path": "rows[0].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        },
+        {
+          "spec_path": "rows[1].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        },
+        {
+          "spec_path": "columns.COLV.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        }
+      ],
+      "findings": [],
+      "csv": "ID,SECTION,KEY,ROWV,COLV\na,L,x,X,X\nc,L,z,,\nb,H,y,Y,Y\n",
+      "select_calls": [
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "y"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "z"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "y"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "z"
+          }
+        }
+      ]
+    },
+    "unknown-named-row-field": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.ABSENT\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "inputs": {
+        "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
+        "donor.csv": "K,V\nx,X\ny,Y\n"
+      },
+      "handler_counts": [],
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "spec_paths": [
+            "rows[0].derivations.ROWV.source"
+          ],
+          "requirement": "REQ-0125",
+          "context": {
+            "identifier": "P.ABSENT"
+          }
+        }
+      ],
+      "select_calls": []
+    },
+    "unknown-named-row-field-with-missing-input": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.ABSENT\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "inputs": {},
+      "handler_counts": [],
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "resource_path_missing",
+          "spec_paths": [
+            "input.SRC.path"
+          ],
+          "requirement": "REQ-0785",
+          "context": {
+            "dataset": "SRC",
+            "path": "src.csv"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "resource_path_missing",
+          "spec_paths": [
+            "input.DONOR.path"
+          ],
+          "requirement": "REQ-0785",
+          "context": {
+            "dataset": "DONOR",
+            "path": "donor.csv"
+          }
+        }
+      ],
+      "select_calls": []
+    },
+    "reordered-inputs": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  DONOR: donor.csv\n  SRC: src.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "inputs": {
+        "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
+        "donor.csv": "K,V\nx,X\ny,Y\n"
+      },
+      "handler_counts": [
+        {
+          "spec_path": "rows[0].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        },
+        {
+          "spec_path": "rows[1].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        },
+        {
+          "spec_path": "columns.COLV.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        }
+      ],
+      "findings": [],
+      "csv": "ID,SECTION,KEY,ROWV,COLV\na,L,x,X,X\nc,L,z,,\nb,H,y,Y,Y\n",
+      "select_calls": [
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "y"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "z"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "y"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "z"
+          }
+        }
+      ]
+    },
+    "filtered-candidate-cache": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "inputs": {
+        "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
+        "donor.csv": "K,V\nx,X\ny,Y\n"
+      },
+      "handler_counts": [
+        {
+          "spec_path": "rows[0].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        },
+        {
+          "spec_path": "rows[1].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        },
+        {
+          "spec_path": "columns.COLV.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        }
+      ],
+      "findings": [],
+      "csv": "ID,SECTION,KEY,ROWV,COLV\nb,L,y,Y,Y\na,H,x,X,X\nc,H,z,,\n",
+      "select_calls": [
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "y"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "z"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "y"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "z"
+          }
+        }
+      ]
+    },
+    "same-record-different-template-values": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY:\n      literal: x\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY:\n      literal: y\n    ROWV: P.V\n",
+      "inputs": {
+        "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
+        "donor.csv": "K,V\nx,X\ny,Y\n"
+      },
+      "handler_counts": [],
+      "findings": [],
+      "csv": "ID,SECTION,KEY,ROWV,COLV\na,L,x,X,X\nb,L,x,X,X\nc,L,x,X,X\na,H,y,Y,Y\nb,H,y,Y,Y\nc,H,y,Y,Y\n",
+      "select_calls": [
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "y"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "y"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "y"
+          }
+        }
+      ]
+    },
+    "unknown-row-driver": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: ABSENT\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "inputs": {},
+      "handler_counts": [],
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "driver_unavailable",
+          "spec_paths": [
+            "rows[1].dataset"
+          ],
+          "requirement": null,
+          "context": {
+            "row": "high",
+            "dataset": "ABSENT"
+          }
+        }
+      ],
+      "select_calls": []
+    },
+    "omitted-row-driver": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\nbase: SRC\n",
+      "inputs": {},
+      "handler_counts": [],
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "driver_unavailable",
+          "spec_paths": [
+            "rows[1].dataset"
+          ],
+          "requirement": null,
+          "context": {
+            "row": "high",
+            "dataset": null
+          }
+        }
+      ],
+      "select_calls": []
+    },
+    "unmatched-before-filter": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "inputs": {
+        "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
+        "donor.csv": "K,V\nx,X\ny,Y\n"
+      },
+      "handler_counts": [],
+      "findings": [
+        {
+          "phase": "join",
+          "condition": "unmatched_key",
+          "spec_paths": [
+            "intermediates[0]"
+          ],
+          "requirement": "REQ-0124",
+          "context": {
+            "intermediate": "P",
+            "dataset": "DONOR",
+            "key": [
+              "K"
+            ],
+            "intermediate_key": {
+              "K": "z"
+            },
+            "keys": [
+              {
+                "ID": "c",
+                "SECTION": "L"
+              }
+            ]
+          }
+        }
+      ],
+      "select_calls": [
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "y"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "z"
+          }
+        }
+      ]
+    },
+    "multiple-before-filter": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "inputs": {
+        "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
+        "donor.csv": "K,V\nx,X\ny,Y\nx,X2\n"
+      },
+      "handler_counts": [],
+      "findings": [
+        {
+          "phase": "join",
+          "condition": "multiple_matches",
+          "spec_paths": [
+            "intermediates[0]"
+          ],
+          "requirement": "REQ-0127",
+          "context": {
+            "intermediate": "P",
+            "dataset": "DONOR",
+            "key": [
+              "K"
+            ],
+            "intermediate_key": {
+              "K": "x"
+            },
+            "match_count": 2,
+            "keys": [
+              {
+                "ID": "a",
+                "SECTION": "L"
+              }
+            ]
+          }
+        }
+      ],
+      "select_calls": [
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        }
+      ]
+    },
+    "conversion-before-filter": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: int\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "inputs": {
+        "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
+        "donor.csv": "K,V\nx,X\ny,Y\n"
+      },
+      "handler_counts": [],
+      "findings": [
+        {
+          "phase": "convert",
+          "condition": "conversion_failed",
+          "spec_paths": [
+            "columns.ROWV"
+          ],
+          "requirement": "REQ-0013",
+          "context": {
+            "from": "str",
+            "to": "int",
+            "value": "X",
+            "keys": [
+              {
+                "ID": "a",
+                "SECTION": "L"
+              }
+            ]
+          }
+        }
+      ],
+      "select_calls": [
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        }
+      ]
+    },
+    "width-after-input-capture": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K:\n      str_pad:\n        source: SRC.K\n        width: 0\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "inputs": {
+        "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
+        "donor.csv": "K,V\nx,X\ny,Y\n"
+      },
+      "handler_counts": [],
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "spec_paths": [
+            "intermediates[0].key.K.str_pad.width"
+          ],
+          "requirement": "REQ-1261",
+          "context": {
+            "expected": "a positive integer width"
+          }
+        }
+      ],
+      "select_calls": []
+    },
+    "missing-input-before-width": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K:\n      str_pad:\n        source: SRC.K\n        width: 0\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "inputs": {},
+      "handler_counts": [],
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "resource_path_missing",
+          "spec_paths": [
+            "input.SRC.path"
+          ],
+          "requirement": "REQ-0785",
+          "context": {
+            "dataset": "SRC",
+            "path": "src.csv"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "resource_path_missing",
+          "spec_paths": [
+            "input.DONOR.path"
+          ],
+          "requirement": "REQ-0785",
+          "context": {
+            "dataset": "DONOR",
+            "path": "donor.csv"
+          }
+        }
+      ],
+      "select_calls": []
+    },
+    "zero-row-source": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: high\n  dataset: SRC\n  filter: SRC.KEEP = '1'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: H\n    KEY: SRC.K\n    ROWV: P.V\n",
+      "inputs": {
+        "src.csv": "ID,K,KEEP\n",
+        "donor.csv": "K,V\nx,X\ny,Y\n"
+      },
+      "handler_counts": [],
+      "findings": [],
+      "csv": "ID,SECTION,KEY,ROWV,COLV\n",
+      "select_calls": []
+    },
+    "different-row-drivers": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\n- SECTION\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECTION\n  - KEY\n  - ROWV\n  - COLV\nintermediates:\n- id: P\n  dataset: DONOR\n  key:\n    K: KEY\n  no_match: null\ncolumns:\n- name: ID\n  type: str\n- name: SECTION\n  type: str\n- name: KEY\n  type: str\n- name: ROWV\n  type: str\n- name: COLV\n  type: str\n  derivation: P.V\nrows:\n- id: low\n  dataset: SRC\n  filter: SRC.KEEP = '0'\n  derivations:\n    ID: SRC.ID\n    SECTION:\n      literal: L\n    KEY: SRC.K\n    ROWV: P.V\n- id: donors\n  dataset: DONOR\n  derivations:\n    ID: DONOR.K\n    SECTION:\n      literal: D\n    KEY: DONOR.K\n    ROWV: P.V\n",
+      "inputs": {
+        "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
+        "donor.csv": "K,V\nx,X\ny,Y\n"
+      },
+      "handler_counts": [
+        {
+          "spec_path": "rows[0].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        },
+        {
+          "spec_path": "columns.COLV.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 1
+        }
+      ],
+      "findings": [],
+      "csv": "ID,SECTION,KEY,ROWV,COLV\na,L,x,X,X\nc,L,z,,\nx,D,x,X,X\ny,D,y,Y,Y\n",
+      "select_calls": [
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "y"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "z"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "x"
+          }
+        },
+        {
+          "intermediate": "P",
+          "current": {
+            "KEY": "y"
+          }
+        }
+      ]
+    }
+  },
+  "eot_native_gates": [
+    {
+      "phase": "planning",
+      "condition": "unsupported_operation",
+      "requirement": null,
+      "spec_paths": [
+        "intermediates[0].verifications"
+      ],
+      "context": {
+        "operation": "verifications"
+      }
+    },
+    {
+      "phase": "planning",
+      "condition": "unsupported_operation",
+      "requirement": null,
+      "spec_paths": [
+        "intermediates[1].derivations"
+      ],
+      "context": {
+        "operation": "derivations"
+      }
+    },
+    {
+      "phase": "planning",
+      "condition": "unsupported_operation",
+      "requirement": null,
+      "spec_paths": [
+        "intermediates[1]"
+      ],
+      "context": {
+        "operation": "intermediate_scope"
+      }
+    },
+    {
+      "phase": "planning",
+      "condition": "unsupported_operation",
+      "requirement": null,
+      "spec_paths": [
+        "columns.ENDPOINT.derivation.source"
+      ],
+      "context": {
+        "operation": "secondary_source_expression"
+      }
+    },
+    {
+      "phase": "planning",
+      "condition": "unsupported_operation",
+      "requirement": null,
+      "spec_paths": [
+        "columns.EOTFL.derivation.flag"
+      ],
+      "context": {
+        "operation": "flag"
+      }
+    }
+  ]
+}

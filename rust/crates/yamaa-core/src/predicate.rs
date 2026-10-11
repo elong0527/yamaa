@@ -436,28 +436,18 @@ pub enum Condition {
 impl Condition {
     /// Predicate binding/type/pattern failures retain the reference validation phase.
     pub fn phase(&self) -> &'static str {
-        "validation"
+        self.diagnostic_code().definition().phase
     }
-
-    /// Stable language condition vocabulary, separate from resource or port failures.
+    /// Stable language vocabulary, separate from resource or port failures.
     pub fn condition(&self) -> &'static str {
-        match self {
-            Self::UnknownField { .. } => "unknown_field",
-            Self::IncompatiblePair { .. }
-            | Self::ExpectedText { .. }
-            | Self::ContainsExpectedText { .. } => "incompatible_input_type",
-            Self::DanglingEscape => "invalid_predicate",
-        }
+        self.diagnostic_code().definition().condition
     }
-
-    /// Owning normative predicate requirement; no lifecycle handler is applied here.
+    /// Owning normative predicate requirement; no lifecycle handler applies here.
     pub fn requirement(&self) -> &'static str {
-        match self {
-            Self::UnknownField { .. } => "REQ-0189",
-            Self::IncompatiblePair { .. } | Self::ExpectedText { .. } => "REQ-0190",
-            Self::DanglingEscape => "REQ-0191",
-            Self::ContainsExpectedText { .. } => "REQ-1244",
-        }
+        self.diagnostic_code()
+            .definition()
+            .requirement
+            .expect("predicate requirement")
     }
 }
 

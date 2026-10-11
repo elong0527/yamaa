@@ -266,6 +266,21 @@ pub struct Verification {
     pub check: Check,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum VerificationSeverity {
+    #[default]
+    Error,
+    Warning,
+}
+impl VerificationSeverity {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+        }
+    }
+}
+
 /// Checks for one declared column, in authored order and its own ID namespace.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ColumnVerifications {
@@ -310,6 +325,7 @@ pub struct DatasetPlan {
     keys: Vec<usize>,
     verifications: Vec<Verification>,
     column_verifications: Vec<ColumnVerifications>,
+    warning_verifications: alloc::collections::BTreeSet<String>,
     conversion_handlers: Vec<ConversionHandler>,
     conversion_sites: BTreeMap<String, usize>,
 }
@@ -542,13 +558,12 @@ fn validate_assignment_at(
         Expression::ProjectFunction(function) => function.validate(source, available, mode)?,
         Expression::FirstAvailable(selection) => selection.validate(source, available, mode)?,
         Expression::Intermediate { index, column } => {
-            if !matches!(mode, RowMode::Keys) {
-                return Err(PlanError::InvalidIntermediate);
-            }
             let item = intermediates
                 .get(*index)
                 .ok_or(PlanError::InvalidIntermediate)?;
-            intermediates::validate_read(item, *column, source, secondary, available, output)?;
+            intermediates::validate_context_read(
+                item, *column, source, secondary, available, output, mode,
+            )?;
         }
         Expression::RowLookup(lookup) => lookup::validate_row(lookup, source, secondary, mode)?,
         Expression::Lookup(lookup) => {
@@ -872,6 +887,7 @@ impl DatasetPlan {
             keys,
             verifications,
             column_verifications: Vec::new(),
+            warning_verifications: Default::default(),
             conversion_handlers: Vec::new(),
             conversion_sites: BTreeMap::new(),
         })
@@ -879,6 +895,34 @@ impl DatasetPlan {
 }
 
 impl DatasetPlan {
+    /// Severity belongs to admitted check declarations, never host issue rows.
+    pub fn with_warning_verifications(mut self, paths: Vec<String>) -> Result<Self, PlanError> {
+        let checks: alloc::collections::BTreeSet<_> = self
+            .verifications
+            .iter()
+            .chain(
+                self.column_verifications
+                    .iter()
+                    .flat_map(|group| &group.checks),
+            )
+            .map(|check| check.path.as_str())
+            .collect();
+        let mut warnings = alloc::collections::BTreeSet::new();
+        for path in paths {
+            if !checks.contains(path.as_str()) || !warnings.insert(path) {
+                return Err(PlanError::InvalidColumns);
+            }
+        }
+        self.warning_verifications = warnings;
+        Ok(self)
+    }
+    pub fn verification_severity(&self, path: &str) -> VerificationSeverity {
+        if self.warning_verifications.contains(path) {
+            VerificationSeverity::Warning
+        } else {
+            VerificationSeverity::Error
+        }
+    }
     /// Admit ordered column checks before any snapshot or value access.
     pub fn with_column_verifications(
         mut self,

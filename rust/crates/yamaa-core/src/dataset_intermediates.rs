@@ -93,3 +93,20 @@ pub(super) fn validate_read(
     }
     match_values::validate(&item.keys, primary, &source.schema, output, available)
 }
+
+/// Direct scalar selections use only admitted complete records or completed keys.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn validate_context_read(
+    item: &Intermediate,
+    column: usize,
+    primary: &TableSchema,
+    sources: &[SecondarySource],
+    available: &[bool],
+    output: &TableSchema,
+    mode: &RowMode,
+) -> Result<(), PlanError> {
+    if !matches!(mode, RowMode::Records | RowMode::Keys) {
+        return Err(PlanError::InvalidIntermediate);
+    }
+    validate_read(item, column, primary, sources, available, output)
+}

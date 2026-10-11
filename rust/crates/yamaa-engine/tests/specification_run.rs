@@ -238,6 +238,10 @@ fn reuse_repeats_effects_and_reports_actual_cached_captures() {
         decoder.trace.borrow_mut().clear();
         run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
         assert_eq!(attempt.sources[0].read.snapshots_created, Some(created));
+        assert_eq!(
+            attempt.sources[0].read.origin,
+            Some(run::SourceOrigin::Resource)
+        );
         assert!(Arc::ptr_eq(
             attempt.sources[0].snapshot.as_ref().unwrap(),
             &port.snapshot
@@ -260,6 +264,10 @@ fn capture_decode_and_binding_failures_stop_later_effects_without_losing_payload
     let mut attempt = CapturedAttempt::new(prepared.source());
     port.fail = true;
     run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+    assert_eq!(
+        attempt.sources[0].read.origin,
+        Some(run::SourceOrigin::Resource)
+    );
     let result = std::mem::replace(&mut attempt.result, Err(PortError::Incomplete));
     let Err(PortError::Capture(Payload(payload))) = result else {
         panic!("capture error")

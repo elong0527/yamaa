@@ -119,6 +119,7 @@ struct Study {
     trace: Trace,
     reads: usize,
     failure: bool,
+    unwind: Option<Arc<()>>,
 }
 impl StudyPort for Study {
     type Error = &'static str;
@@ -138,6 +139,9 @@ impl StudyPort for Study {
     ) -> Result<Arc<[u8]>, Self::Error> {
         assert_eq!((node.identity(), source.name.as_str()), ("/p", "RAW"));
         self.trace.borrow_mut().push("capture:/p:RAW".into());
+        if let Some(payload) = &self.unwind {
+            std::panic::panic_any(Arc::clone(payload));
+        }
         if self.failure {
             return Err("original source refusal");
         }
@@ -321,6 +325,7 @@ impl Ports {
                 trace: Rc::clone(&trace),
                 reads: 0,
                 failure: false,
+                unwind: None,
             },
             decoder: Decoder {
                 schema_case: 0,
@@ -644,6 +649,10 @@ fn whole_union_activates_before_study_and_two_aliases_ingest_one_producer_artifa
     assert!(attempt.outcome.is_ok());
     assert_eq!(ports.study.reads, 1);
     assert_eq!(
+        attempt.nodes[0].dataset.sources[0].read.origin,
+        Some(yamaa_engine::specification_run::SourceOrigin::Resource)
+    );
+    assert_eq!(
         attempt.nodes.iter().map(|n| n.node).collect::<Vec<_>>(),
         [1, 0]
     );
@@ -659,6 +668,10 @@ fn whole_union_activates_before_study_and_two_aliases_ingest_one_producer_artifa
         let snapshot = source.snapshot.as_ref().unwrap();
         assert_eq!(snapshot.as_ptr(), artifact.bytes().as_ptr());
         assert_eq!(source.read.snapshots_created, Some(0));
+        assert_eq!(
+            source.read.origin,
+            Some(yamaa_engine::specification_run::SourceOrigin::Generated)
+        );
     }
     assert_eq!(
         *ports.activation.trace.borrow(),
@@ -862,6 +875,10 @@ fn source_decode_report_and_codec_failures_stop_dependents_and_retain_exact_stag
                 Err(CompleteError::Encode("original codec refusal"))
             )),
         }
+        assert_eq!(
+            node.dataset.sources[0].read.origin,
+            Some(yamaa_engine::specification_run::SourceOrigin::Resource)
+        );
         assert!(!ports
             .activation
             .trace
@@ -869,6 +886,71 @@ fn source_decode_report_and_codec_failures_stop_dependents_and_retain_exact_stag
             .iter()
             .any(|s| s == "decode:FIRST"));
     }
+}
+
+#[test]
+fn routing_admission_before_capture_leaves_both_acquisition_branches_unentered() {
+    let build = prepared();
+    let mut ports = Ports::new();
+    let mut attempt = Attempt::default();
+    let limits = build::Limits {
+        // Both generated-source inspections finish, then the first capture's
+        // routing lookup refuses before borrowing bytes or entering study.
+        routing_work: 5,
+        ..Default::default()
+    };
+    build.build_into(ports.borrow(), limits, &mut attempt);
+    assert!(matches!(attempt.outcome, Err(Failure::Node { node: 0 })));
+    assert_eq!(attempt.nodes.len(), 2);
+    let consumer = &attempt.nodes[1].dataset;
+    assert!(matches!(
+        consumer.result,
+        Err(PortError::Capture(CaptureError::Limit(
+            "producer_routing_work"
+        )))
+    ));
+    assert_eq!(consumer.sources.len(), 1);
+    let source = &consumer.sources[0];
+    assert_eq!(source.read.origin, None);
+    assert!(!source.read.captured && source.snapshot.is_none() && source.table.is_none());
+    assert_eq!(ports.study.reads, 1);
+    assert_eq!(
+        ports
+            .study
+            .trace
+            .borrow()
+            .iter()
+            .filter(|event| event.starts_with("capture:"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn study_capture_unwind_retains_resource_entry_without_inventing_a_completed_snapshot() {
+    let build = prepared();
+    let mut ports = Ports::new();
+    let payload = Arc::new(());
+    ports.study.unwind = Some(Arc::clone(&payload));
+    let mut attempt = Attempt::default();
+    let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        build.build_into(ports.borrow(), Default::default(), &mut attempt);
+    }))
+    .unwrap_err();
+    assert!(Arc::ptr_eq(
+        error.downcast_ref::<Arc<()>>().unwrap(),
+        &payload
+    ));
+    assert!(matches!(attempt.outcome, Err(Failure::Incomplete)));
+    assert_eq!(attempt.nodes.len(), 1);
+    let source = &attempt.nodes[0].dataset.sources[0];
+    assert_eq!(
+        source.read.origin,
+        Some(yamaa_engine::specification_run::SourceOrigin::Resource)
+    );
+    assert_eq!(source.read.snapshots_created, None);
+    assert!(!source.read.captured && source.snapshot.is_none() && source.table.is_none());
+    assert_eq!(ports.study.reads, 0);
 }
 
 #[test]
