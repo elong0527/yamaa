@@ -11,11 +11,12 @@ remaining implementation and acceptance gates.
 ## Native binding and build
 
 The R binding exposes the shared Windows file preparation, capture, inspection,
-project activation, producer execution and explicit publication adapters. Its
+project activation, producer execution, verification logs, shared Define and
+explicit publication adapters. Its
 registered owned handles and rooted host error/interrupt payloads use the same
 implementation on Unix and Windows. The platform adapters retain their existing
-path, file-kind, link and snapshot checks; the separately approved declaring-file
-path change remains [#1905](https://github.com/elong0527/yamaa/issues/1905).
+path, file-kind, link and snapshot checks and implement the approved
+[declaring-file local-path policy](../rules/storage/resources.md).
 
 The official [Rtools45 build contract](https://cran.r-project.org/bin/windows/Rtools/rtools45/rtools.html)
 covers R 4.5 and later, including R 4.6. Its x86_64 compiler uses GCC/MinGW-w64
@@ -51,7 +52,12 @@ binding with strict Clippy, builds and installs a clean source package outside
 the checkout, and runs the complete installed R supplemental catalog. That
 includes original YAML, filesystem snapshots and publication, lossless scalars,
 installed project functions, repeated activation, producer graphs, original
-conditions/interrupts, retained results and failed-save gates. Strict
+conditions/interrupts, retained results and failed-save gates. Declared log
+sidecars must retain their original observations and Save order. Shared Define
+must compare the unchanged DM XML/JSON goldens, admit AE/VS metadata without
+executing specifications, retain held Save bytes after checked input deletion,
+and exercise the real Windows case-alias REQ-1226 collision with unchanged
+sentinels and no writes. Strict
 `R CMD check` must finish with `Status: OK`; notes, warnings and errors fail the
 lane.
 
@@ -70,3 +76,8 @@ against the reviewed revision. Cross-compilation or Rust Windows component tests
 alone never establish installed R qualification. Windows arm64, other R versions
 and binary-package distribution promises remain separate from this x86_64
 source-build lane.
+
+Both Python and R source archives must retain the native fixture manifest and
+all fourteen original log/Define paths it declares. Audits compare those members
+directly with the reviewed Git bytes, including the original CSV, XML and JSON
+expected outputs. A changed or missing fixture cannot qualify a source package.
