@@ -1,0 +1,127 @@
+{
+  "protocol": "public-lifecycle/1",
+  "state": "implemented-opt-in-bounded-controller-and-installed-workers",
+  "controller": "measure_public_lifecycle.py",
+  "workers": {
+    "python": "public_lifecycle_python_worker.py",
+    "r": "public_lifecycle_r_worker.R"
+  },
+  "scope": {
+    "cases": [
+      "adam-adlb-ordered-sum",
+      "schema-window-functions",
+      "schema-lookup"
+    ],
+    "b17": "remaining broader workload/measurement evidence is open",
+    "b18": "numeric budgets and workload/machine decisions remain open",
+    "performance_claim": "correctness-smoke retains raw durations but supplies no characterization"
+  },
+  "public_calls": {
+    "python": "yamaa.domain(entry)",
+    "r": "yamaa_domain(entry)"
+  },
+  "first_explicit_native_call": "first public Build after resolving/importing the public facade; engine_info AFTER Build",
+  "initialization_limits": "Package import may load the native library; shipped-schema and OS filesystem caches are uncontrolled. The controller does not time process startup.",
+  "controller_dependencies": [
+    "Python standard library",
+    "Git",
+    "Unix ps or Windows PowerShell process inventory"
+  ],
+  "worker_dependencies": {
+    "python": [
+      "installed yamaa and its declared runtime dependencies"
+    ],
+    "r": [
+      "installed yamaa",
+      "explicit jsonlite collector",
+      "explicit microbenchmark 1.5.0 collector"
+    ]
+  },
+  "r_clock_admission": "Retained selected source-build config, built timer library and byte-identical installed timer library; declared/actual collector version and origin. Windows WIN32/QueryPerformanceCounter; macOS MB_HAVE_MACH_TIME/mach_absolute_time; clock_gettime only with CLOCK_MONOTONIC, CLOCK_MONOTONIC_RAW or CLOCK_MONOTONIC_PRECISE. Wall-clock fallback refused. Source config/library relationship is retained build attestation, not inferred from OS or sampled time.",
+  "r_collector_bootstrap": "Collector import and request JSON decoding precede the yamaa import timer and are explicitly retained. Only raw microbenchmark::get_nanotime is called; no expression wrapper, implicit warmup or overhead subtraction.",
+  "r_timestamp_representation": "Each raw start_ns/end_ns/duration_ns is an object containing decimal (17 significant-digit round-trip string) and binary64_bits (exact big-endian IEEE binary64 bytes), under representation=binary64-nanoseconds. Controller checks decimal/bytes identity and exact binary64 subtraction; no integer coercion, tolerance, overhead adjustment or elapsed repair. Ordinary JSON numeric rounding is not accepted as the raw R clock representation.",
+  "compilation_exclusion": "Explicit --compilation-clear caller attestation plus process-name inventory before every child; unavailable inventory refuses. This is not an atomic system-wide lock; caller keeps compilation stopped throughout.",
+  "timed_boundaries": [
+    "package_import",
+    "public_build",
+    "copied_output",
+    "copied_issues",
+    "copied_verification_log",
+    "copied_warning_log",
+    "metadata_after_build",
+    "held_save_1",
+    "held_save_2"
+  ],
+  "timing_limits": "Outer boundaries include the actual public call or copying/canonical transport. Raw observation transport, saved-byte copying and controller acceptance run outside those timers. Import is once per child, warm import duration is not assigned to each repeat.",
+  "provenance_required": [
+    "source_revision (complete immutable Git commit)",
+    "artifact_reference",
+    "artifact_path",
+    "package_form (Python wheel/source, R source)",
+    "host",
+    "runtime_version",
+    "package_version",
+    "engine_version",
+    "toolchain (build-attested or null)",
+    "installed_origins (package/native)",
+    "system",
+    "cpu (attested or null)",
+    "installation_evidence (retained source/artifact/version/origin record)",
+    "R collectors/clock_evidence"
+  ],
+  "provenance_limit": "Source/artifact association comes from a retained installation qualification record. Workers verify actual loaded package/native origins and runtime/package/core versions after Build; the engine does not encode an introspectable source revision. Current cargo is not substituted for artifact build toolchain. Supplied Python wheel native bytes are compared directly with the actual installed library. Supplied source archives are compared with every original native source/manifest/lock/toolchain member; final source-built binary association still uses the retained build/installation attestation.",
+  "original_truth": "Controller reads unchanged Git yaml schema tree, all three benchmark case trees and original complete report JSON directly. Expected copied values/types/order/IEEE binary64 bits are projected from the original derived tables using original artifact column order. Only original runtime identity placeholders, public example label and requested specification labels are replaced. Original report artifact content equals original CSV bytes. These schema originals are retained and checked directly; the ordinary installed engine uses its embedded shipped schemas, with their generated native source pinned by archive/source qualification. No custom schema loader is passed to public Build.",
+  "correctness_before_accepting": [
+    "outside all checkout origins, including resolved symlinks",
+    "declared source/artifact/runtime provenance matches retained installation and actual worker observations",
+    "complete Build report with unsaved artifacts",
+    "copied output and post-Save output types/order/cells/float bits and actual host schema",
+    "issues schema/types/order and complete rows",
+    "original null declared log views",
+    "complete Save1/Save2 reports",
+    "both original CSV byte comparisons and native held repeated bytes",
+    "both original successful Save return values",
+    "fresh work directory and new ordinary Domain per repetition",
+    "all retained warmups pass"
+  ],
+  "retained_layout": [
+    "collection.json declared order/provenance/acceptance/failures",
+    "originals/ unchanged Git schema/cases/reports and byte comparison list",
+    "harness/ exact executed controller/protocol/worker bytes with checkout head separate from installed source",
+    "{host}-installation/ declared JSON, installation record, artifact bytes and R clock build evidence",
+    "{child}/request.json fresh work directories for every declared repetition",
+    "{child}/compilation-probe.json, stdout.txt, stderr.txt, response.json",
+    "{child}/rep-{index}-build-report.json and save_1/save_2 raw reports",
+    "{child}/rep-{index}-views.json copied host schema/cells/issues/logs",
+    "{child}/rep-{index}-save_1/save_2-{output}.csv raw saved-byte copies"
+  ],
+  "failure_policy": "No retries or skipped failures. Controller retains worker/startup/acceptance failures and continues remaining declared children when possible. Warm workers retain each declared repetition on ordinary failure; interruptions stop and preserve reached/unreached steps. Any missing/incomplete/failing repetition or warmup rejects the collection. Null/unreached metrics are never replaced by zero. Retain reached Build observations before metadata. Save finally safely retains latest owner observations and any available published bytes even on a throwing Save; secondary evidence_capture_failures are separate from the original public cause and also reject acceptance. Final response transport is protected: emit the primary diagnostic before writing, clear the owned result even if transport fails, emit a separate secondary transport diagnostic, stop that child without retry, and retain the last partial response plus stderr; missing final evidence rejects acceptance.",
+  "rss": {
+    "python_linux": "resource.getrusage(RUSAGE_SELF).ru_maxrss original KiB, bytes=raw*1024",
+    "python_macos": "same provider, original bytes",
+    "python_windows": null,
+    "r": null,
+    "scope": "whole child lifetime including imports, copies and raw evidence writes; cumulative across warm repetitions, excludes parent/controller acceptance; sampled at end of each repetition"
+  },
+  "unavailable": {
+    "phase_durations": null,
+    "actual_callback_counts": null,
+    "isolated_process_startup": null,
+    "shipped_schema_initialization": null,
+    "os_filesystem_cache": null
+  },
+  "prohibited": [
+    "runtime phase instrumentation",
+    "callback-count inference from handler names/report arrays",
+    "scalable synthetic release workloads",
+    "numeric release budgets",
+    "concurrent compilation",
+    "candidate-derived expected truth",
+    "fixture or schema modification",
+    "discarded failures, retries or warmups",
+    "b17/b18 closure or release transition claims"
+  ],
+  "harness_identity": "Truth source_revision and truth_repository_head are separate from the harness surrounding checkout_head (null outside Git). Retained executed controller/protocol/worker bytes are authoritative; a surrounding checkout commit does not prove untracked or modified harness bytes.",
+  "native_call_order_limit": "Worker order records the public Build and subsequent metadata anchors; private held-owner observation transport runs after Build outside timers and is not an actual callback/native-call count.",
+  "worker_executable_admission": "Launch the caller's absolute lexical executable spelling to preserve Python pyvenv.cfg context; independently resolve/audit its real target and reject invocation or actual target inside a checkout. Actual loaded package/native origins and versions are checked after public Build."
+}
