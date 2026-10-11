@@ -76,6 +76,13 @@ impl PreparedRun {
     pub fn document(&self) -> &PreparedDocument {
         &self.document
     }
+    pub(crate) fn reject(self, error: yamaa_core::specification::PrepareError) -> Box<RejectedRun> {
+        Box::new(RejectedRun {
+            document: self.document,
+            captured: self.captured,
+            rejection: self.checked.reject(error),
+        })
+    }
     pub fn captured_environment(&self) -> &CapturedEnvironment {
         &self.captured
     }

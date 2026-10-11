@@ -475,6 +475,7 @@
         "_DefineResult.save",
         "_DomainResult",
         "_DomainResult.issues",
+        "_DomainResult.log",
         "_DomainResult.observations",
         "_DomainResult.output",
         "_DomainResult.project_failures",
@@ -665,6 +666,10 @@
         "_DomainResult.project_failures": {
           "disposition": "internal",
           "rationale": "Retained original host payload qualification independent of formatting."
+        },
+        "_DomainResult.log": {
+          "disposition": "internal",
+          "rationale": "Private owned native log view used by the public result facade; no independent publication or host semantic authority."
         }
       }
     },

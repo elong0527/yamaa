@@ -50,8 +50,14 @@ yamaa_domain <- function(specification, environment = NULL) {
     if (!missing(value)) stop("issues are read only", call. = FALSE)
     .domain_reply(.Call(wrap__domain_issues, h))
   }}), result)
-  result$verification_log <- NULL
-  result$warning_log <- NULL
+  makeActiveBinding("verification_log", local({ h <- handle; function(value) {
+    if (!missing(value)) stop("verification_log is read only", call. = FALSE)
+    .domain_reply(.Call(wrap__domain_log, h, FALSE))
+  }}), result)
+  makeActiveBinding("warning_log", local({ h <- handle; function(value) {
+    if (!missing(value)) stop("warning_log is read only", call. = FALSE)
+    .domain_reply(.Call(wrap__domain_log, h, TRUE))
+  }}), result)
   result$save <- local({ h <- handle; function() {
     reply <- .domain_reply(.Call(wrap__domain_save, h))
     if (reply$failed) stop(structure(list(message = "cannot save a failed build", call = NULL),

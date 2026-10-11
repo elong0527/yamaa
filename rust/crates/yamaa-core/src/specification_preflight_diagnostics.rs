@@ -28,6 +28,7 @@ impl PreflightFinding {
     pub fn visit_diagnostic_text(&self, mut visit: impl FnMut(&str)) {
         use super::FunctionCause;
         match self {
+            Self::Log(finding) => finding.visit_text(visit),
             Self::RoundingInput { path, source, .. } => {
                 visit(path);
                 visit(source);
@@ -108,6 +109,7 @@ impl PreflightFinding {
     /// perform validation again, consult a source, or choose a host representation.
     pub fn diagnostic(&self) -> Diagnostic {
         let (code, paths, context): (C, Vec<String>, Context) = match self {
+            Self::Log(finding) => return finding.diagnostic(),
             Self::RoundingInput {
                 path,
                 source,

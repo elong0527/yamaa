@@ -482,10 +482,20 @@ impl PreparedDocument {
     }
     /// The producer's diagnostic path also belongs to its contributing layer.
     pub fn written_output_origin(&self) -> Option<yamaa_core::producer_admission::WrittenPath<'_>> {
+        self.written_output_field_origin("path")
+    }
+    /// Every governed output field retains its original atomic output layer.
+    pub(crate) fn written_output_field_origin(
+        &self,
+        field: &str,
+    ) -> Option<yamaa_core::producer_admission::WrittenPath<'_>> {
+        if !["path", "verification_log", "warning_log"].contains(&field) {
+            return None;
+        }
         // Output is an atomic top-level field in shared layer composition.
         let (identity, raw) = self.authored_document("output")?;
         let output = raw.field(raw.root(), "output")?;
-        let node = raw.field(output, "path")?;
+        let node = raw.field(output, field)?;
         match &raw.nodes()[node] {
             yamaa_core::schema::DocumentNode::Text(path) => {
                 Some(yamaa_core::producer_admission::WrittenPath {

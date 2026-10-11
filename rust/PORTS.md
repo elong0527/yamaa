@@ -157,7 +157,9 @@ the capture callback or borrows a source/result buffer. Installed tests compare
 all six complete reports and exact saved bytes, and check failed-save rejection,
 opaque publication errors/interruptions, repeated saves and expired R handles.
 These internal results supply the build/save boundary for the public API;
-host data-frame/issue/log properties and the public file-path facade remain to connect.
+the public facade now connects owned output, issue and
+[log views](VERIFICATION_LOGS.md), with complete-target preflight and actual
+publication-prefix retention. Broader API qualification remains open.
 
 Successful response preparation retains the engine's accepted typed execution.
 Publication does not infer acceptance from serialized JSON or decode its own IPC
