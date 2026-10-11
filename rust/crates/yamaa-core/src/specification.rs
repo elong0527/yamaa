@@ -54,8 +54,12 @@ mod imputation;
 mod rounding;
 #[path = "specification_str_case.rs"]
 mod str_case;
+#[path = "specification_str_extract.rs"]
+mod str_extract;
 #[path = "specification_str_pad.rs"]
 mod str_pad;
+#[path = "specification_str_template.rs"]
+mod str_template;
 #[path = "specification_temporal.rs"]
 mod temporal;
 #[path = "specification_terminology.rs"]
@@ -104,6 +108,8 @@ impl Default for CompilationLimits {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum PreflightFinding {
+    TextExtract(crate::diagnostic::Diagnostic),
+    TextTemplate(crate::diagnostic::Diagnostic),
     TextCase(crate::diagnostic::Diagnostic),
     Log(LogFinding),
     Imputation(crate::diagnostic::Diagnostic),
@@ -192,6 +198,8 @@ pub enum BindError {
 #[derive(Debug)]
 pub enum BindFinding {
     Padding(crate::diagnostic::Diagnostic),
+    TextExtract(crate::diagnostic::Diagnostic),
+    TextTemplate(crate::diagnostic::Diagnostic),
     Temporal(crate::diagnostic::Diagnostic),
     Predicate(crate::diagnostic::Diagnostic),
     ProjectFunction(FunctionFinding),
@@ -284,6 +292,8 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    StrExtract(crate::text_extract::StringExtract),
+    StrTemplate(crate::text_template::StringTemplate),
     Case(Vec<cases::Branch>),
     ProjectFunction(usize),
     Literal(crate::value::Value),
@@ -964,6 +974,8 @@ impl PreparedSpecification {
         imputation::declaration_findings(d, columns, &output, &mut findings)?;
         str_pad::declaration_admission(d, columns, &output)?;
         str_case::declaration_findings(d, columns, &output, &mut findings)?;
+        let extraction = str_extract::Prepared::new(d, &output, &mut findings)?;
+        let templates = str_template::Prepared::new(d, &output, &mut findings)?;
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
@@ -1169,6 +1181,8 @@ impl PreparedSpecification {
                 limits,
                 project.as_ref(),
                 catalogue.is_some(),
+                &extraction,
+                &templates,
             )?;
             let project = match project {
                 Some(project) => {
@@ -1222,6 +1236,8 @@ impl PreparedSpecification {
                     &intermediates,
                     keys.contains(&column),
                     0,
+                    &extraction,
+                    &templates,
                 )?)),
                 "function" if project.is_some() => Some(Operation::ProjectFunction(
                     *project
@@ -1296,6 +1312,8 @@ impl PreparedSpecification {
                 | "baseline_flag" => Some(Operation::Window(alloc::boxed::Box::new(
                     windows::Declaration::prepare(d, payload, op, &path, limits, &mut extra)?,
                 ))),
+                "str_template" => Some(Operation::StrTemplate(templates.get(payload)?)),
+                "str_extract" => Some(Operation::StrExtract(extraction.get(payload)?)),
                 "str_case" => Some(Operation::StrCase(str_case::prepare(
                     d,
                     payload,
@@ -1757,6 +1775,28 @@ impl PreparedSpecification {
                 Operation::Literal(value) => Some(Expression::Literal(value.clone())),
                 Operation::Round(rounding) => rounding::bind(
                     rounding,
+                    column,
+                    &self.keys,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
+                Operation::StrTemplate(operation) => str_template::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
+                Operation::StrExtract(operation) => str_extract::bind(
+                    operation,
                     column,
                     &self.keys,
                     &catalog,
