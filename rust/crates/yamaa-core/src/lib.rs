@@ -43,6 +43,7 @@ pub mod submission_json;
 pub mod submission_xml;
 pub mod temporal;
 pub mod text_case;
+pub mod text_extract;
 pub mod typed_csv;
 pub mod value;
 

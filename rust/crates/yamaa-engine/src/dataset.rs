@@ -27,6 +27,8 @@ mod lookup;
 mod numeric;
 #[path = "dataset_text_case.rs"]
 mod str_case;
+#[path = "dataset_text_extract.rs"]
+mod str_extract;
 #[path = "dataset_windows.rs"]
 mod windows;
 
@@ -423,6 +425,11 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
             .apply(ValueRef::from(&value))
             .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)));
     }
+    if let Expression::StrExtract { source, operation } = &assignment.expression {
+        return str_extract::evaluate(
+            source, operation, table, candidate, plan, row, limits, state,
+        );
+    }
     if let Expression::StrCase { source, operation } = &assignment.expression {
         return str_case::evaluate(
             source, operation, table, candidate, plan, row, limits, state,
@@ -516,7 +523,8 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
         | Expression::Round { .. }
         | Expression::Temporal { .. }
         | Expression::Imputation { .. }
-        | Expression::StrCase { .. } => {
+        | Expression::StrCase { .. }
+        | Expression::StrExtract { .. } => {
             unreachable!("recursive evaluation handled above")
         }
         Expression::Column(column) => {
@@ -867,6 +875,7 @@ impl Executor<'_> {
         {
             imputation::register(&assignment.expression, &mut observations.handlers);
             str_case::register(&assignment.expression, &mut observations.handlers);
+            str_extract::register(&assignment.expression, &mut observations.handlers);
         }
         let result = self.execute_inner(
             table,
