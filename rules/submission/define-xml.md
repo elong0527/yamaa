@@ -111,18 +111,30 @@ declared identifiers of the object's position. The construction is total:
 | `def:Standard` | `STD.<standard.id>` |
 | `ItemGroupDef` | `IG.<dataset.id>` |
 | `ItemDef` | `IT.<dataset.id>.<column>` |
+| `ItemDef`, per value | `IT.<dataset.id>.<column>.<test code>` |
+| `def:ValueListDef` | `VL.<dataset.id>.<column>` |
+| `def:WhereClauseDef` | `WC.<dataset.id>.<column>.<test code>` |
 | `CodeList` | `CL.<codelist.id>` |
 | `MethodDef` | `MT.<dataset.id>.<column>` |
+| `MethodDef`, per value | `MT.<dataset.id>.<column>.<test code>` |
 | `def:CommentDef`, dataset | `COM.<dataset.id>` |
 | `def:CommentDef`, column | `COM.<dataset.id>.<column>` |
+| `def:CommentDef`, per value | `COM.<dataset.id>.<column>.<test code>` |
 | `def:leaf`, document | `LF.<document.id>` |
 | `def:leaf`, dataset archive | `LF.<dataset.id>` |
+
+A per-value test code is the declared string literal of `<DOMAIN>TESTCD`,
+retained verbatim in the identifier before XML escaping. It identifies the
+value independently of row order; `ItemRef.OrderNumber` remains the value's
+position in the list. OIDs admit string values, while a `def:leaf` ID separately
+requires an XML NCName. Generated text remains subject to [REQ-1025](#req-1025).
 
 <a id="req-0971"></a>
 
 **REQ-0971.** Collisions are impossible rather than resolved. Dataset, codelist,
 standard, and document identifiers are each unique within the study document;
-a column name is unique within its specification; the prefixes are disjoint.
+a column name is unique within its specification; a column's distinct test
+codes identify its per-value definitions; the prefixes are disjoint.
 Two kinds of object share one identifier space, `def:leaf`, so a document
 identifier must not equal a dataset identifier; checked, not disambiguated.
 

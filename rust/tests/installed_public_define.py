@@ -68,7 +68,7 @@ class PublicDefine(unittest.TestCase):
         self.assertEqual([ref.get("Mandatory") for ref in refs], ["No", "No"])
         self.assertEqual(len(xml.xpath("//o:ItemDef", namespaces=ns)), 13)
         for ordinal, code, source, codelist in [(1, "GLUC", "Vendor", "CL_GLUCOSE"), (2, "CREAT", "Sponsor", "CL_CREATININE")]:
-            identity = f"LB.LBORRESU.V{ordinal}"
+            identity = f"LB.LBORRESU.{code}"
             self.assertEqual(refs[ordinal - 1].get("ItemOID"), "IT." + identity)
             self.assertEqual(refs[ordinal - 1].xpath("d:WhereClauseRef/@WhereClauseOID", namespaces=ns), ["WC." + identity])
             item = xml.xpath("//o:ItemDef[@OID=$oid]", namespaces=ns, oid="IT." + identity)[0]

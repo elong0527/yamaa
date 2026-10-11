@@ -18,7 +18,7 @@ Build owns completed log tables, Arrow IPC views, exact file bytes and complete
 artifact observations without publishing. Host properties create fresh data
 frames. On successful builds, explicit Save preflights the complete physical
 target set, then publishes verification, warning and primary in order. It admits
-and prepares every possible prefix report before the first write. A native
+and prepares each needed report owner before the first write. A native
 operational failure or unwind retains the entered boundary, original payload and
 actual successful prefix. A retry repeats only publication of held bytes.
 
@@ -63,9 +63,12 @@ causes. Repeated Save replaces publication state and preserves execution evidenc
 Graph limits share record admission across nodes and cell/text/JSON/encoded-log
 admission across potential node/log slots. Cumulative publication admission
 covers 64 nodes, 1 MiB of authored/selected paths, 16 MiB of held artifact bytes
-and 64 MiB of work. All possible entered/completed prefix reports share 16 MiB
-before the first publisher opens. Lexical duplicate targets fail during metadata
-preparation; retained physical parent/entry comparisons run before any Save write.
+and 64 MiB of work. Save admits and owns one complete report within 16 MiB
+before the first publisher opens. After publication it drops artifact and entry
+suffixes and updates existing completion flags to retain the actual prefix;
+report admission, rendering and observation copies all precede the first write.
+Lexical duplicate targets fail during metadata preparation; retained physical
+parent/entry comparisons run before any Save write.
 Output parents can remain absent during metadata preparation and Build.
 
 Installed graph witnesses retain complete Build and repeated Save reports and
