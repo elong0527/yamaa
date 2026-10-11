@@ -395,3 +395,32 @@ early findings, cached counters, exact saved CSV and retained failed-save gates.
 runs without Python and uses registered handles. The public facade, Windows native
 file transport and complete environment/function/workflow/submission semantics remain
 open. No reference-assisted qualification level or path authorization is promoted.
+
+`inheritance_capture::prepare` now owns the raw inheritance capture application
+around the existing traversal/composition lifecycle. It borrows the exact already
+decoded entry, reuses `project_preparation::Source`, admits cumulative captured
+bytes and identity text, and moves successful parent snapshots into a retained
+catalog. Parent decoding happens once per requested unique canonical source;
+raw snapshots remain in first-decode order while normalized layers remain in
+postorder. The decoder port retains physical YAML limits and source positions.
+Its closed limit-error constructor preserves the existing adapter representation
+without classifying host errors. Neither raw byte admission nor identity admission
+is substituted for traversal, normalization, document-storage or rebasing policy.
+
+The fail-fast capture port preserves separate canonicalize, capture and rebase
+operations, including their original unavailable/raised distinction. The engine
+supplies remaining capture bytes and forwards the lifecycle's remaining rebasing
+allowance. Original host and decoder payloads move without Clone, Debug, Send or
+Sync requirements. A later failure retains the completed raw-parent catalog;
+opaque failures stop immediately, with no independent-error collection or retry.
+The adapter retains its public InheritancePort/CapturedParent/SourceFailure and
+InheritanceError shapes through reexports and a physical decoder implementation.
+Existing callers and installed Python/R callback protocols are unchanged.
+
+Standalone/schema-closure preparation, authored-origin lookup helpers and the
+native Parents spelling cache remain separate migration work. The post-success
+native alias checks and entry-base selection stay in file_preparation. Existing
+YAML scanner rules, report/log projection, producer facades and filesystem policy
+are not part of this move. Inheritance callback component probes remain pending
+retirement under #1751; this application service does not qualify their API as a
+permanent public surface or close the remaining #1754 acceptance gates.

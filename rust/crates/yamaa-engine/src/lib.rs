@@ -12,6 +12,7 @@ pub mod domain;
 pub mod domain_entry;
 pub mod function_invocation;
 pub mod inheritance;
+pub mod inheritance_capture;
 pub mod inheritance_preparation;
 pub mod numeric_lifecycle;
 pub mod table_grouping;
