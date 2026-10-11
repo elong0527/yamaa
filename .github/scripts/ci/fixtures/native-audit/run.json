@@ -1,0 +1,11 @@
+{
+  "id": 38161000385,
+  "head_sha": "db53bec41f7e740151cb0aee2983b7a9df1a5ff9",
+  "head_branch": "main",
+  "event": "push",
+  "run_attempt": 1,
+  "path": ".github/workflows/native.yml",
+  "status": "completed",
+  "conclusion": "failure",
+  "html_url": "https://github.com/elong0527/yamaa/actions/runs/38161000385"
+}

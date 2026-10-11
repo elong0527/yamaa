@@ -49,3 +49,64 @@ remains required and unqualified until its actual installed evidence passes.
 This adds required `shared_run` comparisons for a different executed route. The
 historical assisted gaps, manifest, expected artifacts and broad inventory are
 retained unchanged; an assisted mismatch is never relabeled as a shared pass.
+
+
+## Corpus-wide public conformance
+
+`rust/tools/public_conformance.py` plans all benchmark entries from literal
+`run.py` and `run.R` calls. Cases without runners use their single specification
+and a host-specific environment when present. A root environment is never
+passed implicitly. The Python and R runners call only the installed public
+`domain` and `yamaa_domain` APIs. Python runs with `-I` and refuses reference
+semantic imports. Both copy execution inputs into a fresh output directory,
+exclude `expected/`, and publish there with `save()`. Python also stages the
+canonical `python/uv.lock`, matching the existing benchmark test harness.
+
+The standalone comparator reads the completed records and independent
+`expected/` files. It checks public column types, row order, full int64 text,
+nulls, UTF-8 bytes (including embedded NUL), binary64 bits and temporal host
+values. Saved CSV bytes compare exactly. Parquet compares logical fields,
+types, nulls, row order and values; metadata and compression are immaterial.
+For a declared `output.decimals`, public floats compare at the exact reported
+precision in the committed CSV under REQ-0747, with no tolerance. The inventory
+explicitly records that the CSV does not supply unrounded float truth.
+Negative contracts compare the first Rust-projected issue's phase, condition,
+requirement and ordered specification paths, with the declared context subset.
+Unsupported operations and infrastructure errors never count as negative passes.
+
+Each inventory records one of `pass`, `mismatch`, `unsupported`, `error` or
+`excluded` for every benchmark and counts unsupported operations. The two
+historical path negatives are excluded under #1905. Four `spec_resolved.yaml`
+artifacts are reference-only until cutover (#1973 item 14); Define XML/JSON are
+explicitly `not_compared` by these domain runners. The fixed-time public Define
+suites remain separate. These dispositions do not suppress table differences.
+
+The first CI integration is report-only. Each sampled PR lane and every main
+or full-dispatch lane uploads its inventory, individual records and staged saved
+artifacts. Run locally against an installed package outside the checkout:
+
+```sh
+python -I rust/tools/public_conformance.py plan --fixtures benchmarks --output /tmp/public-plan
+python -I rust/tests/public_conformance.py --plan /tmp/public-plan --fixtures benchmarks \
+  --python-lock python/uv.lock --output /tmp/public-python --source-revision REVISION
+Rscript --vanilla rust/tests/public_conformance.R /tmp/public-plan benchmarks /tmp/public-r REVISION
+python -I rust/tools/public_conformance.py compare --fixtures benchmarks \
+  --observed /tmp/public-python --output /tmp/public-python/inventory.json
+python -I rust/tools/public_conformance.py compare --fixtures benchmarks \
+  --observed /tmp/public-r --output /tmp/public-r/inventory.json
+```
+
+Use absolute paths for the scripts, fixtures and lock when running from outside
+the checkout. The R comparator host needs `py-yaml12==0.2.0` and
+`pyarrow==25.0.1`; the R runner needs only base R and the installed package.
+
+A follow-up seeds `public-conformance.json` only from the intersection of passes
+in fresh inventories for every approved lane (18 Python lanes and three R
+hosts), using separate `python` and `r` lists. Passing `--ratchet FILE` to the
+comparator makes any listed benchmark's non-pass fail CI and reports new passes.
+Never seed from a cached local run or edit expected truth to add a pass. A
+language-family WP adds a benchmark only after its installed report passes on
+every lane of both hosts, retaining the full-run evidence in its PR. Deliberately
+breaking an output must demonstrate the regression gate, then be reverted in
+that seeding PR. The assisted gates above stay in place until their separate
+retirement decision.

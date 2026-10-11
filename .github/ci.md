@@ -68,3 +68,38 @@ updating a pin.
 
 See [Repository Validation](yaml-validation.md) for validation scope and local
 commands.
+
+### Independent native run audit
+
+Main pushes append a nonblocking `native-run-evidence-audit` job after all native
+lanes finish. Its `native-run-audit` artifact retains `qualification.json` and
+`qualification.md`, the exact source revision and parents, selected Actions
+attempt metadata, downloaded artifacts, and canonical source files. The audit
+job itself may still be running when the metadata snapshot is taken; acceptance
+uses the named dependency jobs and never treats the workflow's pending overall
+conclusion as a pass.
+
+To audit a completed full dispatch or main run locally, authenticate `gh` for
+repository and Actions reads, then use a fresh output directory:
+
+```sh
+python rust/tools/audit_native_run.py --run-id 38167427581 \
+  --repository elong0527/yamaa --output /tmp/yamaa-native-audit --check
+```
+
+To replay downloaded evidence without network access, pass the retained `input`
+directory using `--input /tmp/yamaa-native-audit/input` and another fresh
+`--output`. This snapshot contains `run.json`, `source.json`, `jobs.json`,
+`artifacts.json`, canonical files under `source/`, and artifact directories under
+`artifacts/` using their Actions artifact names. An artifact-only directory also produces a
+record: missing metadata and exact source remain unavailable, and no tuple can
+pass. `--check` returns failure for
+failed or missing evidence after writing both records; omit it for a report-only
+local audit. API artifact digest fields are discarded, and package checks compare
+actual archive and wheel bytes.
+
+The record names all 18 installed Python combinations, three R hosts, nine math
+assessments and their exact comparison, 18 complete public cohort and producer
+comparisons, 21 corpus-wide public inventories, six package build records, and three shared-crates checks.
+Every missing, expired, failed, stale, wrong-attempt or incomplete tuple remains
+visible. CI-script discovery runs independent fixture tests for this protocol.
