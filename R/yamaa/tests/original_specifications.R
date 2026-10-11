@@ -1034,7 +1034,12 @@ for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"
   report <- gsub(paste0('"specification":"',basename(entry),'"'),
                  paste0('"specification":"',entry,'"'),report,fixed=TRUE)
   unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',report)
-  stopifnot(identical(rawToChar(domain_observations(built)),unsaved))
+  observed <- rawToChar(domain_observations(built))
+  if(!identical(observed,unsaved)) {
+    cat(case_name,"public unsaved report mismatch\nexpected:\n",unsaved,
+        "\nactual:\n",observed,"\n",sep="")
+  }
+  stopifnot(identical(observed,unsaved))
   check_issue_frame(built$issues,issue_frame_truth[[case_name]])
   stopifnot(is.null(built$verification_log),is.null(built$warning_log))
   expected <- public_output_truth[[case_name]]
