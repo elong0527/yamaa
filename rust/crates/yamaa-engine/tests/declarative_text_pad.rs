@@ -3,10 +3,15 @@ use yamaa_core::{
     dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     text_case::{Case, StringCase},
+    text_extract::StringExtract,
     text_pad::StringPad,
+    text_template::StringTemplate,
     value::{ColumnType as T, Value},
 };
-use yamaa_engine::dataset::{DatasetExecution, ExecutionError, Limits, Resource};
+use yamaa_engine::{
+    dataset::{DatasetExecution, ExecutionError, Limits, Resource},
+    numeric_lifecycle::HandlerKind,
+};
 #[derive(Debug)]
 struct Failure(Box<u8>, Rc<()>);
 struct Table {
@@ -83,6 +88,9 @@ fn assignment(width: &str) -> Assignment {
     }
 }
 fn plan(width: &str) -> DatasetPlan {
+    from_assignment(assignment(width))
+}
+fn from_assignment(text: Assignment) -> DatasetPlan {
     DatasetPlan::new(
         schema(),
         schema(),
@@ -94,7 +102,7 @@ fn plan(width: &str) -> DatasetPlan {
                     path: "columns.ID.derivation".into(),
                     expression: Expression::Source(0),
                 },
-                assignment(width),
+                text,
             ],
             filter: None,
         }],
@@ -103,6 +111,103 @@ fn plan(width: &str) -> DatasetPlan {
         vec![],
     )
     .unwrap()
+}
+fn padded(expression: Expression) -> DatasetPlan {
+    let mut outer = assignment("4");
+    let Expression::StrPad { source, .. } = &mut outer.expression else {
+        unreachable!()
+    };
+    source.expression = expression;
+    from_assignment(outer)
+}
+#[test]
+fn nested_extraction_keeps_all_declared_handler_sites_in_order_under_padding() {
+    let path = "columns.TEXT.derivation.str_pad.source.str_extract";
+    for (input, expected, missing, no_match) in [
+        (Value::Missing, "   M", 1, 0),
+        (Value::Str("b".into()), "   N", 0, 1),
+        (Value::Str("a".into()), "   a", 0, 0),
+    ] {
+        let table = make_table(input);
+        let plan = padded(Expression::StrExtract {
+            source: Box::new(Assignment {
+                column: 1,
+                path: format!("{path}.source"),
+                expression: Expression::Source(1),
+            }),
+            operation: StringExtract::new(
+                "SRC.TEXT".into(),
+                path.into(),
+                "(a)".into(),
+                "1".into(),
+                Some(Value::Str("M".into())),
+                Some(Value::Str("N".into())),
+            )
+            .unwrap(),
+        });
+        let attempt = plan.execute_observed(&table, limits());
+        assert_eq!(
+            attempt.result.unwrap().dataset.rows(),
+            [vec![Value::Str("row1".into()), Value::Str(expected.into())]]
+        );
+        assert_eq!(
+            attempt
+                .handler_counts
+                .iter()
+                .map(|count| (count.spec_path.as_str(), count.handler, count.count))
+                .collect::<Vec<_>>(),
+            [
+                (
+                    format!("{path}.missing").as_str(),
+                    HandlerKind::Missing,
+                    missing
+                ),
+                (
+                    format!("{path}.no_match").as_str(),
+                    HandlerKind::NoMatch,
+                    no_match
+                ),
+            ]
+        );
+        assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1)]);
+    }
+}
+#[test]
+fn nested_template_retains_zero_and_reached_missing_handler_sites_under_padding() {
+    let path = "columns.TEXT.derivation.str_pad.source.str_template";
+    for (input, expected, count) in [
+        (Value::Missing, "   T", 1),
+        (Value::Str("go".into()), "  go", 0),
+        (Value::Str("".into()), "    ", 0),
+    ] {
+        let table = make_table(input);
+        let plan = padded(Expression::StrTemplate {
+            operands: vec![Assignment {
+                column: 1,
+                path: format!("{path}.template"),
+                expression: Expression::Source(1),
+            }],
+            operation: StringTemplate::new(
+                "{TEXT}".into(),
+                path.into(),
+                Some(Value::Str("T".into())),
+            )
+            .unwrap(),
+        });
+        let attempt = plan.execute_observed(&table, limits());
+        assert_eq!(
+            attempt.result.unwrap().dataset.rows(),
+            [vec![Value::Str("row1".into()), Value::Str(expected.into())]]
+        );
+        assert_eq!(attempt.handler_counts.len(), 1);
+        assert_eq!(
+            attempt.handler_counts[0].spec_path,
+            format!("{path}.missing")
+        );
+        assert_eq!(attempt.handler_counts[0].handler, HandlerKind::Missing);
+        assert_eq!(attempt.handler_counts[0].count, count);
+        assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1)]);
+    }
 }
 #[test]
 fn one_named_read_unicode_character_width_no_truncation_and_no_handlers() {
