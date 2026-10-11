@@ -56,6 +56,42 @@ fn source() -> TableSchema {
 }
 
 #[test]
+fn grouped_filters_cannot_read_deferred_row_windows() {
+    let mut template = row(
+        "groups",
+        vec![(
+            "SEQ",
+            Tree::map(vec![(
+                "row_number",
+                Tree::map(vec![(
+                    "window",
+                    Tree::map(vec![("order_by", Tree::List(vec![Tree::text("ID")]))]),
+                )]),
+            )]),
+        )],
+        Some(vec!["SRC.ID"]),
+    );
+    let Tree::Map(fields) = &mut template else {
+        panic!("row mapping");
+    };
+    fields.push(("filter".into(), Tree::text("SEQ > 1")));
+    let spec = specification_with_rows(vec![("SEQ", "int", literal(0))], vec![template]);
+    let prepared = PreparedSpecification::prepare(&spec).unwrap();
+    let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
+        panic!("grouped filter must reject the window phase");
+    };
+    assert!(
+        findings
+            .iter()
+            .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
+            .any(|diagnostic| diagnostic.code
+                == yamaa_core::diagnostic::ConditionCode::RowFilterPhaseBoundary
+                && diagnostic.spec_paths == ["rows[0].filter"]),
+        "{findings:?}"
+    );
+}
+
+#[test]
 fn row_reads_promote_transitive_defaults_and_schedule_each_override_graph() {
     let spec = specification_with_rows(
         vec![
