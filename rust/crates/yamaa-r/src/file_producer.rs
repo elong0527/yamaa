@@ -3,7 +3,7 @@
 use crate::specification_service::boundary;
 use extendr_api::prelude::*;
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(crate) mod platform {
     use super::*;
     use crate::project_activation::Error as HostError;
@@ -33,7 +33,7 @@ pub(crate) mod platform {
             attempt: Rc<Attempt>,
             observations: Option<String>,
             refusal: &'static str,
-            domain: Option<yamaa_adapters::producer_result::RootResult>,
+            domain: Option<Box<yamaa_adapters::producer_result::RootResult>>,
             output_error: Option<yamaa_adapters::table_transport::TableTransportError>,
         },
     }
@@ -235,6 +235,18 @@ pub(crate) mod platform {
                     domain: Some(result),
                     ..
                 } => result.output_table(),
+                _ => None,
+            }
+        }
+        pub(crate) fn log_table(
+            &self,
+            warning: bool,
+        ) -> Option<&yamaa_adapters::public_table::PublicTable> {
+            match &self.state {
+                State::Report {
+                    domain: Some(result),
+                    ..
+                } => result.log_table(warning),
                 _ => None,
             }
         }
@@ -446,7 +458,7 @@ pub(crate) mod platform {
                     &facts,
                 ) {
                     Ok(value) => {
-                        domain = Some(value);
+                        domain = Some(Box::new(value));
                         Ok(None)
                     }
                     Err(yamaa_adapters::producer_result::Error::Report(error)) => Err(error),
@@ -675,11 +687,11 @@ pub(crate) mod platform {
 #[extendr]
 fn prepare_producer_file(specification: Raw, environment: Raw) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::prepare(specification, environment)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (specification, environment);
             Err("native producer preparation unavailable on this platform".into())
@@ -689,11 +701,11 @@ fn prepare_producer_file(specification: Raw, environment: Raw) -> List {
 #[extendr]
 fn producer_status(handle: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::status(handle)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = handle;
             Err("native producer handles unavailable".into())
@@ -709,11 +721,11 @@ fn producer_build(
     report_bytes: i32,
 ) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::build(handle, metadata, verify, resolve, report_bytes)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (handle, metadata, verify, resolve, report_bytes);
             Err("native producer builds unavailable".into())
@@ -723,11 +735,11 @@ fn producer_build(
 #[extendr]
 fn producer_report(handle: Robj, formatter: Function, maximum: i32) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::report(handle, formatter, maximum)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (handle, formatter, maximum);
             Err("native producer reports unavailable".into())
@@ -737,11 +749,11 @@ fn producer_report(handle: Robj, formatter: Function, maximum: i32) -> List {
 #[extendr]
 fn producer_observations(handle: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::observations(handle)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = handle;
             Err("native producer reports unavailable".into())
@@ -751,11 +763,11 @@ fn producer_observations(handle: Robj) -> List {
 #[extendr]
 fn producer_retained(handle: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::retained(handle)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = handle;
             Err("native producer evidence unavailable".into())
@@ -765,11 +777,11 @@ fn producer_retained(handle: Robj) -> List {
 #[extendr]
 fn producer_interrupt(handle: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::interrupt(handle)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = handle;
             Err("native producer evidence unavailable".into())
@@ -779,11 +791,11 @@ fn producer_interrupt(handle: Robj) -> List {
 #[extendr]
 fn producer_artifact(handle: Robj, node: i32) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::artifact(handle, node)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (handle, node);
             Err("native producer evidence unavailable".into())
@@ -793,11 +805,11 @@ fn producer_artifact(handle: Robj, node: i32) -> List {
 #[extendr]
 fn producer_rejected_sources(handle: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::rejected_sources(handle)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = handle;
             Err("native producer evidence unavailable".into())
@@ -807,11 +819,11 @@ fn producer_rejected_sources(handle: Robj) -> List {
 #[extendr]
 fn producer_rejection_issues(handle: Robj, maximum: i32) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::rejection_issues(handle, maximum)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (handle, maximum);
             Err("native producer evidence unavailable".into())

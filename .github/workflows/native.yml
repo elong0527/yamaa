@@ -349,6 +349,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema.py" installed_schema.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_original_specifications.py" installed_original_specifications.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_verification_logs.py" installed_verification_logs.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_logs.py" installed_producer_logs.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_file_resources.py" installed_file_resources.py
           python "${GITHUB_WORKSPACE}/rust/tools/stage_specification_inputs.py" specification-original
           python "${GITHUB_WORKSPACE}/rust/tools/stage_project_inputs.py" project-original
@@ -497,11 +498,16 @@ jobs:
     if: needs.plan.outputs.run-r == 'true'
     name: native-r (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 40 || 20 }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.r) }}
     steps:
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -517,14 +523,33 @@ jobs:
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
         with:
           r-version: '4.6.1'
+          rtools-version: ${{ runner.os == 'Windows' && '45' || '' }}
           use-public-rspm: true
       - name: Check benchmark SDK lock versions
         run: python rust/tools/check_benchmark_sdk_versions.py
       - name: Install Rust
-        run: rustup toolchain install 1.90.0 --profile minimal --component clippy
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal --component clippy
+          if [ "${{ runner.os }}" = Windows ]; then
+            rustup target add --toolchain 1.90.0 x86_64-pc-windows-gnu
+          fi
+      - name: Record Windows R build toolchain
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p "${RUNNER_TEMP}/windows-r-toolchain"
+          Rscript --vanilla -e 'writeLines(c(R.version.string, R.version$platform, Sys.info(), Sys.getenv("RTOOLS45_HOME")))' > "${RUNNER_TEMP}/windows-r-toolchain/r-platform.txt"
+          gcc --version > "${RUNNER_TEMP}/windows-r-toolchain/gcc-version.txt"
+          make --version > "${RUNNER_TEMP}/windows-r-toolchain/make-version.txt"
+          rustc -vV > "${RUNNER_TEMP}/windows-r-toolchain/rustc-version.txt"
+          rustc --print cfg --target x86_64-pc-windows-gnu > "${RUNNER_TEMP}/windows-r-toolchain/rust-target.txt"
       - name: Check R binding
+        if: runner.os != 'Windows'
         working-directory: rust
         run: cargo clippy --locked -p yamaa-r -- -D warnings
+      - name: Check Windows R binding
+        if: runner.os == 'Windows'
+        working-directory: rust
+        run: cargo clippy --locked --target x86_64-pc-windows-gnu -p yamaa-r -- -D warnings
       - name: Stage standalone R package
         run: python rust/tools/stage_r_package.py "${RUNNER_TEMP}/native-stage/yamaa"
       - name: Build, install, and test outside checkout
@@ -535,6 +560,9 @@ jobs:
           python "${GITHUB_WORKSPACE}/rust/tools/check_cargo_lock.py" --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.3.0.tar.gz
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.3.0.tar.gz
+          if [ "${{ runner.os }}" = Windows ]; then
+            python -c 'from pathlib import Path; import shutil; dlls = list(Path("native-r-library/yamaa/libs").rglob("yamaa.dll")); assert len(dlls) == 1, "installed R DLL is missing or ambiguous"; shutil.copy2(dlls[0], "windows-r-toolchain/yamaa.dll")'
+          fi
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_builds.R" producer_builds.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_producers.R" public_producers.R
@@ -554,6 +582,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/schema.R" schema.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/original_specifications.R" original_specifications.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/verification_logs.R" verification_logs.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_logs.R" producer_logs.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_environment.R" public_environment.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_define.R" public_define.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/inheritance.R" inheritance.R
@@ -594,6 +623,13 @@ jobs:
           name: native-r-qualification-${{ matrix.os }}
           path: ${{ runner.temp }}/qualification
           if-no-files-found: error
+      - name: Preserve Windows R build toolchain
+        if: ${{ always() && runner.os == 'Windows' }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: windows-r-toolchain-${{ matrix.os }}
+          path: ${{ runner.temp }}/windows-r-toolchain
+          if-no-files-found: error
       - name: Preserve locked Rust dependency evidence
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -610,8 +646,7 @@ jobs:
   public-cohort:
     name: ${{ needs.plan.outputs.full == 'true' && 'public-cohort-complete-runs' || 'public-cohort-sample' }}
     needs: [plan, qualify, r]
-    # A Windows PR sample has no R lane; failed Unix R lanes still fail the gate.
-    if: ${{ !cancelled() && needs.qualify.result == 'success' && (needs.r.result == 'success' || (needs.plan.outputs.run-r == 'false' && needs.r.result == 'skipped')) }}
+    if: ${{ !cancelled() && needs.qualify.result == 'success' && needs.r.result == 'success' }}
     runs-on: ${{ needs.plan.outputs.compare-os }}
     timeout-minutes: 10
     steps:

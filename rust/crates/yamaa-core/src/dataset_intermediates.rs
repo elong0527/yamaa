@@ -19,12 +19,22 @@ pub struct Intermediate {
     pub identifier: String,
     pub path: String,
     pub source: usize,
-    pub keys: Vec<MatchKey>,
-    pub record_keys: Vec<RecordMatchKey>,
+    pub keys: Vec<IntermediateKey>,
     pub filter: Option<BoundPredicate>,
     pub selection: Option<SourceSelection>,
     /// `Some(Missing)` handles absence; `None` leaves it as a join condition.
     pub no_match: Option<Value>,
+}
+
+impl Intermediate {
+    pub fn output_dependencies(&self) -> impl Iterator<Item = usize> + '_ {
+        self.keys
+            .iter()
+            .filter_map(|key| key.value.read().and_then(MatchRead::output_column))
+    }
+    pub fn has_expression_keys(&self) -> bool {
+        self.keys.iter().any(|key| key.value.is_expression())
+    }
 }
 
 /// Bind declarations globally; completed-value availability is checked at each read.
@@ -51,18 +61,6 @@ pub(super) fn validate(
             &vec![true; output.columns().len()],
             output,
         )?;
-        if !item.keys.is_empty() {
-            lookup::validate(
-                &Lookup {
-                    source: item.source,
-                    column: 0,
-                    keys: item.keys.clone(),
-                },
-                sources,
-                &vec![true; output.columns().len()],
-                output,
-            )?;
-        }
         let width = sources[item.source].schema.columns().len();
         if let Some(filter) = &item.filter {
             filter
@@ -90,48 +88,25 @@ pub(super) fn validate_read(
     let source = sources
         .get(item.source)
         .ok_or(PlanError::InvalidIntermediate)?;
-    if column >= source.schema.columns().len()
-        || item.keys.is_empty() && item.record_keys.is_empty()
-        || item.record_keys.len() + item.keys.len() > 64
-    {
+    if column >= source.schema.columns().len() {
         return Err(PlanError::InvalidIntermediate);
     }
-    if !item.keys.is_empty() {
-        lookup::validate(
-            &Lookup {
-                source: item.source,
-                column,
-                keys: item.keys.clone(),
-            },
-            sources,
-            available,
-            output,
-        )?;
+    match_values::validate(&item.keys, primary, &source.schema, output, available)
+}
+
+/// Direct scalar selections use only admitted complete records or completed keys.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn validate_context_read(
+    item: &Intermediate,
+    column: usize,
+    primary: &TableSchema,
+    sources: &[SecondarySource],
+    available: &[bool],
+    output: &TableSchema,
+    mode: &RowMode,
+) -> Result<(), PlanError> {
+    if !matches!(mode, RowMode::Records | RowMode::Keys) {
+        return Err(PlanError::InvalidIntermediate);
     }
-    for (index, key) in item.record_keys.iter().enumerate() {
-        if key.identifier.is_empty() || key.identifier.len() > 65_536 {
-            return Err(PlanError::InvalidIntermediate);
-        }
-        let left = primary
-            .columns()
-            .get(key.driver_column)
-            .ok_or(PlanError::InvalidIntermediate)?;
-        let right = source
-            .schema
-            .columns()
-            .get(key.source_column)
-            .ok_or(PlanError::InvalidIntermediate)?;
-        if left.kind != right.kind
-            || item
-                .keys
-                .iter()
-                .any(|prior| prior.source_column == key.source_column)
-            || item.record_keys[..index]
-                .iter()
-                .any(|prior| prior.source_column == key.source_column)
-        {
-            return Err(PlanError::InvalidIntermediate);
-        }
-    }
-    Ok(())
+    validate_read(item, column, primary, sources, available, output)
 }

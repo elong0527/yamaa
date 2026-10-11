@@ -12,7 +12,7 @@ from pathlib import Path
 PLATFORMS = ("ubuntu-24.04", "macos-15", "windows-latest")
 PYTHONS = ("3.12", "3.13", "3.14")
 FORMS = ("wheel", "source")
-R_PLATFORMS = PLATFORMS[:2]
+R_PLATFORMS = PLATFORMS
 BUILD_PYTHON = "3.14"
 
 
@@ -38,7 +38,6 @@ def plan(event, run_id):
             ]
         },
         "qualify": {"include": combinations},
-        # The job-level condition skips Windows R before matrix expansion.
         "r": {"os": r_platforms},
         "run-r": bool(r_platforms),
         "full": event == "push",
@@ -117,7 +116,7 @@ def main():
     with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
         if coverage["full"]:
             summary.write(
-                "Full post-merge native coverage: all 18 Python combinations and both R hosts.\n"
+                "Full post-merge native coverage: all 18 Python combinations and all three R hosts.\n"
             )
         else:
             selected = coverage["qualify"]["include"][0]
@@ -127,10 +126,6 @@ def main():
                 "Retries keep this selection. Full coverage and cross-platform math "
                 "comparison run after merge to main.\n"
             )
-            if not coverage["run-r"]:
-                summary.write(
-                    "Windows R remains unqualified; this sample tests the Python route.\n"
-                )
 
 
 if __name__ == "__main__":

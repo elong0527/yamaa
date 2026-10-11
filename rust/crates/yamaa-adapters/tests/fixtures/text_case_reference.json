@@ -1,0 +1,56 @@
+{
+  "negative-str-case-number": [
+    {
+      "phase": "validation",
+      "condition": "incompatible_input_type",
+      "spec_paths": [
+        "columns.SITE.derivation.str_case.source"
+      ],
+      "requirement": "REQ-0308",
+      "context": {
+        "source": "SITENUM",
+        "expected": "str",
+        "actual": "int"
+      }
+    }
+  ],
+  "negative-str-case-unknown": [
+    {
+      "phase": "validation",
+      "condition": "value_not_permitted",
+      "spec_paths": [
+        "columns.SITE.derivation.str_case.to"
+      ],
+      "requirement": "REQ-0287",
+      "context": {
+        "value": "capitalize",
+        "permitted": [
+          "upper",
+          "lower",
+          "sentence",
+          "title"
+        ],
+        "source": "/private/tmp/yamaa-root-text-operators/benchmarks/negative-str-case-unknown/spec.yaml",
+        "entry": "/private/tmp/yamaa-root-text-operators/benchmarks/negative-str-case-unknown/spec.yaml"
+      }
+    }
+  ],
+  "missing": [
+    {
+      "phase": "mapping",
+      "condition": "missing_input",
+      "spec_paths": [
+        "columns.TEXT.derivation.str_case"
+      ],
+      "requirement": "REQ-0334",
+      "context": {
+        "variable": "SRC.TEXT",
+        "keys": [
+          {
+            "ID": "row1"
+          }
+        ]
+      }
+    }
+  ]
+}

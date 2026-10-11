@@ -464,18 +464,6 @@ pub fn prepare(
             )
         }
         .map_err(|error| Error::Compilation { node: index, error })?;
-        // Producer publication currently retains primary artifacts only. Refuse
-        // sidecars here, before activation or study ports, until their ordered
-        // graph publication is connected to the same retained-byte capability.
-        if compiled.output_logs().declared() {
-            return Err(Error::Compilation {
-                node: index,
-                error: PrepareError::Unsupported(vec![UnsupportedFeature {
-                    operation: "producer_logs".into(),
-                    path: "output".into(),
-                }]),
-            });
-        }
         charge(
             &mut slots,
             compiled.called_functions().len(),

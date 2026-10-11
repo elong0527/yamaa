@@ -226,7 +226,7 @@ fn runtime_impute_failure_retains_current_key_and_is_not_answered_by_invalid_han
     )
     .unwrap();
     let attempt = plan.execute_observed(&table, limits());
-    let ExecutionError::ImputationDiagnostic {
+    let ExecutionError::SemanticDiagnostic {
         diagnostic,
         identity,
     } = *attempt.result.unwrap_err()

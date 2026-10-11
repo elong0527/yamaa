@@ -121,15 +121,24 @@ fn compare_floats(left: f64, right: f64) -> Ordering {
 /// Compare present ordered values; never invent null placement or coerce text.
 /// Boolean predicate truth is handled separately from ordered column values.
 pub fn compare_present(left: &Value, right: &Value) -> Result<Ordering, ComparisonError> {
+    compare_present_refs(left.into(), right.into())
+}
+
+/// Borrow immutable cells for exact matching without retaining donor text.
+pub fn compare_present_refs(
+    left: crate::table::ValueRef<'_>,
+    right: crate::table::ValueRef<'_>,
+) -> Result<Ordering, ComparisonError> {
+    use crate::table::ValueRef as Value;
     match (left, right) {
         (Value::Missing, _) | (_, Value::Missing) => Err(ComparisonError::MissingOperand),
-        (Value::Int(a), Value::Int(b)) => Ok(a.cmp(b)),
-        (Value::Int(a), Value::Float(b)) => Ok(compare_int_float(*a, b.get())),
-        (Value::Float(a), Value::Int(b)) => Ok(compare_int_float(*b, a.get()).reverse()),
+        (Value::Int(a), Value::Int(b)) => Ok(a.cmp(&b)),
+        (Value::Int(a), Value::Float(b)) => Ok(compare_int_float(a, b.get())),
+        (Value::Float(a), Value::Int(b)) => Ok(compare_int_float(b, a.get()).reverse()),
         (Value::Float(a), Value::Float(b)) => Ok(compare_floats(a.get(), b.get())),
         (Value::Str(a), Value::Str(b)) => Ok(a.cmp(b)),
-        (Value::Date(a), Value::Date(b)) => Ok(a.cmp(b)),
-        (Value::DateTime(a), Value::DateTime(b)) => Ok(a.cmp(b)),
+        (Value::Date(a), Value::Date(b)) => Ok(a.cmp(&b)),
+        (Value::DateTime(a), Value::DateTime(b)) => Ok(a.cmp(&b)),
         _ => Err(ComparisonError::IncompatibleTypes),
     }
 }

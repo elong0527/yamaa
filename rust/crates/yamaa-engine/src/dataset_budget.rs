@@ -12,6 +12,10 @@ pub(crate) struct Budget {
     runtime: predicate::Budget,
 }
 impl Budget {
+    /// Borrow the installed capacity policy without charging or changing counters.
+    pub(crate) fn scalar_text_limit(&self) -> usize {
+        self.limits.scalar_text_bytes
+    }
     /// Start a fresh accounting scope; reuse of a plan never reuses counters.
     pub(crate) fn new(limits: Limits) -> Self {
         Self {
@@ -70,10 +74,34 @@ impl Budget {
         &mut self.runtime
     }
 
+    /// The predicate context admits its operand against both local and attempt counters.
+    pub(crate) fn predicate_operand_text(
+        &mut self,
+        local: &mut predicate::Budget,
+        bytes: usize,
+    ) -> Result<(), predicate::LimitError> {
+        self.runtime.operand_text(local, bytes)
+    }
+
     /// A filtered candidate releases retained text, but never refunds evaluated work.
     pub(crate) fn discard_candidate(&mut self, values: &[Value]) {
         let bytes: usize = values.iter().map(text_bytes).sum();
         self.output_text -= bytes;
+    }
+
+    /// Check a known final text result before allocating it, without spending a
+    /// second counter. Ordinary final conversion/value admission still owns retention.
+    pub(crate) fn admit_output_text<E>(&self, bytes: usize) -> Result<(), Box<ExecutionError<E>>> {
+        let required = self.output_text.checked_add(bytes);
+        if required.is_some_and(|n| n <= self.limits.output_text_bytes) {
+            Ok(())
+        } else {
+            Err(Box::new(ExecutionError::Limit {
+                resource: Resource::OutputTextBytes,
+                limit: self.limits.output_text_bytes,
+                required,
+            }))
+        }
     }
 
     /// Each admitted assignment fills a new slot, so retained text grows monotonically.

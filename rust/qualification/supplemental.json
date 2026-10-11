@@ -2,6 +2,50 @@
   "version": "1",
   "contracts": [
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json",
+      "family": "text",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_text_template.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/text_extract_reference.json",
+      "family": "text",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_text_extract.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json",
+      "family": "datasets",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_intermediate_keys.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json",
+      "family": "predicate",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_flags.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/aggregate_syntax.tsv",
       "family": "aggregate",
       "level": "compile",
@@ -57,10 +101,19 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/inheritance_preparation_reference.json",
+      "family": "inheritance",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/inheritance_capture.rs"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv",
       "family": "inheritance",
       "level": "compile",
       "consumers": [
+        "rust/crates/yamaa-adapters/tests/inheritance_capture.rs",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
@@ -73,7 +126,6 @@
       "consumers": [
         "R/yamaa/tests/inheritance.R",
         "rust/crates/yamaa-adapters/tests/inheritance_transport.rs",
-        "rust/tests/installed_inheritance.py",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
@@ -86,7 +138,6 @@
       "consumers": [
         "R/yamaa/tests/inheritance.R",
         "rust/crates/yamaa-adapters/tests/inheritance_transport.rs",
-        "rust/tests/installed_inheritance.py",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
@@ -140,6 +191,27 @@
         "rust/crates/yamaa-adapters/tests/reference_transport.rs",
         "rust/tests/installed_references.py"
       ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json",
+      "family": "datasets", "level": "component",
+      "consumers": ["rust/crates/yamaa-adapters/tests/declarative_row_intermediates.rs",
+        "rust/tools/stage_specification_inputs.py", "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/text_pad_reference.json",
+      "family": "text", "level": "component",
+      "consumers": ["rust/crates/yamaa-adapters/tests/declarative_text_pad.rs",
+        "rust/tools/stage_specification_inputs.py", "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/text_case_reference.json",
+      "family": "text", "level": "component",
+      "consumers": ["rust/crates/yamaa-adapters/tests/declarative_text_case.rs",
+        "rust/tools/stage_specification_inputs.py", "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"]
     },
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/temporal_imputation_reference.json",
@@ -939,7 +1011,9 @@
       "consumers": [
         "rust/crates/yamaa-adapters/tests/verification_logs.rs",
         "rust/tests/installed_verification_logs.py",
-        "R/yamaa/tests/verification_logs.R"
+        "R/yamaa/tests/verification_logs.R",
+        "rust/tests/installed_producer_logs.py",
+        "R/yamaa/tests/producer_logs.R"
       ]
     }
   ],
@@ -1292,6 +1366,20 @@
       "runtime": "r",
       "path": "R/yamaa/tests/verification_logs.R",
       "staged_path": "verification_logs.R",
+      "level": "shared_run"
+    },
+    {
+      "id": "python/producer-logs",
+      "runtime": "python",
+      "path": "rust/tests/installed_producer_logs.py",
+      "staged_path": "installed_producer_logs.py",
+      "level": "shared_run"
+    },
+    {
+      "id": "r/producer-logs",
+      "runtime": "r",
+      "path": "R/yamaa/tests/producer_logs.R",
+      "staged_path": "producer_logs.R",
       "level": "shared_run"
     },
     {

@@ -18,15 +18,16 @@ budget. A core structure that has not completed default preparation retains
 the validating normalization path; failed or interrupted preparation cannot
 establish the prepared state.
 
-The default specification loader still uses the Python interpreter. The explicit
-`yamaa.adapters.native_specification.load_specification` path captures the Rust
-services before YAML IO and uses them throughout schema admission, validation,
-normalization, inherited-layer composition, named-window expansion and inheritance
-dependency discovery. The separate [inheritance traversal service](INHERITANCE_TRAVERSAL.md)
-uses explicit source callbacks; `schema/1` queries retain no IO authority. The host
-keeps filesystem authority and final model validation. Current R specification
-workflows still need integration. Python remains the default and
-`execution_supported` remains false.
+The reference specification loader and the opt-in
+`yamaa.adapters.native_specification` compatibility adapter retain their existing
+standalone schema-query behavior. The optional native interpreter's inheritance
+hook is explicitly refused before document encoding or source effects; its old
+module/snapshot JSON source callbacks are retired. Custom typed interpreter and
+resolver dispositions remain unchanged. Public native build/check preparation
+uses engine services and typed resource/codec ports instead of these probes.
+See [inheritance traversal](INHERITANCE_TRAVERSAL.md) for the current application
+and the remaining R callback retirement boundary. Schema/1 queries retain no IO
+authority and are kept for separate component/API retirement.
 The [shared YAML service](YAML_DECODING.md) supplies decoded source trees for
 the optional loader, including inherited sources, and is available in both hosts.
 
@@ -194,18 +195,22 @@ modules matched the Python reference in both installed hosts: 296 normalized
 documents and 14 ordered diagnostic results. This does not qualify execution,
 inheritance resolution, every possible schema or the full release gates.
 
-`installed_schema_loading.py` additionally disables the reference schema
-interpreter while loading installed Python packages: three inheritance and
-composition cases compare to committed resolved documents, and three loaded
-specifications execute through Rust to unchanged expected CSV bytes. These
-bounded workflow checks do not qualify all schemas or replace the full release
-gates. The optional Python bridge rejects uncaptured constraint-bearing
+`installed_schema_loading.py` keeps standalone/query/custom-schema checks while
+migrating inherited application consumers to existing typed native preparation.
+Supported inherited/window cases compare unchanged CSV; full committed resolved
+documents and authored/default provenance are retained-arena adapter oracles.
+Complete inherited failure reports retain paths, requirements, contexts and
+source effects. COUNT scope, mapping and explicit-null LOOK preparation remains
+covered even though current application compilation refuses those execution
+scopes before study capture. Historical optional-loader execution and resolved
+probe results are not promoted to full native application parity.
+
+The optional Python query bridge still rejects uncaptured constraint-bearing
 descriptors and mismatched compiled root classes explicitly, without fallback.
-It accepts type-only projections used by inheritance and windows. The host
-closure reader caps source bytes at 8 MiB, confines include basenames, rejects
-symlink entry points/includes and preserves the existing YAML restrictions.
-Structured admission findings remain attached to schema errors; exhaustive
-malformed-schema prose compatibility still requires qualification.
+Type-only projections used by inheritance/windows remain query data. Its host
+closure reader retains source limits, basename confinement, symlink refusal and
+existing YAML restrictions. Structured schema admission findings remain attached
+to errors. No schema query operation or analyze/interpret behavior changes here.
 
 Two explicit compatibility items remain open:
 

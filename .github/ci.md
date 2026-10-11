@@ -23,21 +23,19 @@ The Actions run ID seeds the selection, so a new run samples again and retries
 keep the failed configuration. The workflow summary records the selection.
 Rust checks and distribution builds use the selected OS, and qualification
 installs the selected wheel or source archive on the selected Python version.
-Linux and macOS samples also exercise the R package on the same host. Windows
-samples retain the explicit unqualified R route. Public and producer cohort
-comparisons require the installed evidence for that selected configuration.
+Every sample also exercises the R package on the same host, including Windows.
+Public and producer cohort comparisons require the installed evidence for that selected configuration.
 
 Pushes to main retain the full three-OS, three-Python, two-package-form matrix,
-both supported R hosts, the cross-platform math comparison, and the complete
+all three R hosts, the cross-platform math comparison, and the complete
 public/producer cohort gate. PR artifacts are labeled as sampled coverage;
 they do not establish full platform qualification. Main builds remain the
 source of full coverage evidence after merge.
 
 Benchmark Markdown changes trigger documentation checks without rebuilding
 the Python/native runtimes. Specification, input, expected-output, and SDK
-changes still trigger runtime coverage. Native PR runs use five jobs for a
-Windows sample or six for a Unix sample; full main runs use 29, including the
-selection job.
+changes still trigger runtime coverage. Native PR runs use six jobs on every
+platform; full main runs use 30, including the selection job.
 
 Scripts locate repository data relative to their own files, so they can also
 run locally from any working directory. Keep tests and shared helpers beside

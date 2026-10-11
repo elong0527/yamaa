@@ -29,7 +29,10 @@ impl PreflightFinding {
         use super::FunctionCause;
         match self {
             Self::Log(finding) => finding.visit_text(visit),
-            Self::Imputation(diagnostic) => {
+            Self::Imputation(diagnostic)
+            | Self::TextCase(diagnostic)
+            | Self::TextTemplate(diagnostic)
+            | Self::TextExtract(diagnostic) => {
                 diagnostic.spec_paths.iter().for_each(|path| visit(path));
                 fn values(value: &V, visit: &mut impl FnMut(&str)) {
                     match value {
@@ -132,7 +135,10 @@ impl PreflightFinding {
     pub fn diagnostic(&self) -> Diagnostic {
         let (code, paths, context): (C, Vec<String>, Context) = match self {
             Self::Log(finding) => return finding.diagnostic(),
-            Self::Imputation(diagnostic) => return diagnostic.clone(),
+            Self::Imputation(diagnostic)
+            | Self::TextCase(diagnostic)
+            | Self::TextTemplate(diagnostic)
+            | Self::TextExtract(diagnostic) => return diagnostic.clone(),
             Self::RoundingInput {
                 path,
                 source,

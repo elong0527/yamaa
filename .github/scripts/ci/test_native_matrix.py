@@ -59,7 +59,7 @@ class NativeCoverage(unittest.TestCase):
             ),
         )
         self.assertEqual(len(coverage["build"]["include"]), 3)
-        self.assertEqual(coverage["r"]["os"], list(native_matrix.R_PLATFORMS))
+        self.assertEqual(coverage["r"]["os"], list(native_matrix.PLATFORMS))
         self.assertTrue(coverage["full"])
 
     def test_new_pr_runs_sample_all_routes_and_retries_keep_the_choice(self):
@@ -75,12 +75,12 @@ class NativeCoverage(unittest.TestCase):
             )
             self.assertEqual(coverage["compare-os"], selected["os"])
             self.assertFalse(coverage["full"])
-            expected_r = [] if selected["os"] == "windows-latest" else [selected["os"]]
+            expected_r = [selected["os"]]
             self.assertEqual(coverage["r"]["os"], expected_r)
             self.assertEqual(coverage["run-r"], bool(expected_r))
         self.assertEqual(len(observed), 18)
 
-    def test_comparison_uses_only_selected_evidence_and_requires_r_on_unix(self):
+    def test_comparison_uses_only_selected_evidence_and_requires_r_on_every_os(self):
         for platform in native_matrix.PLATFORMS:
             matrix = {"include": [{"os": platform, "python": "3.13", "form": "source"}]}
             with patch("native_matrix.subprocess.run") as run:
@@ -92,8 +92,9 @@ class NativeCoverage(unittest.TestCase):
                     f"cohort-input/native-qualification-{platform}-3.13-source/source",
                     command,
                 )
-                self.assertEqual(
-                    "--r-evidence" in command, platform != "windows-latest"
+                self.assertIn("--r-evidence", command)
+                self.assertIn(
+                    f"cohort-input/native-r-qualification-{platform}/r-source", command
                 )
                 self.assertTrue(call.kwargs["check"])
 

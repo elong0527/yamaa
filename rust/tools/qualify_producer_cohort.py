@@ -19,7 +19,7 @@ from yamaa.adapters.conformance import (
     compare_reports,
     write_report,
 )
-from yamaa.adapters.qualification import Batch, MissingRoute, load_inventory, qualify
+from yamaa.adapters.qualification import Batch, load_inventory, qualify
 
 NAME = "shared-producer-parquet"
 TARGETS = ("produced.parquet", "out.csv")
@@ -153,7 +153,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixtures", type=Path, required=True)
     parser.add_argument("--python-evidence", type=Path, required=True)
-    parser.add_argument("--r-evidence", type=Path)
+    parser.add_argument("--r-evidence", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--source-revision", required=True)
     args = parser.parse_args(argv)
@@ -162,16 +162,12 @@ def main(argv=None):
     if set(load_inventory(args.fixtures).examples) != {NAME}:
         raise ValueError("unexpected original producer cohort inventory")
     python = installed_record(args.python_evidence, "python", args.source_revision)
-    records = [("python", args.python_evidence, python)]
-    if args.r_evidence is not None:
-        r = installed_record(args.r_evidence, "r", args.source_revision)
-        if python["platform"].split("-", 1)[0] != r["platform"].split("-", 1)[0]:
-            raise ValueError("producer hosts must share an OS family")
-        if python["installation"]["core_version"] != r["installation"]["core_version"] or python["evidence"]["run"] != r["evidence"]["run"]:
-            raise ValueError("producer hosts must share the actual core and qualification run")
-        records.append(("r", args.r_evidence, r))
-    elif not python["platform"].lower().startswith("windows-"):
-        raise ValueError("Unix producer qualification requires both installed hosts")
+    r = installed_record(args.r_evidence, "r", args.source_revision)
+    if python["platform"].split("-", 1)[0] != r["platform"].split("-", 1)[0]:
+        raise ValueError("producer hosts must share an OS family")
+    if python["installation"]["core_version"] != r["installation"]["core_version"] or python["evidence"]["run"] != r["evidence"]["run"]:
+        raise ValueError("producer hosts must share the actual core and qualification run")
+    records = [("python", args.python_evidence, python), ("r", args.r_evidence, r)]
     reference = Batch.model_validate_json((args.python_evidence / "producer-reference-provenance.json").read_text(encoding="utf-8"))
     if (reference.runtime, reference.backend, reference.level, reference.source_revision) != ("python", "python", "reference_run", args.source_revision):
         raise ValueError("fresh independent producer reference evidence required")
@@ -192,13 +188,8 @@ def main(argv=None):
         batch, verdicts = retain_owner(directory, runtime, record, expected, args.output)
         batches.append(batch)
         comparisons.extend(verdicts)
-    required = [(NAME, "python", "python", "reference_run"), (NAME, "python", "rust", "shared_run")]
-    missing = ()
-    if args.r_evidence is not None:
-        required.append((NAME, "r", "rust", "shared_run"))
-    else:
-        missing = (MissingRoute(runtime="r", backend="rust", blocker="windows_r_scope_unqualified", issue="#1742"),)
-    inventory = qualify(args.output / "fixtures", args.source_revision, tuple(batches), required=tuple(required), missing_routes=missing)
+    required = ((NAME, "python", "python", "reference_run"), (NAME, "python", "rust", "shared_run"), (NAME, "r", "rust", "shared_run"))
+    inventory = qualify(args.output / "fixtures", args.source_revision, tuple(batches), required=required)
     (args.output / "coverage.json").write_text(inventory.model_dump_json(indent=2) + "\n", encoding="utf-8")
     (args.output / "complete-comparisons.json").write_text(json.dumps([verdict.model_dump(mode="json") for verdict in comparisons], indent=2) + "\n", encoding="utf-8")
     print(json.dumps(inventory.summary, indent=2))

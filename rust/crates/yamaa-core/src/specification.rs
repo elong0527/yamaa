@@ -22,6 +22,8 @@ mod binding_diagnostics;
 mod intermediates;
 #[path = "specification_lookup_diagnostics.rs"]
 mod lookup_diagnostics;
+#[path = "specification_match_values.rs"]
+mod match_values;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
 #[path = "specification_output_diagnostics.rs"]
@@ -35,6 +37,8 @@ pub use source_expressions::SourceFinding;
 mod column_checks;
 #[path = "specification_logs.rs"]
 mod logs;
+#[path = "specification_row_intermediates.rs"]
+mod row_intermediates;
 #[path = "specification_rows.rs"]
 mod rows;
 #[path = "specification_verifications.rs"]
@@ -48,10 +52,20 @@ mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
 #[path = "specification_cases.rs"]
 mod cases;
+#[path = "specification_flag.rs"]
+mod flags;
 #[path = "specification_temporal_imputation.rs"]
 mod imputation;
 #[path = "specification_rounding.rs"]
 mod rounding;
+#[path = "specification_str_case.rs"]
+mod str_case;
+#[path = "specification_str_extract.rs"]
+mod str_extract;
+#[path = "specification_str_pad.rs"]
+mod str_pad;
+#[path = "specification_str_template.rs"]
+mod str_template;
 #[path = "specification_temporal.rs"]
 mod temporal;
 #[path = "specification_terminology.rs"]
@@ -100,6 +114,9 @@ impl Default for CompilationLimits {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum PreflightFinding {
+    TextExtract(crate::diagnostic::Diagnostic),
+    TextTemplate(crate::diagnostic::Diagnostic),
+    TextCase(crate::diagnostic::Diagnostic),
     Log(LogFinding),
     Imputation(crate::diagnostic::Diagnostic),
     RoundingInput {
@@ -186,6 +203,9 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    Padding(crate::diagnostic::Diagnostic),
+    TextExtract(crate::diagnostic::Diagnostic),
+    TextTemplate(crate::diagnostic::Diagnostic),
     Temporal(crate::diagnostic::Diagnostic),
     Predicate(crate::diagnostic::Diagnostic),
     ProjectFunction(FunctionFinding),
@@ -278,6 +298,9 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    Flag(flags::Declaration),
+    StrExtract(crate::text_extract::StringExtract),
+    StrTemplate(crate::text_template::StringTemplate),
     Case(Vec<cases::Branch>),
     ProjectFunction(usize),
     Literal(crate::value::Value),
@@ -287,6 +310,8 @@ enum Operation {
     Compute(CompiledNumeric),
     Round(crate::dataset::Rounding),
     Temporal(crate::dataset::Temporal),
+    StrCase(crate::text_case::StringCase),
+    StrPad(str_pad::Declaration),
     Imputation(crate::dataset::Imputation),
     /// Reference planning emits formula diagnostics after source ingestion.
     InvalidNumeric {
@@ -898,6 +923,7 @@ impl PreparedSpecification {
                 }
             }
         }
+        match_values::declaration_admission(d, limits)?;
         let mut findings = preflight(spec)?;
         let columns = sequence(d, field(d, root, "columns")?)?;
         let output = TableSchema::new(
@@ -954,6 +980,11 @@ impl PreparedSpecification {
         rounding::declaration_findings(d, columns, &output, &mut findings)?;
         temporal::declaration_findings(d, columns, &output, &mut findings)?;
         imputation::declaration_findings(d, columns, &output, &mut findings)?;
+        str_pad::declaration_admission(d, columns, &output)?;
+        flags::declaration_admission(d, columns, &output)?;
+        str_case::declaration_findings(d, columns, &output, &mut findings)?;
+        let extraction = str_extract::Prepared::new(d, &output, &mut findings)?;
+        let templates = str_template::Prepared::new(d, &output, &mut findings)?;
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
@@ -980,13 +1011,14 @@ impl PreparedSpecification {
         }
         let inputs = mapping(d, field(d, root, "input")?)?;
         let mut source_findings = Vec::new();
-        if has_rows && inputs.len() != 1 {
-            reject(&mut extra, "multiple_source_rows", "rows".into());
-        }
-        let driver = match spec.default_driver() {
-            Some(driver) => driver,
-            None if !extra.is_empty() => return Err(PrepareError::Unsupported(extra)),
-            None => return Err(PrepareError::Internal),
+        let driver = if has_rows {
+            row_intermediates::common_driver(d, inputs)?
+        } else {
+            match spec.default_driver() {
+                Some(driver) => driver,
+                None if !extra.is_empty() => return Err(PrepareError::Unsupported(extra)),
+                None => return Err(PrepareError::Internal),
+            }
         };
         let driver_index = inputs
             .iter()
@@ -1145,9 +1177,6 @@ impl PreparedSpecification {
         }
         let intermediates =
             intermediates::Declarations::prepare(d, &sources, driver_index, limits, &mut extra)?;
-        if has_rows && !intermediates.is_empty() {
-            reject(&mut extra, "intermediate_rows", "rows".into());
-        }
         if has_rows {
             if !extra.is_empty() {
                 return Err(PrepareError::Unsupported(extra));
@@ -1159,6 +1188,8 @@ impl PreparedSpecification {
                 limits,
                 project.as_ref(),
                 catalogue.is_some(),
+                &extraction,
+                &templates,
             )?;
             let project = match project {
                 Some(project) => {
@@ -1204,6 +1235,7 @@ impl PreparedSpecification {
             let op = text(d, op)?;
             let path = format!("{prefix}.derivation.{op}");
             let operation = match op {
+                "flag" => Some(Operation::Flag(flags::prepare(d, payload, &path)?)),
                 "case" => Some(Operation::Case(cases::prepare(
                     d,
                     payload,
@@ -1212,6 +1244,8 @@ impl PreparedSpecification {
                     &intermediates,
                     keys.contains(&column),
                     0,
+                    &extraction,
+                    &templates,
                 )?)),
                 "function" if project.is_some() => Some(Operation::ProjectFunction(
                     *project
@@ -1286,6 +1320,24 @@ impl PreparedSpecification {
                 | "baseline_flag" => Some(Operation::Window(alloc::boxed::Box::new(
                     windows::Declaration::prepare(d, payload, op, &path, limits, &mut extra)?,
                 ))),
+                "str_template" => Some(Operation::StrTemplate(templates.get(payload)?)),
+                "str_extract" => Some(Operation::StrExtract(extraction.get(payload)?)),
+                "str_case" => Some(Operation::StrCase(str_case::prepare(
+                    d,
+                    payload,
+                    &path,
+                    Some(driver),
+                    Some(&intermediates),
+                    &mut extra,
+                )?)),
+                "str_pad" => Some(Operation::StrPad(str_pad::prepare(
+                    d,
+                    payload,
+                    &path,
+                    Some(driver),
+                    Some(&intermediates),
+                    &mut extra,
+                )?)),
                 "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision"
                 | "to_date" => Some(Operation::Imputation(imputation::prepare(
                     d,
@@ -1585,6 +1637,18 @@ impl PreparedSpecification {
         }
         let source = schemas[self.driver];
         if let Some(rows) = &self.rows {
+            if !self.intermediates.is_empty() {
+                rows.admit_sources(schemas, &self.output)?;
+            }
+            let mut findings = Vec::new();
+            let (secondary, intermediates) = self.intermediates.bind(
+                &self.sources,
+                self.driver,
+                schemas,
+                &self.output,
+                &self.keys,
+                &mut findings,
+            )?;
             return rows
                 .bind(
                     source,
@@ -1593,6 +1657,10 @@ impl PreparedSpecification {
                     &self.keys,
                     self.verifications(),
                     self.project_calls.as_ref(),
+                    &self.intermediates,
+                    secondary,
+                    intermediates,
+                    findings,
                 )
                 .and_then(|plan| {
                     plan.with_column_verifications(self.column_verification_groups())
@@ -1640,6 +1708,8 @@ impl PreparedSpecification {
         let mut assignments = BTreeMap::new();
         let mut dependencies = Vec::new();
         for (column, declaration) in self.declarations.iter().enumerate() {
+            let declarations_reported =
+                cases::padding_findings(&declaration.operation, &mut findings)?;
             let mut edges = Vec::new();
             let path = &declaration.path;
             let reference_path = if matches!(
@@ -1677,6 +1747,19 @@ impl PreparedSpecification {
                 Ok(binding)
             };
             let expression = match &declaration.operation {
+                Operation::Flag(operation) => flags::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    &self.source().name,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                    declarations_reported,
+                )?,
                 Operation::Case(branches) => cases::bind(
                     self,
                     branches,
@@ -1686,6 +1769,7 @@ impl PreparedSpecification {
                     &intermediates,
                     &mut edges,
                     &mut findings,
+                    declarations_reported,
                 )?,
                 Operation::ProjectFunction(call) => {
                     let calls = self.project_calls.as_ref().ok_or(BindError::Internal)?;
@@ -1728,6 +1812,50 @@ impl PreparedSpecification {
                 Operation::Literal(value) => Some(Expression::Literal(value.clone())),
                 Operation::Round(rounding) => rounding::bind(
                     rounding,
+                    column,
+                    &self.keys,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
+                Operation::StrTemplate(operation) => str_template::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
+                Operation::StrExtract(operation) => str_extract::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
+                Operation::StrCase(operation) => str_case::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
+                Operation::StrPad(operation) => str_pad::bind(
+                    operation,
                     column,
                     &self.keys,
                     &catalog,
@@ -1781,7 +1909,7 @@ impl PreparedSpecification {
                     )?;
                     if let Some((index, field)) = self.intermediates.reference(name) {
                         if let Some(item) = &intermediates[index] {
-                            edges.extend(item.keys.iter().map(|key| key.output_column));
+                            edges.extend(item.output_dependencies());
                             let column = secondary[item.source]
                                 .schema
                                 .columns()
@@ -1901,7 +2029,7 @@ impl PreparedSpecification {
                             .reference(name)
                             .ok_or(BindError::Internal)?;
                         if let Some(item) = &intermediates[index] {
-                            edges.extend(item.keys.iter().map(|key| key.output_column));
+                            edges.extend(item.output_dependencies());
                             if let Some(column) = secondary[item.source]
                                 .schema
                                 .columns()

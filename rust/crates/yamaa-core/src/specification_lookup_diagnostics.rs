@@ -68,22 +68,25 @@ impl LookupFinding {
         path: &str,
         intermediate: &str,
         source: &str,
-        expected: ColumnType,
+        expected: crate::key_relation::ComparableType,
         actual: ColumnType,
     ) -> Self {
         let mut finding = Self::new(path, C::LookupKeyType);
-        let name = |kind| match kind {
-            ColumnType::Str => "str",
-            ColumnType::Int => "int",
-            ColumnType::Float => "float",
-            ColumnType::Date => "date",
-            ColumnType::DateTime => "datetime",
+        let name = |kind: crate::key_relation::ComparableType| match kind {
+            crate::key_relation::ComparableType::Boolean => "bool",
+            crate::key_relation::ComparableType::Column(kind) => match kind {
+                ColumnType::Str => "str",
+                ColumnType::Int => "int",
+                ColumnType::Float => "float",
+                ColumnType::Date => "date",
+                ColumnType::DateTime => "datetime",
+            },
         };
         for (key, value) in [
             ("intermediate", intermediate),
             ("source", source),
             ("expected", name(expected)),
-            ("actual", name(actual)),
+            ("actual", name(actual.into())),
         ] {
             finding.text(key, value);
         }

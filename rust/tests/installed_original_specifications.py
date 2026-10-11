@@ -1623,6 +1623,428 @@ class PublicDomains(unittest.TestCase):
                     result.save()
                 self.assertEqual(sorted(p.name for p in case.glob("*.csv")), [])
 
+    def test_public_string_case_modes_original_negatives_and_ordering_blocker(self):
+        import shutil
+
+        import yamaa
+
+        def issues(result):
+            records = result.issues.to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
+            return records
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = """schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: input.csv}
+output: {path: output.csv, columns: [ID, UP, LOW, SENT, TITLE]}
+columns:
+  - {name: ID, type: str, derivation: SRC.ID}
+  - {name: UP, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper, missing: MiXeD}}}
+  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower, missing: null}}}
+  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence, missing: null}}}
+  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title, missing: null}}}
+"""
+            entry = root / "spec.yaml"
+            entry.write_text(source)
+            self.assertEqual(issues(yamaa.check(entry)), [])
+            (root / "input.csv").write_text("ID,TEXT\n1,FOLLOW-UP\n2,\u00df\u0130\u00e9\U0001f642AbC\n3,\n", encoding="utf-8", newline="\n")
+            result = yamaa.domain(entry)
+            self.assertEqual(issues(result), [])
+            self.assertEqual(result.output.rows(), [("1", "FOLLOW-UP", "follow-up", "Follow-up", "Follow-Up"),
+                ("2", "\u00df\u0130\u00e9\U0001f642ABC", "\u00df\u0130\u00e9\U0001f642abc", "\u00df\u0130\u00e9\U0001f642abc", "\u00df\u0130\u00e9\U0001f642Abc"), ("3", "MiXeD", None, None, None)])
+            self.assertFalse((root / "output.csv").exists())
+            self.assertTrue(result.save())
+            self.assertEqual((root / "output.csv").read_bytes(), "ID,UP,LOW,SENT,TITLE\n1,FOLLOW-UP,follow-up,Follow-up,Follow-Up\n2,\u00df\u0130\u00e9\U0001f642ABC,\u00df\u0130\u00e9\U0001f642abc,\u00df\u0130\u00e9\U0001f642abc,\u00df\u0130\u00e9\U0001f642Abc\n3,MiXeD,,,\n".encode())
+            source = source.replace("to: upper, missing: MiXeD", "to: upper")
+            entry.write_text(source)
+            (root / "input.csv").write_bytes(b"ID,TEXT\nrow1,\n")
+            rejected = yamaa.domain(entry)
+            expected = json.loads((ROOT / "text-case-reference.json").read_text())["missing"][0]
+            expected = dict(expected, spec_paths=["columns.UP.derivation.str_case"])
+            self.assertEqual(issues(rejected), [expected])
+            self.assertIsNone(rejected.output)
+            with self.assertRaises(yamaa.DomainError):
+                rejected.save()
+            with (ROOT / "text-case-diagnostics.tsv").open() as stream:
+                failures = list(csv.DictReader(stream, delimiter="\t"))
+            self.assertEqual(len(failures), 2)
+            for finding in failures:
+                case = root / finding["case"]
+                shutil.copytree(ROOT / "cases" / finding["case"], case)
+                shutil.rmtree(case / "input")
+                expected = {key: finding[key] for key in ("phase", "condition", "requirement")}
+                expected.update(spec_paths=[finding["spec_path"]], context=json.loads(finding["context"]))
+                checked = yamaa.check(case / "spec.yaml")
+                rejected = yamaa.domain(case / "spec.yaml")
+                self.assertEqual(issues(checked), [expected])
+                self.assertEqual(issues(rejected), [expected])
+                self.assertIsNone(rejected.output)
+                self.assertIsNone(rejected._native.observations())
+                with self.assertRaises(yamaa.DomainError):
+                    rejected.save()
+                self.assertFalse((case / "input").exists())
+            case = root / "schema-sentence-case"
+            shutil.copytree(ROOT / "cases" / case.name, case)
+            expected = [{"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                "spec_paths":["output.order_by"], "context":{"operation":"order_by"}}]
+            self.assertEqual(issues(yamaa.check(case / "spec.yaml")), expected)
+            rejected = yamaa.domain(case / "spec.yaml")
+            self.assertEqual(issues(rejected), expected)
+            self.assertIsNone(rejected.output)
+            self.assertIsNone(rejected._native.observations())
+            self.assertFalse((case / "adlb.csv").exists())
+
+    def test_public_string_padding_complete_independent_outputs_findings_and_effects(self):
+        import shutil
+        import yamaa
+        reference = json.loads((ROOT / "text-pad-reference.json").read_text(encoding="utf-8"))
+        def issues(result):
+            records = result.issues.to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
+            return records
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, case in reference.items():
+                current = root / name
+                shutil.copytree(ROOT / "text-pad-cases" / name, current)
+                entry = current / "spec.yaml"
+                if name == "width-noninteger":
+                    (current / "input.csv").unlink()
+                result = yamaa.domain(entry)
+                if "csv" in case:
+                    self.assertEqual(issues(result), [], name)
+                    self.assertEqual(result.output.write_csv().encode(), case["csv"].encode(), name)
+                    self.assertFalse((current / "output.csv").exists())
+                    self.assertEqual(json.loads(result._native.observations())["handler_counts"], case["handlers"], name)
+                    self.assertTrue(result.save())
+                    self.assertEqual((current / "output.csv").read_bytes(), case["csv"].encode(), name)
+                else:
+                    expected = json.loads(json.dumps(case["findings"]))
+                    if name == "width-noninteger":
+                        # Preserve complete loader evidence and expose the existing
+                        # schema source/entry gap separately from normative equality.
+                        for field in ("source", "entry"):
+                            self.assertEqual(expected[0]["context"].pop(field), "/private/tmp/yamaa-root-text-pad-audit/width-noninteger/spec.yaml")
+                        self.assertEqual(issues(yamaa.check(entry)), expected)
+                        self.assertIsNone(result._native.observations())
+                    else:
+                        self.assertEqual(json.loads(result._native.observations())["handler_counts"], case["handlers"], name)
+                    self.assertEqual(issues(result), expected, name)
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.DomainError):
+                        result.save()
+                    self.assertFalse((current / "output.csv").exists())
+            original = root / "negative-str-pad-width"
+            shutil.copytree(ROOT / "cases" / original.name, original)
+            shutil.rmtree(original / "input")
+            expected = [{"phase":"validation", "condition":"invalid_field_type", "requirement":"REQ-0287", "spec_paths":["columns.IDVARVAL.derivation.str_pad.width"], "context":{"expected":"int", "actual":"str"}}]
+            for result in (yamaa.check(original / "spec.yaml"), yamaa.domain(original / "spec.yaml")):
+                self.assertEqual(issues(result), expected)
+            self.assertFalse((original / "input").exists())
+
+
+    def test_public_declarative_flags_complete_original_and_authored_captures(self):
+        import shutil
+        import yamaa
+        reference = json.loads((ROOT / "flag-reference.json").read_text(encoding="utf-8"))
+        positives = ("schema-str-contains", "adam-adae-occurrence-flags", "adam-adex-dose-reduction", "adam-adlb-closest-visit", "adam-adsl-completion-flag", "sdtm-dm-death")
+        negatives = ("negative-flag-condition", "negative-flag-missing-value", "negative-flag-payload", "negative-review-arithmetic", "negative-review-date-text", "negative-review-unknown-date")
+        outputs = dict(zip(positives, ("adae.csv", "adae.csv", "adex.csv", "adlb.csv", "adsl.csv", "dm.csv")))
+        # Complete captures remain installed for both existing independent gates.
+        held = ("nested_case_mixed_declarations", "implicit_raw_ambiguous")
+        self.assertEqual(set(held).intersection(reference["witnesses"]), set(held))
+        cases = [(name, reference["originals"][name], "cases") for name in positives + negatives]
+        cases += [(name, case, "flags") for name, case in reference["witnesses"].items() if name not in held]
+        self.assertEqual(len(cases), 33)
+        def issues(result):
+            rows = result.issues.to_dicts()
+            for row in rows:
+                row["context"] = json.loads(row["context"])
+            return rows
+        with tempfile.TemporaryDirectory() as directory:
+            for name, case, cohort in cases:
+                with self.subTest(case=name):
+                    work = Path(directory) / name
+                    shutil.copytree(ROOT / cohort / name, work)
+                    entry = work / "spec.yaml"
+                    self.assertEqual(entry.read_text(encoding="utf-8"), case["specification"])
+                    retained = {path: path.read_bytes() for path in work.rglob("*") if path.is_file()}
+                    expected = json.loads(json.dumps(case["findings"]))
+                    schema_failure = case["result_type"] == "SpecificationError"
+                    if schema_failure:
+                        # Full loader provenance remains in the unchanged capture;
+                        # only these two existing absent native fields are excepted.
+                        for finding in expected:
+                            source = finding["context"].pop("source")
+                            self.assertEqual(source, finding["context"].pop("entry"))
+                            self.assertTrue(source.endswith("/" + name + "/spec.yaml"))
+                    output = work / outputs.get(name, "out.csv")
+                    for attempt in range(2):
+                        with self.subTest(attempt=attempt):
+                            self.assertFalse(output.exists())
+                            try:
+                                result = yamaa.domain(entry)
+                            except yamaa.SpecificationError as error:
+                                self.assertTrue(schema_failure)
+                                self.assertEqual(issues(error), expected)
+                            else:
+                                self.assertEqual(issues(result), expected)
+                                wire = result._native.observations()
+                                if wire is None:
+                                    self.assertEqual(case.get("handlers", []), [])
+                                else:
+                                    self.assertEqual(json.loads(wire)["handler_counts"], case.get("handlers", []))
+                                if case["result_type"] == "ExecutionSuccess":
+                                    expected_path = next((work / "expected").glob("*.csv")) if cohort == "cases" else work / "expected.csv"
+                                    if cohort == "flags":
+                                        self.assertEqual(expected_path.read_bytes(), case["csv"].encode())
+                                        self.assertEqual(result.output.write_csv().encode(), expected_path.read_bytes())
+                                    self.assertTrue(result.save())
+                                    self.assertEqual(output.read_bytes(), expected_path.read_bytes())
+                                    output.unlink()
+                                else:
+                                    self.assertIsNone(result.output)
+                                    with self.assertRaises(yamaa.DomainError):
+                                        result.save()
+                            self.assertFalse(output.exists())
+                            for path, original in retained.items():
+                                self.assertEqual(path.read_bytes(), original)
+
+
+    def test_public_intermediate_keys_complete_unchanged_nineteen_captures(self):
+        import shutil
+        import yamaa
+        reference = json.loads((ROOT / "key-reference.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(reference), 19)
+        with tempfile.TemporaryDirectory() as directory:
+            for name, case in reference.items():
+                with self.subTest(case=name):
+                    work = Path(directory) / name
+                    shutil.copytree(ROOT / "keys" / name, work)
+                    entry = work / "spec.yaml"
+                    self.assertEqual(entry.read_bytes(), case["specification"].encode())
+                    retained = {path: path.read_bytes() for path in work.rglob("*") if path.is_file()}
+                    output = work / "out.csv"
+                    for attempt in range(2):
+                        with self.subTest(attempt=attempt):
+                            self.assertFalse(output.exists())
+                            result = yamaa.domain(entry)
+                            findings = result.issues.to_dicts()
+                            for finding in findings:
+                                finding["context"] = json.loads(finding["context"])
+                            self.assertEqual(findings, case.get("findings", []))
+                            wire = result._native.observations()
+                            if wire is None:
+                                self.assertEqual(case["handlers"], [])
+                            else:
+                                self.assertEqual(json.loads(wire)["handler_counts"], case["handlers"])
+                            if "csv" in case:
+                                expected = case["csv"].encode()
+                                self.assertEqual((work / "expected.csv").read_bytes(), expected)
+                                self.assertEqual(result.output.write_csv().encode(), expected)
+                                self.assertTrue(result.save())
+                                self.assertEqual(output.read_bytes(), expected)
+                                output.unlink()
+                            else:
+                                self.assertIsNone(result.output)
+                                with self.assertRaises(yamaa.DomainError):
+                                    result.save()
+                            self.assertFalse(output.exists())
+                            for path, original in retained.items():
+                                self.assertEqual(path.read_bytes(), original)
+
+
+    def test_public_common_row_intermediates_complete_original_and_independent_truth(self):
+        import shutil
+        import yamaa
+        reference = json.loads((ROOT / "row-intermediate-reference.json").read_text(encoding="ascii"))
+        cases = dict(reference["cases"], **reference["originals"])
+        def issues(result):
+            records = result.issues.to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
+            return records
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, case in cases.items():
+                with self.subTest(name=name):
+                    current = root / name
+                    shutil.copytree(ROOT / "row-cases" / name, current)
+                    entry = current / "spec.yaml"
+                    expected = json.loads((current / "findings.json").read_text(encoding="ascii"))
+                    if name == "adam-adlb-end-of-treatment":
+                        gates = list(reference["eot_native_gates"])
+                        self.assertEqual(len(gates), 5)
+                        self.assertEqual(gates.pop(), {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                            "spec_paths":["columns.EOTFL.derivation.flag"], "context":{"operation":"flag"}})
+                        self.assertEqual(expected, gates)
+                    result = yamaa.domain(entry)
+                    self.assertEqual(issues(result), expected)
+                    observations = result._native.observations()
+                    if observations is not None:
+                        self.assertEqual(json.loads(observations)["handler_counts"], case.get("handler_counts", []))
+                    output = current / ("adlb.csv" if name in reference["originals"] else "result.csv")
+                    self.assertFalse(output.exists())
+                    if not expected:
+                        self.assertIsNotNone(result.output)
+                        expected_csv = (current / "expected.csv").read_bytes()
+                        self.assertEqual(result.output.write_csv().encode(), expected_csv)
+                        self.assertTrue(result.save())
+                        self.assertEqual(output.read_bytes(), expected_csv)
+                        self.assertTrue(result.save())
+                        self.assertEqual(output.read_bytes(), expected_csv)
+                    else:
+                        self.assertIsNone(result.output)
+                        with self.assertRaises(yamaa.DomainError):
+                            result.save()
+                        self.assertFalse(output.exists())
+                    if name in ("unknown-row-driver", "omitted-row-driver", "different-row-drivers", "adam-adlb-end-of-treatment"):
+                        self.assertEqual(issues(yamaa.check(entry)), expected)
+            # Public Check admits metadata without inspecting missing study files.
+            original = root / "adam-adlb-supplb-padded-key"
+            shutil.rmtree(original / "input")
+            self.assertEqual(issues(yamaa.check(original / "spec.yaml")), [])
+            self.assertFalse((original / "input").exists())
+
+
+    def test_public_text_template_original_bytes_and_complete_reference_witnesses(self):
+        import shutil
+
+        import polars as pl
+        import yamaa
+        from polars.testing import assert_frame_equal
+
+        truth = json.loads((ROOT / "text-template-reference.json").read_text())
+        with (ROOT / "text-template-directories.tsv").open(newline="", encoding="ascii") as stream:
+            directories = {row["case"]: row["directory"] for row in csv.DictReader(stream, delimiter="\t")}
+
+        def issues(result):
+            records = result.issues.to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
+            return records
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            case = root / "adam-adsl-site-parse"
+            shutil.copytree(ROOT / "cases" / case.name, case)
+            entry = case / "spec.yaml"
+            written = entry.read_bytes()
+            held = case / "held"
+            (case / "input").rename(held)
+            self.assertEqual(issues(yamaa.check(entry)), [])
+            held.rename(case / "input")
+            result = yamaa.domain(entry)
+            self.assertEqual(issues(result), [])
+            expected = pl.read_csv(case / "expected/adsl.csv", infer_schema=False)
+            assert_frame_equal(result.output, expected)
+            self.assertEqual(json.loads(result._native.observations())["handler_counts"], truth[case.name]["handler_counts"])
+            self.assertEqual(entry.read_bytes(), written)
+            self.assertFalse((case / "adsl.csv").exists())
+            self.assertTrue(result.save())
+            self.assertEqual((case / "adsl.csv").read_bytes(), (case / "expected/adsl.csv").read_bytes())
+            self.assertEqual((case / "adsl.csv").read_bytes(), truth[case.name]["csv"].encode("utf-8"))
+            negative = root / "negative-subject-reference"
+            shutil.copytree(ROOT / "cases" / negative.name, negative)
+            shutil.rmtree(negative / "input")
+            for result in [yamaa.check(negative / "spec.yaml"), yamaa.domain(negative / "spec.yaml")]:
+                self.assertEqual(issues(result), truth[negative.name]["findings"])
+            self.assertIsNone(result.output)
+            self.assertIsNone(result._native.observations())
+            with self.assertRaises(yamaa.DomainError):
+                result.save()
+            for name, value in truth.items():
+                if "specification" not in value:
+                    continue
+                case = root / name
+                shutil.copytree(ROOT / "text-template-cases" / directories[name], case)
+                result = yamaa.domain(case / "spec.yaml")
+                self.assertEqual(issues(result), value.get("findings", []), name)
+                observations = result._native.observations()
+                if observations is not None and "handler_counts" in value:
+                    self.assertEqual(json.loads(observations)["handler_counts"], value["handler_counts"], name)
+                if "csv" in value:
+                    self.assertFalse((case / "output.csv").exists())
+                    self.assertTrue(result.save())
+                    self.assertEqual((case / "output.csv").read_bytes(), value["csv"].encode("utf-8"), name)
+                else:
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.DomainError):
+                        result.save()
+                    self.assertFalse((case / "output.csv").exists())
+
+
+    def test_public_text_extract_original_bytes_and_complete_reference_witnesses(self):
+        import shutil
+
+        import polars as pl
+        import yamaa
+        from polars.testing import assert_frame_equal
+
+        truth = json.loads((ROOT / "text-extract-reference.json").read_text())
+
+        def issues(result):
+            records = result.issues.to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
+            return records
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            case = root / "adam-adae-text-cleanup"
+            shutil.copytree(ROOT / "cases" / case.name, case)
+            entry = case / "spec.yaml"
+            written = entry.read_bytes()
+            held = case / "held"
+            (case / "input").rename(held)
+            self.assertEqual(issues(yamaa.check(entry)), [])
+            held.rename(case / "input")
+            result = yamaa.domain(entry)
+            self.assertEqual(issues(result), [])
+            expected = pl.read_csv(case / "expected/adae.csv", schema_overrides={"AESEQ": pl.Int64, "AEREFNUM": pl.Int64})
+            assert_frame_equal(result.output, expected)
+            self.assertEqual(json.loads(result._native.observations())["handler_counts"], truth[case.name]["handler_counts"])
+            self.assertEqual(entry.read_bytes(), written)
+            self.assertFalse((case / "adae.csv").exists())
+            self.assertTrue(result.save())
+            self.assertEqual((case / "adae.csv").read_bytes(), (case / "expected/adae.csv").read_bytes())
+            self.assertEqual((case / "adae.csv").read_bytes(), truth[case.name]["csv"].encode())
+            negative = root / "negative-str-uncaptured-group"
+            shutil.copytree(ROOT / "cases" / negative.name, negative)
+            shutil.rmtree(negative / "input")
+            for result in [yamaa.check(negative / "spec.yaml"), yamaa.domain(negative / "spec.yaml")]:
+                self.assertEqual(issues(result), truth[negative.name]["findings"])
+            self.assertIsNone(result.output)
+            self.assertIsNone(result._native.observations())
+            with self.assertRaises(yamaa.DomainError):
+                result.save()
+            for name in ("missing", "no-match", "non-string", "invalid-pattern", "negative-group", "optional-unentered", "entered-empty", "whole-empty", "leftmost-alternative", "last-repeated-capture", "literal-null", "one-final-conversion", "combined-nonstring-group", "combined-unknown-group", "combined-nonstring-invalid-pattern", "combined-unknown-invalid-pattern", "nested-case","row-extract", "scope-before-pattern"):
+                case = root / name
+                shutil.copytree(ROOT / "text-extract-cases" / name, case)
+                result = yamaa.domain(case / "spec.yaml")
+                self.assertEqual(issues(result), truth[name].get("findings", []), name)
+                observations = result._native.observations()
+                if observations is not None and "handler_counts" in truth[name]:
+                    self.assertEqual(json.loads(observations)["handler_counts"], truth[name]["handler_counts"], name)
+                if "csv" in truth[name]:
+                    self.assertFalse((case / "output.csv").exists())
+                    self.assertTrue(result.save())
+                    self.assertEqual((case / "output.csv").read_bytes(), truth[name]["csv"].encode(), name)
+                    if name == "optional-unentered":
+                        self.assertEqual(result.output["RESULT"].to_list(), [None])
+                    if name in ("entered-empty", "whole-empty"):
+                        self.assertEqual(result.output["RESULT"].to_list(), [""])
+                else:
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.DomainError):
+                        result.save()
+
+
     def test_public_domain_all_original_issues_outputs_and_saved_bytes(self):
         import datetime
         import shutil

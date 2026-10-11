@@ -22,6 +22,10 @@ pub use inheritance::InheritanceFinding;
 mod source;
 pub use source::{admit_source_diagnostics, ParquetFinding, SourceDiagnosticReport, SourceFinding};
 
+#[path = "diagnostic_inherited_dependencies.rs"]
+mod inherited_dependencies;
+pub use inherited_dependencies::inheritance_dependency_diagnostics;
+
 #[path = "diagnostic_grammar.rs"]
 mod grammar;
 #[path = "diagnostic_numeric.rs"]
@@ -128,6 +132,7 @@ conditions! {
     NumericUnknownField => ("validation", "unknown_field", Some("REQ-0443")),
     NumericInputType => ("validation", "incompatible_input_type", Some("REQ-0444")),
     RoundingDigitsType => ("validation", "incompatible_input_type", Some("REQ-0418")),
+    StrPadWidth => ("validation", "invalid_field_type", Some("REQ-1261")),
     DeclarativeRoundingInput => ("validation", "incompatible_input_type", Some("REQ-0418")),
     TemporalOperand => ("validation", "incompatible_input_type", Some("REQ-0606")),
     ImputationMonthNotPermitted => ("validation", "month_not_permitted", Some("REQ-0592")),
@@ -146,6 +151,12 @@ conditions! {
     DatetimePrecisionInvalid => ("impute", "invalid_datetime_text", Some("REQ-1183")),
     ToDateInput => ("validation", "incompatible_input_type", Some("REQ-0607")),
     ToDateInvalid => ("validation", "invalid_date_text", Some("REQ-0607")),
+    TemplateInvalid => ("validation", "invalid_string_template", Some("REQ-0461")),
+    ExtractGroup => ("validation", "regex_group_out_of_range", Some("REQ-0816")),
+    ExtractNoMatch => ("mapping", "unmatched_pattern", Some("REQ-0334")),
+    ExtractUnknown => ("validation", "unknown_field", Some("REQ-0308")),
+    StrCaseInput => ("validation", "incompatible_input_type", Some("REQ-0308")),
+    StrCaseMissing => ("mapping", "missing_input", Some("REQ-0334")),
     TemporalBounds => ("validation", "value_not_permitted", Some("REQ-0613")),
     IntegerOverflow => ("derivation", "integer_overflow", Some("REQ-0434")),
     DivisionByZero => ("derivation", "division_by_zero", Some("REQ-0430")),
@@ -158,6 +169,7 @@ conditions! {
     ResourceMissing => ("validation", "resource_path_missing", Some("REQ-0785")),
     ResourceNotRegularFile => ("validation", "resource_path_not_regular_file", Some("REQ-0785")),
     InheritanceInvalidParent => ("validation", "invalid_parent_path", Some("REQ-0653")),
+    InheritanceUnknownDependency => ("validation", "unknown_reference", Some("REQ-0070")),
     InheritanceParentUnavailable => ("validation", "parent_not_found", Some("REQ-0654")),
     InheritanceCycle => ("validation", "inheritance_cycle", Some("REQ-0655")),
     InheritanceParentVersion => ("validation", "schema_version_mismatch", Some("REQ-0656")),
@@ -238,7 +250,10 @@ conditions! {
     LookupOutputKeyReference => ("validation", "unknown_field", Some("REQ-0117")),
     LookupValueReference => ("validation", "unknown_field", Some("REQ-0125")),
     LookupKeyType => ("validation", "incompatible_input_type", Some("REQ-0323")),
+    FlagMissingValueRequired => ("validation", "missing_value_required", Some("REQ-1258")),
     PredicateUnknownField => ("validation", "unknown_field", Some("REQ-0189")),
+    PredicateUnresolvableName => ("validation", "unresolvable_name", Some("REQ-0189")),
+    PredicateInputType => ("validation", "incompatible_input_type", Some("REQ-0190")),
     PredicateIncompatiblePair => ("validation", "incompatible_input_type", Some("REQ-0190")),
     PredicateExpectedText => ("validation", "incompatible_input_type", Some("REQ-0190")),
     PredicateContainsExpectedText => ("validation", "incompatible_input_type", Some("REQ-1244")),

@@ -1,0 +1,3223 @@
+{
+  "adam-adsl-site-parse": {
+    "handler_counts": [
+      {
+        "spec_path": "columns.SITEIDP.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.SITEIDP.derivation.str_extract.no_match",
+        "handler": "no_match",
+        "count": 4
+      },
+      {
+        "spec_path": "columns.SUBJREF.derivation.str_template.missing",
+        "handler": "missing",
+        "count": 1
+      }
+    ],
+    "csv": "STUDYID,USUBJID,SUBJID,SITEIDP,SITEID,SUBJREF\nYAMAA-01,YAMAA-UCSD-0001,0001,UCSD,UCSD,UCSD:0001\nYAMAA-01,YAMAA-UCSD-0002,0002,UCSD,UCSD,UCSD:0002\nYAMAA-01,YAMAA-UCLA-0003,0003,UCLA,UCLA,UCLA:0003\nYAMAA-01,SUBJECT-0004,0004,,UCSD,UCSD:0004\nYAMAA-01,SUBJECT-0005,0005,,UNKNOWN,UNKNOWN:0005\nYAMAA-01,YAMAA-UCSD-006,0006,,UCSD,UCSD:0006\nYAMAA-01,YAMAA-UCSD-00007,0007,,UCSD,UCSD:0007\nYAMAA-01,YAMAA-UCSD-0008,,UCSD,UCSD,UNKNOWN\n"
+  },
+  "negative-subject-reference": {
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_string_template",
+        "spec_paths": [
+          "columns.SUBJREF.derivation.str_template"
+        ],
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": "SITEID + ':' + SUBJID"
+        }
+      }
+    ]
+  },
+  "literal-only": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "constant text"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "csv": "ID,RESULT\nrow1,constant text\n"
+  },
+  "empty-template": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": ""
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "csv": "ID,RESULT\nrow1,\"\"\n"
+  },
+  "escaped-braces": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{{literal}}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "csv": "ID,RESULT\nrow1,{literal}\n"
+  },
+  "brace-pair-precedence": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{{{A}}}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "csv": "ID,RESULT\nrow1,{alpha}\n"
+  },
+  "repeated-placeholder": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{A}-{B}-{A}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "csv": "ID,RESULT\nrow1,alpha-beta-alpha\n"
+  },
+  "qualified-placeholder": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{SRC.A}:{B}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "csv": "ID,RESULT\nrow1,alpha:beta\n"
+  },
+  "missing-first": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{A}:{B}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "mapping",
+        "condition": "missing_input",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template"
+        ],
+        "requirement": "REQ-0334",
+        "context": {
+          "variable": "A",
+          "keys": [
+            {
+              "ID": "row1"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "missing-later": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{B}:{A}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "mapping",
+        "condition": "missing_input",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template"
+        ],
+        "requirement": "REQ-0334",
+        "context": {
+          "variable": "A",
+          "keys": [
+            {
+              "ID": "row1"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "missing-null": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": {
+              "template": "{A}:{B}",
+              "missing": null
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,,beta,7\n",
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.str_template.missing",
+        "handler": "missing",
+        "count": 1
+      }
+    ],
+    "csv": "ID,RESULT\nrow1,\n"
+  },
+  "missing-literal": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": {
+              "template": "{A}:{B}",
+              "missing": "MiXeD"
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,,beta,7\n",
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.str_template.missing",
+        "handler": "missing",
+        "count": 1
+      }
+    ],
+    "csv": "ID,RESULT\nrow1,MiXeD\n"
+  },
+  "missing-then-present": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": {
+              "template": "{A}:{B}",
+              "missing": "MiXeD"
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,,beta,7\nrow2,alpha,beta,8\n",
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.str_template.missing",
+        "handler": "missing",
+        "count": 1
+      }
+    ],
+    "csv": "ID,RESULT\nrow1,MiXeD\nrow2,alpha:beta\n"
+  },
+  "non-string": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{A}:{N}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "source": "N",
+          "expected": "str",
+          "actual": "int"
+        }
+      }
+    ]
+  },
+  "qualified-non-string": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{SRC.N}:{A}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "source": "SRC.N",
+          "expected": "str",
+          "actual": "int"
+        }
+      }
+    ]
+  },
+  "unknown": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{UNKNOWN}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "identifier": "UNKNOWN"
+        }
+      }
+    ]
+  },
+  "unknown-qualified": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{OTHER.A}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "OTHER.A"
+        }
+      }
+    ]
+  },
+  "unknown-qualified-field": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{SRC.NOT_DECLARED}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "SRC.NOT_DECLARED"
+        }
+      }
+    ]
+  },
+  "repeated-unknown": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{UNKNOWN}:{UNKNOWN}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "identifier": "UNKNOWN"
+        }
+      }
+    ]
+  },
+  "repeated-type": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{N}:{N}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "source": "N",
+          "expected": "str",
+          "actual": "int"
+        }
+      }
+    ]
+  },
+  "unknown-then-type": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{UNKNOWN}:{N}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "identifier": "UNKNOWN"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "source": "N",
+          "expected": "str",
+          "actual": "int"
+        }
+      }
+    ]
+  },
+  "type-then-unknown": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{N}:{UNKNOWN}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "source": "N",
+          "expected": "str",
+          "actual": "int"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "identifier": "UNKNOWN"
+        }
+      }
+    ]
+  },
+  "invalid-placeholder": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{A + B}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_string_template",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template"
+        ],
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": "A + B"
+        }
+      }
+    ]
+  },
+  "invalid-placeholder-whitespace": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{ A }"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_string_template",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template"
+        ],
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": " A "
+        }
+      }
+    ]
+  },
+  "empty-placeholder": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_string_template",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template"
+        ],
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": ""
+        }
+      }
+    ]
+  },
+  "format-directive": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{A:>10}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_string_template",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template"
+        ],
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": "A:>10"
+        }
+      }
+    ]
+  },
+  "nested-placeholder": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{A{B}}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_string_template",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template"
+        ],
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": "A{B"
+        }
+      }
+    ]
+  },
+  "unmatched-opening": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{A"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_string_template",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template"
+        ],
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "unmatched_brace"
+        }
+      }
+    ]
+  },
+  "unmatched-closing": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "A}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_string_template",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template"
+        ],
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "unmatched_brace"
+        }
+      }
+    ]
+  },
+  "unknown-before-invalid-suffix": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{UNKNOWN} {A + B}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_string_template",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template"
+        ],
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": "A + B"
+        }
+      }
+    ]
+  },
+  "type-before-invalid-suffix": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{N} {A + B}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_string_template",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template"
+        ],
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": "A + B"
+        }
+      }
+    ]
+  },
+  "unicode-json-surrogate-escape": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": {
+            "literal": "e\u0301\ud83d\ude42"
+          }
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": {
+            "literal": "\u00e9"
+          }
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "\u03a9:{A}/{B}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_text",
+        "spec_paths": [
+          "$.columns[1].derivation.literal"
+        ],
+        "requirement": null,
+        "context": {
+          "code_point": "U+D83D",
+          "offset": 2
+        }
+      }
+    ]
+  },
+  "unicode-exact": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "\u03a9:{A}/{B}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,e\u0301\ud83d\ude42,\u00e9,7\n",
+    "handler_counts": [],
+    "csv": "ID,RESULT\nrow1,\u03a9:e\u0301\ud83d\ude42/\u00e9\n"
+  },
+  "empty-string-value": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": {
+            "literal": ""
+          }
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "<{A}>"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "csv": "ID,RESULT\nrow1,<>\n"
+  },
+  "nul-value": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": {
+            "literal": "\u0000"
+          }
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "<{A}>"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "csv": "ID,RESULT\nrow1,<\u0000>\n"
+  },
+  "one-final-conversion": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "int",
+          "derivation": {
+            "str_template": {
+              "template": "{A}",
+              "missing": "not-an-int"
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,,beta,7\n",
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.str_template.missing",
+        "handler": "missing",
+        "count": 1
+      }
+    ],
+    "findings": [
+      {
+        "phase": "convert",
+        "condition": "conversion_failed",
+        "spec_paths": [
+          "columns.RESULT"
+        ],
+        "requirement": "REQ-0013",
+        "context": {
+          "from": "str",
+          "to": "int",
+          "value": "not-an-int",
+          "keys": [
+            {
+              "ID": "row1"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "nested-case": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "case": [
+              {
+                "when": "ID = 'row1'",
+                "then": {
+                  "str_template": "<{A}>"
+                }
+              },
+              {
+                "otherwise": {
+                  "str_template": {
+                    "template": "{B}",
+                    "missing": null
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\nrow2,x,beta,8\n",
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.case[1].otherwise.str_template.missing",
+        "handler": "missing",
+        "count": 0
+      }
+    ],
+    "csv": "ID,RESULT\nrow1,<alpha>\nrow2,beta\n"
+  },
+  "row-template": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str"
+        }
+      ],
+      "rows": [
+        {
+          "id": "records",
+          "derivations": {
+            "ID": "SRC.ID",
+            "A": "SRC.A",
+            "B": "SRC.B",
+            "N": "SRC.N",
+            "RESULT": {
+              "str_template": {
+                "template": "{A}:{B}",
+                "missing": "MiXeD"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,,beta,7\nrow2,alpha,beta,8\n",
+    "handler_counts": [
+      {
+        "spec_path": "rows[0].derivations.RESULT.str_template.missing",
+        "handler": "missing",
+        "count": 1
+      }
+    ],
+    "csv": "ID,RESULT\nrow1,MiXeD\nrow2,alpha:beta\n"
+  },
+  "group-scope": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": {
+            "literal": 7
+          }
+        },
+        {
+          "name": "RESULT",
+          "type": "str"
+        }
+      ],
+      "rows": [
+        {
+          "id": "grouped",
+          "group_by": [
+            "SRC.ID"
+          ],
+          "derivations": {
+            "ID": "SRC.ID",
+            "RESULT": {
+              "str_template": "{SRC.A}"
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "ungrouped_driver_field",
+        "spec_paths": [
+          "rows[0].derivations.RESULT.str_template.template"
+        ],
+        "requirement": "REQ-0067",
+        "context": {
+          "identifier": "SRC.A",
+          "row": "grouped",
+          "dataset": "SRC"
+        }
+      }
+    ]
+  },
+  "type-before-later-invalid-declaration": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT",
+          "RESULT2"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{N}"
+          }
+        },
+        {
+          "name": "RESULT2",
+          "type": "str",
+          "derivation": {
+            "str_template": "{A + B}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "source": "N",
+          "expected": "str",
+          "actual": "int"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "invalid_string_template",
+        "spec_paths": [
+          "columns.RESULT2.derivation.str_template"
+        ],
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": "A + B"
+        }
+      }
+    ]
+  },
+  "unknown-before-later-invalid-declaration": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": {
+          "path": "input.csv",
+          "types": {
+            "N": "int"
+          }
+        }
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "RESULT",
+          "RESULT2"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "A",
+          "type": "str",
+          "derivation": "SRC.A"
+        },
+        {
+          "name": "B",
+          "type": "str",
+          "derivation": "SRC.B"
+        },
+        {
+          "name": "N",
+          "type": "int",
+          "derivation": "SRC.N"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_template": "{UNKNOWN}"
+          }
+        },
+        {
+          "name": "RESULT2",
+          "type": "str",
+          "derivation": {
+            "str_template": "{A + B}"
+          }
+        }
+      ]
+    },
+    "input": "ID,A,B,N\nrow1,alpha,beta,7\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_template.template"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "identifier": "UNKNOWN"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "invalid_string_template",
+        "spec_paths": [
+          "columns.RESULT2.derivation.str_template"
+        ],
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": "A + B"
+        }
+      }
+    ]
+  },
+  "grammar_and_effects": {
+    "grammar": [
+      {
+        "id": "a-template-interleaves-text-and-placeholders",
+        "text": "{SITEID}:{SUBJID}",
+        "expected": {
+          "id": "a-template-interleaves-text-and-placeholders",
+          "covers": [
+            "placeholder",
+            "text"
+          ],
+          "text": "{SITEID}:{SUBJID}",
+          "parse": "accept",
+          "identifiers": [
+            "SITEID",
+            "SUBJID"
+          ],
+          "shape": "(template (placeholder SITEID) (text ':') (placeholder SUBJID))"
+        },
+        "parts": [
+          {
+            "kind": "placeholder",
+            "name": "SITEID"
+          },
+          {
+            "kind": "text",
+            "value": ":"
+          },
+          {
+            "kind": "placeholder",
+            "name": "SUBJID"
+          }
+        ],
+        "identifiers": [
+          "SITEID",
+          "SUBJID"
+        ]
+      },
+      {
+        "id": "a-repeated-placeholder-is-one-dependency",
+        "text": "{A}-{A}",
+        "expected": {
+          "id": "a-repeated-placeholder-is-one-dependency",
+          "covers": [
+            "placeholder"
+          ],
+          "text": "{A}-{A}",
+          "parse": "accept",
+          "identifiers": [
+            "A"
+          ],
+          "shape": "(template (placeholder A) (text '-') (placeholder A))"
+        },
+        "parts": [
+          {
+            "kind": "placeholder",
+            "name": "A"
+          },
+          {
+            "kind": "text",
+            "value": "-"
+          },
+          {
+            "kind": "placeholder",
+            "name": "A"
+          }
+        ],
+        "identifiers": [
+          "A"
+        ]
+      },
+      {
+        "id": "a-template-may-be-only-text",
+        "text": "no placeholder here",
+        "expected": {
+          "id": "a-template-may-be-only-text",
+          "covers": [
+            "text"
+          ],
+          "text": "no placeholder here",
+          "parse": "accept",
+          "identifiers": [],
+          "shape": "(template (text 'no placeholder here'))"
+        },
+        "parts": [
+          {
+            "kind": "text",
+            "value": "no placeholder here"
+          }
+        ],
+        "identifiers": []
+      },
+      {
+        "id": "an-empty-template-has-no-parts",
+        "text": "",
+        "expected": {
+          "id": "an-empty-template-has-no-parts",
+          "covers": [
+            "text"
+          ],
+          "text": "",
+          "parse": "accept",
+          "identifiers": [],
+          "shape": "(template)"
+        },
+        "parts": [],
+        "identifiers": []
+      },
+      {
+        "id": "a-doubled-brace-emits-one-literal-brace",
+        "text": "{{literal}}",
+        "expected": {
+          "id": "a-doubled-brace-emits-one-literal-brace",
+          "covers": [
+            "escape"
+          ],
+          "text": "{{literal}}",
+          "parse": "accept",
+          "identifiers": [],
+          "shape": "(template (text '{literal}'))"
+        },
+        "parts": [
+          {
+            "kind": "text",
+            "value": "{literal}"
+          }
+        ],
+        "identifiers": []
+      },
+      {
+        "id": "brace-pairs-take-precedence-while-scanning",
+        "text": "{{{SITEID}}}",
+        "expected": {
+          "id": "brace-pairs-take-precedence-while-scanning",
+          "covers": [
+            "escape",
+            "placeholder"
+          ],
+          "text": "{{{SITEID}}}",
+          "parse": "accept",
+          "identifiers": [
+            "SITEID"
+          ],
+          "shape": "(template (text '{') (placeholder SITEID) (text '}'))"
+        },
+        "parts": [
+          {
+            "kind": "text",
+            "value": "{"
+          },
+          {
+            "kind": "placeholder",
+            "name": "SITEID"
+          },
+          {
+            "kind": "text",
+            "value": "}"
+          }
+        ],
+        "identifiers": [
+          "SITEID"
+        ]
+      },
+      {
+        "id": "a-placeholder-may-be-qualified",
+        "text": "{DM.SITEID}",
+        "expected": {
+          "id": "a-placeholder-may-be-qualified",
+          "covers": [
+            "placeholder",
+            "identifier"
+          ],
+          "text": "{DM.SITEID}",
+          "parse": "accept",
+          "identifiers": [
+            "DM.SITEID"
+          ],
+          "shape": "(template (placeholder DM.SITEID))"
+        },
+        "parts": [
+          {
+            "kind": "placeholder",
+            "name": "DM.SITEID"
+          }
+        ],
+        "identifiers": [
+          "DM.SITEID"
+        ]
+      },
+      {
+        "id": "placeholder-names-are-case-sensitive",
+        "text": "{aval}{AVAL}",
+        "expected": {
+          "id": "placeholder-names-are-case-sensitive",
+          "covers": [
+            "placeholder",
+            "identifier"
+          ],
+          "text": "{aval}{AVAL}",
+          "parse": "accept",
+          "identifiers": [
+            "AVAL",
+            "aval"
+          ],
+          "shape": "(template (placeholder aval) (placeholder AVAL))"
+        },
+        "parts": [
+          {
+            "kind": "placeholder",
+            "name": "aval"
+          },
+          {
+            "kind": "placeholder",
+            "name": "AVAL"
+          }
+        ],
+        "identifiers": [
+          "aval",
+          "AVAL"
+        ]
+      },
+      {
+        "id": "an-underscore-may-open-a-placeholder-name",
+        "text": "{_FLAG}",
+        "expected": {
+          "id": "an-underscore-may-open-a-placeholder-name",
+          "covers": [
+            "placeholder",
+            "identifier"
+          ],
+          "text": "{_FLAG}",
+          "parse": "accept",
+          "identifiers": [
+            "_FLAG"
+          ],
+          "shape": "(template (placeholder _FLAG))"
+        },
+        "parts": [
+          {
+            "kind": "placeholder",
+            "name": "_FLAG"
+          }
+        ],
+        "identifiers": [
+          "_FLAG"
+        ]
+      },
+      {
+        "id": "a-quote-in-literal-text-is-an-ordinary-scalar",
+        "text": "it's {A}",
+        "expected": {
+          "id": "a-quote-in-literal-text-is-an-ordinary-scalar",
+          "covers": [
+            "text"
+          ],
+          "text": "it's {A}",
+          "parse": "accept",
+          "identifiers": [
+            "A"
+          ],
+          "shape": "(template (text 'it''s ') (placeholder A))"
+        },
+        "parts": [
+          {
+            "kind": "text",
+            "value": "it's "
+          },
+          {
+            "kind": "placeholder",
+            "name": "A"
+          }
+        ],
+        "identifiers": [
+          "A"
+        ]
+      },
+      {
+        "id": "whitespace-inside-braces-is-not-ignored",
+        "text": "{ SITEID }",
+        "expected": {
+          "id": "whitespace-inside-braces-is-not-ignored",
+          "covers": [
+            "placeholder",
+            "rejection"
+          ],
+          "text": "{ SITEID }",
+          "parse": "reject",
+          "condition": "invalid_string_template"
+        },
+        "condition": "invalid_string_template",
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": " SITEID "
+        }
+      },
+      {
+        "id": "an-empty-placeholder-is-rejected",
+        "text": "{}",
+        "expected": {
+          "id": "an-empty-placeholder-is-rejected",
+          "covers": [
+            "placeholder",
+            "rejection"
+          ],
+          "text": "{}",
+          "parse": "reject",
+          "condition": "invalid_string_template"
+        },
+        "condition": "invalid_string_template",
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": ""
+        }
+      },
+      {
+        "id": "an-expression-inside-braces-is-rejected",
+        "text": "{A + B}",
+        "expected": {
+          "id": "an-expression-inside-braces-is-rejected",
+          "covers": [
+            "placeholder",
+            "rejection"
+          ],
+          "text": "{A + B}",
+          "parse": "reject",
+          "condition": "invalid_string_template"
+        },
+        "condition": "invalid_string_template",
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": "A + B"
+        }
+      },
+      {
+        "id": "a-format-directive-is-rejected",
+        "text": "{A:>10}",
+        "expected": {
+          "id": "a-format-directive-is-rejected",
+          "covers": [
+            "placeholder",
+            "rejection"
+          ],
+          "text": "{A:>10}",
+          "parse": "reject",
+          "condition": "invalid_string_template"
+        },
+        "condition": "invalid_string_template",
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": "A:>10"
+        }
+      },
+      {
+        "id": "a-nested-placeholder-is-rejected",
+        "text": "{A{B}}",
+        "expected": {
+          "id": "a-nested-placeholder-is-rejected",
+          "covers": [
+            "placeholder",
+            "rejection"
+          ],
+          "text": "{A{B}}",
+          "parse": "reject",
+          "condition": "invalid_string_template"
+        },
+        "condition": "invalid_string_template",
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": "A{B"
+        }
+      },
+      {
+        "id": "an-unmatched-opening-brace-is-rejected",
+        "text": "{A",
+        "expected": {
+          "id": "an-unmatched-opening-brace-is-rejected",
+          "covers": [
+            "escape",
+            "rejection"
+          ],
+          "text": "{A",
+          "parse": "reject",
+          "condition": "invalid_string_template"
+        },
+        "condition": "invalid_string_template",
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "unmatched_brace"
+        }
+      },
+      {
+        "id": "an-unmatched-closing-brace-is-rejected",
+        "text": "A}",
+        "expected": {
+          "id": "an-unmatched-closing-brace-is-rejected",
+          "covers": [
+            "escape",
+            "rejection"
+          ],
+          "text": "A}",
+          "parse": "reject",
+          "condition": "invalid_string_template"
+        },
+        "condition": "invalid_string_template",
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "unmatched_brace"
+        }
+      },
+      {
+        "id": "a-digit-may-not-open-a-placeholder-name",
+        "text": "{2FLAG}",
+        "expected": {
+          "id": "a-digit-may-not-open-a-placeholder-name",
+          "covers": [
+            "placeholder",
+            "rejection"
+          ],
+          "text": "{2FLAG}",
+          "parse": "reject",
+          "condition": "invalid_string_template"
+        },
+        "condition": "invalid_string_template",
+        "requirement": "REQ-0461",
+        "context": {
+          "reason": "invalid_placeholder",
+          "placeholder": "2FLAG"
+        }
+      }
+    ],
+    "effects": {
+      "repeated-occurrence": {
+        "template": "{A}-{A}-{B}",
+        "calls": [
+          "A",
+          "A",
+          "B"
+        ],
+        "status": "value",
+        "missing": false,
+        "value": "alpha-alpha-beta",
+        "observations": []
+      },
+      "missing-before-failing-source": {
+        "template": "{A}:{B}",
+        "calls": [
+          "A"
+        ],
+        "condition": {
+          "phase": "mapping",
+          "condition": "missing_input",
+          "context": {
+            "variable": "A"
+          },
+          "applicable_handler": "missing",
+          "requirement": "REQ-0334",
+          "path_suffix": null
+        }
+      },
+      "null-recovery-before-failing-source": {
+        "template": "{A}:{B}",
+        "calls": [
+          "A"
+        ],
+        "status": "value",
+        "missing": true,
+        "value": null,
+        "observations": []
+      },
+      "opaque-before-missing": {
+        "template": "{A}:{B}",
+        "calls": [
+          "A"
+        ],
+        "status": "original_failure",
+        "identity_preserved": true
+      },
+      "type-before-later-failure": {
+        "template": "{A}:{B}",
+        "calls": [
+          "A"
+        ],
+        "condition": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "context": {
+            "source": "A",
+            "expected": "str",
+            "actual": "int"
+          },
+          "applicable_handler": null,
+          "requirement": "REQ-0308",
+          "path_suffix": "template"
+        }
+      }
+    }
+  }
+}

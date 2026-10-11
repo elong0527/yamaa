@@ -65,6 +65,22 @@ pub trait CodecPort {
 /// Select the original node context and enforce this report's complete byte
 /// budget. Reports own observations only; no method grants publication authority.
 pub trait ReportPort: OutputReport {
+    /// Prepare bounded diagnostic output from this actual entered attempt before
+    /// its primary can become available to any dependent. This also runs after
+    /// an execution/source failure, preserving the original attempt unchanged.
+    /// The port must admit allocation against both supplied capacities and keep
+    /// separately completed diagnostic evidence when later preparation fails.
+    /// Returning a byte count consumes the graph's shared held-output budget;
+    /// it never grants publication authority or replaces an original failure.
+    fn prepare_diagnostics<C, D, T: TableAccess>(
+        &mut self,
+        _node: &Node,
+        _attempt: &CapturedAttempt<C, D, T>,
+        _output_bytes: usize,
+        _report_bytes: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
     fn select<C, D, T: TableAccess>(
         &mut self,
         node: &Node,
@@ -362,6 +378,25 @@ impl PreparedBuild {
                 node_limits,
                 &mut entered.dataset,
             );
+            let diagnostics = ports.report.prepare_diagnostics(
+                node,
+                &entered.dataset,
+                output_left,
+                limits.report_bytes / count,
+            );
+            match diagnostics {
+                Ok(bytes) if bytes <= output_left => output_left -= bytes,
+                Ok(_) => {
+                    entered.output = Err(output::CompleteError::OutputLimit);
+                    attempt.outcome = Err(Failure::Node { node: index });
+                    return Err("producer_build_failed");
+                }
+                Err(error) => {
+                    entered.output = Err(output::CompleteError::Report(error));
+                    attempt.outcome = Err(Failure::Node { node: index });
+                    return Err("producer_build_failed");
+                }
+            }
             let execution = entered
                 .dataset
                 .result
