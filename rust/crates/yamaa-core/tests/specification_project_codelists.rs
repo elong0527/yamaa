@@ -106,8 +106,10 @@ fn root_metadata_rejects_the_governed_has_no_data_key() {
         panic!("root metadata.has_no_data must be rejected");
     };
     assert!(
-        features.iter().any(|feature| feature.operation == "reserved_metadata_key"
-            && feature.path == "metadata.has_no_data"),
+        features
+            .iter()
+            .any(|feature| feature.operation == "reserved_metadata_key"
+                && feature.path == "metadata.has_no_data"),
         "unexpected unsupported features: {features:?}"
     );
 }
