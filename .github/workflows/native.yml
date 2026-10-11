@@ -102,7 +102,7 @@ jobs:
             uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-reference-assessment.json"
             python tools/check_dependencies.py
             python tools/check_diagnostics.py
-            python -m unittest discover -s tests -p 'test_*.py'
+            uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p 'test_*.py'
           ) 2>&1 | tee "${RUNNER_TEMP}/shared-crates-check.log"
       - name: Preserve locked Rust dependency evidence
         if: always()
