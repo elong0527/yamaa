@@ -4,6 +4,13 @@ This document describes the validation scope and rules for the `yamaa`
 specification repository. The repository provides a validation tool to ensure
 examples, schemas, and directories are structurally consistent and well-formed.
 
+During migration #2002, `_reference_checks.py` is the single temporary boundary
+for reference regex, predicate, window, CSV/Parquet, ODM and scalar bindings,
+including the standalone CSV source-profile loader. The validator's source guard
+allows the public `yamaa.check` and native project metadata interfaces. Semantic
+checks will move to the installed shared engine as its language families qualify;
+the temporary boundary must be deleted before reference removal in #1994.
+
 ## Scope
 The validation ensures:
 1. **Text source**: Repository-authored source files are ASCII-only. Unicode
