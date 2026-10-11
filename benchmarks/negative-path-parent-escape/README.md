@@ -1,5 +1,13 @@
 # Reject Parent Escape
 
+This fixture retains the reference engine's historical containment rejection
+and locked expected report. Under the approved declaring-file policy (#1905),
+absolute and parent-relative local spellings are permitted; an absent file fails
+at the declared location. Current public Python/R path behavior is qualified by
+independently authored installed tests. This fixture is reference-only policy
+history until the coordinated reference transition and is not evidence that the
+replacement public routes reject these path forms.
+
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-path-parent-escape.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 

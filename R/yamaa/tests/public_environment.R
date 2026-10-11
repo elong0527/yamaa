@@ -299,7 +299,7 @@ writeLines(c("schema_version: '1.0'", "language: r", "codelists: [ids.yaml]"), "
 writeLines(terminology, "ids.yaml"); writeLines(terminology, "entry/ids.yaml")
 failed <- yamaa_domain("entry/spec.yaml", environment = "environment/env.yaml")
 stopifnot(is.null(failed$output), nrow(failed$issues) > 0L,
-  grepl('"source_reads":[]', observations(failed), fixed = TRUE), !file.exists("outputs/ids.csv"))
+  inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"), !file.exists("outputs/ids.csv"))
 cat("public R relative/absolute external codelists and missing-file ownership passed\n")
 setwd(previous)
 cat("public R environment static diagnostics, lock/test failure ordering and no data reads passed\n")

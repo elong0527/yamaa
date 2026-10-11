@@ -159,8 +159,8 @@ class PublicEnvironment(unittest.TestCase):
             Path(name).mkdir()
         Path("environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
         Path("shared/data.csv").write_text("ID\n7\n")
-        source = (self.directory / "shared/../shared/./data.csv").as_posix()
-        output = (self.directory / "outputs/absolute.csv").as_posix()
+        source = (self.directory.resolve() / "shared/../shared/./data.csv").as_posix()
+        output = (self.directory.resolve() / "outputs/absolute.csv").as_posix()
         document = (
             "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
             "columns: [{name: ID, type: int, derivation: SRC.ID}]\n"
@@ -214,7 +214,7 @@ class PublicEnvironment(unittest.TestCase):
         Path("terminology/ids.yaml").write_text(terminology)
         # An unrelated same-name document cannot change which codelist is used.
         Path("entry/ids.yaml").write_text("[unrelated document")
-        for written in ("../terminology/ids.yaml", (self.directory / "terminology/ids.yaml").as_posix()):
+        for written in ("../terminology/ids.yaml", (self.directory.resolve() / "terminology/ids.yaml").as_posix()):
             with self.subTest(written=written):
                 Path("environment/env.yaml").write_text(
                     "schema_version: '1.0'\nlanguage: python\ncodelists: [" + json.dumps(written) + "]\n"
@@ -239,7 +239,7 @@ class PublicEnvironment(unittest.TestCase):
             failed = yamaa.domain("entry/spec.yaml", environment="environment/env.yaml")
         self.assertIsNone(failed.output)
         self.assertFalse(failed.issues.is_empty())
-        self.assertEqual(self.report(failed)["source_reads"], [])
+        self.assertIsNone(failed._native.observations())
         self.assertFalse(Path("outputs/ids.csv").exists())
 
     def setUp(self):
