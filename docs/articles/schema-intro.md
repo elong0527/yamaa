@@ -71,8 +71,9 @@ family:
 
 Two composition rules keep dependencies visible: operands are named
 variables, not nested expressions (bind a value to a column, then
-reference the name), and nesting is permitted in exactly two places
-(`case` branches and `str_concat.sources`).
+reference the name), and nesting is permitted in exactly three places
+(`case` branches, `str_concat.sources`, and lookup `key` match values,
+which may be expressions under REQ-1259).
 
 ## What the schema does not do
 

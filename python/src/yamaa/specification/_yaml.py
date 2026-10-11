@@ -151,7 +151,11 @@ _Yaml12Loader.add_constructor("tag:yaml.org,2002:float", _construct_float)
 
 def _yaml_error(error: yaml.YAMLError) -> SpecificationError:
     mark = getattr(error, "problem_mark", None)
-    context: dict[str, str | int] = {"reason": str(error).splitlines()[0]}
+    # Prefer the structured problem message: the first line of str(error) is
+    # the construction context (e.g. "while constructing a mapping"), not the
+    # actual problem (e.g. "found duplicate key 'a'").
+    reason = getattr(error, "problem", None) or str(error).splitlines()[0]
+    context: dict[str, str | int] = {"reason": reason}
     if mark is not None:
         context.update(line=mark.line + 1, column=mark.column + 1)
     return SpecificationError(
