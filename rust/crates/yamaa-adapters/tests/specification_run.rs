@@ -349,26 +349,18 @@ fn unsupported_operations_handlers_and_metadata_are_refused_before_binding() {
     let schema = schema(&root.join("yaml"));
     let raw =
         std::fs::read_to_string(root.join("benchmarks/negative-zero-division/spec.yaml")).unwrap();
-    for (written, feature) in [
-        (
-            raw.replace("input/lb.csv", "{path: input/lb.csv, ordinal: RECNO}"),
-            "ordinal",
-        ),
-        (
-            format!("{raw}\nmetadata:\n  label: reserved\n"),
-            "reserved_metadata_key",
-        ),
-    ] {
-        let captured = prepare(&schema, written.as_bytes());
-        let error = PreparedSpecification::prepare(captured.model()).unwrap_err();
-        let PrepareError::Unsupported(features) = error else {
-            panic!("{error:?}")
-        };
-        assert!(
-            features.iter().any(|f| f.operation == feature),
-            "{features:?}"
-        );
-    }
+    let written = format!("{raw}\nmetadata:\n  label: reserved\n");
+    let captured = prepare(&schema, written.as_bytes());
+    let error = PreparedSpecification::prepare(captured.model()).unwrap_err();
+    let PrepareError::Unsupported(features) = error else {
+        panic!("{error:?}")
+    };
+    assert!(
+        features
+            .iter()
+            .any(|f| f.operation == "reserved_metadata_key"),
+        "{features:?}"
+    );
     let written = raw.replace("100 * (AVAL - BASE) / BASE", "LB.LBSTRESN + 1");
     let captured = prepare(&schema, written.as_bytes());
     let prepared = PreparedSpecification::prepare(captured.model()).unwrap();

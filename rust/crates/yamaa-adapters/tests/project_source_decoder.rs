@@ -42,6 +42,7 @@ fn bounded_producer_csv_admits_original_header_before_typing_and_owns_portable_m
         ],
         profile: SourceProfile::Csv,
         empty_string_present: false,
+        ordinal: None,
     };
     let limits = DecodeLimits {
         cells: 100,
@@ -71,6 +72,40 @@ fn bounded_producer_csv_admits_original_header_before_typing_and_owns_portable_m
         .decode_bounded(&source, b"ID,VALUE\n1,13\n", Some(&contract), limits)
         .unwrap();
     assert_eq!(table.cell(0, 1).unwrap(), ValueRef::Int(13));
+    let mut ordinal_source = source.clone();
+    ordinal_source.ordinal = Some("REC".into());
+    let table = decoder
+        .decode_bounded(
+            &ordinal_source,
+            b"ID,VALUE\n1,13\n2,17\n",
+            Some(&contract),
+            limits,
+        )
+        .unwrap();
+    assert_eq!(
+        table
+            .schema()
+            .columns()
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect::<Vec<_>>(),
+        ["ID", "VALUE", "REC"]
+    );
+    assert_eq!(
+        (table.cell(0, 2).unwrap(), table.cell(1, 2).unwrap()),
+        (ValueRef::Int(1), ValueRef::Int(2))
+    );
+    ordinal_source.ordinal = Some("ID".into());
+    for bytes in [b"ID,VALUE\n1,13\n".as_slice(), b"ID,VALUE\n"] {
+        assert!(matches!(
+            decoder.decode_bounded(&ordinal_source, bytes, Some(&contract), limits),
+            Err(DecodeError::Codec(
+                yamaa_adapters::specification_run::Error::Ordinal(
+                    yamaa_core::source_ordinal::Error::Collision
+                )
+            ))
+        ));
+    }
     for bounded in [
         DecodeLimits { cells: 1, ..limits },
         DecodeLimits {
@@ -113,6 +148,7 @@ fn decoded_profiles_keep_exact_cells_bounds_and_ingestion_failure_categories() {
         ],
         profile: SourceProfile::Csv,
         empty_string_present: true,
+        ordinal: None,
     };
     let table = decoder
         .decode(
@@ -174,6 +210,7 @@ fn decoded_profiles_keep_exact_cells_bounds_and_ingestion_failure_categories() {
             types: vec![("I".into(), ColumnType::Int), ("S".into(), ColumnType::Str)],
             profile: SourceProfile::Parquet,
             empty_string_present: present,
+            ordinal: None,
         };
         let table = decoder.decode(&source, bytes).unwrap();
         assert_eq!(

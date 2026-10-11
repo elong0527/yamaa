@@ -189,6 +189,7 @@ retain historical evidence.
 | 16 | Register empty_string_present_unsupported under REQ-1161 in the validation phase for CSV empty_string: present. | #1976 |
 | 17 | Check greatest/least comparability statically from declared types under REQ-0324. Equal int/float values retain the first source's type; document this existing behavior in the expression rules. | #1978 |
 | 18 | An integer predicate literal outside signed 64-bit reports integer_overflow during parsing. Do not widen the language's integer type. | #1983 |
+| 19 | Reconcile REQ-0058's older row-filter summary with REQ-0068 and REQ-0218: ungrouped filters read completed non-window candidate derivations and lookup state before windows; grouped filters read completed grouped derivations. Preserve historical provenance and committed expected outputs. | #1981 |
 
 The numerical performance budgets (item 10) remain to be selected from #1998's
 actual comparable measurements. Preserve the approved lookup, aggregate, window,
