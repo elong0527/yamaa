@@ -48,6 +48,8 @@ mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
 #[path = "specification_cases.rs"]
 mod cases;
+#[path = "specification_temporal_imputation.rs"]
+mod imputation;
 #[path = "specification_rounding.rs"]
 mod rounding;
 #[path = "specification_temporal.rs"]
@@ -96,9 +98,10 @@ impl Default for CompilationLimits {
         }
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PreflightFinding {
     Log(LogFinding),
+    Imputation(crate::diagnostic::Diagnostic),
     RoundingInput {
         path: String,
         source: String,
@@ -284,6 +287,7 @@ enum Operation {
     Compute(CompiledNumeric),
     Round(crate::dataset::Rounding),
     Temporal(crate::dataset::Temporal),
+    Imputation(crate::dataset::Imputation),
     /// Reference planning emits formula diagnostics after source ingestion.
     InvalidNumeric {
         expression: String,
@@ -949,6 +953,7 @@ impl PreparedSpecification {
         }
         rounding::declaration_findings(d, columns, &output, &mut findings)?;
         temporal::declaration_findings(d, columns, &output, &mut findings)?;
+        imputation::declaration_findings(d, columns, &output, &mut findings)?;
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
@@ -1281,6 +1286,16 @@ impl PreparedSpecification {
                 | "baseline_flag" => Some(Operation::Window(alloc::boxed::Box::new(
                     windows::Declaration::prepare(d, payload, op, &path, limits, &mut extra)?,
                 ))),
+                "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision"
+                | "to_date" => Some(Operation::Imputation(imputation::prepare(
+                    d,
+                    payload,
+                    op,
+                    &path,
+                    Some(driver),
+                    Some(&intermediates),
+                    &mut extra,
+                )?)),
                 "date_diff" | "study_day" | "to_epoch_day" => {
                     Some(Operation::Temporal(temporal::prepare(
                         d,
@@ -1713,6 +1728,17 @@ impl PreparedSpecification {
                 Operation::Literal(value) => Some(Expression::Literal(value.clone())),
                 Operation::Round(rounding) => rounding::bind(
                     rounding,
+                    column,
+                    &self.keys,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
+                Operation::Imputation(operation) => imputation::bind(
+                    operation,
                     column,
                     &self.keys,
                     &catalog,

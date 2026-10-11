@@ -13,6 +13,8 @@ mod dataset;
 #[path = "diagnostic/predicate_evaluation.rs"]
 mod predicate_evaluation;
 
+#[path = "diagnostic/temporal_imputation.rs"]
+mod temporal_imputation;
 struct Bindings;
 #[path = "diagnostic/binding.rs"]
 mod binding;
@@ -437,6 +439,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     assert_eq!(diagnostic.operand_route, None);
     reached.insert(diagnostic.code);
     reached.extend(preflight::temporal_reached());
+    reached.extend(temporal_imputation::reached());
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());
     reached.extend(parquet::reached());

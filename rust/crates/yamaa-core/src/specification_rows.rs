@@ -19,6 +19,7 @@ enum RowOperation {
     Compute(CompiledNumeric),
     Round(crate::dataset::Rounding),
     Temporal(crate::dataset::Temporal),
+    Imputation(crate::dataset::Imputation),
     InvalidNumeric {
         expression: String,
         error: CompileError,
@@ -116,6 +117,14 @@ fn declaration(
             }
         }
         "literal" => RowOperation::Literal(literal(d, payload, &path)?),
+        "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision" | "to_date" => {
+            let mut features = Vec::new();
+            let operation = imputation::prepare(d, payload, op, &path, None, None, &mut features)?;
+            if !features.is_empty() {
+                return Err(PrepareError::Unsupported(features));
+            }
+            RowOperation::Imputation(operation)
+        }
         "date_diff" | "study_day" | "to_epoch_day" => {
             let mut features = Vec::new();
             let operation = temporal::prepare(d, payload, op, &path, None, None, &mut features)?;
@@ -916,6 +925,17 @@ impl Rows {
                     }
                 }
                 RowOperation::Literal(value) => Some(Expression::Literal(value.clone())),
+                RowOperation::Imputation(operation) => imputation::bind_row(
+                    operation,
+                    declaration.column,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                )?,
                 RowOperation::Temporal(operation) => temporal::bind_row(
                     operation,
                     declaration.column,
