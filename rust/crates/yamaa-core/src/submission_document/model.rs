@@ -25,6 +25,7 @@ pub enum FieldName {
     MetadataVersion,
     Originator,
     Stylesheet,
+    SourceSystemVersion,
     Kind,
     Link,
     Title,
@@ -53,6 +54,7 @@ impl FieldName {
             Self::MetadataVersion => "metadata_version",
             Self::Originator => "originator",
             Self::Stylesheet => "stylesheet",
+            Self::SourceSystemVersion => "source_system_version",
             Self::Kind => "kind",
             Self::Link => "link",
             Self::Title => "title",
@@ -230,6 +232,62 @@ pub struct Section {
     pub metadata_version: Option<MetadataVersion>,
     pub originator: Option<Field<String>>,
     pub stylesheet: Option<Field<String>>,
+    /// Authored metadata override; omission retains the installed-version default.
+    pub source_system_version: Option<Field<String>>,
+}
+
+/// Borrowed metadata selection keeps the actual generator version separately.
+/// This performs no copying, rendering or IO, and grants no Save capability.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SourceVersions<'a> {
+    metadata: &'a str,
+    installed: &'a str,
+    override_origin: Option<Origin>,
+}
+impl SourceVersions<'_> {
+    /// One selected value for both Define-XML and Dataset-JSON metadata.
+    pub fn metadata(&self) -> &str {
+        self.metadata
+    }
+    /// Qualification evidence always records the actual installed generator.
+    pub fn installed(&self) -> &str {
+        self.installed
+    }
+    pub fn override_origin(&self) -> Option<Origin> {
+        self.override_origin
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VersionError {
+    EmptyInstalledVersion,
+    EmptyOverride,
+}
+impl Section {
+    /// The calling package supplies its actual installed version. Core's own
+    /// crate version is never a substitute for the Python or R generator.
+    pub fn source_versions<'a>(
+        &'a self,
+        installed: &'a str,
+    ) -> Result<SourceVersions<'a>, VersionError> {
+        if installed.is_empty() {
+            return Err(VersionError::EmptyInstalledVersion);
+        }
+        let metadata = self
+            .source_system_version
+            .as_ref()
+            .map_or(installed, |field| field.value.as_str());
+        if metadata.is_empty() {
+            return Err(VersionError::EmptyOverride);
+        }
+        Ok(SourceVersions {
+            metadata,
+            installed,
+            override_origin: self
+                .source_system_version
+                .as_ref()
+                .map(|field| field.origin),
+        })
+    }
 }
 /// Owned metadata admitted only by the complete bounded decoder. It is not an
 /// execution plan, semantic submission acceptance or a generator capability.

@@ -421,7 +421,7 @@ fn invalid() -> Document {
         ("metadata_version", metadata),
         ("originator", originator),
         ("stylesheet", style),
-        ("source_system_version", unknown),
+        ("generator_version", unknown),
     ]);
     let root = a.map(vec![("study", study), ("adam", section)]);
     a.finish(root)
@@ -732,11 +732,11 @@ fn unknown_fields_and_nontext_keys_retain_exact_container_and_key_occurrences() 
     assert_eq!(unknown.kind, Kind::UnknownField);
     assert_eq!(unknown.container, Some(section));
     assert!(
-        matches!(&input.nodes()[unknown.key.unwrap()], N::Text(text) if text == "source_system_version")
+        matches!(&input.nodes()[unknown.key.unwrap()], N::Text(text) if text == "generator_version")
     );
     assert_eq!(
         unknown.node,
-        input.field(section, "source_system_version").unwrap()
+        input.field(section, "generator_version").unwrap()
     );
     assert_eq!(unknown.requirement(), None);
     let mut a = Arena::default();
@@ -1080,4 +1080,143 @@ fn valid_document_fields_and_omitted_defaults_remain_owned_after_original_input_
     assert_eq!(send.documents.origin.container, send.origin.node.unwrap());
     assert_eq!(send.documents.origin.key, None);
     assert_eq!(send.documents.origin.node, None);
+}
+
+#[test]
+fn approved_source_system_version_is_admitted_for_every_section() {
+    for (family, guide) in [("sdtm", "SDTMIG"), ("adam", "ADaMIG"), ("send", "SENDIG")] {
+        let mut a = Arena::default();
+        a.section(guide);
+        let N::Mapping(mut fields) = a.0.pop().unwrap() else {
+            unreachable!()
+        };
+        let key = a.text("source_system_version");
+        let version = a.text("1.0");
+        fields.push((key, version));
+        let section = a.node(N::Mapping(fields));
+        let root = a.map(vec![(family, section)]);
+        let input = a.finish(root);
+        let owned = submission_document::decode(&input, root, Limits::default()).unwrap();
+        drop(input);
+        let section = &owned.sections()[0];
+        let field = section.source_system_version.as_ref().unwrap();
+        assert_eq!(field.value, "1.0");
+        assert_eq!(field.origin.field, F::SourceSystemVersion);
+        assert_eq!(field.origin.node, Some(version));
+        assert_eq!(field.origin.key, Some(key));
+        let selected = section.source_versions("0.3.0").unwrap();
+        assert_eq!(selected.metadata(), "1.0");
+        assert_eq!(selected.installed(), "0.3.0");
+        assert_eq!(selected.override_origin(), Some(field.origin));
+        assert_eq!(selected.metadata().as_ptr(), field.value.as_ptr());
+        assert_eq!(
+            section.source_versions(""),
+            Err(submission_document::VersionError::EmptyInstalledVersion)
+        );
+    }
+}
+
+#[test]
+fn omitted_submission_version_uses_actual_generator_without_creating_an_authored_field() {
+    let input = full();
+    let owned = submission_document::decode(&input, input.root(), Limits::default()).unwrap();
+    for section in owned.sections() {
+        assert!(section.source_system_version.is_none());
+        for installed in ["0.3.0", "0.4.0.dev7"] {
+            let selected = section.source_versions(installed).unwrap();
+            assert_eq!(selected.metadata(), installed);
+            assert_eq!(selected.installed(), installed);
+            assert_eq!(selected.override_origin(), None);
+            assert_eq!(selected.installed().as_ptr(), installed.as_ptr());
+        }
+    }
+}
+
+#[test]
+fn submission_version_refusals_preserve_exact_nodes_and_do_not_choose_defaults() {
+    for (value, expected) in [
+        (N::Null, Kind::ExpectedText),
+        (N::Boolean(true), Kind::ExpectedText),
+        (N::Integer("1".into()), Kind::ExpectedText),
+        (N::Text("".into()), Kind::EmptyText),
+    ] {
+        let mut a = Arena::default();
+        a.section("ADaMIG");
+        let N::Mapping(mut fields) = a.0.pop().unwrap() else {
+            unreachable!()
+        };
+        let key = a.text("source_system_version");
+        let version = a.node(value);
+        fields.push((key, version));
+        let section = a.node(N::Mapping(fields));
+        let root = a.map(vec![("adam", section)]);
+        let input = a.finish(root);
+        let error = submission_document::decode(&input, root, Limits::default()).unwrap_err();
+        assert!(std::ptr::eq(error.input, &input));
+        let Cause::Findings(findings) = error.cause else {
+            panic!("findings")
+        };
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].kind, expected);
+        assert_eq!(findings[0].node, version);
+        assert_eq!(findings[0].key, Some(key));
+        assert_eq!(
+            findings[0].path.steps().collect::<Vec<_>>(),
+            [Step::Field(F::Adam), Step::Field(F::SourceSystemVersion)]
+        );
+        assert_eq!(findings[0].requirement(), None);
+    }
+}
+
+#[test]
+fn submission_version_text_is_admitted_before_ownership_under_complete_quotas() {
+    let mut a = Arena::default();
+    a.section("SENDIG");
+    let N::Mapping(mut fields) = a.0.pop().unwrap() else {
+        unreachable!()
+    };
+    let key = a.text("source_system_version");
+    let version = a.text(&"v".repeat(4096));
+    fields.push((key, version));
+    let section = a.node(N::Mapping(fields));
+    let root = a.map(vec![("send", section)]);
+    let input = a.finish(root);
+    for (limits, resource) in [
+        (
+            Limits {
+                text_bytes: 4095,
+                ..Limits::default()
+            },
+            Resource::TextBytes,
+        ),
+        (
+            Limits {
+                escaped_bytes: 4095,
+                ..Limits::default()
+            },
+            Resource::EscapedBytes,
+        ),
+        (
+            Limits {
+                work: 4095,
+                ..Limits::default()
+            },
+            Resource::Work,
+        ),
+    ] {
+        let error = submission_document::decode(&input, root, limits).unwrap_err();
+        assert!(std::ptr::eq(error.input, &input));
+        assert_eq!(error.cause, Cause::Limit(resource));
+        assert_eq!(input.field(section, "source_system_version"), Some(version));
+    }
+    let owned = submission_document::decode(&input, root, Limits::default()).unwrap();
+    assert_eq!(
+        owned.sections()[0]
+            .source_system_version
+            .as_ref()
+            .unwrap()
+            .value
+            .len(),
+        4096
+    );
 }

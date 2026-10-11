@@ -11,7 +11,7 @@ all shipped implementation-guide names, versions and Draft/Final status; and
 sdtm, adam and send sections in original root mapping order. Each section keeps
 specifications and document references in declaration order, Define-XML path,
 document ID/kind/link/title, Dataset-JSON flag, context, language, and existing
-file OID, metadata version, originator and stylesheet overrides. Paths remain
+file OID, metadata version, originator, stylesheet and source-system-version overrides. Paths remain
 text declarations. The decoder performs no filesystem operation.
 
 Existing omitted defaults are false for `dataset_json`, Submission for
@@ -56,7 +56,16 @@ recursive specification files. Those services and installed define APIs remain
 #1758. The old Define-XML implementation and independently authored XML/JSON
 expected bytes remain until that complete use case qualifies.
 
-#1887 asks how to preserve historical source-system-version bytes beside the
-installed runtime version. No source version field, schema override or expected
-byte change is inferred while that decision is unanswered. #1866 publication
-lifecycle and #1857 Windows R scope remain independent decisions.
+The approved #1887 decision permits a nonempty `source_system_version` string
+in each section. The decoder owns its exact bounded text and normalized
+occurrences; explicit null, empty and non-text values refuse without selecting a
+default. Omission keeps the field absent. `Section::source_versions` borrows one
+selected metadata version for both XML and JSON alongside the actual installed
+generator version supplied by the calling package. An empty installed version
+refuses even when an override is present; core's crate version is never substituted.
+
+This is declaration admission and version selection. The shared generators,
+native submission capture, all three migrated fixtures and installed `define`
+APIs remain #1758. Existing independent XML/JSON truth and the old generator stay
+until those replacements qualify. The approved producer publication lifecycle
+and required Windows R scope retain separate implementation gates.
