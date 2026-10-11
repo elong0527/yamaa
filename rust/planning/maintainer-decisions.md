@@ -18,6 +18,9 @@ acceptance gates.
 | Diagnostic context | JSON text in both Python and R. | [#1751](https://github.com/elong0527/yamaa/issues/1751). |
 | Resource paths | Resolve relative declarations from their original declaring file; permit absolute and parent-relative local paths without yamaa root containment or fallback. | [#1905](https://github.com/elong0527/yamaa/issues/1905), [#1751](https://github.com/elong0527/yamaa/issues/1751). |
 | Rust dependency locking | One canonical `rust/Cargo.lock`, unchanged source-package copies and enforced locked builds, with a packaging-checksum exception. | [#1906](https://github.com/elong0527/yamaa/issues/1906), [#1742](https://github.com/elong0527/yamaa/issues/1742). |
+| First-release public API scope | Domain/check/define in both hosts, package version metadata and existing `read_odm`/`write_odm_parquet`; retire the legacy semantic, custom-schema/provenance and IO/authoring extension APIs. | [#1751](https://github.com/elong0527/yamaa/issues/1751), approved 2026-10-11. |
+| R NUL-string representation | Lossless `yamaa_utf8_vector` for columns containing NUL bytes; separate missingness, exact subsetting and preserve-or-error conversion. Ordinary string columns stay `character`. | [#1751](https://github.com/elong0527/yamaa/issues/1751), approved 2026-10-11. |
+| Representative measurement scope | Five workload families at 1,000/10,000/100,000 rows, ten cold samples and thirty warm samples after three warm-ups; compare the previous release on the same machine. | [#1742](https://github.com/elong0527/yamaa/issues/1742), approved 2026-10-11. Numeric budgets follow actual measurements. |
 
 ## Producer lifecycle
 
@@ -94,6 +97,38 @@ explicitly; they must not silently narrow to an R integer or a binary64 double.
 shared encoder. Apply the representation consistently to public issue tables,
 including submission diagnostics as they are implemented. Host adapters do not
 convert context into Python dictionaries or R list columns.
+
+## First-release public API scope
+
+On 2026-10-11 the maintainer approved Python `domain`/`check`/`define`, their R
+equivalents, package version metadata and the existing `read_odm`/`write_odm_parquet`
+helpers as the first-release public surface. Retire legacy semantic,
+custom-schema/provenance, IO/authoring extension APIs and R `parse_odm_to_long_df`
+with `cdiscbuilder`. The shipped `schema_version` remains the schema-selection
+mechanism. Preserve the private reference baseline until the qualified transition.
+This settles the scope decision; installed retained-helper qualification,
+deliberate removals, benchmark migration and the final transition remain required.
+
+## R NUL-string representation
+
+The maintainer approved the lossless `yamaa_utf8_vector` representation on
+2026-10-11 for output columns containing NUL bytes. Missingness remains separate
+from present byte payloads, subsetting preserves exact UTF-8 bytes, and a
+conversion must preserve the value or raise an explicit error. Ordinary string
+columns remain `character`. Qualify those operations through installed public
+results, including Windows R; approval alone does not establish that evidence.
+
+## Representative measurement scope
+
+On 2026-10-11 the maintainer approved lookup, aggregate, window, callback and
+producer workloads at 1,000, 10,000 and 100,000 driving rows. Collect ten cold
+samples and thirty warm samples following three retained warm-ups, comparing
+the previous release on the same machine. Choose numeric regression budgets
+after reviewing actual measurements. Preserve raw observations, independent
+truth, failures and capacity refusals; the size decision does not authorize
+raising runtime quotas. Phase/callback attribution, memory-provider availability
+and baseline API compatibility must remain explicit. Neither this decision nor
+an incomplete collection authorizes performance claims or release cutover.
 
 ## Declaring file resource paths
 

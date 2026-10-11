@@ -2,6 +2,17 @@
   "protocol": "public-lifecycle/1",
   "state": "implemented-opt-in-bounded-controller-and-installed-workers",
   "controller": "measure_public_lifecycle.py",
+  "scalable_extension": {
+    "controller": "measure_scalable_public.py",
+    "generator": "prepare_public_workloads.py",
+    "scope_decision": "2026-10-11 approved lookup/aggregate/window/callback/producer at 1000/10000/100000 rows, 10 cold and 30 warm after 3 warmups, compatible previous release on the same machine",
+    "correctness_smoke": "One case per run, both installed hosts, 1 cold/1 warm after 1 warmup; functional execution only",
+    "truth": "Candidate-free stdlib algorithms regenerate and compare every input/expected byte and the retained generator. Original fixtures remain unchanged.",
+    "request_extensions": ["optional explicit host environment", "artifact_names for every root/producer output"],
+    "worker_extensions": ["build_artifact_presence from actual files before Save", "saved_artifacts for every named output after each Save"],
+    "acceptance": "Exact copied root cells/types/order/binary64 bits, empty issues/null logs, independently declared node/source ledgers, zero published files after Build, complete Build/two Save observations, successful Save returns, exact artifact identities/order/columns/rows/bytes. Prospective report artifacts are retained without interpreting them as publication.",
+    "remaining": "Approved-size capacity, qualified candidate/baseline characterization, phase and actual callback instrumentation, additional memory providers, and numeric budgets remain open. This extension does not close B17/B18."
+  },
   "workers": {
     "python": "public_lifecycle_python_worker.py",
     "r": "public_lifecycle_r_worker.R"
@@ -13,7 +24,7 @@
       "schema-lookup"
     ],
     "b17": "remaining broader workload/measurement evidence is open",
-    "b18": "numeric budgets and workload/machine decisions remain open",
+    "b18": "workload sizes/sampling/baseline approved; numeric budgets and remaining machine/metric decisions remain open",
     "performance_claim": "correctness-smoke retains raw durations but supplies no characterization"
   },
   "public_calls": {
@@ -113,7 +124,6 @@
   "prohibited": [
     "runtime phase instrumentation",
     "callback-count inference from handler names/report arrays",
-    "scalable synthetic release workloads",
     "numeric release budgets",
     "concurrent compilation",
     "candidate-derived expected truth",

@@ -2,8 +2,9 @@
 
 This is the implementation plan for B17/B18 in the
 [release blocker register](release-readiness.md), assessed against main
-`1696cc6bb66c0efc64f3f0b177a07540f007efab` on 2026-10-11. It proposes evidence
-collection, not approved workload sizes, numeric budgets or release transition.
+`65249a577d1cbfafd4f59c7d081a4636c8aed119` on 2026-10-11. The maintainer approved
+the scalable workload sizes, sampling and baseline below. Numeric budgets and
+release transition remain undecided.
 The first-release support matrix and exclusions are already approved in the
 [maintainer decisions](maintainer-decisions.md#first-release-support-matrix).
 
@@ -23,7 +24,8 @@ the warm child retains one declared warm-up and one measured repetition. This
 creates twelve children and eighteen public Builds, each with a new Domain and
 fresh directory, followed by two Saves of the held result. A smoke establishes
 collector execution and exact truth, not a performance distribution or B17/B18
-completion. The other workloads below still need implementation and decisions.
+completion. The scalable extension below now implements independent input/truth
+generation and uses these same installed workers.
 
 For an already qualified installed Python wheel/source and R source package,
 provide separate installation-provenance JSON files and absolute paths:
@@ -122,13 +124,62 @@ source and fixture bytes directly, without content hashes.
 | Host callbacks | Missing short circuits, call count, types and argument width | Actual delegated calls and argument/result traces, per-build lock/binding/tests and original errors/interrupts. |
 | Producer workflow | Chain depth, fan-out, shared nodes and consumer sizes | Producer once, activation before study reads, serialized rounding, complete node/source/check ledgers and both held Saves. |
 
-The suggested 1,000/10,000/100,000 driving rows are proposals, not approved
-sizes, budgets or capacity promises. Author each scalable input/expected-output
-manifest and a separate pure expected-value/byte algorithm before running the
-candidate. Keep original fixtures unchanged. Retain actual capacity refusals and
-reached stages; do not raise runtime quotas to obtain a timing sample. Follow the
-approved numerical policy with exact comparison, without tolerance or formula
-changes to make a sample pass.
+The maintainer approved 1,000/10,000/100,000 driving rows, ten cold samples and
+thirty warm samples after three warm-ups, comparing a compatible previous
+release on the same machine. Numeric regression budgets follow review of those
+measurements. This approval does not change runtime quotas or promise capacity.
+Keep original fixtures unchanged and retain refusals and reached stages.
+
+The candidate-free [workload generator](../tools/prepare_public_workloads.py)
+authors 27 variants: lookup donor multiplicity 1/4, aggregate group width 10/100,
+window partition width 10/100, callback missing short circuits, and producer
+shared chain depth 1/3 with two consumers. Independent algorithms pin first-tie
+selection, exact source-order floating-point folds, missing-aware window values,
+typed root cells and all serialized producer/root bytes. Existing complete host
+locks are copied unchanged. Expected callback counts are explicitly independent
+expectations; actual counts stay unavailable until observed.
+
+```sh
+python3 rust/tools/prepare_public_workloads.py --output /outside/fresh-workloads
+python3 rust/tools/measure_scalable_public.py \
+  --repository /path/to/source-checkout --workloads /outside/fresh-workloads \
+  --case aggregate-1000-10 --label candidate --purpose characterization \
+  --python-provenance /outside/python-installation.json \
+  --r-provenance /outside/r-installation.json \
+  --python-executable /outside/installed-venv/bin/python \
+  --r-executable /path/to/Rscript --output /outside/fresh-evidence \
+  --compilation-clear
+```
+
+Run separately for each case and candidate/baseline label. The controller
+regenerates the declared case and compares every authored member and the
+retained generator bytes before launching any host. Every repeat has a fresh
+directory. Admission requires independent typed output, node/source ledgers,
+zero actual published files after Build, successful repeated Saves and exact
+named artifact identities/order/columns/row counts/bytes. Some installed owners
+expose prospective artifact records during Build; those records are retained
+and checked against completed Save observations without equating them with
+disk publication. The full raw reports remain available for inspection.
+No failing repetition becomes a sample or is retried. A correctness smoke uses
+`--purpose correctness-smoke --cold 1 --warm 1 --warmups 1`; its durations never
+produce a characterization distribution. Phase/callback counts and unavailable
+memory metrics remain null.
+
+Pinned Rust/Cargo 1.90.0 current-source functional controls retained nine variants
+at 20 rows with exact typed output and both Saves for Python and R on local
+macOS arm64, CPython 3.14.0 and R 4.6.1. These are workload/worker controls,
+not qualified release timings. A separate Python frontier retained all 36
+Build/Save attempts at 20/1,000/10,000/100,000 rows: twelve pass (all nine small
+cases, both 1,000-row aggregates, and the 1,000-row callback), while 24 refuse.
+At 1,000 rows lookup/window report publication or result projection limits and
+producer report limits prevent acceptance. Every 10,000/100,000-row case refuses;
+100,000 rows also reaches source/original-boundary limits. Raw evidence is retained
+under `/private/tmp/yamaa-measurement-pinned-frontier`,
+`/private/tmp/yamaa-scalable-python-functional-v2` and
+`/private/tmp/yamaa-scalable-r-functional-v2` on the collecting machine.
+The maintainer capacity decision is pending. B17/B18 stay open until the approved
+sizes can be measured, qualified candidate/baseline evidence is retained, and
+numeric budgets and remaining metrics are approved.
 
 ## Cold, warm and reuse protocols
 
