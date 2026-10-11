@@ -20,8 +20,12 @@ mod predicate_evaluation;
 mod temporal_imputation;
 #[path = "diagnostic/text_case.rs"]
 mod text_case;
+#[path = "diagnostic/text_extract.rs"]
+mod text_extract;
 #[path = "diagnostic/text_pad.rs"]
 mod text_pad;
+#[path = "diagnostic/text_template.rs"]
+mod text_template;
 struct Bindings;
 #[path = "diagnostic/binding.rs"]
 mod binding;
@@ -450,6 +454,8 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(text_case::reached());
     reached.extend(text_pad::reached());
     reached.extend(declarative_flags::reached());
+    reached.extend(text_extract::reached());
+    reached.extend(text_template::reached());
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());
     reached.extend(parquet::reached());

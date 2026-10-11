@@ -14,6 +14,8 @@ use crate::{
 #[derive(Debug)]
 enum RowOperation {
     Flag(flags::Declaration),
+    StrExtract(crate::text_extract::StringExtract),
+    StrTemplate(crate::text_template::StringTemplate),
     ProjectFunction(usize),
     Output(String),
     Source(String),
@@ -85,6 +87,7 @@ fn closed_fields(
     }
     Ok(())
 }
+#[allow(clippy::too_many_arguments)]
 fn declaration(
     d: &Document,
     id: usize,
@@ -92,6 +95,8 @@ fn declaration(
     prefix: String,
     grouped: bool,
     project: Option<&functions::Prepared>,
+    extraction: &str_extract::Prepared,
+    string_templates: &str_template::Prepared,
 ) -> Result<RowDeclaration, PrepareError> {
     closed_fields(d, id, &["value", "unconvertible"], &prefix)?;
     let handler = literal_handler(d, id, &prefix)?;
@@ -121,6 +126,8 @@ fn declaration(
         }
         "flag" => RowOperation::Flag(flags::prepare(d, payload, &path)?),
         "literal" => RowOperation::Literal(literal(d, payload, &path)?),
+        "str_template" => RowOperation::StrTemplate(string_templates.get(payload)?),
+        "str_extract" => RowOperation::StrExtract(extraction.get(payload)?),
         "str_case" => {
             let mut features = Vec::new();
             let operation = str_case::prepare(d, payload, &path, None, None, &mut features)?;
@@ -590,6 +597,7 @@ fn validate_row_phases(
     ))
 }
 impl Rows {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn prepare(
         d: &Document,
         output: &TableSchema,
@@ -597,6 +605,8 @@ impl Rows {
         limits: CompilationLimits,
         project: Option<&functions::Prepared>,
         column_terminology: bool,
+        extraction: &str_extract::Prepared,
+        string_templates: &str_template::Prepared,
     ) -> Result<Self, PrepareError> {
         let root = d.root();
         let raw_rows = sequence(d, field(d, root, "rows")?)?;
@@ -694,6 +704,8 @@ impl Rows {
                     format!("columns.{}.derivation", metadata.name),
                     false,
                     project,
+                    extraction,
+                    string_templates,
                 )?;
             }
         }
@@ -761,6 +773,8 @@ impl Rows {
                     prefix,
                     groups.is_some(),
                     project,
+                    extraction,
+                    string_templates,
                 )?);
             }
             // Other datasets require lookup/join state outside this closed row language.
@@ -820,6 +834,8 @@ impl Rows {
                     format!("{prefix}.derivation"),
                     false,
                     project,
+                    extraction,
+                    string_templates,
                 )?);
             }
         }
@@ -1036,6 +1052,28 @@ impl Rows {
                     edges,
                     findings,
                     declarations_reported,
+                )?,
+                RowOperation::StrTemplate(operation) => str_template::bind_row(
+                    operation,
+                    declaration.column,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                )?,
+                RowOperation::StrExtract(operation) => str_extract::bind_row(
+                    operation,
+                    declaration.column,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
                 )?,
                 RowOperation::StrCase(operation) => str_case::bind_row(
                     operation,

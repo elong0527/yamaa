@@ -89,6 +89,21 @@ impl Budget {
         self.output_text -= bytes;
     }
 
+    /// Check a known final text result before allocating it, without spending a
+    /// second counter. Ordinary final conversion/value admission still owns retention.
+    pub(crate) fn admit_output_text<E>(&self, bytes: usize) -> Result<(), Box<ExecutionError<E>>> {
+        let required = self.output_text.checked_add(bytes);
+        if required.is_some_and(|n| n <= self.limits.output_text_bytes) {
+            Ok(())
+        } else {
+            Err(Box::new(ExecutionError::Limit {
+                resource: Resource::OutputTextBytes,
+                limit: self.limits.output_text_bytes,
+                required,
+            }))
+        }
+    }
+
     /// Each admitted assignment fills a new slot, so retained text grows monotonically.
     pub(crate) fn value<E>(&mut self, value: &Value) -> Result<(), Box<ExecutionError<E>>> {
         charge(

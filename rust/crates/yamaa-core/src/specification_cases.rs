@@ -40,6 +40,7 @@ fn unsupported(path: &str, operation: &str) -> PrepareError {
         path: path.into(),
     }])
 }
+#[allow(clippy::too_many_arguments)]
 pub(super) fn prepare(
     d: &Document,
     node: usize,
@@ -48,6 +49,8 @@ pub(super) fn prepare(
     intermediates: &intermediates::Declarations,
     record: bool,
     depth: usize,
+    extraction: &str_extract::Prepared,
+    templates: &str_template::Prepared,
 ) -> Result<Vec<Branch>, PrepareError> {
     if depth > 64 || path.len() > 65_536 {
         return Err(PrepareError::Limit("case_depth"));
@@ -121,7 +124,11 @@ pub(super) fn prepare(
                 intermediates,
                 record,
                 depth + 1,
+                extraction,
+                templates,
             )?),
+            "str_template" => Operation::StrTemplate(templates.get(payload)?),
+            "str_extract" => Operation::StrExtract(extraction.get(payload)?),
             "str_case" => {
                 let mut features = Vec::new();
                 let operation = str_case::prepare(
@@ -446,6 +453,28 @@ pub(super) fn bind(
                     Err(_) => return Err(BindError::Internal),
                 }
             }
+            Operation::StrTemplate(operation) => str_template::bind(
+                operation,
+                column,
+                &spec.keys,
+                catalog,
+                &spec.intermediates,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
+            Operation::StrExtract(operation) => str_extract::bind(
+                operation,
+                column,
+                &spec.keys,
+                catalog,
+                &spec.intermediates,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
             Operation::StrCase(operation) => str_case::bind(
                 operation,
                 column,

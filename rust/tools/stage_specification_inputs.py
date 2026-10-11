@@ -17,8 +17,15 @@ PAD_CASES = ("negative-str-pad-width",)
 FLAG_POSITIVE_CASES = ("schema-str-contains", "adam-adae-occurrence-flags", "adam-adex-dose-reduction", "adam-adlb-closest-visit", "adam-adsl-completion-flag", "sdtm-dm-death")
 FLAG_NEGATIVE_CASES = ("negative-flag-condition", "negative-flag-missing-value", "negative-flag-payload", "negative-review-arithmetic", "negative-review-date-text", "negative-review-unknown-date")
 FLAG_HELD_CASES = ("nested_case_mixed_declarations", "implicit_raw_ambiguous")
+EXTRACTION_CASES = ("adam-adae-text-cleanup", "negative-str-uncaptured-group")
+TEMPLATE_CASES = ("adam-adsl-site-parse", "negative-subject-reference")
 # Archive aliases shorten installed paths without changing original fixture identities or bytes.
 CASE_DIRECTORY_NAMES = {"negative-round-half-away-from-zero-non-numeric-source": "negative-rounding-source"}
+# Only archive directories are shortened; independent capture labels remain exact.
+TEMPLATE_DIRECTORY_NAMES = {
+    "type-before-later-invalid-declaration": "type-before-invalid",
+    "unknown-before-later-invalid-declaration": "unknown-before-invalid",
+}
 # The current specification schema closure, not other standalone schema roots.
 # Missing/new includes fail shared bundle admission; no runtime parser is used here.
 SCHEMA_MODULES = (
@@ -37,6 +44,70 @@ SCHEMA_MODULES = (
     "schema_expression_window.yaml",
     "schema_expression_odm.yaml",
 )
+
+
+def stage_text_extract_truth(destination: Path):
+    """Stage originals and separately captured complete reference extraction cases."""
+    source = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/text_extract_reference.json"
+    shutil.copy2(source, destination / "text-extract-reference.json")
+    capture = json.loads(source.read_text())
+    with (destination / "text-extract-handlers.tsv").open("w", newline="", encoding="ascii") as stream:
+        writer = csv.writer(stream, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE, quotechar=None)
+        writer.writerow(("case", "handlers"))
+        for name, value in capture.items():
+            if "handler_counts" in value:
+                writer.writerow((name, json.dumps(value["handler_counts"], sort_keys=True, separators=(",", ":"))))
+    root = destination / "text-extract-cases"
+    root.mkdir()
+    with (destination / "text-extract-diagnostics.tsv").open("w", newline="", encoding="ascii") as stream:
+        writer = csv.writer(stream, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE, quotechar=None)
+        writer.writerow(("case", "phase", "condition", "requirement", "spec_path", "context"))
+        for name, value in capture.items():
+            if "specification" not in value or name == "wide-group":
+                continue
+            case = root / name
+            case.mkdir()
+            (case / "spec.yaml").write_text(json.dumps(value["specification"], ensure_ascii=True) + "\n", encoding="ascii")
+            (case / "input.csv").write_text(value["input"], encoding="utf-8")
+            if "csv" in value:
+                (case / "expected.csv").write_text(value["csv"], encoding="utf-8")
+            for finding in value.get("findings", []):
+                writer.writerow((name, finding["phase"], finding["condition"], finding["requirement"], finding["spec_paths"][0], json.dumps(finding["context"], sort_keys=True, separators=(",", ":"))))
+
+
+def stage_text_template_truth(destination: Path):
+    """Stage originals and separately captured complete reference template cases."""
+    source = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json"
+    shutil.copy2(source, destination / "text-template-reference.json")
+    capture = json.loads(source.read_text())
+    with (destination / "text-template-handlers.tsv").open("w", newline="", encoding="ascii") as stream:
+        writer = csv.writer(stream, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE, quotechar=None)
+        writer.writerow(("case", "handlers"))
+        for name, value in capture.items():
+            if "handler_counts" in value:
+                writer.writerow((name, json.dumps(value["handler_counts"], sort_keys=True, separators=(",", ":"))))
+    with (destination / "text-template-directories.tsv").open("w", newline="", encoding="ascii") as stream:
+        writer = csv.writer(stream, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE, quotechar=None)
+        writer.writerow(("case", "directory"))
+        for name, value in capture.items():
+            if "specification" in value:
+                writer.writerow((name, TEMPLATE_DIRECTORY_NAMES.get(name, name)))
+    root = destination / "text-template-cases"
+    root.mkdir()
+    with (destination / "text-template-diagnostics.tsv").open("w", newline="", encoding="ascii") as stream:
+        writer = csv.writer(stream, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE, quotechar=None)
+        writer.writerow(("case", "phase", "condition", "requirement", "spec_path", "context"))
+        for name, value in capture.items():
+            if "specification" not in value:
+                continue
+            case = root / TEMPLATE_DIRECTORY_NAMES.get(name, name)
+            case.mkdir()
+            (case / "spec.yaml").write_text(json.dumps(value["specification"], ensure_ascii=True) + "\n", encoding="ascii", newline="\n")
+            (case / "input.csv").write_text(value["input"], encoding="utf-8", newline="\n")
+            if "csv" in value:
+                (case / "expected.csv").write_text(value["csv"], encoding="utf-8", newline="\n")
+            for finding in value.get("findings", []):
+                writer.writerow((name, finding["phase"], finding["condition"], finding["requirement"], finding["spec_paths"][0], json.dumps(finding["context"], sort_keys=True, separators=(",", ":"))))
 
 
 def stage_temporal_imputation_truth(destination: Path):
@@ -437,7 +508,7 @@ def stage(destination: Path):
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.tsv", destination / "original-row-conversion-handlers.tsv")
     for name in SCHEMA_MODULES:
         shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
-    for name in (*CASES, *ROUNDING_CASES, *TEMPORAL_CASES, *IMPUTATION_CASES, *TEXT_CASES, *PAD_CASES, *FLAG_POSITIVE_CASES, *FLAG_NEGATIVE_CASES, "schema-verification-log"):
+    for name in (*CASES, *ROUNDING_CASES, *TEMPORAL_CASES, *IMPUTATION_CASES, *TEXT_CASES, *PAD_CASES, *EXTRACTION_CASES, *TEMPLATE_CASES, *FLAG_POSITIVE_CASES, *FLAG_NEGATIVE_CASES, "schema-verification-log"):
         shutil.copytree(REPOSITORY / "benchmarks" / name, destination / "cases" / CASE_DIRECTORY_NAMES.get(name, name))
     shutil.copytree(
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specs",
@@ -460,6 +531,8 @@ def stage(destination: Path):
     stage_text_pad_truth(destination)
     stage_flag_truth(destination)
     stage_row_intermediate_truth(destination)
+    stage_text_extract_truth(destination)
+    stage_text_template_truth(destination)
 
 
 if __name__ == "__main__":

@@ -90,6 +90,8 @@ impl BindFinding {
     pub fn diagnostics(&self, source: &SourceDeclaration) -> Option<Vec<Diagnostic>> {
         let (code, path, values) = match self {
             Self::Padding(diagnostic)
+            | Self::TextTemplate(diagnostic)
+            | Self::TextExtract(diagnostic)
             | Self::Temporal(diagnostic)
             | Self::Predicate(diagnostic) => return Some(vec![diagnostic.clone()]),
             Self::ProjectFunction(finding) => return Some(vec![finding.diagnostic()]),
