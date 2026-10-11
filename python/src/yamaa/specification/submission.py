@@ -71,6 +71,7 @@ _GOVERNED_DATASET_KEYS: frozenset[str] = frozenset(
         "structure",
         "repeating",
         "reference_data",
+        "has_no_data",
         "domain",
         "comment",
     }

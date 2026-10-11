@@ -460,6 +460,7 @@ fn metadata_features(
             "structure",
             "repeating",
             "reference_data",
+            "has_no_data",
             "domain",
             "comment",
         ]

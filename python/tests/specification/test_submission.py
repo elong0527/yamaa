@@ -318,6 +318,29 @@ def test_rejects_reserved_metadata_key(tmp_path: Path) -> None:
     )
 
 
+def test_rejects_reserved_metadata_key_has_no_data(tmp_path: Path) -> None:
+    # REQ-0858: the free-form map must not carry a governed key. has_no_data
+    # is a SubmissionDataset field (REQ-1296); it was missing from the
+    # governed dataset set when the field was introduced.
+    source = (EXAMPLE / "spec.yaml").read_text(encoding="ascii")
+    assert "\nsubmission:\n  label:" in source
+    path = tmp_path / "spec.yaml"
+    path.write_text(
+        source.replace(
+            "\nsubmission:\n  label:",
+            "\nmetadata:\n  has_no_data: smuggled\nsubmission:\n  label:",
+            1,
+        ),
+        encoding="ascii",
+    )
+
+    assert _condition(path) == (
+        "reserved_metadata_key",
+        ("metadata.has_no_data",),
+        "REQ-0910",
+    )
+
+
 def test_rejects_reference_data_with_repeating(
     tmp_path: Path,
 ) -> None:  # REQ-0865/REQ-0925: reference data never repeats.

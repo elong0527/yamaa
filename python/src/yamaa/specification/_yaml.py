@@ -64,6 +64,12 @@ class _Yaml12Loader(yaml.SafeLoader):
         node: yaml.MappingNode,
         deep: bool = False,
     ) -> dict[object, object]:
+        # This override replaces SafeConstructor.construct_mapping, whose own
+        # flatten_mapping(node) call is the only place PyYAML invokes the
+        # merge-key guard above. Without it the guard is dead and merge keys
+        # fail later with an accidental "could not determine a constructor"
+        # message instead of the intended rejection.
+        self.flatten_mapping(node)
         mapping: dict[object, object] = {}
         for key_node, value_node in node.value:
             key = self.construct_object(key_node, deep=deep)
