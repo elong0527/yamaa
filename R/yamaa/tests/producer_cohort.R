@@ -29,7 +29,8 @@ stopifnot(nrow(result$issues)==0L,identical(result$output$ID,"01"))
 before <- observe(result)
 writeBin(before,file.path(evidence,"before.json"))
 stopifnot(!file.exists(file.path(case,"produced.parquet")),!file.exists(file.path(case,"out.csv")))
-unlink(file.path(case,c("seed.csv","producer.yaml","spec.yaml")))
+inputs <- file.path(case,c("seed.csv","producer.yaml","spec.yaml"))
+stopifnot(unlink(inputs)==0L,!any(file.exists(inputs)))
 saved <- NULL
 for(attempt in 1:2) {
   stopifnot(isTRUE(result$save()),identical(result$output$ID,"01"))
