@@ -258,6 +258,9 @@ pub(super) fn prepare_value_with_driver(
             if source.has_filter() {
                 return Err(unsupported(&result_path, "case_source_filter"));
             }
+            if source.has_selection() || source.has_absent() {
+                return Err(unsupported(&result_path, "case_source_options"));
+            }
             Operation::Source(alloc::boxed::Box::new(source))
         }
         _ => return Err(unsupported(&result_path, op)),

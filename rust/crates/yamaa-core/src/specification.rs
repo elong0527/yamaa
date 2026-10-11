@@ -1259,10 +1259,6 @@ impl PreparedSpecification {
                     )?;
                     if keys.contains(&column)
                         && (source.has_filter() || source.has_selection() || source.has_absent())
-                        && source
-                            .variable
-                            .split_once('.')
-                            .is_some_and(|(name, _)| name == driver)
                     {
                         reject(&mut extra, "filtered_key_source", path.clone());
                     }
@@ -1863,7 +1859,7 @@ impl PreparedSpecification {
                                     alloc::boxed::Box::new(crate::dataset::Assignment {
                                         column,
                                         expression,
-                                        path: path.into(),
+                                        path: operand_path.clone(),
                                     }),
                                 ),
                             });

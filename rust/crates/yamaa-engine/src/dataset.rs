@@ -1187,11 +1187,7 @@ impl Executor<'_> {
                         )?;
                         candidate.completed[assignment.column] = true;
                     }
-                    if let Some(filter) = template
-                        .filter
-                        .as_ref()
-                        .filter(|_| !matches!(template.mode.local_mode(), RowMode::Groups(_)))
-                    {
+                    if let Some(filter) = template.filter.as_ref() {
                         let source_row = candidate.members[0];
                         let truth = crate::dataset_predicate::evaluate(
                             filter,
@@ -1231,15 +1227,6 @@ impl Executor<'_> {
                         intermediates: &mut intermediate_run,
                     },
                 )?;
-                if matches!(template.mode.local_mode(), RowMode::Groups(_)) {
-                    row_windows::filter_groups(
-                        table,
-                        template,
-                        &mut candidates,
-                        first,
-                        &mut budget,
-                    )?;
-                }
                 intermediate_run.publish_self(self, &mut budget)?;
             }
         }
