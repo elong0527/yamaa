@@ -14,6 +14,9 @@ TEMPORAL_CASES = ("adam-adsl-duration", "adam-adsl-analysis-age", "negative-date
 IMPUTATION_CASES = ("schema-birth-date", "sdtm-dm-age", "negative-impute-bad-month", "negative-impute-unreachable-month", "negative-impute-missing-month", "negative-impute-day-rule", "negative-impute-bad-day", "negative-date-conversion", "negative-impute-bad-source", "negative-precision-bad-source", "negative-datetime-impute-bad-source", "negative-datetime-precision-bad-source")
 TEXT_CASES = ("schema-sentence-case", "negative-str-case-number", "negative-str-case-unknown")
 PAD_CASES = ("negative-str-pad-width",)
+FLAG_POSITIVE_CASES = ("schema-str-contains", "adam-adae-occurrence-flags", "adam-adex-dose-reduction", "adam-adlb-closest-visit", "adam-adsl-completion-flag", "sdtm-dm-death")
+FLAG_NEGATIVE_CASES = ("negative-flag-condition", "negative-flag-missing-value", "negative-flag-payload", "negative-review-arithmetic", "negative-review-date-text", "negative-review-unknown-date")
+FLAG_HELD_CASES = ("nested_case_mixed_declarations", "implicit_raw_ambiguous")
 EXTRACTION_CASES = ("adam-adae-text-cleanup", "negative-str-uncaptured-group")
 TEMPLATE_CASES = ("adam-adsl-site-parse", "negative-subject-reference")
 # Archive aliases shorten installed paths without changing original fixture identities or bytes.
@@ -178,6 +181,116 @@ def stage_text_pad_truth(destination: Path):
                 writer.writerow((name, index, finding["phase"], finding["condition"], finding["requirement"], json.dumps(finding["spec_paths"], separators=(",", ":")), json.dumps(context, sort_keys=True, separators=(",", ":"))))
 
 
+def stage_flag_truth(destination: Path):
+    """Retain complete independent captures and emit literal installed R truth."""
+    original = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json"
+    shutil.copy2(original, destination / "flag-reference.json")
+    capture = json.loads(original.read_text(encoding="utf-8"))
+    authored = destination / "flags"
+    authored.mkdir()
+    for name, case in capture["witnesses"].items():
+        directory = authored / name
+        directory.mkdir()
+        (directory / "spec.yaml").write_text(case["specification"], encoding="utf-8", newline="\n")
+        for filename, text in case.get("inputs", {}).items():
+            (directory / filename).write_text(text, encoding="utf-8", newline="\n")
+        if "csv" in case:
+            (directory / "expected.csv").write_text(case["csv"], encoding="utf-8", newline="\n")
+
+    def text(value):
+        quoted = json.dumps(value, ensure_ascii=False)
+        return "".join(char if ord(char) < 128 else
+            (f"\\u{ord(char):04x}" if ord(char) <= 0xffff else f"\\U{ord(char):08x}") for char in quoted)
+
+    def strings(values):
+        return "c(" + ",".join("NA_character_" if v is None else text(v) for v in values) + ")" if values else "character()"
+
+    outputs = dict(zip(FLAG_POSITIVE_CASES, ("adae.csv", "adae.csv", "adex.csv", "adlb.csv", "adsl.csv", "dm.csv")))
+    entries = []
+    cohorts = [(name, capture["originals"][name], "cases") for name in FLAG_POSITIVE_CASES + FLAG_NEGATIVE_CASES]
+    cohorts += [(name, case, "flags") for name, case in capture["witnesses"].items() if name not in FLAG_HELD_CASES]
+    assert len(cohorts) == 33
+    for name, case, directory in cohorts:
+        findings = json.loads(json.dumps(case["findings"]))
+        if case["result_type"] == "SpecificationError":
+            # Existing loader source/entry fields are retained unmodified in
+            # flag-reference.json; this suite states the native provenance gap.
+            for finding in findings:
+                context = finding["context"]
+                source, entry = context.pop("source"), context.pop("entry")
+                assert source == entry and source.endswith("/" + name + "/spec.yaml")
+        columns = []
+        for field in ("phase", "condition", "requirement", "spec_paths", "context"):
+            values = [row[field] for row in findings]
+            if field == "spec_paths":
+                literal = "list(" + ",".join(strings(paths) for paths in values) + ")"
+            else:
+                if field == "context":
+                    values = [json.dumps(v, sort_keys=True, separators=(",", ":")) for v in values]
+                literal = strings(values)
+            columns.append(field + "=" + literal)
+        expected_csv = ""
+        if case["result_type"] == "ExecutionSuccess":
+            if directory == "cases":
+                expected, = (REPOSITORY / "benchmarks" / name / "expected").glob("*.csv")
+                # Committed CSV fixes lexical serialization; the retained legacy
+                # dataframe capture may use decimal/datetime display padding.
+                expected_csv = "expected/" + expected.name
+            else:
+                expected_csv = "expected.csv"
+        values = ["directory=" + text(directory), "output=" + text(outputs.get(name, "out.csv")),
+            "expected_csv=" + text(expected_csv), "specification=" + text(case["specification"]),
+            "schema_failure=" + ("TRUE" if case["result_type"] == "SpecificationError" else "FALSE"),
+            "handlers=" + text(json.dumps(case.get("handlers", []), sort_keys=True, separators=(",", ":"))),
+            "findings=list(" + ",".join(columns) + ")"]
+        entries.append(text(name) + "=list(" + ",".join(values) + ")")
+    (destination / "flag-truth.R").write_text(
+        "# Independent original CSV/findings/handlers; no candidate execution.\n"
+        "# Held: generic case REQ-0103/0189 and recursive report context PR1933.\n"
+        "flag_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
+
+def stage_intermediate_key_truth(destination: Path):
+    """Stage all unchanged scalar-key captures without evaluating the candidate."""
+    original = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json"
+    shutil.copy2(original, destination / "key-reference.json")
+    capture = json.loads(original.read_text(encoding="utf-8"))
+    assert len(capture) == 19
+    root = destination / "keys"
+    root.mkdir()
+
+    def text(value):
+        return json.dumps(value, ensure_ascii=True)
+
+    def strings(values):
+        return "c(" + ",".join("NA_character_" if value is None else text(value) for value in values) + ")" if values else "character()"
+
+    entries = []
+    for name, case in capture.items():
+        directory = root / name
+        directory.mkdir()
+        (directory / "spec.yaml").write_text(case["specification"], encoding="utf-8", newline="\n")
+        for filename, source in case["inputs"].items():
+            (directory / filename).write_text(source, encoding="utf-8", newline="\n")
+        if "csv" in case:
+            (directory / "expected.csv").write_text(case["csv"], encoding="utf-8", newline="\n")
+        columns = []
+        for field in ("phase", "condition", "requirement", "spec_paths", "context"):
+            values = [finding[field] for finding in case.get("findings", [])]
+            if field == "spec_paths":
+                literal = "list(" + ",".join(strings(paths) for paths in values) + ")"
+            else:
+                if field == "context":
+                    values = [json.dumps(value, sort_keys=True, separators=(",", ":")) for value in values]
+                literal = strings(values)
+            columns.append(field + "=" + literal)
+        entries.append(text(name) + "=list(issues=list(" + ",".join(columns) + "),success=" +
+            ("TRUE" if "csv" in case else "FALSE") + ",handlers=" +
+            text(json.dumps(case["handlers"], sort_keys=True, separators=(",", ":"))) + ")")
+    (destination / "key-truth.R").write_text(
+        "# All 19 unchanged independent scalar-key findings, CSV and handlers.\n"
+        "key_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
+
+
 def stage_row_intermediate_truth(destination: Path):
     """Materialize unchanged originals and complete independently captured row truth."""
     original = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json"
@@ -211,7 +324,12 @@ def stage_row_intermediate_truth(destination: Path):
                          "spec_paths":["rows[1].dataset"], "context":{"operation":"row_driver"}}]
             success = False
         elif name == "adam-adlb-end-of-treatment":
-            findings = reference["eot_native_gates"]
+            # The unmodified row-only capture retains the old flag gate. Flags
+            # now admits this exact declaration; all four EOT scope gates stay held.
+            findings = list(reference["eot_native_gates"])
+            assert len(findings) == 5
+            assert findings.pop() == {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                                      "spec_paths":["columns.EOTFL.derivation.flag"], "context":{"operation":"flag"}}
             success = False
         if success:
             (directory / "expected.csv").write_text(case["csv"], encoding="utf-8", newline="\n")
@@ -232,7 +350,6 @@ def stage_row_intermediate_truth(destination: Path):
         output = "adlb.csv" if name in reference["originals"] else "result.csv"
         entries.append(text(name) + "=list(issues=list(" + ",".join(fields) + "),success=" + ("TRUE" if success else "FALSE") + ",output=" + text(output) + ",ledger=" + text(json.dumps(ledger, sort_keys=True, separators=(",", ":"))) + ")")
     (destination / "row-intermediate-truth.R").write_text("# Complete independent row-context truth; EOT and distinct sources remain gated.\nrow_intermediate_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
-
 
 def stage_inheritance_replay(destination: Path):
     """Translate existing graph inputs to raw JSON/YAML, preserving independent outcomes."""
@@ -438,7 +555,7 @@ def stage(destination: Path):
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.tsv", destination / "original-row-conversion-handlers.tsv")
     for name in SCHEMA_MODULES:
         shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
-    for name in (*CASES, *ROUNDING_CASES, *TEMPORAL_CASES, *IMPUTATION_CASES, *TEXT_CASES, *PAD_CASES, *EXTRACTION_CASES, *TEMPLATE_CASES, "schema-verification-log"):
+    for name in (*CASES, *ROUNDING_CASES, *TEMPORAL_CASES, *IMPUTATION_CASES, *TEXT_CASES, *PAD_CASES, *EXTRACTION_CASES, *TEMPLATE_CASES, *FLAG_POSITIVE_CASES, *FLAG_NEGATIVE_CASES, "schema-verification-log"):
         shutil.copytree(REPOSITORY / "benchmarks" / name, destination / "cases" / CASE_DIRECTORY_NAMES.get(name, name))
     shutil.copytree(
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specs",
@@ -459,6 +576,8 @@ def stage(destination: Path):
     stage_temporal_imputation_truth(destination)
     stage_text_case_truth(destination)
     stage_text_pad_truth(destination)
+    stage_intermediate_key_truth(destination)
+    stage_flag_truth(destination)
     stage_row_intermediate_truth(destination)
     stage_text_extract_truth(destination)
     stage_text_template_truth(destination)

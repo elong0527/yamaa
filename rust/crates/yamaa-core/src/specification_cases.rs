@@ -109,6 +109,7 @@ pub(super) fn prepare(
         let op = text(d, op)?;
         let result_path = format!("{result_path}.{op}");
         let operation = match op {
+            "flag" => Operation::Flag(flags::prepare(d, payload, &result_path)?),
             "literal" => Operation::Literal(literal(d, payload, &result_path)?),
             "function" => Operation::ProjectFunction(
                 *project
@@ -269,6 +270,7 @@ pub(super) fn padding_findings(
     fn has_width_error(operation: &Operation) -> bool {
         match operation {
             Operation::StrPad(operation) => operation.has_width_error(),
+            Operation::Flag(operation) => operation.has_findings(),
             Operation::Case(branches) => branches
                 .iter()
                 .any(|branch| has_width_error(&branch.operation)),
@@ -282,6 +284,7 @@ pub(super) fn padding_findings(
     ) -> Result<(), BindError> {
         match operation {
             Operation::StrPad(operation) => str_pad::declaration_findings(operation, findings),
+            Operation::Flag(operation) => operation.findings(findings),
             Operation::InvalidNumeric { expression, error } => {
                 findings.push(BindFinding::Numeric {
                     path: format!("{path}.expr"),
@@ -339,7 +342,13 @@ pub(super) fn bind(
                     }
                 };
                 let mut bindings = Vec::new();
+                let mut seen = alloc::collections::BTreeSet::new();
                 for name in plan.identifiers() {
+                    // Binding owns one coordinate per name; evaluation keeps
+                    // every authored occurrence, including BETWEEN's repeat.
+                    if !seen.insert(name) {
+                        continue;
+                    }
                     if let Some(binding) = catalog.bind(name).map_err(BindError::Catalog)? {
                         let read = match binding {
                             reference_binding::Binding::Output { column, .. } => {
@@ -382,6 +391,19 @@ pub(super) fn bind(
                 None
             }
             Operation::Literal(value) => Some(Expression::Literal(value.clone())),
+            Operation::Flag(operation) => flags::bind(
+                operation,
+                column,
+                &spec.keys,
+                &spec.source().name,
+                catalog,
+                &spec.intermediates,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+                declarations_reported,
+            )?,
             Operation::Case(branches) => bind(
                 spec,
                 branches,
@@ -612,6 +634,17 @@ pub(super) fn charge(
 ) -> Result<(), PrepareError> {
     if depth > 64 {
         return Err(PrepareError::Limit("case_depth"));
+    }
+    if let Some(flag) = d.field(value, "flag") {
+        let condition = if matches!(d.nodes()[flag], N::Text(_)) {
+            flag
+        } else {
+            field(d, flag, "condition")?
+        };
+        *total = total
+            .checked_add(text(d, condition)?.len())
+            .filter(|&n| n <= limit)
+            .ok_or(PrepareError::Limit("numeric_bytes"))?;
     }
     let Some(case) = d.field(value, "case") else {
         return Ok(());

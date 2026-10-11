@@ -1518,6 +1518,41 @@ local({
 })
 
 local({
+  source(file.path(root,"flag-truth.R"),local=TRUE)
+  stopifnot(length(flag_truth)==33L)
+  directory <- tempfile("flag-originals-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE),add=TRUE)
+  observations <- get(".domain_observations",asNamespace("yamaa"))
+  for(name in names(flag_truth)) {
+    truth <- flag_truth[[name]]
+    stopifnot(file.copy(file.path(root,truth$directory,name),directory,recursive=TRUE))
+    case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
+    stopifnot(identical(rawfile(entry),charToRaw(enc2utf8(truth$specification))))
+    files <- list.files(case,recursive=TRUE,full.names=TRUE)
+    retained <- lapply(files,rawfile)
+    output <- file.path(case,truth$output)
+    for(attempt in seq_len(2L)) {
+      stopifnot(!file.exists(output))
+      result <- yamaa_domain(entry)
+      check_issue_frame(result$issues,truth$findings)
+      wire <- observations(result)
+      if(is.null(wire)) stopifnot(identical(truth$handlers,"[]")) else {
+        ledgers <- regmatches(rawToChar(wire),gregexpr('"handler_counts":\\[[^]]*\\]',rawToChar(wire)))[[1L]]
+        stopifnot(identical(ledgers,rep(paste0('"handler_counts":',truth$handlers),2L)))
+      }
+      if(nzchar(truth$expected_csv)) {
+        expected <- rawfile(file.path(case,truth$expected_csv))
+        stopifnot(is.data.frame(result$output),isTRUE(result$save()),identical(rawfile(output),expected))
+        unlink(output)
+      } else stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+      stopifnot(!file.exists(output),identical(lapply(files,rawfile),retained))
+      if(truth$schema_failure) stopifnot(is.null(wire))
+    }
+  }
+  cat("declarative flags: six unchanged positives/six negatives and 21 authored complete captures match findings/CSV/handlers on two attempts without Python; schema provenance and two held report/case gates remain explicit\n")
+})
+
+local({
   source(file.path(root,"row-intermediate-truth.R"),local=TRUE)
   directory <- tempfile("public-row-intermediates-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
@@ -1667,6 +1702,41 @@ local({
     if(name=="missing-null") stopifnot(identical(result$output$RESULT,NA_character_))
   }
   cat("public str_template matches unchanged site bytes and complete ordered independent findings/handlers without Python passed\n")
+})
+
+local({
+  source(file.path(root,"key-truth.R"),local=TRUE)
+  stopifnot(length(key_truth)==19L)
+  directory <- tempfile("public-intermediate-keys-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  for(name in names(key_truth)) {
+    truth <- key_truth[[name]]
+    stopifnot(file.copy(file.path(root,"keys",name),directory,recursive=TRUE))
+    case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
+    written <- rawfile(entry);output <- file.path(case,"out.csv")
+    for(attempt in seq_len(2L)) {
+      stopifnot(!file.exists(output))
+      result <- yamaa_domain(entry);check_issue_frame(result$issues,truth$issues)
+      observed <- get(".domain_observations",asNamespace("yamaa"))(result)
+      if(is.null(observed)) {
+        stopifnot(identical(truth$handlers,"[]"))
+      } else {
+        report <- rawToChar(observed)
+        ledger <- paste0('"handler_counts":',truth$handlers,',')
+        stopifnot(sum(gregexpr('"handler_counts":',report,fixed=TRUE)[[1L]]>0L)==2L,
+          sum(gregexpr(ledger,report,fixed=TRUE)[[1L]]>0L)==2L)
+      }
+      if(truth$success) {
+        stopifnot(!is.null(result$output),identical(result$save(),TRUE),
+          identical(rawfile(output),rawfile(file.path(case,"expected.csv"))))
+        unlink(output)
+      } else {
+        stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+      }
+      stopifnot(!file.exists(output),identical(rawfile(entry),written))
+    }
+  }
+  cat("all 19 unchanged scalar-key captures match complete ordered findings, CSV and handler ledgers twice without Python passed\n")
 })
 
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))

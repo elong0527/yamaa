@@ -73,7 +73,15 @@ fn complete_independent_record_contexts_and_unchanged_original() {
                 serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["rows[1].dataset"],"context":{"operation":"row_driver"}}),
             ]
         } else if name == "adam-adlb-end-of-treatment" {
-            reference["eot_native_gates"].as_array().unwrap().clone()
+            // Keep the row-only capture intact: declarative flags closes only
+            // its final flag gate while all four EOT scope gates remain held.
+            let mut gates = reference["eot_native_gates"].as_array().unwrap().clone();
+            assert_eq!(gates.len(), 5);
+            assert_eq!(
+                gates.pop().unwrap(),
+                serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["columns.EOTFL.derivation.flag"],"context":{"operation":"flag"}})
+            );
+            gates
         } else {
             case["findings"].as_array().unwrap().clone()
         };
@@ -105,7 +113,7 @@ fn complete_independent_record_contexts_and_unchanged_original() {
         } else if name == "adam-adlb-end-of-treatment" {
             assert_eq!(
                 result.issues().iter().map(issue_json).collect::<Vec<_>>(),
-                reference["eot_native_gates"].as_array().unwrap().as_slice()
+                expected.as_slice()
             );
         } else if let Some(csv) = case.get("csv") {
             assert!(result.issues().is_empty(), "{name}: {:?}", result.issues());

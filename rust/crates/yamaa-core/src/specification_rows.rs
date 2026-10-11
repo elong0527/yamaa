@@ -13,6 +13,7 @@ use crate::{
 
 #[derive(Debug)]
 enum RowOperation {
+    Flag(flags::Declaration),
     StrExtract(crate::text_extract::StringExtract),
     StrTemplate(crate::text_template::StringTemplate),
     ProjectFunction(usize),
@@ -123,6 +124,7 @@ fn declaration(
                 return Err(unsupported("row_output_reference", &path));
             }
         }
+        "flag" => RowOperation::Flag(flags::prepare(d, payload, &path)?),
         "literal" => RowOperation::Literal(literal(d, payload, &path)?),
         "str_template" => RowOperation::StrTemplate(string_templates.get(payload)?),
         "str_extract" => RowOperation::StrExtract(extraction.get(payload)?),
@@ -298,6 +300,23 @@ fn default_reads(
                         reference(name);
                     }
                 }
+            }
+        }
+        "flag" => {
+            let condition = if matches!(d.nodes()[payload], N::Text(_)) {
+                payload
+            } else {
+                field(d, payload, "condition")?
+            };
+            match crate::predicate_parser::parse_predicate(text(d, condition)?, Default::default())
+            {
+                Ok(parsed) => {
+                    for name in parsed.identifiers() {
+                        reference(name);
+                    }
+                }
+                Err(crate::predicate_parser::ParseError::Grammar { .. }) => (),
+                Err(_) => return Err(PrepareError::Limit("predicate_parser")),
             }
         }
         "compute" => {
@@ -1023,6 +1042,17 @@ impl Rows {
                     }
                 }
                 RowOperation::Literal(value) => Some(Expression::Literal(value.clone())),
+                RowOperation::Flag(operation) => flags::bind_row(
+                    operation,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                    declarations_reported,
+                )?,
                 RowOperation::StrTemplate(operation) => str_template::bind_row(
                     operation,
                     declaration.column,
@@ -1358,10 +1388,12 @@ impl Rows {
             let declarations_reported = template.declarations.iter().any(|declaration| {
                 matches!(&declaration.operation,
                     RowOperation::StrPad(operation) if operation.has_width_error())
+                    || matches!(&declaration.operation, RowOperation::Flag(operation) if operation.has_findings())
             });
             if declarations_reported {
                 for declaration in &template.declarations {
                     match &declaration.operation {
+                        RowOperation::Flag(operation) => operation.findings(&mut findings),
                         RowOperation::StrPad(operation) => {
                             str_pad::declaration_findings(operation, &mut findings);
                         }

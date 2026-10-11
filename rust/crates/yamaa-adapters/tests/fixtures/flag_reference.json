@@ -1,0 +1,1420 @@
+{
+  "originals": {
+    "adam-adae-death": {
+      "specification_path": "benchmarks/adam-adae-death/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: {path: input/ae.csv, types: {ASTDT: date}}\n  DM: {path: input/dm.csv, types: {DTHDT: date}}\nbase: AE\n\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, DTHFL, DTHCAUS, DTHDT]\n\nintermediates:\n  - id: DEATHEV\n    dataset: AE\n    key: [STUDYID, USUBJID]\n    filter: \"AE.AEOUT = 'FATAL'\"\n    order_by: [AE.ASTDT, AE.AESEQ]\n    keep: last\n    no_match: null\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: AE.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: AE.USUBJID\n\n  - name: AESEQ\n    type: int\n    label: Sequence Number\n    derivation: AE.AESEQ\n\n  - name: AEDECOD\n    type: str\n    label: Dictionary-Derived Term\n    derivation: AE.AEDECOD\n\n  - name: ASTDT\n    type: date\n    label: Analysis Start Date\n    derivation: AE.ASTDT\n\n  # The subject's fatal event: the latest by start date, ties broken by\n  # the highest sequence number.\n  - name: DTHAESEQ\n    type: int\n    label: Sequence Number of the Fatal Event\n    derivation: DEATHEV.AESEQ\n\n  - name: DTHCAUS\n    type: str\n    label: Cause of Death\n    derivation: DEATHEV.AEDECOD\n\n  # The fatal event's start date wins; demographics fills in otherwise.\n  - name: DTHDT\n    type: date\n    label: Date of Death\n    derivation:\n      first_available:\n        sources: [DEATHEV.ASTDT, DM.DTHDT]\n\n  - name: DTHFL\n    type: str\n    label: Death Flag\n    derivation:\n      flag: \"DTHDT IS NOT NULL\"\n    verifications:\n      allowed_values:\n        values: [Y]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, AESEQ]\n  - row_count:\n      min: 10\n      max: 10\n  - assert:\n      id: fatal-event-carries-its-own-cause\n      when: \"AESEQ = DTHAESEQ\"\n      require: \"DTHCAUS = AEDECOD AND DTHDT = ASTDT\"\n  - assert:\n      id: no-cause-without-a-fatal-event\n      when: \"DTHCAUS IS NOT NULL\"\n      require: \"DTHDT IS NOT NULL\"\n  - assert:\n      id: death-date-marks-the-subject\n      when: \"DTHDT IS NOT NULL\"\n      require: \"DTHFL = 'Y'\"\n",
+      "occurrences": [
+        {
+          "path": "columns[8].derivation.flag",
+          "payload": "DTHDT IS NOT NULL"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [
+        {
+          "spec_path": "columns.DTHAESEQ.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 3
+        },
+        {
+          "spec_path": "columns.DTHAESEQ.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": 4
+        },
+        {
+          "spec_path": "columns.DTHCAUS.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 3
+        },
+        {
+          "spec_path": "columns.DTHCAUS.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": 4
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,AESEQ,AEDECOD,ASTDT,DTHFL,DTHCAUS,DTHDT\nKN189,KN189-101,1,HEART ATTACK,2024-02-15,Y,HEART ATTACK,2024-02-15\nKN189,KN189-101,2,NAUSEA,2024-01-20,Y,HEART ATTACK,2024-02-15\nKN189,KN189-102,1,HEART FAILURE,2024-03-01,Y,HEART FAILURE,2024-03-01\nKN189,KN189-103,1,HEADACHE,2024-02-10,Y,,2024-03-10\nKN189,KN189-104,1,DIZZINESS,2024-02-12,,,\nKN189,KN189-105,1,HEART FAILURE,2024-02-20,Y,CARDIAC ARREST,2024-03-02\nKN189,KN189-105,2,CARDIAC ARREST,2024-03-02,Y,CARDIAC ARREST,2024-03-02\nKN189,KN189-106,1,RASH,2024-02-25,,,\nKN189,KN189-107,1,STROKE,2024-04-01,Y,CEREBRAL HAEMORRHAGE,2024-04-01\nKN189,KN189-107,2,CEREBRAL HAEMORRHAGE,2024-04-01,Y,CEREBRAL HAEMORRHAGE,2024-04-01\n"
+    },
+    "adam-adae-occurrence-flags": {
+      "specification_path": "benchmarks/adam-adae-occurrence-flags/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  ADAE_RAW: {path: input/adae_raw.csv, types: {ASTDT: date}}\n\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, TRTEMFL, AOCCFL,\n            AOCCSFL, AOCCPFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: ADAE_RAW.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: ADAE_RAW.USUBJID\n\n  - name: AESEQ\n    type: int\n    label: Sequence Number\n    derivation: ADAE_RAW.AESEQ\n\n  - name: AEBODSYS\n    type: str\n    label: Body System or Organ Class\n    derivation: ADAE_RAW.AEBODSYS\n\n  - name: AEDECOD\n    type: str\n    label: Dictionary-Derived Term\n    derivation: ADAE_RAW.AEDECOD\n\n  - name: ASTDT\n    type: date\n    label: Analysis Start Date\n    derivation: ADAE_RAW.ASTDT\n\n  - name: TRTEMFL\n    type: str\n    label: Treatment Emergent Analysis Flag\n    derivation: ADAE_RAW.TRTEMFL\n    verifications:\n      allowed_values:\n        values: [Y]\n\n  # Number each subject's treatment-emergent events (earliest first, AESEQ\n  # breaking same-day ties) at three levels; each flag below marks number 1.\n  - name: AOCCSEQ\n    type: int\n    label: Subject Occurrence Sequence Number\n    derivation:\n      row_number:\n        window:\n          group_by: [STUDYID, USUBJID]\n          order_by: [ASTDT, AESEQ]\n          filter: \"TRTEMFL = 'Y'\"\n\n  - name: AOCCSSEQ\n    type: int\n    label: Body System Occurrence Sequence Number\n    derivation:\n      row_number:\n        window:\n          group_by: [STUDYID, USUBJID, AEBODSYS]\n          order_by: [ASTDT, AESEQ]\n          filter: \"TRTEMFL = 'Y'\"\n\n  - name: AOCCPSEQ\n    type: int\n    label: Preferred Term Occurrence Sequence Number\n    derivation:\n      row_number:\n        window:\n          group_by: [STUDYID, USUBJID, AEBODSYS, AEDECOD]\n          order_by: [ASTDT, AESEQ]\n          filter: \"TRTEMFL = 'Y'\"\n\n  - name: AOCCFL\n    type: str\n    label: 1st Occurrence within Subject Flag\n    derivation:\n      flag: \"AOCCSEQ = 1\"\n\n  - name: AOCCSFL\n    type: str\n    label: 1st Occurrence of SOC Flag\n    derivation:\n      flag: \"AOCCSSEQ = 1\"\n\n  - name: AOCCPFL\n    type: str\n    label: 1st Occurrence of Preferred Term Flag\n    derivation:\n      flag: \"AOCCPSEQ = 1\"\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, AESEQ]\n  - row_count:\n      min: 10\n      max: 10\n  - assert:\n      id: occurrence-flag-requires-treatment-emergence\n      when: \"AOCCFL = 'Y' OR AOCCSFL = 'Y' OR AOCCPFL = 'Y'\"\n      require: \"TRTEMFL = 'Y'\"\n",
+      "occurrences": [
+        {
+          "path": "columns[10].derivation.flag",
+          "payload": "AOCCSEQ = 1"
+        },
+        {
+          "path": "columns[11].derivation.flag",
+          "payload": "AOCCSSEQ = 1"
+        },
+        {
+          "path": "columns[12].derivation.flag",
+          "payload": "AOCCPSEQ = 1"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,AESEQ,AEBODSYS,AEDECOD,ASTDT,TRTEMFL,AOCCFL,AOCCSFL,AOCCPFL\nCATH-01,CATH-01-001,1,NERVOUS SYSTEM DISORDERS,HEADACHE,2024-01-05,,,,\nCATH-01,CATH-01-001,2,NERVOUS SYSTEM DISORDERS,HEADACHE,2024-01-10,Y,Y,Y,Y\nCATH-01,CATH-01-001,3,GASTROINTESTINAL DISORDERS,NAUSEA,2024-01-10,Y,,Y,Y\nCATH-01,CATH-01-001,4,NERVOUS SYSTEM DISORDERS,HEADACHE,2024-01-12,Y,,,\nCATH-01,CATH-01-001,5,SKIN AND SUBCUTANEOUS TISSUE DISORDERS,RASH,2024-01-21,,,,\nCATH-01,CATH-01-002,1,NERVOUS SYSTEM DISORDERS,HEADACHE,2024-02-01,Y,Y,Y,Y\nCATH-01,CATH-01-002,2,NERVOUS SYSTEM DISORDERS,HEADACHE,2024-02-01,Y,,,\nCATH-01,CATH-01-003,1,NERVOUS SYSTEM DISORDERS,DIZZINESS,2024-03-04,Y,Y,Y,Y\nCATH-01,CATH-01-004,1,GASTROINTESTINAL DISORDERS,DIARRHOEA,2024-04-02,,,,\nCATH-01,CATH-01-004,2,NERVOUS SYSTEM DISORDERS,HEADACHE,2024-04-09,,,,\n"
+    },
+    "adam-adae-onset-emergence": {
+      "specification_path": "benchmarks/adam-adae-onset-emergence/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: {path: input/ae.csv, types: {AESTDTC: datetime}}\n  ADSL: {path: input/adsl.csv, types: {TRTSDTM: datetime}}\nbase: AE\n\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, AETERM, ASTDTM, TRTSDTM, TRTEMFL, AOCCFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: AE.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: AE.USUBJID\n\n  - name: AESEQ\n    type: int\n    label: Sequence Number\n    derivation: AE.AESEQ\n\n  - name: AETERM\n    type: str\n    label: Reported Term for the Adverse Event\n    derivation: AE.AETERM\n\n  - name: ASTDTM\n    type: datetime\n    label: Analysis Start Date/Time\n    derivation: AE.AESTDTC\n\n  - name: TRTSDTM\n    type: datetime\n    label: Datetime of First Exposure to Treatment\n    derivation: ADSL.TRTSDTM\n\n  # A comparison with a missing moment is unknown, never true, so the flag\n  # stays empty when either the onset or the first exposure is missing.\n  - name: TRTEMFL\n    type: str\n    label: Treatment Emergent Analysis Flag\n    derivation:\n      flag: \"ASTDTM >= TRTSDTM\"\n    verifications:\n      allowed_values:\n        values: [Y]\n\n  - name: AOCCSEQ\n    type: int\n    label: Subject Occurrence Sequence Number\n    derivation:\n      row_number:\n        window:\n          group_by: [STUDYID, USUBJID]\n          order_by: [ASTDTM, AESEQ]\n          filter: \"TRTEMFL = 'Y'\"\n\n  - name: AOCCFL\n    type: str\n    label: First Occurrence Within Subject Flag\n    derivation:\n      flag: \"AOCCSEQ = 1\"\n    verifications:\n      allowed_values:\n        values: [Y]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, AESEQ]\n  - row_count:\n      min: 7\n      max: 7\n  - assert:\n      id: treatment-emergent-onset-is-not-before-first-dose\n      when: \"TRTEMFL = 'Y'\"\n      require: \"ASTDTM >= TRTSDTM\"\n  - assert:\n      id: occurrence-flag-requires-treatment-emergence\n      when: \"AOCCFL = 'Y'\"\n      require: \"TRTEMFL = 'Y'\"\n",
+      "occurrences": [
+        {
+          "path": "columns[6].derivation.flag",
+          "payload": "ASTDTM >= TRTSDTM"
+        },
+        {
+          "path": "columns[8].derivation.flag",
+          "payload": "AOCCSEQ = 1"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,AESEQ,AETERM,ASTDTM,TRTSDTM,TRTEMFL,AOCCFL\nPILOT7,P7-101,1,CHILLS,2025-03-04T07:15:00.000000,2025-03-04T09:00:00.000000,,\nPILOT7,P7-101,2,HEADACHE,2025-03-04T11:45:00.000000,2025-03-04T09:00:00.000000,Y,Y\nPILOT7,P7-101,3,NAUSEA,2025-03-06T22:30:00.000000,2025-03-04T09:00:00.000000,Y,\nPILOT7,P7-101,4,VOMITING,2025-03-04T11:45:00.000000,2025-03-04T09:00:00.000000,Y,\nPILOT7,P7-102,1,RASH,2025-03-05T09:00:00.000000,2025-03-05T09:00:00.000000,Y,Y\nPILOT7,P7-102,2,PRURITUS,,2025-03-05T09:00:00.000000,,\nPILOT7,P7-103,1,FATIGUE,2025-03-07T13:05:00.000000,,,\n"
+    },
+    "adam-adae-partial-dates": {
+      "specification_path": "benchmarks/adam-adae-partial-dates/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: input/ae.csv\n  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}\nbase: AE\n\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, ASTDT, ASTDTC, ASTDTF,\n            TRTSDT, TRTEMFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: AE.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: AE.USUBJID\n\n  - name: AESEQ\n    type: int\n    label: Sequence Number\n    derivation: AE.AESEQ\n\n  - name: AETERM\n    type: str\n    label: Reported Term for the Adverse Event\n    derivation: AE.AETERM\n\n  - name: AESTDTC\n    type: str\n    label: Start Date/Time of Adverse Event\n    derivation: AE.AESTDTC\n\n  - name: TRTSDT\n    type: date\n    label: Date of First Exposure to Treatment\n    derivation: ADSL.TRTSDT\n\n  # Complete a year-and-month start to the 15th, never before first\n  # exposure. A year alone, non-date text, or nothing gives no date.\n  # (Month precision is the minimum accepted, so no month is ever\n  # supplied, and none is written.)\n  - name: ASTDT\n    type: date\n    label: Analysis Start Date\n    derivation:\n      date_impute:\n        source: AESTDTC\n        day: 15\n        minimum_source_precision: month\n        not_before: TRTSDT\n        missing: null   # handlers are explicit: an omitted one is fatal\n        invalid: null\n\n  - name: ASTDTC\n    type: str\n    label: Analysis Start Date (C)\n    derivation: ASTDT\n\n  - name: ASTDTPR\n    type: str\n    label: Analysis Start Date Precision\n    derivation:\n      date_precision:\n        source: ASTDT\n        missing: null\n\n  # M means the collected start carried a year and month, so the day was\n  # supplied.\n  - name: ASTDTF\n    type: str\n    label: Analysis Start Date Imputation Flag\n    derivation:\n      case:\n        - when: \"ASTDTPR = 'M'\"\n          then: {literal: \"D\"}\n    verifications:\n      allowed_values:\n        values: [\"D\"]\n\n  - name: TRTEMFL\n    type: str\n    label: Treatment Emergent Analysis Flag\n    derivation:\n      flag: \"ASTDT >= TRTSDT\"\n    verifications:\n      allowed_values:\n        values: [Y]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, AESEQ]\n  - row_count:\n      min: 13\n      max: 13\n  - all_or_none:\n      id: analysis-date-completeness\n      columns: [ASTDTC, ASTDT]\n  - assert:\n      id: imputation-flag-requires-an-analysis-date\n      when: \"ASTDTF IS NOT NULL\"\n      require: \"ASTDT IS NOT NULL\"\n  - assert:\n      id: supplied-day-never-precedes-treatment-start\n      when: \"ASTDTF = 'D'\"\n      require: \"TRTSDT IS NULL OR ASTDT >= TRTSDT\"\n  - assert:\n      id: treatment-emergent-event-has-an-analysis-date\n      when: \"TRTEMFL = 'Y'\"\n      require: \"ASTDT IS NOT NULL AND ASTDT >= TRTSDT\"\n",
+      "occurrences": [
+        {
+          "path": "columns[10].derivation.flag",
+          "payload": "ASTDT >= TRTSDT"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [
+        {
+          "spec_path": "columns.ASTDT.derivation.date_impute.missing",
+          "handler": "missing",
+          "count": 1
+        },
+        {
+          "spec_path": "columns.ASTDT.derivation.date_impute.invalid",
+          "handler": "invalid",
+          "count": 1
+        },
+        {
+          "spec_path": "columns.ASTDTPR.derivation.date_precision.missing",
+          "handler": "missing",
+          "count": 4
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,AESEQ,AETERM,AESTDTC,ASTDT,ASTDTC,ASTDTF,TRTSDT,TRTEMFL\nCATH,CATH-UCSD-0001,1,HEADACHE,2025-01-15,2025-01-15,2025-01-15,,2025-01-10,Y\nCATH,CATH-UCSD-0001,2,NAUSEA,2025-01,2025-01-15,2025-01-15,D,2025-01-10,Y\nCATH,CATH-UCSD-0001,3,ECZEMA FLARE,2025,,,,2025-01-10,\nCATH,CATH-UCSD-0001,4,DIZZINESS,UNKNOWN,,,,2025-01-10,\nCATH,CATH-UCSD-0001,5,FATIGUE,,,,,2025-01-10,\nCATH,CATH-UCSD-0001,6,RASH,2025-02-20,2025-02-20,2025-02-20,,2025-01-10,Y\nCATH,CATH-UCSD-0002,1,PYREXIA,2025-03,2025-03-20,2025-03-20,D,2025-03-20,Y\nCATH,CATH-UCSD-0002,2,COUGH,2025-02,,,,2025-03-20,\nCATH,CATH-UCSD-0002,3,INSOMNIA,2025-04-05,2025-04-05,2025-04-05,,2025-03-20,Y\nCATH,CATH-UCSD-0002,4,MIGRAINE,2025-01-05,2025-01-05,2025-01-05,,2025-03-20,\nCATH,CATH-UCSD-0001,7,FLUSHING,2025-01-10,2025-01-10,2025-01-10,,2025-01-10,Y\nCATH,CATH-UCSD-0003,1,BACK PAIN,2025-04,2025-04-15,2025-04-15,D,,\nCATH,CATH-UCSD-0004,1,VOMITING,2025-02,2025-02-15,2025-02-15,D,2025-02-15,Y\n"
+    },
+    "adam-adae-post-index": {
+      "specification_path": "benchmarks/adam-adae-post-index/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE:\n    path: input/ae.csv\n    types: {AESEQ: int, AESTDTC: date}\n\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, AFTIDXFL]\n\nintermediates:\n  # Each subject's index event: the first event carrying the designated\n  # index term (in this fixture, COVID-19) -- earliest start, then\n  # lowest AESEQ.\n  - id: FIRSTIDX\n    dataset: AE\n    key: [STUDYID, USUBJID]\n    filter: \"AE.AEDECOD = 'COVID-19'\"\n    order_by: [AE.AESTDTC, AE.AESEQ]\n    keep: first\n    no_match: null\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: AE.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: AE.USUBJID\n\n  - name: AESEQ\n    type: int\n    label: Sequence Number\n    derivation: AE.AESEQ\n\n  - name: AEDECOD\n    type: str\n    label: Dictionary-Derived Term\n    derivation: AE.AEDECOD\n\n  - name: ASTDT\n    type: date\n    label: Analysis Start Date\n    derivation: AE.AESTDTC\n\n  # Strictly after the subject's index event in (start date, AESEQ) order.\n  # A missing start compares as unknown, so the flag stays empty.\n  - name: AFTIDXFL\n    type: str\n    label: After Index Event Flag\n    derivation:\n      flag: >-\n            ASTDT > FIRSTIDX.AESTDTC OR\n            (ASTDT = FIRSTIDX.AESTDTC AND AESEQ > FIRSTIDX.AESEQ)\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, AESEQ]\n  - row_count:\n      min: 11\n      max: 11\n",
+      "occurrences": [
+        {
+          "path": "columns[5].derivation.flag",
+          "payload": "ASTDT > FIRSTIDX.AESTDTC OR (ASTDT = FIRSTIDX.AESTDTC AND AESEQ > FIRSTIDX.AESEQ)"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,AESEQ,AEDECOD,ASTDT,AFTIDXFL\nYAMAA-01,YAMAA-01-101,1,HEADACHE,2023-01-10,\nYAMAA-01,YAMAA-01-101,2,COVID-19,2023-01-15,\nYAMAA-01,YAMAA-01-101,3,COUGH,2023-01-15,Y\nYAMAA-01,YAMAA-01-101,4,FATIGUE,2023-01-20,Y\nYAMAA-01,YAMAA-01-101,5,NAUSEA,,\nYAMAA-01,YAMAA-01-102,1,NAUSEA,2023-02-01,\nYAMAA-01,YAMAA-01-102,2,FATIGUE,2023-02-04,\nYAMAA-01,YAMAA-01-103,1,COVID-19,2023-03-01,\nYAMAA-01,YAMAA-01-103,2,COVID-19,2023-03-01,Y\nYAMAA-01,YAMAA-01-103,3,PYREXIA,2023-03-03,Y\nYAMAA-01,YAMAA-01-104,1,COVID-19,2023-04-05,\n"
+    },
+    "adam-adae-worsening-emergence": {
+      "specification_path": "benchmarks/adam-adae-worsening-emergence/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: {path: input/ae.csv, types: {AESTDTC: datetime, AETOXGR: int}}\n  ADSL: {path: input/adsl.csv, types: {TRTSDTM: datetime}}\nbase: AE\n\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDTM, TRTSDTM, AESEV,\n            AETOXGR, TRTEMFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: AE.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: AE.USUBJID\n\n  - name: AESEQ\n    type: int\n    label: Sequence Number\n    derivation: AE.AESEQ\n\n  - name: AEDECOD\n    type: str\n    label: Dictionary-Derived Term\n    derivation: AE.AEDECOD\n\n  - name: ASTDTM\n    type: datetime\n    label: Analysis Start Date/Time\n    derivation: AE.AESTDTC\n\n  - name: TRTSDTM\n    type: datetime\n    label: Datetime of First Exposure to Treatment\n    derivation: ADSL.TRTSDTM\n\n  - name: AESEV\n    type: str\n    label: Severity/Intensity\n    derivation: AE.AESEV\n    verifications:\n      allowed_values:\n        values: [MILD, MODERATE, SEVERE]\n\n  - name: AETOXGR\n    type: int\n    label: Standard Toxicity Grade\n    derivation: AE.AETOXGR\n    verifications:\n      allowed_values:\n        values: [1, 2, 3, 4, 5]\n\n  # Numeric rank of the collected severity, so a later episode can be\n  # compared with an earlier one for the same term. Not in the output.\n  - name: AESEVN\n    type: int\n    label: Severity/Intensity (N)\n    derivation:\n      mapping:\n        source: AESEV\n        dict:\n          MILD: 1\n          MODERATE: 2\n          SEVERE: 3\n        missing: null\n\n  # Highest severity reached at or after first exposure, within the\n  # subject and term. A comparison with a missing moment is unknown,\n  # so rows with no onset or no exposure never contribute. Not in\n  # the output.\n  - name: POSTMAX\n    type: int\n    label: Maximum Post-Treatment Severity (N)\n    derivation:\n      aggregate:\n        filter: \"ASTDTM >= TRTSDTM\"\n        group_by: [STUDYID, USUBJID, AEDECOD]\n        expr: \"MAX(AESEVN)\"\n\n  # Highest toxicity grade reached at or after first exposure,\n  # within the subject and term. Rows with no onset, no grade, or\n  # no exposure never contribute. Not in the output.\n  - name: POSTMAXG\n    type: int\n    label: Maximum Post-Treatment Toxicity Grade\n    derivation:\n      aggregate:\n        filter: \"ASTDTM >= TRTSDTM\"\n        group_by: [STUDYID, USUBJID, AEDECOD]\n        expr: \"MAX(AETOXGR)\"\n\n  # A comparison with a missing value is unknown, never true, so the\n  # flag stays empty when the onset or the first exposure is missing,\n  # and for an earlier event when neither the severity nor the grade\n  # rises later.\n  - name: TRTEMFL\n    type: str\n    label: Treatment Emergent Analysis Flag\n    derivation:\n      flag: \"ASTDTM >= TRTSDTM OR (ASTDTM < TRTSDTM AND\n        (AESEVN < POSTMAX OR AETOXGR < POSTMAXG))\"\n    verifications:\n      allowed_values:\n        values: [Y]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, AESEQ]\n  - row_count:\n      min: 18\n      max: 18\n  - assert:\n      id: treatment-emergent-event-has-known-onset-and-exposure\n      when: \"TRTEMFL = 'Y'\"\n      require: \"ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL\"\n",
+      "occurrences": [
+        {
+          "path": "columns[11].derivation.flag",
+          "payload": "ASTDTM >= TRTSDTM OR (ASTDTM < TRTSDTM AND (AESEVN < POSTMAX OR AETOXGR < POSTMAXG))"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [
+        {
+          "spec_path": "columns.AESEVN.derivation.mapping.missing",
+          "handler": "missing",
+          "count": 1
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,AESEQ,AEDECOD,ASTDTM,TRTSDTM,AESEV,AETOXGR,TRTEMFL\nPILOT7,P7-101,1,HEADACHE,2025-03-04T07:15:00.000000,2025-03-04T09:00:00.000000,MILD,1,Y\nPILOT7,P7-101,2,HEADACHE,2025-03-04T11:45:00.000000,2025-03-04T09:00:00.000000,MODERATE,2,Y\nPILOT7,P7-101,3,NAUSEA,2025-03-03T10:00:00.000000,2025-03-04T09:00:00.000000,MILD,1,\nPILOT7,P7-101,4,NAUSEA,2025-03-06T22:30:00.000000,2025-03-04T09:00:00.000000,MILD,1,Y\nPILOT7,P7-102,1,RASH,2025-03-04T08:00:00.000000,2025-03-05T09:00:00.000000,MODERATE,2,\nPILOT7,P7-102,2,RASH,2025-03-05T10:00:00.000000,2025-03-05T09:00:00.000000,MILD,1,Y\nPILOT7,P7-102,3,PRURITUS,,2025-03-05T09:00:00.000000,MILD,1,\nPILOT7,P7-102,4,PRURITUS,2025-03-06T09:00:00.000000,2025-03-05T09:00:00.000000,MODERATE,2,Y\nPILOT7,P7-103,1,HEADACHE,2025-03-04T07:00:00.000000,,MILD,1,\nPILOT7,P7-103,2,HEADACHE,2025-03-07T10:00:00.000000,,MODERATE,2,\nPILOT7,P7-104,1,FATIGUE,2025-03-03T09:00:00.000000,2025-03-04T09:00:00.000000,,,\nPILOT7,P7-104,2,FATIGUE,2025-03-05T09:00:00.000000,2025-03-04T09:00:00.000000,MODERATE,2,Y\nPILOT7,P7-105,1,VOMITING,2025-03-03T10:00:00.000000,2025-03-04T09:00:00.000000,MODERATE,1,Y\nPILOT7,P7-105,2,VOMITING,2025-03-05T10:00:00.000000,2025-03-04T09:00:00.000000,MODERATE,2,Y\nPILOT7,P7-106,1,COUGH,2025-03-04T08:00:00.000000,2025-03-05T09:00:00.000000,MODERATE,2,\nPILOT7,P7-106,2,COUGH,2025-03-06T09:00:00.000000,2025-03-05T09:00:00.000000,MODERATE,1,Y\nPILOT7,P7-107,1,DIARRHEA,2025-03-03T09:00:00.000000,2025-03-04T09:00:00.000000,MODERATE,,\nPILOT7,P7-107,2,DIARRHEA,2025-03-05T09:00:00.000000,2025-03-04T09:00:00.000000,MODERATE,2,Y\n"
+    },
+    "adam-adae-worst-severity": {
+      "specification_path": "benchmarks/adam-adae-worst-severity/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  ADAE_RAW: {path: input/adae_raw.csv, types: {ASTDT: date}}\n\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL,\n            AESEVN, AWSEVFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: ADAE_RAW.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: ADAE_RAW.USUBJID\n\n  - name: AESEQ\n    type: int\n    label: Sequence Number\n    derivation: ADAE_RAW.AESEQ\n\n  - name: AEBODSYS\n    type: str\n    label: Body System or Organ Class\n    derivation: ADAE_RAW.AEBODSYS\n\n  - name: AEDECOD\n    type: str\n    label: Dictionary-Derived Term\n    derivation: ADAE_RAW.AEDECOD\n\n  - name: ASTDT\n    type: date\n    label: Analysis Start Date\n    derivation: ADAE_RAW.ASTDT\n\n  - name: AESEV\n    type: str\n    label: Severity/Intensity\n    derivation: ADAE_RAW.AESEV\n    verifications:\n      allowed_values:\n        values: [MILD, MODERATE, SEVERE]\n\n  - name: TRTEMFL\n    type: str\n    label: Treatment Emergent Analysis Flag\n    derivation: ADAE_RAW.TRTEMFL\n    verifications:\n      allowed_values:\n        values: [Y]\n\n  - name: AESEVN\n    type: int\n    label: Severity/Intensity (N)\n    derivation:\n      mapping:\n        source: AESEV\n        dict:\n          MILD: 1\n          MODERATE: 2\n          SEVERE: 3\n        missing: null\n    verifications:\n      range:\n        min: 1\n        max: 3\n\n  # Ranks the subject's treatment-emergent, graded events within each\n  # preferred term: worst severity first, then earliest start date, then\n  # lowest sequence number. Any other event gets no rank.\n  - name: AWSRNK\n    type: int\n    label: Worst Severity Rank\n    derivation:\n      row_number:\n        window:\n          group_by: [STUDYID, USUBJID, AEDECOD]\n          order_by:\n            - {variable: AESEVN, direction: desc}\n            - ASTDT\n            - AESEQ\n          filter: \"TRTEMFL = 'Y' AND AESEVN IS NOT NULL\"\n\n  - name: AWSEVFL\n    type: str\n    label: Worst Severity Flag\n    derivation:\n      flag: \"AWSRNK = 1\"\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, AESEQ]\n  - row_count:\n      min: 12\n      max: 12\n  - assert:\n      id: worst-severity-flag-requires-graded-treatment-emergent-event\n      when: \"AWSEVFL = 'Y'\"\n      require: \"TRTEMFL = 'Y' AND AESEVN IS NOT NULL\"\n",
+      "occurrences": [
+        {
+          "path": "columns[10].derivation.flag",
+          "payload": "AWSRNK = 1"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [
+        {
+          "spec_path": "columns.AESEVN.derivation.mapping.missing",
+          "handler": "missing",
+          "count": 2
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,AESEQ,AEBODSYS,AEDECOD,ASTDT,AESEV,TRTEMFL,AESEVN,AWSEVFL\nCATH,CATH-UCSD-0001,1,NERVOUS SYSTEM DISORDERS,HEADACHE,2025-01-12,MILD,Y,1,\nCATH,CATH-UCSD-0001,2,NERVOUS SYSTEM DISORDERS,HEADACHE,2025-01-18,SEVERE,Y,3,Y\nCATH,CATH-UCSD-0001,3,NERVOUS SYSTEM DISORDERS,HEADACHE,2025-01-20,MODERATE,Y,2,\nCATH,CATH-UCSD-0001,4,GASTROINTESTINAL DISORDERS,NAUSEA,2025-01-15,MODERATE,Y,2,Y\nCATH,CATH-UCSD-0001,5,SKIN AND SUBCUTANEOUS TISSUE DISORDERS,RASH,2025-01-05,SEVERE,,3,\nCATH,CATH-UCSD-0002,1,NERVOUS SYSTEM DISORDERS,HEADACHE,2025-02-10,MODERATE,Y,2,Y\nCATH,CATH-UCSD-0002,2,NERVOUS SYSTEM DISORDERS,HEADACHE,2025-02-10,MODERATE,Y,2,\nCATH,CATH-UCSD-0002,3,GASTROINTESTINAL DISORDERS,NAUSEA,2025-02-12,,Y,,\nCATH,CATH-UCSD-0003,1,NERVOUS SYSTEM DISORDERS,HEADACHE,2025-03-10,SEVERE,Y,3,\nCATH,CATH-UCSD-0003,2,NERVOUS SYSTEM DISORDERS,HEADACHE,2025-03-05,SEVERE,Y,3,Y\nCATH,CATH-UCSD-0003,3,SKIN AND SUBCUTANEOUS TISSUE DISORDERS,RASH,2025-03-06,MODERATE,,2,\nCATH,CATH-UCSD-0003,4,SKIN AND SUBCUTANEOUS TISSUE DISORDERS,RASH,2025-03-08,,Y,,\n"
+    },
+    "adam-adce-worst-toxicity": {
+      "specification_path": "benchmarks/adam-adce-worst-toxicity/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADCE\nkeys: [STUDYID, USUBJID, CESEQ]\ninput:\n  CE: {path: input/ce.csv, types: {ASTDT: date}}\n\noutput:\n  path: adce.csv\n  columns: [STUDYID, USUBJID, CESEQ, CETERM, ASTDT, ASEV, ASEVN, ATOXGRN,\n            AOCCFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: CE.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: CE.USUBJID\n\n  - name: CESEQ\n    type: int\n    label: Sequence Number\n    derivation: CE.CESEQ\n\n  - name: CETERM\n    type: str\n    label: Reported Term for Clinical Event\n    derivation: CE.CETERM\n\n  - name: ASTDT\n    type: date\n    label: Analysis Start Date\n    derivation: CE.ASTDT\n\n  - name: ASEV\n    type: str\n    label: Analysis Severity/Intensity\n    derivation: CE.CESEV\n    verifications:\n      allowed_values:\n        values: [MILD, MODERATE, SEVERE]\n\n  - name: ASEVN\n    type: int\n    label: Analysis Severity/Intensity (N)\n    derivation:\n      mapping:\n        source: ASEV\n        dict: {MILD: 1, MODERATE: 2, SEVERE: 3}\n        missing: null\n    verifications:\n      allowed_values:\n        values: [1, 2, 3]\n\n  - name: ATOXGRN\n    type: int\n    label: Analysis Toxicity Grade (N)\n    derivation: ASEVN\n    verifications:\n      allowed_values:\n        values: [1, 2, 3]\n\n  # Number each subject's graded events: worst grade first, then earliest\n  # start, then lowest CESEQ. AOCCFL marks number 1; an ungraded event is\n  # left out, so it is never flagged.\n  - name: WGRSEQ\n    type: int\n    label: Worst Grade Sequence Number\n    derivation:\n      row_number:\n        window:\n          group_by: [STUDYID, USUBJID]\n          order_by:\n            - {variable: ASEVN, direction: desc}\n            - ASTDT\n            - CESEQ\n          filter: \"ASEVN IS NOT NULL\"\n\n  - name: AOCCFL\n    type: str\n    label: Worst Grade Occurrence Flag\n    derivation:\n      flag: \"WGRSEQ = 1\"\n    verifications:\n      allowed_values:\n        values: [Y]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, CESEQ]\n  - row_count:\n      min: 11\n      max: 11\n  - assert:\n      id: worst-grade-flag-requires-a-graded-event\n      when: \"AOCCFL = 'Y'\"\n      require: \"ASEV IS NOT NULL\"\n  - row_count:\n      id: worst-grade-flag-is-unique-within-subject\n      group_by: [STUDYID, USUBJID]\n      filter: \"AOCCFL = 'Y'\"\n      min: 0\n      max: 1\n",
+      "occurrences": [
+        {
+          "path": "columns[9].derivation.flag",
+          "payload": "WGRSEQ = 1"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [
+        {
+          "spec_path": "columns.ASEVN.derivation.mapping.missing",
+          "handler": "missing",
+          "count": 3
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,CESEQ,CETERM,ASTDT,ASEV,ASEVN,ATOXGRN,AOCCFL\nKN189,KN189-101,1,FEVER,2024-01-11,MILD,1,1,\nKN189,KN189-101,2,FATIGUE,2024-01-12,SEVERE,3,3,Y\nKN189,KN189-101,3,CHILLS,2024-01-13,SEVERE,3,3,\nKN189,KN189-101,4,FATIGUE,2024-01-12,SEVERE,3,3,\nKN189,KN189-102,1,FEVER,2024-02-06,,,,\nKN189,KN189-102,2,FEVER,2024-02-06,MODERATE,2,2,Y\nKN189,KN189-103,1,REDNESS,2024-03-02,MODERATE,2,2,Y\nKN189,KN189-104,1,FEVER,2024-05-01,,,,\nKN189,KN189-104,2,HEADACHE,2024-05-03,,,,\nKN189,KN189-105,1,PAIN,2024-04-10,MODERATE,2,2,\nKN189,KN189-105,2,HEADACHE,2024-04-05,MODERATE,2,2,Y\n"
+    },
+    "adam-adcm-on-treatment": {
+      "specification_path": "benchmarks/adam-adcm-on-treatment/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADCM\nkeys: [STUDYID, USUBJID, CMSEQ]\ninput:\n  CM: {path: input/cm.csv, types: {CMSTDTC: date, CMENDTC: date}}\n  ADSL: {path: input/adsl.csv, types: {TRTSDT: date, TRTEDT: date}}\nbase: CM\n\noutput:\n  path: adcm.csv\n  columns: [STUDYID, USUBJID, CMSEQ, CMTRT, ASTDT, AENDT, TRTSDT, TRTEDT,\n            ONTRTFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: CM.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: CM.USUBJID\n\n  - name: CMSEQ\n    type: int\n    label: Sequence Number\n    derivation: CM.CMSEQ\n\n  - name: CMTRT\n    type: str\n    label: Reported Name of Drug, Medication, or Therapy\n    derivation: CM.CMTRT\n\n  - name: ASTDT\n    type: date\n    label: Analysis Start Date\n    derivation: CM.CMSTDTC\n\n  - name: AENDT\n    type: date\n    label: Analysis End Date\n    derivation: CM.CMENDTC\n\n  - name: TRTSDT\n    type: date\n    label: Date of First Exposure to Treatment\n    derivation: ADSL.TRTSDT\n\n  - name: TRTEDT\n    type: date\n    label: Date of Last Exposure to Treatment\n    derivation: ADSL.TRTEDT\n\n  # Overlap with the treatment period: the medication neither ends before\n  # treatment starts nor starts after it ends. A missing medication date or\n  # treatment end leaves that side open; no treatment start means no flag.\n  - name: ONTRTFL\n    type: str\n    label: On Treatment Record Flag\n    derivation:\n      flag: >\n            TRTSDT IS NOT NULL AND\n            (TRTEDT IS NULL OR ASTDT IS NULL OR ASTDT <= TRTEDT) AND\n            (AENDT IS NULL OR AENDT >= TRTSDT)\n    verifications:\n      allowed_values:\n        values: [Y]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, CMSEQ]\n  - row_count:\n      min: 13\n      max: 13\n  - assert:\n      id: on-treatment-medication-has-treatment-start\n      when: \"ONTRTFL = 'Y'\"\n      require: \"TRTSDT IS NOT NULL\"\n",
+      "occurrences": [
+        {
+          "path": "columns[8].derivation.flag",
+          "payload": "TRTSDT IS NOT NULL AND (TRTEDT IS NULL OR ASTDT IS NULL OR ASTDT <= TRTEDT) AND (AENDT IS NULL OR AENDT >= TRTSDT)\n"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,CMSEQ,CMTRT,ASTDT,AENDT,TRTSDT,TRTEDT,ONTRTFL\nYAMAA-01,YAMAA-01-101,1,Ibuprofen,2023-02-20,2023-02-28,2023-03-01,2023-06-30,\nYAMAA-01,YAMAA-01-101,2,Acetaminophen,2023-02-25,2023-03-01,2023-03-01,2023-06-30,Y\nYAMAA-01,YAMAA-01-101,3,Metformin,2023-03-01,2023-06-30,2023-03-01,2023-06-30,Y\nYAMAA-01,YAMAA-01-101,4,Lisinopril,2023-04-10,2023-04-24,2023-03-01,2023-06-30,Y\nYAMAA-01,YAMAA-01-101,5,Omeprazole,2023-06-30,2023-07-15,2023-03-01,2023-06-30,Y\nYAMAA-01,YAMAA-01-101,6,Atorvastatin,2023-07-01,,2023-03-01,2023-06-30,\nYAMAA-01,YAMAA-01-101,7,Alendronate,2023-05-01,,2023-03-01,2023-06-30,Y\nYAMAA-01,YAMAA-01-101,8,Calcium carbonate,,,2023-03-01,2023-06-30,Y\nYAMAA-01,YAMAA-01-101,9,Aspirin,,2023-02-15,2023-03-01,2023-06-30,\nYAMAA-01,YAMAA-01-102,1,Gabapentin,2023-04-01,2023-04-15,,,\nYAMAA-01,YAMAA-01-103,1,Sertraline,2023-04-01,2023-05-10,2023-05-15,,\nYAMAA-01,YAMAA-01-103,2,Levothyroxine,2023-05-20,,2023-05-15,,Y\nYAMAA-01,YAMAA-01-103,3,Vitamin D,,2023-06-01,2023-05-15,,Y\n"
+    },
+    "adam-adex-dose-reduction": {
+      "specification_path": "benchmarks/adam-adex-dose-reduction/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADEX\nkeys: [STUDYID, USUBJID, EXSEQ]\ninput:\n  EX: {path: input/ex.csv, types: {EXSTDTM: datetime}}\n\noutput:\n  path: adex.csv\n  columns: [STUDYID, USUBJID, EXSEQ, EXSTDTM, EXDOSE, DOSREDFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: EX.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: EX.USUBJID\n\n  - name: EXSEQ\n    type: int\n    label: Sequence Number\n    derivation: EX.EXSEQ\n\n  - name: EXSTDTM\n    type: datetime\n    label: Start Date/Time of Treatment\n    derivation: EX.EXSTDTM\n\n  - name: EXDOSE\n    type: float\n    label: Dose\n    derivation: EX.EXDOSE\n\n  - name: PREVDOSE\n    type: float\n    label: Previous Dose\n    derivation:\n      row_value:\n        source: EXDOSE\n        offset: -1\n        window:\n          group_by: [STUDYID, USUBJID]\n          order_by: [EXSTDTM, EXSEQ]\n\n  # Lower than the administration just before, with both doses above zero\n  # (0 < EXDOSE < PREVDOSE puts PREVDOSE above zero too). A missing dose on\n  # either side compares as unknown, so the flag stays empty.\n  - name: DOSREDFL\n    type: str\n    label: Dose Reduced Flag\n    derivation:\n      flag: \"EXDOSE > 0 AND EXDOSE < PREVDOSE\"\n",
+      "occurrences": [
+        {
+          "path": "columns[6].derivation.flag",
+          "payload": "EXDOSE > 0 AND EXDOSE < PREVDOSE"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,EXSEQ,EXSTDTM,EXDOSE,DOSREDFL\nYAMAA-01,YAMAA-01-101,1,2024-01-08T08:00:00.000000,200.0,\nYAMAA-01,YAMAA-01-101,2,2024-01-15T08:00:00.000000,200.0,\nYAMAA-01,YAMAA-01-101,3,2024-01-22T08:00:00.000000,150.0,Y\nYAMAA-01,YAMAA-01-101,4,2024-01-29T08:00:00.000000,0.0,\nYAMAA-01,YAMAA-01-101,5,2024-02-05T08:00:00.000000,150.0,\nYAMAA-01,YAMAA-01-101,6,2024-02-12T08:00:00.000000,,\nYAMAA-01,YAMAA-01-101,7,2024-02-19T08:00:00.000000,100.0,\nYAMAA-01,YAMAA-01-101,8,2024-02-26T08:00:00.000000,80.0,Y\nYAMAA-01,YAMAA-01-102,1,2024-01-10T08:00:00.000000,250.0,\nYAMAA-01,YAMAA-01-103,1,2024-01-09T08:00:00.000000,200.0,\nYAMAA-01,YAMAA-01-103,2,2024-01-09T08:00:00.000000,120.0,Y\nYAMAA-01,YAMAA-01-104,1,2024-01-11T08:00:00.000000,0.0,\nYAMAA-01,YAMAA-01-104,2,2024-01-18T08:00:00.000000,100.0,\n"
+    },
+    "adam-adlb-closest-visit": {
+      "specification_path": "benchmarks/adam-adlb-closest-visit/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADLB\nkeys: [STUDYID, USUBJID, PARAMCD, LBSEQ]\ninput:\n  ADLB_RAW: {path: input/adlb_raw.csv, types: {ADT: date}}\n\noutput:\n  path: adlb.csv\n  columns: [STUDYID, USUBJID, PARAMCD, LBSEQ, ADT, ADY, AVAL, AVISIT, AWTARGET,\n            ADIST, ANL01FL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: ADLB_RAW.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: ADLB_RAW.USUBJID\n\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: ADLB_RAW.PARAMCD\n\n  - name: LBSEQ\n    type: int\n    label: Sequence Number\n    derivation: ADLB_RAW.LBSEQ\n\n  - name: ADT\n    type: date\n    label: Analysis Date\n    derivation: ADLB_RAW.ADT\n\n  - name: ADY\n    type: int\n    label: Analysis Relative Day\n    derivation: ADLB_RAW.ADY\n\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation: ADLB_RAW.AVAL\n\n  # One analysis window, study days 8 to 22 around target day 15. A record\n  # outside it, or with no study day, gets no visit, target, or distance.\n  - name: AVISIT\n    type: str\n    label: Analysis Visit\n    derivation:\n      case:\n        - when: \"ADY BETWEEN 8 AND 22\"\n          then: {literal: WEEK 2}\n    verifications:\n      allowed_values:\n        values: [WEEK 2]\n\n  - name: AWTARGET\n    type: int\n    label: Analysis Window Target\n    derivation:\n      case:\n        - when: \"AVISIT IS NOT NULL\"\n          then: {literal: 15}\n\n  - name: ADIST\n    type: float\n    label: Analysis Day Distance from Target\n    derivation:\n      compute:\n        expr: \"ABS(ADY - AWTARGET)\"\n    verifications:\n      range:\n        min: 0\n\n  # Within each subject, parameter, and visit: closest to the target first,\n  # then the later study day, then the lower sequence number. ANL01FL marks\n  # rank 1.\n  - name: ARNK\n    type: int\n    label: Analysis Rank\n    derivation:\n      row_number:\n        window:\n          group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]\n          order_by:\n            - ADIST\n            - {variable: ADY, direction: desc}\n            - LBSEQ\n          filter: \"AVISIT IS NOT NULL\"\n\n  - name: ANL01FL\n    type: str\n    label: Analysis Record Flag 01\n    derivation:\n      flag: \"ARNK = 1\"\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, PARAMCD, LBSEQ]\n  - row_count:\n      min: 11\n      max: 11\n  - all_or_none:\n      id: window-derivation-completeness\n      columns: [AVISIT, AWTARGET, ADIST]\n  - assert:\n      id: analysis-record-is-inside-window\n      when: \"ANL01FL = 'Y'\"\n      require: \"ADY BETWEEN 8 AND 22\"\n",
+      "occurrences": [
+        {
+          "path": "columns[11].derivation.flag",
+          "payload": "ARNK = 1"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,PARAMCD,LBSEQ,ADT,ADY,AVAL,AVISIT,AWTARGET,ADIST,ANL01FL\nCATH,CATH-UCSD-0001,ALT,1,2025-01-17,10,22.0,WEEK 2,15,5.0,\nCATH,CATH-UCSD-0001,ALT,2,2025-01-27,20,26.0,WEEK 2,15,5.0,Y\nCATH,CATH-UCSD-0001,ALT,3,2025-02-06,30,24.0,,,,\nCATH,CATH-UCSD-0002,ALT,1,2025-02-19,12,31.0,WEEK 2,15,3.0,\nCATH,CATH-UCSD-0002,ALT,2,2025-02-23,16,29.0,WEEK 2,15,1.0,Y\nCATH,CATH-UCSD-0002,AST,1,2025-02-21,14,27.0,WEEK 2,15,1.0,Y\nCATH,CATH-UCSD-0003,ALT,1,2025-03-15,8,18.0,WEEK 2,15,7.0,Y\nCATH,CATH-UCSD-0004,ALT,1,2025-04-09,22,33.0,WEEK 2,15,7.0,Y\nCATH,CATH-UCSD-0005,ALT,1,2025-04-30,15,21.0,WEEK 2,15,0.0,Y\nCATH,CATH-UCSD-0005,ALT,2,2025-04-30,15,23.0,WEEK 2,15,0.0,\nCATH,CATH-UCSD-0006,ALT,1,2025-05-12,,28.0,,,,\n"
+    },
+    "adam-adlb-end-of-treatment": {
+      "specification_path": "benchmarks/adam-adlb-end-of-treatment/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADLB\nkeys: [STUDYID, USUBJID, LBSEQ]\ninput:\n  LB: {path: input/lb.csv, types: {LBSEQ: int, VISITNUM: int, LBSTRESN: float}}\n  SUPPLB: input/supplb.csv\nbase: LB\n\noutput:\n  path: adlb.csv\n  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, VISITNUM, AVAL, ENDPOINT, EOTFL]\n\nintermediates:\n  # The protocol endpoint qualifier, one supplemental record per\n  # laboratory record. The supplemental key is the laboratory sequence\n  # number written as eight-character, space-padded text.\n  - id: SUPP_EP\n    dataset: SUPPLB\n    key:\n      STUDYID: LB.STUDYID\n      USUBJID: LB.USUBJID\n      IDVARVAL: {str_pad: {source: LB.LBSEQ, width: 8}}\n    filter: \"SUPPLB.QNAM = 'ENDPOINT'\"\n    no_match: null\n    verifications:\n      - unique: [STUDYID, USUBJID, IDVARVAL]\n\n  # Every laboratory record carries its own endpoint qualifier before the\n  # window ranks the records of each subject and test: the endpoint\n  # record first, then the latest visit.\n  - id: EOT_RANK\n    dataset: LB\n    key: [STUDYID, USUBJID, LBSEQ]\n    derivations:\n      ENDPOINT: SUPP_EP.QVAL\n      EOT_SEQ:\n        row_number:\n          window:\n            group_by: [LB.USUBJID, LB.LBTESTCD]\n            order_by:\n              - {variable: ENDPOINT, direction: desc}\n              - {variable: LB.VISITNUM, direction: desc}\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: LB.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n\n  - name: LBSEQ\n    type: int\n    label: Sequence Number\n    derivation: LB.LBSEQ\n\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: LB.LBTESTCD\n\n  - name: VISITNUM\n    type: int\n    label: Visit Number\n    derivation: LB.VISITNUM\n\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation: LB.LBSTRESN\n\n  - name: ENDPOINT\n    type: str\n    label: Protocol Endpoint Record\n    derivation: EOT_RANK.ENDPOINT\n\n  - name: EOTFL\n    type: str\n    label: End of Treatment Record Flag\n    derivation:\n      flag: \"EOT_RANK.EOT_SEQ = 1\"\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, LBSEQ]\n  - row_count:\n      min: 12\n      max: 12\n",
+      "occurrences": [
+        {
+          "path": "columns[7].derivation.flag",
+          "payload": "EOT_RANK.EOT_SEQ = 1"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,LBSEQ,LBTESTCD,VISITNUM,AVAL,ENDPOINT,EOTFL\nYAMAA-01,YAMAA-01-101,1,ALB,1,4.0,,\nYAMAA-01,YAMAA-01-101,2,ALB,2,4.2,Y,Y\nYAMAA-01,YAMAA-01-101,3,ALB,3,4.1,,\nYAMAA-01,YAMAA-01-101,4,CREAT,1,80.0,,\nYAMAA-01,YAMAA-01-101,5,CREAT,2,82.0,,\nYAMAA-01,YAMAA-01-101,6,CREAT,3,85.0,,Y\nYAMAA-01,YAMAA-01-102,1,ALB,1,3.9,,\nYAMAA-01,YAMAA-01-102,2,ALB,2,4.0,,Y\nYAMAA-01,YAMAA-01-103,1,ALB,1,4.3,,Y\nYAMAA-01,YAMAA-01-104,1,ALB,1,,Y,Y\nYAMAA-01,YAMAA-01-104,2,ALB,2,4.4,,\nYAMAA-01,YAMAA-01-105,1,CREAT,3,95.0,Y,Y\n"
+    },
+    "adam-adrs-measurable-disease": {
+      "specification_path": "benchmarks/adam-adrs-measurable-disease/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADRS\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput:\n  ADSL: input/adsl.csv\n  TU: input/tu.csv\nbase: ADSL\n\noutput:\n  path: adrs.csv\n  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVALC, AVAL]\n\nintermediates:\n  # The subject's screening tumor identification records showing target\n  # disease, matched on STUDYID and USUBJID. Only whether one exists is\n  # read; keep: first picks one when there are several.\n  - id: TU_TARGET\n    dataset: TU\n    filter: >-\n      TU.TUTESTCD = 'TUMIDENT' AND TU.VISIT = 'SCREENING'\n      AND TU.TUSTRESC = 'TARGET'\n    order_by: [TU.TUSEQ]\n    keep: first\n    no_match: null\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: ADSL.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: ADSL.USUBJID\n\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: {literal: MDIS}\n\n  - name: PARAM\n    type: str\n    label: Parameter\n    derivation: {literal: Measurable Disease at Baseline}\n\n  - name: AVALC\n    type: str\n    label: Analysis Value (C)\n    derivation:\n      flag:\n        condition: \"TU_TARGET.TUSTRESC IS NOT NULL\"\n        false_value: \"N\"\n        missing: \"N\"\n    verifications:\n      - not_missing: {}\n      - allowed_values:\n          values: [Y, N]\n\n  - name: AVAL\n    type: int\n    label: Analysis Value\n    derivation:\n      mapping:\n        source: AVALC\n        dict:\n          Y: 1\n          N: 0\n    verifications:\n      - not_missing: {}\n      - range:\n          min: 0\n          max: 1\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, PARAMCD]\n  - row_count:\n      min: 6\n      max: 6\n",
+      "occurrences": [
+        {
+          "path": "columns[4].derivation.flag",
+          "payload": {
+            "condition": "TU_TARGET.TUSTRESC IS NOT NULL",
+            "false_value": "N",
+            "missing": "N"
+          }
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,PARAMCD,PARAM,AVALC,AVAL\nYAMAA-01,YAMAA-01-101,MDIS,Measurable Disease at Baseline,Y,1\nYAMAA-01,YAMAA-01-102,MDIS,Measurable Disease at Baseline,N,0\nYAMAA-01,YAMAA-01-103,MDIS,Measurable Disease at Baseline,N,0\nYAMAA-01,YAMAA-01-104,MDIS,Measurable Disease at Baseline,N,0\nYAMAA-01,YAMAA-01-105,MDIS,Measurable Disease at Baseline,N,0\nYAMAA-01,YAMAA-01-106,MDIS,Measurable Disease at Baseline,N,0\n"
+    },
+    "adam-adrs-response-records": {
+      "specification_path": "benchmarks/adam-adrs-response-records/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADRS\nkeys: [STUDYID, USUBJID, RSSEQ]\ninput:\n  RS: input/rs.csv\n  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}\n\nbase: RS\n\nfilter: \"RS.RSTESTCD = 'OVRLRESP' AND RS.RSEVAL = 'INVESTIGATOR'\"\n\noutput:\n  path: adrs.csv\n  columns: [STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY, AVALC,\n            AVAL, ANL01FL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: RS.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RS.USUBJID\n\n  - name: RSSEQ\n    type: int\n    label: Sequence Number\n    derivation: RS.RSSEQ\n\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: {literal: OVR}\n\n  - name: PARAM\n    type: str\n    label: Parameter\n    derivation: {literal: Overall Response by Investigator}\n\n  - name: RSDTC\n    type: str\n    label: Date/Time of Assessment\n    derivation: RS.RSDTC\n\n  # A year and month take the first of the month, a year alone 1 January.\n  # No replacement is declared, so a blank or non-date RSDTC stops the run.\n  - name: ADT\n    type: date\n    label: Analysis Date\n    derivation:\n      date_impute:\n        source: RSDTC\n        month: 1\n        day: 1\n    verifications:\n      not_missing: {}\n\n  - name: AVALC\n    type: str\n    label: Analysis Value (C)\n    derivation: RS.RSSTRESC\n    verifications:\n      allowed_values:\n        values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]\n\n  - name: AVAL\n    type: int\n    label: Analysis Value\n    derivation:\n      mapping:\n        source: AVALC\n        dict:\n          CR: 1\n          PR: 2\n          SD: 3\n          NON-CR/NON-PD: 4\n          PD: 5\n          NE: 6\n    verifications:\n      range:\n        min: 1\n        max: 6\n\n  - name: TRTSDT\n    type: date\n    label: Date of First Exposure to Treatment\n    derivation: ADSL.TRTSDT\n\n  - name: ADY\n    type: int\n    label: Analysis Relative Day\n    derivation:\n      study_day:\n        date: ADT\n        reference: TRTSDT\n\n  # One record per subject and date carries ANL01FL: the date's worst\n  # response (largest AVAL), and among ties the lowest RSSEQ. Records below\n  # the worst are not numbered.\n  - name: WORSTAVAL\n    type: int\n    label: Worst Analysis Value\n    derivation:\n      aggregate:\n        expr: \"MAX(AVAL)\"\n        group_by: [STUDYID, USUBJID, ADT]\n\n  - name: WORSTORD\n    type: int\n    label: Worst Response Order\n    derivation:\n      row_number:\n        window:\n          group_by: [STUDYID, USUBJID, ADT]\n          order_by: [RSSEQ]\n          filter: \"AVAL = WORSTAVAL\"\n\n  - name: ANL01FL\n    type: str\n    label: Analysis Record Flag 01\n    derivation:\n      flag: \"WORSTORD = 1\"\n    verifications:\n      allowed_values:\n        values: [Y]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, RSSEQ]\n  - row_count:\n      min: 16\n      max: 16\n  - assert:\n      id: analysis-flag-marks-the-worst-response-of-its-date\n      when: \"ANL01FL = 'Y'\"\n      require: \"AVAL = WORSTAVAL\"\n  - assert:\n      id: assessment-is-not-before-treatment-start\n      when: \"ADT IS NOT NULL\"\n      require: \"ADY >= 1\"\n",
+      "occurrences": [
+        {
+          "path": "columns[13].derivation.flag",
+          "payload": "WORSTORD = 1"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,RSSEQ,PARAMCD,PARAM,RSDTC,ADT,ADY,AVALC,AVAL,ANL01FL\nYAMAA-01,YAMAA-01-101,1,OVR,Overall Response by Investigator,2025-02-03,2025-02-03,29,PR,2,Y\nYAMAA-01,YAMAA-01-101,2,OVR,Overall Response by Investigator,2025-03-17,2025-03-17,71,CR,1,Y\nYAMAA-01,YAMAA-01-101,3,OVR,Overall Response by Investigator,2025-04-28,2025-04-28,113,PD,5,Y\nYAMAA-01,YAMAA-01-102,1,OVR,Overall Response by Investigator,2025-02-10,2025-02-10,29,SD,3,\nYAMAA-01,YAMAA-01-102,2,OVR,Overall Response by Investigator,2025-02-10,2025-02-10,29,PD,5,Y\nYAMAA-01,YAMAA-01-102,3,OVR,Overall Response by Investigator,2025-03-24,2025-03-24,71,NE,6,Y\nYAMAA-01,YAMAA-01-103,1,OVR,Overall Response by Investigator,2025-03,2025-03-01,41,NON-CR/NON-PD,4,Y\nYAMAA-01,YAMAA-01-104,1,OVR,Overall Response by Investigator,2025-02-17,2025-02-17,22,SD,3,Y\nYAMAA-01,YAMAA-01-104,2,OVR,Overall Response by Investigator,2025-02-17,2025-02-17,22,SD,3,\nYAMAA-01,YAMAA-01-105,3,OVR,Overall Response by Investigator,2025-05-05,2025-05-05,92,CR,1,Y\nYAMAA-01,YAMAA-01-106,1,OVR,Overall Response by Investigator,2025,2025-01-01,1,PR,2,Y\nYAMAA-01,YAMAA-01-107,1,OVR,Overall Response by Investigator,2025-01-06,2025-01-06,1,CR,1,Y\nYAMAA-01,YAMAA-01-108,1,OVR,Overall Response by Investigator,2025-02-10,2025-02-10,29,SD,3,\nYAMAA-01,YAMAA-01-108,2,OVR,Overall Response by Investigator,2025-02-10,2025-02-10,29,PD,5,\nYAMAA-01,YAMAA-01-108,3,OVR,Overall Response by Investigator,2025-02-10,2025-02-10,29,NE,6,Y\nYAMAA-01,YAMAA-01-108,4,OVR,Overall Response by Investigator,2025-02-10,2025-02-10,29,NE,6,\n"
+    },
+    "adam-adsl-completion-flag": {
+      "specification_path": "benchmarks/adam-adsl-completion-flag/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput:\n  ADSL_RAW: {path: input/adsl_raw.csv, types: {TRTSDT: date}}\n  DS: input/ds.csv\nbase: ADSL_RAW\n\noutput:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, TRTSDT, COMPLFL]\n\n# The subject's end-of-study COMPLETED disposition record, if any: a\n# DISPOSITION EVENT in the FOLLOW-UP epoch. A treatment-epoch completion\n# does not count. A subject with two such records stops the run: nothing\n# here chooses between them.\nintermediates:\n  - id: COMPLT\n    dataset: DS\n    filter: \"DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'FOLLOW-UP'\n      AND DS.DSDECOD = 'COMPLETED'\"\n    no_match: null\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: ADSL_RAW.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: ADSL_RAW.USUBJID\n\n  - name: TRTSDT\n    type: date\n    label: Date of First Exposure to Treatment\n    derivation: ADSL_RAW.TRTSDT\n\n  - name: COMPREC\n    type: str\n    label: Completion Disposition Term\n    derivation: COMPLT.DSDECOD\n\n  # COMPREC is the matched record's outcome, always COMPLETED, so it is empty\n  # only when the subject has no completion record; such a subject is N.\n  - name: COMPLFL\n    type: str\n    label: Completers Population Flag\n    derivation:\n      flag:\n        condition: \"COMPREC IS NOT NULL\"\n        false_value: \"N\"\n        missing: \"N\"\n    verifications:\n      allowed_values:\n        values: [Y, N]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID]\n  - row_count:\n      min: 8\n      max: 8\n  - assert:\n      id: completer-received-treatment\n      when: \"COMPLFL = 'Y'\"\n      require: \"TRTSDT IS NOT NULL\"\n",
+      "occurrences": [
+        {
+          "path": "columns[4].derivation.flag",
+          "payload": {
+            "condition": "COMPREC IS NOT NULL",
+            "false_value": "N",
+            "missing": "N"
+          }
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [
+        {
+          "spec_path": "columns.COMPREC.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 5
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,TRTSDT,COMPLFL\nYAMAA-01,YAMAA-01-101,2024-01-15,N\nYAMAA-01,YAMAA-01-102,2024-01-20,Y\nYAMAA-01,YAMAA-01-103,2024-02-02,N\nYAMAA-01,YAMAA-01-104,2024-02-05,N\nYAMAA-01,YAMAA-01-105,,N\nYAMAA-01,YAMAA-01-106,2024-02-12,Y\nYAMAA-01,YAMAA-01-107,2024-02-18,N\nYAMAA-01,YAMAA-01-108,2024-03-01,Y\n"
+    },
+    "adam-adsl-flag-chain": {
+      "specification_path": "benchmarks/adam-adsl-flag-chain/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput:\n  DM: {path: input/dm.csv, types: {RANDDT: date}}\n  EX: input/ex.csv\nbase: DM\n\noutput:\n  path: adsl.csv\n  columns: [POPFL, SAFFL, ITTFL, TRTSDT, RANDDT, AGEGR1, AGERNK, STUDYID,\n            USUBJID, AGE]\n\ncolumns:\n  # The earliest exposure start date. MIN skips a missing date, so a subject\n  # with no dated exposure record has no TRTSDT.\n  - name: TRTSDT\n    type: date\n    label: Date of First Exposure to Treatment\n    derivation:\n      aggregate:\n        expr: \"MIN(EX.EXSTDTC)\"\n\n  - name: SAFFL\n    type: str\n    label: Safety Population Flag\n    derivation:\n      flag:\n        condition: \"TRTSDT IS NOT NULL\"\n        false_value: \"N\"\n        missing: \"N\"\n\n  - name: RANDDT\n    type: date\n    label: Randomization Date\n    derivation: DM.RANDDT\n\n  # A working flag, not in the output: ITTFL reads it, so the chain runs\n  # RANDDT -> RANDFL -> ITTFL -> POPFL.\n  - name: RANDFL\n    type: str\n    label: Randomized Population Flag\n    derivation:\n      flag:\n        condition: \"RANDDT IS NOT NULL\"\n        false_value: \"N\"\n        missing: \"N\"\n\n  - name: ITTFL\n    type: str\n    label: Intent-to-Treat Population Flag\n    derivation:\n      flag:\n        condition: \"RANDFL = 'Y'\"\n        false_value: \"N\"\n        missing: \"N\"\n\n  - name: POPFL\n    type: str\n    label: Analysis Population Flag\n    derivation:\n      flag:\n        condition: \"SAFFL = 'Y' AND ITTFL = 'Y'\"\n        false_value: \"N\"\n        missing: \"N\"\n\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: DM.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n\n  - name: AGE\n    type: int\n    label: Age\n    derivation: DM.AGE\n\n  # 65 itself falls in >=65. With no fallback for a missing AGE, a subject\n  # with no age stops the run.\n  - name: AGEGR1\n    type: str\n    label: Pooled Age Group 1\n    derivation:\n      cut:\n        source: AGE\n        breaks: [65]\n        labels: [\"<65\", \">=65\"]\n        right: false\n\n  # 1 for the youngest subject in the study; USUBJID breaks ties.\n  - name: AGERNK\n    type: int\n    label: Pooled Age Group 1 Rank\n    derivation:\n      row_number:\n        window:\n          group_by: [STUDYID]\n          order_by: [AGE, USUBJID]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID]\n  - row_count:\n      min: 7\n      max: 7\n  - assert:\n      id: analysis-population-requires-both-flags\n      when: \"POPFL = 'Y'\"\n      require: \"SAFFL = 'Y' AND ITTFL = 'Y'\"\n",
+      "occurrences": [
+        {
+          "path": "columns[1].derivation.flag",
+          "payload": {
+            "condition": "TRTSDT IS NOT NULL",
+            "false_value": "N",
+            "missing": "N"
+          }
+        },
+        {
+          "path": "columns[3].derivation.flag",
+          "payload": {
+            "condition": "RANDDT IS NOT NULL",
+            "false_value": "N",
+            "missing": "N"
+          }
+        },
+        {
+          "path": "columns[4].derivation.flag",
+          "payload": {
+            "condition": "RANDFL = 'Y'",
+            "false_value": "N",
+            "missing": "N"
+          }
+        },
+        {
+          "path": "columns[5].derivation.flag",
+          "payload": {
+            "condition": "SAFFL = 'Y' AND ITTFL = 'Y'",
+            "false_value": "N",
+            "missing": "N"
+          }
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "POPFL,SAFFL,ITTFL,TRTSDT,RANDDT,AGEGR1,AGERNK,STUDYID,USUBJID,AGE\nY,Y,Y,2025-01-08,2025-01-05,<65,2,YAMAA-01,YAMAA-01-101,34\nY,Y,Y,2025-02-08,2025-02-05,>=65,5,YAMAA-01,YAMAA-01-102,65\nN,N,N,,,<65,4,YAMAA-01,YAMAA-01-103,52\nN,N,Y,,2025-02-20,>=65,6,YAMAA-01,YAMAA-01-104,65\nN,Y,N,2025-02-28,,<65,3,YAMAA-01,YAMAA-01-105,41\nY,Y,Y,2025-03-05,2025-03-01,>=65,7,YAMAA-01,YAMAA-01-106,88\nN,N,Y,,2025-04-01,<65,1,YAMAA-01,YAMAA-01-107,29\n"
+    },
+    "adam-adsl-new-therapy": {
+      "specification_path": "benchmarks/adam-adsl-new-therapy/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput:\n  ADSL_RAW: {path: input/adsl.csv, types: {TRTSDT: date}}\n  CM:\n    path: input/cm.csv\n    types: {CMSTDTC: str, CMSTDTC_IMP: date}\n  PR:\n    path: input/pr.csv\n    types: {PRSTDTC: date}\nbase: ADSL_RAW\n\noutput:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, TRTSDT, NACTDT, NACTDY, NACTFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: ADSL_RAW.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: ADSL_RAW.USUBJID\n\n  - name: TRTSDT\n    type: date\n    label: Date of First Exposure to Treatment\n    derivation: ADSL_RAW.TRTSDT\n    verifications:\n      not_missing: {}\n\n  # The first start of an on-treatment medication, and of an on-treatment\n  # cancer-related procedure, on or after the treatment start date. A record\n  # dated before TRTSDT does not qualify; a record with no start date is\n  # ineligible under the range narrowing. MIN skips a missing date, so either\n  # is empty when the subject has no dated qualifying record. The medication\n  # side reads the completed start date: a year-month CMSTDTC is completed\n  # to the 15th of that month in CMSTDTC_IMP, and full dates pass through\n  # unchanged, so the example shows the stated completion rule on a partial\n  # date (subject 107).\n  - name: CMNACTDT\n    type: date\n    label: First New Anti-Cancer Medication Date\n    derivation:\n      aggregate:\n        filter: \"CM.CMCAT = 'ON TREATMENT'\"\n        between:\n          value: TRTSDT\n          upper: CMSTDTC_IMP\n        expr: \"MIN(CM.CMSTDTC_IMP)\"\n\n  - name: PRNACTDT\n    type: date\n    label: First New Anti-Cancer Procedure Date\n    derivation:\n      aggregate:\n        filter: \"PR.PRCAT = 'CANCER RELATED' AND PR.PRSCAT = 'ON TREATMENT'\"\n        between:\n          value: TRTSDT\n          upper: PRSTDTC\n        expr: \"MIN(PR.PRSTDTC)\"\n\n  # The earlier of the two, skipping an empty one; empty when both are.\n  - name: NACTDT\n    type: date\n    label: New Anti-Cancer Therapy Start Date\n    derivation:\n      least:\n        sources: [CMNACTDT, PRNACTDT]\n\n  # Day 1 is TRTSDT itself.\n  - name: NACTDY\n    type: int\n    label: New Anti-Cancer Therapy Start Relative Day\n    derivation:\n      study_day:\n        date: NACTDT\n        reference: TRTSDT\n\n  - name: NACTFL\n    type: str\n    label: New Anti-Cancer Therapy Flag\n    derivation:\n      flag: \"NACTDT IS NOT NULL\"\n    verifications:\n      allowed_values:\n        values: [Y]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID]\n  - row_count:\n      min: 7\n      max: 7\n  - all_or_none:\n      id: therapy-date-day-and-flag-agree\n      columns: [NACTDT, NACTDY, NACTFL]\n",
+      "occurrences": [
+        {
+          "path": "columns[7].derivation.flag",
+          "payload": "NACTDT IS NOT NULL"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,TRTSDT,NACTDT,NACTDY,NACTFL\nYAMAA-01,YAMAA-01-101,2025-01-06,2025-02-20,46,Y\nYAMAA-01,YAMAA-01-102,2025-01-13,2025-05-05,113,Y\nYAMAA-01,YAMAA-01-103,2025-01-20,2025-04-02,73,Y\nYAMAA-01,YAMAA-01-104,2025-02-03,,,\nYAMAA-01,YAMAA-01-105,2025-02-10,2025-04-15,65,Y\nYAMAA-01,YAMAA-01-106,2025-03-03,2025-03-03,1,Y\nYAMAA-01,YAMAA-01-107,2025-03-10,2025-04-15,37,Y\n"
+    },
+    "adam-adsl-treatment": {
+      "specification_path": "benchmarks/adam-adsl-treatment/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput:\n  DM: input/dm.csv\n  EX: {path: input/ex.csv, types: {EXSEQ: int}}\nbase: DM\n\noutput:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, TRT01A, TRTSDT, TRTSDTM, TRTSTMF,\n    TRTEDT, TRTEDTM, TRTETMF, TRTDURD, SAFFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: DM.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n\n  # The treatment of the earliest study-drug exposure with a start, ties to\n  # the lower EXSEQ. The actual arm fills in when there is none, then\n  # NOT TREATED; TRT01A is the result in upper case.\n  - name: TRT01RAW\n    type: str\n    label: First Actual Treatment from Exposure\n    derivation:\n      source:\n        variable: EX.EXTRT\n        filter: \"EX.EXTRT IN ('VITAMIN D3', 'PLACEBO')\n          AND EX.EXSTDTC IS NOT NULL\"\n        order_by: [EX.EXSTDTC, EX.EXSEQ]\n        keep: first\n\n  - name: TRT01SRC\n    type: str\n    label: Selected Actual Treatment for Period 01\n    derivation:\n      first_available:\n        sources: [TRT01RAW, DM.ACTARM]\n        missing: NOT TREATED\n\n  - name: TRT01A\n    type: str\n    label: Actual Treatment for Period 01\n    derivation:\n      str_case:\n        source: TRT01SRC\n        to: upper\n    verifications:\n      allowed_values:\n        values: [VITAMIN D3, PLACEBO, NOT TREATED]\n\n  # Earliest start and latest end as collected text. A date alone gets\n  # 00:00:00 (start) or 23:59:59 (end), and precision D marks that; a date\n  # missing its day gives no date/time at all.\n  - name: TRTSDTC\n    type: str\n    label: Collected Date/Time of First Exposure to Treatment\n    derivation:\n      aggregate:\n        filter: \"EX.EXTRT IN ('VITAMIN D3', 'PLACEBO')\n          AND EX.EXSTDTC IS NOT NULL\"\n        expr: \"MIN(EX.EXSTDTC)\"\n\n  - name: TRTEDTC\n    type: str\n    label: Collected Date/Time of Last Exposure to Treatment\n    derivation:\n      aggregate:\n        filter: \"EX.EXTRT IN ('VITAMIN D3', 'PLACEBO')\n          AND EX.EXENDTC IS NOT NULL\"\n        expr: \"MAX(EX.EXENDTC)\"\n\n  - name: TRTSDTM\n    type: datetime\n    label: Datetime of First Exposure to Treatment\n    derivation:\n      datetime_impute:\n        source: TRTSDTC\n        time: first\n        missing: null\n        invalid: null\n\n  - name: TRTSTPR\n    type: str\n    label: First Exposure Date/Time Collected Precision\n    derivation:\n      datetime_precision:\n        source: TRTSDTM\n        missing: null\n\n  - name: TRTSTMF\n    type: str\n    label: Time of First Exposure Imputation Flag\n    derivation:\n      case:\n        - when: \"TRTSTPR = 'D'\"\n          then: {literal: H}\n    verifications:\n      allowed_values:\n        values: [H]\n\n  - name: TRTEDTM\n    type: datetime\n    label: Datetime of Last Exposure to Treatment\n    derivation:\n      datetime_impute:\n        source: TRTEDTC\n        time: last\n        missing: null\n        invalid: null\n\n  - name: TRTETPR\n    type: str\n    label: Last Exposure Date/Time Collected Precision\n    derivation:\n      datetime_precision:\n        source: TRTEDTM\n        missing: null\n\n  - name: TRTETMF\n    type: str\n    label: Time of Last Exposure Imputation Flag\n    derivation:\n      case:\n        - when: \"TRTETPR = 'D'\"\n          then: {literal: H}\n    verifications:\n      allowed_values:\n        values: [H]\n\n  - name: TRTSDT\n    type: date\n    label: Date of First Exposure to Treatment\n    derivation:\n      to_date:\n        source: TRTSDTM\n\n  - name: TRTEDT\n    type: date\n    label: Date of Last Exposure to Treatment\n    derivation:\n      to_date:\n        source: TRTEDTM\n\n  - name: TRTDURD\n    type: int\n    label: Total Treatment Duration (Days)\n    derivation:\n      date_diff:\n        start: TRTSDT\n        end: TRTEDT\n        unit: day\n        bounds: inclusive\n    verifications:\n      range:\n        min: 1\n\n  - name: SAFFL\n    type: str\n    label: Safety Population Flag\n    derivation:\n      flag:\n        condition: \"TRTSDT IS NOT NULL\"\n        false_value: \"N\"\n        missing: \"N\"\n    verifications:\n      - not_missing: {}\n      - allowed_values:\n          values: [Y, N]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID]\n  - row_count:\n      min: 8\n      max: 8\n  - all_or_none:\n      id: treatment-period-completeness\n      columns: [TRTSDT, TRTSDTM, TRTEDT, TRTEDTM, TRTDURD]\n  - assert:\n      id: start-time-imputation-requires-a-start-datetime\n      when: \"TRTSTMF = 'H'\"\n      require: \"TRTSDTM IS NOT NULL\"\n  - assert:\n      id: end-time-imputation-requires-an-end-datetime\n      when: \"TRTETMF = 'H'\"\n      require: \"TRTEDTM IS NOT NULL\"\n  - assert:\n      id: placebo-subject-is-in-safety-population\n      when: \"TRT01A = 'PLACEBO'\"\n      require: \"SAFFL = 'Y'\"\n",
+      "occurrences": [
+        {
+          "path": "columns[16].derivation.flag",
+          "payload": {
+            "condition": "TRTSDT IS NOT NULL",
+            "false_value": "N",
+            "missing": "N"
+          }
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [
+        {
+          "spec_path": "columns.TRTSDTM.derivation.datetime_impute.missing",
+          "handler": "missing",
+          "count": 2
+        },
+        {
+          "spec_path": "columns.TRTSDTM.derivation.datetime_impute.invalid",
+          "handler": "invalid",
+          "count": 0
+        },
+        {
+          "spec_path": "columns.TRTSTPR.derivation.datetime_precision.missing",
+          "handler": "missing",
+          "count": 2
+        },
+        {
+          "spec_path": "columns.TRTEDTM.derivation.datetime_impute.missing",
+          "handler": "missing",
+          "count": 2
+        },
+        {
+          "spec_path": "columns.TRTEDTM.derivation.datetime_impute.invalid",
+          "handler": "invalid",
+          "count": 0
+        },
+        {
+          "spec_path": "columns.TRTETPR.derivation.datetime_precision.missing",
+          "handler": "missing",
+          "count": 2
+        },
+        {
+          "spec_path": "columns.TRT01RAW.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": 4
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,TRT01A,TRTSDT,TRTSDTM,TRTSTMF,TRTEDT,TRTEDTM,TRTETMF,TRTDURD,SAFFL\nYAMAA-01,YAMAA-01-101,VITAMIN D3,2025-01-08,2025-01-08T00:00:00.000000,H,2025-01-28,2025-01-28T23:59:59.000000,H,21,Y\nYAMAA-01,YAMAA-01-102,PLACEBO,2025-02-08,2025-02-08T09:00:00.000000,,2025-02-28,2025-02-28T17:00:00.000000,,21,Y\nYAMAA-01,YAMAA-01-103,VITAMIN D3,2025-03-05,2025-03-05T00:00:00.000000,H,2025-03-05,2025-03-05T23:59:59.000000,H,1,Y\nYAMAA-01,YAMAA-01-104,VITAMIN D3,2025-04-03,2025-04-03T10:00:00.000000,,2025-04-16,2025-04-16T12:00:00.000000,,14,Y\nYAMAA-01,YAMAA-01-105,VITAMIN D3,,,,,,,,N\nYAMAA-01,YAMAA-01-106,NOT TREATED,,,,,,,,N\nYAMAA-01,YAMAA-01-107,VITAMIN D3,2025-06-08,2025-06-08T09:00:00.000000,,2025-06-20,2025-06-20T23:59:59.000000,H,13,Y\nYAMAA-01,YAMAA-01-108,PLACEBO,2025-07-01,2025-07-01T10:00:00.000000,,2025-07-07,2025-07-07T10:00:00.000000,,7,Y\n"
+    },
+    "adam-adtr-sum": {
+      "specification_path": "benchmarks/adam-adtr-sum/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADTR\nkeys: [STUDYID, USUBJID, AVISIT]\ninput:\n  TRVISIT: {path: input/trvisit.csv, types: {ADT: date}}\n  TR: {path: input/tr.csv, types: {TRSTRESN: float}}\n  TU: input/tu.csv\nbase: TRVISIT\n\noutput:\n  path: adtr.csv\n  columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, PARAMCD, PARAM, AVAL,\n            NMEAS, NTARGET, ANL01FL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: TRVISIT.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: TRVISIT.USUBJID\n\n  - name: AVISIT\n    type: str\n    label: Analysis Visit\n    derivation: TRVISIT.AVISIT\n\n  - name: AVISITN\n    type: int\n    label: Analysis Visit (N)\n    derivation: TRVISIT.AVISITN\n\n  - name: ADT\n    type: date\n    label: Analysis Date\n    derivation: TRVISIT.ADT\n\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: {literal: SDIAM}\n\n  - name: PARAM\n    type: str\n    label: Parameter\n    derivation: {literal: Sum of Target Lesion Diameters (mm)}\n\n  # The subject's target-lesion longest diameters at this visit (TR matches\n  # on study, subject and visit). A missing result is skipped; a visit with\n  # no such record leaves both AVAL and NMEAS empty, not 0, while records\n  # with no result at all give NMEAS 0 and still leave AVAL empty.\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation:\n      aggregate:\n        filter: \"TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'\"\n        expr: \"SUM(TR.TRSTRESN)\"\n\n  - name: NMEAS\n    type: int\n    label: Number of Measured Target Lesions\n    derivation:\n      aggregate:\n        filter: \"TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'\"\n        expr: \"COUNT(TR.TRSTRESN)\"\n\n  # TU has no visit, so it matches on study and subject alone: the same\n  # count at every visit of the subject.\n  - name: NTARGET\n    type: int\n    label: Number of Target Lesions\n    derivation:\n      aggregate:\n        filter: \"TU.TUGRPID = 'TARGET'\"\n        expr: \"COUNT(TU.TULNKID)\"\n\n  - name: ANL01FL\n    type: str\n    label: Analysis Record Flag 01\n    derivation:\n      flag: \"NMEAS = NTARGET\"\n    verifications:\n      allowed_values:\n        values: [Y]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, AVISIT]\n  - row_count:\n      min: 9\n      max: 9\n  - assert:\n      id: measured-lesions-do-not-exceed-the-target-lesions\n      require: \"NMEAS IS NULL OR NMEAS <= NTARGET\"\n  - assert:\n      id: complete-assessment-has-a-sum\n      when: \"ANL01FL = 'Y'\"\n      require: \"AVAL IS NOT NULL\"\n",
+      "occurrences": [
+        {
+          "path": "columns[10].derivation.flag",
+          "payload": "NMEAS = NTARGET"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,AVISIT,AVISITN,ADT,PARAMCD,PARAM,AVAL,NMEAS,NTARGET,ANL01FL\nYAMAA-01,YAMAA-01-101,BASELINE,0,2025-01-05,SDIAM,Sum of Target Lesion Diameters (mm),80.0,3,3,Y\nYAMAA-01,YAMAA-01-101,WEEK 8,8,2025-03-02,SDIAM,Sum of Target Lesion Diameters (mm),50.0,2,3,\nYAMAA-01,YAMAA-01-101,WEEK 16,16,2025-04-27,SDIAM,Sum of Target Lesion Diameters (mm),,,3,\nYAMAA-01,YAMAA-01-102,BASELINE,0,2025-01-12,SDIAM,Sum of Target Lesion Diameters (mm),40.0,2,2,Y\nYAMAA-01,YAMAA-01-102,WEEK 8,8,2025-03-09,SDIAM,Sum of Target Lesion Diameters (mm),22.0,2,2,Y\nYAMAA-01,YAMAA-01-103,BASELINE,0,2025-01-19,SDIAM,Sum of Target Lesion Diameters (mm),50.0,1,1,Y\nYAMAA-01,YAMAA-01-103,WEEK 8,8,,SDIAM,Sum of Target Lesion Diameters (mm),45.0,1,1,Y\nYAMAA-01,YAMAA-01-104,BASELINE,0,2025-02-03,SDIAM,Sum of Target Lesion Diameters (mm),,0,2,\nYAMAA-01,YAMAA-01-104,WEEK 8,8,2025-03-30,SDIAM,Sum of Target Lesion Diameters (mm),30.0,2,2,Y\n"
+    },
+    "adam-advs-window-table": {
+      "specification_path": "benchmarks/adam-advs-window-table/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD, VSSEQ]\ninput:\n  ADVS_RAW: {path: input/advs_raw.csv, types: {ADT: date}}\n  AWINDOW:\n    path: input/awindow.csv\n    types: {AVISITN: int, AWLO: int, AWHI: int, AWTARGET: int}\nbase: ADVS_RAW\n\noutput:\n  path: advs.csv\n  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, ADT, ADY, AVAL, AVISIT,\n            AVISITN, AWTARGET, AWTDIFF, ANL01FL]\n\n# The window whose first-to-last study day range, both ends inclusive,\n# holds the record's study day, matched on STUDYID (the one output key the\n# window table carries). A record with no study day, or a window with no\n# last day, gives no match. Records on days 21 and 22 pin the shared edge:\n# the upper bound closes Week 2, the lower bound opens Week 4.\nintermediates:\n  - id: AWIN\n    dataset: AWINDOW\n    between:\n      value: ADY\n      lower: AWLO\n      upper: AWHI\n    no_match: null\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: ADVS_RAW.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: ADVS_RAW.USUBJID\n\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: ADVS_RAW.PARAMCD\n\n  - name: VSSEQ\n    type: int\n    label: Sequence Number\n    derivation: ADVS_RAW.VSSEQ\n\n  - name: VISIT\n    type: str\n    label: Visit Name\n    derivation: ADVS_RAW.VISIT\n\n  - name: ADT\n    type: date\n    label: Analysis Date\n    derivation: ADVS_RAW.ADT\n\n  - name: ADY\n    type: int\n    label: Analysis Relative Day\n    derivation: ADVS_RAW.ADY\n\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation: ADVS_RAW.AVAL\n\n  - name: AVISIT\n    type: str\n    label: Analysis Visit\n    derivation: AWIN.AVISIT\n\n  - name: AVISITN\n    type: int\n    label: Analysis Visit (N)\n    derivation: AWIN.AVISITN\n\n  - name: AWTARGET\n    type: int\n    label: Analysis Window Target\n    derivation: AWIN.AWTARGET\n\n  - name: AWTDIFF\n    type: int\n    label: Analysis Window Difference\n    derivation:\n      compute:\n        expr: \"ADY - AWTARGET\"\n\n  - name: AWTABS\n    type: int\n    label: Absolute Analysis Window Distance\n    derivation:\n      compute:\n        expr: \"ABS(AWTDIFF)\"\n\n  # Within each subject, parameter, and window: closest to the target day\n  # first, then the lower sequence number. ANL01FL marks rank 1; a record\n  # with no window is left out, so it is never flagged.\n  - name: AWRANK\n    type: int\n    label: Analysis Window Rank\n    derivation:\n      row_number:\n        window:\n          group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]\n          order_by: [AWTABS, VSSEQ]\n          filter: \"AVISIT IS NOT NULL\"\n\n  - name: ANL01FL\n    type: str\n    label: Analysis Record Flag 01\n    derivation:\n      flag: \"AWRANK = 1\"\n    verifications:\n      allowed_values:\n        values: [Y]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]\n  - row_count:\n      min: 16\n      max: 16\n  - all_or_none:\n      id: an-assigned-window-carries-its-order-and-target\n      columns: [AVISIT, AVISITN, AWTARGET]\n  - assert:\n      id: analysis-record-has-an-analysis-window\n      when: \"ANL01FL = 'Y'\"\n      require: \"AVISIT IS NOT NULL AND ADY IS NOT NULL\"\n",
+      "occurrences": [
+        {
+          "path": "columns[14].derivation.flag",
+          "payload": "AWRANK = 1"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [
+        {
+          "spec_path": "columns.AVISIT.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 3
+        },
+        {
+          "spec_path": "columns.AVISITN.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 3
+        },
+        {
+          "spec_path": "columns.AWTARGET.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 3
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,PARAMCD,VSSEQ,VISIT,ADT,ADY,AVAL,AVISIT,AVISITN,AWTARGET,AWTDIFF,ANL01FL\nYAMAA-01,YAMAA-01-101,SYSBP,1,SCREENING,2025-01-02,-6,128.0,SCREENING,-1,-7,1,Y\nYAMAA-01,YAMAA-01-101,SYSBP,2,BASELINE,2025-01-08,1,132.0,BASELINE,0,1,0,Y\nYAMAA-01,YAMAA-01-101,SYSBP,3,UNSCHEDULED,2025-01-15,8,145.0,WEEK 2,2,15,-7,\nYAMAA-01,YAMAA-01-101,SYSBP,4,WEEK 2,2025-01-22,15,138.0,WEEK 2,2,15,0,Y\nYAMAA-01,YAMAA-01-101,SYSBP,5,WEEK 4,2025-02-05,29,130.0,WEEK 4,4,29,0,Y\nYAMAA-01,YAMAA-01-101,SYSBP,6,WEEK 8,2025-03-08,60,126.0,POST-TREATMENT,99,57,3,Y\nYAMAA-01,YAMAA-01-101,SYSBP,7,UNSCHEDULED,2025-01-28,21,136.0,WEEK 2,2,15,6,\nYAMAA-01,YAMAA-01-101,SYSBP,8,UNSCHEDULED,2025-01-29,22,129.0,WEEK 4,4,29,-7,\nYAMAA-01,YAMAA-01-102,SYSBP,1,BASELINE,2025-02-08,1,118.0,BASELINE,0,1,0,Y\nYAMAA-01,YAMAA-01-102,SYSBP,2,WEEK 2,2025-02-21,14,122.0,WEEK 2,2,15,-1,Y\nYAMAA-01,YAMAA-01-102,SYSBP,3,WEEK 4,,,120.0,,,,,\nYAMAA-01,YAMAA-01-102,SYSBP,4,UNSCHEDULED,2025-02-23,16,121.0,WEEK 2,2,15,1,\nYAMAA-01,YAMAA-01-102,SYSBP,5,UNSCHEDULED,2027-11-04,1000,119.0,,,,,\nYAMAA-01,YAMAA-01-102,SYSBP,6,UNSCHEDULED,2028-02-12,1100,117.0,,,,,\nYAMAA-02,YAMAA-01-101,SYSBP,1,BASELINE,2025-06-02,1,124.0,BASELINE,0,1,0,Y\nYAMAA-02,YAMAA-01-101,SYSBP,2,WEEK 2,2025-06-15,14,120.0,WEEK 2,2,14,0,Y\n"
+    },
+    "adam-advs-windows": {
+      "specification_path": "benchmarks/adam-advs-windows/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD, VSSEQ]\ninput:\n  # SDTM VS: the vital-signs domain as the ADaM programmer receives it.\n  # VSDTC is date-only here; VSDY arrives derived upstream, so this\n  # benchmark pins windowing, not study-day derivation.\n  VS: {path: input/vs.csv, types: {VSDTC: date}}\n  # SDTM SV: every planned visit of every subject, including the visits\n  # that did not take place, plus the unscheduled visits.\n  SV: {path: input/sv.csv, types: {VISITNUM: float}}\n\noutput:\n  path: advs.csv\n  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, VISITNUM, ADT, ADY, AVAL,\n            AVISIT, AVISITN, ANL01FL]\n\nintermediates:\n  # The collected record with the highest sequence number whose study day\n  # falls in the planned window the current row names. A record with no\n  # study day belongs to no window, so it never counts as coverage.\n  - id: WINDOW_COVER\n    dataset: SELF\n    key: [STUDYID, USUBJID, PARAMCD, AVISIT]\n    filter: \"SELF.AVISIT IN ('SCREENING', 'BASELINE', 'WEEK 2', 'WEEK 4')\"\n    order_by: [SELF.VSSEQ]\n    keep: last\n    no_match: null\n\n  # The collected record with the highest sequence number for the study,\n  # subject, and parameter; expected records continue the numbering past\n  # it, and a subject with no collected record numbers them from 1.\n  - id: PRIOR_MAX\n    dataset: SELF\n    key: [STUDYID, USUBJID, PARAMCD]\n    order_by: [SELF.VSSEQ]\n    keep: last\n    no_match: 0\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: VS.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: VS.USUBJID\n\n  # ADaM parameter codes for vital signs mirror the SDTM test codes.\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: VS.VSTESTCD\n\n  # The position of an expected record among its study, subject, and\n  # parameter's expected records, in planned visit order; missing on\n  # collected records. Internal: it numbers the expected records and\n  # marks them for the checks below, and never reaches the artifact.\n  - name: EXPECTED_ORDER\n    type: int\n    label: Expected Record Order\n\n  - name: VSSEQ\n    type: int\n    label: Sequence Number\n    derivation: VS.VSSEQ\n\n  - name: VISIT\n    type: str\n    label: Visit Name\n    derivation: VS.VISIT\n\n  - name: VISITNUM\n    type: float\n    label: Visit Number\n    derivation: VS.VISITNUM\n\n  - name: ADT\n    type: date\n    label: Analysis Date\n    derivation: VS.VSDTC\n\n  - name: ADY\n    type: int\n    label: Analysis Relative Day\n    derivation: VS.VSDY\n\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation: VS.VSSTRESN\n\n  # Windows on study day, each including its lower break and excluding its\n  # upper one: before 0 SCREENING, 0-1 BASELINE (there is no day 0), 2-21\n  # WEEK 2, 22-42 WEEK 4, 43 onward POST-TREATMENT. No study day, no window.\n  - name: AVISIT\n    type: str\n    label: Analysis Visit\n    derivation:\n      cut:\n        source: ADY\n        breaks: [0, 2, 22, 43]\n        labels: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]\n        right: false\n        missing: null\n    verifications:\n      allowed_values:\n        values: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]\n\n  - name: AVISITN\n    type: int\n    label: Analysis Visit (N)\n    derivation:\n      mapping:\n        source: AVISIT\n        dict:\n          SCREENING: -1\n          BASELINE: 0\n          WEEK 2: 2\n          WEEK 4: 4\n          POST-TREATMENT: 99\n        missing: null\n\n  # Within each subject, parameter, and window: earliest study day first,\n  # then the lower sequence number. ANL01FL marks rank 1; a record with no\n  # window is left out, so it is never flagged.\n  - name: AWRANK\n    type: int\n    label: Analysis Window Rank\n    derivation:\n      row_number:\n        window:\n          group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]\n          order_by: [ADY, VSSEQ]\n          filter: \"AVISIT IS NOT NULL\"\n\n  # Expected records have no study day, so the flag additionally requires\n  # one: an expected record never takes ANL01FL, even when it is the only\n  # record in its window.\n  - name: ANL01FL\n    type: str\n    label: Analysis Record Flag 01\n    derivation:\n      flag: \"AWRANK = 1 AND ADY IS NOT NULL\"\n\nrows:\n  # Every collected record, unchanged.\n  - id: collected\n    dataset: VS\n    derivations:\n      EXPECTED_ORDER: {literal: null}\n\n  # One expected record for each planned visit whose window no collected\n  # record's study day covers. It carries the planned visit name and\n  # number and the window, continues the sequence numbering, and has no\n  # date, day, or value.\n  - id: expected\n    dataset: SV\n    filter: \"AVISIT IS NOT NULL AND WINDOW_COVER.VSSEQ IS NULL\"\n    derivations:\n      STUDYID: SV.STUDYID\n      USUBJID: SV.USUBJID\n      PARAMCD: {literal: SYSBP}\n      VISIT: SV.VISIT\n      VISITNUM: SV.VISITNUM\n      ADT: {literal: null}\n      ADY: {literal: null}\n      AVAL: {literal: null}\n      # The window each planned visit is expected in. Unscheduled visits\n      # and planned visits after week 4 get no expected record.\n      AVISIT:\n        mapping:\n          source: SV.VISIT\n          dict:\n            SCREENING: SCREENING\n            BASELINE: BASELINE\n            WEEK 2: WEEK 2\n            WEEK 4: WEEK 4\n          missing: null\n          unmapped: null\n      EXPECTED_ORDER:\n        row_number:\n          window:\n            group_by: [STUDYID, USUBJID, PARAMCD]\n            order_by: [SV.VISITNUM]\n      VSSEQ:\n        compute:\n          expr: \"PRIOR_MAX.VSSEQ + EXPECTED_ORDER\"\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]\n  # Pins the 19-row fixture: the 14 original collected rows, the new\n  # subject's collected baseline record, and the four expected records\n  # (one uncovered screening window and one subject missing screening,\n  # week 2, and week 4).\n  - row_count:\n      min: 19\n      max: 19\n  - all_or_none:\n      id: analysis-visit-completeness\n      columns: [AVISIT, AVISITN]\n  - assert:\n      id: analysis-record-has-analysis-visit\n      when: \"ANL01FL = 'Y'\"\n      require: \"AVISIT IS NOT NULL AND ADY IS NOT NULL\"\n  - assert:\n      id: baseline-window-is-study-day-one\n      when: \"AVISIT = 'BASELINE'\"\n      require: \"ADY = 1 OR EXPECTED_ORDER IS NOT NULL\"\n  # An expected record carries a planned window (never the open-ended\n  # post-treatment one), has no date, day, or value, and never takes the\n  # analysis flag.\n  - assert:\n      id: expected-record-has-planned-window\n      when: \"EXPECTED_ORDER IS NOT NULL\"\n      require: \"AVISIT IN ('SCREENING', 'BASELINE', 'WEEK 2', 'WEEK 4')\"\n  - assert:\n      id: expected-record-is-empty\n      when: \"EXPECTED_ORDER IS NOT NULL\"\n      require: \"ADT IS NULL AND ADY IS NULL AND AVAL IS NULL\"\n  - assert:\n      id: expected-record-never-flagged\n      when: \"EXPECTED_ORDER IS NOT NULL\"\n      require: \"ANL01FL IS NULL\"\n  # Every collected measurement has a value.\n  - assert:\n      id: collected-record-has-value\n      when: \"EXPECTED_ORDER IS NULL\"\n      require: \"AVAL IS NOT NULL\"\n",
+      "occurrences": [
+        {
+          "path": "columns[13].derivation.flag",
+          "payload": "AWRANK = 1 AND ADY IS NOT NULL"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [
+        {
+          "spec_path": "columns.AVISIT.derivation.cut.missing",
+          "handler": "missing",
+          "count": 1
+        },
+        {
+          "spec_path": "rows[1].derivations.AVISIT.mapping.missing",
+          "handler": "missing",
+          "count": 0
+        },
+        {
+          "spec_path": "rows[1].derivations.AVISIT.mapping.unmapped",
+          "handler": "unmapped",
+          "count": 6
+        },
+        {
+          "spec_path": "columns.AVISITN.derivation.mapping.missing",
+          "handler": "missing",
+          "count": 1
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,PARAMCD,VSSEQ,VISIT,VISITNUM,ADT,ADY,AVAL,AVISIT,AVISITN,ANL01FL\nYAMAA-01,YAMAA-01-201,SYSBP,1,SCREENING,1.0,2025-01-02,-6,128.0,SCREENING,-1,Y\nYAMAA-01,YAMAA-01-201,SYSBP,2,BASELINE,2.0,2025-01-08,1,132.0,BASELINE,0,Y\nYAMAA-01,YAMAA-01-201,SYSBP,3,UNSCHEDULED,,2025-01-15,8,145.0,WEEK 2,2,\nYAMAA-01,YAMAA-01-201,SYSBP,4,WEEK 2,3.0,2025-01-22,15,138.0,WEEK 2,2,\nYAMAA-01,YAMAA-01-201,SYSBP,5,WEEK 4,4.0,2025-02-05,29,130.0,WEEK 4,4,\nYAMAA-01,YAMAA-01-201,SYSBP,6,WEEK 8,5.0,2025-03-08,60,126.0,POST-TREATMENT,99,Y\nYAMAA-01,YAMAA-01-201,SYSBP,7,UNSCHEDULED,,2025-01-09,2,134.0,WEEK 2,2,Y\nYAMAA-01,YAMAA-01-201,SYSBP,8,WEEK 4,4.0,2025-01-29,22,131.0,WEEK 4,4,Y\nYAMAA-01,YAMAA-01-202,SYSBP,1,BASELINE,2.0,2025-02-08,1,118.0,BASELINE,0,Y\nYAMAA-01,YAMAA-01-202,SYSBP,2,WEEK 2,3.0,2025-02-21,14,122.0,WEEK 2,2,Y\nYAMAA-01,YAMAA-01-202,SYSBP,3,WEEK 4,4.0,,,120.0,,,\nYAMAA-01,YAMAA-01-202,SYSBP,4,UNSCHEDULED,,2025-02-21,14,119.0,WEEK 2,2,\nYAMAA-01,YAMAA-01-202,SYSBP,5,WEEK 4,4.0,2025-03-01,22,124.0,WEEK 4,4,Y\nYAMAA-01,YAMAA-01-202,SYSBP,6,FOLLOW-UP,6.0,2025-03-22,43,117.0,POST-TREATMENT,99,Y\nYAMAA-01,YAMAA-01-203,SYSBP,1,BASELINE,2.0,2025-03-08,1,121.0,BASELINE,0,Y\nYAMAA-01,YAMAA-01-202,SYSBP,7,SCREENING,1.0,,,,SCREENING,-1,\nYAMAA-01,YAMAA-01-203,SYSBP,2,SCREENING,1.0,,,,SCREENING,-1,\nYAMAA-01,YAMAA-01-203,SYSBP,3,WEEK 2,3.0,,,,WEEK 2,2,\nYAMAA-01,YAMAA-01-203,SYSBP,4,WEEK 4,4.0,,,,WEEK 4,4,\n"
+    },
+    "negative-flag-condition": {
+      "specification_path": "benchmarks/negative-flag-condition/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, ELDFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: DM.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n\n  # Not a valid rule: `>>` is not a comparison, so the flag rejects the\n  # spec before any data is read.\n  - name: ELDFL\n    type: str\n    label: Elderly Flag\n    derivation:\n      flag:\n        condition: \"AGE >> 65\"\n",
+      "occurrences": [
+        {
+          "path": "columns[2].derivation.flag",
+          "payload": {
+            "condition": "AGE >> 65"
+          }
+        }
+      ],
+      "result_type": "ExecutionFailure",
+      "handlers": [],
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "invalid_predicate",
+          "spec_paths": [
+            "columns.ELDFL.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0188",
+          "context": {
+            "predicate": "AGE >> 65",
+            "position": 5
+          }
+        }
+      ]
+    },
+    "negative-flag-missing-value": {
+      "specification_path": "benchmarks/negative-flag-missing-value/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, AGE, ELDFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: DM.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n\n  - name: AGE\n    type: int\n    label: Age\n    derivation: DM.AGE\n\n  # The flag names a value for a false condition but none for an unknown\n  # one.\n  - name: ELDFL\n    type: str\n    label: Elderly Flag\n    derivation:\n      flag:\n        condition: \"AGE >= 65\"\n        false_value: \"N\"\n",
+      "occurrences": [
+        {
+          "path": "columns[3].derivation.flag",
+          "payload": {
+            "condition": "AGE >= 65",
+            "false_value": "N"
+          }
+        }
+      ],
+      "result_type": "ExecutionFailure",
+      "handlers": [],
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "missing_value_required",
+          "spec_paths": [
+            "columns.ELDFL.derivation.flag.missing"
+          ],
+          "requirement": "REQ-1258",
+          "context": {
+            "false_value": "N"
+          }
+        }
+      ]
+    },
+    "negative-flag-payload": {
+      "specification_path": "benchmarks/negative-flag-payload/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, ELDFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: DM.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n\n  # The flag is written as a bare number instead of a predicate string or\n  # a mapping naming its condition.\n  - name: ELDFL\n    type: str\n    label: Elderly Flag\n    derivation:\n      flag: 65\n",
+      "occurrences": [
+        {
+          "path": "columns[2].derivation.flag",
+          "payload": 65
+        }
+      ],
+      "result_type": "SpecificationError",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "spec_paths": [
+            "columns.ELDFL.derivation.flag"
+          ],
+          "requirement": "REQ-0287",
+          "context": {
+            "expected": "predicate",
+            "actual": "int",
+            "source": "/private/tmp/yamaa-declarative-flag-readonly/benchmarks/negative-flag-payload/spec.yaml",
+            "entry": "/private/tmp/yamaa-declarative-flag-readonly/benchmarks/negative-flag-payload/spec.yaml"
+          }
+        }
+      ]
+    },
+    "negative-review-arithmetic": {
+      "specification_path": "benchmarks/negative-review-arithmetic/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE:\n    path: input/ae.csv\n    types: {AESEQ: int, AESTDTC: date, TRTEDT: date}\n\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, ASTDT, TRTEDT, REVIEWFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: AE.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: AE.USUBJID\n\n  - name: AESEQ\n    type: int\n    label: Sequence Number\n    derivation: AE.AESEQ\n\n  - name: ASTDT\n    type: date\n    label: Analysis Start Date\n    derivation: AE.AESTDTC\n\n  - name: TRTEDT\n    type: date\n    label: Date of Last Exposure to Treatment\n    derivation: AE.TRTEDT\n\n  # Intentionally invalid: a condition compares named values and cannot\n  # do date arithmetic, so TRTEDT + 30 is refused.\n  - name: REVIEWFL\n    type: str\n    label: Protocol Review Flag\n    derivation:\n      flag:\n        condition: \"ASTDT <= TRTEDT + 30\"\n        false_value: \"N\"\n        missing: \"N\"\n",
+      "occurrences": [
+        {
+          "path": "columns[5].derivation.flag",
+          "payload": {
+            "condition": "ASTDT <= TRTEDT + 30",
+            "false_value": "N",
+            "missing": "N"
+          }
+        }
+      ],
+      "result_type": "ExecutionFailure",
+      "handlers": [],
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "invalid_predicate",
+          "spec_paths": [
+            "columns.REVIEWFL.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0188",
+          "context": {
+            "predicate": "ASTDT <= TRTEDT + 30",
+            "position": 16
+          }
+        }
+      ]
+    },
+    "negative-review-date-text": {
+      "specification_path": "benchmarks/negative-review-date-text/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE:\n    path: input/ae.csv\n    types: {AESEQ: int, AESTDTC: date}\n\noutput: {path: adae.csv, columns: [STUDYID, USUBJID, AESEQ, REVIEWFL]}\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: AE.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: AE.USUBJID\n\n  - name: AESEQ\n    type: int\n    label: Sequence Number\n    derivation: AE.AESEQ\n\n  - name: ASTDT\n    type: date\n    label: Analysis Start Date\n    derivation: AE.AESTDTC\n\n  # Intentionally invalid: '2025-01-01' is text, not a date, and a date\n  # cannot be compared with text.\n  - name: REVIEWFL\n    type: str\n    label: Protocol Review Flag\n    derivation:\n      flag:\n        condition: \"ASTDT >= '2025-01-01'\"\n        false_value: \"N\"\n        missing: \"N\"\n",
+      "occurrences": [
+        {
+          "path": "columns[4].derivation.flag",
+          "payload": {
+            "condition": "ASTDT >= '2025-01-01'",
+            "false_value": "N",
+            "missing": "N"
+          }
+        }
+      ],
+      "result_type": "ExecutionFailure",
+      "handlers": [],
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "spec_paths": [
+            "columns.REVIEWFL.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0190",
+          "context": {
+            "left_type": "date",
+            "right_type": "str"
+          }
+        }
+      ]
+    },
+    "negative-review-unknown-date": {
+      "specification_path": "benchmarks/negative-review-unknown-date/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE:\n    path: input/ae.csv\n    types: {AESEQ: int, AESTDTC: date}\n\noutput: {path: adae.csv, columns: [STUDYID, USUBJID, AESEQ, REVIEWFL]}\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: AE.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: AE.USUBJID\n\n  - name: AESEQ\n    type: int\n    label: Sequence Number\n    derivation: AE.AESEQ\n\n  - name: ASTDT\n    type: date\n    label: Analysis Start Date\n    derivation: AE.AESTDTC\n\n  # Intentionally invalid: no column is named UNKNOWNDT; the date meant\n  # here is ASTDT.\n  - name: REVIEWFL\n    type: str\n    label: Protocol Review Flag\n    derivation:\n      flag:\n        condition: \"UNKNOWNDT >= DATE '2025-01-01'\"\n        false_value: \"N\"\n        missing: \"N\"\n",
+      "occurrences": [
+        {
+          "path": "columns[4].derivation.flag",
+          "payload": {
+            "condition": "UNKNOWNDT >= DATE '2025-01-01'",
+            "false_value": "N",
+            "missing": "N"
+          }
+        }
+      ],
+      "result_type": "ExecutionFailure",
+      "handlers": [],
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "spec_paths": [
+            "columns.REVIEWFL.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0189",
+          "context": {
+            "identifier": "UNKNOWNDT"
+          }
+        }
+      ]
+    },
+    "schema-shorthand": {
+      "specification_path": "benchmarks/schema-shorthand/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: {path: input/dm.csv, types: {AGE: int}}\n  WT: {path: input/wt.csv, types: {WTSEQ: int, WT: float}}\nbase: DM\n\noutput:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, SEX, AGE, AGE65FL, SUBJLBL, WTMAX, LASTWT]\n\nintermediates:\n  # The subject's latest dated weight record. The match key is written\n  # as a lone key, and the ordering value as a lone value; both expand\n  # to their full forms before the run.\n  - id: LAST_WT\n    dataset: WT\n    key: USUBJID\n    order_by: [\"WT.WTDTC\"]\n    keep: last\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: {literal: YAMAA-01}\n\n  # The completeness check is written as a lone check; it expands to a\n  # one-check list.\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n    verifications: {not_missing: {}}\n\n  - name: SEX\n    type: str\n    label: Sex\n    derivation: DM.SEX\n\n  - name: AGE\n    type: int\n    label: Age\n    derivation: DM.AGE\n\n  # A lone condition is the common yes-answer flag: Y when true, blank\n  # when false or unknown, with no explicit answers written.\n  - name: AGE65FL\n    type: str\n    label: Age 65 or Older Flag\n    derivation:\n      flag: \"AGE >= 65\"\n\n  # A lone template string fills its placeholders from the current row.\n  - name: SUBJLBL\n    type: str\n    label: Subject Label\n    derivation:\n      str_template: \"Subject {USUBJID} ({SEX})\"\n\n  # The grouping key is written as a lone key over the weight records.\n  - name: WTMAX\n    type: float\n    label: Maximum Collected Weight\n    derivation:\n      aggregate:\n        key: USUBJID\n        expr: \"MAX(WT.WT)\"\n\n  # Read off the selected latest weight record.\n  - name: LASTWT\n    type: float\n    label: Latest Collected Weight\n    derivation: LAST_WT.WT\n",
+      "occurrences": [
+        {
+          "path": "columns[4].derivation.flag",
+          "payload": "AGE >= 65"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [
+        {
+          "spec_path": "columns.LASTWT.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": 3
+        }
+      ],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,SEX,AGE,AGE65FL,SUBJLBL,WTMAX,LASTWT\nYAMAA-01,YAMAA-01-001,M,34,,Subject YAMAA-01-001 (M),71.0,71.0\nYAMAA-01,YAMAA-01-002,F,67,Y,Subject YAMAA-01-002 (F),68.0,67.5\nYAMAA-01,YAMAA-01-003,M,,,Subject YAMAA-01-003 (M),80.0,80.0\nYAMAA-01,YAMAA-01-004,F,72,Y,Subject YAMAA-01-004 (F),56.0,56.0\n"
+    },
+    "schema-str-contains": {
+      "specification_path": "benchmarks/schema-str-contains/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: input/ae.csv\n\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, CRIT1FL, DERMFL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: AE.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: AE.USUBJID\n\n  - name: AESEQ\n    type: int\n    label: Sequence Number\n    derivation: AE.AESEQ\n\n  - name: AEDECOD\n    type: str\n    label: Dictionary-Derived Term\n    derivation: AE.AEDECOD\n\n  # One regular expression, '|' separating the alternatives, searched\n  # anywhere in the term. There is no otherwise: a non-match (FALSE) and a\n  # missing term (UNKNOWN) both leave the flag missing.\n  - name: CRIT1FL\n    type: str\n    label: Criterion 1 Evaluation Result Flag\n    derivation:\n      flag: \"str_contains(AE.AEDECOD,\n        'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')\"\n    verifications:\n      allowed_values:\n        values: [Y]\n\n  # DERM matches inside a longer word, so DERMATITIS counts.\n  - name: DERMFL\n    type: str\n    label: Dermatologic Event Flag\n    derivation:\n      flag: \"str_contains(AE.AEDECOD, 'DERM|ERYTHEMA')\"\n",
+      "occurrences": [
+        {
+          "path": "columns[4].derivation.flag",
+          "payload": "str_contains(AE.AEDECOD, 'APPLICATION|DERMATITIS|ERYTHEMA|BLISTER')"
+        },
+        {
+          "path": "columns[5].derivation.flag",
+          "payload": "str_contains(AE.AEDECOD, 'DERM|ERYTHEMA')"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [],
+      "findings": [],
+      "csv": "STUDYID,USUBJID,AESEQ,AEDECOD,CRIT1FL,DERMFL\nCATH-01,CATH-01-001,1,HEADACHE,,\nCATH-01,CATH-01-001,2,APPLICATION SITE DERMATITIS,Y,Y\nCATH-01,CATH-01-001,3,NAUSEA,,\nCATH-01,CATH-01-001,4,ERYTHEMA,Y,Y\nCATH-01,CATH-01-002,1,BLISTER,Y,\nCATH-01,CATH-01-002,2,VOMITING,,\nCATH-01,CATH-01-003,1,,,\n"
+    },
+    "sdtm-dm-death": {
+      "specification_path": "benchmarks/sdtm-dm-death/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput:\n  DM_RAW: input/dm_raw.csv\n  DS: input/ds.csv\n  AE: input/ae.csv\nbase: DM_RAW\n\noutput:\n  path: dm.csv\n  columns: [DOMAIN, STUDYID, USUBJID, DTHDTC, DTHFL]\n\nintermediates:\n  # Per subject: the latest death disposition record and the latest fatal\n  # adverse event. An undated record cannot supply a death date.\n  - id: DTHDS\n    dataset: DS\n    filter: \"DS.DSDECOD = 'DEATH' AND DS.DSSTDTC IS NOT NULL\"\n    order_by: [DS.DSSTDTC]\n    keep: last\n    no_match: null\n\n  - id: DTHAE\n    dataset: AE\n    filter: \"AE.AEOUT = 'FATAL' AND AE.AEENDTC IS NOT NULL\"\n    order_by: [AE.AEENDTC]\n    keep: last\n    no_match: null\n\ncolumns:\n  - name: DOMAIN\n    type: str\n    label: Domain Abbreviation\n    derivation: {literal: DM}\n\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: DM_RAW.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM_RAW.USUBJID\n\n  # Each source's death date as a date: DS and AE hold dates as text.\n  - name: DSDTHDT\n    type: date\n    label: Death Date from Disposition\n    derivation: DTHDS.DSSTDTC\n\n  - name: AEDTHDT\n    type: date\n    label: Death Date from Fatal Adverse Event\n    derivation: DTHAE.AEENDTC\n\n  - name: DTHDTC\n    type: date\n    label: Date/Time of Death\n    derivation:\n      first_available:\n        sources: [DSDTHDT, AEDTHDT]\n\n  - name: DTHFL\n    type: str\n    label: Subject Death Flag\n    derivation:\n      flag: \"DSDTHDT IS NOT NULL OR AEDTHDT IS NOT NULL\"\n    verifications:\n      allowed_values:\n        values: [Y]\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID]\n  - row_count:\n      min: 5\n      max: 5\n  - assert:\n      id: death-date-marks-flag\n      when: \"DTHDTC IS NOT NULL\"\n      require: \"DTHFL = 'Y'\"\n  - assert:\n      id: flag-needs-date\n      when: \"DTHFL = 'Y'\"\n      require: \"DTHDTC IS NOT NULL\"\n",
+      "occurrences": [
+        {
+          "path": "columns[6].derivation.flag",
+          "payload": "DSDTHDT IS NOT NULL OR AEDTHDT IS NOT NULL"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [
+        {
+          "spec_path": "columns.DSDTHDT.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 2
+        },
+        {
+          "spec_path": "columns.AEDTHDT.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 2
+        }
+      ],
+      "findings": [],
+      "csv": "DOMAIN,STUDYID,USUBJID,DTHDTC,DTHFL\nDM,CATH,S1,2025-01-15,Y\nDM,CATH,S2,2025-02-15,Y\nDM,CATH,S3,2025-03-20,Y\nDM,CATH,S4,,\nDM,CATH,S5,2025-05-25,Y\n"
+    },
+    "sdtm-lb-last-observation-before-exposure": {
+      "specification_path": "benchmarks/sdtm-lb-last-observation-before-exposure/spec.yaml",
+      "specification": "schema_version: \"1.0\"\ndomain: LB\nkeys: [STUDYID, USUBJID, LBSEQ]\ninput:\n  ODM: input/odm.csv\n  DM:\n    path: input/dm.csv\n    types: {RFSTDTC: date}\n  LB_MAPPING: input/lb_mapping.csv\nbase: ODM\n\noutput:\n  path: lb.csv\n  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES,\n            LBDTC, LBSTAT, LBLOBXFL]\n\nintermediates:\n  - id: LB_MAP\n    dataset: LB_MAPPING\n    key: {ItemOID: ODM.ItemOID}\n    no_match: null\n\ncolumns:\n  - name: DOMAIN\n    type: str\n    label: Domain Abbreviation\n    derivation: {literal: LB}\n\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: ODM.StudyOID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: ODM.SubjectKey\n\n  - name: LBSEQ\n    type: int\n    label: Sequence Number\n    derivation: ODM.ItemGroupRepeatKey\n    verifications:\n      not_missing: {}\n\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n\n  - name: LBSPEC\n    type: str\n    label: Specimen Material Type\n\n  - name: LBORRES\n    type: str\n    label: Result or Finding in Original Units\n\n  # The date and status items of the same item group occurrence as the\n  # result; missing when that occurrence has none.\n  - name: LBDTC\n    type: date\n    label: Date/Time of Specimen Collection\n    derivation: {odm: ODM.IT.LB.LBDTC}\n\n  - name: LBSTAT\n    type: str\n    label: Completion Status\n    derivation: {odm: ODM.IT.LB.LBSTAT}\n\n  - name: RFSTDTC\n    type: date\n    label: Subject Reference Start Date/Time\n    derivation: DM.RFSTDTC\n\n  # Rank each record against the other results for the same subject,\n  # test, and specimen. Only records with a result, collected on or\n  # before the reference start date (or with no reference start at\n  # all), are ranked; the latest collection date wins, with the\n  # sequence number breaking ties.\n  - name: LOBXRNK\n    type: int\n    label: Last Observation Before Exposure Rank\n    derivation:\n      row_number:\n        window:\n          group_by: [STUDYID, USUBJID, LBTESTCD, LBSPEC]\n          order_by:\n            - {variable: LBDTC, direction: desc}\n            - {variable: LBSEQ, direction: desc}\n          filter: >-\n            LBORRES IS NOT NULL AND (RFSTDTC IS NULL OR LBDTC <= RFSTDTC)\n\n  - name: LBLOBXFL\n    type: str\n    label: Last Observation Before Exposure Flag\n    derivation:\n      flag: \"LOBXRNK = 1\"\n\n# One record per result item of each item group occurrence. The date and\n# status items are not in the dictionary, so their LBTESTCD is missing and\n# the filter drops them; they are read back onto the result record below.\nrows:\n  - id: lb_result\n    dataset: ODM\n    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID,\n               ODM.ItemGroupOID, ODM.ItemGroupRepeatKey, ODM.ItemOID]\n    filter: \"LBTESTCD IS NOT NULL\"\n    derivations:\n      LBTESTCD: LB_MAP.LBTESTCD\n      LBSPEC: LB_MAP.LBSPEC\n      LBORRES:\n        aggregate:\n          expr: \"ONLY(ODM.Value)\"\n\nverifications:\n  - unique:\n      columns: [STUDYID, USUBJID, LBSEQ]\n  - row_count:\n      min: 14\n      max: 14\n  - assert:\n      id: flagged-record-has-a-result\n      when: \"LBLOBXFL = 'Y'\"\n      require: \"LBORRES IS NOT NULL\"\n  - assert:\n      id: flagged-record-is-done\n      when: \"LBLOBXFL = 'Y'\"\n      require: \"LBSTAT IS NULL\"\n",
+      "occurrences": [
+        {
+          "path": "columns[11].derivation.flag",
+          "payload": "LOBXRNK = 1"
+        }
+      ],
+      "result_type": "ExecutionSuccess",
+      "handlers": [
+        {
+          "spec_path": "rows[0].derivations.LBTESTCD.source.no_match",
+          "handler": "no_match",
+          "count": 15
+        },
+        {
+          "spec_path": "rows[0].derivations.LBSPEC.source.no_match",
+          "handler": "no_match",
+          "count": 15
+        }
+      ],
+      "findings": [],
+      "csv": "DOMAIN,STUDYID,USUBJID,LBSEQ,LBTESTCD,LBSPEC,LBORRES,LBDTC,LBSTAT,LBLOBXFL\nLB,YAMAA-01,YAMAA-01-101,1,ALT,SERUM,32,2026-01-05,,\nLB,YAMAA-01,YAMAA-01-101,2,ALT,SERUM,35,2026-01-10,,\nLB,YAMAA-01,YAMAA-01-101,3,ALT,SERUM,,2026-01-14,NOT DONE,\nLB,YAMAA-01,YAMAA-01-101,4,ALT,SERUM,38,2026-01-15,,Y\nLB,YAMAA-01,YAMAA-01-101,5,ALT,SERUM,40,2026-01-20,,\nLB,YAMAA-01,YAMAA-01-101,6,GLUC,SERUM,5.1,2026-01-08,,Y\nLB,YAMAA-01,YAMAA-01-101,7,GLUC,SERUM,5.4,2026-01-16,,\nLB,YAMAA-01,YAMAA-01-101,8,K,SERUM,4.2,2026-01-09,,Y\nLB,YAMAA-01,YAMAA-01-101,9,K,SERUM,4.5,2026-01-18,,\nLB,YAMAA-01,YAMAA-01-101,10,K,URINE,60,2026-01-12,,\nLB,YAMAA-01,YAMAA-01-101,11,K,URINE,62,2026-01-14,,Y\nLB,YAMAA-01,YAMAA-01-102,12,ALT,SERUM,30,2026-02-01,,\nLB,YAMAA-01,YAMAA-01-102,13,ALT,SERUM,33,2026-02-10,,\nLB,YAMAA-01,YAMAA-01-102,14,ALT,SERUM,34,2026-02-10,,Y\n"
+    }
+  },
+  "witnesses": {
+    "regex_valid_with_wrong_source_type": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"str_contains(SRC.EXTRA, 'a')\"\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "spec_paths": [
+            "columns.F.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0190",
+          "context": {
+            "expected": "str",
+            "actual": "int"
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "regex_invalid_with_wrong_source_type": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"str_contains(SRC.EXTRA, '[')\"\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "invalid_predicate",
+          "spec_paths": [
+            "columns.F.derivation.flag.condition"
+          ],
+          "requirement": "REQ-1244",
+          "context": {
+            "predicate": "str_contains(SRC.EXTRA, '[')",
+            "position": 24
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "regex_invalid_with_text_source": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"str_contains(SRC.ID, '[')\"\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "invalid_predicate",
+          "spec_paths": [
+            "columns.F.derivation.flag.condition"
+          ],
+          "requirement": "REQ-1244",
+          "context": {
+            "predicate": "str_contains(SRC.ID, '[')",
+            "position": 21
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "three_truths": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >= 65\", false_value: N, missing: U}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionSuccess",
+      "findings": [],
+      "handlers": [],
+      "csv": "ID,AGE,F\na,70,Y\nb,5,N\nc,,U\n",
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "bare_defaults": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: \"AGE >= 65\"\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionSuccess",
+      "findings": [],
+      "handlers": [],
+      "csv": "ID,AGE,F\na,70,Y\nb,5,\nc,,\n",
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "explicit_null_missing": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >= 65\", false_value: N, missing: null}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionSuccess",
+      "findings": [],
+      "handlers": [],
+      "csv": "ID,AGE,F\na,70,Y\nb,5,N\nc,,\n",
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "explicit_null_false_without_missing": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >= 65\", false_value: null}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "missing_value_required",
+          "spec_paths": [
+            "columns.F.derivation.flag.missing"
+          ],
+          "requirement": "REQ-1258",
+          "context": {
+            "false_value": null
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "grammar_and_missing": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"UNKNOWN >> 65\", false_value: N}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "invalid_predicate",
+          "spec_paths": [
+            "columns.F.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0188",
+          "context": {
+            "predicate": "UNKNOWN >> 65",
+            "position": 9
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "missing_value_required",
+          "spec_paths": [
+            "columns.F.derivation.flag.missing"
+          ],
+          "requirement": "REQ-1258",
+          "context": {
+            "false_value": "N"
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "unknown_and_missing": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"UNKNOWN >= 65\", false_value: N}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "missing_value_required",
+          "spec_paths": [
+            "columns.F.derivation.flag.missing"
+          ],
+          "requirement": "REQ-1258",
+          "context": {
+            "false_value": "N"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "spec_paths": [
+            "columns.F.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0189",
+          "context": {
+            "identifier": "UNKNOWN"
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "malformed_non_scalar_unselected": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"TRUE\", true_value: Y, false_value: [N], missing: null}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "SpecificationError",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "spec_paths": [
+            "columns.F.derivation.flag.false_value"
+          ],
+          "requirement": "REQ-0287",
+          "context": {
+            "expected": "literal_value",
+            "actual": "sequence",
+            "source": "/private/tmp/yamaa-declarative-flag-audit/precedence/malformed_non_scalar_unselected/spec.yaml",
+            "entry": "/private/tmp/yamaa-declarative-flag-audit/precedence/malformed_non_scalar_unselected/spec.yaml"
+          }
+        }
+      ],
+      "effects": []
+    },
+    "grammar_and_non_scalar": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >> 65\", false_value: [N], missing: null}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "SpecificationError",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "spec_paths": [
+            "columns.F.derivation.flag.false_value"
+          ],
+          "requirement": "REQ-0287",
+          "context": {
+            "expected": "literal_value",
+            "actual": "sequence",
+            "source": "/private/tmp/yamaa-declarative-flag-audit/precedence/grammar_and_non_scalar/spec.yaml",
+            "entry": "/private/tmp/yamaa-declarative-flag-audit/precedence/grammar_and_non_scalar/spec.yaml"
+          }
+        }
+      ],
+      "effects": []
+    },
+    "bare_driver_suggestion": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"EXTRA = 1\", missing: null}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "unresolvable_name",
+          "spec_paths": [
+            "columns.F.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0189",
+          "context": {
+            "identifier": "EXTRA",
+            "suggestion": "SRC.EXTRA"
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "named_repeat_read": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\n  TAB: {path: tab.csv, types: {V: int}}\nbase: SRC\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\nintermediates:\n  - id: MATCHED\n    dataset: TAB\n    key: {K: ID}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"MATCHED.V > 0 AND MATCHED.V < 100\", false_value: N, missing: U}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionSuccess",
+      "findings": [],
+      "handlers": [],
+      "csv": "ID,AGE,F\na,70,Y\nb,5,N\nc,,U\n",
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC",
+            "TAB"
+          ]
+        }
+      ]
+    },
+    "selected_conversion_handler": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: int\n    derivation:\n      unconvertible: 99\n      value:\n        flag: {condition: \"AGE >= 65\", true_value: bad, false_value: 2, missing: 3}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionSuccess",
+      "findings": [],
+      "handlers": [
+        {
+          "spec_path": "columns.F.derivation.unconvertible",
+          "handler": "unconvertible",
+          "count": 1
+        }
+      ],
+      "csv": "ID,AGE,F\na,70,99\nb,5,2\nc,,3\n",
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "row_output_and_raw": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str}\n  - {name: AGE, type: int}\n  - {name: F, type: str}\nrows:\n  - id: emit\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      AGE: SRC.AGE\n      F: {flag: {condition: \"AGE >= 65 AND SRC.EXTRA > 0\", false_value: N, missing: U}}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionSuccess",
+      "findings": [],
+      "handlers": [],
+      "csv": "ID,AGE,F\na,70,Y\nb,5,N\nc,,U\n",
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "grouped_nonkey_raw": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str}\n  - {name: AGE, type: int}\n  - {name: F, type: str}\nrows:\n  - id: emit\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      AGE: {literal: 70}\n      F: {flag: {condition: \"SRC.EXTRA > 0\", false_value: N, missing: U}}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "ungrouped_driver_field",
+          "spec_paths": [
+            "rows[0].derivations.F.flag.condition"
+          ],
+          "requirement": "REQ-0067",
+          "context": {
+            "identifier": "SRC.EXTRA",
+            "row": "emit",
+            "dataset": "SRC"
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "grouped_key_raw": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str}\n  - {name: AGE, type: int}\n  - {name: F, type: str}\nrows:\n  - id: emit\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      AGE: {literal: 70}\n      F: {flag: {condition: \"SRC.ID = 'a'\", false_value: N, missing: U}}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionSuccess",
+      "findings": [],
+      "handlers": [],
+      "csv": "ID,AGE,F\na,70,Y\nb,70,N\nc,70,N\n",
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "nested_case_mixed_declarations": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      case:\n        - when: \"EXTRA > 0\"\n          then: {flag: {condition: \"AGE >> 65\", false_value: N}}\n        - otherwise: {literal: N}\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\nb,5,1\nc,,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "invalid_predicate",
+          "spec_paths": [
+            "columns.F.derivation.case[0].then.flag.condition"
+          ],
+          "requirement": "REQ-0188",
+          "context": {
+            "predicate": "AGE >> 65",
+            "position": 5
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "missing_value_required",
+          "spec_paths": [
+            "columns.F.derivation.case[0].then.flag.missing"
+          ],
+          "requirement": "REQ-1258",
+          "context": {
+            "false_value": "N"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "unresolvable_name",
+          "spec_paths": [
+            "columns.F.derivation.case[0].when"
+          ],
+          "requirement": "REQ-0189",
+          "context": {
+            "identifier": "EXTRA",
+            "suggestion": "SRC.EXTRA"
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "implicit_raw_ambiguous": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: {literal: 70}}\n  - name: F\n    type: str\n    derivation:\n      flag: \"SRC.AGE >= 65\"\n",
+      "inputs": {
+        "data.csv": "ID,AGE,EXTRA\na,70,1\na,5,1\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "derivation",
+          "condition": "multiple_values_per_key",
+          "spec_paths": [
+            "columns.F.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0075",
+          "context": {
+            "identifier": "SRC.AGE",
+            "value_count": 2,
+            "keys": [
+              {
+                "ID": "a"
+              }
+            ]
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "grammar_and_missing_input_absent": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"UNKNOWN >> 65\", false_value: N}\n",
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "resource_path_missing",
+          "spec_paths": [
+            "input.SRC.path"
+          ],
+          "requirement": "REQ-0785",
+          "context": {
+            "dataset": "SRC",
+            "path": "data.csv"
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "unknown_and_missing_input_absent": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"UNKNOWN >= 65\", false_value: N}\n",
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "resource_path_missing",
+          "spec_paths": [
+            "input.SRC.path"
+          ],
+          "requirement": "REQ-0785",
+          "context": {
+            "dataset": "SRC",
+            "path": "data.csv"
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "explicit_null_false_without_missing_input_absent": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: data.csv, types: {AGE: int, EXTRA: int}}\noutput:\n  path: out.csv\n  columns: [ID, AGE, F]\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - name: F\n    type: str\n    derivation:\n      flag: {condition: \"AGE >= 65\", false_value: null}\n",
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "resource_path_missing",
+          "spec_paths": [
+            "input.SRC.path"
+          ],
+          "requirement": "REQ-0785",
+          "context": {
+            "dataset": "SRC",
+            "path": "data.csv"
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC"
+          ]
+        }
+      ]
+    },
+    "missing_named_field_keys": {
+      "specification": "schema_version: \"1.0\"\ndomain: TEST\nkeys: [ID]\nbase: SRC\ninput:\n  SRC: {path: data.csv, types: {ID: str, K: str}}\n  TAB: {path: tab.csv, types: {K: str, V: int}}\nintermediates:\n  - id: MATCHED\n    dataset: TAB\n    key: {K: KEY}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: KEY, type: str, derivation: SRC.K}\n  - {name: F, type: str, derivation: {flag: {condition: \"MATCHED.ABSENT > 0\", false_value: N, missing: U}}}\noutput: {path: out.csv, columns: [ID, KEY, F]}\n",
+      "inputs": {
+        "data.csv": "ID,K\na,a\nb,b\nc,c\n",
+        "tab.csv": "K,V\na,1\nb,-1\n"
+      },
+      "result_type": "ExecutionFailure",
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "spec_paths": [
+            "columns.F.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0125",
+          "context": {
+            "identifier": "MATCHED.ABSENT"
+          }
+        }
+      ],
+      "handlers": [],
+      "effects": [
+        {
+          "event": "capture_sources",
+          "names": [
+            "SRC",
+            "TAB"
+          ]
+        },
+        {
+          "event": "capture_sources_end",
+          "names": [
+            "SRC",
+            "TAB"
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "interpreter": "/private/tmp/yamaa-closeout-local/python-venv/bin/python",
+    "schema": "/private/tmp/yamaa-root-text-pr/yaml",
+    "source_base": "bb49da0883b1357cefbdb34587a107e8f6a48ed0",
+    "original_effects": "original-effects.json"
+  }
+}

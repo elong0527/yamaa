@@ -1747,6 +1747,118 @@ columns:
                 self.assertEqual(issues(result), expected)
             self.assertFalse((original / "input").exists())
 
+
+    def test_public_declarative_flags_complete_original_and_authored_captures(self):
+        import shutil
+        import yamaa
+        reference = json.loads((ROOT / "flag-reference.json").read_text(encoding="utf-8"))
+        positives = ("schema-str-contains", "adam-adae-occurrence-flags", "adam-adex-dose-reduction", "adam-adlb-closest-visit", "adam-adsl-completion-flag", "sdtm-dm-death")
+        negatives = ("negative-flag-condition", "negative-flag-missing-value", "negative-flag-payload", "negative-review-arithmetic", "negative-review-date-text", "negative-review-unknown-date")
+        outputs = dict(zip(positives, ("adae.csv", "adae.csv", "adex.csv", "adlb.csv", "adsl.csv", "dm.csv")))
+        # Complete captures remain installed for both existing independent gates.
+        held = ("nested_case_mixed_declarations", "implicit_raw_ambiguous")
+        self.assertEqual(set(held).intersection(reference["witnesses"]), set(held))
+        cases = [(name, reference["originals"][name], "cases") for name in positives + negatives]
+        cases += [(name, case, "flags") for name, case in reference["witnesses"].items() if name not in held]
+        self.assertEqual(len(cases), 33)
+        def issues(result):
+            rows = result.issues.to_dicts()
+            for row in rows:
+                row["context"] = json.loads(row["context"])
+            return rows
+        with tempfile.TemporaryDirectory() as directory:
+            for name, case, cohort in cases:
+                with self.subTest(case=name):
+                    work = Path(directory) / name
+                    shutil.copytree(ROOT / cohort / name, work)
+                    entry = work / "spec.yaml"
+                    self.assertEqual(entry.read_text(encoding="utf-8"), case["specification"])
+                    retained = {path: path.read_bytes() for path in work.rglob("*") if path.is_file()}
+                    expected = json.loads(json.dumps(case["findings"]))
+                    schema_failure = case["result_type"] == "SpecificationError"
+                    if schema_failure:
+                        # Full loader provenance remains in the unchanged capture;
+                        # only these two existing absent native fields are excepted.
+                        for finding in expected:
+                            source = finding["context"].pop("source")
+                            self.assertEqual(source, finding["context"].pop("entry"))
+                            self.assertTrue(source.endswith("/" + name + "/spec.yaml"))
+                    output = work / outputs.get(name, "out.csv")
+                    for attempt in range(2):
+                        with self.subTest(attempt=attempt):
+                            self.assertFalse(output.exists())
+                            try:
+                                result = yamaa.domain(entry)
+                            except yamaa.SpecificationError as error:
+                                self.assertTrue(schema_failure)
+                                self.assertEqual(issues(error), expected)
+                            else:
+                                self.assertEqual(issues(result), expected)
+                                wire = result._native.observations()
+                                if wire is None:
+                                    self.assertEqual(case.get("handlers", []), [])
+                                else:
+                                    self.assertEqual(json.loads(wire)["handler_counts"], case.get("handlers", []))
+                                if case["result_type"] == "ExecutionSuccess":
+                                    expected_path = next((work / "expected").glob("*.csv")) if cohort == "cases" else work / "expected.csv"
+                                    if cohort == "flags":
+                                        self.assertEqual(expected_path.read_bytes(), case["csv"].encode())
+                                        self.assertEqual(result.output.write_csv().encode(), expected_path.read_bytes())
+                                    self.assertTrue(result.save())
+                                    self.assertEqual(output.read_bytes(), expected_path.read_bytes())
+                                    output.unlink()
+                                else:
+                                    self.assertIsNone(result.output)
+                                    with self.assertRaises(yamaa.DomainError):
+                                        result.save()
+                            self.assertFalse(output.exists())
+                            for path, original in retained.items():
+                                self.assertEqual(path.read_bytes(), original)
+
+
+    def test_public_intermediate_keys_complete_unchanged_nineteen_captures(self):
+        import shutil
+        import yamaa
+        reference = json.loads((ROOT / "key-reference.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(reference), 19)
+        with tempfile.TemporaryDirectory() as directory:
+            for name, case in reference.items():
+                with self.subTest(case=name):
+                    work = Path(directory) / name
+                    shutil.copytree(ROOT / "keys" / name, work)
+                    entry = work / "spec.yaml"
+                    self.assertEqual(entry.read_bytes(), case["specification"].encode())
+                    retained = {path: path.read_bytes() for path in work.rglob("*") if path.is_file()}
+                    output = work / "out.csv"
+                    for attempt in range(2):
+                        with self.subTest(attempt=attempt):
+                            self.assertFalse(output.exists())
+                            result = yamaa.domain(entry)
+                            findings = result.issues.to_dicts()
+                            for finding in findings:
+                                finding["context"] = json.loads(finding["context"])
+                            self.assertEqual(findings, case.get("findings", []))
+                            wire = result._native.observations()
+                            if wire is None:
+                                self.assertEqual(case["handlers"], [])
+                            else:
+                                self.assertEqual(json.loads(wire)["handler_counts"], case["handlers"])
+                            if "csv" in case:
+                                expected = case["csv"].encode()
+                                self.assertEqual((work / "expected.csv").read_bytes(), expected)
+                                self.assertEqual(result.output.write_csv().encode(), expected)
+                                self.assertTrue(result.save())
+                                self.assertEqual(output.read_bytes(), expected)
+                                output.unlink()
+                            else:
+                                self.assertIsNone(result.output)
+                                with self.assertRaises(yamaa.DomainError):
+                                    result.save()
+                            self.assertFalse(output.exists())
+                            for path, original in retained.items():
+                                self.assertEqual(path.read_bytes(), original)
+
+
     def test_public_common_row_intermediates_complete_original_and_independent_truth(self):
         import shutil
         import yamaa
@@ -1765,6 +1877,12 @@ columns:
                     shutil.copytree(ROOT / "row-cases" / name, current)
                     entry = current / "spec.yaml"
                     expected = json.loads((current / "findings.json").read_text(encoding="ascii"))
+                    if name == "adam-adlb-end-of-treatment":
+                        gates = list(reference["eot_native_gates"])
+                        self.assertEqual(len(gates), 5)
+                        self.assertEqual(gates.pop(), {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                            "spec_paths":["columns.EOTFL.derivation.flag"], "context":{"operation":"flag"}})
+                        self.assertEqual(expected, gates)
                     result = yamaa.domain(entry)
                     self.assertEqual(issues(result), expected)
                     observations = result._native.observations()
