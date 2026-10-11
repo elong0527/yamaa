@@ -12,35 +12,36 @@ status: normative
 
 <a id="req-1193"></a>
 
-**REQ-1193.** A `datasets` entry's `dataset_json` names the Dataset-JSON file
-the study document produces for that dataset. The field is optional: a
-document that declares none produces its Define-XML document alone, and a
-document that declares one for some entries produces one for exactly those.
-The path is relative to the directory holding the generated document, is
-written with `/` separators, must not begin with a parent traversal, and ends
-in `.json`, matched without regard to case.
+**REQ-1193.** The selected environment submission section's `dataset_json`
+boolean requests one Dataset-JSON file for each specification in its ordered
+`specs`. Each target is beside that specification's already published
+`output.path`, with the same basename and a `.json` extension. Omission or
+false produces only the Define-XML document. Package references use `/`
+separators and satisfy [REQ-1206](dataset-json.md#req-1206) and
+[REQ-1229](dataset-json.md#req-1229). The retained reference document's
+per-dataset path declarations remain qualification history until transition.
 
 <a id="req-1194"></a>
 
-**REQ-1194.** The study document declares it, and [Artifact publication](../storage/publication.md)'s extension
-mapping stays closed at `.csv` and `.parquet`. A Dataset-JSON file carries
-`studyOID`, `metaDataVersionOID`, `itemGroupOID`, a per-column `itemOID`, and
-a creation timestamp. Every one of those is a study-document fact: [REQ-0970](define-xml.md#req-0970)
-builds the identifiers from the document's `study`, `metadata_version`, and
-dataset `id`, and [REQ-0962](define-xml.md#req-0962) declares the timestamp rather than reading a clock.
-A specification holds none of them.
+**REQ-1194.** The submission section requests the files;
+[Artifact publication](../storage/publication.md)'s extension mapping stays
+closed at `.csv` and `.parquet`. A Dataset-JSON file carries `studyOID`,
+`metaDataVersionOID`, `itemGroupOID`, a per-column `itemOID`, and a creation
+timestamp. The shared composition derives those facts from the study,
+selected section and specification domain, and
+[REQ-0962](define-xml.md#req-0962) selects the explicit creation time or current
+UTC once during preparation.
 
 <a id="req-1195"></a>
 
-**REQ-1195.** A `dataset_json` path must differ from the document's
-`output.path`, from every other entry's `dataset_json`, and from the
-`output.path` of every specification the document composes. Each file has one
-writer, and a path with two is a document that overwrites its own package.
+**REQ-1195.** Every Dataset-JSON target must differ from the selected
+section's `define` target, every other Dataset-JSON target and every composed
+specification's published `output.path`. Each file has one writer.
 
 <a id="req-1196"></a>
 
-**REQ-1196.** An entry declaring `has_no_data` must not declare
-`dataset_json`.
+**REQ-1196.** A selected specification whose dataset submission metadata
+declares `has_no_data` must not be requested as Dataset-JSON.
 
 ### Version
 
@@ -111,11 +112,11 @@ order, which is the order the standard presents them:
 
 | Member | Source |
 |---|---|
-| `datasetJSONCreationDateTime` | `creation_datetime` |
+| `datasetJSONCreationDateTime` | the selected creation time |
 | `datasetJSONVersion` | fixed `1.1.0` |
-| `fileOID` | `file_oid`, a period, and the entry's `id` |
+| `fileOID` | the selected FileOID, a period, and the specification domain |
 | `originator` | `originator`, when declared |
-| `sourceSystem` | `source_system` and `source_system_version`, when declared |
+| `sourceSystem` | `yamaa` and the selected source-system version |
 | `studyOID` | the study's generated identifier |
 | `metaDataVersionOID` | the metadata version's generated identifier |
 | `metaDataRef` | the generated document, per [REQ-1206](dataset-json.md#req-1206) |
@@ -137,19 +138,21 @@ as `null`: within this file `null` is the missing value of a row.
 
 <a id="req-1206"></a>
 
-**REQ-1206.** `metaDataRef` is the document's `output.path` expressed relative
-to the directory holding the Dataset-JSON file, written with `/` separators,
-and must not begin with a parent traversal. The pair travels together: the
-file names the document its `itemOID`s point into, and [REQ-1215](dataset-json.md#req-1215) has that
-document name the file.
+**REQ-1206.** `metaDataRef` is the selected section's `define` target
+expressed relative to the directory holding the Dataset-JSON file, written
+with `/` separators, and must not begin with a parent traversal. The pair
+travels together: the file names the document its `itemOID`s point into, and
+[REQ-1215](dataset-json.md#req-1215) has that document name the file.
 
 <a id="req-1207"></a>
 
-**REQ-1207.** `sourceSystem` is one object carrying `name` and `version`, in
-that order. The standard requires both. A document that declares
-`source_system` without `source_system_version` therefore cannot write the
-member; the declaration fails rather than silently producing a file with no
-source system, and [REQ-0979](define-xml.md#req-0979) already refuses the reverse pair.
+**REQ-1207.** `sourceSystem` is one object carrying `name` and `version`,
+in that order. Its name is `yamaa`; its version is the selected section's
+explicit `source_system_version`, or the actual installed yamaa version when
+omitted, under [REQ-1080](../operations/functions.md#req-1080). The same selected
+version is used in Define-XML and Dataset-JSON. The retained reference
+`define_class` source-system pair remains qualification history until
+transition.
 
 <a id="req-1208"></a>
 
@@ -249,11 +252,11 @@ present empty string. A `csv` artifact's empty field arrives as missing under
 
 <a id="req-1215"></a>
 
-**REQ-1215.** When an entry declares `dataset_json`, the dataset's `def:leaf`
-names that file: [REQ-0987](define-xml.md#req-0987)'s `xlink:href` and `def:title` are taken from the
-Dataset-JSON path rather than from the specification's `output.path`. A
-submission's document points at the file the submission carries. An entry
-declaring no `dataset_json` is unchanged.
+**REQ-1215.** When the selected section requests `dataset_json`, each
+dataset's `def:leaf` names that dataset's JSON target: its `xlink:href` and
+`def:title` use the JSON file rather than the published CSV or Parquet path.
+When Dataset-JSON is not requested, the leaf names the specification's
+published `output.path`.
 
 <a id="req-1216"></a>
 
@@ -345,22 +348,25 @@ stays closed at `.csv` and `.parquet`, and a `dataset_class.path` ending in
 
 <a id="req-1226"></a>
 
-**REQ-1226.** A `dataset_json` path equal to the document's `output.path`, to
-another entry's `dataset_json`, or to a composed specification's
+**REQ-1226.** A derived Dataset-JSON target equal to the selected section's
+`define` target, another Dataset-JSON target, or a composed specification's
 `output.path`: fail validation with `dataset_json_path_collision`, reporting
-both declarations.
+the conflicting targets.
 
 <a id="req-1227"></a>
 
-**REQ-1227.** A `dataset_json` declared on an entry that declares
-`has_no_data`: fail validation with `dataset_json_without_data`, reporting the
-dataset.
+**REQ-1227.** Dataset-JSON requested for a selected specification whose
+dataset submission metadata declares `has_no_data`: fail validation with
+`dataset_json_without_data`, reporting the dataset.
 
 <a id="req-1228"></a>
 
-**REQ-1228.** A declared `source_system` with no `source_system_version`, in a
-document that declares any `dataset_json`: fail validation with
-`source_system_incomplete`.
+**REQ-1228.** In the retained reference `define_class` format, a declared
+`source_system` without `source_system_version` on a document requesting
+Dataset-JSON fails validation with `source_system_incomplete`. Environment
+submission sections derive both values under
+[REQ-1207](dataset-json.md#req-1207); omission of their version override selects
+the actual installed version.
 
 <a id="req-1229"></a>
 

@@ -138,13 +138,16 @@ under the equality [REQ-0935](terminology.md#req-0935) uses. A difference is rej
 an ordinary [Verification](../execution/verification.md) verification. Not every constrained column carries published
 terminology.
 
-### Every declared codelist is used
+### Codelists selected by binding
 
 <a id="req-0946"></a>
 
-**REQ-0946.** Every codelist the study document declares must be named by at
-least one binding among the datasets the study document represents. An
-unreferenced codelist is rejected rather than emitted.
+**REQ-0946.** Each generated document includes exactly the environment
+codelists bound by its represented output columns, in their declaration order,
+and the controlled-terminology standards cited by those sources. Unbound
+codelists may serve another submission section and are omitted without an
+unreferenced-codelist failure. The retained reference evaluator's former
+all-codelists-used policy remains qualification history until transition.
 
 ### Study-inventory vocabulary
 
@@ -261,11 +264,6 @@ does not admit: fail validation with `codelist_type_mismatch`.
 **REQ-0955.** A `codelist` binding and an `allowed_values` verification whose
 value sets differ, where [REQ-0942](terminology.md#req-0942) requires equality: fail validation with
 `codelist_values_conflict`, reporting the column and both sets.
-
-<a id="req-0956"></a>
-
-**REQ-0956.** A declared codelist no binding names: fail validation with
-`unreferenced_codelist`, reporting the codelist.
 
 <a id="req-0957"></a>
 

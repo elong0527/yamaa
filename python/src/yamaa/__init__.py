@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     from yamaa.submission import generate_study_document
 
 _EXPORTS = {
+    "define": ("yamaa._define", "define"),
+    "DefineError": ("yamaa._define", "DefineError"),
     "domain": ("yamaa._domain", "domain"),
     "check": ("yamaa._domain", "check"),
     "DomainError": ("yamaa._domain", "DomainError"),
@@ -36,12 +38,14 @@ def __dir__() -> list[str]:
 __version__ = _distribution_version("yamaa")
 
 __all__ = [
+    "DefineError",
     "DomainError",
     "DomainRun",
     "DomainRunError",
     "__version__",
     "check",
     "domain",
+    "define",
     "generate_study_document",
     "yamaa_domain",
 ]

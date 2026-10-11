@@ -4,11 +4,13 @@
   "sources": {
     "python/src/yamaa/__init__.py": {
       "names": [
+        "DefineError",
         "DomainError",
         "DomainRun",
         "DomainRunError",
         "__version__",
         "check",
+        "define",
         "domain",
         "generate_study_document",
         "yamaa_domain"
@@ -460,11 +462,17 @@
     },
     "python/src/yamaa/_native.pyi": {
       "names": [
+        "DefineError",
         "DomainError",
         "_BuildResult",
         "_BuildResult.observations",
         "_BuildResult.output",
         "_BuildResult.save",
+        "_DefineResult",
+        "_DefineResult.artifacts",
+        "_DefineResult.capture_reads",
+        "_DefineResult.issues",
+        "_DefineResult.save",
         "_DomainResult",
         "_DomainResult.issues",
         "_DomainResult.observations",
@@ -512,6 +520,7 @@
         "_check_project_metadata",
         "_compile_reference_catalog",
         "_compile_schema",
+        "_define_file",
         "_domain_file",
         "_prepare_document",
         "_prepare_file_project",
@@ -709,6 +718,7 @@
         "utf8_bytes",
         "utf8_scalar",
         "yamaa_check",
+        "yamaa_define",
         "yamaa_domain"
       ],
       "disposition": "remove_public",
@@ -748,6 +758,15 @@
           "rationale": "Approved exact-or-error conversion of lossless public integer output; final release matrix qualification remains required."
         }
       }
+    },
+    "python/src/yamaa/_define.py": {
+      "names": [
+        "DefineError",
+        "define"
+      ],
+      "disposition": "retain_candidate",
+      "issue": "#1758",
+      "rationale": "Shared public Define generation and its specified failure type; qualification remains separate from final reference API retirement."
     }
   }
 }

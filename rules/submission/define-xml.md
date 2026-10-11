@@ -12,31 +12,37 @@ status: normative
 
 <a id="req-0959"></a>
 
-**REQ-0959.** A **study document** is a separately validated entry point,
-written against `schema_define.yaml`. It declares one study, one metadata
-version, the standards, supporting documents, and codelists its datasets
-share, the ordered datasets it represents, and the file it produces. A
-specification remains a single-dataset contract and declares none of this.
+**REQ-0959.** A **study document** is composed from one selected `sdtm`,
+`adam`, or `send` section of an admitted `environment.yaml`. The environment
+supplies `study` and shared `codelists`; the selected section supplies one
+implementation guide, supporting documents, an ordered `specs` list and one
+`define` target. Each section produces exactly one Define-XML document.
+The retained `define.yaml` reference route and its schema remain transition
+qualification history until the complete replacement is qualified.
 
 <a id="req-0960"></a>
 
-**REQ-0960.** The study document is the only place the composition is declared.
+**REQ-0960.** The selected environment section is the only place the composition is declared.
 An implementation must not assemble a document from whatever specifications a
 directory holds: which datasets one submission represents is a study decision,
 and a directory listing is not one.
 
 <a id="req-0961"></a>
 
-**REQ-0961.** `output.path` names the file the document produces, and its
+**REQ-0961.** The selected section's `define` names the file the document produces, and its
 extension must be `.xml`. [Artifact publication](../storage/publication.md)'s extension mapping is not consulted: that
 mapping selects a profile for a dataset artifact, and this artifact has one
 form.
 
 <a id="req-0962"></a>
 
-**REQ-0962.** `creation_datetime` is declared rather than read from a clock.
-Two runs of the same inputs must produce the same bytes. `file_oid` is declared
-rather than minted per run.
+**REQ-0962.** Two generations with the same captured inputs and `created`
+produce the same bytes. An explicit `created` is a whole-second civil datetime;
+omission selects the current UTC time during preparation. Save retains that
+time. An omitted `file_oid` is `study.id` followed by the selected lower-case
+section key and `Define-XML_2.1`, joined by dots. Omitted metadata-version ID
+and name are respectively `study.id.section` and `study.name section metadata`.
+Explicit overrides retain their admitted text, independently of these defaults.
 
 <a id="req-0963"></a>
 
@@ -48,21 +54,19 @@ rather than minted per run.
 
 <a id="req-0964"></a>
 
-**REQ-0964.** Each `datasets` entry names one resolved specification through
-`spec` and gives it an `id`. `id` is the name the document gives the dataset,
-it is unique within the document, and it is what every generated identifier
-for that dataset is built from.
+**REQ-0964.** Each `specs` entry names one specification resolved with its
+parent layers. That specification's `domain` supplies the dataset ID and name.
+The ID is unique within the document and supplies every generated identifier
+for that dataset. Written resource and output paths retain their original
+declaring layer under [Resource paths](../storage/resources.md).
 
 <a id="req-0965"></a>
 
-**REQ-0965.** An entry's `standard` binds that dataset to a declared standard
-of type `IG`. It defaults to the document's `default_standard`, so a document
-whose datasets all follow one implementation guide names it once. Each entry
-has two lines. A document mixing standards -- two releases of an
-implementation guide, or tabulation and analysis datasets together -- names
-the exception on the exceptional entry. A dataset with neither fails:
-[REQ-0859](metadata.md#req-0859) reads this binding to decide the dataset's family, and every
-family-dependent requirement rests on it.
+**REQ-0965.** The selected section's `standard` binds every represented
+dataset to the same implementation guide of type `IG`. Its name must belong
+to the selected section's family. The `sdtm`, `adam`, and `send` sections
+produce separate documents; each document carries the controlled-terminology
+standards cited by its bound codelists' sources.
 
 <a id="req-0966"></a>
 
@@ -201,13 +205,14 @@ attributes in this order:
 | `ODMVersion` | fixed `1.3.2` |
 | `FileType` | fixed `Snapshot` |
 | `FileOID` | `file_oid` |
-| `CreationDateTime` | `creation_datetime` |
+| `CreationDateTime` | selected `created`, or preparation-time UTC |
 | `Originator` | `originator`, when declared |
-| `SourceSystem` | `source_system`, when declared |
-| `SourceSystemVersion` | `source_system_version`, when declared |
+| `SourceSystem` | fixed `yamaa` |
+| `SourceSystemVersion` | section override or actual installed version |
 | `def:Context` | `context` |
 
-`source_system_version` is declared only with `source_system`.
+The source-system version selection applies to both XML and Dataset-JSON under
+[REQ-1080](../operations/functions.md#req-1080).
 
 <a id="req-0980"></a>
 
@@ -233,7 +238,7 @@ standard.
 <a id="req-0983"></a>
 
 **REQ-0983.** Each document produces one `def:leaf` whose `ID` is its generated
-identifier, whose `xlink:href` is the document's `href`, and whose
+identifier, whose `xlink:href` is the document's literal `link`, and whose
 `def:title` is its `title`. A document's kind decides where else it is
 listed:
 
@@ -589,7 +594,26 @@ metadata has no generated form.
 
 <a id="req-1061"></a>
 
-**REQ-1061.** The `define_class` fields have these meanings:
+**REQ-1061.** The selected `submission_section_class` fields have these meanings:
+
+| Field | Meaning |
+| --- | --- |
+| `submission_section_class.standard` | Implementation guide shared by the selected datasets. |
+| `submission_section_class.specs` | Ordered specifications resolved with their parent layers. |
+| `submission_section_class.define` | Define-XML publication target, relative to its declaring environment. |
+| `submission_section_class.documents` | Supporting document IDs, kinds, literal links and titles. |
+| `submission_section_class.dataset_json` | Whether to read already published datasets and render adjacent JSON files. |
+| `submission_section_class.context` | Submission or Other; defaults to Submission. |
+| `submission_section_class.xml_lang` | Language of generated translated text; defaults to en. |
+| `submission_section_class.file_oid` | Optional nonempty file-identity text; it admits the existing URL-style spellings. Generated object and leaf identifiers are validated separately. |
+| `submission_section_class.metadata_version` | Optional metadata-version ID, name and description overrides. |
+| `submission_section_class.originator` | Optional submitting party. |
+| `submission_section_class.stylesheet` | Optional relative stylesheet link. |
+| `submission_section_class.source_system_version` | Optional nonempty XML and JSON source-system version; omission selects the installed package version under [REQ-1080](../operations/functions.md#req-1080). |
+
+The generated Define-XML release is `2.1.11` and SourceSystem is `yamaa`.
+The following `define_class` table describes the retained reference-only route
+pending coordinated retirement:
 
 | Field | Meaning |
 | --- | --- |
