@@ -50,16 +50,24 @@ def native_test_fixtures(workspace: Path):
             parent = parent / part
             if parent.is_symlink():
                 raise ValueError("native source fixtures must not be symlinks")
-    # Literal compile-time inputs outside Cargo's workspace need the same
-    # explicit declaration as runtime fixture reads. Check before creating an
-    # archive so a library-only build cannot hide missing native test inputs.
-    include = re.compile(
-        r'\binclude_(?:str|bytes)!\s*\(\s*"((?:[^"\\]|\\.)*)"\s*,?\s*\)'
-    )
+    # This conservative source-text scan admits direct include_str!/include_bytes!
+    # calls only with ordinary quoted literals and matching (), [] or {}.
+    # Raw/dynamic arguments are refused. Inputs outside Cargo's workspace need
+    # an explicit declaration before creating an archive.
+    include = re.compile(r"\binclude_(?:str|bytes)\s*!\s*([\(\[\{])\s*")
+    argument = re.compile(r'"((?:[^"\\]|\\.)*)"\s*,?\s*([\)\]\}])')
+    closing = {"(": ")", "[": "]", "{": "}"}
     for source in sorted((workspace / "crates").rglob("*.rs")):
         if any(part in {"target", ".git", "__pycache__"} for part in source.parts):
             continue
-        for written in include.findall(source.read_text(encoding="utf-8")):
+        text = source.read_text(encoding="utf-8")
+        for directive in include.finditer(text):
+            literal = argument.match(text, directive.end())
+            if literal is None or literal.group(2) != closing[directive.group(1)]:
+                raise ValueError(
+                    "native compile fixture arguments must be ordinary string literals"
+                )
+            written = literal.group(1)
             if (
                 "\\" in written
                 or ":" in written
