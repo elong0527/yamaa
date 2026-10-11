@@ -198,7 +198,7 @@ pub fn execute_with_functions_into<P: SourcePort, D: SourceDecoder>(
     prepared: &PreparedSpecification,
     port: &mut P,
     decoder: &mut D,
-    functions: &mut dyn dataset::FunctionBindings<Error = <D::Table as TableAccess>::Error>,
+    functions: &mut dyn dataset::FunctionPort<Error = <D::Table as TableAccess>::Error>,
     limits: Limits,
     attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
 ) {

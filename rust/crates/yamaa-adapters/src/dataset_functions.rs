@@ -2,14 +2,11 @@
 use super::{CallbackError, Error};
 use crate::{function_signature, scalar_transport::ScalarValue};
 use serde::{Deserialize, Serialize};
-use yamaa_core::{
-    table::{CellError, TableAccess, TableSchema, ValueRef},
-    value::Value,
-};
+use yamaa_core::table::{CellError, TableAccess, TableSchema, ValueRef};
 use yamaa_engine::{
-    dataset::{ExpressionDeclaration, FunctionArgument, FunctionBindings, FunctionInput},
+    dataset::{ExpressionDeclaration, FunctionArgument, FunctionInput},
     dataset_predicate::Read,
-    function_invocation::{Argument, HostError, InvocationFailure, InvocationPlan},
+    function_invocation::InvocationFailure,
 };
 
 #[derive(Deserialize)]
@@ -71,19 +68,6 @@ impl Call {
             slot: call.slot,
             arguments,
         })
-    }
-}
-
-pub(super) struct Unavailable;
-impl FunctionBindings for Unavailable {
-    type Error = CallbackError;
-    /// Legacy entrypoints provide no implicit callable authority.
-    fn signature(&self, _: usize) -> Option<&InvocationPlan> {
-        None
-    }
-    /// Binding admission rejects all function-bearing plans before this point.
-    fn call(&mut self, _: usize, _: &[Argument<'_>]) -> Result<Value, HostError<CallbackError>> {
-        unreachable!("legacy execution admitted no callback bindings")
     }
 }
 

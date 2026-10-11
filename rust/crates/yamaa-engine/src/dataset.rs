@@ -13,9 +13,9 @@ mod intermediates;
 pub use yamaa_core::dataset::*;
 #[path = "dataset_functions.rs"]
 mod functions;
-pub use functions::FunctionBindings;
-pub(crate) fn unavailable_functions<E>() -> impl FunctionBindings<Error = E> {
-    functions::UnavailableFunctions(core::marker::PhantomData)
+pub use crate::function_invocation::FunctionPort;
+pub(crate) fn unavailable_functions<E>() -> impl FunctionPort<Error = E> {
+    crate::function_invocation::NoFunctions::new()
 }
 #[path = "dataset_keys.rs"]
 mod key_grain;
@@ -326,7 +326,7 @@ pub(crate) fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> Ex
 
 /// Resources and semantic observations belong to the same attempted run.
 struct EvaluationState<'a, E> {
-    functions: &'a mut dyn FunctionBindings<Error = E>,
+    functions: &'a mut dyn FunctionPort<Error = E>,
     secondary: &'a [&'a dyn TableAccess<Error = E>],
     budget: &'a mut Budget,
     handlers: &'a mut HandlerCounter,
@@ -675,7 +675,7 @@ pub trait DatasetExecution {
         &self,
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],
-        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
     ) -> ExecutionAttempt<T::Error>;
     /// Observe stage transitions without repeating evaluation or exposing intermediate output.
@@ -685,7 +685,7 @@ pub trait DatasetExecution {
         &self,
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],
-        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
         observer: &mut dyn FnMut(ExecutionPhase),
     ) -> ExecutionAttempt<T::Error>;
@@ -717,7 +717,7 @@ impl DatasetExecution for DatasetPlan {
         &self,
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],
-        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
     ) -> ExecutionAttempt<T::Error> {
         Executor { plan: self }.execute_observed_functions(table, secondary, functions, limits)
@@ -726,7 +726,7 @@ impl DatasetExecution for DatasetPlan {
         &self,
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],
-        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
         observer: &mut dyn FnMut(ExecutionPhase),
     ) -> ExecutionAttempt<T::Error> {
@@ -775,7 +775,7 @@ impl Executor<'_> {
         self.execute_observed_functions(
             table,
             secondary,
-            &mut functions::UnavailableFunctions(core::marker::PhantomData),
+            &mut crate::function_invocation::NoFunctions::new(),
             limits,
         )
     }
@@ -787,7 +787,7 @@ impl Executor<'_> {
         &self,
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],
-        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
     ) -> ExecutionAttempt<T::Error> {
         self.execute_with_phase_observer(table, secondary, functions, limits, &mut |_| {})
@@ -800,7 +800,7 @@ impl Executor<'_> {
         &self,
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],
-        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
         observer: &mut dyn FnMut(ExecutionPhase),
     ) -> ExecutionAttempt<T::Error> {
@@ -833,7 +833,7 @@ impl Executor<'_> {
         &self,
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],
-        functions: &mut dyn FunctionBindings<Error = T::Error>,
+        functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
         observations: &mut AttemptObservations,
         observer: &mut dyn FnMut(ExecutionPhase),
@@ -1242,7 +1242,7 @@ impl Executor<'_> {
                             return Err(Box::new(ExecutionError::VerificationDiagnostic {
                                 diagnostic: diagnostic.clone(),
                                 records: core::mem::take(records),
-                            }))
+                            }));
                         }
                         Check::InvalidDeclaration {
                             condition,
@@ -1255,7 +1255,7 @@ impl Executor<'_> {
                                 requirement,
                                 reason: reason.clone(),
                                 records: core::mem::take(records),
-                            }))
+                            }));
                         }
                         Check::NotMissing
                         | Check::AllowedValues(_)

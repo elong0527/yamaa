@@ -77,7 +77,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
                 row,
                 limits,
                 &mut EvaluationState {
-                    functions: &mut functions::UnavailableFunctions(core::marker::PhantomData),
+                    functions: &mut crate::function_invocation::NoFunctions::new(),
                     budget,
                     handlers,
                     secondary: &[],

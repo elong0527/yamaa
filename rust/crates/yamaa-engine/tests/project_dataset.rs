@@ -11,7 +11,7 @@ use yamaa_core::{
 use yamaa_engine::{
     dataset::{
         Assignment, BoundProjectFunction, DatasetExecution, DatasetPlan, ExecutionError,
-        Expression, FunctionArgument, FunctionBindings, FunctionInput, Limits, PlanError, RowMode,
+        Expression, FunctionArgument, FunctionInput, FunctionPort, Limits, PlanError, RowMode,
         RowTemplate,
     },
     function_invocation::{Argument, FailureKind, HostError},
@@ -147,7 +147,7 @@ struct Callbacks {
     calls: Vec<Vec<(String, Value)>>,
     result: Result<Value, &'static str>,
 }
-impl FunctionBindings for Callbacks {
+impl FunctionPort for Callbacks {
     type Error = &'static str;
     fn signature(&self, _: usize) -> Option<&InvocationPlan> {
         None

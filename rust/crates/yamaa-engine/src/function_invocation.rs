@@ -27,14 +27,47 @@ pub enum HostError<E> {
     InvalidResult(E),
 }
 
-/// Synchronous already-bound callable; no Send/Sync/Clone requirement or retry.
+/// Stable activated callable slots; no Send/Sync/Clone requirement or retry.
 /// Adapters normalize nonfinite returns, encode temporal arguments at the
 /// REQ-0570 boundary, and contain host exceptions before returning here. The
 /// owned result cannot borrow the input or callback's temporary host buffers.
 pub trait FunctionPort {
     type Error;
+    /// Borrow resolved metadata without executing project code. A prebound
+    /// scalar-only port may leave metadata unavailable; dataset admission checks
+    /// every selected slot before observing source cardinality or cells.
+    fn signature(&self, _slot: usize) -> Option<&InvocationPlan> {
+        None
+    }
+    /// Borrow an activated versionless package signature without host effects.
+    fn project_signature(&self, _slot: usize) -> Option<&ProjectInvocationPlan> {
+        None
+    }
     /// Invoke on the caller's thread with declaration-order mapped arguments.
-    fn call(&mut self, arguments: &[Argument<'_>]) -> Result<Value, HostError<Self::Error>>;
+    fn call(
+        &mut self,
+        slot: usize,
+        arguments: &[Argument<'_>],
+    ) -> Result<Value, HostError<Self::Error>>;
+}
+
+/// No implicit function authority, shared by every non-function execution path.
+pub struct NoFunctions<E>(core::marker::PhantomData<E>);
+impl<E> NoFunctions<E> {
+    pub const fn new() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+impl<E> Default for NoFunctions<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl<E> FunctionPort for NoFunctions<E> {
+    type Error = E;
+    fn call(&mut self, _: usize, _: &[Argument<'_>]) -> Result<Value, HostError<E>> {
+        unreachable!("function metadata was admitted before source access")
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -100,7 +133,17 @@ pub fn invoke<P: FunctionPort>(
     supplied: &BTreeMap<String, Value>,
     port: &mut P,
 ) -> Result<Value, InvocationFailure<P::Error>> {
-    invoke_signature(plan.identity(), plan.signature(), supplied, port)
+    invoke_at(plan, supplied, 0, port)
+}
+
+/// Invoke one admitted immutable callback slot through the scalar lifecycle.
+pub fn invoke_at<P: FunctionPort + ?Sized>(
+    plan: &InvocationPlan,
+    supplied: &BTreeMap<String, Value>,
+    slot: usize,
+    port: &mut P,
+) -> Result<Value, InvocationFailure<P::Error>> {
+    invoke_signature(plan.identity(), plan.signature(), supplied, slot, port)
 }
 
 /// Run a versionless admitted package function through the same scalar semantics.
@@ -110,13 +153,24 @@ pub fn invoke_project<P: FunctionPort>(
     supplied: &BTreeMap<String, Value>,
     port: &mut P,
 ) -> Result<Value, InvocationFailure<P::Error, ProjectFunctionIdentity>> {
-    invoke_signature(plan.identity(), plan.signature(), supplied, port)
+    invoke_project_at(plan, supplied, 0, port)
 }
 
-fn invoke_signature<P: FunctionPort, I: Clone>(
+/// Invoke one activated package slot without resolving or activating host code.
+pub fn invoke_project_at<P: FunctionPort + ?Sized>(
+    plan: &ProjectInvocationPlan,
+    supplied: &BTreeMap<String, Value>,
+    slot: usize,
+    port: &mut P,
+) -> Result<Value, InvocationFailure<P::Error, ProjectFunctionIdentity>> {
+    invoke_signature(plan.identity(), plan.signature(), supplied, slot, port)
+}
+
+fn invoke_signature<P: FunctionPort + ?Sized, I: Clone>(
     identity: &I,
     signature: &LogicalSignature,
     supplied: &BTreeMap<String, Value>,
+    slot: usize,
     port: &mut P,
 ) -> Result<Value, InvocationFailure<P::Error, I>> {
     let failure = |kind| InvocationFailure {
@@ -139,7 +193,7 @@ fn invoke_signature<P: FunctionPort, I: Clone>(
                 Presence::Required => {
                     return Err(failure(FailureKind::MissingRequired {
                         parameter: parameter.name.clone(),
-                    }))
+                    }));
                 }
                 Presence::Optional(default) => default,
             },
@@ -160,7 +214,7 @@ fn invoke_signature<P: FunctionPort, I: Clone>(
             value: value.into(),
         });
     }
-    let returned = port.call(&arguments).map_err(|error| {
+    let returned = port.call(slot, &arguments).map_err(|error| {
         failure(match error {
             HostError::Raised(payload) => FailureKind::CallFailed(payload),
             HostError::InvalidResult(payload) => FailureKind::InvalidHostResult(payload),

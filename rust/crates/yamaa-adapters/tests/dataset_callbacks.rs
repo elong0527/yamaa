@@ -8,7 +8,7 @@ use yamaa_adapters::{
 };
 use yamaa_core::{table::ValueRef, value::Value};
 use yamaa_engine::{
-    dataset::FunctionBindings,
+    dataset::FunctionPort,
     function_invocation::{Argument, HostError, InvocationPlan},
 };
 
@@ -17,7 +17,7 @@ struct Callbacks {
     trace: Vec<String>,
     mode: String,
 }
-impl FunctionBindings for Callbacks {
+impl FunctionPort for Callbacks {
     type Error = CallbackError;
     /// Stable metadata has no callback effects.
     fn signature(&self, slot: usize) -> Option<&InvocationPlan> {
@@ -246,7 +246,7 @@ fn callback_boundary_contains_panics_and_reuses_fresh_attempts() {
         call_panic: bool,
         calls: usize,
     }
-    impl FunctionBindings for Unwind {
+    impl FunctionPort for Unwind {
         type Error = CallbackError;
         fn signature(&self, slot: usize) -> Option<&InvocationPlan> {
             assert!(!self.metadata_panic, "private metadata panic");

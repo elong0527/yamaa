@@ -98,7 +98,7 @@ struct RBindings<'a> {
     signatures: &'a [yamaa_engine::function_invocation::InvocationPlan],
     callbacks: Vec<Function>,
 }
-impl yamaa_engine::dataset::FunctionBindings for RBindings<'_> {
+impl yamaa_engine::dataset::FunctionPort for RBindings<'_> {
     type Error = CallbackError;
     /// Borrow immutable admitted metadata independently of callback evaluation.
     fn signature(&self, slot: usize) -> Option<&yamaa_engine::function_invocation::InvocationPlan> {
@@ -113,7 +113,7 @@ impl yamaa_engine::dataset::FunctionBindings for RBindings<'_> {
         RPort {
             dispatch: self.callbacks[slot].clone(),
         }
-        .call(arguments)
+        .call(0, arguments)
     }
 }
 
@@ -165,6 +165,7 @@ impl FunctionPort for RPort {
     /// result fields by position. Never inspect arbitrary R character pointers.
     fn call(
         &mut self,
+        _slot: usize,
         arguments: &[Argument<'_>],
     ) -> std::result::Result<Value, HostError<CallbackError>> {
         let mut encoded = Vec::with_capacity(arguments.len());
