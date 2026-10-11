@@ -1,7 +1,7 @@
 use yamaa_core::{
     predicate, regex,
     table::ValueRef,
-    text_extract::{AdmissionError, Error, MAX_DECLARATION_BYTES, Step, StringExtract},
+    text_extract::{AdmissionError, Error, Step, StringExtract, MAX_DECLARATION_BYTES},
     value::Value,
 };
 fn operation(
@@ -84,11 +84,9 @@ fn matcher_limits_and_shared_consumer_usage_never_become_no_match() {
         Ok(Step::Capture(Some("a")))
     );
     let other = regex::Pattern::compile("a", Default::default()).unwrap();
-    assert!(
-        shared
-            .search_pattern(&other, "aa", Default::default())
-            .is_err()
-    );
+    assert!(shared
+        .search_pattern(&other, "aa", Default::default())
+        .is_err());
     assert_eq!(shared.used().regex.subject_bytes, 2);
     let mut shared = budget();
     let limits = regex::MatchLimits {
@@ -135,10 +133,9 @@ fn constructor_and_failure_context_are_admitted_before_copying_or_parsing() {
     let op = operation("(a)", "1", None, None);
     assert!(op.failure_diagnostic(Step::NoMatch("x"), 0).is_none());
     let size = op.failure_text_bytes(Step::NoMatch("x")).unwrap();
-    assert!(
-        op.failure_diagnostic(Step::NoMatch("x"), size - 1)
-            .is_none()
-    );
+    assert!(op
+        .failure_diagnostic(Step::NoMatch("x"), size - 1)
+        .is_none());
     assert!(op.failure_diagnostic(Step::NoMatch("x"), size).is_some());
 }
 #[path = "diagnostic/text_extract.rs"]
