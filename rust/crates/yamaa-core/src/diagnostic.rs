@@ -22,6 +22,10 @@ pub use inheritance::InheritanceFinding;
 mod source;
 pub use source::{admit_source_diagnostics, ParquetFinding, SourceDiagnosticReport, SourceFinding};
 
+#[path = "diagnostic_inherited_dependencies.rs"]
+mod inherited_dependencies;
+pub use inherited_dependencies::inheritance_dependency_diagnostics;
+
 #[path = "diagnostic_grammar.rs"]
 mod grammar;
 #[path = "diagnostic_numeric.rs"]
@@ -142,6 +146,7 @@ conditions! {
     ResourceMissing => ("validation", "resource_path_missing", Some("REQ-0785")),
     ResourceNotRegularFile => ("validation", "resource_path_not_regular_file", Some("REQ-0785")),
     InheritanceInvalidParent => ("validation", "invalid_parent_path", Some("REQ-0653")),
+    InheritanceUnknownDependency => ("validation", "unknown_reference", Some("REQ-0070")),
     InheritanceParentUnavailable => ("validation", "parent_not_found", Some("REQ-0654")),
     InheritanceCycle => ("validation", "inheritance_cycle", Some("REQ-0655")),
     InheritanceParentVersion => ("validation", "schema_version_mismatch", Some("REQ-0656")),
