@@ -46,6 +46,22 @@ fn normalized(
 fn literal(outcome: Value) -> Value {
     captured_schema::literal_outcome(outcome).unwrap_or_else(context_failure)
 }
+fn traversal_finding<E>(error: &graph::Error<E>) -> Result<Option<Value>, captured_schema::Error> {
+    let finding = error
+        .diagnostic_with_limit(16_777_216)
+        .map_err(|error| match error {
+            yamaa_core::diagnostic::ProjectionError::Limit => captured_schema::Error::Limit,
+            yamaa_core::diagnostic::ProjectionError::InvalidContext => {
+                captured_schema::Error::InvalidContext
+            }
+        })?;
+    let Some(finding) = finding else {
+        return Ok(None);
+    };
+    Ok(Some(
+        json!({"status":"invalid", "diagnostics":[super::portable_diagnostic(finding).ok_or(captured_schema::Error::InvalidContext)?]}),
+    ))
+}
 /// Borrow rejected preparation so a public carrier can retain its exact sources
 /// and opaque resource payload beside the complete projected findings.
 pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
@@ -76,48 +92,27 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
             &[("source", source), ("entry", entry)],
         ),
         E::Traversal(error) => {
-            let error: graph::Error<()> = match error {
-                graph::Error::Resource(error) => graph::Error::Resource(*error),
-                graph::Error::Unavailable { declaring, path } => graph::Error::Unavailable {
-                    declaring: declaring.clone(),
-                    path: path.clone(),
-                },
-                graph::Error::InvalidParent { declaring, path } => graph::Error::InvalidParent {
-                    declaring: declaring.clone(),
-                    path: path.clone(),
-                },
-                graph::Error::Cycle {
-                    path,
-                    returns_to_entry,
-                } => graph::Error::Cycle {
-                    path: path.clone(),
-                    returns_to_entry: *returns_to_entry,
-                },
-                graph::Error::Version {
-                    source,
-                    entry,
-                    expected,
-                    actual,
-                    is_entry,
-                } => graph::Error::Version {
-                    source: source.clone(),
-                    entry: entry.clone(),
-                    expected: expected.clone(),
-                    actual: actual.clone(),
-                    is_entry: *is_entry,
-                },
-                graph::Error::UnsupportedControlField { source, field } => {
-                    graph::Error::UnsupportedControlField {
-                        source: source.clone(),
-                        field,
+            match traversal_finding(error) {
+                Ok(Some(outcome)) => outcome,
+                Err(error) => context_failure(error),
+                Ok(None) => {
+                    let error: graph::Error<()> = match error {
+                        graph::Error::Resource(error) => graph::Error::Resource(*error),
+                        graph::Error::UnsupportedControlField { source, field } => {
+                            graph::Error::UnsupportedControlField {
+                                source: source.clone(),
+                                field,
+                            }
+                        }
+                        // Classified findings were handled above. A contradictory
+                        // cycle carrier remains a transport refusal.
+                        _ => graph::Error::InvalidIdentity,
+                    };
+                    match inheritance_transport::traversal_outcome(error) {
+                        Ok(value) => literal(value),
+                        Err(_) => rejected("transport"),
                     }
                 }
-                graph::Error::InvalidIdentity => graph::Error::InvalidIdentity,
-                _ => unreachable!("host and layer handled above"),
-            };
-            match inheritance_transport::traversal_outcome(error) {
-                Ok(value) => literal(value),
-                Err(_) => rejected("transport"),
             }
         }
         E::ParentsRequired => rejected("parents_required"),
@@ -181,10 +176,14 @@ pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
             error,
             &[("source", &source), ("entry", &entry)],
         ),
-        E::Traversal(error) => match inheritance_transport::traversal_outcome(error) {
-            Ok(value) => literal(value),
-            Err(Failure::Host(error)) => return source(error),
-            Err(Failure::Transport(_)) => rejected("transport"),
+        E::Traversal(error) => match traversal_finding(&error) {
+            Ok(Some(outcome)) => outcome,
+            Err(error) => context_failure(error),
+            Ok(None) => match inheritance_transport::traversal_outcome(error) {
+                Ok(value) => literal(value),
+                Err(Failure::Host(error)) => return source(error),
+                Err(Failure::Transport(_)) => rejected("transport"),
+            },
         },
         E::ParentsRequired => rejected("parents_required"),
         E::PathBytes => rejected("path_byte_limit"),
@@ -215,4 +214,30 @@ pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
                     .to_string()
             }),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn traversal_context_limit_preserves_original_whole_failure() {
+        let error = graph::Error::<()>::Unavailable {
+            declaring: "entry".into(),
+            path: "x".repeat(3_000_000),
+        };
+        for _ in 0..2 {
+            assert!(matches!(
+                traversal_finding(&error),
+                Err(captured_schema::Error::Limit)
+            ));
+        }
+        assert_eq!(
+            context_failure(captured_schema::Error::Limit),
+            json!({"status":"rejected","stage":"inheritance","code":"diagnostic_context_limit"})
+        );
+        let graph::Error::Unavailable { path, .. } = error else {
+            panic!("failure replaced")
+        };
+        assert_eq!(path.len(), 3_000_000);
+    }
 }

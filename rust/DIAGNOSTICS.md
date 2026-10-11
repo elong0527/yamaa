@@ -221,3 +221,17 @@ later records, shortened diagnostic keys and full offending-key log context.
 Eleven complete independent reports and the unchanged negative-paired-dates
 report pin typed source observations and failed publication gates in Rust and both
 installed-host replay suites. Remaining verification families still need migration.
+
+## Inheritance traversal findings
+
+Borrowed core findings own the five existing parent-path, unavailable-parent,
+cycle and parent/entry-version causes. They retain declaring source, entry,
+parent, closed-loop paths and exact version text. Complete context admission
+precedes copies; malformed loop carriers and quota refusal remain distinct.
+The engine exposes borrowed projection without changing traversal effects or
+retaining a second host error. The original-document adapter uses the shared
+envelope directly. The legacy inheritance/1 probe still represents the same
+core findings in its compatibility context list until API retirement.
+Captured schema arenas, resource failures and opaque host errors retain their
+separate authority and precedence. This slice contributes to #1753/#1754; it
+does not complete global diagnostic or legacy protocol removal.
