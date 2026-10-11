@@ -22,11 +22,22 @@ Follow [the delivery order](migration-order.md).
 
 ## Declared API inventory
 
-[release-api.json](release-api.json) records 438 declared names in 23 source files:
-276 Python `__all__` entries, 88 native Python stub symbols/members, 22 legacy R
+[release-api.json](release-api.json) records 436 declared names in 23 source files:
+276 Python `__all__` entries, 86 native Python stub symbols/members, 22 legacy R
 exports, and 52 native R exports/S3 registrations. Re-exports are counted at each
 public location. Private modules and native handles are included for removal
 tracking; their inclusion is not a public compatibility promise.
+
+Python's module `traverse_inheritance` and `_Schema.traverse_inheritance` source
+callback probes are retired. Their installed semantic consumers use the existing
+typed native document preparation paths; complete resolved/provenance oracles
+use retained adapter arenas. Private `_Schema.analyze`, `_compile_schema` and
+`interpret_schema` queries remain. The optional native interpreter explicitly
+refuses its old inheritance hook before encoding or source effects, with no
+reference fallback. Default reference and custom typed resolver dispositions
+remain unchanged. The R callback/export and shared JSON bridge still require
+owner-coordinated removal: Python-only retirement does not close #1755's
+No JSON host callback criterion or the broader #1751 release API gates.
 
 Every source group has a disposition, linked issue and rationale; exceptions are
 explicit per-name overrides. `replace` and `remove_public` are implementation

@@ -1,7 +1,8 @@
-"""Installed source-port identity, exception, thread and reentrancy contracts."""
+"""Installed typed inheritance ports preserve originals, effects and isolation."""
 
-import csv
 import json
+import os
+import platform
 import threading
 import unittest
 from pathlib import Path
@@ -9,146 +10,169 @@ from pathlib import Path
 from yamaa import _native as yamaa_native
 from yamaa.adapters._native_schema_wire import encode_tree
 
-SCHEMA = json.dumps(
-    {
-        "protocol": "schema/1",
-        "schema": {
-            "entry": 0,
-            "root_class": "root_class",
-            "modules": [
-                {
-                    "name": "schema.yaml",
-                    "document": encode_tree(
-                        {
-                            "version": "1.0",
-                            "root_class": [
-                                {"schema_version": {"type": "str"}},
-                                {"parents": {"type": ["str", "list[str]"]}},
-                            ],
-                        }
-                    ),
-                }
+ROOT = Path(__file__).with_name("specification-original")
+SCHEMA = json.dumps({
+    "protocol": "schema/1",
+    "schema": {"entry": 0, "root_class": "root_class", "modules": [{
+        "name": "schema.yaml", "document": encode_tree({
+            "version": "1.0", "root_class": [
+                {"schema_version": {"type": "str"}},
+                {"parents": {"type": ["str", "list[str]"]}},
             ],
-        },
-    }
-)
+        }),
+    }]},
+})
 
 
-def request(parents):
-    return json.dumps(
-        {
-            "protocol": "inheritance/1",
-            "entry": {"identity": "/entry", "display_path": "/entry"},
-            "document": encode_tree({"schema_version": "1.0", "parents": parents}),
-        }
-    )
-
-
-def reply(outcome):
-    return json.dumps({"protocol": "inheritance/1", "outcome": outcome})
+def modules():
+    root = ROOT / "schema"
+    names = ["schema.yaml"] + sorted(p.name for p in root.glob("*.yaml") if p.name != "schema.yaml")
+    return [(name, (root / name).read_bytes()) for name in names]
 
 
 class Boundary(unittest.TestCase):
     def setUp(self):
         self.assertIn("site-packages", str(Path(yamaa_native.__file__).resolve()))
-        self.snapshot, result = yamaa_native._compile_schema(SCHEMA)
-        self.assertEqual(json.loads(result)["outcome"]["status"], "compiled")
+        self.case = ROOT / "cases" / "schema-inheritance"
+        self.path = self.case / "spec_study.yaml"
+        self.entry = str(self.path.resolve())
+        self.source = self.path.read_bytes()
 
-    def test_complete_independent_graph_outcomes_and_source_traces(self):
-        root = Path(__file__).parent
-        with (root / "inheritance_traversal.tsv").open(encoding="ascii") as stream:
-            cases = list(csv.DictReader(stream, delimiter="\t"))
-        with (root / "inheritance_sources.tsv").open(encoding="ascii") as stream:
-            sources = list(csv.DictReader(stream, delimiter="\t"))
-        self.assertEqual(len(cases), 8)
-        for case in cases:
-            for prepared in (False, True):
-                with self.subTest(case=case["case"], prepared=prepared):
-                    expected = [s for s in sources if s["case"] == case["case"]]
-                    trace = iter(expected)
-                    calls = []
+    def prepare(self, explicit, canonicalize, capture, rebase, source=None):
+        arguments = (self.entry, self.source if source is None else source, canonicalize, capture, rebase)
+        if explicit:
+            return yamaa_native._prepare_inherited_specification(modules(), 0, *arguments)
+        return yamaa_native._prepare_document(*arguments)
 
-                    def callback(message, maximum, trace=trace, calls=calls):
-                        event = next(trace)
-                        self.assertEqual(message, event["request"])
-                        calls.append(message)
-                        self.assertLessEqual(len(event["reply"].encode()), maximum)
-                        return event["reply"]
-
-                    if prepared:
-                        snapshot, _ = yamaa_native._compile_schema(case["schema"])
-                        result = snapshot.traverse_inheritance(
-                            case["request"], callback
-                        )
-                    else:
-                        result = yamaa_native.traverse_inheritance(
-                            case["schema"], case["request"], callback
-                        )
-                    self.assertEqual(result, case["expected"])
-                    self.assertEqual(calls, [s["request"] for s in expected])
-
-    def test_original_host_exceptions_and_control_flow_survive(self):
-        for prepared in (False, True):
-            for failure in (
-                ValueError("original"),
-                KeyboardInterrupt("original"),
-                SystemExit(17),
-            ):
-                with self.subTest(prepared=prepared, failure=type(failure)):
-
-                    def callback(*_, failure=failure):
-                        raise failure
-
-                    with self.assertRaises(type(failure)) as caught:
-                        if prepared:
-                            self.snapshot.traverse_inheritance(request(["a"]), callback)
-                        else:
-                            yamaa_native.traverse_inheritance(
-                                SCHEMA, request(["a"]), callback
-                            )
-                    self.assertIs(caught.exception, failure)
-
-    def test_same_thread_reentrant_snapshot_has_isolated_graph_state(self):
-        caller = threading.get_ident()
+    def ports(self, effect=None):
         calls = []
 
-        def callback(message, maximum):
+        def record(operation, arguments):
+            calls.append((operation, arguments))
+            if effect is not None:
+                effect(operation, arguments)
+
+        def canonicalize(declaring, written):
+            record("canonicalize", (declaring, written))
+            candidate = Path(declaring).parent / written
+            return (str(candidate.resolve()), str(candidate)) if candidate.is_file() else None
+
+        def capture(identity, display_path, maximum):
+            record("capture", (identity, display_path, maximum))
+            with Path(identity).open("rb") as stream:
+                content = stream.read(maximum + 1)
+            self.assertLessEqual(len(content), maximum)
+            return content
+
+        def rebase(layer, entry, written, maximum):
+            record("rebase", (layer, entry, written, maximum))
+            if Path(written).is_absolute() or Path(layer).parent == Path(entry).parent:
+                return written
+            return Path(os.path.relpath(os.path.normpath(os.path.join(Path(layer).parent, written)), Path(entry).parent)).as_posix()
+
+        return (canonicalize, capture, rebase), calls
+
+    def assert_original(self, specification):
+        self.assertEqual(specification.source(), ("LB", "input/lb.csv"))
+        reads, publications = [], []
+
+        def capture(dataset, path, maximum):
+            reads.append((dataset, path))
+            content = (self.case / path).read_bytes()
+            self.assertLessEqual(len(content), maximum)
+            return content, True
+
+        def publish(path, content):
+            publications.append(path)
+            self.assertEqual(path, "adlb.csv")
+            self.assertEqual(content, (self.case / "expected/adlb.csv").read_bytes())
+
+        metadata = (platform.python_version(), yamaa_native.engine_info()["core_version"], "schema-inheritance", "spec_study.yaml", ".")
+        expected = json.loads((ROOT / "expected/schema-inheritance.json").read_text())
+        expected.update(runtime="python", runtime_version=metadata[0], engine_version=metadata[1])
+        self.assertEqual(json.loads(specification.report(capture, publish, metadata)), expected)
+        self.assertEqual(publications, ["adlb.csv"])
+        self.assertEqual(reads, [("LB", "input/lb.csv")])
+
+    def test_retired_callbacks_are_absent_and_private_schema_query_is_unchanged(self):
+        self.assertFalse(hasattr(yamaa_native, "traverse_inheritance"))
+        snapshot, compiled = yamaa_native._compile_schema(SCHEMA)
+        self.assertEqual(json.loads(compiled)["outcome"]["status"], "compiled")
+        self.assertFalse(hasattr(snapshot, "traverse_inheritance"))
+        queries = [{"operation": "validate_document", "document": encode_tree({"schema_version": "1.0", "parents": []})}]
+        query = json.dumps({"protocol": "schema/1", "queries": queries})
+        expected = {"protocol": "schema/1", "outcome": {"status": "analyzed", "results": [{"status": "valid", "diagnostics": []}]}}
+        self.assertEqual(json.loads(snapshot.analyze(query)), expected)
+        stateless = json.loads(yamaa_native.interpret_schema(json.dumps({**json.loads(SCHEMA), "queries": queries})))
+        self.assertEqual(stateless["outcome"].pop("schema"), json.loads(compiled)["outcome"])
+        self.assertEqual(stateless, expected)
+
+    def test_complete_original_reports_and_typed_source_effects(self):
+        for explicit in (False, True):
+            with self.subTest(explicit=explicit):
+                ports, calls = self.ports()
+                specification = self.prepare(explicit, *ports)
+                self.assert_original(specification)
+                self.assertEqual([Path(args[1]).name for op, args in calls if op == "canonicalize"], ["spec_organization.yaml", "spec_compound.yaml", "spec_organization.yaml"])
+                self.assertEqual([Path(args[0]).name for op, args in calls if op == "capture"], ["spec_organization.yaml", "spec_compound.yaml"])
+                remaining = 16_777_216 - len(self.source)
+                for op, args in calls:
+                    if op == "capture":
+                        self.assertEqual(args[2], remaining)
+                        remaining -= Path(args[0]).stat().st_size
+
+    def test_original_exceptions_and_interrupts_stop_at_each_typed_port(self):
+        for explicit in (False, True):
+            for operation in ("canonicalize", "capture", "rebase"):
+                for failure in (ValueError("original"), KeyboardInterrupt("original"), SystemExit(17)):
+                    with self.subTest(explicit=explicit, operation=operation, failure=type(failure)):
+                        def effect(op, arguments):
+                            if op == operation:
+                                raise failure
+                        ports, calls = self.ports(effect)
+                        with self.assertRaises(type(failure)) as caught:
+                            self.prepare(explicit, *ports)
+                        self.assertIs(caught.exception, failure)
+                        self.assertEqual(calls[-1][0], operation)
+                        self.assertEqual(sum(op == operation for op, _ in calls), 1)
+
+    def test_same_thread_reentrant_typed_attempts_have_independent_state(self):
+        caller = threading.get_ident()
+        nested = []
+        source = b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\n"
+        def effect(operation, arguments):
             self.assertEqual(threading.get_ident(), caller)
-            message = json.loads(message)
-            calls.append(message["operation"])
-            nested = self.snapshot.traverse_inheritance(
-                request([]), lambda *_: self.fail("nested IO")
-            )
-            self.assertEqual(json.loads(nested)["outcome"]["status"], "traversed")
-            if message["operation"] == "canonicalize":
-                return reply(
-                    {"status": "resolved", "identity": "/a", "display_path": "/a"}
-                )
-            return reply(
-                {
-                    "status": "document",
-                    "document": encode_tree({"schema_version": "1.0"}),
-                }
-            )
+            def no_io(*_):
+                self.fail("nested source authority")
+            nested.append(yamaa_native._prepare_document("nested.yaml", source, no_io, no_io, no_io))
+            self.assertEqual(nested[-1].source(), ("SRC", "input.csv"))
+        for explicit in (False, True):
+            ports, calls = self.ports(effect)
+            specification = self.prepare(explicit, *ports)
+            self.assert_original(specification)
+            self.assertEqual(len(nested), len(calls) if not explicit else 2 * len(calls))
 
-        result = self.snapshot.traverse_inheritance(request(["a"]), callback)
-        self.assertEqual(calls, ["canonicalize", "read"])
-        self.assertEqual(
-            [x["identity"] for x in json.loads(result)["outcome"]["layers"]],
-            ["/a", "/entry"],
-        )
-
-    def test_reply_limit_and_wrong_return_do_not_poison_snapshot(self):
-        with self.assertRaisesRegex(ValueError, "reply exceeds byte limit"):
-            self.snapshot.traverse_inheritance(
-                request(["a"]), lambda _, maximum: " " * (maximum + 1)
-            )
-        with self.assertRaisesRegex(TypeError, "return JSON text"):
-            self.snapshot.traverse_inheritance(request(["a"]), lambda *_: 17)
-        result = self.snapshot.traverse_inheritance(
-            request([]), lambda *_: self.fail("unexpected IO")
-        )
-        self.assertEqual(json.loads(result)["outcome"]["status"], "traversed")
+    def test_typed_shape_and_capture_limits_do_not_poison_later_attempts(self):
+        for explicit in (False, True):
+            for operation, reply, exception, reason in (
+                ("canonicalize", 17, TypeError, "tuple"),
+                ("capture", "not bytes", TypeError, "bytes"),
+                ("capture", lambda maximum: b" " * (maximum + 1), ValueError, "capture limit"),
+                ("rebase", 17, TypeError, "str"),
+            ):
+                with self.subTest(explicit=explicit, operation=operation, reason=reason):
+                    ports, calls = self.ports()
+                    index = ("canonicalize", "capture", "rebase").index(operation)
+                    def invalid(*arguments):
+                        calls.append((operation, arguments))
+                        return reply(arguments[-1]) if callable(reply) else reply
+                    ports = list(ports)
+                    ports[index] = invalid
+                    with self.assertRaisesRegex(exception, reason):
+                        self.prepare(explicit, *ports)
+                    self.assertEqual(calls[-1][0], operation)
+                    healthy, _ = self.ports()
+                    self.assert_original(self.prepare(explicit, *healthy))
 
 
 if __name__ == "__main__":

@@ -1,16 +1,23 @@
 # Shared inheritance traversal
 
-The experimental `inheritance/1` service owns demand-driven inheritance traversal
-in `yamaa-engine`. It admits each decoded layer against the captured schema,
-checks entry/parent versions and returns normalized contributions in deterministic
-postorder. Python's opt-in native loader uses it. Python remains the default
-backend and `execution_supported` remains false.
+The engine owns demand-driven inheritance traversal through native source ports.
+`inheritance_capture::prepare` captures/decode parents once and preserves their
+original snapshots; `inheritance_preparation::prepare` admits layers, composes,
+expands windows, prunes and normalizes in deterministic order. Public Python/R
+build and check routes use this application through native file preparation.
 
-This is a separate application service from `schema/1`. Schema queries retain
-no IO authority. Traversal receives an explicit synchronous source callback;
-Rust never opens files or discovers an ambient reader. The host owns filesystem
-confinement, canonical identities, source snapshots and decoding. R exposes the
-same service but still needs a complete current-schema workflow loader.
+Python's module `traverse_inheritance` and frozen `_Schema.traverse_inheritance`
+JSON callback probes are retired. Existing `_prepare_document` and
+`_prepare_inherited_specification` bindings accept separate typed canonicalize,
+raw-byte capture and lexical rebase callbacks. The optional compatibility
+`NativeSchemaInterpreter` refuses its old hook with `inheritance_traversal`
+before encoding or source effects; it does not fall back to reference traversal.
+The default reference and custom typed interpreter/resolver behavior is unchanged.
+
+The remaining R component probe and shared `inheritance/1` bridge below retain
+their existing protocol for separate owner-coordinated retirement. Python-only
+removal does not close #1755's No JSON host callback criterion. Retained schema/1
+queries carry data but no host source callback authority.
 
 ## Source protocol and ordering
 
@@ -46,8 +53,8 @@ fields, wrong-operation replies, invalid trees and invalid UTF-8 are refused.
 
 The callback also receives the remaining cumulative reply-byte allowance. It
 runs synchronously on the calling host thread. Decode errors and other raised
-host failures preserve their original Python exception or R condition, including
-interrupts, after the Rust call returns. The Python filesystem adapter maps only
+host failures preserve their original R condition, including
+interrupts, after the Rust call returns. The historical Python bridge mapped only
 `OSError` to unavailable. No retry or later sibling read follows a failure.
 
 The traversal order is:
@@ -76,7 +83,7 @@ references address that child's authored input. Cycles carry the ordered
 canonical `cycle` context. Version findings retain entry/source identities and
 role-specific expected/actual version context. Unavailable-source diagnostics
 retain the written parent before resolution or the display path after resolution.
-The Python exception bridge copies the outcome's `source`, `entry` and `parent`
+The historical Python exception bridge copied the outcome's `source`, `entry` and `parent`
 identities into each diagnostic context; it retains all existing value and
 version context, including a null actual version for a missing declaration.
 The reference loader reports the same identities. Custom admitted schemas whose
@@ -93,30 +100,43 @@ start fresh budgets. These limits do not establish process-memory containment or
 asynchronous cancellation guarantees. Host bindings refuse oversized replies
 before copying them into Rust-owned response text.
 
-Python exposes `yamaa_native.traverse_inheritance(schema_request, request, callback)`
-and frozen `_Schema.traverse_inheritance(request, callback)`. R exposes
-`yamaanative::traverse_inheritance(schema_request, request, callback)`. Stateless
-calls compile the schema before invoking source callbacks. Invalid schema outcomes
-carry `status: "invalid_schema"` and the original `schema_outcome`.
+R still exposes the component `yamaa::traverse_inheritance(schema_request,
+request, callback)`. Stateless calls compile the schema before invoking source
+callbacks; invalid schema outcomes carry `status: "invalid_schema"` and the
+original `schema_outcome`. Its registration/export and the shared JSON callback
+transport remain pending removal. No Python registration or snapshot method
+remains for that protocol.
 
-The Python loader supplies filesystem and captured YAML-decoder ports. After
-traversal, it attaches written path provenance and rebases paths lexically using
-the already canonical source directories, without reopening filesystem identity.
-Data-file symlink targets are not resolved by rebasing. Shared composition,
-window expansion and dependency resolution follow as before. Final host model
-validation remains an explicit integration boundary.
+Native application callbacks preserve synchronous source operations, remaining
+byte/text allowances and original host exceptions/interrupts. They do not parse
+JSON host operations. Physical YAML decoding, filesystem identity and lexical
+path rebasing stay at the native resource/codec boundary; engine services own
+capture, traversal and preparation ordering. Current application byte budgets
+remain distinct from the removed Python JSON request/reply budgets.
 
 ## Qualification and remaining work
 
 Eight complete outcomes and source traces in `inheritance_traversal.tsv` and
-`inheritance_sources.tsv` are independently authored and replayed unchanged by
-Rust and both installed hosts. Focused engine/transport tests also specify aliases,
-cycles, complete layer admission, version/failure precedence and resource limits.
-Installed Python loader checks disable reference layer/parent helpers and retain
-the committed resolved documents and CSV expectations. Independent installed
-Python/R tests exercise source traces, owned results, original host failures,
-reply limits and reentrancy. Native CI runs the installed boundary checks for
-direct/source-rebuilt Python artifacts and the staged R source package.
+`inheritance_sources.tsv` remain byte-identical independent oracles for Rust and
+the remaining installed R probe. Seven complete raw preparation rejection/effect
+oracles are also preserved through both hosts' original-document suites.
+
+The installed Python inheritance suite now checks both existing typed preparation
+bindings: complete original reports/CSV, source capture order/allowances, exact
+exception and control-flow identity, same-thread reentrancy, and recovery after
+native reply shape/capture refusal. It asserts both retired attributes are absent
+and retained schema query behavior agrees. The installed schema-loading suite
+keeps supported inherited/window CSV truth and complete failure contexts. Full
+normalized/pruned documents, raw/default origins, committed resolved artifacts
+and window definition/override provenance use held typed adapter arenas.
+
+COUNT scope, mapping and explicit-null LOOK fixtures remain admitted by pure
+native document preparation but encounter current compiler Unsupported gates
+before study authority. Their complete preparation/provenance expectations are
+preserved; this retirement does not claim execution parity for those gates.
+Prior optional-loader and JSON callback results are historical component evidence.
+Private analyze/interpret probes and reference/custom schema dispositions remain
+separate API work. No authored source, expected report or CSV is regenerated.
 
 This service does not qualify full R workflows, final shared model validation,
 remaining dataset execution scopes or issue #1585's deployment/release gates.
