@@ -76,6 +76,42 @@ class PortabilityTests(unittest.TestCase):
             portability.observations(report)
 
 
+class MatrixTests(unittest.TestCase):
+    """Missing interpreter evidence must fail even when all supplied bits agree."""
+
+    HOSTS = (
+        ("Darwin", "arm64", "3.12"),
+        ("Darwin", "arm64", "3.13"),
+        ("Darwin", "arm64", "3.14"),
+        ("Linux", "x86_64", "3.12"),
+        ("Linux", "x86_64", "3.13"),
+        ("Linux", "x86_64", "3.14"),
+        ("Windows", "AMD64", "3.12"),
+        ("Windows", "AMD64", "3.13"),
+        ("Windows", "AMD64", "3.14"),
+    )
+
+    def test_complete_approved_matrix(self):
+        """Accept all nine distinct approved numerical report origins."""
+        portability.validate_hosts(self.HOSTS)
+
+    def test_missing_or_duplicate_interpreter_is_rejected(self):
+        """Require 3.13 on each OS, including when a duplicate preserves the count."""
+        for index in (1, 4, 7):
+            incomplete = self.HOSTS[:index] + self.HOSTS[index + 1 :]
+            with self.assertRaisesRegex(AssertionError, "native matrix"):
+                portability.validate_hosts(incomplete)
+            with self.assertRaisesRegex(AssertionError, "native matrix"):
+                portability.validate_hosts(incomplete + (self.HOSTS[0],))
+
+    def test_unapproved_tuple_does_not_replace_required_evidence(self):
+        """An excluded architecture cannot fill a missing approved host slot."""
+        hosts = list(self.HOSTS)
+        hosts[0] = ("Darwin", "x86_64", "3.12")
+        with self.assertRaisesRegex(AssertionError, "native matrix"):
+            portability.validate_hosts(hosts)
+
+
 class CorpusTests(unittest.TestCase):
     """Bind a complete agreeing sample to independent identities and inputs."""
 

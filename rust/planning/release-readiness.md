@@ -4,7 +4,8 @@ This is the finite blocker register for [#1742](https://github.com/elong0527/yam
 It records evidence and decisions still needed, not approval to release or switch
 backends. The [2026-10-10 maintainer decisions](maintainer-decisions.md) settle
 eight implementation choices, including required Windows R and the Cargo
-packaging exception. The register below distinguishes those approvals from
+packaging exception, and the subsequently approved first-release support matrix
+and explicit exclusions. The register below distinguishes those approvals from
 remaining implementation and qualification.
 
 Historical foundation: main `3895017b619642d4cda1d14b0000e20dc65becd7` includes #1811's
@@ -83,9 +84,20 @@ or future interpreters. Python 3.12 numerical-probe CI is not an installed-wheel
 API test. Windows R is required for the first shared Rust release by the
 2026-10-10 maintainer decision (#1857); implementation and installed qualification
 are tracked in #1903. Its twelve missing public cohort tuples remain unqualified.
-macOS x86_64, Linux arm64, musl, other Python implementations, R binary
-distributions and untested versions still need explicit support dispositions.
-They are **undecided/unqualified**, not silently approved exclusions.
+The maintainer has now approved CPython 3.12, 3.13 and 3.14 plus R 4.6.1
+on Linux x86_64, macOS arm64 and Windows x64, with Python wheel/source and R
+source packages. Every runtime/platform/form combination is required. Other
+versions, implementations, free-threaded Python, architectures, musl/Alpine and
+R binary distributions are explicitly excluded from the first release by
+[the support decision](maintainer-decisions.md#first-release-support-matrix).
+
+The native CI keeps one abi3 wheel/source artifact build per platform and runs
+the entire installed Python qualification separately on all three interpreters,
+for both wheel and independent source-rebuild forms: eighteen installed lanes.
+The public cohort comparator requires each interpreter/form's complete reports.
+PortableLibmV1's exact candidate comparison requires all nine OS/interpreter
+reports, including Python 3.13. These are required gates; changing the workflow
+does not preemptively turn missing reports or unqualified Windows R into passes.
 
 The native R CI job now runs `R CMD check --no-manual` on Linux and macOS in
 addition to build/install and the separately recorded supplemental scripts. It
@@ -103,8 +115,9 @@ not remove Rust's standard-library abort path or prove recovery from allocation
 failure, double panic or every native fault. B16 remains open. Earlier local
 checks used an external Cargo target directory, so they did not reproduce the
 archive-symbol finding; the audited hosted checks exercise the default
-package-local target layout. B15 remains open for a chosen release matrix and
-qualification of the final combined public package.
+package-local target layout. B15's scope decision is settled; it remains open
+for installed qualification of the final combined public package across every
+approved tuple.
 The macOS Rust archive build defaults its deployment target to 11.0 while
 preserving an explicitly supplied target. This covers Rust and its C codec
 objects; R's own compilation/link settings remain supplied by R. The audited
@@ -138,7 +151,7 @@ linked decision. Issue numbers identify the implementation/test or decision owne
 | B12 | Pinned `PortableLibmV1` and one behavior per locked release are approved, including documented historical Python differences. | #1740 | Qualify every affected final scope and retain reviewed disposition for observable numerical/artifact differences. Public APIs and YAML do not select policy/backend. |
 | B13 | Canonical Cargo locking and its packaging exception are approved. The lock, unchanged source-package workspaces and locked builds are implemented; complete platform qualification remains open. | #1906, #1742 | Retain clean full-transitive-graph build evidence with exact versions/features/toolchains on all required platforms, including Windows R. |
 | B14 | Packaging checksum policy resolved: AGENTS.md permits python/uv.lock and the canonical rust/Cargo.lock with unchanged staged copies. | #1742, #1906 | No further policy decision is needed for those files. B13 tracks implementation/build evidence. Preserve held-byte comparison; runtime identity, contract, activation-cache and resource-snapshot digests remain prohibited. Additional exceptions need a separate decision. |
-| B15 | Windows R is required for the first release; other platform/version/distribution promises still need a complete matrix. | #1903, #1742 | Qualify Windows R native file ports, source build/install, public/cohort suites and strict R CMD check. Specify other supported combinations and exclusions, then complete final installed checks for the entire chosen scope. |
+| B15 | The first-release matrix and explicit exclusions are approved: CPython 3.12-3.14 and R 4.6.1 on Linux x86_64/macOS arm64/Windows x64, Python wheel/source and R source. Windows R remains unqualified. | #1903, #1742 | Complete all eighteen installed Python interpreter/platform/form lanes and all three R source lanes, including Windows R native file ports, public/cohort suites and strict R CMD check. Retain exact runtime, system and artifact provenance; the approved target is not completed qualification. |
 | B16 | Native ownership, interruption, reentrancy and repeated-use behavior across the final facade. Probes already exercise many cases. | #1755, #1742 | Repeat those contracts through final installed domain/check/workflow/save APIs, including failed builds and expired/mismatched handles; probes alone do not close this. |
 | B17 | Representative phase/performance/memory evidence. Existing harness is small and cold, with host-assisted preparation. | #1742 | Shared-path workloads at agreed sizes, repeated cold/warm measurements, raw samples/spread, exact truth/callback checks, phase attribution and peak RSS or explicit unavailability. |
 | B18 | Performance regression budgets and support tradeoffs. | #1742 | Maintainer-approved numeric budgets before release qualification; evaluate distributions and representative workloads, not one smoke sample or a tiny fixture speedup. |
