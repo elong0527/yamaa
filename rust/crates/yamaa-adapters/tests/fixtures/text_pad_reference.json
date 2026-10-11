@@ -1,37 +1,37 @@
 {
   "text": {
     "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {INT: int, FLOAT: float, DAY: date, TIME: datetime}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: SRC.TEXT, width: 4}}}\n",
-    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,é🦀,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
+    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,\u00e9\ud83e\udd80,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
     "handlers": [],
-    "csv": "ID,RESULT\nrow1,  é🦀\nrow2,\nrow3,\n"
+    "csv": "ID,RESULT\nrow1,  \u00e9\ud83e\udd80\nrow2,\nrow3,\n"
   },
   "integer": {
     "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {INT: int, FLOAT: float, DAY: date, TIME: datetime}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: SRC.INT, width: 22}}}\n",
-    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,é🦀,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
+    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,\u00e9\ud83e\udd80,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
     "handlers": [],
     "csv": "ID,RESULT\nrow1,      9007199254740993\nrow2,  -9223372036854775808\nrow3,                     0\n"
   },
   "float": {
     "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {INT: int, FLOAT: float, DAY: date, TIME: datetime}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: SRC.FLOAT, width: 6}}}\n",
-    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,é🦀,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
+    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,\u00e9\ud83e\udd80,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
     "handlers": [],
     "csv": "ID,RESULT\nrow1,    -0\nrow2,  1.25\nrow3,     0\n"
   },
   "date": {
     "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {INT: int, FLOAT: float, DAY: date, TIME: datetime}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: SRC.DAY, width: 12}}}\n",
-    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,é🦀,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
+    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,\u00e9\ud83e\udd80,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
     "handlers": [],
     "csv": "ID,RESULT\nrow1,  2025-07-19\nrow2,\nrow3,  0001-01-01\n"
   },
   "datetime": {
     "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {INT: int, FLOAT: float, DAY: date, TIME: datetime}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: SRC.TIME, width: 21}}}\n",
-    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,é🦀,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
+    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,\u00e9\ud83e\udd80,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
     "handlers": [],
     "csv": "ID,RESULT\nrow1,  2025-07-19T12:34:56\nrow2,\nrow3,  0001-01-01T00:00:00\n"
   },
   "unknown": {
     "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {INT: int, FLOAT: float, DAY: date, TIME: datetime}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: SRC.ABSENT, width: 4}}}\n",
-    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,é🦀,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
+    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,\u00e9\ud83e\udd80,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
     "handlers": [],
     "findings": [
       {
@@ -49,7 +49,7 @@
   },
   "width-zero": {
     "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {INT: int, FLOAT: float, DAY: date, TIME: datetime}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: SRC.TEXT, width: 0}}}\n",
-    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,é🦀,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
+    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,\u00e9\ud83e\udd80,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
     "handlers": [],
     "findings": [
       {
@@ -67,7 +67,7 @@
   },
   "width-noninteger": {
     "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {INT: int, FLOAT: float, DAY: date, TIME: datetime}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: SRC.TEXT, width: '3'}}}\n",
-    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,é🦀,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
+    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,\u00e9\ud83e\udd80,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
     "findings": [
       {
         "phase": "validation",
@@ -87,7 +87,7 @@
   },
   "one-final-conversion": {
     "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {INT: int, FLOAT: float, DAY: date, TIME: datetime}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: int, derivation: {str_pad: {source: SRC.INT, width: 22}}}\n",
-    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,é🦀,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
+    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,\u00e9\ud83e\udd80,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
     "handlers": [],
     "findings": [
       {
@@ -112,14 +112,14 @@
   },
   "rows": {
     "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: TEXT, width: 6}}}\nrows:\n  - id: records\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      TEXT: {str_pad: {source: SRC.TEXT, width: 4}}\n",
-    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,é🦀,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
+    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,\u00e9\ud83e\udd80,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
     "handlers": [],
-    "csv": "ID,TEXT,RESULT\nrow1,  é🦀,    é🦀\nrow2,,\nrow3,,\n"
+    "csv": "ID,TEXT,RESULT\nrow1,  \u00e9\ud83e\udd80,    \u00e9\ud83e\udd80\nrow2,,\nrow3,,\n"
   },
   "nested-case": {
     "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: TEXT\n    type: str\n    derivation:\n      case:\n        - when: \"ID = 'row1'\"\n          then:\n            case:\n              - when: \"ID = 'row1'\"\n                then: {str_pad: {source: SRC.TEXT, width: 4}}\n              - otherwise: {str_case: {source: SRC.TEXT, to: upper}}\n        - otherwise: {literal: safe}\n",
-    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,é🦀,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
+    "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,\u00e9\ud83e\udd80,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
     "handlers": [],
-    "csv": "ID,TEXT\nrow1,  é🦀\nrow2,safe\nrow3,safe\n"
+    "csv": "ID,TEXT\nrow1,  \u00e9\ud83e\udd80\nrow2,safe\nrow3,safe\n"
   }
 }

@@ -107,7 +107,7 @@ fn plan(width: &str) -> DatasetPlan {
 #[test]
 fn one_named_read_unicode_character_width_no_truncation_and_no_handlers() {
     for (text, width, expected) in [
-        ("é🦀", "4", "  é🦀"),
+        ("\u{e9}\u{1f980}", "4", "  \u{e9}\u{1f980}"),
         ("e\u{301}", "4", "  e\u{301}"),
         ("a\0b", "5", "  a\0b"),
         ("longer", "1", "longer"),
@@ -210,7 +210,7 @@ fn recursive_padding_and_case_count_only_the_reached_authored_missing_handler() 
 }
 #[test]
 fn work_and_cumulative_text_refuse_before_later_reads_and_retry_uses_fresh_budget() {
-    let table = make_table(Value::Str("é🦀".into()));
+    let table = make_table(Value::Str("\u{e9}\u{1f980}".into()));
     let mut quota = limits();
     quota.work_cells = 0;
     assert!(matches!(

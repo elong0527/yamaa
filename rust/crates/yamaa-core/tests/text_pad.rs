@@ -13,7 +13,7 @@ fn pad(value: &Value, width: &str, maximum: usize) -> Result<Value, OutputLimit>
 #[test]
 fn unicode_characters_nul_empty_and_no_truncation() {
     for (input, width, expected) in [
-        ("é🦀", "4", "  é🦀"),
+        ("\u{e9}\u{1f980}", "4", "  \u{e9}\u{1f980}"),
         ("e\u{301}", "4", "  e\u{301}"),
         ("a\0b", "5", "  a\0b"),
         ("", "3", "   "),
@@ -69,9 +69,12 @@ fn missing_bypasses_positive_mathematical_width_without_output_or_handler() {
 }
 #[test]
 fn byte_quota_precedes_authored_copy_and_padding_allocation() {
-    let input = Value::Str("🦀".into());
+    let input = Value::Str("\u{1f980}".into());
     assert_eq!(pad(&input, "4", 6), Err(OutputLimit { required: Some(7) }));
-    assert_eq!(pad(&input, "4", 7).unwrap(), Value::Str("   🦀".into()));
+    assert_eq!(
+        pad(&input, "4", 7).unwrap(),
+        Value::Str("   \u{1f980}".into())
+    );
     assert_eq!(
         pad(&Value::Str("x".repeat(100_000)), "1", 1),
         Err(OutputLimit {
@@ -85,7 +88,7 @@ fn metadata_admission_precedes_width_scan_and_shape_failure() {
         StringPad::new("X", "p", &"!".repeat(MAX_DECLARATION_BYTES)),
         Err(DeclarationError::MetadataLimit)
     );
-    for width in ["", "+1", "01", "1.0", "١"] {
+    for width in ["", "+1", "01", "1.0", "\u{661}"] {
         assert_eq!(
             StringPad::new("X", "p", width),
             Err(DeclarationError::Shape)
