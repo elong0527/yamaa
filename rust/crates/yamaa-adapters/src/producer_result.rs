@@ -656,7 +656,7 @@ mod log_tests {
                 ),
             );
             let root = yaml("{A: {path: generated/producer.csv, schema: producer.yaml}, B: {path: generated/producer.csv, schema: ./producer.yaml}}", "A", "root", fatal_root)
-                .replace("columns:\n", "intermediates: [{id: SHARED, dataset: B, no_match: null}]\ncolumns:\n");
+                .replace("columns:\n", "intermediates: [{id: SHARED, dataset: B, key: [ID], no_match: null}]\ncolumns:\n");
             self.write("root.yaml", root);
         }
         fn graph(

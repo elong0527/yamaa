@@ -53,7 +53,7 @@ producer <- paste0("schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [ID]\n
 consumer <- paste0("schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n",
   "  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n",
   "  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\n",
-  "intermediates: [{id: SECOND_REFERENCE, dataset: SECOND, no_match: null}]\ncolumns:\n",
+  "intermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]\ncolumns:\n",
   "  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n",
   "  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n",
   "  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n",

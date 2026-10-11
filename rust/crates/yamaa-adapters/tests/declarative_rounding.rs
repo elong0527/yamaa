@@ -228,7 +228,7 @@ fn admitted_driver_and_named_intermediate_operands_keep_independent_rounding_tru
             .replace("source: VAL1", "source: SOURCE.VAL1"),
         false,
     );
-    let source = POSITIVE.replace("SOURCE: input/adsl.csv", "SOURCE: input/adsl.csv\n  LOOKUP: {path: input/lookup.csv, types: {VAL1: float}}\nbase: SOURCE\nintermediates:\n  - id: SELECTED\n    dataset: LOOKUP\n    no_match: null").replace("source: VAL1", "source: SELECTED.VAL1");
+    let source = POSITIVE.replace("SOURCE: input/adsl.csv", "SOURCE: input/adsl.csv\n  LOOKUP: {path: input/lookup.csv, types: {VAL1: float}}\nbase: SOURCE\nintermediates:\n  - id: SELECTED\n    dataset: LOOKUP\n    key: [STUDYID, USUBJID]\n    no_match: null").replace("source: VAL1", "source: SELECTED.VAL1");
     qualified(&source, true);
 }
 #[test]
