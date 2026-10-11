@@ -22,8 +22,8 @@ Follow [the delivery order](migration-order.md).
 
 ## Declared API inventory
 
-[release-api.json](release-api.json) records 488 declared names in 34 source files:
-363 Python `__all__` entries, 52 native Python stub symbols/members, 22 legacy R
+[release-api.json](release-api.json) records 425 declared names in 22 source files:
+272 Python `__all__` entries, 80 native Python stub symbols/members, 22 legacy R
 exports, and 51 native R exports/S3 registrations. Re-exports are counted at each
 public location. Private modules and native handles are included for removal
 tracking; their inclusion is not a public compatibility promise.
