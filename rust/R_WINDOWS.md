@@ -64,8 +64,9 @@ revisions until fresh evidence replaces them.
 
 Artifacts retain the exact source revision, R/platform and Rtools compiler
 identities, Rust host/target details, full locked Cargo metadata/features, strict
-check logs, complete supplemental and public reports, and the tested source
-archive. Audits compare source and fixture bytes directly against the reviewed
-revision. Cross-compilation or Rust Windows component tests alone never establish
-installed R qualification. Windows arm64, other R versions and binary-package
-distribution promises remain separate from this x86_64 source-build lane.
+check logs, complete supplemental and public reports, the installed Windows DLL
+and the tested source archive. Audits compare source and fixture bytes directly
+against the reviewed revision. Cross-compilation or Rust Windows component tests
+alone never establish installed R qualification. Windows arm64, other R versions
+and binary-package distribution promises remain separate from this x86_64
+source-build lane.
