@@ -3,12 +3,15 @@ domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE: {path: input/ae.csv, types: {AESTDTC: datetime}}
-  ADSL: {path: input/adsl.csv, types: {TRTSDTM: datetime, TRTENDTM: datetime, TEENDDTM: datetime}}
+  ADSL:
+    path: input/adsl.csv
+    types: {TRTSDTM: datetime, TRTENDTM: datetime, TEENDDTM: datetime}
 base: AE
 
 output:
   path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AETERM, ASTDTM, TRTSDTM, TEENDDTM, TRTEMFL, AOCCFL]
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, ASTDTM, TRTSDTM, TEENDDTM,
+            TRTEMFL, AOCCFL]
 
 columns:
   - name: STUDYID
