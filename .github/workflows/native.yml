@@ -79,6 +79,7 @@ jobs:
         run: |
           (
             set -e
+            python tools/check_benchmark_sdk_versions.py
             cargo fmt --all --check
             cargo clippy -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
             cargo test
@@ -173,6 +174,8 @@ jobs:
           workspaces: rust
           shared-key: native-dist-${{ matrix.os }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Check benchmark SDK lock versions
+        run: python rust/tools/check_benchmark_sdk_versions.py
       - name: Install build tools
         run: |
           rustup toolchain install 1.90.0 --profile minimal
@@ -451,6 +454,8 @@ jobs:
         with:
           r-version: '4.6.1'
           use-public-rspm: true
+      - name: Check benchmark SDK lock versions
+        run: python rust/tools/check_benchmark_sdk_versions.py
       - name: Install Rust
         run: rustup toolchain install 1.90.0 --profile minimal --component clippy
       - name: Check R binding
