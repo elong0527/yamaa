@@ -183,8 +183,8 @@ when content does.
 **REQ-0790.** A failure names the written path exactly as the specification
 wrote it, the declaring field, and one condition below. A message does not
 contain a canonical path, a symbolic link's target, or any other host path the
-specification did not itself write. An absolute written path may be repeated
-because the specification supplied it. Resolved paths retained as provenance
+specification did not itself write. An absolute written path supplied by the
+specification may be repeated. Resolved paths retained as provenance
 are not substituted for the authored path in these diagnostics.
 
 | Condition | Rejects |
@@ -198,8 +198,8 @@ are not substituted for the authored path in these diagnostics.
 
 `resource_path_not_relative` and `resource_path_outside_project` are historical
 conditions from the retired containment policy. The replacement route emits
-neither merely because an absolute path or parent traversal leaves an entry
-directory. Their old observations remain in the reference qualification record.
+neither for an absolute path or parent traversal that leaves an entry directory.
+Their old observations remain in the reference qualification record.
 
 <a id="req-0791"></a>
 
