@@ -32,7 +32,8 @@ held <- artifacts(result)
 stopifnot(length(held) == 2L, identical(vapply(held, `[[`, character(1), "path"), c("dm.json", "define.xml")),
   !dir.exists(file.path(root, "input")), !file.exists(file.path(root, "dm.json")), !file.exists(file.path(root, "define.xml")))
 for (artifact in held) stopifnot(identical(artifact$bytes, rawfile(file.path(fixtures, "sdtm-dm-metadata/expected", artifact$path))))
-unlink(file.path(root, c("spec.yaml", "environment.yaml")))
+removed <- file.path(root, c("spec.yaml", "environment.yaml"))
+stopifnot(unlink(removed) == 0L, !any(file.exists(removed)))
 writeLines("changed after preparation", file.path(root, "dm.csv"))
 stopifnot(isTRUE(result$save()), identical(result$save(), FALSE))
 for (artifact in held) stopifnot(identical(rawfile(file.path(root, artifact$path)), artifact$bytes))
@@ -186,6 +187,7 @@ if (file.exists(file.path(root, "DM.JSON"))) {
     identical(rawfile(define_sentinel), charToRaw("original Define sentinel")),
     identical(sort(list.files(root, all.files = TRUE, no.. = TRUE)), previous_names),
     all(vapply(artifacts(result), `[[`, character(1), "state") == "Stopped"))
+  cat("PASS: shared installed R Define case-alias REQ-1226 collision and zero-write sentinels\n")
 }
 unlink(root, recursive = TRUE)
 Sys.setenv(PATH = original_path)
