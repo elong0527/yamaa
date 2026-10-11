@@ -1111,6 +1111,55 @@ for(path in c(strrep("x",65537L),strrep("\u00e9",32769L))) {
 unlink(directory,recursive=TRUE)
 cat("public check without study data, full-range integers, retained save retry and environment refusal passed\n")
 
+for(factory in list(yamaa_domain,yamaa_check)) {
+  stopifnot(identical(names(formals(factory)),c("specification","environment")),
+            identical(formals(factory)$environment,NULL))
+}
+directory <- tempfile("public-facade-");dir.create(directory)
+entry <- file.path(directory,"spec.yaml")
+input_path <- file.path(directory,"input.csv")
+target <- file.path(directory,"out.csv")
+writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
+             "output: {path: out.csv, columns: [ID]}","columns:",
+             "  - {name: ID, type: int, derivation: {source: SRC.ID}}"),entry)
+checked <- yamaa_check(entry)
+stopifnot(identical(names(checked),"issues"),nrow(checked$issues)==0L)
+for(factory in list(yamaa_domain,yamaa_check)) {
+  for(option in c("schema_root","project_root","data_roots","read_project_configuration",
+                 "dispatcher","study_document","backend")) {
+    refused <- tryCatch(do.call(factory,c(list(entry),setNames(list(NULL),option))),error=identity)
+    stopifnot(inherits(refused,"error"))
+  }
+}
+stopifnot(!file.exists(input_path),!file.exists(target))
+writeBin(charToRaw("ID\n1\n"),input_path)
+built <- yamaa_domain(entry)
+views <- c("output","issues","verification_log","warning_log")
+stopifnot(is.environment(built),environmentIsLocked(built),
+          identical(sort(ls(built,all.names=TRUE)),sort(c(views,"save"))),
+          length(formals(built$save))==0L)
+for(name in c("input","inputs","spec","specification","resolved")) {
+  stopifnot(!exists(name,envir=built,inherits=FALSE))
+}
+for(name in views) {
+  stopifnot(bindingIsActive(name,built),bindingIsLocked(name,built),
+            inherits(tryCatch(assign(name,NULL,envir=built),error=identity),"error"))
+}
+output_copy <- built$output;output_copy$ID <- 999L
+issue_copy <- built$issues;issue_copy$phase <- NULL
+stopifnot(identical(as.character(built$output$ID),"1"),
+          identical(names(built$issues),c("phase","condition","requirement","spec_paths","context")),
+          is.null(built$verification_log),is.null(built$warning_log),
+          inherits(tryCatch(built$save(target),error=identity),"error"),
+          inherits(tryCatch(built$save(path=target),error=identity),"error"),!file.exists(target))
+stopifnot(unlink(c(entry,input_path))==0L,!file.exists(entry),!file.exists(input_path))
+for(attempt in seq_len(2L)) {
+  stopifnot(identical(built$save(),TRUE),identical(rawfile(target),charToRaw("ID\n1\n")),
+            nrow(built$issues)==0L)
+}
+unlink(directory,recursive=TRUE)
+cat("public facade exact signatures, owned read-only views, removed arguments and held Save passed\n")
+
 remove_directory_link <- function(path) {
   if(.Platform$OS.type=="windows") {
     # R's unlink treats directory symbolic links as mount-point reparse tags.

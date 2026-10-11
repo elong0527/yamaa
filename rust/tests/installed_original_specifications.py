@@ -1545,6 +1545,79 @@ class PublicDomains(unittest.TestCase):
                     self.assertTrue(built.issues.is_empty())
                     self.assertEqual((link / "output.csv").read_bytes(), b"ID\n1\n")
 
+    def test_public_facade_signatures_views_and_held_save(self):
+        import inspect
+        import yamaa
+
+        for factory in (yamaa.domain, yamaa.check):
+            parameters = inspect.signature(factory).parameters
+            self.assertEqual(list(parameters), ["specification", "environment"])
+            self.assertEqual(parameters["specification"].kind,
+                             inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            self.assertIs(parameters["specification"].default, inspect.Parameter.empty)
+            self.assertEqual(parameters["environment"].kind,
+                             inspect.Parameter.KEYWORD_ONLY)
+            self.assertIsNone(parameters["environment"].default)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry, input_path, target = root / "spec.yaml", root / "input.csv", root / "out.csv"
+            entry.write_text("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+                             "input: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID]}\n"
+                             "columns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n",
+                             encoding="utf-8")
+            checked = yamaa.check(entry)
+            self.assertTrue(checked.issues.is_empty())
+            self.assertEqual({name for name in vars(type(checked)) if not name.startswith("_")},
+                             {"issues"})
+            with self.assertRaises(AttributeError):
+                checked.issues = None
+            for factory in (yamaa.domain, yamaa.check):
+                for option in ("schema_root", "project_root", "data_roots",
+                               "read_project_configuration", "dispatcher", "study_document", "backend"):
+                    with self.subTest(factory=factory.__name__, option=option):
+                        with self.assertRaises(TypeError):
+                            factory(entry, **{option: None})
+                with self.assertRaises(TypeError):
+                    factory(entry, None)
+            self.assertFalse(input_path.exists())
+            self.assertFalse(target.exists())
+
+            input_path.write_bytes(b"ID\n1\n")
+            built = yamaa.domain(entry)
+            views = ("output", "issues", "verification_log", "warning_log")
+            self.assertEqual({name for name in vars(type(built)) if not name.startswith("_")},
+                             {*views, "save"})
+            for name in ("input", "inputs", "spec", "specification", "resolved"):
+                self.assertFalse(hasattr(built, name))
+            for name in views:
+                with self.subTest(view=name), self.assertRaises(AttributeError):
+                    setattr(built, name, None)
+            output_copy = built.output
+            self.assertEqual(output_copy["ID"].to_list(), [1])
+            output_copy.drop_in_place("ID")
+            self.assertEqual(built.output["ID"].to_list(), [1])
+            issue_copy = built.issues
+            issue_copy.drop_in_place("phase")
+            self.assertEqual(built.issues.columns,
+                             ["phase", "condition", "requirement", "spec_paths", "context"])
+            self.assertIsNone(built.verification_log)
+            self.assertIsNone(built.warning_log)
+            self.assertEqual(list(inspect.signature(built.save).parameters), [])
+            with self.assertRaises(TypeError):
+                built.save(target)
+            with self.assertRaises(TypeError):
+                built.save(path=target)
+            self.assertFalse(target.exists())
+            entry.unlink()
+            input_path.unlink()
+            self.assertFalse(entry.exists())
+            self.assertFalse(input_path.exists())
+            for _ in range(2):
+                self.assertTrue(built.save())
+                self.assertEqual(target.read_bytes(), b"ID\n1\n")
+                self.assertTrue(built.issues.is_empty())
+
     def test_public_environment_refusal_and_argument_types(self):
         import yamaa
         result=yamaa.domain("absent.yaml",environment="absent-environment.yaml")
