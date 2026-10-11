@@ -4,7 +4,6 @@ import copy
 import csv
 import datetime as dt
 import decimal
-import importlib.util
 import io
 import json
 import keyword
@@ -21,6 +20,7 @@ import yaml
 # Editorial validators live in editorial.py; re-exported here so existing
 # `from validate_repository import ...` call sites keep working.
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # noqa: E402
+import _reference_checks  # noqa: E402
 from editorial import (  # noqa: E402
     ASCII_SOURCE_IGNORED_PARTS,
     ASCII_SOURCE_NAMES,
@@ -122,12 +122,10 @@ def require_regex_binding():
     global _portable_group_count, _portable_compile, _portable_full_match
     if _portable_binding is None:
         try:
-            from yamaa.regex import (
-                RegexError as binding_error,
-                capture_group_count as binding_group_count,
-                compile_pattern as binding_compile,
-                full_match as binding_full_match,
-            )
+            (
+                binding_error, binding_group_count,
+                binding_compile, binding_full_match,
+            ) = _reference_checks.regex_binding()
         except ImportError:
             _portable_binding = False
         else:
@@ -514,12 +512,9 @@ def _ensure_predicate_binding():
     global PredicateError, parse_predicate
     if parse_predicate is None:
         try:
-            from yamaa.expressions.predicates import (
-                COMPARISON_OPERATORS as comparison_operators,
-                RESERVED_NAMES as reserved_names,
-                PredicateError as predicate_error,
-                parse_predicate as parse,
-            )
+            (
+                comparison_operators, reserved_names, predicate_error, parse,
+            ) = _reference_checks.predicate_binding()
         except ImportError as error:
             raise SystemExit(
                 "validate_repository.py requires the yamaa package "
@@ -3742,9 +3737,9 @@ def order_resolved_spec_fields(spec, env):
 
 
 def expand_spec_windows(spec, env, strict=True, provenance=None, label=""):
-    from yamaa.schema.windows import expand_named_windows
-    from yamaa.specification.diagnostics import SpecificationError
-    from yamaa.specification.schema import SchemaBundle
+    expand_named_windows, SpecificationError, SchemaBundle = (
+        _reference_checks.window_binding()
+    )
 
     bundle = SchemaBundle(
         version=env.get('version', '1.0'),
@@ -4910,8 +4905,9 @@ def validate_spec_contracts(
                     except (UnicodeError, csv.Error):
                         names = []  # The CSV profile pass reports invalid bytes.
                 else:
-                    from yamaa.io.parquet import parquet_source_fields
-                    from yamaa.io.parquet import ParquetProfileFailure
+                    parquet_source_fields, ParquetProfileFailure = (
+                        _reference_checks.parquet_binding()
+                    )
 
                     try:
                         _, fields = parquet_source_fields(snapshot.content)
@@ -5103,11 +5099,8 @@ def _ensure_odm_binding():
     global ODM_SCHEMA_FIELDS, bind_odm_fields, iter_odm_payloads, parse_odm_read
     if parse_odm_read is None:
         try:
-            from yamaa.odm.items import (
-                ODM_SCHEMA_FIELDS as schema_fields,
-                bind_fields,
-                iter_odm_payloads as iter_payloads,
-                parse_odm_read as parse_read,
+            schema_fields, bind_fields, iter_payloads, parse_read = (
+                _reference_checks.odm_binding()
             )
         except ImportError as error:
             raise SystemExit(
@@ -9489,17 +9482,11 @@ def _ensure_csv_binding():
     global DateTimeValue, DateValue, convert_value
     if scan_records is None:
         try:
-            from yamaa.io.csv import (
-                CsvProfileFailure as csv_failure,
-                fixed_point as profile_fixed_point,
-                render_records as profile_render_records,
-                scan_records as profile_scan_records,
-            )
-            from yamaa.models import (
-                DateTimeValue as model_datetime_value,
-                DateValue as model_date_value,
-                convert_value as model_convert_value,
-            )
+            (
+                csv_failure, profile_fixed_point, profile_render_records,
+                profile_scan_records, model_datetime_value, model_date_value,
+                model_convert_value,
+            ) = _reference_checks.csv_binding()
         except ImportError as error:
             raise SystemExit(
                 "validate_repository.py requires the yamaa package "
@@ -9697,15 +9684,7 @@ def artifact_profile(output):
 # this script can load it by path without installing anything. What a
 # repository check adds stays below: fixture wording, and reporting every
 # departure in one pass where a runtime stops at the first.
-_CSV_PROFILE_PATH = (
-    Path(__file__).resolve().parents[3]
-    / 'python' / 'src' / 'yamaa' / 'io' / 'csv.py'
-)
-_CSV_PROFILE_SPEC = importlib.util.spec_from_file_location(
-    'yamaa_io_csv', _CSV_PROFILE_PATH
-)
-CSV_PROFILE = importlib.util.module_from_spec(_CSV_PROFILE_SPEC)
-_CSV_PROFILE_SPEC.loader.exec_module(CSV_PROFILE)
+CSV_PROFILE = _reference_checks.source_profile_binding()
 
 SourceProfileError = CSV_PROFILE.CsvProfileFailure
 parse_source_profile = CSV_PROFILE.scan_records

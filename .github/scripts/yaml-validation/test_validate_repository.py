@@ -1,3 +1,4 @@
+import ast
 import copy
 import importlib.util
 import math
@@ -5698,6 +5699,77 @@ class TestDatasetPathExamples(unittest.TestCase):
                 self.assertEqual(len(reported), 1)
                 self.assertIn("input.LBREF.path: resource_path_missing: ", reported[0])
                 self.assertIn(repr(written), reported[0])
+
+
+class TestReferenceDependencyBoundary(unittest.TestCase):
+    """#2002 keeps every removable semantic import in one explicit module."""
+
+    @staticmethod
+    def forbidden_imports(source):
+        forbidden = []
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                names = [node.module or '']
+                if node.module == 'yamaa':
+                    names = ['yamaa.' + alias.name for alias in node.names]
+            else:
+                continue
+            forbidden.extend(
+                name for name in names
+                if name.startswith('yamaa.')
+                and name not in {'yamaa._native', 'yamaa.check'}
+            )
+        return forbidden
+
+    def test_validator_has_no_reference_import_or_source_loader(self):
+        source = TOOL_PATH.read_text(encoding='utf-8')
+        self.assertEqual(self.forbidden_imports(source), [])
+        calls = [
+            node.func for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.Call)
+        ]
+        self.assertFalse(any(
+            isinstance(call, ast.Attribute)
+            and call.attr == 'spec_from_file_location'
+            for call in calls
+        ), 'reference source-file loading belongs only in _reference_checks.py')
+
+    def test_guard_rejects_direct_aliased_and_from_package_imports(self):
+        for source in (
+            'import yamaa.expressions.predicates',
+            'import yamaa.models as model',
+            'from yamaa.io.csv import scan_records as scan',
+            'from yamaa import schema',
+            'from yamaa.odm.items import parse_odm_read',
+        ):
+            with self.subTest(source=source):
+                self.assertTrue(self.forbidden_imports(source))
+
+    def test_public_check_and_native_metadata_imports_are_allowed(self):
+        self.assertEqual(self.forbidden_imports(
+            'import yamaa\n'
+            'from yamaa import check as shared_check\n'
+            'from yamaa._native import _check_project_metadata\n'
+        ), [])
+
+    def test_boundary_has_no_dependency_back_on_the_validator(self):
+        path = TOOL_PATH.with_name('_reference_checks.py')
+        source = path.read_text(encoding='utf-8')
+        imports = [
+            node for node in ast.walk(ast.parse(source))
+            if isinstance(node, (ast.Import, ast.ImportFrom))
+        ]
+        names = [
+            name
+            for node in imports
+            for name in (
+                [alias.name for alias in node.names]
+                if isinstance(node, ast.Import) else [node.module]
+            )
+        ]
+        self.assertNotIn('validate_repository', names)
 
 
 class TestValidatorCLI(unittest.TestCase):
