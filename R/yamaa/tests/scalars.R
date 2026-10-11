@@ -77,3 +77,70 @@ reject(utf8_scalar(as.raw(rep(1L, 1048577L))), "exceeds byte limit")
 for (fake in list(structure("bad", class="yamaa_int64"), structure(c("1","2"),class="yamaa_int64"), structure(1, class="yamaa_int64"), structure("1",class=c("yamaa_int64","other")), structure("1",class="yamaa_int64", names="x"))) reject(as.character(fake))
 for (fake in list(structure(as.raw(255), class="yamaa_utf8"), structure("text",class="yamaa_utf8"), structure(raw(),class=c("yamaa_utf8","other")))) reject(utf8_bytes(fake))
 cat("Lossless R scalar contracts passed\n")
+
+
+# Exercise conversions on actual public output, including separate missingness.
+check_integer_output_conversions <- function() {
+  work <- tempfile("integer-output-"); dir.create(work)
+  on.exit(unlink(work, recursive = TRUE))
+  entry <- file.path(work, "spec.yaml")
+  writeLines(c(
+    "schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+    "input: {SRC: input.csv}",
+    "output: {path: output.csv, columns: [ID, VALUE]}", "columns:",
+    "  - {name: ID, type: int, derivation: {source: SRC.ID}}",
+    "  - {name: VALUE, type: int, derivation: {source: SRC.VALUE}}"
+  ), entry)
+  truth <- c("-9223372036854775808", "9223372036854775807",
+             "9007199254740993", "-9007199254740993",
+             "9007199254740992", "-9007199254740992",
+             "-2147483648", "-2147483647", "2147483647", NA_character_)
+  rows <- paste(seq_along(truth), ifelse(is.na(truth), "", truth), sep = ",")
+  writeBin(charToRaw(paste0("ID,VALUE\n", paste(rows, collapse = "\n"), "\n")),
+           file.path(work, "input.csv"))
+  result <- yamaa_domain(entry)
+  stopifnot(nrow(result$issues) == 0L)
+  output <- result$output$VALUE
+  stopifnot(identical(class(output), "yamaa_int64_vector"),
+            identical(as.character(output), truth),
+            identical(is.na(output), c(rep(FALSE, 9L), TRUE)))
+  exact <- output[c(1L, 5L, 6L, 10L)]
+  exact_truth <- c(-2^63, 2^53, -2^53, NA_real_)
+  stopifnot(identical(as.double(exact), exact_truth),
+            identical(as.numeric(exact), exact_truth),
+            identical(as.integer(output[c(8L, 9L, 10L)]),
+                      c(-2147483647L, 2147483647L, NA_integer_)))
+  for (index in c(2L, 3L, 4L)) {
+    reject(as.double(output[c(8L, index, 10L)]), "not exactly representable")
+    reject(as.numeric(output[c(8L, index, 10L)]), "not exactly representable")
+  }
+  for (index in 1:7) {
+    reject(as.integer(output[c(8L, index, 10L)]), "not representable")
+  }
+  stopifnot(identical(as.character(output), truth),
+            identical(as.character(result$output$VALUE), truth))
+  named <- setNames(output[c(8L, 9L, 10L)], c("low", "high", "missing"))
+  stopifnot(identical(as.double(named),
+                      c(low = -2147483647, high = 2147483647, missing = NA_real_)),
+            identical(as.integer(named),
+                      c(low = -2147483647L, high = 2147483647L, missing = NA_integer_)))
+  for (convert in list(as.double, as.integer)) {
+    template <- if (identical(convert, as.double)) NA_real_ else NA_integer_
+    stopifnot(identical(convert(output[10L]), template),
+              identical(convert(output[integer()]), template[integer()]))
+    for (fake in list(structure(1, class = "yamaa_int64_vector"),
+                      structure("1", class = c("yamaa_int64_vector", "other")),
+                      structure("1", class = "yamaa_int64_vector", dim = c(1L, 1L)),
+                      structure("01", class = "yamaa_int64_vector"),
+                      structure("9223372036854775808", class = "yamaa_int64_vector"))) {
+      reject(convert(fake))
+    }
+  }
+  rm(result); unlink(work, recursive = TRUE); invisible(gc())
+  for (attempt in seq_len(5L)) {
+    stopifnot(identical(as.double(exact), exact_truth),
+              identical(as.character(output), truth))
+  }
+}
+check_integer_output_conversions()
+cat("Full-range R integer output exact-or-error conversions and ownership passed\n")
