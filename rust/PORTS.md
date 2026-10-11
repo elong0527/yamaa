@@ -473,3 +473,34 @@ Class preparation, dispatch, authored-origin helpers, native alias/cache/entry-b
 policy and component probe retirement remain separate work. YAML scanning,
 producer/source-origin facades, report/log projection, Define and Windows behavior
 are outside this slice.
+
+`structural_preparation::prepare` owns the live environment root and external
+function/codelist class normalization route used by project_preparation's codec.
+A named request admits class text, looks up only a closed class and rejects any
+class declaring schema_version before physical decoding. Structural root retains
+its separate decode-first version/default gate and has no named-selection check.
+The physical codec calls the unchanged entry decoder once, preserving captured
+byte-before-identity limits, YAML parsing limits and original occurrence locations.
+After decoding, one fresh per-document NormalizationBudget spans named type-query
+binding and normalization. Existing project preparation's cumulative source, node
+and semantic budgets remain separate; no limit or counter is reset within a pass.
+
+The immutable engine result moves the original source bytes/identity, raw arena
+and location payload with its normalized tree. Complete semantic findings move
+the exact raw failed-pass arena and source into the existing adapter representation.
+Query validation and normalization policy/default failures keep their distinct
+categories; generic original codec errors move without Clone, Debug, Send or Sync
+requirements. Input origins address that retained raw arena, and Default origins
+require the caller to retain the exact admitted schema module/descriptor authority.
+This lifetime/retention contract does not authenticate an equal replacement arena.
+
+The adapter preserves CapturedDocument/CapturedFindings/Error shapes, the existing
+prepare_class convenience delegate and all standalone/inherited dispatch. It no
+longer calls core query/normalization in these live entry points. The former private
+two-caller cloning failure helper is removed when its callers move to the engine.
+No source capture, activation, study or publication capability is added here.
+The decoded schema/1 transports and host _Schema/interpret_schema/inheritance
+component probes remain unchanged for planned #1751 retirement, rather than being
+refactored. Dispatch, authored/producer-origin helpers, native alias/cache/entry-base
+policy and other owners' scanner/report/log/Define/Save/Windows work remain separate
+#1754 debt; this move does not claim whole-issue closure.

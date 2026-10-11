@@ -130,6 +130,26 @@ impl capture::DecodePort for SchemaDecoder {
     }
 }
 
+/// Physical entry decoding retains its source-limit order and YAML locations.
+struct StructuralDecoder<'a>(&'a CapturedSchema);
+impl yamaa_engine::structural_preparation::DecodePort for StructuralDecoder<'_> {
+    type Error = Error;
+    type Locations = Vec<SourcePosition>;
+    fn decode(
+        &mut self,
+        source: &Source,
+    ) -> Result<yamaa_engine::structural_preparation::Decoded<Self::Locations>, Error> {
+        let DecodedYaml {
+            document,
+            locations,
+        } = self.0.decode_entry(source)?;
+        Ok(yamaa_engine::structural_preparation::Decoded {
+            document,
+            locations,
+        })
+    }
+}
+
 impl CapturedSchema {
     /// Decode the complete host-captured closure using the shared YAML semantics.
     /// Cumulative byte/count admission happens before any source is decoded.
@@ -194,19 +214,10 @@ impl CapturedSchema {
     /// Validate and normalize a versioned root without windows, inheritance or IO.
     /// Environment-specific admission follows this captured structural gate.
     pub fn prepare_structural(self: &Arc<Self>, source: Source) -> Result<CapturedDocument, Error> {
-        let raw = self.decode_entry(&source)?;
-        let mut budget = NormalizationBudget::new(self.limits.normalization);
-        let normalized = self
-            .structure
-            .normalize_document(&raw.document, &mut budget)
-            .map_err(|error| self.normalization_failure(&source, &raw.document, error))?;
-        Ok(CapturedDocument {
-            schema: Arc::clone(self),
-            class_name: self.structure.root_class().name.clone(),
+        self.prepare_structural_selected(
             source,
-            raw,
-            normalized,
-        })
+            yamaa_engine::structural_preparation::Selection::StructuralRoot,
+        )
     }
 
     /// Normalize a versionless class using the version of its captured schema.
@@ -222,41 +233,54 @@ impl CapturedSchema {
         source: Source,
         class_name: &str,
     ) -> Result<CapturedDocument, Error> {
-        if class_name.len() > self.limits.identity_bytes {
-            return Err(Error::Limit("class_name"));
-        }
-        let class = self
-            .structure
-            .class_named(class_name)
-            .ok_or_else(|| Error::UnknownClass(class_name.into()))?;
-        if class
-            .fields
-            .iter()
-            .any(|field| field.name == "schema_version")
-        {
-            return Err(Error::VersionedRootRequired);
-        }
-        let raw = self.decode_entry(&source)?;
-        let mut budget = NormalizationBudget::new(self.limits.normalization);
-        let types = self
-            .structure
-            .parse_query_types(&[class_name.into()], budget.validation_scope())
-            .map_err(Error::Validation)?;
-        let normalized = self
-            .structure
-            .normalize_types(
-                &types,
-                &raw.document,
-                raw.document.root(),
-                false,
-                &mut budget,
-            )
-            .map_err(|error| self.normalization_failure(&source, &raw.document, error))?;
+        self.prepare_structural_selected(
+            source,
+            yamaa_engine::structural_preparation::Selection::NamedClass(class_name),
+        )
+    }
+
+    fn prepare_structural_selected(
+        self: &Arc<Self>,
+        source: Source,
+        selection: yamaa_engine::structural_preparation::Selection<'_>,
+    ) -> Result<CapturedDocument, Error> {
+        use yamaa_engine::structural_preparation::{self, Error as StructuralError};
+        let prepared = structural_preparation::prepare(
+            &self.structure,
+            source,
+            selection,
+            structural_preparation::Limits {
+                class_name_bytes: self.limits.identity_bytes,
+                normalization: self.limits.normalization,
+            },
+            &mut StructuralDecoder(self),
+        )
+        .map_err(|error| match error {
+            StructuralError::ClassNameLimit => Error::Limit("class_name"),
+            StructuralError::UnknownClass(name) => Error::UnknownClass(name),
+            StructuralError::VersionedRootRequired => Error::VersionedRootRequired,
+            StructuralError::Decode(error) => error,
+            StructuralError::Validation(error) => Error::Validation(error),
+            StructuralError::Normalize(error) => Error::Normalize(error),
+            StructuralError::Findings(failure) => {
+                let (source, document, findings) = failure.into_parts();
+                Error::Findings(Box::new(CapturedFindings {
+                    schema: Arc::clone(self),
+                    source,
+                    document: Some(document),
+                    findings,
+                }))
+            }
+        })?;
+        let (source, document, locations, class_name, normalized) = prepared.into_parts();
         Ok(CapturedDocument {
             schema: Arc::clone(self),
-            class_name: class_name.into(),
+            class_name,
             source,
-            raw,
+            raw: DecodedYaml {
+                document,
+                locations,
+            },
             normalized,
         })
     }
@@ -333,23 +357,6 @@ impl CapturedSchema {
             },
             parents: Vec::new(),
         })
-    }
-
-    fn normalization_failure(
-        self: &Arc<Self>,
-        source: &Source,
-        document: &yamaa_core::schema::Document,
-        error: NormalizationError,
-    ) -> Error {
-        match error {
-            NormalizationError::Invalid(findings) => Error::Findings(Box::new(CapturedFindings {
-                schema: Arc::clone(self),
-                source: source.clone(),
-                document: Some(document.clone()),
-                findings,
-            })),
-            error => Error::Normalize(error),
-        }
     }
 
     /// Select the shared preparation lifecycle from one decoded raw entry.
