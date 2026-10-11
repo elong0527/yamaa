@@ -1,109 +1,88 @@
-# Reference solution for the yamaa benchmark adam-adae-worsening-emergence (Python track).
-#
-# Written from the benchmark's full prompt and its inputs alone, as an agent
-# would write it. Harbor's oracle agent runs it to check that the prompt can
-# be solved and that the grader scores a correct answer 1.
-
+# Python reference for the yamaa benchmark adam-adae-worsening-emergence.
+# Uses the collected event records and dated findings to construct periods.
 from pathlib import Path
 
 import polars as pl
 
 
-def normalize(column: pl.Expr) -> pl.Expr:
-    # Datetimes compare as text once every value carries seconds.
-    return (
-        pl.when(column.str.len_chars() == 16)
-        .then(column + ":00")
-        .otherwise(column)
-    )
+def normalize(value):
+    return value + ":00" if value and len(value) == 16 else value
 
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False).select(
-    "STUDYID", "USUBJID", "TRTSDTM"
-)
-
-base = (
-    ae.join(adsl, on=["STUDYID", "USUBJID"], how="left")
-    .with_columns(
-        ASTDTM=normalize(pl.col("AESTDTC")),
-        AENDTM=normalize(pl.col("AEENDTC")),
-        TRTSDTM=normalize(pl.col("TRTSDTM")),
-    )
-    .with_columns(
-        SEVN=pl.when(pl.col("AESEV") == "MILD")
-        .then(1)
-        .when(pl.col("AESEV") == "MODERATE")
-        .then(2)
-        .when(pl.col("AESEV") == "SEVERE")
-        .then(3)
-        .otherwise(None)
-        .cast(pl.Int64),
-        TOXN=pl.col("AETOXGR").cast(pl.Int64, strict=False),
-    )
-)
-
-term = ["STUDYID", "USUBJID", "AEDECOD"]
-# Only adjacent episodes with a known, exactly equal boundary can link.
-# Number each break after sorting, then accumulate it to identify chains.
-base = (
-    base.sort([*term, "ASTDTM", "AESEQ"], nulls_last=True)
-    .with_columns(PREVEND=pl.col("AENDTM").shift(1).over(term))
-    .with_columns(
-        BREAK=(pl.col("PREVEND") != pl.col("ASTDTM"))
-        .fill_null(True)
-        .cast(pl.Int64)
-    )
-    .with_columns(CHAIN=pl.col("BREAK").cum_sum().over(term))
-)
-chain = [*term, "CHAIN"]
-# The worst severity and grade after exposure in this continuous chain.
-after = base.filter(
-    pl.col("ASTDTM").is_not_null(),
-    pl.col("TRTSDTM").is_not_null(),
-    pl.col("ASTDTM") >= pl.col("TRTSDTM"),
-).group_by(chain).agg(
-    MAXSEV=pl.col("SEVN").max(), MAXTOX=pl.col("TOXN").max()
-)
-joined = base.join(after, on=chain, how="left")
-
-sev_worse = (
-    pl.col("MAXSEV").is_not_null()
-    & pl.col("SEVN").is_not_null()
-    & (pl.col("MAXSEV") > pl.col("SEVN"))
-)
-tox_worse = (
-    pl.col("MAXTOX").is_not_null()
-    & pl.col("TOXN").is_not_null()
-    & (pl.col("MAXTOX") > pl.col("TOXN"))
-)
-
-adae = (
-    joined.with_columns(
-        TRTEMFL=pl.when(
-            pl.col("ASTDTM").is_null() | pl.col("TRTSDTM").is_null()
+ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).to_dicts()
+fa = pl.read_csv("/app/input/fa.csv", infer_schema=False).to_dicts()
+exposure = {
+    (row["STUDYID"], row["USUBJID"]): normalize(row["TRTSDTM"])
+    for row in pl.read_csv("/app/input/adsl.csv", infer_schema=False).to_dicts()
+}
+severity_rank = {"MILD": 1, "MODERATE": 2, "SEVERE": 3}
+output = []
+sequences = {}
+for event in sorted(ae, key=lambda r: (r["STUDYID"], r["USUBJID"], int(r["AESEQ"]))):
+    subject = event["STUDYID"], event["USUBJID"]
+    trt = exposure.get(subject)
+    onset, end = normalize(event["AESTDTC"]), normalize(event["AEENDTC"])
+    changes = {}
+    for finding in fa:
+        if (finding["STUDYID"], finding["USUBJID"]) != subject:
+            continue
+        if finding["FALNKID"] != event["AELNKID"]:
+            continue
+        time = normalize(finding["FADTC"])
+        values = changes.setdefault(time, {})
+        test = finding["FATESTCD"]
+        if test in values:
+            raise ValueError("Duplicate finding at the same event and time")
+        values[test] = finding["FASTRESC"]
+    states = []
+    sev, grade = None, None
+    for time, values in sorted(changes.items()):
+        if values.get("SEV") is not None:
+            sev = values["SEV"]
+        if values.get("TOXGR") is not None:
+            grade = int(values["TOXGR"])
+        states.append((time, sev, grade))
+    before = [state for state in states if trt and state[0] < trt]
+    baseline_sev = severity_rank.get(before[-1][1]) if before else None
+    baseline_grade = before[-1][2] if before else None
+    emergent = False
+    for i, (time, sev, grade) in enumerate(states):
+        if onset and trt:
+            if onset >= trt:
+                emergent = True
+            elif time >= trt:
+                rank = severity_rank.get(sev)
+                sev_worse = (
+                    rank is not None
+                    and baseline_sev is not None
+                    and rank > baseline_sev
+                )
+                grade_worse = (
+                    grade is not None
+                    and baseline_grade is not None
+                    and grade > baseline_grade
+                )
+                emergent = emergent or sev_worse or grade_worse
+        sequences[subject] = sequences.get(subject, 0) + 1
+        output.append(
+            {
+                "STUDYID": event["STUDYID"],
+                "USUBJID": event["USUBJID"],
+                "ASEQ": sequences[subject],
+                "AESEQ": int(event["AESEQ"]),
+                "AEDECOD": event["AEDECOD"],
+                "AESTDTC": onset,
+                "AEENDTC": end,
+                "ASTDTM": time,
+                "AENDTM": states[i + 1][0] if i + 1 < len(states) else end,
+                "TRTSDTM": trt,
+                "AESEV": event["AESEV"],
+                "AETOXGR": event["AETOXGR"],
+                "ASEV": sev,
+                "ATOXGRN": grade,
+                "TRTEMFL": "Y" if emergent else None,
+            }
         )
-        .then(None)
-        .when(pl.col("ASTDTM") >= pl.col("TRTSDTM"))
-        .then(pl.lit("Y"))
-        .when(sev_worse | tox_worse)
-        .then(pl.lit("Y"))
-        .otherwise(None)
-    ).select(
-        "STUDYID",
-        "USUBJID",
-        "AESEQ",
-        "AEDECOD",
-        "ASTDTM",
-        "AENDTM",
-        "TRTSDTM",
-        "AESEV",
-        "AETOXGR",
-        "TRTEMFL",
-    )
-)
 
 Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+pl.DataFrame(output).write_csv("/app/output/adae.csv")

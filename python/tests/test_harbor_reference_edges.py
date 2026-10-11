@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 from decimal import Decimal
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -86,63 +87,151 @@ def worsening_track(request):
     return request.param
 
 
-def _worsening_flags(tmp_path, track, changes):
+def _worsening_rows(tmp_path, track, ae=None, fa=None):
     name = "adam-adae-worsening-emergence"
-    ae = _input(name, "ae.csv")
-    for row in ae:
-        if row["USUBJID"] == "P7-101" and row["AESEQ"] in changes:
-            row.update(changes[row["AESEQ"]])
-    if track == "yamaa":
-        from yamaa import yamaa_domain
+    changes = {
+        "ae.csv": ae or _input(name, "ae.csv"),
+        "fa.csv": fa or _input(name, "fa.csv"),
+    }
+    if track != "yamaa":
+        return _run(tmp_path, name, track, changes)["adae.csv"]
+    from yamaa import yamaa_domain
 
-        study = tmp_path / "study"
-        shutil.copytree(ROOT / "benchmarks" / name, study)
-        header, _ = _read(study / "input/ae.csv")
-        with (study / "input/ae.csv").open("w", newline="") as stream:
+    study = tmp_path / "study"
+    shutil.copytree(ROOT / "benchmarks" / name, study)
+    for file, rows in changes.items():
+        header, _ = _read(study / "input" / file)
+        with (study / "input" / file).open("w", newline="") as stream:
             writer = csv.DictWriter(stream, fieldnames=header)
             writer.writeheader()
-            writer.writerows(ae)
-        rows = yamaa_domain(study / "spec.yaml").output.to_dicts()
-    else:
-        rows = _run(tmp_path, name, track, {"ae.csv": ae})["adae.csv"]
-    return {
-        str(row["AESEQ"]): row["TRTEMFL"] or ""
-        for row in rows
-        if row["USUBJID"] == "P7-101" and row["AEDECOD"] == "HEADACHE"
-    }
+            writer.writerows(rows)
+    result = yamaa_domain(study / "spec.yaml").output
+    result.write_csv(study / "actual.csv", datetime_format="%Y-%m-%dT%H:%M:%S")
+    return _read(study / "actual.csv")[1]
 
 
-@pytest.mark.parametrize(
-    ("end", "flag"),
-    [
-        ("", ""),
-        ("2025-03-04T11:44:59", ""),
-        ("2025-03-04T11:45:01", ""),
-        ("2025-03-04T11:45", "Y"),
-    ],
-    ids=["missing", "gap", "overlap", "equal-minute-precision"],
-)
-def test_worsening_requires_every_episode_boundary(
-    tmp_path, worsening_track, end, flag
-):
-    # The unchanged middle episode links both earlier episodes to worsening.
-    # Moving its end by even one second must break that link for both rows.
-    flags = _worsening_flags(tmp_path, worsening_track, {"5": {"AEENDTC": end}})
-    assert flags == {"1": flag, "2": "Y", "5": flag, "6": ""}
-
-
-@pytest.mark.parametrize(
-    ("severity", "grade", "flag"),
-    [("", "2", "Y"), ("MODERATE", "", "Y"), ("", "", ""), ("MILD", "1", "")],
-    ids=["grade-only", "severity-only", "both-missing", "unchanged"],
-)
-def test_continuous_worsening_compares_severity_and_grade_independently(
-    tmp_path, worsening_track, severity, grade, flag
-):
-    flags = _worsening_flags(
-        tmp_path, worsening_track, {"2": {"AESEV": severity, "AETOXGR": grade}}
+def _event_rows(rows, subject="P7-101", sequence="1"):
+    return sorted(
+        [row for row in rows if row["USUBJID"] == subject and row["AESEQ"] == sequence],
+        key=lambda row: row["ASTDTM"],
     )
-    assert flags == {"1": flag, "2": "Y", "5": flag, "6": ""}
+
+
+def test_one_source_ae_expands_to_continuous_analysis_periods(
+    tmp_path, worsening_track
+):
+    rows = _worsening_rows(tmp_path, worsening_track)
+    assert len(rows) == 14 > len(_input("adam-adae-worsening-emergence", "ae.csv"))
+    headache = _event_rows(rows)
+    assert [row["TRTEMFL"] for row in headache] == ["", "Y", "Y", "Y"]
+    assert [row["ASEV"] for row in headache] == ["MILD", "MODERATE", "SEVERE", "MILD"]
+    assert all(row["AESEV"] == "SEVERE" for row in headache)
+    assert [int(row["ASEQ"]) for row in headache] == [1, 2, 3, 4]
+    for earlier, later in pairwise(headache):
+        assert earlier["AENDTM"] == later["ASTDTM"]
+    assert headache[0]["ASTDTM"] == headache[0]["AESTDTC"]
+    assert headache[-1]["AENDTM"] == headache[-1]["AEENDTC"]
+    # Improvement alone does not start TE; improvement after worsening keeps TE.
+    assert [row["TRTEMFL"] for row in _event_rows(rows, "P7-102")] == ["", "", "Y"]
+    cough = _event_rows(rows, "P7-105")
+    assert all(row["TRTEMFL"] == "" for row in cough)
+    assert cough[-1]["AENDTM"] == ""
+    assert all(row["TRTEMFL"] == "" for row in _event_rows(rows, "P7-104"))
+    assert [row["TRTEMFL"] for row in _event_rows(rows, "P7-103")] == ["", "Y"]
+
+
+def test_moving_a_collected_change_moves_both_period_boundaries(
+    tmp_path, worsening_track
+):
+    fa = _input("adam-adae-worsening-emergence", "fa.csv")
+    for row in fa:
+        if row["USUBJID"] == "P7-101" and row["FADTC"] == "2025-03-04T11:00:00":
+            row["FADTC"] = "2025-03-04T11:45"
+    rows = _event_rows(_worsening_rows(tmp_path, worsening_track, fa=fa))
+    assert rows[0]["AENDTM"] == "2025-03-04T11:45:00"
+    assert rows[1]["ASTDTM"] == rows[0]["AENDTM"]
+    assert rows[1]["TRTEMFL"] == "Y"
+
+
+def test_different_source_events_with_the_same_term_do_not_share_worsening(
+    tmp_path, worsening_track
+):
+    name = "adam-adae-worsening-emergence"
+    ae, fa = _input(name, "ae.csv"), _input(name, "fa.csv")
+    for row in ae:
+        if row["USUBJID"] == "P7-101" and row["AESEQ"] == "2":
+            row.update(AESTDTC="2025-03-03T06:00:00", AEENDTC="2025-03-04T06:00:00")
+    for row in fa:
+        if row["USUBJID"] == "P7-101" and row["FALNKID"] == "AE-2":
+            row["FADTC"] = "2025-03-03T06:00:00"
+    rows = _worsening_rows(tmp_path, worsening_track, ae, fa)
+    assert all(row["TRTEMFL"] == "" for row in _event_rows(rows, sequence="2"))
+    assert [row["TRTEMFL"] for row in _event_rows(rows)] == ["", "Y", "Y", "Y"]
+
+
+@pytest.mark.parametrize(
+    ("subject", "dimension"), [("P7-101", "SEV"), ("P7-103", "TOXGR")]
+)
+def test_missing_pretreatment_dimension_cannot_establish_worsening(
+    tmp_path, worsening_track, subject, dimension
+):
+    fa = _input("adam-adae-worsening-emergence", "fa.csv")
+    for row in fa:
+        if (
+            row["USUBJID"] == subject
+            and row["FALNKID"] == "AE-1"
+            and row["FATESTCD"] == dimension
+            and row["FADTC"] < "2025-03-04T09:00:00"
+        ):
+            row["FASTRESC"] = ""
+    rows = _worsening_rows(tmp_path, worsening_track, fa=fa)
+    assert all(row["TRTEMFL"] == "" for row in _event_rows(rows, subject))
+
+
+def test_worsening_uses_the_last_pretreatment_state(tmp_path, worsening_track):
+    fa = _input("adam-adae-worsening-emergence", "fa.csv")
+    for row in fa:
+        if row["USUBJID"] != "P7-101" or row["FALNKID"] != "AE-1":
+            continue
+        if row["FADTC"] == "2025-03-04T11:00:00":
+            row.update(FADTC="2025-03-04T08:00:00", FASTRESC="SEVERE")
+        elif row["FADTC"] == "2025-03-04T13:00:00":
+            row["FASTRESC"] = "MODERATE"
+    rows = _event_rows(_worsening_rows(tmp_path, worsening_track, fa=fa))
+    assert all(row["TRTEMFL"] == "" for row in rows)
+
+
+def test_worsening_at_first_exposure_starts_treatment_emergence(
+    tmp_path, worsening_track
+):
+    fa = _input("adam-adae-worsening-emergence", "fa.csv")
+    for row in fa:
+        if row["USUBJID"] == "P7-101" and row["FADTC"] == "2025-03-04T11:00:00":
+            row["FADTC"] = "2025-03-04T09:00:00"
+    rows = _event_rows(_worsening_rows(tmp_path, worsening_track, fa=fa))
+    assert [row["TRTEMFL"] for row in rows] == ["", "Y", "Y", "Y"]
+    assert rows[1]["ASTDTM"] == rows[1]["TRTSDTM"]
+
+
+def test_simultaneous_severity_and_grade_changes_create_one_period(
+    tmp_path, worsening_track
+):
+    name = "adam-adae-worsening-emergence"
+    ae, fa = _input(name, "ae.csv"), _input(name, "fa.csv")
+    update = next(
+        row
+        for row in fa
+        if row["USUBJID"] == "P7-101" and row["FADTC"] == "2025-03-04T11:00:00"
+    )
+    fa.append({**update, "FASEQ": "8", "FATESTCD": "TOXGR", "FASTRESC": "2"})
+    ae[0]["AETOXGR"] = "2"
+    rows = _worsening_rows(tmp_path, worsening_track, ae, fa)
+    assert len(rows) == 14
+    headache = _event_rows(rows)
+    assert len(headache) == 4
+    assert headache[1]["ASEV"] == "MODERATE"
+    assert headache[1]["ATOXGRN"] == "2"
+    assert all(row["ATOXGRN"] == "2" for row in headache[1:])
 
 
 def test_missing_age_has_no_group_and_ranks_last(tmp_path, language):

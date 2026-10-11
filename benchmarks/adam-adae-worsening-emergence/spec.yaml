@@ -1,164 +1,194 @@
 schema_version: "1.0"
 domain: ADAE
-keys: [STUDYID, USUBJID, AESEQ]
+keys: [STUDYID, USUBJID, ASEQ]
 input:
   AE:
     path: input/ae.csv
-    types: {AESTDTC: datetime, AEENDTC: datetime, AETOXGR: int}
+    types: {AESEQ: int, AESTDTC: datetime, AEENDTC: datetime}
+  FA:
+    path: input/fa.csv
+    types: {FASEQ: int, FADTC: datetime}
   ADSL: {path: input/adsl.csv, types: {TRTSDTM: datetime}}
-base: AE
-
 output:
   path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDTM, AENDTM, TRTSDTM, AESEV,
-            AETOXGR, TRTEMFL]
-
+  columns: [STUDYID, USUBJID, ASEQ, AESEQ, AEDECOD, AESTDTC, AEENDTC,
+            ASTDTM, AENDTM, TRTSDTM, AESEV, AETOXGR, ASEV, ATOXGRN, TRTEMFL]
+  order_by: [STUDYID, USUBJID, ASEQ]
+intermediates:
+  # The collected link identifies an occurrence, even if terms repeat.
+  - id: EVENT
+    dataset: AE
+    key: [STUDYID, USUBJID, AELNKID]
 windows:
-  EPISODE_ORDER:
-    group_by: [STUDYID, USUBJID, AEDECOD]
-    order_by: [ASTDTM, AESEQ]
-
+  EVENT_ORDER:
+    group_by: [STUDYID, USUBJID, AESEQ]
+    order_by: [ASTDTM]
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: AE.STUDYID
-
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: AE.USUBJID
-
+  - name: AELNKID
+    type: str
+    label: Event Link Identifier
   - name: AESEQ
     type: int
-    label: Sequence Number
-    derivation: AE.AESEQ
-
+    label: Source Adverse Event Sequence Number
+    derivation: EVENT.AESEQ
   - name: AEDECOD
     type: str
     label: Dictionary-Derived Term
-    derivation: AE.AEDECOD
-
+    derivation: EVENT.AEDECOD
+  - name: AESTDTC
+    type: datetime
+    label: Source Event Start Date/Time
+    derivation: EVENT.AESTDTC
+  - name: AEENDTC
+    type: datetime
+    label: Source Event End Date/Time
+    derivation: EVENT.AEENDTC
   - name: ASTDTM
     type: datetime
-    label: Analysis Start Date/Time
-    derivation: AE.AESTDTC
-
+    label: Analysis Segment Start Date/Time
+  - name: NEXTSTART
+    type: datetime
+    label: Next Segment Start Date/Time
+    derivation:
+      row_value: {source: ASTDTM, offset: 1, window: EVENT_ORDER}
   - name: AENDTM
     type: datetime
-    label: Analysis End Date/Time
-    derivation: AE.AEENDTC
-
+    label: Analysis Segment End Date/Time
+    derivation:
+      first_available: {sources: [NEXTSTART, AEENDTC]}
   - name: TRTSDTM
     type: datetime
     label: Datetime of First Exposure to Treatment
     derivation: ADSL.TRTSDTM
-
   - name: AESEV
     type: str
-    label: Severity/Intensity
-    derivation: AE.AESEV
-    verifications:
-      allowed_values:
-        values: [MILD, MODERATE, SEVERE]
-
+    label: Source Event Severity/Intensity
+    derivation: EVENT.AESEV
   - name: AETOXGR
+    type: str
+    label: Source Event Standard Toxicity Grade
+    derivation: EVENT.AETOXGR
+  - name: SEVCOL
+    type: str
+    label: Collected Severity at Change Time
+  - name: GRDCOL
     type: int
-    label: Standard Toxicity Grade
-    derivation: AE.AETOXGR
+    label: Collected Toxicity Grade at Change Time
+  - name: ASEV
+    type: str
+    label: Analysis Severity/Intensity
+    derivation:
+      locf: {source: SEVCOL, window: EVENT_ORDER}
     verifications:
-      allowed_values:
-        values: [1, 2, 3, 4, 5]
-
-  # Numeric rank of the collected severity, so a later episode can be
-  # compared with an earlier one for the same term. Not in the output.
-  - name: AESEVN
+      allowed_values: {values: [MILD, MODERATE, SEVERE]}
+  - name: ATOXGRN
     type: int
-    label: Severity/Intensity (N)
+    label: Analysis Toxicity Grade (N)
+    derivation:
+      locf: {source: GRDCOL, window: EVENT_ORDER}
+    verifications:
+      allowed_values: {values: [1, 2, 3, 4, 5]}
+  - name: ASEVN
+    type: int
+    label: Analysis Severity/Intensity (N)
     derivation:
       mapping:
-        source: AESEV
-        dict:
-          MILD: 1
-          MODERATE: 2
-          SEVERE: 3
+        source: ASEV
+        dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
         missing: null
-
-  # The immediately preceding episode's end, in chronological term order.
-  # Missing ends are retained: continuity must never skip an episode.
-  - name: PREVEND
-    type: datetime
-    label: Previous Episode End Date/Time
+  - name: PRETRTFL
+    type: str
+    label: Last Pretreatment Segment Flag
+    # Select the last collected state strictly before first exposure.
+    # A severity decrease after exposure alone must not create a TE period.
     derivation:
-      row_value:
-        source: AENDTM
-        offset: -1
-        window: EPISODE_ORDER
-
-  # Start a new chain unless the preceding end equals this onset exactly.
-  # Unknown boundaries, gaps, and overlaps all start a new chain.
-  - name: CHAINSTART
+      baseline_flag:
+        date: ASTDTM
+        reference_date: TRTSDTM
+        window:
+          group_by: [STUDYID, USUBJID, AESEQ]
+          filter: "ASTDTM < TRTSDTM"
+  - name: PRESEV
     type: int
-    label: First Sequence Number in Continuous Chain
+    label: Severity Immediately Before First Exposure
+    derivation:
+      aggregate:
+        filter: "PRETRTFL = 'Y'"
+        group_by: [STUDYID, USUBJID, AESEQ]
+        expr: "MAX(ASEVN)"
+  - name: PREGRD
+    type: int
+    label: Toxicity Grade Immediately Before First Exposure
+    derivation:
+      aggregate:
+        filter: "PRETRTFL = 'Y'"
+        group_by: [STUDYID, USUBJID, AESEQ]
+        expr: "MAX(ATOXGRN)"
+  - name: WORSDTM
+    type: datetime
+    label: Post-Treatment Worsening Date/Time
     derivation:
       case:
-        - when: "PREVEND = ASTDTM"
-          then: {literal: null}
-        - otherwise: AESEQ
-
-  # Carry the chain's first sequence number through every linked episode,
-  # including unchanged episodes before treatment or before worsening.
-  - name: CHAINID
-    type: int
-    label: Continuous Episode Chain Identifier
-    derivation:
-      locf:
-        source: CHAINSTART
-        window: EPISODE_ORDER
-
-  # Highest severity at or after exposure in the same continuous chain.
-  # Rows with no onset or no exposure never contribute. Not in the output.
-  - name: POSTMAX
-    type: int
-    label: Maximum Post-Treatment Severity (N)
+        - when: "ASTDTM >= TRTSDTM AND
+            (ASEVN > PRESEV OR ATOXGRN > PREGRD)"
+          then: ASTDTM
+  - name: FIRSTWRS
+    type: datetime
+    label: First Post-Treatment Worsening Date/Time
+    # A first worsening point latches TE for this source event only.
     derivation:
       aggregate:
-        filter: "ASTDTM >= TRTSDTM"
-        group_by: [STUDYID, USUBJID, AEDECOD, CHAINID]
-        expr: "MAX(AESEVN)"
-
-  # Highest toxicity grade at or after exposure in the same chain.
-  # Rows with no onset, no grade, or no exposure never contribute.
-  - name: POSTMAXG
-    type: int
-    label: Maximum Post-Treatment Toxicity Grade
-    derivation:
-      aggregate:
-        filter: "ASTDTM >= TRTSDTM"
-        group_by: [STUDYID, USUBJID, AEDECOD, CHAINID]
-        expr: "MAX(AETOXGR)"
-
-  # A comparison with a missing value is unknown, never true, so the
-  # flag stays empty when the onset or the first exposure is missing,
-  # and for an earlier event when neither the severity nor the grade
-  # rises later.
+        group_by: [STUDYID, USUBJID, AESEQ]
+        expr: "MIN(WORSDTM)"
   - name: TRTEMFL
     type: str
     label: Treatment Emergent Analysis Flag
     derivation:
-      flag: "ASTDTM >= TRTSDTM OR (ASTDTM < TRTSDTM AND
-        (AESEVN < POSTMAX OR AETOXGR < POSTMAXG))"
+      flag: "AESTDTC IS NOT NULL AND TRTSDTM IS NOT NULL AND
+        (AESTDTC >= TRTSDTM OR ASTDTM >= FIRSTWRS)"
     verifications:
-      allowed_values:
-        values: [Y]
-
+      allowed_values: {values: [Y]}
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [AESEQ, ASTDTM]
+rows:
+  # Dated findings are upstream source data, not pre-built ADAE periods.
+  # Pivot the two dimensions at each event/time into one analysis period.
+  - id: severity_periods
+    dataset: FA
+    group_by: [FA.STUDYID, FA.USUBJID, FA.FALNKID, FA.FADTC]
+    derivations:
+      STUDYID: {aggregate: "MAX(FA.STUDYID)"}
+      USUBJID: {aggregate: "MAX(FA.USUBJID)"}
+      AELNKID: {aggregate: "MAX(FA.FALNKID)"}
+      ASTDTM: {aggregate: "MAX(FA.FADTC)"}
+      SEVCOL:
+        aggregate:
+          filter: "FA.FATESTCD = 'SEV'"
+          expr: "ONLY(FA.FASTRESC)"
+      GRDCOL:
+        aggregate:
+          filter: "FA.FATESTCD = 'TOXGR'"
+          expr: "ONLY(FA.FASTRESC)"
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
-  - row_count:
-      min: 20
-      max: 20
+  - unique: {columns: [STUDYID, USUBJID, ASEQ]}
+  - unique: {columns: [STUDYID, USUBJID, AESEQ, ASTDTM]}
+  - row_count: {min: 14, max: 14}
   - assert:
-      id: treatment-emergent-event-has-known-onset-and-exposure
-      when: "TRTEMFL = 'Y'"
-      require: "ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL"
+      id: segment-start-within-source-event
+      require: "(AESTDTC IS NULL OR ASTDTM >= AESTDTC) AND
+        (AEENDTC IS NULL OR ASTDTM < AEENDTC)"
+  - assert:
+      id: segment-has-positive-duration-or-is-ongoing
+      require: "AENDTM IS NULL OR AENDTM > ASTDTM"
