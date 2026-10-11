@@ -235,7 +235,8 @@ impl Define {
             if section.dataset_json.value {
                 targets.push(reference.clone());
             }
-            let href = package_reference(Path::new(&reference), define_parent).ok_or_else(|| {
+            let href =
+                package_reference(Path::new(&reference), define_parent).ok_or_else(|| {
                     Failure::Metadata(vec![Finding::new(
                         "artifact_outside_document",
                         "REQ-1021",
@@ -335,7 +336,7 @@ impl Define {
                         dataset,
                         source.names.iter().map(String::as_str),
                     )
-                        .map_err(|finding| Failure::Metadata(vec![finding]))?;
+                    .map_err(|finding| Failure::Metadata(vec![finding]))?;
                     let table = yamaa_core::typed_csv::PreparedTypes::new(&kinds, 16_384)
                         .and_then(|types| types.convert(source))
                         .map_err(|error| {

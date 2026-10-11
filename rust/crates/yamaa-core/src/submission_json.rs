@@ -245,14 +245,18 @@ fn validate_artifact<T: TableAccess>(
     let mismatch = |detail| artifact_mismatch(dataset, detail);
     admit_fields(
         dataset,
-        table.schema().columns().iter().map(|field| field.name.as_str()),
-    )?;
-    if table
+        table
             .schema()
             .columns()
             .iter()
-            .zip(&dataset.columns)
-            .any(|(actual, expected)| actual.kind != expected.runtime_type())
+            .map(|field| field.name.as_str()),
+    )?;
+    if table
+        .schema()
+        .columns()
+        .iter()
+        .zip(&dataset.columns)
+        .any(|(actual, expected)| actual.kind != expected.runtime_type())
     {
         return Err(mismatch(
             "published artifact fields, order or types differ from the output contract",

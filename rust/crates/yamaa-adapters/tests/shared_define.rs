@@ -283,8 +283,10 @@ fn mutual_references_and_published_contract_fail_before_any_publication() {
     // conversion can misclassify the absent field as a scalar/lookup problem.
     fs::write(temp.0.join("dm.csv"), csv.replace("STUDYID", "WRONG")).unwrap();
     let mut run = temp.run("2026-09-11T00:00:00");
-    assert!(run.issues().iter().any(|issue|
-        issue.requirement.as_deref() == Some("REQ-0535")));
+    assert!(run
+        .issues()
+        .iter()
+        .any(|issue| issue.requirement.as_deref() == Some("REQ-0535")));
     assert!(run.save().is_err());
     assert!(!temp.0.join("define.xml").exists());
     // REQ0957 preserves the verification phase, offending value and row key.
