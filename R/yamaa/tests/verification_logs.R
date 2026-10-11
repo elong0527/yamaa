@@ -47,7 +47,8 @@ view <- built$verification_log
 view$REPORT_VERSION[] <- "changed"
 view <- built$warning_log
 view$LOG_VERSION[] <- "changed"
-unlink(c(entry,file.path(case,"input","dm.csv")))
+removed <- c(entry,file.path(case,"input","dm.csv"))
+stopifnot(unlink(removed)==0L,!any(file.exists(removed)))
 gc()
 for(attempt in seq_len(2L)) {
   stopifnot(identical(built$save(),TRUE),identical(rawToChar(observations(built)),expected))
@@ -77,7 +78,8 @@ stopifnot(is.null(failed$output),is.null(failed$warning_log),nrow(failed$verific
   identical(failed$verification_log$OUTCOME,c("held","violated")),identical(failed$issues$condition,"range_failed"))
 issues <- failed$issues
 for(name in names) writeBin(charToRaw("sentinel"),file.path(case,name))
-unlink(c(entry,file.path(case,"input","dm.csv")))
+removed <- c(entry,file.path(case,"input","dm.csv"))
+stopifnot(unlink(removed)==0L,!any(file.exists(removed)))
 for(attempt in seq_len(2L)) {
   stopifnot(inherits(tryCatch(failed$save(),error=identity),"yamaa_domain_error"),identical(failed$issues,issues))
   for(name in names[-1L]) stopifnot(identical(rawfile(file.path(case,name)),charToRaw("sentinel")))
@@ -104,7 +106,8 @@ for(name in c("checks.csv","warnings.csv")) writeBin(charToRaw("stale"),file.pat
 stopifnot(identical(warn$save(),FALSE))
 for(name in c("checks.csv","warnings.csv")) stopifnot(identical(rawfile(file.path(case,name)),charToRaw("stale")))
 dir.create(file.path(case,"absent"))
-unlink(c(entry,file.path(case,"input.csv")))
+removed <- c(entry,file.path(case,"input.csv"))
+stopifnot(unlink(removed)==0L,!any(file.exists(removed)))
 stopifnot(identical(warn$save(),TRUE),nrow(warn$issues)==0L)
 source <- strsplit(source,"    verifications:",fixed=TRUE)[[1L]][[1L]]
 writeBin(charToRaw(source),entry)

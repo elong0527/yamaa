@@ -38,6 +38,9 @@ at-most-four prefix reports. These are explicit capacity policies, not a promise
 about process RSS or recovery from allocation failure.
 
 The unchanged `schema-verification-log` document has three unchanged CSV goldens.
+The native source fixture manifest lists that original document, input and three
+goldens explicitly. Python and R source archives preserve those exact bytes so
+the unpacked source verification-log tests can exercise their own fixture files.
 Its complete expected report comes from the retained installed Python reference
 engine, with identity labels replaced by fixture placeholders. Native and fresh
 installed Python/R suites compare all source and derived cells, check records,
