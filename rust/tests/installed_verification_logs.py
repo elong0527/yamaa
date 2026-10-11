@@ -238,7 +238,7 @@ columns:
             result = yamaa.domain(entry)
             self.assertTrue(result.issues.is_empty())
             warning = result.warning_log
-            self.assertEqual(warning["VERIFICATION_ID"].to_list(), ["é𝄞"])
+            self.assertEqual(warning["VERIFICATION_ID"].to_list(), ["\u00e9\U0001d11e"])
             self.assertEqual(warning["FAILURE_COUNT"].to_list(), [8])
             self.assertEqual(
                 warning["OFFENDING_KEYS"].to_list(),
