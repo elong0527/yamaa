@@ -1020,6 +1020,18 @@ cat("native file publication explicit authority, raw transport and registered ha
 
 source(file.path(root,"public-output-truth.R"),local=TRUE)
 domain_observations <- get(".domain_observations",envir=asNamespace("yamaa"))
+json_text <- function(value) {
+  # Quote only run-identity labels; original semantic truth remains unchanged.
+  characters <- strsplit(enc2utf8(value),"",fixed=TRUE)[[1L]]
+  escaped <- vapply(characters,function(character) {
+    code <- utf8ToInt(character)
+    switch(as.character(code),
+      "8"="\\b","9"="\\t","10"="\\n","12"="\\f","13"="\\r",
+      "34"="\\\"","92"="\\\\",
+      if(code<32L) sprintf("\\u%04x",code) else character)
+  },character(1L),USE.NAMES=FALSE)
+  paste0('"',paste0(escaped,collapse=""),'"')
+}
 for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"static/")]) {
   directory <- tempfile("public-domain-");dir.create(directory)
   stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
@@ -1031,8 +1043,9 @@ for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"
   report <- sub('fixture-runtime',as.character(getRversion()),report,fixed=TRUE)
   report <- sub('fixture-engine',engine_info()$core_version,report,fixed=TRUE)
   report <- sub(paste0('"example":"',case_name,'"'),'"example":"domain"',report,fixed=TRUE)
-  report <- gsub(paste0('"specification":"',basename(entry),'"'),
-                 paste0('"specification":"',entry,'"'),report,fixed=TRUE)
+  entry_field <- paste0('"specification":',json_text(entry))
+  report <- gsub(paste0('"specification":',json_text(basename(entry))),
+                 entry_field,report,fixed=TRUE)
   unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',report)
   observed <- rawToChar(domain_observations(built))
   if(!identical(observed,unsaved)) {
@@ -1060,8 +1073,8 @@ for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"
     # Relabel only the observed run identity; semantic findings and reads stay exact.
     observed <- rawToChar(domain_observations(built))
     observed <- sub('"example":"domain"',paste0('"example":"',case_name,'"'),observed,fixed=TRUE)
-    observed <- gsub(paste0('"specification":"',entry,'"'),
-                     paste0('"specification":"',basename(entry),'"'),observed,fixed=TRUE)
+    observed <- gsub(entry_field,
+                     paste0('"specification":',json_text(basename(entry))),observed,fixed=TRUE)
     dir.create(report_directory,recursive=TRUE,showWarnings=FALSE)
     writeBin(charToRaw(observed),file.path(report_directory,paste0(case_name,".r.rust.json")))
   }
