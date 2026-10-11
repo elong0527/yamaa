@@ -4,13 +4,14 @@ import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 
 from yamaa.specification import (
     SpecificationError,
     ValidationDiagnostic,
     load_specification,
 )
-from yamaa.specification._yaml import read_yaml_document
+from yamaa.specification._yaml import _yaml_error, read_yaml_document
 from yamaa.specification.schema import (
     class_fields,
     load_schema_bundle,
@@ -594,6 +595,17 @@ def test_yaml_errors_report_the_actual_problem(
     diagnostic = caught.value.diagnostics[0]
     assert diagnostic.condition == "invalid_yaml"
     assert diagnostic.context["reason"] == reason
+
+
+def test_bare_yaml_error_still_reports_a_reason() -> None:
+    # A bare yaml.YAMLError carries neither a problem attribute nor any text;
+    # the diagnostic path must raise SpecificationError, not IndexError.
+    error = _yaml_error(yaml.YAMLError())
+
+    diagnostic = error.diagnostics[0]
+    assert diagnostic.condition == "invalid_yaml"
+    assert diagnostic.spec_paths == ("$",)
+    assert diagnostic.context["reason"] == "invalid YAML document"
 
 
 def test_rejects_non_ascii_authored_source(tmp_path: Path) -> None:
