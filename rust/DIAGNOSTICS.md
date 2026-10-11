@@ -128,8 +128,30 @@ public condition strings match. Inconsistent caller-supplied function spans
 produce no semantic projection; parser policy limits remain separate failures.
 
 `tools/check_diagnostics.py` checks literal requirement IDs across every Rust
-crate's source against current normative rule definitions, including mappings
-outside the migrated registry. Native CI runs this guard and its mutation tests.
+crate's source against current normative rule definitions. It also requires each
+core registry condition and phase to be registered in `yaml/conditions.yaml`.
+Adapter and binding source literals are bounded by exact existing source lines
+and occurrence counts. Generated `shipped_schema_data.rs` is exempt from the
+ownership ratchet; its requirements are still checked against normative rules.
+The source scanner decodes ordinary Rust string escapes and raw strings, then
+inspects JSON payload values, including nested encoded JSON and format templates.
+Comments, character literals and quoted prose do not create diagnostic sites.
+
+`tools/diagnostic_literal_seed.json` freezes the original sites. Do not add or
+change seed sites. `tools/diagnostic_literal_allowlist.json` selects the remaining
+sites and counts from that ceiling. When a cause moves into core, remove its
+active entry or reduce its count; stale entries fail. Copying a seeded line,
+changing its text or moving it to another file fails. Inserting unrelated lines
+above a site does not consume a new allowance.
+
+CI runs `python tools/check_diagnostics.py --baseline-ref HEAD^` from `rust/`,
+with at least two Git revisions available. Baseline mode compares decoded records
+directly: the frozen seed must match the prior revision, and an active allowance
+may never grow or reactivate a retired site. The first introduction permits both
+files to be absent only when the prior checker did not already require them.
+An unavailable revision or an incomplete baseline fails. Without `--baseline-ref`,
+local checks enforce the frozen ceiling and stale entries but cannot prove
+historical non-growth. Native CI also runs the guard's mutation tests.
 The existing canonical rules validator separately checks definition uniqueness
 and historical IDs. The guard does not infer requirements from documentation
 citations or count component tests as complete-run qualification.

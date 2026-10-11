@@ -9353,6 +9353,8 @@ def check_declared_validation_error(
 
 
 EXPECTED_ERROR_PHASES = {
+    'planning',
+    'engine',
     'validation',
     'ingest',
     'row_construction',

@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, convert::Infallible};
 use yamaa_core::{
     conversion::convert,
-    diagnostic::{ContextValue, CONDITIONS},
+    diagnostic::{ConditionCode, ContextValue, CONDITIONS},
     evaluation::{EvaluationErrorKind, NumericResolver},
     numeric_compiler::{compile_numeric, compile_numeric_with_policy, CompileLimits, MathPolicy},
     numeric_parser::SourceSpan,
@@ -216,6 +216,19 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         assert_eq!(diagnostic.context.len(), 2);
         reached.insert(diagnostic.code);
     }
+    // Activation happens in the engine; its adapter reaches this core mapping.
+    // Complete actual activation failures are pinned by the adapter suite.
+    let conformance = ConditionCode::FunctionConformanceFailed;
+    let mapping = conformance.definition();
+    assert_eq!(
+        (mapping.phase, mapping.condition, mapping.requirement),
+        (
+            "validation",
+            "function_conformance_failed",
+            Some("REQ-0703")
+        )
+    );
+    reached.insert(conformance);
     reached.extend(project_functions::reached());
     reached.extend(project_environment::reached());
     reached.extend(project_lock::reached());
