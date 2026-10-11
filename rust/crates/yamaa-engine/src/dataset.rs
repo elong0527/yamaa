@@ -3,6 +3,9 @@
 //! This is an internal bridge target, not a specification parser or public backend.
 //! Unsupported syntax must be rejected by a compiler before creating this plan.
 
+#[path = "dataset_diagnostics.rs"]
+mod diagnostics;
+
 #[path = "dataset_conversion.rs"]
 mod conversion;
 #[path = "dataset_intermediates.rs"]
@@ -165,6 +168,8 @@ struct AttemptObservations {
 
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError<E> {
+    /// A pure scalar operation's already classified cause and original field path.
+    ScalarDiagnostic(yamaa_core::diagnostic::Diagnostic),
     VerificationDiagnostic {
         diagnostic: yamaa_core::diagnostic::Diagnostic,
         records: Vec<CheckRecord>,
@@ -403,6 +408,13 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
         }
         return Ok(Value::Missing);
     }
+    if let Expression::Round { source, rounding } = &assignment.expression {
+        state.budget.work(1, 1)?;
+        let value = evaluate_raw(table, source, candidate, plan, row, limits, state)?;
+        return rounding
+            .apply(ValueRef::from(&value))
+            .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)));
+    }
     if let Expression::Compute(expression) = &assignment.expression {
         return numeric::evaluate(expression, table, candidate, plan, row, assignment, state);
     }
@@ -457,7 +469,7 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
             }
             value.clone()
         }
-        Expression::Compute(_) | Expression::Case(_) => {
+        Expression::Compute(_) | Expression::Case(_) | Expression::Round { .. } => {
             unreachable!("recursive evaluation handled above")
         }
         Expression::Column(column) => {

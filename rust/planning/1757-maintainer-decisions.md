@@ -4,6 +4,10 @@ The maintainer approved the following recommendations on 2026-10-10 in the
 Rust migration assessment conversation, replying "agree with your recommendation".
 This records the explicit numerical choice required by #1740 and the implementation
 defaults for #1757. It does not claim that the remaining acceptance tests pass.
+The [#1740 decision/evidence record](1740-math-decision.md) now retains the
+sample mismatch union, independent bounded accuracy certificates and observable
+downstream consequences. Its decision acceptance remains separate from #1742's
+full release qualification.
 
 - Qualify pinned `libm` 0.2.16 with default features disabled, under the internal
   `PortableLibmV1` label, for shared POWER, EXP and LN. Accept the documented

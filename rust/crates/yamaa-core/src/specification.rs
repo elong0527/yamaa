@@ -48,6 +48,8 @@ mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
 #[path = "specification_cases.rs"]
 mod cases;
+#[path = "specification_rounding.rs"]
+mod rounding;
 #[path = "specification_terminology.rs"]
 mod terminology;
 
@@ -95,6 +97,11 @@ impl Default for CompilationLimits {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PreflightFinding {
     Log(LogFinding),
+    RoundingInput {
+        path: String,
+        source: String,
+        actual: &'static str,
+    },
     ProjectFunction(FunctionFinding),
     ProjectCodelist(alloc::boxed::Box<crate::project_codelist_binding::Finding>),
     RowPhase {
@@ -262,6 +269,7 @@ enum Operation {
     Source(alloc::boxed::Box<source_expressions::Declaration>),
     FirstAvailable(alloc::boxed::Box<source_expressions::FirstAvailable>),
     Compute(CompiledNumeric),
+    Round(crate::dataset::Rounding),
     /// Reference planning emits formula diagnostics after source ingestion.
     InvalidNumeric {
         expression: String,
@@ -925,6 +933,7 @@ impl PreparedSpecification {
                 Err(error) => return Err(error),
             }
         }
+        rounding::declaration_findings(d, columns, &output, &mut findings)?;
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
@@ -1257,6 +1266,14 @@ impl PreparedSpecification {
                 | "baseline_flag" => Some(Operation::Window(alloc::boxed::Box::new(
                     windows::Declaration::prepare(d, payload, op, &path, limits, &mut extra)?,
                 ))),
+                "round_half_away_from_zero" => Some(Operation::Round(rounding::prepare(
+                    d,
+                    payload,
+                    &path,
+                    Some(driver),
+                    Some(&intermediates),
+                    &mut extra,
+                )?)),
                 "compute" => {
                     for &(name, _) in mapping(d, payload)? {
                         let name = text(d, name)?;
@@ -1668,6 +1685,17 @@ impl PreparedSpecification {
                     }
                 }
                 Operation::Literal(value) => Some(Expression::Literal(value.clone())),
+                Operation::Round(rounding) => rounding::bind(
+                    rounding,
+                    column,
+                    &self.keys,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
                 Operation::Window(window) => window
                     .bind(&catalog, &mut edges, &mut findings)?
                     .map(Expression::Window),

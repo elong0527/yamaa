@@ -8,6 +8,9 @@ use yamaa_core::{
     value::{ColumnType, Selection, Value},
 };
 
+#[path = "diagnostic/dataset.rs"]
+mod dataset;
+
 struct Bindings;
 #[path = "diagnostic/binding.rs"]
 mod binding;
@@ -27,6 +30,8 @@ mod project_codelist_binding;
 mod project_environment;
 #[path = "diagnostic/project_functions.rs"]
 mod project_functions;
+#[path = "diagnostic/project_lock.rs"]
+mod project_lock;
 impl NumericResolver for Bindings {
     type Error = Infallible;
     fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
@@ -196,6 +201,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     }
     reached.extend(project_functions::reached());
     reached.extend(project_environment::reached());
+    reached.extend(project_lock::reached());
     let lock = yamaa_core::application_issue::lock_mismatch(
         [(
             "package".into(),
@@ -398,6 +404,31 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         ContextValue::Scalar(Value::Str("(".into()))
     );
     assert_eq!(diagnostic.source_span, None);
+    reached.insert(diagnostic.code);
+    reached.extend(dataset::reached());
+    let diagnostic = yamaa_core::dataset::Rounding::new(
+        "SEX",
+        "columns.RND.derivation.round_half_away_from_zero",
+        "1",
+    )
+    .unwrap()
+    .apply(yamaa_core::table::ValueRef::Str("F"))
+    .unwrap_err();
+    assert_eq!(
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().requirement
+        ),
+        ("validation", "incompatible_input_type", Some("REQ-0418"))
+    );
+    assert_eq!(
+        diagnostic.spec_paths,
+        ["columns.RND.derivation.round_half_away_from_zero.source"]
+    );
+    assert_eq!(diagnostic.context.len(), 3);
+    assert_eq!(diagnostic.source_span, None);
+    assert_eq!(diagnostic.operand_route, None);
     reached.insert(diagnostic.code);
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());

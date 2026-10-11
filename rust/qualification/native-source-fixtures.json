@@ -1,10 +1,23 @@
 {
   "format": "yamaa-native-source-fixtures/1",
   "files": [
+    "benchmarks/sdtm-dm-metadata/environment.yaml",
+    "benchmarks/sdtm-dm-metadata/spec.yaml",
+    "benchmarks/sdtm-dm-metadata/expected/dm.csv",
+    "benchmarks/sdtm-dm-metadata/expected/dm.json",
+    "benchmarks/sdtm-dm-metadata/expected/define.xml",
+    "benchmarks/sdtm-ae-coding/environment.yaml",
+    "benchmarks/sdtm-ae-coding/spec.yaml",
+    "benchmarks/sdtm-vs-epoch-from-subject-elements/environment.yaml",
+    "benchmarks/sdtm-vs-epoch-from-subject-elements/spec.yaml",
     "benchmarks/schema-verification-log/spec.yaml",
     "benchmarks/schema-verification-log/input/dm.csv",
     "benchmarks/schema-verification-log/expected/adsl.csv",
     "benchmarks/schema-verification-log/expected/adsl-checks.csv",
-    "benchmarks/schema-verification-log/expected/adsl-warnings.csv"
+    "benchmarks/schema-verification-log/expected/adsl-warnings.csv",
+    "benchmarks/schema-round-half-away-from-zero-ties/spec.yaml",
+    "benchmarks/schema-round-half-away-from-zero-ties/input/adsl.csv",
+    "benchmarks/schema-round-half-away-from-zero-ties/expected/adsl.csv",
+    "benchmarks/negative-round-half-away-from-zero-non-numeric-source/spec.yaml"
   ]
 }

@@ -229,7 +229,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `submission_section_class.dataset_json` | `"bool"` | `false` | `false` | -- | Schema constraint |
 | `submission_section_class.context` | `"str"` | `false` | `"Submission"` | `{"values": ["Submission", "Other"]}` | Schema constraint |
 | `submission_section_class.xml_lang` | `"language_tag"` | `false` | `"en"` | -- | Schema constraint |
-| `submission_section_class.file_oid` | `"define_id"` | `false` | Absent | -- | Schema constraint |
+| `submission_section_class.file_oid` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1061](../submission/define-xml.md#req-1061) |
 | `submission_section_class.metadata_version` | `"metadata_version_class"` | `false` | Absent | -- | Schema constraint |
 | `submission_section_class.originator` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
 | `submission_section_class.stylesheet` | `"relative_href"` | `false` | Absent | -- | Schema constraint |

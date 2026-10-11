@@ -721,3 +721,178 @@ fn dependency_findings_share_the_request_diagnostic_quota() {
         )))
     );
 }
+
+#[test]
+fn inheritance_and_graph_analysis_match_independently_declared_schedules() {
+    use yamaa_core::dependency_analysis::{analyze, Limits};
+    let cases = [
+        (vec![vec![2], vec![2], vec![], vec![]], vec![2, 0, 1, 3]),
+        (vec![vec![2, 1], vec![3], vec![3], vec![]], vec![3, 1, 2, 0]),
+        (vec![vec![1, 1, 1], vec![2, 2], vec![]], vec![2, 1, 0]),
+        (vec![vec![], vec![], vec![]], vec![0, 1, 2]),
+    ];
+    for (graph, expected) in cases {
+        let column_names: Vec<_> = (0..graph.len()).map(|index| format!("N{index}")).collect();
+        let columns = graph
+            .iter()
+            .zip(&column_names)
+            .map(|(edges, name)| {
+                let derivation = if edges.is_empty() {
+                    operation("literal", "constant")
+                } else {
+                    let expression = edges
+                        .iter()
+                        .map(|&index| column_names[index].as_str())
+                        .collect::<Vec<_>>()
+                        .join(" + ");
+                    operation("compute", &expression)
+                };
+                column(name, derivation)
+            })
+            .collect();
+        let input = document(Map(vec![
+            (
+                "output",
+                Map(vec![(
+                    "columns",
+                    List(column_names.iter().map(|name| text(name)).collect()),
+                )]),
+            ),
+            ("columns", List(columns)),
+        ]));
+        let normalized = schema()
+            .resolve_inheritance_dependencies(&input, &mut budget())
+            .unwrap();
+        let expected_names: Vec<_> = expected
+            .iter()
+            .map(|&index| column_names[index].as_str())
+            .collect();
+        assert_eq!(
+            names(&normalized.document, "columns", "name"),
+            expected_names
+        );
+        let analyzed = analyze(&graph, Limits::default()).unwrap();
+        assert_eq!(analyzed.order, expected);
+        assert_eq!(analyzed.cycle, None);
+    }
+}
+
+#[test]
+fn shared_schedule_keeps_inheritance_residuals_distinct_from_first_cycle() {
+    use yamaa_core::{
+        dependency_analysis::{analyze, Limits},
+        schema::{InheritanceDependencyError as E, InheritanceDependencyIssue as I},
+    };
+    let input = document(Map(vec![
+        (
+            "output",
+            Map(vec![(
+                "columns",
+                List(
+                    ["DOWNSTREAM", "A", "B", "FREE", "SELF", "FREE_READER"]
+                        .iter()
+                        .map(|name| text(name))
+                        .collect(),
+                ),
+            )]),
+        ),
+        (
+            "columns",
+            List(vec![
+                column("DOWNSTREAM", text("A")),
+                column("A", text("B")),
+                column("B", text("A")),
+                column("FREE", operation("literal", "constant")),
+                column("SELF", text("SELF")),
+                column("FREE_READER", text("FREE")),
+            ]),
+        ),
+    ]));
+    assert_eq!(
+        schema().resolve_inheritance_dependencies(&input, &mut budget()),
+        Err(E::Invalid(vec![I::Cycle {
+            columns: vec!["DOWNSTREAM".into(), "A".into(), "B".into(), "SELF".into()],
+        }]))
+    );
+    let analyzed = analyze(
+        &[vec![1], vec![2], vec![1], vec![], vec![4], vec![3]],
+        Limits::default(),
+    )
+    .unwrap();
+    assert_eq!(analyzed.order, vec![3, 5]);
+    assert_eq!(analyzed.cycle, Some(vec![1, 2, 1]));
+}
+
+#[test]
+fn inheritance_scheduler_storage_and_early_work_refusals_publish_no_document() {
+    use yamaa_core::schema::{
+        ConstraintError, InheritanceDependencyError as E, NormalizationError as N,
+        NormalizationResource, ValidationError,
+    };
+    let input = document(Map(vec![
+        (
+            "output",
+            Map(vec![("columns", List(vec![text("A"), text("B")]))]),
+        ),
+        (
+            "columns",
+            List(vec![
+                Map(vec![("name", text("A"))]),
+                Map(vec![("name", text("B"))]),
+            ]),
+        ),
+    ]));
+    let schema = schema();
+    let mut limits = NormalizationLimits::default();
+    limits.storage.edges = 17;
+    let mut constrained = NormalizationBudget::new(limits);
+    assert_eq!(
+        schema.resolve_inheritance_dependencies(&input, &mut constrained),
+        Err(E::Normalization(N::Limit {
+            resource: NormalizationResource::Edges,
+            limit: 17
+        }))
+    );
+    // The extra scheduler slots are refused before the first emission; only
+    // the admitted declarations, reachability and emitted-state storage remain.
+    assert_eq!(constrained.storage_used().2, 12);
+    let before_schedule = constrained.work_used();
+    // Independent columns require the legacy scans [A], [A, B], [A, B].
+    // Refuse before A, then while scanning for B, without reserving a later
+    // emission or beginning the normalized document copy.
+    for (extra_work, emitted) in [(0, 0), (2, 1)] {
+        let mut limits = NormalizationLimits::default();
+        limits.validation.work = before_schedule + extra_work;
+        let mut constrained = NormalizationBudget::new(limits);
+        assert_eq!(
+            schema.resolve_inheritance_dependencies(&input, &mut constrained),
+            Err(E::Normalization(N::Validation(
+                ValidationError::Constraint(ConstraintError::Work {
+                    limit: before_schedule + extra_work
+                })
+            )))
+        );
+        assert_eq!(constrained.storage_used().2, 18 + emitted);
+    }
+    let mut limits = NormalizationLimits::default();
+    limits.validation.work = 0;
+    let mut constrained = NormalizationBudget::new(limits);
+    assert_eq!(
+        schema.resolve_inheritance_dependencies(&input, &mut constrained),
+        Err(E::Normalization(N::Validation(
+            ValidationError::Constraint(ConstraintError::Work { limit: 0 })
+        )))
+    );
+    assert_eq!(constrained.storage_used(), (0, 0, 0));
+    assert_eq!(
+        names(
+            &schema
+                .resolve_inheritance_dependencies(&input, &mut budget())
+                .unwrap()
+                .document,
+            "columns",
+            "name"
+        ),
+        vec!["A", "B"]
+    );
+}

@@ -51,3 +51,4 @@ export(specification_source)
 export(specification_failure_report)
 
 export(specification_report)
+export(yamaa_define)

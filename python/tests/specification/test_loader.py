@@ -573,6 +573,29 @@ def test_merge_key_reports_intended_reason(tmp_path: Path) -> None:
     assert diagnostic.context["reason"] == "YAML merge keys are not allowed"
 
 
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ("a: 1\na: 2\n", "found duplicate key 'a'"),
+        ("[]: 1\n", "found unhashable key"),
+    ],
+)
+def test_yaml_errors_report_the_actual_problem(
+    tmp_path: Path, text: str, reason: str
+) -> None:
+    # _yaml_error used the first line of str(error), which is the construction
+    # context ("while constructing a mapping"), hiding the real problem.
+    path = tmp_path / "bad.yaml"
+    path.write_text(text, encoding="ascii")
+
+    with pytest.raises(SpecificationError) as caught:
+        read_yaml_document(path)
+
+    diagnostic = caught.value.diagnostics[0]
+    assert diagnostic.condition == "invalid_yaml"
+    assert diagnostic.context["reason"] == reason
+
+
 def test_rejects_non_ascii_authored_source(tmp_path: Path) -> None:
     path = tmp_path / "non-ascii.yaml"
     path.write_text("label: caf\N{LATIN SMALL LETTER E WITH ACUTE}\n", encoding="utf-8")

@@ -1,8 +1,9 @@
 # Portable math policy for the shared engine
 
 Status: numerical choice approved for implementation and qualification on
-2026-10-10; production qualification remains pending under
-[#1740](https://github.com/elong0527/yamaa/issues/1740),
+2026-10-10. The [#1740 decision and retained evidence](planning/1740-math-decision.md)
+record its compatibility disposition and bounded accuracy assessment. Full release
+qualification remains pending under
 [#1742](https://github.com/elong0527/yamaa/issues/1742) and
 [#1585](https://github.com/elong0527/yamaa/issues/1585).
 The maintainer accepted the pinned `PortableLibmV1` recommendation and its
@@ -92,19 +93,35 @@ There is no claim here that libm or platform math is universally correctly round
 - Schema-2 assessment reports retain all 30,033 candidate observations and every
   legacy Python mismatch. The probe executes the actual opt-in compiled policy.
 - The native CI matrix runs semantic tests and produces reports on Linux x86_64,
-  macOS arm64 and Windows AMD64 with Python 3.12/3.14. A separate job requires
+  macOS arm64 and Windows AMD64 with Python 3.12/3.13/3.14. A separate job requires
   the independent numeric-math-v1 case identities and input bits, then exactly
-  matching result bits across all six
+  matching result bits across all nine
   reports. It rejects missingness and signed-zero differences without tolerance.
-- This finite sample establishes neither universal portability nor complete
-  mathematical accuracy. Independent high-precision accuracy analysis, difficult
-  boundary cases and broader POWER domains remain qualification work.
-- Before host/dataset exposure, compare both bindings exactly, assess downstream
-  predicates/conversion/rounding/CSV changes under the approved compatibility
-  decision, and qualify all existing benchmark goldens without rewriting their
-  expected truth. Retain difficult-domain accuracy evidence and every historical
-  mismatch class with its disposition; sampled portability is not an accuracy
-  certificate.
+- The [retained decision report](qualification/math-decision-v1.json) contains the
+  2,246-case historical mismatch union with all nine host observations and
+  independent 160-digit Decimal/rational certificates. Candidate nearest-binary64
+  counts are EXP 23/1,006, LN 0/280 and POWER 7/960. This selected mismatch union
+  is not an estimate of overall error rates. Reproducible host equality does not
+  imply improved mathematical accuracy.
+- A separate 58-case input specification covers zeros, missingness, domain checks,
+  range transitions, subnormals, exact underflow ties, negative bases, promoted
+  exponents and opposing integer-handler witnesses. Its 33 numerical certificates
+  retain two candidate discrepancies; 21 cases have separate language truth and
+  four have explicit work-bound accuracy exclusions. The report retains actual
+  EXP(1) predicate, verification, decimal-rounding and complete CSV differences.
+- #1757 qualified original `adam-adsl-bmi` and `adam-advs-percentiles` artifacts
+  in both installed hosts. The current local replay also preserves original
+  `schema-numeric-functions` CSV and `negative-log-zero` diagnostics. The original
+  filtered aggregate in `adam-adeg-derived-intervals` remains refused by the
+  native frontend; its retained reference-planning experiment isolates the math
+  choice and preserves the original artifact, but does not qualify that frontend.
+  Complete its compiler support under #1751, then qualify the full affected
+  inventory and both bindings under #1742 without rewriting expected truth.
+- The [decision follow-up checklist](planning/1740-math-decision.md#qualification-follow-up)
+  retains exact cross-host diagnostics and lifecycle/artifact gates. This finite
+  evidence establishes neither universal portability nor all-input accuracy;
+  broader POWER domains and difficult unresolved accuracy regions remain release
+  qualification work. Sampled portability is not an accuracy certificate.
 - Decimal rounding is shared by both policies; numeric completed-result conversion
   and handler accounting is now a qualified engine service (31 shared Python/Rust
   cases, CI on all native targets). Normalized specification dispatch, host

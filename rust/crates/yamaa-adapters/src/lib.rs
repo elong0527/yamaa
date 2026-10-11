@@ -23,6 +23,8 @@ pub fn installation_resource() -> &'static str {
 
 pub mod arrow_table;
 mod arrow_temporal;
+#[cfg(any(unix, windows))]
+pub mod file_define;
 pub mod public_table;
 pub mod table_transport;
 

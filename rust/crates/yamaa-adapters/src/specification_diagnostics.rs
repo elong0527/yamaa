@@ -43,6 +43,15 @@ fn preparing(error: &PreflightFinding) -> Option<Value> {
 /// The original-document report shape retains ordinary JSON context values.
 /// Geometry is retained by the core diagnostic and projected by the report contract.
 pub(crate) fn portable_diagnostic(finding: yamaa_core::diagnostic::Diagnostic) -> Option<Value> {
+    portable_definition(finding.definition(), finding.spec_paths, finding.context)
+}
+/// Submission findings retain their core-owned definition until their causes
+/// join the closed cause registry; serialization assigns no semantic vocabulary.
+pub(crate) fn portable_definition(
+    definition: yamaa_core::diagnostic::Definition,
+    paths: Vec<String>,
+    context: yamaa_core::diagnostic::Context,
+) -> Option<Value> {
     fn value(cell: yamaa_core::diagnostic::ContextValue) -> Option<Value> {
         use yamaa_core::{diagnostic::ContextValue as C, value::Value as S};
         Some(match cell {
@@ -61,9 +70,7 @@ pub(crate) fn portable_diagnostic(finding: yamaa_core::diagnostic::Diagnostic) -
             },
         })
     }
-    let definition = finding.definition();
-    let context = finding
-        .context
+    let context = context
         .into_iter()
         .map(|(name, v)| Some((name, value(v)?)))
         .collect::<Option<serde_json::Map<_, _>>>()?;
@@ -71,7 +78,7 @@ pub(crate) fn portable_diagnostic(finding: yamaa_core::diagnostic::Diagnostic) -
         definition.phase,
         definition.condition,
         definition.requirement,
-        finding.spec_paths,
+        paths,
         context.into(),
     ))
 }
