@@ -92,33 +92,15 @@ fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> serde_json::Value {
     serde_json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<serde_json::Value>(&issue.context).unwrap()})
 }
 #[test]
-fn original_sentence_fixture_preserves_its_explicit_unimplemented_ordering_blocker() {
+fn original_sentence_fixture_matches_its_ordered_artifact() {
     let fixture = Fixture::new("schema-sentence-case");
-    let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-    let identity = Identity {
-        runtime: "test",
-        runtime_version: "test",
-        engine_version: yamaa_core::VERSION,
-        example: "test",
-        specification: &specification,
-        base_directory: ".",
-    };
-    let issues = match file_application::domain(
-        Request {
-            specification: &specification,
-            environment: None,
-        },
-        identity,
-    ) {
-        Ok(_) => panic!("original output ordering is still unimplemented"),
-        Err(issues) => issues,
-    };
-    assert_eq!(issues.len(), 1);
+    let mut result = fixture.run();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(result.save().unwrap());
     assert_eq!(
-        issue_json(&issues[0]),
-        serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["output.order_by"],"context":{"operation":"order_by"}})
+        fs::read(fixture.0.join("adlb.csv")).unwrap(),
+        fs::read(fixture.0.join("expected/adlb.csv")).unwrap()
     );
-    assert!(!fixture.0.join("adlb.csv").exists());
 }
 #[test]
 fn original_static_negatives_preserve_complete_findings_before_input_capture() {

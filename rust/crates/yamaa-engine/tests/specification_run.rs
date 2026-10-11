@@ -423,6 +423,8 @@ mod publication {
                     OutputFinding::InternalKey { .. } => "internal",
                     OutputFinding::InvalidDecimals { .. } => "precision",
                     OutputFinding::DecimalsNotApplicable { .. } => "precision_profile",
+                    OutputFinding::DuplicateOrderTerm { .. } => "order_duplicate",
+                    OutputFinding::UndeclaredOrderColumn { .. } => "order_undeclared",
                 })
                 .collect();
             Ok("rejected")
@@ -1120,21 +1122,37 @@ mod domain_usecase {
     }
 
     #[test]
-    fn rejected_vocabulary_precedes_every_study_effect() {
+    fn unknown_source_profile_precedes_every_study_effect() {
         let (mut port, mut decoder) = fixtures();
         let document = document("ID + 1", "input.unknown");
-        let Err(PrepareError::Unsupported(check_findings)) = domain::check(&document) else {
-            panic!("check must reject unsupported source format");
+        let Err(PrepareError::Invalid(check_findings)) = domain::check(&document) else {
+            panic!("check must reject unknown source profile");
         };
-        let Err(PrepareError::Unsupported(build_findings)) =
+        let Err(PrepareError::Invalid(build_findings)) =
             domain::build(&document, &mut port, &mut decoder, limits())
         else {
-            panic!("build must reject unsupported source format");
+            panic!("build must reject unknown source profile");
         };
         assert_eq!(check_findings, build_findings);
         assert_eq!(check_findings.len(), 1);
-        assert_eq!(check_findings[0].operation, "source_format");
-        assert_eq!(check_findings[0].path, "input.SRC.path");
+        let diagnostic = check_findings[0].diagnostic();
+        assert_eq!(
+            diagnostic.code,
+            yamaa_core::diagnostic::ConditionCode::SourceUnknownProfile
+        );
+        assert_eq!(diagnostic.spec_paths, ["input.SRC.path"]);
+        assert_eq!(
+            diagnostic.context,
+            [("dataset", "SRC"), ("path", "input.unknown")]
+                .into_iter()
+                .map(|(key, value)| (
+                    key.into(),
+                    yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                        value.into()
+                    ))
+                ))
+                .collect()
+        );
         assert!(port.trace.borrow().is_empty());
         assert_eq!((port.requests, port.reads), (0, 0));
     }
