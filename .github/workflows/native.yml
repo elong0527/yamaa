@@ -528,6 +528,9 @@ jobs:
           python "${GITHUB_WORKSPACE}/rust/tools/check_cargo_lock.py" --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.3.0.tar.gz
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.3.0.tar.gz
+          if [ "${{ runner.os }}" = Windows ]; then
+            python -c 'from pathlib import Path; import shutil; dlls = list(Path("native-r-library/yamaa/libs").rglob("yamaa.dll")); assert len(dlls) == 1, "installed R DLL is missing or ambiguous"; shutil.copy2(dlls[0], "windows-r-toolchain/yamaa.dll")'
+          fi
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_builds.R" producer_builds.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_producers.R" public_producers.R
