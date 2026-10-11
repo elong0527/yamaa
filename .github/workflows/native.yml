@@ -325,6 +325,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema.py" installed_schema.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_original_specifications.py" installed_original_specifications.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_verification_logs.py" installed_verification_logs.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_logs.py" installed_producer_logs.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_file_resources.py" installed_file_resources.py
           python "${GITHUB_WORKSPACE}/rust/tools/stage_specification_inputs.py" specification-original
           python "${GITHUB_WORKSPACE}/rust/tools/stage_project_inputs.py" project-original
@@ -526,6 +527,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/schema.R" schema.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/original_specifications.R" original_specifications.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/verification_logs.R" verification_logs.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_logs.R" producer_logs.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_environment.R" public_environment.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/inheritance.R" inheritance.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/yaml.R" yaml.R
