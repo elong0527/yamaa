@@ -18,7 +18,8 @@ intermediates:
   - id: LASTTRT
     dataset: DS
     key: [STUDYID, USUBJID]
-    filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT' AND DS.DSSTDTC IS NOT NULL"
+    filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT'
+      AND DS.DSSTDTC IS NOT NULL"
     order_by: [DS.DSSTDTC, DS.DSSEQ]
     keep: last
     no_match: null
@@ -44,7 +45,8 @@ columns:
     label: End of Study Date
     derivation:
       aggregate:
-        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT' AND DS.DSSTDTC IS NOT NULL"
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT'
+          AND DS.DSSTDTC IS NOT NULL"
         expr: "MAX(DS.DSSTDTC)"
 
   - name: EOSDECOD
@@ -53,7 +55,8 @@ columns:
     derivation:
       source:
         variable: DS.DSDECOD
-        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT' AND DS.DSSTDTC IS NOT NULL"
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT'
+          AND DS.DSSTDTC IS NOT NULL"
         order_by: [DS.DSSTDTC, DS.DSSEQ]
         keep: last
 
@@ -63,7 +66,8 @@ columns:
     derivation:
       source:
         variable: DS.DSTERM
-        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT' AND DS.DSSTDTC IS NOT NULL"
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT'
+          AND DS.DSSTDTC IS NOT NULL"
         order_by: [DS.DSSTDTC, DS.DSSEQ]
         keep: last
 
@@ -99,7 +103,8 @@ columns:
     label: End of Treatment Date
     derivation:
       aggregate:
-        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT' AND DS.DSSTDTC IS NOT NULL"
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT'
+          AND DS.DSSTDTC IS NOT NULL"
         expr: "MAX(DS.DSSTDTC)"
 
   - name: EOTSTT
