@@ -322,17 +322,13 @@ pub(super) fn bind(
                         findings,
                         reported,
                     )?
-                    .map(|expression| {
+                    .and_then(|expression| {
                         // Strip the synthetic branch container; this leaf has
                         // no predicate and must not form an otherwise-only case.
                         let Expression::Case(mut branches) = expression else {
                             unreachable!("case binder result")
                         };
-                        branches
-                            .pop()
-                            .expect("one expression branch")
-                            .assignment
-                            .expression
+                        branches.pop().map(|branch| branch.assignment.expression)
                     })
                 };
                 if let Some(expression) = expression {

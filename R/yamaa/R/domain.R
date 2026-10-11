@@ -3,13 +3,17 @@
   if (!is.null(reply$error)) stop(reply$error, call. = FALSE)
   reply$value
 }
+.domain_argument_error <- function(message) {
+  stop(structure(list(message = message, call = NULL),
+    class = c("yamaa_argument_error", "error", "condition")))
+}
 .domain_path_bytes <- function(value) {
   if (!is.character(value) || length(value) != 1L || is.na(value) ||
       !is.null(attributes(value))) {
-    stop("expected one unclassed non-missing character scalar", call. = FALSE)
+    .domain_argument_error("expected one unclassed non-missing character scalar")
   }
   if (identical(Encoding(value), "bytes")) {
-    stop("byte-marked R text has no declared Unicode encoding", call. = FALSE)
+    .domain_argument_error("byte-marked R text has no declared Unicode encoding")
   }
   # Keep conversion bounded. An oversized prefix still exceeds the native
   # 65536-byte path limit and is rejected as an issue before any file access.

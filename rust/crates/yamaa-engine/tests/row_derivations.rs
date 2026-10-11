@@ -66,6 +66,76 @@ fn limits() -> Limits {
     }
 }
 #[test]
+fn grouped_filter_removes_candidates_before_numbering_windows() {
+    let source = schema(&[("ID", ColumnType::Int)]);
+    let table = Table {
+        schema: source.clone(),
+        rows: [1, 1, 2, 3, 3]
+            .into_iter()
+            .map(|id| vec![Value::Int(id)])
+            .collect(),
+        reads: RefCell::default(),
+        failure: None,
+    };
+    let filter = BoundPredicate::new(
+        yamaa_core::predicate_compiler::compile("N > 1", "row.filter", Default::default()).unwrap(),
+        vec![Binding {
+            name: "N".into(),
+            read: Read::Column(1),
+        }],
+    )
+    .unwrap();
+    let plan = DatasetPlan::new(
+        source,
+        schema(&[
+            ("ID", ColumnType::Int),
+            ("N", ColumnType::Int),
+            ("SEQ", ColumnType::Int),
+        ]),
+        vec![RowTemplate {
+            mode: RowMode::Groups(vec![0]),
+            assignments: vec![
+                assign(0, Expression::Source(0), "row.ID"),
+                assign(
+                    1,
+                    Expression::Count {
+                        column: None,
+                        text: "COUNT(*)".into(),
+                    },
+                    "row.N",
+                ),
+                assign(
+                    2,
+                    Expression::Window(Window {
+                        kind: WindowKind::RowNumber,
+                        group_by: vec![],
+                        order_by: vec![OrderTerm {
+                            column: 0,
+                            descending: false,
+                            nulls_first: false,
+                        }],
+                        filter: None,
+                    }),
+                    "row.SEQ",
+                ),
+            ],
+            filter: Some(filter),
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(
+        plan.execute(&table, limits()).unwrap().dataset.rows(),
+        [
+            vec![Value::Int(1), Value::Int(2), Value::Int(1)],
+            vec![Value::Int(3), Value::Int(2), Value::Int(2)],
+        ]
+    );
+}
+
+#[test]
 fn windows_number_each_template_after_filter_without_revisiting_sources() {
     let source = schema(&[("ID", ColumnType::Int)]);
     let table = Table {

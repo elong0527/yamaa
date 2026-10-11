@@ -91,10 +91,12 @@ are omitted, under [Lookup and joins](../operations/lookup.md);
 
 **REQ-0058.** Predicates include `case` items' `when`,
 `row.filter`, aggregate `filter`, and window `filter`. An ungrouped
-`row.filter` resolves only qualified variables of that row template's input
-dataset and runs before that row template's derivation graph. A grouped
-`row.filter` resolves unqualified columns derived by that row template and
-runs after that graph completes. Identifier extraction requires parsing the
+`row.filter` reads the candidate row's derived columns and lookup state under
+[REQ-0068](rows.md#req-0068), after the non-window derivations complete and
+before the window pass. A grouped `row.filter` resolves unqualified columns
+derived by that row template and runs after that graph completes. Both sites
+read values after stages 1 to 3, as
+[REQ-0218](#req-0218) defines. Identifier extraction requires parsing the
 predicate under the [Predicates](../operations/predicates.md) grammar, the numeric expression under the [Numeric computation](../operations/computation.md)
 grammar, the string template under the [Text operations](../operations/text.md) grammar, and the reducer
 expression under the [Aggregation](../operations/aggregation.md) grammar. An implementation must not treat any of
