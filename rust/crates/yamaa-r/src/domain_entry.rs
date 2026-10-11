@@ -359,7 +359,7 @@ fn domain_log(handle: Robj, warning: bool) -> List {
         {
             return crate::public_table::frame(table);
         }
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(table) = state
             .producer
             .as_ref()
