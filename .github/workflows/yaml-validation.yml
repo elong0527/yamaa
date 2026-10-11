@@ -19,25 +19,31 @@ env:
 
 jobs:
   validate:
-    # R021 fixes path resolution, so the same fixtures must decide the same
-    # way on a case-sensitive and a case-insensitive filesystem.
-    name: repository-validation (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-    timeout-minutes: 30
+    name: repository-validation (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
+
+      - name: Select dashboard preview checks
+        id: changes
+        run: python .github/scripts/ci/dashboard_changes.py
+
+      - name: README.md and docs/index.md must match byte-for-byte
+        run: |
+          if ! cmp -s README.md docs/index.md; then
+            echo "::error::README.md and docs/index.md differ. README.md is canonical: copy it over docs/index.md (cp README.md docs/index.md)."
+            exit 1
+          fi
 
       - name: Install Rust for the bundled extension
         run: rustup toolchain install 1.90.0 --profile minimal
@@ -51,7 +57,15 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install uv==0.11.6
-          uv sync --project python --locked
+          uv sync --project python --extra test --locked
+
+      - name: Check formatting and lint once
+        run: |
+          uv run --project python --no-sync ruff format --check python/src/yamaa python/tests .github/scripts/ci
+          uv run --project python --no-sync ruff check python/src/yamaa python/tests .github/scripts/ci
+
+      - name: Check CI selection and dependencies
+        run: python -m unittest discover -s .github/scripts/ci -p 'test_*.py'
 
       - name: Run unit tests
         run: |
@@ -100,3 +114,40 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           uv run --project python --no-sync python .github/scripts/yaml-validation/check_validation_blockers.py
+
+      - name: Install pinned dashboard dependencies
+        if: steps.changes.outputs.dashboards == 'true'
+        run: uv pip install --python python/.venv/bin/python -r .github/scripts/benchmark-docs/requirements.txt
+
+      - name: Test fixture fidelity and deterministic generation
+        if: steps.changes.outputs.dashboards == 'true'
+        run: uv run --project python --no-sync python -m unittest discover -s .github/scripts/benchmark-docs -p 'test_*.py'
+
+      - name: Generate every benchmark
+        if: steps.changes.outputs.dashboards == 'true'
+        env:
+          LC_ALL: C.UTF-8
+          PYTHONHASHSEED: '1'
+          TZ: UTC
+        run: uv run --project python --no-sync python .github/scripts/benchmark-docs/generate.py --all --quiet --output-dir "${RUNNER_TEMP}/yamaa-benchmark-docs-first"
+
+      - name: Generate every benchmark again in a different environment
+        if: steps.changes.outputs.dashboards == 'true'
+        env:
+          LC_ALL: C.UTF-8
+          PYTHONHASHSEED: '8675309'
+          TZ: Pacific/Honolulu
+        run: uv run --project python --no-sync python .github/scripts/benchmark-docs/generate.py --all --quiet --output-dir "${RUNNER_TEMP}/yamaa-benchmark-docs-second"
+
+      - name: Confirm byte-for-byte deterministic output
+        if: steps.changes.outputs.dashboards == 'true'
+        run: diff -rq "${RUNNER_TEMP}/yamaa-benchmark-docs-first" "${RUNNER_TEMP}/yamaa-benchmark-docs-second"
+
+      - name: Upload all generated benchmark dashboards
+        if: steps.changes.outputs.dashboards == 'true'
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: yamaa-benchmark-dashboards
+          path: ${{ runner.temp }}/yamaa-benchmark-docs-first
+          if-no-files-found: error
+          retention-days: 7

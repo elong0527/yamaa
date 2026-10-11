@@ -15,6 +15,10 @@ on:
       - '.github/scripts/benchmark-docs/**'
       - '.github/workflows/deploy-docs.yml'
 
+concurrency:
+  group: docs-deployment
+  cancel-in-progress: false
+
 permissions:
   contents: read
   pages: write
