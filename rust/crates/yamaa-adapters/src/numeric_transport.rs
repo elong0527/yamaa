@@ -9,7 +9,7 @@ use yamaa_core::{
     evaluation::NumericResolver,
     numeric_compiler::{compile_numeric_with_policy, CompileError, CompileLimits, MathPolicy},
     numeric_parser::{GrammarFailure, ParseError, ParseResource, SourcePosition, SourceSpan},
-    value::{ColumnType, Selection, Value, ValueType},
+    value::{ColumnType, Selection, Value},
 };
 use yamaa_engine::numeric_lifecycle::{
     HandlerCounter, LiteralHandler, NumericDerivation, NumericLifecycleError,
@@ -270,18 +270,6 @@ impl NumericResolver for Resolver {
             .get(name)
             .cloned()
             .map_or(Selection::Absent, Selection::Present))
-    }
-}
-
-/// Stable vocabulary names for typed diagnostic data.
-fn type_name(value: ValueType) -> &'static str {
-    match value {
-        ValueType::Str => "str",
-        ValueType::Int => "int",
-        ValueType::Float => "float",
-        ValueType::Bool => "bool",
-        ValueType::Date => "date",
-        ValueType::DateTime => "datetime",
     }
 }
 

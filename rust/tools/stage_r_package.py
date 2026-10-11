@@ -25,6 +25,15 @@ def stage(destination: Path):
         rust / "crates",
         ignore=shutil.ignore_patterns("target", "__pycache__", "*.pyc", "Cargo.lock"),
     )
+    backend_spec = importlib.util.spec_from_file_location(
+        "yamaa_build_backend", REPOSITORY / "python/yamaa_build_backend.py"
+    )
+    backend = importlib.util.module_from_spec(backend_spec)
+    backend_spec.loader.exec_module(backend)
+    for relative, original in backend.native_test_fixtures(WORKSPACE):
+        target = destination / "src" / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(original, target)
     resources = destination / "inst"
     resources.mkdir(exist_ok=True)
     for fixture in (
@@ -91,6 +100,12 @@ def stage(destination: Path):
     project_helper = importlib.util.module_from_spec(project_spec)
     project_spec.loader.exec_module(project_helper)
     project_helper.stage(resources / "project-original")
+    define_spec = importlib.util.spec_from_file_location(
+        "stage_define_inputs", Path(__file__).with_name("stage_define_inputs.py")
+    )
+    define_helper = importlib.util.module_from_spec(define_spec)
+    define_spec.loader.exec_module(define_helper)
+    define_helper.stage(resources / "define-fixtures")
     print(destination)
 
 

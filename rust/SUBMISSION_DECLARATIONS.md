@@ -18,7 +18,8 @@ Existing omitted defaults are false for `dataset_json`, Submission for
 `context`, en for `xml_lang`, and an empty document list. Required fields remain
 required. Explicit null values never become omitted defaults. A present study
 or section is decoded completely; an absent study or section stays absent.
-Generator prerequisites and family compatibility remain #1758 semantic work.
+The [shared Define composition](DEFINE_GENERATION.md) checks generator
+prerequisites and family compatibility after this declaration admission.
 
 Every owned field carries its normalized container, key and value occurrence
 indices. Defaulted omitted fields have no key or value occurrence. These facts
@@ -52,9 +53,10 @@ and transport defects acquire no fabricated requirement cause.
 This model supplies no execution plan, activation, callable resolution, study
 or artifact read, rendering, publisher or Save capability. It does not derive
 generator identities, compose submission semantics, bind codelists or capture
-recursive specification files. Those services and installed define APIs remain
-#1758. The old Define-XML implementation and independently authored XML/JSON
-expected bytes remain until that complete use case qualifies.
+recursive specification files. The separate [shared Define use case](DEFINE_GENERATION.md) supplies those
+services for the bounded column-metadata profile. The old Define-XML
+implementation and independently authored XML/JSON expected bytes remain
+until the complete replacement and transition qualify.
 
 The approved #1887 decision permits a nonempty `source_system_version` string
 in each section. The decoder owns its exact bounded text and normalized
@@ -64,8 +66,9 @@ selected metadata version for both XML and JSON alongside the actual installed
 generator version supplied by the calling package. An empty installed version
 refuses even when an override is present; core's crate version is never substituted.
 
-This is declaration admission and version selection. The shared generators,
-native submission capture, all three migrated fixtures and installed `define`
-APIs remain #1758. Existing independent XML/JSON truth and the old generator stay
-until those replacements qualify. The approved producer publication lifecycle
-and required Windows R scope retain separate implementation gates.
+This model owns declaration admission and version selection. The shared
+column-metadata generator and three side-by-side environment fixtures advance
+#1758; value-level generation, full contract qualification and coordinated
+reference loader/schema retirement remain open. Existing independent XML/JSON
+truth stays unchanged. Producer publication and Windows R retain their own
+implementation and qualification gates.

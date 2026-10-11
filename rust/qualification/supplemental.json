@@ -1244,6 +1244,20 @@
       "path": "R/yamaa/tests/public_environment.R",
       "staged_path": "public_environment.R",
       "level": "shared_run"
+    },
+    {
+      "id": "python/public-define",
+      "runtime": "python",
+      "path": "rust/tests/installed_public_define.py",
+      "level": "shared_run",
+      "staged_path": "installed_public_define.py"
+    },
+    {
+      "id": "r/public-define",
+      "runtime": "r",
+      "path": "R/yamaa/tests/public_define.R",
+      "level": "shared_run",
+      "staged_path": "public_define.R"
     }
   ],
   "support_files": [
