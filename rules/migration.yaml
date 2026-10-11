@@ -2080,7 +2080,7 @@ requirements:
   REQ-1010: {"file": "submission/define-xml.md", "sources": ["R026-52"]}
   REQ-1011: {"file": "submission/define-xml.md", "sources": ["R026-53"]}
   REQ-1012: {"file": "submission/define-xml.md", "sources": ["R026-54"]}
-  REQ-1013: {"file": "submission/define-xml.md", "sources": ["R026-55"]}
+  REQ-1013: {"file": "submission/define-xml.md", "sources": ["R026-55", "yamaa:issue-1758:req-1013"]}
   REQ-1014: {"file": "submission/define-xml.md", "sources": ["R026-56"]}
   REQ-1015: {"file": "submission/define-xml.md", "sources": ["R026-57"]}
   REQ-1016: {"file": "submission/define-xml.md", "sources": ["R026-58"]}
@@ -2239,7 +2239,7 @@ requirements:
   REQ-1166: {"file": "submission/metadata.md", "sources": ["yamaa:issue-565:value-level-metadata-output"]}
   REQ-1167: {"file": "submission/metadata.md", "sources": ["yamaa:issue-565:value-level-metadata-conflict"]}
   REQ-1168: {"file": "submission/metadata.md", "sources": ["yamaa:issue-565:value-level-metadata-origin"]}
-  REQ-1169: {"file": "submission/define-xml.md", "sources": ["yamaa:issue-565:value-level-metadata-generation"]}
+  REQ-1169: {"file": "submission/define-xml.md", "sources": ["yamaa:issue-565:value-level-metadata-generation", "yamaa:issue-1758:req-1169"]}
   REQ-1170: {"file": "execution/rows.md", "sources": ["yamaa:issue-629:root-filter"]}
   REQ-1171: {"file": "execution/rows.md", "sources": ["yamaa:issue-629:root-filter-conflict"]}
   REQ-1173: {"file": "execution/verification.md", "sources": ["yamaa:issue-495:verification-log-declaration"]}
@@ -3032,3 +3032,5 @@ provenance_addenda:
   - {"source": "yamaa:issue-1758:req-1226", "target": "REQ-1226", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
   - {"source": "yamaa:issue-1758:req-1227", "target": "REQ-1227", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
   - {"source": "yamaa:issue-1758:req-1228", "target": "REQ-1228", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
+  - {"source": "yamaa:issue-1758:req-1013", "text": "Approved shared Define migration #1758: the bundled Define 2.1 XSD permits one ValueListRef on each column ItemDef, ordered ItemRefs inside one ValueListDef, and WhereClauseRefs on those entries. ValueListDef precedes WhereClauseDef before ordinary definitions; per-value ItemDefs contain merged typed metadata.", "owner": "submission/define-xml", "group": "value-level metadata", "target": "REQ-1013"}
+  - {"source": "yamaa:issue-1758:req-1169", "text": "Approved shared Define migration #1758 consumes every admitted bounded row override, retaining per-value origin and vocabulary admission and complete metadata references. An unconsumed entry still fails loudly; the unchanged reference generator failure remains transition evidence.", "owner": "submission/define-xml", "group": "value-level metadata", "target": "REQ-1169"}

@@ -6,7 +6,11 @@ rawfile <- function(path) readBin(path, "raw", n = file.info(path)$size)
 fixture <- function(name, published = FALSE) {
   root <- tempfile("define-"); dir.create(root)
   stopifnot(file.copy(file.path(fixtures, name, c("spec.yaml", "environment.yaml")), root))
-  if (published) stopifnot(file.copy(file.path(fixtures, name, "expected/dm.csv"), file.path(root, "dm.csv")))
+  if (name == "sdtm-lb-metadata") stopifnot(file.copy(file.path(fixtures, name, "submission-spec.yaml"), root))
+  if (published) {
+    dataset <- if (name == "sdtm-lb-metadata") "lb" else "dm"
+    stopifnot(file.copy(file.path(fixtures, name, "expected", paste0(dataset, ".csv")), file.path(root, paste0(dataset, ".csv"))))
+  }
   root
 }
 check_issues <- function(result, empty = TRUE) {
@@ -38,6 +42,103 @@ writeLines("changed after preparation", file.path(root, "dm.csv"))
 stopifnot(isTRUE(result$save()), identical(result$save(), FALSE))
 for (artifact in held) stopifnot(identical(rawfile(file.path(root, artifact$path)), artifact$bytes))
 unlink(root, recursive = TRUE)
+
+# The original LB spec and expected CSV remain immutable. The separate metadata
+# completion explicitly supplies SDTM-valid sources and complete column facts.
+root <- fixture("sdtm-lb-metadata", TRUE)
+result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = "2026-09-11T00:00:00")
+check_issues(result); held <- artifacts(result)
+stopifnot(length(held) == 2L, identical(vapply(held, `[[`, character(1), "path"), c("lb.json", "define.xml")))
+xml <- rawToChar(held[[2L]]$bytes)
+count <- function(pattern, text) sum(gregexpr(pattern, text, fixed = TRUE)[[1L]] > 0L)
+stopifnot(count("<def:ValueListDef ", xml) == 1L, count("<def:ValueListRef ", xml) == 1L,
+  count("<def:WhereClauseDef ", xml) == 2L, count("<ItemDef ", xml) == 13L,
+  grepl('CreationDateTime="2026-09-11T00:00:00"', xml, fixed = TRUE),
+  grepl('SourceSystemVersion="1.0"', xml, fixed = TRUE),
+  grepl('<def:ValueListRef ValueListOID="VL.LB.LBORRESU"/>', xml, fixed = TRUE))
+for (case in list(list(i = 1L, code = "GLUC", source = "Vendor", list = "CL_GLUCOSE"),
+  list(i = 2L, code = "CREAT", source = "Sponsor", list = "CL_CREATININE"))) {
+  identity <- paste0("LB.LBORRESU.V", case$i)
+  item_start <- regexpr(paste0('<ItemDef OID="IT.', identity, '"'), xml, fixed = TRUE)[[1L]]
+  stopifnot(item_start > 0L)
+  item <- substring(xml, item_start)
+  item <- substring(item, 1L, regexpr("</ItemDef>", item, fixed = TRUE)[[1L]])
+  stopifnot(grepl('Name="LBORRESU" DataType="text" Length="8"', item, fixed = TRUE),
+    grepl(paste0('CodeListOID="CL.', case$list, '"'), item, fixed = TRUE),
+    grepl(paste0('<def:Origin Type="Assigned" Source="', case$source, '"/>'), item, fixed = TRUE),
+    grepl(paste0('<def:WhereClauseRef WhereClauseOID="WC.', identity, '"/>'), xml, fixed = TRUE),
+    grepl(paste0("<CheckValue>", case$code, "</CheckValue>"), xml, fixed = TRUE))
+}
+stopifnot(count('Comparator="EQ" SoftHard="Soft" def:ItemOID="IT.LB.LBTESTCD"', xml) == 2L)
+json <- rawToChar(held[[1L]]$bytes)
+stopifnot(grepl('"records": 3', json, fixed = TRUE))
+# These fixture strings need no JSON unescaping. Compare all typed row values
+# with the immutable CSV, allowing equivalent JSON numeric spellings.
+json_lines <- strsplit(json, "\n", fixed = TRUE)[[1L]]
+column_lines <- grep('^[[:space:]]*\\{[[:space:]]*"itemOID"', json_lines, value = TRUE)
+column_names <- c("DOMAIN", "STUDYID", "USUBJID", "LBSEQ", "LBTESTCD", "LBTEST", "LBORRES", "LBORRESU", "LBSTRESN", "LBSTRESU", "LBDTC")
+column_types <- c(rep("string", 3L), "integer", rep("string", 4L), "float", "string", "date")
+field <- function(name, lines) {
+  pattern <- paste0('.*"', name, '"[[:space:]]*:[[:space:]]*"([^"]*)".*')
+  stopifnot(all(grepl(pattern, lines)))
+  sub(pattern, "\\1", lines)
+}
+stopifnot(identical(field("name", column_lines), column_names),
+  identical(field("dataType", column_lines), column_types))
+row_lines <- grep('^[[:space:]]*\\["LB",', json_lines, value = TRUE)
+stopifnot(length(row_lines) == 3L)
+row_csv <- sub('^[[:space:]]*\\[', "", sub('\\],?[[:space:]]*$', "", row_lines))
+types <- c(rep("character", 3L), "integer", rep("character", 4L), "numeric", rep("character", 2L))
+actual <- read.csv(text = paste(row_csv, collapse = "\n"), header = FALSE,
+  colClasses = types, strip.white = TRUE, check.names = FALSE)
+expected <- read.csv(file.path(fixtures, "sdtm-lb-metadata/expected/lb.csv"),
+  colClasses = types, check.names = FALSE)
+stopifnot(identical(names(expected), column_names),
+  identical(unname(as.list(actual)), unname(as.list(expected))))
+inputs <- file.path(root, c("spec.yaml", "submission-spec.yaml", "environment.yaml"))
+stopifnot(unlink(inputs) == 0L, !any(file.exists(inputs)))
+writeLines("changed after preparation", file.path(root, "lb.csv"))
+stopifnot(isTRUE(result$save()), identical(result$save(), FALSE))
+for (artifact in held) stopifnot(identical(rawfile(file.path(root, artifact$path)), artifact$bytes))
+unlink(root, recursive = TRUE)
+
+for (mode in c("original source", "value codelist", "metadata only", "arbitrary row ID")) {
+  metadata_only <- mode %in% c("metadata only", "arbitrary row ID")
+  root <- fixture("sdtm-lb-metadata", !metadata_only)
+  if (mode == "original source") {
+    overlay <- readLines(file.path(root, "submission-spec.yaml"))
+    rows <- which(overlay == "rows:")
+    stopifnot(length(rows) == 1L)
+    writeLines(overlay[seq_len(rows - 1L)], file.path(root, "submission-spec.yaml"))
+    stopifnot(identical(rawfile(file.path(root, "spec.yaml")), rawfile(file.path(fixtures, "sdtm-lb-metadata/spec.yaml"))))
+  } else if (mode == "value codelist") {
+    csv <- readLines(file.path(root, "lb.csv"))
+    writeLines(sub("95,mg/dL,95", "95,mmol/L,95", csv, fixed = TRUE), file.path(root, "lb.csv"))
+  } else {
+    environment <- readLines(file.path(root, "environment.yaml"))
+    writeLines(sub("dataset_json: true", "dataset_json: false", environment, fixed = TRUE), file.path(root, "environment.yaml"))
+    if (mode == "arbitrary row ID") {
+      for (file in c("spec.yaml", "submission-spec.yaml")) {
+        path <- file.path(root, file)
+        writeLines(sub("id: glucose", "id: 'glucose / primary test: 1'", readLines(path), fixed = TRUE), path)
+      }
+    }
+  }
+  result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = "2026-09-11T00:00:00")
+  check_issues(result, metadata_only)
+  if (mode == "original source") {
+    stopifnot(any(result$issues$requirement == "REQ-0919" & result$issues$condition == "origin_source_not_admitted"), refused(result))
+  } else if (mode == "value codelist") {
+    row <- which(result$issues$condition == "allowed_values_failed")
+    stopifnot(length(row) == 1L, grepl('"codelist":"CL_GLUCOSE"', result$issues$context[row], fixed = TRUE),
+      grepl('"testcd":"GLUC"', result$issues$context[row], fixed = TRUE), refused(result))
+  } else {
+    stopifnot(length(artifacts(result)) == 1L, !file.exists(file.path(root, "lb.csv")))
+  }
+  stopifnot(!file.exists(file.path(root, "define.xml")), !file.exists(file.path(root, "lb.json")), !dir.exists(file.path(root, "input")))
+  unlink(root, recursive = TRUE)
+}
+cat("PASS: independent LB value metadata, original-source rejection and selected-value codelist\n")
 
 for (case in list(
   list(name = "sdtm-ae-coding", id = "AE", columns = c("DOMAIN", "STUDYID", "USUBJID", "AESEQ", "AETERM", "AEDECOD", "AEBODSYS"), context = "Submission", codelist = "MEDDRA", acrf = TRUE),
