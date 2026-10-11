@@ -1337,6 +1337,46 @@ local({
   cat("public complete date operations match original independent outputs and four complete static failures without Python passed\n")
 })
 
+local({
+  directory <- tempfile("public-imputation-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  for(case_name in c("schema-birth-date","sdtm-dm-age")) {
+    stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
+    case <- file.path(directory,case_name);entry <- file.path(case,"spec.yaml")
+    written <- rawfile(entry);input <- file.path(case,"input");held <- file.path(case,"held")
+    stopifnot(file.rename(input,held),nrow(yamaa_check(entry)$issues)==0L,file.rename(held,input))
+    result <- yamaa_domain(entry)
+    output <- if(case_name=="schema-birth-date") "adsl.csv" else "dm.csv"
+    expected <- read.csv(file.path(case,"expected",output),colClasses="character",na.strings="",check.names=FALSE)
+    dates <- if(case_name=="schema-birth-date") c("REFDT","DOB_FIRST","DOB_LAST","DTMDT") else "RFICDTC"
+    for(column in dates) expected[[column]] <- as.Date(expected[[column]])
+    if(case_name=="schema-birth-date") expected$DTM <- as.POSIXct(expected$DTM,format="%Y-%m-%dT%H:%M:%S",tz="UTC")
+    column <- if(case_name=="schema-birth-date") "DOBDY" else "AGE"
+    expected[[column]] <- structure(expected[[column]],class="yamaa_int64_vector")
+    stopifnot(nrow(result$issues)==0L,identical(result$output,expected),identical(rawfile(entry),written),
+      !file.exists(file.path(case,output)),identical(result$save(),TRUE),
+      identical(rawfile(file.path(case,output)),rawfile(file.path(case,"expected",output))))
+  }
+  failures <- read.delim(file.path(root,"temporal-imputation-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
+  stopifnot(nrow(failures)==10L)
+  for(index in seq_len(nrow(failures))) {
+    finding <- failures[index,]
+    stopifnot(file.copy(file.path(root,"cases",finding$case),directory,recursive=TRUE))
+    case <- file.path(directory,finding$case);entry <- file.path(case,"spec.yaml")
+    static <- finding$phase=="validation"
+    if(static) unlink(file.path(case,"input"),recursive=TRUE)
+    checked <- yamaa_check(entry)$issues
+    result <- yamaa_domain(entry);actual <- result$issues
+    stopifnot(nrow(actual)==1L,identical(actual$phase,finding$phase),
+      identical(actual$condition,finding$condition),identical(actual$requirement,finding$requirement),
+      identical(actual$spec_paths,list(finding$spec_path)),identical(actual$context,finding$context),
+      is.null(result$output),identical(is.null(get(".domain_observations",asNamespace("yamaa"))(result)),static),
+      inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),length(list.files(case,pattern="[.]csv$"))==0L)
+    if(static) stopifnot(identical(checked,actual)) else stopifnot(nrow(checked)==0L)
+  }
+  cat("public temporal imputation preserves two original outputs and ten complete failures without Python passed\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

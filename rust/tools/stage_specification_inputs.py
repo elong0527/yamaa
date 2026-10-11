@@ -11,6 +11,7 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter", "negative-paired-dates", "negative-not-missing-age", "negative-implausible-age", "negative-invalid-sex", "negative-sex-code", "negative-matches-bad-pattern")
 ROUNDING_CASES = ("schema-round-half-away-from-zero-ties", "negative-round-half-away-from-zero-non-numeric-source")
 TEMPORAL_CASES = ("adam-adsl-duration", "adam-adsl-analysis-age", "negative-date-diff-endpoints", "negative-date-diff-units", "negative-study-day-datetime", "negative-epoch-day-non-date")
+IMPUTATION_CASES = ("schema-birth-date", "sdtm-dm-age", "negative-impute-bad-month", "negative-impute-unreachable-month", "negative-impute-missing-month", "negative-impute-day-rule", "negative-impute-bad-day", "negative-date-conversion", "negative-impute-bad-source", "negative-precision-bad-source", "negative-datetime-impute-bad-source", "negative-datetime-precision-bad-source")
 # Archive aliases shorten installed paths without changing original fixture identities or bytes.
 CASE_DIRECTORY_NAMES = {"negative-round-half-away-from-zero-non-numeric-source": "negative-rounding-source"}
 # The current specification schema closure, not other standalone schema roots.
@@ -31,6 +32,30 @@ SCHEMA_MODULES = (
     "schema_expression_window.yaml",
     "schema_expression_odm.yaml",
 )
+
+
+def stage_temporal_imputation_truth(destination: Path):
+    """Retain independently stated original failures and complete reference captures."""
+    cases = [
+        ("negative-impute-bad-month", "validation", "month_out_of_range", "REQ-0608", "columns.ASTDT.derivation.date_impute.month", {"month": 15}),
+        ("negative-impute-unreachable-month", "validation", "month_not_permitted", "REQ-0592", "columns.ASTDT.derivation.date_impute.month", {"month": 6}),
+        ("negative-impute-missing-month", "validation", "month_required", "REQ-0592", "columns.ASTDT.derivation.date_impute.month", {"minimum_source_precision": "year"}),
+        ("negative-impute-day-rule", "validation", "value_not_permitted", "REQ-0609", "columns.ASTDT.derivation.date_impute.day", {"value": "mid", "permitted": ["first", "last"]}),
+        ("negative-impute-bad-day", "impute", "invalid_calendar_date", "REQ-0608", "columns.AENDT.derivation.date_impute", {"value": "2023-04", "completed": "2023-04-31", "keys": [{"STUDYID": "YAMAA-01", "USUBJID": "YAMAA-01-101", "AESEQ": 2}]}),
+        ("negative-date-conversion", "validation", "incompatible_input_type", "REQ-0607", "columns.ASTDT2.derivation.to_date.source", {"source": "ASTDT", "expected": "datetime, ISO date text, or ISO 8601 datetime text", "actual": "date"}),
+    ]
+    capture = json.loads((REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/temporal_imputation_reference.json").read_text())
+    for name, findings in capture.items():
+        assert len(findings) == 1
+        finding = findings[0]
+        assert len(finding["spec_paths"]) == 1
+        cases.append((name, finding["phase"], finding["condition"], finding["requirement"], finding["spec_paths"][0], finding["context"]))
+    assert {case[0] for case in cases} == set(IMPUTATION_CASES) - {"schema-birth-date", "sdtm-dm-age"}
+    with (destination / "temporal-imputation-diagnostics.tsv").open("w", newline="", encoding="ascii") as stream:
+        writer = csv.writer(stream, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE, quotechar=None)
+        writer.writerow(("case", "phase", "condition", "requirement", "spec_path", "context"))
+        for name, phase, condition, requirement, path, context in cases:
+            writer.writerow((name, phase, condition, requirement, path, json.dumps(context, sort_keys=True, separators=(",", ":"))))
 
 
 def stage_inheritance_replay(destination: Path):
@@ -237,7 +262,7 @@ def stage(destination: Path):
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.tsv", destination / "original-row-conversion-handlers.tsv")
     for name in SCHEMA_MODULES:
         shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
-    for name in CASES + ROUNDING_CASES + TEMPORAL_CASES:
+    for name in CASES + ROUNDING_CASES + TEMPORAL_CASES + IMPUTATION_CASES:
         shutil.copytree(REPOSITORY / "benchmarks" / name, destination / "cases" / CASE_DIRECTORY_NAMES.get(name, name))
     shutil.copytree(
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specs",
@@ -255,6 +280,7 @@ def stage(destination: Path):
         )
     stage_issue_frame_truth(destination)
     stage_public_output_truth(destination)
+    stage_temporal_imputation_truth(destination)
 
 
 if __name__ == "__main__":

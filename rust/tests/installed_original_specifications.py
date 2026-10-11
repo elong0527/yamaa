@@ -1561,6 +1561,68 @@ class PublicDomains(unittest.TestCase):
                     result.save()
                 self.assertFalse((case / "input").exists())
 
+    def test_public_temporal_imputation_originals_and_complete_failures(self):
+        import shutil
+        import polars as pl
+        import yamaa
+        from polars.testing import assert_frame_equal
+
+        def issues(result):
+            records = result.issues.to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
+            return records
+
+        with tempfile.TemporaryDirectory() as directory:
+            for name, output, dates, integers, datetimes in [
+                ("schema-birth-date", "adsl.csv", ["REFDT", "DOB_FIRST", "DOB_LAST", "DTMDT"], ["DOBDY"], ["DTM"]),
+                ("sdtm-dm-age", "dm.csv", ["RFICDTC"], ["AGE"], []),
+            ]:
+                case = Path(directory) / name
+                shutil.copytree(ROOT / "cases" / name, case)
+                entry = case / "spec.yaml"
+                written = entry.read_bytes()
+                source = case / "input"
+                held = case / "held"
+                source.rename(held)
+                self.assertEqual(issues(yamaa.check(entry)), [])
+                held.rename(source)
+                result = yamaa.domain(entry)
+                self.assertEqual(issues(result), [])
+                expected = pl.read_csv(case / "expected" / output, infer_schema=False)
+                for column in dates:
+                    expected = expected.with_columns(pl.col(column).str.to_date())
+                for column in datetimes:
+                    expected = expected.with_columns(pl.col(column).str.to_datetime(time_unit="ms"))
+                for column in integers:
+                    expected = expected.with_columns(pl.col(column).cast(pl.Int64))
+                assert_frame_equal(result.output, expected)
+                self.assertEqual(entry.read_bytes(), written)
+                self.assertFalse((case / output).exists())
+                self.assertTrue(result.save())
+                self.assertEqual((case / output).read_bytes(), (case / "expected" / output).read_bytes())
+            with (ROOT / "temporal-imputation-diagnostics.tsv").open() as stream:
+                failures = list(csv.DictReader(stream, delimiter="\t"))
+            self.assertEqual(len(failures), 10)
+            for finding in failures:
+                case = Path(directory) / finding["case"]
+                shutil.copytree(ROOT / "cases" / finding["case"], case)
+                entry = case / "spec.yaml"
+                expected = {key: finding[key] for key in ("phase", "condition", "requirement")}
+                expected.update(spec_paths=[finding["spec_path"]], context=json.loads(finding["context"]))
+                static = finding["phase"] == "validation"
+                if static:
+                    shutil.rmtree(case / "input")
+                checked = yamaa.check(entry)
+                self.assertEqual(issues(checked), [expected] if static else [])
+                result = yamaa.domain(entry)
+                self.assertEqual(issues(result), [expected])
+                self.assertIsNone(result.output)
+                self.assertEqual(result._native.observations() is None, static)
+                with self.assertRaises(yamaa.DomainError):
+                    result.save()
+                self.assertEqual(sorted(p.name for p in case.glob("*.csv")), [])
+
     def test_public_domain_all_original_issues_outputs_and_saved_bytes(self):
         import datetime
         import shutil
