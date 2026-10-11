@@ -97,6 +97,20 @@ pub enum Expression {
     /// Only the first TRUE branch is evaluated; FALSE and UNKNOWN continue.
     Case(Vec<CaseBranch>),
     Literal(Value),
+    /// Binding handler ownership is retained even when the variable exists.
+    SourceBinding {
+        source: alloc::boxed::Box<Assignment>,
+        absent: Option<Value>,
+        variable_absent: bool,
+        variable: String,
+        path: String,
+    },
+    /// Source-only eligibility and stable choice on an implicit secondary join.
+    SourceLookup {
+        lookup: Lookup,
+        filter: Option<BoundPredicate>,
+        selection: Option<SourceSelection>,
+    },
     /// One condition selects a raw true/false/UNKNOWN literal.
     Flag(Flag),
     /// Compiled scalar arithmetic over statically bound source/completed output reads.
@@ -642,7 +656,76 @@ fn validate_assignment_at(
         }
         Expression::Function(function) => function.validate(source, available, mode)?,
         Expression::ProjectFunction(function) => function.validate(source, available, mode)?,
-        Expression::FirstAvailable(selection) => selection.validate(source, available, mode)?,
+        Expression::FirstAvailable(selection) => {
+            selection.validate(source, available, mode)?;
+            for operand in selection.sources() {
+                if let SelectionRead::Expression(operand) = &operand.read {
+                    if operand.column != assignment.column {
+                        return Err(PlanError::InvalidColumns);
+                    }
+                    validate_assignment_at(
+                        operand,
+                        available,
+                        source,
+                        secondary,
+                        intermediates,
+                        output,
+                        mode,
+                        depth + 1,
+                        remaining,
+                    )?;
+                    available[assignment.column] = false;
+                }
+            }
+        }
+        Expression::SourceBinding {
+            source: operand,
+            path,
+            variable,
+            absent,
+            variable_absent,
+        } => {
+            if operand.column != assignment.column
+                || path.is_empty()
+                || variable.is_empty()
+                || (*variable_absent && absent.is_none())
+            {
+                return Err(PlanError::InvalidColumns);
+            }
+            validate_assignment_at(
+                operand,
+                available,
+                source,
+                secondary,
+                intermediates,
+                output,
+                mode,
+                depth + 1,
+                remaining,
+            )?;
+            available[assignment.column] = false;
+        }
+        Expression::SourceLookup {
+            lookup: bound,
+            filter,
+            selection,
+        } => {
+            if !matches!(mode, RowMode::Keys) {
+                return Err(PlanError::InvalidLookup);
+            }
+            lookup::validate(bound, secondary, available, output)?;
+            let width = secondary[bound.source].schema.columns().len();
+            if let Some(filter) = filter {
+                filter
+                    .validate(width, &[], false)
+                    .map_err(PlanError::Filter)?;
+            }
+            if selection.as_ref().is_some_and(|s| {
+                s.order_by.is_empty() || s.order_by.iter().any(|term| term.column >= width)
+            }) {
+                return Err(PlanError::InvalidSourceOrder);
+            }
+        }
         Expression::Intermediate { index, column } => {
             let item = intermediates
                 .get(*index)
