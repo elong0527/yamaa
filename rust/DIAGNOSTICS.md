@@ -43,6 +43,15 @@ remain canonical decimal text with a distinct type. Absent source geometry stays
 absent. Original opaque resolver errors have no normative projection: the caller
 retains the error and its identity rather than manufacturing `unknown_field`.
 
+Key-grain distinct-value conflicts, implicit lookup zero/duplicate matches,
+baseline ties and present nonnumeric reduction arguments now project through
+five core dataset causes. The engine borrows its retained typed failure and
+admits the complete diagnostic before any path or context copy, preserving
+original error precedence and table effects. Counts that exceed i64 remain
+mathematical diagnostic integers. Matched keys, identities and partition
+observations stay attached to the original attempted run; the dataset/1 adapter
+serializes the common finding with its established context representation.
+
 ## Registry identity and compatibility
 
 Each `ConditionCode` names one semantic cause and maps to one phase, public
@@ -132,6 +141,14 @@ parser findings now retain the same shared diagnostic, preserving typed context,
 original spellings and character positions without narrowing through runtime i64.
 All original binding findings with normative projections use the common adapter
 serializer. Resource policies and inconsistent metadata retain separate failures.
+
+Classified packaging lock diagnostics now borrow their complete ordered host
+facts and held root/captured/authored origins into core. Core owns reason tokens,
+context fields, shape validation and whole-report admission before any authored
+copy. uv/renv parsing, installed metadata selection and version comparison remain
+host operations. The original opaque lock failure survives repeated projection
+and quota refusal without a provider retry or binding/invocation effect; a
+non-Clone, non-Debug, non-Send activation witness checks that identity directly.
 
 The unchanged lookup reports and predicate syntax fixtures pin existing mappings
 and richer parser context. One independently captured malformed window predicate

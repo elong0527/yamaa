@@ -4,7 +4,43 @@ private <- function(name) get(name, namespace)
 root <- system.file("project-original", package="yamaa", mustWork=TRUE)
 reply <- private(".domain_reply")
 handle <- function(result) get("h", envir=environment(result$save), inherits=FALSE)
-observe <- function(result) rawToChar(private(".domain_observations")(result))
+.producer_witness <- new.env(parent=emptyenv())
+.producer_witness$index <- 0L
+observe <- function(result) {
+  bytes <- private(".domain_observations")(result)
+  output <- Sys.getenv("YAMAA_PUBLIC_REPORT_DIR")
+  if(nzchar(output)) {
+    # Reports remain complete actual native JSON. Disk targets are separate
+    # witnesses, preserving both earlier writes and failed-target prior bytes.
+    .producer_witness$index <- .producer_witness$index+1L
+    directory <- file.path(output,"producer-witnesses/r",sprintf("%03d",.producer_witness$index))
+    dir.create(directory,recursive=TRUE,showWarnings=FALSE)
+    writeBin(bytes,file.path(directory,"report.json"))
+    saved <- character()
+    if(exists("work",envir=parent.frame(),inherits=TRUE)) {
+      current <- get("work",envir=parent.frame(),inherits=TRUE)
+      for(name in c("generated","published")) {
+        paths <- list.files(file.path(current,name),pattern="[.]csv$",full.names=TRUE)
+        for(path in paths[!dir.exists(paths)]) {
+          relative <- paste0(name,"/",basename(path))
+          target <- file.path(directory,"targets",relative)
+          dir.create(dirname(target),recursive=TRUE,showWarnings=FALSE)
+          stopifnot(file.copy(path,target,overwrite=TRUE))
+          saved <- c(saved,relative)
+        }
+      }
+    }
+    # This fixture authors fixed filenames without JSON quoting characters.
+    targets <- paste0('"',saved,'"',collapse=",")
+    if(!length(saved)) targets <- ""
+    writeBin(charToRaw(paste0('{"scope":"supplemental_producer_publication",',
+      '"truth":"R/yamaa/tests/public_producers.R","report":"report.json",',
+      '"saved_targets":[',targets,']}\n')),file.path(directory,"witness.json"))
+    provenance <- Sys.getenv("YAMAA_SUPPLEMENTAL_EVIDENCE")
+    if(nzchar(provenance)) writeBin(charToRaw(provenance),file.path(directory,"provenance.json"))
+  }
+  rawToChar(bytes)
+}
 evidence <- function(result) reply(.Call(private("wrap__domain_producer_evidence"), handle(result)))
 preparation <- function(result) reply(.Call(private("wrap__domain_preparation_sources"), handle(result)))
 raw <- charToRaw("ID,VALUE\n1,1.234\n2,2.345\n")
@@ -96,12 +132,11 @@ for(result in results) {
     grepl('"content":"ID,VALUE\\n1,1.23\\n2,2.35\\n"',before,fixed=TRUE),
     grepl('"content":"ID,VALUE\\n1,2.46\\n2,4.70\\n"',before,fixed=TRUE),
     grepl('"invoked":false',before,fixed=TRUE))
-  refusal <- tryCatch(result$save(),error=identity)
-  stopifnot(inherits(refusal,"yamaa_domain_error"),
-    identical(conditionMessage(refusal),"producer workflow publication is not supported"),
-    identical(observe(result),before),identical(result$output$VALUE,c(2.46,4.70)))
+  stopifnot(identical(result$save(),FALSE),
+    grepl('"entered":[]',observe(result),fixed=TRUE),
+    identical(result$output$VALUE,c(2.46,4.70)),isTRUE(evidence(result)$accepted))
 }
-cat("R public aliases, actual fresh activation, held rounded ingestion and explicit publication refusal passed\n")
+cat("R public aliases, fresh activation, held rounded ingestion and deleted target refusal passed\n")
 
 work <- study()
 text <- sub("output: {path:","  - {name: ROOT_UNROUNDED, type: float, label: Root precision, derivation: {compute: {expr: 'VALUE + 0.004'}}}\noutput: {path:",consumer,fixed=TRUE)
@@ -113,6 +148,18 @@ stopifnot(nrow(result$issues)==0L,identical(names(result$output),c("ROOT_UNROUND
   grepl('"content":"ROOT_UNROUNDED,ID,VALUE\\n2.46,1,2.46\\n4.70,2,4.70\\n"',observe(result),fixed=TRUE))
 copy <- result$output; copy$VALUE <- copy$VALUE*10
 stopifnot(identical(result$output$VALUE,c(2.46,4.70)))
+dir.create(file.path(work,"generated"))
+before <- observe(result)
+unlink(file.path(work,c("producer","consumer","raw","env")),recursive=TRUE)
+invisible(gc())
+for(index in 1:2) {
+  stopifnot(isTRUE(result$save()),nrow(result$issues)==0L,
+    identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
+    identical(readBin(file.path(work,"generated/root.csv"),"raw",n=100),charToRaw("ROOT_UNROUNDED,ID,VALUE\n2.46,1,2.46\n4.70,2,4.70\n")),
+    grepl('"entered":[{"node":1,"published":true},{"node":0,"published":true}]',observe(result),fixed=TRUE),
+    identical(result$output$ROOT_UNROUNDED,c(2.464,4.704)),
+    identical(sub('"publication":.+?,"report_version":','"report_version":',observe(result),perl=TRUE),before))
+}
 unlink(work,recursive=TRUE)
 stopifnot(identical(result$output$ROOT_UNROUNDED,c(2.464,4.704)))
 cat("R public unrounded root precision, projection order and copied views passed\n")
@@ -135,9 +182,23 @@ result <- with_caps(verify,resolve,build(work))
 stopifnot(nrow(result$issues)==0L,identical(result$output$VALUE,c(2.46,4.70)),
   identical(events,c("lock","bind","invoke:7.25","invoke:0","invoke:1.234","invoke:2.345")),
   identical(unlist(evidence(result)$entered),c(3,1,2,0)),!dir.exists(file.path(work,"generated")))
+dir.create(file.path(work,"generated"))
+before <- observe(result)
+unlink(file.path(work,c("producer","consumer","raw","env","bridge")),recursive=TRUE)
+invisible(gc())
+for(index in 1:2) {
+  stopifnot(isTRUE(result$save()),nrow(result$issues)==0L,
+    identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
+    identical(readBin(file.path(work,"generated/left.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
+    identical(readBin(file.path(work,"generated/right.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
+    identical(readBin(file.path(work,"generated/root.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,2.46\n2,4.70\n")),
+    grepl('"entered":[{"node":3,"published":true},{"node":1,"published":true},{"node":2,"published":true},{"node":0,"published":true}]',observe(result),fixed=TRUE),
+    identical(events,c("lock","bind","invoke:7.25","invoke:0","invoke:1.234","invoke:2.345")),
+    identical(sub('"publication":.+?,"report_version":','"report_version":',observe(result),perl=TRUE),before))
+}
 unlink(work,recursive=TRUE)
 stopifnot(identical(result$output$VALUE,c(2.46,4.70)))
-cat("R public inherited diamond executes the shared leaf once with no prospective disk input\n")
+cat("R public inherited diamond saves the shared leaf once in producer order without replay\n")
 
 work <- study()
 bad <- sub("params: [{name: x","params: [{name: z",definition,fixed=TRUE)
@@ -260,3 +321,90 @@ unlink(work,recursive=TRUE); invisible(gc())
 stopifnot(identical(refusal(result),"table output exceeds byte limit"),isTRUE(evidence(result)$accepted),
   inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
 cat("R public copy quota preserves accepted whole attempt and typed original refusal without output or Save\n")
+
+work <- study();dir.create(file.path(work,"generated"));dir.create(file.path(work,"generated/root.csv"))
+result <- build(work)
+stopifnot(identical(result$save(),FALSE),isTRUE(evidence(result)$accepted),
+  identical(result$output$VALUE,c(2.46,4.70)),!file.exists(file.path(work,"generated/producer.csv")),
+  grepl('"entered":[]',observe(result),fixed=TRUE))
+unlink(file.path(work,"generated/root.csv"),recursive=TRUE)
+stopifnot(isTRUE(result$save()),nrow(result$issues)==0L)
+unlink(work,recursive=TRUE)
+cat("R whole target-set preflight refuses late invalid target before every write\n")
+
+save_failure <- function(failed) {
+  work <- study()
+  on.exit(unlink(work,recursive=TRUE))
+  write(work,"consumer/root.yaml",sub("../generated/root.csv","../published/root.csv",consumer,fixed=TRUE))
+  write(work,"generated/producer.csv","previous producer bytes")
+  write(work,"published/root.csv","previous consumer bytes")
+  events <- character()
+  versions <- function(versions,calls) {events <<- c(events,"lock");capabilities$verify(versions,calls)}
+  binding <- function(call,parameters) {
+    events <<- c(events,"bind");bound <- capabilities$resolve(call,parameters)
+    if(bound[[1L]]!=0L) return(bound)
+    invoke <- bound[[2L]]
+    list(0L,function(encoded) {events <<- c(events,"invoke");invoke(encoded)})
+  }
+  result <- with_caps(versions,binding,build(work));before <- observe(result);built <- evidence(result);calls <- events
+  target <- file.path(work,if(failed=="producer") "generated/producer.csv" else "published/root.csv")
+  readonly <- if(.Platform$OS.type=="windows") target else dirname(target)
+  Sys.chmod(readonly,if(.Platform$OS.type=="windows") "0444" else "0500")
+  on.exit(Sys.chmod(readonly,if(.Platform$OS.type=="windows") "0666" else "0700"),add=TRUE,after=FALSE)
+  if(.Platform$OS.type!="windows") {
+    probe <- file.path(readonly,".write-permission-probe")
+    writable <- suppressWarnings(tryCatch({writeBin(charToRaw("permission probe"),probe);TRUE},error=function(error) FALSE))
+    if(writable) {
+      unlink(probe)
+      cat("R publication permission witness skipped: directory permissions cannot deny writes on this host\n")
+      return(FALSE)
+    }
+  }
+  stopifnot(identical(result$save(),FALSE),identical(evidence(result),built),identical(events,calls),
+    identical(result$output$VALUE,c(2.46,4.70)),"REQ-0764" %in% result$issues$requirement,
+    identical(readBin(target,"raw",n=100),charToRaw(if(failed=="producer") "previous producer bytes" else "previous consumer bytes")),
+    identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw(if(failed=="producer") "previous producer bytes" else "ID,VALUE\n1,1.23\n2,2.35\n")),
+    grepl(if(failed=="producer") '"entered":[{"node":1,"published":false}]' else '"entered":[{"node":1,"published":true},{"node":0,"published":false}]',observe(result),fixed=TRUE),
+    length(list.files(dirname(target),pattern="[.]stage$",all.files=TRUE))==0L)
+  Sys.chmod(readonly,if(.Platform$OS.type=="windows") "0666" else "0700")
+  stopifnot(isTRUE(result$save()),nrow(result$issues)==0L,identical(events,calls),identical(evidence(result),built),
+    identical(sub('"publication":.+?,"report_version":','"report_version":',observe(result),perl=TRUE),before))
+  TRUE
+}
+qualified <- vapply(c("producer","consumer"),save_failure,logical(1))
+if(all(qualified)) cat("R actual producer/consumer publication failures preserve original Build, actual prefix and earlier writes\n")
+
+if(.Platform$OS.type=="windows") {
+  work <- study()
+  dir.create(file.path(work,"generated"))
+  write(work,"consumer/root.yaml",sub("../generated/root.csv","../generated/PRODUCER.csv",consumer,fixed=TRUE))
+  result <- build(work)
+  stopifnot(!is.null(result$output),isTRUE(evidence(result)$accepted),identical(result$save(),FALSE),
+    length(list.files(file.path(work,"generated"),all.files=TRUE,no..=TRUE))==0L,
+    grepl('"entered":[]',observe(result),fixed=TRUE))
+  unlink(work,recursive=TRUE)
+  cat("R absent Windows case-alias targets refuse every write\n")
+}
+
+if(Sys.info()[["sysname"]]=="Darwin") {
+  work <- study();dir.create(file.path(work,"generated"))
+  write(work,"generated/case-probe","native case witness")
+  sensitive <- !file.exists(file.path(work,"generated/CASE-PROBE"))
+  unlink(file.path(work,"generated/case-probe"))
+  for(name in c("PRODUCER.csv","\\u00e9.csv")) {
+    parts <- strsplit(consumer,"../generated/root.csv",fixed=TRUE)[[1L]]
+    write(work,"consumer/root.yaml",paste(parts,collapse=paste0('"../generated/',name,'"')))
+    result <- build(work)
+    stopifnot(!is.null(result$output),isTRUE(evidence(result)$accepted))
+    if(name=="PRODUCER.csv" && sensitive) {
+      stopifnot(isTRUE(result$save()),
+        identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
+        identical(readBin(file.path(work,"generated/PRODUCER.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,2.46\n2,4.70\n")))
+      unlink(list.files(file.path(work,"generated"),full.names=TRUE))
+    } else stopifnot(identical(result$save(),FALSE),
+      grepl('"entered":[]',observe(result),fixed=TRUE),
+      length(list.files(file.path(work,"generated"),all.files=TRUE,no..=TRUE))==0L)
+  }
+  unlink(work,recursive=TRUE)
+  cat("R macOS parent case policy and unproven Unicode names refuse before publication\n")
+}

@@ -135,6 +135,23 @@ class SupplementalEvidence(unittest.TestCase):
             )
         self.assertFalse(self.output.exists())
 
+    def test_actual_suite_receives_its_checked_source_and_installed_artifact_provenance(self):
+        code = 'import os\nprint(os.environ["YAMAA_SUPPLEMENTAL_EVIDENCE"])\n'
+        self.write("rust/tests/installed_first.py", code)
+        (self.staged / "installed_first.py").write_text(code)
+        self.catalog["suites"] = self.catalog["suites"][:1]
+        evidence = {"source_revision": "checked-revision", "artifact_reference": "installed-archive"}
+        with (
+            patch.object(module, "installed_metadata", return_value=self.metadata),
+            patch.dict(module.os.environ, {"YAMAA_SUPPLEMENTAL_EVIDENCE": "stale inherited claim"}),
+        ):
+            status = module.run_suites(self.root,self.catalog,runtime="python",
+                staged_root=self.staged,output=self.output,evidence=evidence)
+        self.assertEqual(status,0)
+        report = json.loads((self.output / "python-first.log").read_text())
+        self.assertEqual(report["evidence"],evidence)
+        self.assertEqual(report["installation"],self.metadata)
+
     def test_distinct_suite_ids_cannot_overwrite_the_same_log(self):
         # Both IDs used to map to python-first-nested.log after slash replacement.
         self.catalog["suites"][0]["id"] = "python/first/nested"

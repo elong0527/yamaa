@@ -213,3 +213,10 @@ fn cumulative_escaped_text_and_utf8_limits_are_atomic() {
         .collect::<Vec<_>>();
     assert_eq!(issues(&environment, &facts), Err(Error::Limit));
 }
+
+#[test]
+fn empty_unlocked_projection_preserves_zero_quota_success_without_capture() {
+    let (environment, capture) = environment(false);
+    assert_eq!(issues_with_limit(&environment, &[], 0).unwrap(), vec![]);
+    assert_eq!(capture.calls, 0);
+}

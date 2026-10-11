@@ -1,14 +1,18 @@
 """Installed public producer builds against independently authored study truth."""
 import gc
 import json
+import os
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 import yamaa_benchmarks as program
-from yamaa import DomainError, _locked_functions as host, _native as native, domain
+from yamaa import DomainError, domain
+from yamaa import _locked_functions as host
+from yamaa import _native as native
 
 ROOT = Path(__file__).parent / "project-original"
 RAW = b"ID,VALUE\n1,1.234\n2,2.345\n"
@@ -76,7 +80,35 @@ class PublicProducers(unittest.TestCase):
         return result._native.producer_attempt()
 
     def observe(self, result):
-        return json.loads(result._native.observations())
+        text = result._native.observations()
+        output = os.environ.get("YAMAA_PUBLIC_REPORT_DIR")
+        if output:
+            # Preserve the complete actual report and separately snapshot disk
+            # targets; held artifact content alone cannot prove publication.
+            self._witness_count = getattr(self, "_witness_count", 0) + 1
+            directory = Path(output) / "producer-witnesses/python" / self._testMethodName / f"{self._witness_count:02d}"
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / "report.json").write_text(text, encoding="utf-8")
+            saved = []
+            for name in ("generated", "published"):
+                for path in sorted((self.root / name).glob("*.csv")):
+                    if path.is_file():
+                        relative = path.relative_to(self.root)
+                        target = directory / "targets" / relative
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_bytes(path.read_bytes())
+                        saved.append(relative.as_posix())
+            (directory / "witness.json").write_text(json.dumps({
+                "scope": "supplemental_producer_publication",
+                "truth": "rust/tests/installed_public_producers.py",
+                "test": self._testMethodName,
+                "report": "report.json",
+                "saved_targets": saved,
+            }, indent=2) + "\n", encoding="utf-8")
+            provenance = os.environ.get("YAMAA_SUPPLEMENTAL_EVIDENCE")
+            if provenance:
+                (directory / "provenance.json").write_text(provenance, encoding="utf-8")
+        return json.loads(text)
 
     def test_original_aliases_fresh_union_before_data_and_retained_public_views(self):
         self.write("raw/raw.csv", b"ID,VALUE\n1,99.99\n")
@@ -121,9 +153,10 @@ class PublicProducers(unittest.TestCase):
             self.assertEqual(observed["activation"]["lock"], "verified")
             self.assertEqual([item["case"] for item in observed["activation"]["tests"]], ["normal", "boundary", "missing"])
             self.assertFalse(observed["activation"]["tests"][-1]["invoked"])
-            with self.assertRaisesRegex(DomainError, "producer workflow publication is not supported"):
-                result.save()
-            self.assertEqual(self.observe(result), observed)
+            self.assertFalse(result.save())
+            after = self.observe(result)
+            self.assertEqual(after.pop("publication")["entered"], [])
+            self.assertEqual(after, observed)
             self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
 
     def test_root_output_keeps_unrounded_values_and_projection_order(self):
@@ -169,11 +202,132 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
         self.assertEqual(self.entered(result).entered_nodes(), [3, 1, 2, 0])
         self.assertEqual(len(self.observe(result)["nodes"]), 4)
         self.assertFalse((self.root / "generated").exists())
+        (self.root / "generated").mkdir()
+        before = self.observe(result)
+        for directory in ("producer", "consumer", "raw", "env", "bridge"):
+            shutil.rmtree(self.root / directory)
+        gc.collect()
+        for _ in range(2):
+            self.assertTrue(result.save())
+            self.assertEqual((self.root / "generated/producer.csv").read_bytes(), PRODUCED)
+            self.assertEqual((self.root / "generated/left.csv").read_bytes(), PRODUCED)
+            self.assertEqual((self.root / "generated/right.csv").read_bytes(), PRODUCED)
+            self.assertEqual((self.root / "generated/root.csv").read_bytes(), CONSUMED)
+            after = self.observe(result)
+            self.assertEqual(after.pop("publication"), {"status": "success", "entered": [{"node": node, "published": True} for node in (3, 1, 2, 0)], "error": None})
+            self.assertEqual(after, before)
+            self.assertEqual(calls, [7.25, 0.0, 1.234, 2.345])
+            self.assertTrue(result.issues.is_empty())
         shutil.rmtree(self.root)
         sources = dict(self.entered(result).retained_sources())
         self.assertEqual(len(sources), 10)
         self.assertFalse(any(name.endswith("/yamaa-project.yaml") for name in sources))
         self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
+
+    def test_save_retains_rounded_alias_bytes_and_unrounded_root_after_originals_drop(self):
+        text = CONSUMER.replace("output: {path:", "  - {name: ROOT_UNROUNDED, type: float, label: Root precision, derivation: {compute: {expr: 'VALUE + 0.004'}}}\noutput: {path:")
+        text = text.replace("columns: [ID, VALUE], decimals: 2", "columns: [ROOT_UNROUNDED, ID, VALUE], decimals: 2")
+        self.write("consumer/root.yaml", text)
+        (self.root / "generated").mkdir()
+        result = self.build()
+        before = self.observe(result)
+        self.assertEqual(list((self.root / "generated").iterdir()), [])
+        self.write("raw/raw.csv", b"ID,VALUE\n1,99.99\n")
+        for directory in ("producer", "consumer", "raw", "env"):
+            shutil.rmtree(self.root / directory)
+        gc.collect()
+        with patch.object(host, "verify_versions", side_effect=AssertionError("Save repeated activation")), patch.object(host, "resolve_callable", side_effect=AssertionError("Save rebound a callable")), patch.object(program, "project_value", side_effect=AssertionError("Save replayed a callback")):
+            for _ in range(2):
+                self.assertTrue(result.save())
+                self.assertEqual((self.root / "generated/producer.csv").read_bytes(), PRODUCED)
+                self.assertEqual((self.root / "generated/root.csv").read_bytes(), b"ROOT_UNROUNDED,ID,VALUE\n2.46,1,2.46\n4.70,2,4.70\n")
+                self.assertEqual(result.output["ROOT_UNROUNDED"].to_list(), [2.464, 4.704])
+                after = self.observe(result)
+                self.assertEqual(after.pop("publication")["entered"], [{"node": 1, "published": True}, {"node": 0, "published": True}])
+                self.assertEqual(after, before)
+
+    def test_whole_set_preflight_refuses_invalid_late_target_without_producer_write(self):
+        (self.root / "generated/root.csv").mkdir(parents=True)
+        result = self.build()
+        self.assertIsNotNone(result.output)
+        self.assertFalse(result.save())
+        self.assertFalse((self.root / "generated/producer.csv").exists())
+        self.assertEqual(self.observe(result)["publication"]["entered"], [])
+        self.assertTrue(self.entered(result).accepted())
+        self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
+        (self.root / "generated/root.csv").rmdir()
+        self.assertTrue(result.save())
+        self.assertTrue(result.issues.is_empty())
+
+    def test_actual_producer_or_consumer_save_failure_preserves_entered_prefix_and_prior_targets(self):
+        self.write("consumer/root.yaml", CONSUMER.replace("../generated/root.csv", "../published/root.csv"))
+        for failed in ("producer", "consumer"):
+            self.write("generated/producer.csv", b"previous producer bytes")
+            self.write("published/root.csv", b"previous consumer bytes")
+            result = self.build()
+            before = self.observe(result)
+            target = self.root / ("generated/producer.csv" if failed == "producer" else "published/root.csv")
+            readonly = target if os.name == "nt" else target.parent
+            readonly.chmod(0o400 if os.name == "nt" else 0o500)
+            try:
+                if os.name != "nt":
+                    probe = readonly / ".write-permission-probe"
+                    try:
+                        probe.write_bytes(b"permission probe")
+                    except PermissionError:
+                        pass
+                    else:
+                        probe.unlink()
+                        self.skipTest("directory permissions cannot deny writes on this host")
+                self.assertFalse(result.save())
+                entered = [{"node": 1, "published": False}] if failed == "producer" else [{"node": 1, "published": True}, {"node": 0, "published": False}]
+                self.assertEqual(self.observe(result)["publication"]["entered"], entered)
+                self.assertEqual(target.read_bytes(), b"previous producer bytes" if failed == "producer" else b"previous consumer bytes")
+                self.assertEqual((self.root / "generated/producer.csv").read_bytes(), b"previous producer bytes" if failed == "producer" else PRODUCED)
+                self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
+                self.assertTrue(self.entered(result).accepted())
+                self.assertIn("REQ-0764", result.issues["requirement"].to_list())
+                self.assertEqual(list(target.parent.glob("*.stage")), [])
+            finally:
+                readonly.chmod(0o600 if os.name == "nt" else 0o700)
+            self.assertTrue(result.save())
+            self.assertTrue(result.issues.is_empty())
+            after = self.observe(result)
+            after.pop("publication")
+            self.assertEqual(after, before)
+
+    @unittest.skipUnless(os.name == "nt", "Windows uses ordinal case-insensitive targets")
+    def test_absent_windows_case_alias_targets_refuse_every_write(self):
+        self.write("consumer/root.yaml", CONSUMER.replace("../generated/root.csv", "../generated/PRODUCER.csv"))
+        (self.root / "generated").mkdir()
+        result = self.build()
+        self.assertIsNotNone(result.output)
+        self.assertFalse(result.save())
+        self.assertEqual(list((self.root / "generated").iterdir()), [])
+        self.assertEqual(self.observe(result)["publication"]["entered"], [])
+        self.assertTrue(self.entered(result).accepted())
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS native parent case policy")
+    def test_macos_absent_case_aliases_and_unproven_unicode_targets_preflight(self):
+        (self.root / "generated").mkdir()
+        self.write("generated/case-probe", b"native case witness")
+        sensitive = not (self.root / "generated/CASE-PROBE").exists()
+        (self.root / "generated/case-probe").unlink()
+        for name in ("PRODUCER.csv", r"\u00e9.csv"):
+            self.write("consumer/root.yaml", CONSUMER.replace("../generated/root.csv", '"../generated/' + name + '"'))
+            result = self.build()
+            self.assertIsNotNone(result.output)
+            self.assertTrue(self.entered(result).accepted())
+            if name == "PRODUCER.csv" and sensitive:
+                self.assertTrue(result.save())
+                self.assertEqual((self.root / "generated/producer.csv").read_bytes(), PRODUCED)
+                self.assertEqual((self.root / "generated/PRODUCER.csv").read_bytes(), CONSUMED)
+                for path in (self.root / "generated").iterdir():
+                    path.unlink()
+            else:
+                self.assertFalse(result.save())
+                self.assertEqual(self.observe(result)["publication"]["entered"], [])
+                self.assertEqual(list((self.root / "generated").iterdir()), [])
 
     def test_consumer_only_bad_binding_precedes_all_study_and_runtime_effects(self):
         bad = FUNCTION.replace("params: [{name: x", "params: [{name: z").replace("args: {x:", "args: {z:").replace("short-circuit-missing:x", "short-circuit-missing:z")

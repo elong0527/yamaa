@@ -382,10 +382,13 @@ pub fn round_half_away_from_zero(
             kind: ArithmeticErrorKind::InvalidRoundingDigits,
         });
     };
-    let value = value
-        .as_float()
-        .expect("missing handled before digits validation");
-    Ok(Number::float(crate::decimal_rounding::round_finite(
-        value, digits,
-    )))
+    Ok(round_integer_places(value, digits))
+}
+
+/// Apply the shared arithmetic after an integer declaration has been admitted.
+/// Declarative operations do not construct formula text or formula diagnostics.
+pub(crate) fn round_integer_places(value: Number, digits: i64) -> Number {
+    value.as_float().map_or(Number::Missing, |value| {
+        Number::float(crate::decimal_rounding::round_finite(value, digits))
+    })
 }
