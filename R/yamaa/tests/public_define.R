@@ -70,9 +70,30 @@ for (case in list(list(i = 1L, code = "GLUC", source = "Vendor", list = "CL_GLUC
 }
 stopifnot(count('Comparator="EQ" SoftHard="Soft" def:ItemOID="IT.LB.LBTESTCD"', xml) == 2L)
 json <- rawToChar(held[[1L]]$bytes)
-stopifnot(grepl('"records": 3', json, fixed = TRUE),
-  grepl('["LB", "STUDY01", "001", 2, "GLUC", "Glucose", "95", "mg/dL", 95.0, "mg/dL", "2025-01-01"]', json, fixed = TRUE),
-  grepl('["LB", "STUDY01", "001", 1, "CREAT", "Creatinine", "0.9", "mg/dL", 0.9, "mg/dL", "2025-01-01"]', json, fixed = TRUE))
+stopifnot(grepl('"records": 3', json, fixed = TRUE))
+# These fixture strings need no JSON unescaping. Compare all typed row values
+# with the immutable CSV, allowing equivalent JSON numeric spellings.
+json_lines <- strsplit(json, "\n", fixed = TRUE)[[1L]]
+column_lines <- grep('^[[:space:]]*\\{[[:space:]]*"itemOID"', json_lines, value = TRUE)
+column_names <- c("DOMAIN", "STUDYID", "USUBJID", "LBSEQ", "LBTESTCD", "LBTEST", "LBORRES", "LBORRESU", "LBSTRESN", "LBSTRESU", "LBDTC")
+column_types <- c(rep("string", 3L), "integer", rep("string", 4L), "float", "string", "date")
+field <- function(name, lines) {
+  pattern <- paste0('.*"', name, '"[[:space:]]*:[[:space:]]*"([^"]*)".*')
+  stopifnot(all(grepl(pattern, lines)))
+  sub(pattern, "\\1", lines)
+}
+stopifnot(identical(field("name", column_lines), column_names),
+  identical(field("dataType", column_lines), column_types))
+row_lines <- grep('^[[:space:]]*\\["LB",', json_lines, value = TRUE)
+stopifnot(length(row_lines) == 3L)
+row_csv <- sub('^[[:space:]]*\\[', "", sub('\\],?[[:space:]]*$', "", row_lines))
+types <- c(rep("character", 3L), "integer", rep("character", 4L), "numeric", rep("character", 2L))
+actual <- read.csv(text = paste(row_csv, collapse = "\n"), header = FALSE,
+  colClasses = types, strip.white = TRUE, check.names = FALSE)
+expected <- read.csv(file.path(fixtures, "sdtm-lb-metadata/expected/lb.csv"),
+  colClasses = types, check.names = FALSE)
+stopifnot(identical(names(expected), column_names),
+  identical(unname(as.list(actual)), unname(as.list(expected))))
 inputs <- file.path(root, c("spec.yaml", "submission-spec.yaml", "environment.yaml"))
 stopifnot(unlink(inputs) == 0L, !any(file.exists(inputs)))
 writeLines("changed after preparation", file.path(root, "lb.csv"))
