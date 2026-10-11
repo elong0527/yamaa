@@ -343,8 +343,7 @@ fn reserved_metadata(
         }
     }
 }
-/// Compose the complete bounded column-metadata profile. Value-level metadata
-/// retains an explicit unsupported finding pending its own shared composition.
+/// Admit the complete inherited column metadata for a base or per-value item.
 struct ColumnAdmission<'a> {
     doc: &'a Document,
     section: &'a env::Section,
@@ -705,6 +704,19 @@ fn row_derivation(doc: &Document, row: usize, name: &str) -> Option<usize> {
     doc.field(row, "derivations")
         .and_then(|n| doc.field(n, name))
 }
+fn string_literal(doc: &Document, mut node: usize) -> Option<&String> {
+    node = doc.field(node, "value").unwrap_or(node);
+    let N::Mapping(fields) = &doc.nodes()[node] else {
+        return None;
+    };
+    let [(key, value)] = fields.as_slice() else {
+        return None;
+    };
+    match (&doc.nodes()[*key], &doc.nodes()[*value]) {
+        (N::Text(handler), N::Text(value)) if handler == "literal" => Some(value),
+        _ => None,
+    }
+}
 fn column_derivations(
     doc: &Document,
     column: &spec::Column,
@@ -771,10 +783,8 @@ fn compose_values(
             ));
             continue;
         }
-        let Some(N::Text(test_code)) = row_derivation(doc, row.node, &name)
-            .map(|n| doc.field(n, "value").unwrap_or(n))
-            .and_then(|n| doc.field(n, "literal"))
-            .map(|n| &doc.nodes()[n])
+        let Some(test_code) =
+            row_derivation(doc, row.node, &name).and_then(|n| string_literal(doc, n))
         else {
             findings.push(Finding::new(
                 "value_metadata_requires_literal_testcd",
