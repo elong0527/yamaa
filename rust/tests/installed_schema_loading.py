@@ -102,7 +102,7 @@ class InstalledSchemaLoading(unittest.TestCase):
         def publish(path, value):
             publications.append((path, value))
         report = json.loads(prepared.report(capture, publish, (platform.python_version(), yamaa_native.engine_info()["core_version"], "typed-loading", "spec.yaml", ".")))
-        self.assertEqual(report["status"], "success")
+        self.assertEqual(report["outcome"], "success")
         self.assertEqual(len(publications), 1)
         self.assertEqual(publications[0][1], report["artifacts"][0]["content"].encode("utf-8"))
         return publications[0][1]
@@ -227,7 +227,7 @@ class InstalledSchemaLoading(unittest.TestCase):
                     "status": "invalid", "diagnostics": [{
                         "phase": "validation", "condition": "inheritance_cycle",
                         "spec_paths": ["parents"], "requirement": "REQ-0655",
-                        "context": {"cycle": [str(root / n) for n in names], "reason": "parent_chain_returns_to_entry", "source": str(root / "b.yaml")},
+                        "context": {"cycle": [str(root / n) for n in names], "reason": "parent_chain_returns_to_entry" if repeated == "entry.yaml" else "parent_chain_returns_to_active_layer", "source": str(root / "b.yaml")},
                     }],
                 })
                 self.assertEqual(self.captured_paths(calls), [root / n for n in ("entry.yaml", "a.yaml", "b.yaml")])
