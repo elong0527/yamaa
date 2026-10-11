@@ -8,6 +8,10 @@ pub type SourceFailure<E> = application::SourceFailure<E, Error>;
 #[derive(Debug)]
 pub enum InheritanceError<E> {
     Entry(Error),
+    Dictionary {
+        document: Box<PreparedDocument>,
+        error: Box<yamaa_engine::dictionary_preparation::Error<E, Error, DecodedYaml>>,
+    },
     Preparation {
         schema: Arc<CapturedSchema>,
         error: Box<lifecycle::Error<SourceFailure<E>>>,
@@ -84,7 +88,9 @@ impl CapturedSchema {
                 raw,
                 content: PreparedContent::Inherited(Box::new(prepared.inheritance)),
                 parents: prepared.parents,
-            }),
+                dictionaries: None,
+            }
+            .prepare_dictionaries(port)?),
             Err(application::Error::Entry(error)) => Err(InheritanceError::Entry(error)),
             Err(application::Error::Preparation {
                 error,

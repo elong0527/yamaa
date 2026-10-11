@@ -356,6 +356,7 @@ impl CapturedSchema {
                 windows,
             },
             parents: Vec::new(),
+            dictionaries: None,
         })
     }
 
@@ -425,13 +426,15 @@ impl CapturedSchema {
                 prepared.parents,
             ),
         };
-        Ok(PreparedDocument {
+        let document = PreparedDocument {
             schema: Arc::clone(self),
             source,
             raw,
             content,
             parents,
-        })
+            dictionaries: None,
+        };
+        document.prepare_dictionaries(port)
     }
 }
 
@@ -487,6 +490,7 @@ pub struct PreparedDocument {
     raw: DecodedYaml,
     content: PreparedContent,
     parents: Vec<CapturedParent>,
+    dictionaries: Option<yamaa_engine::dictionary_preparation::Prepared<DecodedYaml>>,
 }
 #[derive(Debug)]
 enum PreparedContent {
@@ -505,6 +509,11 @@ impl yamaa_engine::file_preparation::PreparedView for PreparedDocument {
     fn parent_source(parent: &CapturedParent) -> &Source {
         parent.source()
     }
+    fn resources(&self) -> impl Iterator<Item = &Source> {
+        self.dictionaries
+            .iter()
+            .flat_map(|prepared| prepared.captures.iter().map(|capture| capture.source()))
+    }
 }
 impl PreparedDocument {
     pub fn schema(&self) -> &CapturedSchema {
@@ -520,6 +529,76 @@ impl PreparedDocument {
         match &self.content {
             PreparedContent::Standalone { model, .. } => model,
             PreparedContent::Inherited(prepared) => prepared.model(),
+        }
+    }
+    pub fn dictionary_sources(&self) -> impl Iterator<Item = &Source> {
+        self.dictionaries
+            .iter()
+            .flat_map(|prepared| prepared.captures.iter().map(|capture| capture.source()))
+    }
+    pub(crate) fn dictionary_input<'a, E>(
+        &'a self,
+        error: &'a yamaa_engine::dictionary_preparation::Error<E, Error, DecodedYaml>,
+        arena: yamaa_engine::dictionary_preparation::Arena,
+    ) -> Option<&'a yamaa_core::schema::Document> {
+        use yamaa_engine::dictionary_preparation::Arena;
+        match arena {
+            Arena::Seed(0) => Some(&self.raw.document),
+            Arena::Seed(index) => self
+                .parents
+                .get(index - 1)
+                .map(|parent| &parent.raw().document),
+            Arena::Captured(index) => error
+                .captures
+                .get(index)
+                .map(|capture| &capture.raw().document),
+        }
+    }
+    pub(crate) fn compilation_model(&self) -> &SpecificationDocument {
+        self.dictionaries
+            .as_ref()
+            .map_or_else(|| self.model(), |prepared| &prepared.model)
+    }
+    fn prepare_dictionaries<P: InheritancePort>(
+        mut self,
+        port: &mut P,
+    ) -> Result<Self, InheritanceError<P::Error>> {
+        use yamaa_engine::dictionary_preparation::{self as application, Origins, Seed};
+        let origins = self.inheritance().map_or(
+            Origins::Standalone(&self.source.identity),
+            Origins::Inherited,
+        );
+        let seeds = core::iter::once(Seed {
+            source: &self.source,
+            raw: &self.raw,
+        })
+        .chain(self.parents.iter().map(|parent| Seed {
+            source: parent.source(),
+            raw: parent.raw(),
+        }))
+        .collect::<Vec<_>>();
+        let prepared = application::prepare(
+            self.schema.structure(),
+            self.model(),
+            origins,
+            &seeds,
+            port,
+            &mut inheritance::Decoder::new(self.schema.limits.decode),
+            application::Limits {
+                captured_bytes: self.schema.limits.captured_bytes,
+                identity_bytes: self.schema.limits.identity_bytes,
+                normalization: self.schema.limits.normalization,
+            },
+        );
+        match prepared {
+            Ok(prepared) => {
+                self.dictionaries = prepared;
+                Ok(self)
+            }
+            Err(error) => Err(InheritanceError::Dictionary {
+                document: Box::new(self),
+                error,
+            }),
         }
     }
     pub fn origins(&self) -> &[SchemaOrigin] {

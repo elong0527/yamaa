@@ -125,6 +125,27 @@ pub fn opaque_resource_failure(attempt: &CapturedAttempt<ResourceError>) -> Opti
 struct Native<'a> {
     resources: &'a mut Resources,
 }
+impl Native<'_> {
+    fn resource_identity(
+        &mut self,
+        declaring: &str,
+        written: &str,
+    ) -> Result<Identity, ResourceError> {
+        let identity = self.resources.resolve_from(declaring, written)?;
+        let display_path = if std::path::Path::new(written).is_absolute() {
+            written.to_owned()
+        } else {
+            format!("{}/{written}", directory(declaring)?)
+        };
+        if display_path.len() > Limits::default().identity_bytes {
+            return Err(ResourceError::Limit);
+        }
+        Ok(Identity {
+            identity,
+            display_path,
+        })
+    }
+}
 struct Documents {
     schema: Option<Arc<crate::specification_source::CapturedSchema>>,
 }
@@ -180,22 +201,38 @@ impl yamaa_engine::file_preparation::NativePort for Native<'_> {
         declaring: &str,
         written: &str,
     ) -> Result<Identity, SourceError<ResourceError>> {
-        let identity = self
-            .resources
-            .resolve_from(declaring, written)
-            .map_err(available)?;
-        let display_path = if std::path::Path::new(written).is_absolute() {
-            written.to_owned()
-        } else {
-            format!("{}/{written}", directory(declaring).map_err(available)?)
-        };
-        if display_path.len() > Limits::default().identity_bytes {
-            return Err(SourceError::Raised(ResourceError::Limit));
+        self.resource_identity(declaring, written)
+            .map_err(available)
+    }
+    fn canonicalize_resource(
+        &mut self,
+        declaring: &str,
+        written: &str,
+    ) -> Result<Identity, SourceError<ResourceError>> {
+        self.resource_identity(declaring, written)
+            .map_err(SourceError::Raised)
+    }
+    fn capture_resource(
+        &mut self,
+        declaring: &str,
+        written: &str,
+        maximum: usize,
+    ) -> Result<Vec<u8>, SourceError<ResourceError>> {
+        self.resources
+            .capture_from(declaring, written, maximum)
+            .and_then(|(bytes, _)| self.resources.preparation_copy(&bytes))
+            .map_err(SourceError::Raised)
+    }
+    fn resource_failure(
+        &self,
+        error: &ResourceError,
+    ) -> Option<yamaa_core::resource::ResourceFailure> {
+        use yamaa_core::resource::ResourceFailure;
+        match error {
+            ResourceError::Missing => Some(ResourceFailure::Missing),
+            ResourceError::NotRegularFile => Some(ResourceFailure::NotRegularFile),
+            _ => None,
         }
-        Ok(Identity {
-            identity,
-            display_path,
-        })
     }
     fn admit_alias_text(&mut self, bytes: usize) -> Result<(), SourceError<ResourceError>> {
         self.resources
@@ -485,6 +522,34 @@ mod dispatch_policy_tests {
             fs::write(&self.path, b"changed after semantic success").unwrap();
             Ok(document)
         }
+    }
+    #[test]
+    fn changed_dictionary_after_semantic_success_is_original_failure_before_entry_selection() {
+        let root="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: {mapping: {source: SRC.ID, dict: dict.yaml}}}]\n";
+        let study = Study::new(root);
+        fs::write(study.0.join("entry/dict.yaml"), b"A: answer\n").unwrap();
+        let mut resources = study.resources();
+        let original = resources.resolve("root.yaml").unwrap();
+        let result = yamaa_engine::file_preparation::prepare(
+            &mut Native {
+                resources: &mut resources,
+            },
+            &mut ChangeAfterSuccess {
+                path: study.0.join("entry/dict.yaml"),
+            },
+            None,
+            "entry/root.yaml",
+            Limits::default().captured_bytes,
+        );
+        assert!(matches!(
+            result,
+            Err(yamaa_engine::file_preparation::Error::Resource(
+                ResourceError::Changed
+            ))
+        ));
+        assert_eq!(resources.capture_reads(), 2);
+        assert_eq!(resources.resolve("root.yaml").unwrap(), original);
+        assert!(!study.0.join("entry/never-read.csv").exists());
     }
     #[test]
     fn changed_parent_after_semantic_success_is_original_resource_failure_before_base_selection() {

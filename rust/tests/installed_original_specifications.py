@@ -532,6 +532,53 @@ class OriginalSpecifications(unittest.TestCase):
                             result.save(publish)
                         self.assertEqual(saves, [])
 
+    def test_native_file_dictionary_resources_match_independent_inline_truth(self):
+        # These authored dictionaries share the established independent inline truth.
+        dictionaries = {
+            "exact_typed": "{Y: 1, y: 2.0, Z: null}",
+            "ascii_fold": "{'yes': 'matched', \"\\u00e9a\": 'foreign', \"\\u00c9a\": 'capital', \"\\u00df\": 'sharp', 'ss': 'double'}",
+            "lazy_case": "{Y: 1}",
+            "nested_concat": "{Y: 'yes'}",
+            "record_mapping": "{Y: 1}",
+            "multiple_distinct_input": "{Y: yes}",
+        }
+        with (ROOT / "original-mapping-cut.tsv").open(encoding="ascii") as stream:
+            cases = {row["case"]: row for row in csv.DictReader(stream, delimiter="\t")}
+        for name, dictionary in dictionaries.items():
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                row = cases[name]
+                authored = bytes.fromhex(row["source_hex"]).decode("ascii")
+                inline = "dict: " + dictionary
+                self.assertEqual(authored.count(inline), 1)
+                (root / "spec.yaml").write_text(authored.replace(inline, "dict: ./dictionary.yaml"), encoding="ascii")
+                (root / "dictionary.yaml").write_text(dictionary + "\n", encoding="ascii")
+                inputs = {n: bytes.fromhex(value) for n, value in json.loads(row["inputs_json"]).items()}
+                for source, value in inputs.items():
+                    (root / (source.lower() + ".csv")).write_bytes(value)
+                prepared = yamaa_native._prepare_file_specification(str(root), str(root), "spec.yaml", [])
+                self.assertEqual(prepared.capture_reads(), 2)
+                self.assertEqual(json.loads(prepared.check_issues()), [])
+                expected = json.loads(row["expected"])
+                artifact = bytes.fromhex(row["artifact_hex"])
+                metadata = ("fixture-runtime", "fixture-engine", "mapping-cut-" + name, "spec.yaml", ".")
+                for created in (1, 0):
+                    for read in expected["source_reads"]:
+                        if read["snapshots_created"] is not None:
+                            read["snapshots_created"] = created
+                    result = prepared.build(metadata)
+                    self.assertEqual(json.loads(result.observations()), dict(expected, artifacts=[]))
+                    self.assertEqual(prepared.capture_reads(), 2 + len(inputs))
+                    target = root / "result.csv"
+                    if artifact:
+                        self.assertEqual(json.loads(result.save_file("result.csv", str(target))), expected)
+                        self.assertEqual(target.read_bytes(), artifact)
+                    else:
+                        self.assertIsNone(result.output())
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save_file("result.csv", str(target))
+                        self.assertFalse(target.exists())
+
     def test_original_mapping_cut_admission_precedes_all_ports(self):
         def no_port(*_):
             self.fail("mapping/cut admission reached a study or inheritance port")
