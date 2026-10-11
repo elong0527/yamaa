@@ -67,10 +67,10 @@ def stage_text_extract_truth(destination: Path):
                 continue
             case = root / name
             case.mkdir()
-            (case / "spec.yaml").write_text(json.dumps(value["specification"], ensure_ascii=True) + "\n", encoding="ascii")
-            (case / "input.csv").write_text(value["input"], encoding="utf-8")
+            (case / "spec.yaml").write_text(json.dumps(value["specification"], ensure_ascii=True) + "\n", encoding="ascii", newline="\n")
+            (case / "input.csv").write_text(value["input"], encoding="utf-8", newline="\n")
             if "csv" in value:
-                (case / "expected.csv").write_text(value["csv"], encoding="utf-8")
+                (case / "expected.csv").write_text(value["csv"], encoding="utf-8", newline="\n")
             for finding in value.get("findings", []):
                 writer.writerow((name, finding["phase"], finding["condition"], finding["requirement"], finding["spec_paths"][0], json.dumps(finding["context"], sort_keys=True, separators=(",", ":"))))
 
@@ -167,10 +167,10 @@ def stage_text_pad_truth(destination: Path):
         for name, case in capture.items():
             directory = root / name
             directory.mkdir()
-            (directory / "spec.yaml").write_text(case["specification"], encoding="utf-8")
-            (directory / "input.csv").write_text(case["input"], encoding="utf-8")
+            (directory / "spec.yaml").write_text(case["specification"], encoding="utf-8", newline="\n")
+            (directory / "input.csv").write_text(case["input"], encoding="utf-8", newline="\n")
             if "csv" in case:
-                (directory / "expected.csv").write_text(case["csv"], encoding="utf-8")
+                (directory / "expected.csv").write_text(case["csv"], encoding="utf-8", newline="\n")
             for index, finding in enumerate(case.get("findings", [])):
                 context = dict(finding["context"])
                 if name == "width-noninteger":

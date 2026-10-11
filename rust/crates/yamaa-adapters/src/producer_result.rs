@@ -197,7 +197,7 @@ impl RootResult {
         let publication = self.log_publication.as_ref().expect("logged owner");
         let count = publication.requests(failed).count();
         let mut budget = Budget::new(maximum);
-        let reports = (|| {
+        let report = (|| {
             budget.entries(count.saturating_mul(64))?;
             for (_, request) in publication.requests(failed) {
                 for _ in 0..8 {
@@ -205,35 +205,13 @@ impl RootResult {
                 }
                 budget.text(request.field)?;
             }
-            budget.entries(count.saturating_mul(2).saturating_add(1))?;
-            let mut reports = Vec::with_capacity(count * 2 + 1);
-            reports.push(Some(publication.prefix_report(
-                &self.observations,
-                failed,
-                0,
-                0,
-                &mut budget,
-            )?));
-            for entered in 1..=count {
-                reports.push(Some(publication.prefix_report(
-                    &self.observations,
-                    failed,
-                    entered,
-                    entered - 1,
-                    &mut budget,
-                )?));
-                reports.push(Some(publication.prefix_report(
-                    &self.observations,
-                    failed,
-                    entered,
-                    entered,
-                    &mut budget,
-                )?));
-            }
-            Ok::<_, ReportError>(reports)
+            // Own the complete report before any write. Every actual prefix is
+            // formed by dropping already-owned artifact/entry suffixes; it never
+            // reprojects observations or clones their tables and CSV content.
+            publication.prefix_report(&self.observations, failed, count, count, &mut budget)
         })();
-        let mut reports = match reports {
-            Ok(reports) => reports,
+        let mut value = match report {
+            Ok(report) => report,
             Err(_) => {
                 self.issues.extend(crate::file_application::rejected(
                     "output",
@@ -300,12 +278,17 @@ impl RootResult {
             .iter()
             .filter(|entry| entry.published)
             .count();
-        let prefix = if entered == 0 {
-            0
-        } else {
-            entered * 2 - usize::from(completed != entered)
-        };
-        let mut value = reports[prefix].take().expect("admitted publication prefix");
+        value["artifacts"]
+            .as_array_mut()
+            .expect("admitted publication artifacts")
+            .truncate(completed);
+        let entries = value["publication"]["entered"]
+            .as_array_mut()
+            .expect("admitted publication entries");
+        entries.truncate(entered);
+        for (entry, actual) in entries.iter_mut().zip(&attempt.entered) {
+            entry["published"] = Value::Bool(actual.published);
+        }
         value["publication"]["status"] =
             Value::String(if saved { "success" } else { "failure" }.into());
         if saved {
@@ -424,7 +407,7 @@ fn prepare_observations<'a, E>(
                     attempt,
                     observations,
                     error,
-                })
+                });
             }
         }
     } else {
@@ -645,7 +628,9 @@ mod log_tests {
             self.write("input.csv", "ID\n1\n2\n");
             let yaml = |source: &str, base: &str, name: &str, fatal: bool| {
                 let logs = if logs {
-                    format!(", verification_log: generated/{name}-checks.csv, warning_log: generated/{name}-warnings.csv")
+                    format!(
+                        ", verification_log: generated/{name}-checks.csv, warning_log: generated/{name}-warnings.csv"
+                    )
                 } else {
                     String::new()
                 };
@@ -653,9 +638,13 @@ mod log_tests {
                 let checks = if logs.is_empty() {
                     String::new()
                 } else {
-                    format!("    verifications: [{{range: {{max: 0, severity: {severity}, id: {name}-range}}}}]\n")
+                    format!(
+                        "    verifications: [{{range: {{max: 0, severity: {severity}, id: {name}-range}}}}]\n"
+                    )
                 };
-                format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {source}\ncolumns:\n  - name: ID\n    type: int\n    label: Identifier\n    derivation: {base}.ID\n{checks}output: {{path: generated/{name}.csv, columns: [ID]{logs}}}\n")
+                format!(
+                    "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {source}\ncolumns:\n  - name: ID\n    type: int\n    label: Identifier\n    derivation: {base}.ID\n{checks}output: {{path: generated/{name}.csv, columns: [ID]{logs}}}\n"
+                )
             };
             self.write(
                 "producer.yaml",
@@ -835,6 +824,48 @@ mod log_tests {
         }
     }
     #[test]
+    fn retained_two_node_report_saves_without_copying_every_possible_prefix() {
+        let study = Study::new();
+        let text = "x".repeat(32_768);
+        let csv = format!("ID,VALUE\n1,{text}\n");
+        study.write("input.csv", &csv);
+        let yaml = |source: &str, base: &str, name: &str| {
+            format!(
+                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {source}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n  - {{name: VALUE, type: str, label: Value, derivation: {base}.VALUE}}\noutput: {{path: generated/{name}.csv, columns: [ID, VALUE], verification_log: generated/{name}-checks.csv, warning_log: generated/{name}-warnings.csv}}\n"
+            )
+        };
+        study.write("producer.yaml", yaml("{SRC: input.csv}", "SRC", "producer"));
+        study.write(
+            "root.yaml",
+            yaml(
+                "{A: {path: generated/producer.csv, schema: producer.yaml}}",
+                "A",
+                "root",
+            ),
+        );
+        let owned = study.owned(Language::Python, Default::default());
+        assert!(owned.accepted());
+        let mut result = root(&owned);
+        let before = execution(result.observations().clone());
+        study.remove_inputs();
+        assert!(result.save().unwrap(), "{:?}", result.issues());
+        assert_eq!(study.generated("producer.csv"), csv.as_bytes());
+        assert_eq!(study.generated("root.csv"), csv.as_bytes());
+        let report = result.observations();
+        assert_eq!(execution(report.clone()), before);
+        assert_eq!(report["artifacts"].as_array().unwrap().len(), 6);
+        assert_eq!(
+            report["publication"]["entered"].as_array().unwrap().len(),
+            6
+        );
+        assert!(report["publication"]["entered"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entry| entry["published"] == true));
+        assert!(result.issues().is_empty());
+    }
+    #[test]
     fn fatal_leaf_or_dependent_keeps_actual_v_prefix_and_revokes_every_primary_and_warning() {
         for (leaf, expected_nodes, expected_v) in [(true, 1, 1), (false, 2, 2)] {
             let study = Study::new();
@@ -988,6 +1019,72 @@ mod log_tests {
             assert_eq!(result.log_save_attempt.as_ref().unwrap().entered.len(), 6);
             assert!(result.log_save_attempt.as_ref().unwrap().unwind.is_none());
             assert_eq!(execution(result.observations().clone()), before);
+        }
+    }
+    #[test]
+    fn every_error_and_unwind_boundary_keeps_the_actual_owned_prefix() {
+        let requests = [
+            (1, "verification_log", "producer-checks.csv"),
+            (1, "warning_log", "producer-warnings.csv"),
+            (1, "path", "producer.csv"),
+            (0, "verification_log", "root-checks.csv"),
+            (0, "warning_log", "root-warnings.csv"),
+            (0, "path", "root.csv"),
+        ];
+        for unwind in [false, true] {
+            for boundary in 1..=requests.len() {
+                let study = Study::new();
+                study.fixture(false, false, true);
+                let owned = study.owned(Language::Python, Default::default());
+                let mut result = root(&owned);
+                let before = execution(result.observations().clone());
+                study.remove_inputs();
+                let mut calls = 0;
+                assert!(!result
+                    .save_logs_with(Default::default(), 16_777_216, |publisher, path, bytes| {
+                        calls += 1;
+                        if calls == boundary {
+                            if unwind {
+                                std::panic::panic_any(Payload(Arc::new(())));
+                            }
+                            return Err(crate::file_publication::Error::Io(std::io::Error::other(
+                                Payload(Arc::new(())),
+                            )));
+                        }
+                        publisher.publish(path, bytes)
+                    })
+                    .unwrap());
+                let report = result.observations();
+                let expected = requests[..boundary]
+                    .iter()
+                    .enumerate()
+                    .map(|(position, (node, field, name))| {
+                        serde_json::json!({
+                            "node":node, "field":field, "path":format!("generated/{name}"),
+                            "published":position + 1 < boundary
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    report["publication"]["entered"],
+                    serde_json::json!(expected)
+                );
+                assert_eq!(report["artifacts"].as_array().unwrap().len(), boundary - 1);
+                assert_eq!(execution(report.clone()), before);
+                for (position, (_, _, name)) in requests.iter().enumerate() {
+                    assert_eq!(
+                        study.0.join("generated").join(name).exists(),
+                        position + 1 < boundary
+                    );
+                }
+                assert!(result.save().unwrap());
+                assert_eq!(
+                    result.observations()["artifacts"].as_array().unwrap().len(),
+                    requests.len()
+                );
+                assert_eq!(execution(result.observations().clone()), before);
+                assert!(result.issues().is_empty());
+            }
         }
     }
     #[test]

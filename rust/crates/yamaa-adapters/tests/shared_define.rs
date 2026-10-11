@@ -76,12 +76,12 @@ fn lb_value_metadata_uses_original_published_bytes_and_family_valid_completion()
     assert_eq!(xml.matches("<def:ValueListDef ").count(), 1);
     assert_eq!(xml.matches("<def:WhereClauseDef ").count(), 2);
     assert_eq!(xml.matches("<ItemDef ").count(), 13);
-    for (index, code, source, list) in [
-        (1, "GLUC", "Vendor", "CL_GLUCOSE"),
-        (2, "CREAT", "Sponsor", "CL_CREATININE"),
+    for (code, source, list) in [
+        ("GLUC", "Vendor", "CL_GLUCOSE"),
+        ("CREAT", "Sponsor", "CL_CREATININE"),
     ] {
         let begin = xml
-            .find(&format!("<ItemDef OID=\"IT.LB.LBORRESU.V{index}\""))
+            .find(&format!("<ItemDef OID=\"IT.LB.LBORRESU.{code}\""))
             .unwrap();
         let item = &xml[begin..begin + xml[begin..].find("</ItemDef>").unwrap()];
         assert!(item.contains("Length=\"8\""));

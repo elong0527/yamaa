@@ -109,12 +109,18 @@ fn specification(case: &str) -> Document {
     let output_path = a.text("lb.csv");
     let output = a.map(vec![("path", output_path), ("columns", output_names)]);
     let mut rows = Vec::new();
-    for index in 0..2 {
+    let row_order: &[usize] = match case {
+        "reordered values" => &[1, 0],
+        "inserted value" => &[2, 0, 1],
+        _ => &[0, 1],
+    };
+    for &index in row_order {
         let id = a.text(match (index, case) {
             (0, "arbitrary row ID" | "arbitrary invalid source") => "glucose / primary test: 1",
             (0, "empty row ID") => "",
             (0, _) => "glucose",
-            _ => "creatinine",
+            (1, _) => "creatinine",
+            _ => "albumin",
         });
         let literal = if case == "dynamic discriminator" && index == 0 {
             a.texts(&[("source", "ODM.TestCode")])
@@ -126,10 +132,14 @@ fn specification(case: &str) -> Document {
         } else {
             a.texts(&[(
                 "literal",
-                if index == 0 || matches!(case, "conflict" | "identical") {
+                if index == 0 && case == "escaped test code" {
+                    "A.&\" /é"
+                } else if index == 0 || matches!(case, "conflict" | "identical") {
                     "GLUC"
-                } else {
+                } else if index == 1 {
                     "CREAT"
+                } else {
+                    "ALB"
                 },
             )])
         };
@@ -156,7 +166,15 @@ fn specification(case: &str) -> Document {
         };
         let origin = a.texts(&[("type", origin_type), ("source", source)]);
         let method = a.text("Units assigned from the supplied test metadata");
-        let metadata = a.map(vec![("origin", origin), ("method", method)]);
+        let mut metadata_fields = vec![("origin", origin), ("method", method)];
+        if matches!(
+            case,
+            "stable values" | "reordered values" | "inserted value"
+        ) {
+            let comment = a.text("Independent value metadata comment");
+            metadata_fields.push(("comment", comment));
+        }
+        let metadata = a.map(metadata_fields);
         let submission = a.map(vec![(
             if case == "unknown column" && index == 0 {
                 "BOGUS"
@@ -400,7 +418,7 @@ fn fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references() {
     assert_eq!(xml.matches("<ItemDef ").count(), 4);
     assert!(xml.contains("<def:ValueListRef ValueListOID=\"VL.LB.LBORRESU\"/>"));
     for (index, code, source) in [(1, "GLUC", "Vendor"), (2, "CREAT", "Sponsor")] {
-        let identity = format!("LB.LBORRESU.V{index}");
+        let identity = format!("LB.LBORRESU.{code}");
         assert!(xml.contains(&format!("ItemOID=\"IT.{identity}\" OrderNumber=\"{index}\" Mandatory=\"No\" MethodOID=\"MT.{identity}\"")));
         assert!(xml.contains(&format!(
             "<def:WhereClauseRef WhereClauseOID=\"WC.{identity}\"/>"
@@ -421,4 +439,42 @@ fn fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references() {
     let start = xml.find("<ItemDef OID=\"IT.LB.LBORRESU\"").unwrap();
     let item = &xml[start..start + xml[start..].find("</ItemDef>").unwrap()];
     assert!(item.find("<def:Origin ").unwrap() < item.find("<def:ValueListRef ").unwrap());
+}
+
+#[test]
+fn value_identifiers_survive_unrelated_insertion_and_row_reordering() {
+    let render = |case| {
+        String::from_utf8(submission_xml::render(&compose(&specification(case)).unwrap()).unwrap())
+            .unwrap()
+    };
+    let original = render("stable values");
+    let reordered = render("reordered values");
+    let inserted = render("inserted value");
+    for xml in [&original, &reordered, &inserted] {
+        for code in ["GLUC", "CREAT"] {
+            for prefix in ["IT", "MT", "COM", "WC"] {
+                let oid = format!("{prefix}.LB.LBORRESU.{code}");
+                assert_eq!(xml.matches(&format!(" OID=\"{oid}\"")).count(), 1);
+            }
+            assert!(xml.contains(&format!(
+                "<def:WhereClauseRef WhereClauseOID=\"WC.LB.LBORRESU.{code}\"/>"
+            )));
+        }
+        assert_eq!(xml.matches(" OID=\"VL.LB.LBORRESU\"").count(), 1);
+    }
+    assert!(original.contains("ItemOID=\"IT.LB.LBORRESU.GLUC\" OrderNumber=\"1\""));
+    assert!(reordered.contains("ItemOID=\"IT.LB.LBORRESU.GLUC\" OrderNumber=\"2\""));
+    assert!(inserted.contains("ItemOID=\"IT.LB.LBORRESU.GLUC\" OrderNumber=\"2\""));
+    assert!(inserted.contains("ItemOID=\"IT.LB.LBORRESU.ALB\" OrderNumber=\"1\""));
+}
+
+#[test]
+fn value_identifier_retains_the_literal_with_xml_attribute_escaping() {
+    let xml = String::from_utf8(
+        submission_xml::render(&compose(&specification("escaped test code")).unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert!(xml.contains("ItemOID=\"IT.LB.LBORRESU.A.&amp;&quot; /é\""));
+    assert!(xml.contains(" OID=\"WC.LB.LBORRESU.A.&amp;&quot; /é\""));
+    assert!(xml.contains("<CheckValue>A.&amp;\" /é</CheckValue>"));
 }
