@@ -1,13 +1,6 @@
 //! The closed R023 CSV input profile over one captured byte snapshot.
 //! Pure byte admission; filesystem authority and physical tables are outer boundaries.
-use alloc::{
-    borrow::ToOwned,
-    collections::BTreeSet,
-    format,
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};
+use alloc::{borrow::ToOwned, collections::BTreeSet, string::String, vec::Vec};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -81,12 +74,12 @@ impl Error {
             Self::Limit { .. } => None,
         }
     }
-    /// Preserve complete ingestion context without consulting a host or a table.
-    pub fn diagnostic(&self, dataset: &str, path: &str) -> Option<crate::diagnostic::Diagnostic> {
-        use crate::{
-            diagnostic::{Context, ContextValue as C, Diagnostic},
-            value::Value,
-        };
+    /// Borrow classified profile facts without allocating diagnostic context.
+    pub fn finding<'a>(
+        &'a self,
+        dataset: &'a str,
+        path: &'a str,
+    ) -> Option<crate::diagnostic::SourceFinding<'a>> {
         let Self::Profile {
             cause,
             record,
@@ -95,22 +88,19 @@ impl Error {
         else {
             return None;
         };
-        let field = match field {
-            Field::Index(index) => C::Integer(index.to_string()),
-            Field::Name(name) => C::Scalar(Value::Str(name.clone())),
-        };
-        Some(Diagnostic {
-            code: cause.code(),
-            spec_paths: vec![format!("input.{dataset}.path")],
-            context: Context::from([
-                ("dataset".into(), C::Scalar(Value::Str(dataset.into()))),
-                ("path".into(), C::Scalar(Value::Str(path.into()))),
-                ("record".into(), C::Integer(record.to_string())),
-                ("field".into(), field),
-            ]),
-            source_span: None,
-            operand_route: None,
+        Some(crate::diagnostic::SourceFinding::Csv {
+            cause: *cause,
+            record: *record,
+            field,
+            dataset,
+            path,
         })
+    }
+    /// Unbounded owned compatibility; use complete borrowed report admission for new callers.
+    /// This existing Option signature is retained until its callers migrate.
+    pub fn diagnostic(&self, dataset: &str, path: &str) -> Option<crate::diagnostic::Diagnostic> {
+        self.finding(dataset, path)
+            .map(crate::diagnostic::SourceFinding::owned_compatibility)
     }
 }
 fn failure(cause: ProfileCause, record: usize, field: usize) -> Error {

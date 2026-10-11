@@ -9,9 +9,30 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub(super) struct Branch {
-    when: Option<Result<Plan, crate::diagnostic::Diagnostic>>,
+    when: Option<Result<Plan, InvalidPredicate>>,
     path: String,
     operation: alloc::boxed::Box<Operation>,
+}
+/// Keep the complete parser cause on the prepared branch; document reporting
+/// projects it only after source ingestion reaches predicate binding.
+#[derive(Clone, Debug)]
+struct InvalidPredicate {
+    path: String,
+    expression: String,
+    error: crate::predicate_parser::ParseError,
+}
+impl InvalidPredicate {
+    fn diagnostic(&self) -> Result<crate::diagnostic::Diagnostic, BindError> {
+        let crate::predicate_parser::ParseError::Grammar {
+            position, failure, ..
+        } = &self.error
+        else {
+            return Err(BindError::Internal);
+        };
+        failure
+            .original_diagnostic(&self.path, &self.expression, position.character)
+            .map_err(|_| BindError::PredicateDiagnosticLimit)
+    }
 }
 fn unsupported(path: &str, operation: &str) -> PrepareError {
     PrepareError::Unsupported(vec![UnsupportedFeature {
@@ -65,10 +86,12 @@ pub(super) fn prepare(
                     Ok(plan)
                 }
                 Err(predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::Grammar {
-                        position, failure, ..
-                    },
-                )) => Err(failure.diagnostic(&format!("{prefix}.when"), when, position.character)),
+                    error @ crate::predicate_parser::ParseError::Grammar { .. },
+                )) => Err(InvalidPredicate {
+                    path: format!("{prefix}.when"),
+                    expression: when.into(),
+                    error,
+                }),
                 Err(_) => return Err(unsupported(&format!("{prefix}.when"), "case_predicate")),
             };
             (
@@ -232,7 +255,10 @@ pub(super) fn prepare(
 /// A width defect shares its derivation's authored declaration-validation order
 /// with predicate and numeric grammar defects, before any reference binding.
 /// Consumers without a width defect retain their existing binding checkpoint.
-pub(super) fn padding_findings(operation: &Operation, findings: &mut Vec<BindFinding>) -> bool {
+pub(super) fn padding_findings(
+    operation: &Operation,
+    findings: &mut Vec<BindFinding>,
+) -> Result<bool, BindError> {
     fn has_width_error(operation: &Operation) -> bool {
         match operation {
             Operation::StrPad(operation) => operation.has_width_error(),
@@ -242,7 +268,11 @@ pub(super) fn padding_findings(operation: &Operation, findings: &mut Vec<BindFin
             _ => false,
         }
     }
-    fn append(operation: &Operation, path: &str, findings: &mut Vec<BindFinding>) {
+    fn append(
+        operation: &Operation,
+        path: &str,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
         match operation {
             Operation::StrPad(operation) => str_pad::declaration_findings(operation, findings),
             Operation::InvalidNumeric { expression, error } => {
@@ -254,22 +284,23 @@ pub(super) fn padding_findings(operation: &Operation, findings: &mut Vec<BindFin
             }
             Operation::Case(branches) => {
                 for branch in branches {
-                    if let Some(Err(diagnostic)) = &branch.when {
-                        findings.push(BindFinding::Predicate(diagnostic.clone()));
+                    if let Some(Err(invalid)) = &branch.when {
+                        findings.push(BindFinding::Predicate(invalid.diagnostic()?));
                     }
-                    append(&branch.operation, &branch.path, findings);
+                    append(&branch.operation, &branch.path, findings)?;
                 }
             }
             _ => (),
         }
+        Ok(())
     }
     if !has_width_error(operation) {
-        return false;
+        return Ok(false);
     }
     // A top-level numeric declaration cannot also contain padding. Its path is
     // only needed for the branch-owned InvalidNumeric cases visited by append.
-    append(operation, "", findings);
-    true
+    append(operation, "", findings)?;
+    Ok(true)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -293,9 +324,9 @@ pub(super) fn bind(
             .map(|compiled| {
                 let plan = match compiled {
                     Ok(plan) => plan,
-                    Err(diagnostic) => {
+                    Err(invalid) => {
                         if !declarations_reported {
-                            findings.push(BindFinding::Predicate(diagnostic.clone()));
+                            findings.push(BindFinding::Predicate(invalid.diagnostic()?));
                         }
                         return Ok(None);
                     }

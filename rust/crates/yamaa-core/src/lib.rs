@@ -45,6 +45,7 @@ pub mod temporal;
 pub mod text_case;
 pub mod typed_csv;
 pub mod value;
+pub mod verification_logs;
 
 /// Version of the shared core compiled into a native installation.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

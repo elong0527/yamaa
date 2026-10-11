@@ -43,6 +43,7 @@ pub mod specification_output;
 pub mod specification_run;
 
 pub mod project_activation;
+pub mod project_preparation;
 
 pub mod producer_admission;
 pub mod producer_build;

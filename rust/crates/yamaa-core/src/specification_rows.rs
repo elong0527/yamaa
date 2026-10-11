@@ -265,6 +265,16 @@ fn default_reads(
         "literal" => {}
         "source" => reference(text(d, field(d, payload, "variable")?)?),
         "round_half_away_from_zero" => reference(text(d, field(d, payload, "source")?)?),
+        "date_diff" | "study_day" | "to_epoch_day" => {
+            let fields: &[&str] = match operation {
+                "date_diff" => &["start", "end"],
+                "study_day" => &["date", "reference"],
+                _ => &["source"],
+            };
+            for &name in fields {
+                reference(text(d, field(d, payload, name)?)?);
+            }
+        }
         "function" => {
             if let Some(project) = project {
                 let call = project
@@ -1180,7 +1190,7 @@ impl Rows {
                         text,
                         position.character,
                         failure,
-                    )));
+                    )?));
                     None
                 }
                 Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),

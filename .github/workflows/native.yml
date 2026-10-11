@@ -102,7 +102,7 @@ jobs:
             uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-reference-assessment.json"
             python tools/check_dependencies.py
             python tools/check_diagnostics.py
-            python -m unittest discover -s tests -p 'test_*.py'
+            uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p 'test_*.py'
           ) 2>&1 | tee "${RUNNER_TEMP}/shared-crates-check.log"
       - name: Preserve locked Rust dependency evidence
         if: always()
@@ -312,6 +312,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_project_functions.py" installed_project_functions.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_builds.py" installed_producer_builds.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_producers.py" installed_public_producers.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_cohort.py" installed_producer_cohort.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_profile.py" installed_profile.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_dependencies.py" installed_dependencies.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_references.py" installed_references.py
@@ -323,6 +324,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_execution.py" installed_predicate_execution.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema.py" installed_schema.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_original_specifications.py" installed_original_specifications.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_verification_logs.py" installed_verification_logs.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_file_resources.py" installed_file_resources.py
           python "${GITHUB_WORKSPACE}/rust/tools/stage_specification_inputs.py" specification-original
           python "${GITHUB_WORKSPACE}/rust/tools/stage_project_inputs.py" project-original
@@ -402,6 +404,7 @@ jobs:
           python -I conformance-suite/qualify_native.py \
             --fixtures conformance-suite/benchmarks --schema conformance-suite/yaml \
             --gates conformance-suite/gates --output "qualification/${FORM}" \
+            --producer-fixtures conformance-suite/gates/producer-cohort \
             --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form "${FORM}" \
             --reference-artifacts reference-dist --native-artifacts native-dist \
             --reference-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}" \
@@ -509,6 +512,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_builds.R" producer_builds.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_producers.R" public_producers.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_cohort.R" producer_cohort.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/scalars.R" scalars.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/functions.R" functions.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/datasets.R" datasets.R
@@ -523,6 +527,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/predicate_execution.R" predicate_execution.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/schema.R" schema.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/original_specifications.R" original_specifications.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/verification_logs.R" verification_logs.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_environment.R" public_environment.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_define.R" public_define.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/inheritance.R" inheritance.R
@@ -623,6 +628,11 @@ jobs:
                   --python-evidence "cohort-input/native-qualification-${platform}-${version}-${form}/${form}" \
                   "${r_evidence[@]}" \
                   --output "public-cohort/${platform}/${version}/${form}" --source-revision "${revision}"
+                python -I "${GITHUB_WORKSPACE}/rust/tools/qualify_producer_cohort.py" \
+                  --fixtures "${GITHUB_WORKSPACE}/rust/qualification/producer-cohort" \
+                  --python-evidence "cohort-input/native-qualification-${platform}-${version}-${form}/${form}" \
+                  "${r_evidence[@]}" \
+                  --output "public-cohort/${platform}/${version}/${form}/producer-cohort" --source-revision "${revision}"
               done
             done
           done
