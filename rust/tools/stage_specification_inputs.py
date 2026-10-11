@@ -552,7 +552,8 @@ def stage(destination: Path):
     source_cases.mkdir()
     with source_truth.open(encoding="ascii") as stream:
         for row in csv.DictReader(stream, delimiter="\t"):
-            case = source_cases / row["case"]
+            # R CMD build removes directories ending in old, including ascii_fold.
+            case = source_cases / (row["case"] + "-fixture")
             case.mkdir()
             for name, content in json.loads(row["inputs_json"]).items():
                 (case / (name.lower() + ".csv")).write_bytes(bytes.fromhex(content))

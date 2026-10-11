@@ -900,7 +900,7 @@ for(i in seq_len(nrow(mapping_cut_truth))) {
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
   expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
   unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
-  case <- file.path(root,"mapping-cut-cases",row$case[[1L]])
+  case <- file.path(root,"mapping-cut-cases",paste0(row$case[[1L]],"-fixture"))
   for(j in seq_len(2L)) {
     calls <- character();saves <- 0L
     capture <- function(name,path,maximum) {
