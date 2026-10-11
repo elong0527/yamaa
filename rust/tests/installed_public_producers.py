@@ -270,6 +270,15 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
             readonly = target if os.name == "nt" else target.parent
             readonly.chmod(0o400 if os.name == "nt" else 0o500)
             try:
+                if os.name != "nt":
+                    probe = readonly / ".write-permission-probe"
+                    try:
+                        probe.write_bytes(b"permission probe")
+                    except PermissionError:
+                        pass
+                    else:
+                        probe.unlink()
+                        self.skipTest("directory permissions cannot deny writes on this host")
                 self.assertFalse(result.save())
                 entered = [{"node": 1, "published": False}] if failed == "producer" else [{"node": 1, "published": True}, {"node": 0, "published": False}]
                 self.assertEqual(self.observe(result)["publication"]["entered"], entered)

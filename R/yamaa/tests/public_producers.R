@@ -351,6 +351,15 @@ save_failure <- function(failed) {
   readonly <- if(.Platform$OS.type=="windows") target else dirname(target)
   Sys.chmod(readonly,if(.Platform$OS.type=="windows") "0444" else "0500")
   on.exit(Sys.chmod(readonly,if(.Platform$OS.type=="windows") "0666" else "0700"),add=TRUE,after=FALSE)
+  if(.Platform$OS.type!="windows") {
+    probe <- file.path(readonly,".write-permission-probe")
+    writable <- suppressWarnings(tryCatch({writeBin(charToRaw("permission probe"),probe);TRUE},error=function(error) FALSE))
+    if(writable) {
+      unlink(probe)
+      cat("R publication permission witness skipped: directory permissions cannot deny writes on this host\n")
+      return(FALSE)
+    }
+  }
   stopifnot(identical(result$save(),FALSE),identical(evidence(result),built),identical(events,calls),
     identical(result$output$VALUE,c(2.46,4.70)),"REQ-0764" %in% result$issues$requirement,
     identical(readBin(target,"raw",n=100),charToRaw(if(failed=="producer") "previous producer bytes" else "previous consumer bytes")),
@@ -360,9 +369,10 @@ save_failure <- function(failed) {
   Sys.chmod(readonly,if(.Platform$OS.type=="windows") "0666" else "0700")
   stopifnot(isTRUE(result$save()),nrow(result$issues)==0L,identical(events,calls),identical(evidence(result),built),
     identical(sub('"publication":.+?,"report_version":','"report_version":',observe(result),perl=TRUE),before))
+  TRUE
 }
-save_failure("producer");save_failure("consumer")
-cat("R actual producer/consumer publication failures preserve original Build, actual prefix and earlier writes\n")
+qualified <- vapply(c("producer","consumer"),save_failure,logical(1))
+if(all(qualified)) cat("R actual producer/consumer publication failures preserve original Build, actual prefix and earlier writes\n")
 
 if(.Platform$OS.type=="windows") {
   work <- study()
