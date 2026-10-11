@@ -528,6 +528,9 @@ jobs:
           python "${GITHUB_WORKSPACE}/rust/tools/check_cargo_lock.py" --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.3.0.tar.gz
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.3.0.tar.gz
+          if [ "${{ runner.os }}" = Windows ]; then
+            python "${GITHUB_WORKSPACE}/rust/tools/probe_windows_r.py" --library "${RUNNER_TEMP}/native-r-library" --output "${RUNNER_TEMP}/windows-r-toolchain"
+          fi
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_builds.R" producer_builds.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_producers.R" public_producers.R
