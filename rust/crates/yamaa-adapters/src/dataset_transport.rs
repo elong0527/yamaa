@@ -20,7 +20,7 @@ use yamaa_core::{
 };
 use yamaa_engine::dataset::DatasetExecution;
 use yamaa_engine::{
-    dataset::{self, CheckRecord, DatasetPlan, ExecutionError, Limits, Resource, RowIdentity},
+    dataset::{self, CheckRecord, ExecutionError, Limits, Resource, RowIdentity},
     table_grouping::GroupingError,
     table_reduction::TableReductionError,
 };
@@ -157,28 +157,26 @@ struct Compute {
 }
 
 impl Compute {
-    /// Compile the supported numerical policy and bind every name before snapshot decoding.
-    fn prepare(self, path: &str) -> Result<dataset::BoundNumeric, Error> {
-        use yamaa_core::{
-            numeric_compiler::{compile_numeric, CompileError, CompileLimits},
-            numeric_parser::ParseError,
-        };
+    /// Decode authored text and coordinates; numerical compilation belongs to core.
+    fn decode(
+        self,
+        path: &str,
+        compiler: &mut dataset::DatasetCompiler,
+    ) -> Result<dataset::ExpressionDeclaration, Error> {
         if self.bindings.len() > 4096 {
             return Err(Error::RequestLimit);
         }
-        let expression = compile_numeric(&self.text, path, CompileLimits::default()).map_err(
-            |error| match error {
-                CompileError::ResolutionLimit { .. }
-                | CompileError::Parse(ParseError::Limit { .. }) => Error::RequestLimit,
-                _ => Error::InvalidPlan,
-            },
-        )?;
-        let bindings = self
-            .bindings
-            .into_iter()
-            .map(crate::predicate_transport::Binding::prepare)
-            .collect::<Result<Vec<_>, _>>()?;
-        dataset::BoundNumeric::new(expression, bindings).map_err(|_| Error::InvalidPlan)
+        compiler
+            .reserve_numeric(&self.text, path)
+            .map_err(compile_error)?;
+        Ok(dataset::ExpressionDeclaration::Compute {
+            text: self.text,
+            bindings: self
+                .bindings
+                .into_iter()
+                .map(crate::predicate_transport::Binding::prepare)
+                .collect::<Result<Vec<_>, _>>()?,
+        })
     }
 }
 #[derive(Deserialize)]
@@ -210,7 +208,18 @@ struct Window {
 }
 impl Window {
     /// Lower one bounded window operation while retaining the legacy number request form.
-    fn prepare(self) -> Result<dataset::Window, Error> {
+    fn prepare(self, number: bool) -> Result<dataset::Window, Error> {
+        use dataset::WindowDeclarationKind as K;
+        let kind = match &self.kind {
+            WindowKind::RowNumber => K::RowNumber,
+            WindowKind::Competition => K::Competition,
+            WindowKind::Dense => K::Dense,
+            WindowKind::RowValue { .. } => K::RowValue,
+            WindowKind::PreviousNonMissing { .. } => K::PreviousNonMissing,
+            WindowKind::Locf { .. } => K::Locf,
+            WindowKind::BaselineFlag { .. } => K::BaselineFlag,
+        };
+        dataset::validate_window_form(kind, number).map_err(compile_error)?;
         if self.group_by.len() > MAX_COLUMNS || self.order_by.len() > MAX_COLUMNS {
             return Err(Error::RequestLimit);
         }
@@ -489,9 +498,8 @@ struct Request {
 
 /// The prepared bridge owns its admitted plan; no host objects or source buffers survive.
 pub struct PreparedDataset {
-    plan: DatasetPlan,
+    compiled: dataset::CompiledDataset,
     secondary_count: usize,
-    functions: Vec<yamaa_engine::function_invocation::InvocationPlan>,
 }
 
 /// A checked table is present only for success. JSON carries exact typed observations.
@@ -549,7 +557,14 @@ impl PreparedDataset {
             {
                 return Err(Error::RequestLimit);
             }
-            let mut functions = functions::Admission::new(request.functions)?;
+            if request.functions.len() > 64 {
+                return Err(Error::RequestLimit);
+            }
+            let functions = request
+                .functions
+                .into_iter()
+                .map(|signature| signature.prepare().map_err(Error::Function))
+                .collect::<Result<Vec<_>, Error>>()?;
             let secondary_count = request.secondary.len();
             let secondary = request
                 .secondary
@@ -569,28 +584,42 @@ impl PreparedDataset {
                 .collect::<Result<Vec<_>, Error>>()?;
             let source = schema(request.source)?;
             let output = schema(request.output)?;
-            let templates = request
-                .templates
-                .into_iter()
-                .map(|template| {
-                    let mode = match template.mode {
-                        Mode::Records(()) => dataset::RowMode::Records,
-                        Mode::Keys(()) => dataset::RowMode::Keys,
-                        Mode::Groups(keys) => {
-                            if keys.len() > MAX_COLUMNS {
-                                return Err(Error::RequestLimit);
-                            }
-                            dataset::RowMode::Groups(keys)
+            let mut compiler = dataset::DatasetCompiler::new(functions, Default::default())
+                .map_err(compile_error)?;
+            for template in request.templates {
+                let mode = match template.mode {
+                    Mode::Records(()) => dataset::RowMode::Records,
+                    Mode::Keys(()) => dataset::RowMode::Keys,
+                    Mode::Groups(keys) => {
+                        if keys.len() > MAX_COLUMNS {
+                            return Err(Error::RequestLimit);
                         }
-                    };
-                    Ok(dataset::RowTemplate {
-                        filter: template.filter.map(Predicate::prepare).transpose()?,
-                        mode,
-                        assignments: assignments(template.assignments, &mut functions)?,
-                    })
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
-            let columns = assignments(request.columns, &mut functions)?;
+                        dataset::RowMode::Groups(keys)
+                    }
+                };
+                let filter = template.filter.map(Predicate::prepare).transpose()?;
+                if template.assignments.len() > MAX_COLUMNS {
+                    return Err(Error::RequestLimit);
+                }
+                compiler
+                    .begin_template(mode, filter)
+                    .map_err(compile_error)?;
+                for declaration in template.assignments {
+                    let declaration = assignment(declaration, &mut compiler)?;
+                    compiler
+                        .template_assignment(declaration)
+                        .map_err(compile_error)?;
+                }
+            }
+            if request.columns.len() > MAX_COLUMNS {
+                return Err(Error::RequestLimit);
+            }
+            for declaration in request.columns {
+                let declaration = assignment(declaration, &mut compiler)?;
+                compiler
+                    .column_assignment(declaration)
+                    .map_err(compile_error)?;
+            }
             let verifications = request
                 .verifications
                 .into_iter()
@@ -626,28 +655,26 @@ impl PreparedDataset {
                 .into_iter()
                 .map(ConversionHandler::prepare)
                 .collect::<Result<Vec<_>, Error>>()?;
-            let plan = DatasetPlan::new_with_intermediates(
-                dataset::SourceSchemas {
-                    primary: source,
-                    secondary,
-                },
-                request
-                    .intermediates
-                    .into_iter()
-                    .map(Intermediate::prepare)
-                    .collect::<Result<Vec<_>, Error>>()?,
-                output,
-                templates,
-                columns,
-                request.keys,
-                verifications,
-            )
-            .and_then(|plan| plan.with_conversion_handlers(handlers))
-            .map_err(|_| Error::InvalidPlan)?;
+            let compiled = compiler
+                .finish(dataset::DatasetMetadata {
+                    sources: dataset::SourceSchemas {
+                        primary: source,
+                        secondary,
+                    },
+                    intermediates: request
+                        .intermediates
+                        .into_iter()
+                        .map(Intermediate::prepare)
+                        .collect::<Result<Vec<_>, Error>>()?,
+                    output,
+                    keys: request.keys,
+                    verifications,
+                    conversion_handlers: handlers,
+                })
+                .map_err(compile_error)?;
             Ok(Self {
-                plan,
+                compiled,
                 secondary_count,
-                functions: functions.signatures,
             })
         })
         .map_err(|_| Error::Internal)?
@@ -669,7 +696,7 @@ impl PreparedDataset {
 
     /// Borrow admitted metadata for a host-owned, stable registry; labels do not prove activation.
     pub fn function_signatures(&self) -> &[yamaa_engine::function_invocation::InvocationPlan] {
-        &self.functions
+        self.compiled.functions()
     }
 
     /// Admit every binding before decoding IPC, then invoke only on the caller's thread.
@@ -709,7 +736,7 @@ impl PreparedDataset {
         functions: &mut dyn dataset::FunctionBindings<Error = CallbackError>,
         mut profile: Option<&mut DatasetProfile>,
     ) -> Result<DatasetResponse, Error> {
-        for (slot, signature) in self.functions.iter().enumerate() {
+        for (slot, signature) in self.compiled.functions().iter().enumerate() {
             if functions.signature(slot) != Some(signature) {
                 return Err(Error::FunctionBinding);
             }
@@ -753,7 +780,7 @@ impl PreparedDataset {
                 .map(|table| table as &dyn TableAccess<Error = CallbackError>)
                 .collect();
             let attempt = if let Some(profile) = profile {
-                self.plan.execute_with_phase_observer(
+                self.compiled.plan().execute_with_phase_observer(
                     &source,
                     &references,
                     functions,
@@ -761,11 +788,28 @@ impl PreparedDataset {
                     &mut |phase| profile.engine_phase(phase),
                 )
             } else {
-                self.plan
-                    .execute_observed_functions(&source, &references, functions, LIMITS)
+                self.compiled.plan().execute_observed_functions(
+                    &source,
+                    &references,
+                    functions,
+                    LIMITS,
+                )
             };
             response(attempt)
         }
+    }
+}
+
+/// Project pure compilation failures into the unchanged temporary wire errors.
+fn compile_error(error: dataset::DatasetCompileError) -> Error {
+    use yamaa_core::{numeric_compiler::CompileError, numeric_parser::ParseError};
+    match error {
+        dataset::DatasetCompileError::Limit(_)
+        | dataset::DatasetCompileError::Numeric(CompileError::ResolutionLimit { .. })
+        | dataset::DatasetCompileError::Numeric(CompileError::Parse(ParseError::Limit {
+            ..
+        })) => Error::RequestLimit,
+        _ => Error::InvalidPlan,
     }
 }
 
@@ -808,122 +852,98 @@ fn bound(value: Option<String>) -> Result<Option<i64>, Error> {
         .transpose()
 }
 /// Lower the closed expression vocabulary without performing any evaluation.
-fn assignments(
-    values: Vec<Assignment>,
-    functions: &mut functions::Admission,
-) -> Result<Vec<dataset::Assignment>, Error> {
-    if values.len() > MAX_COLUMNS {
-        return Err(Error::RequestLimit);
-    }
-    values
-        .into_iter()
-        .map(|assignment| {
-            path(&assignment.path)?;
-            let expression = match assignment.expression {
-                Expression::Literal(value) => dataset::Expression::Literal(
-                    value.into_core().map_err(|_| Error::InvalidScalar)?,
-                ),
-                Expression::Function(call) => dataset::Expression::Function(functions.bind(call)?),
-                Expression::Compute(expression) => {
-                    dataset::Expression::Compute(expression.prepare(&assignment.path)?)
-                }
-                Expression::Source(column) => dataset::Expression::Source(column),
-                Expression::Intermediate(read) => dataset::Expression::Intermediate {
-                    index: read.index,
-                    column: read.column,
-                },
-                Expression::Collect(source) => {
-                    path(&source.identifier)?;
-                    dataset::Expression::Collect {
-                        column: source.column,
-                        identifier: source.identifier,
-                        filter: source.filter.map(Predicate::prepare).transpose()?,
-                        selection: source.selection.map(SourceSelection::prepare).transpose()?,
-                    }
-                }
-                Expression::RowLookup(lookup) => {
-                    if lookup.keys.len() > MAX_COLUMNS {
-                        return Err(Error::RequestLimit);
-                    }
-                    dataset::Expression::RowLookup(dataset::RowLookup {
-                        source: lookup.source,
-                        column: lookup.column,
-                        keys: lookup
-                            .keys
-                            .into_iter()
-                            .map(|key| dataset::RowMatchKey {
-                                source_column: key.source_column,
-                                driver_column: key.driver_column,
-                            })
-                            .collect(),
+fn assignment(
+    assignment: Assignment,
+    compiler: &mut dataset::DatasetCompiler,
+) -> Result<dataset::AssignmentDeclaration, Error> {
+    path(&assignment.path)?;
+    let expression = match assignment.expression {
+        Expression::Literal(value) => dataset::ExpressionDeclaration::Literal(
+            value.into_core().map_err(|_| Error::InvalidScalar)?,
+        ),
+        Expression::Function(call) => call.decode(compiler)?,
+        Expression::Compute(expression) => expression.decode(&assignment.path, compiler)?,
+        Expression::Source(column) => dataset::ExpressionDeclaration::Source(column),
+        Expression::Intermediate(read) => dataset::ExpressionDeclaration::Intermediate {
+            index: read.index,
+            column: read.column,
+        },
+        Expression::Collect(source) => {
+            path(&source.identifier)?;
+            dataset::ExpressionDeclaration::Collect {
+                column: source.column,
+                identifier: source.identifier,
+                filter: source.filter.map(Predicate::prepare).transpose()?,
+                selection: source.selection.map(SourceSelection::prepare).transpose()?,
+            }
+        }
+        Expression::RowLookup(lookup) => {
+            if lookup.keys.len() > MAX_COLUMNS {
+                return Err(Error::RequestLimit);
+            }
+            dataset::ExpressionDeclaration::RowLookup(dataset::RowLookup {
+                source: lookup.source,
+                column: lookup.column,
+                keys: lookup
+                    .keys
+                    .into_iter()
+                    .map(|key| dataset::RowMatchKey {
+                        source_column: key.source_column,
+                        driver_column: key.driver_column,
                     })
-                }
-                Expression::Lookup(lookup) => {
-                    if lookup.keys.len() > MAX_COLUMNS {
-                        return Err(Error::RequestLimit);
-                    }
-                    dataset::Expression::Lookup(dataset::Lookup {
-                        source: lookup.source,
-                        column: lookup.column,
-                        keys: lookup
-                            .keys
-                            .into_iter()
-                            .map(|key| dataset::MatchKey {
-                                source_column: key.source_column,
-                                output_column: key.output_column,
-                            })
-                            .collect(),
-                    })
-                }
-                Expression::Column(column) => dataset::Expression::Column(column),
-                Expression::Number(window) => {
-                    if !matches!(
-                        window.kind,
-                        WindowKind::RowNumber | WindowKind::Competition | WindowKind::Dense
-                    ) {
-                        return Err(Error::InvalidPlan);
-                    }
-                    dataset::Expression::Window(window.prepare()?)
-                }
-                Expression::Window(window) => {
-                    if matches!(
-                        window.kind,
-                        WindowKind::RowNumber | WindowKind::Competition | WindowKind::Dense
-                    ) {
-                        return Err(Error::InvalidPlan);
-                    }
-                    dataset::Expression::Window(window.prepare()?)
-                }
-                Expression::Count(count) => {
-                    path(&count.text)?;
-                    dataset::Expression::Count {
-                        column: count.column,
-                        text: count.text,
-                    }
-                }
-                Expression::Reduce(reduction) => {
-                    path(&reduction.text)?;
-                    if let Some(identifier) = &reduction.identifier {
-                        path(identifier)?;
-                    }
-                    dataset::Expression::Reduce {
-                        identifier: reduction.identifier,
-                        column: reduction.column,
-                        reducer: match reduction.reducer {
-                            Reducer::Sum => NumericReducer::Sum,
-                            Reducer::Mean => NumericReducer::Mean,
-                        },
-                        text: reduction.text,
-                    }
-                }
-            };
-            Ok(dataset::Assignment {
-                column: assignment.column,
-                path: assignment.path,
-                expression,
+                    .collect(),
             })
-        })
-        .collect()
+        }
+        Expression::Lookup(lookup) => {
+            if lookup.keys.len() > MAX_COLUMNS {
+                return Err(Error::RequestLimit);
+            }
+            dataset::ExpressionDeclaration::Lookup(dataset::Lookup {
+                source: lookup.source,
+                column: lookup.column,
+                keys: lookup
+                    .keys
+                    .into_iter()
+                    .map(|key| dataset::MatchKey {
+                        source_column: key.source_column,
+                        output_column: key.output_column,
+                    })
+                    .collect(),
+            })
+        }
+        Expression::Column(column) => dataset::ExpressionDeclaration::Column(column),
+        Expression::Number(window) => dataset::ExpressionDeclaration::Number(window.prepare(true)?),
+        Expression::Window(window) => {
+            dataset::ExpressionDeclaration::Window(window.prepare(false)?)
+        }
+        Expression::Count(count) => {
+            path(&count.text)?;
+            dataset::ExpressionDeclaration::Count {
+                column: count.column,
+                text: count.text,
+            }
+        }
+        Expression::Reduce(reduction) => {
+            path(&reduction.text)?;
+            if let Some(identifier) = &reduction.identifier {
+                path(identifier)?;
+            }
+            dataset::ExpressionDeclaration::Reduce {
+                identifier: reduction.identifier,
+                column: reduction.column,
+                reducer: match reduction.reducer {
+                    Reducer::Sum => NumericReducer::Sum,
+                    Reducer::Mean => NumericReducer::Mean,
+                },
+                text: reduction.text,
+            }
+        }
+    };
+    Ok(dataset::AssignmentDeclaration {
+        column: assignment.column,
+        path: assignment.path,
+        expression,
+    })
 }
 
 #[derive(Serialize)]

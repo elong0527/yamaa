@@ -8,6 +8,13 @@ use crate::{
     value::Value,
 };
 use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
+#[path = "dataset_compiler.rs"]
+mod compiler;
+pub use compiler::{
+    compile_dataset, validate_window_form, AssignmentDeclaration, CompiledDataset,
+    DatasetCompileError, DatasetCompileLimits, DatasetCompiler, DatasetDeclaration,
+    DatasetMetadata, ExpressionDeclaration, TemplateDeclaration, WindowDeclarationKind,
+};
 #[path = "dataset_conversion.rs"]
 mod conversion;
 pub use conversion::ConversionHandler;
