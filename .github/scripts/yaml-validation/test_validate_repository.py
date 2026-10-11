@@ -2885,7 +2885,7 @@ class TestSpecificationInheritance(unittest.TestCase):
         self.assertIsNone(resolved)
         self.assertIn('inheritance_cycle', '\n'.join(errors))
 
-    def test_inherited_input_absent_beside_its_layer_reads_the_project_root(self):
+    def test_inherited_input_absent_beside_its_layer_never_retries_the_entry(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / 'common').mkdir()
@@ -2919,12 +2919,11 @@ class TestSpecificationInheritance(unittest.TestCase):
                 spec, 'example/spec.yaml', spec_path, self.env
             )
 
-        # REQ-0636 states the path from the shared layer's directory, and
-        # REQ-1246 reads it from the project root when nothing is stored there.
+        # REQ-0636 rebases the declaration; REQ-1246 forbids entry fallback.
         self.assertEqual(resolved['input']['DM']['path'], 'common/input/dm.csv')
-        self.assertEqual(errors, [])
+        self.assertIn("resource_path_missing", "\n".join(errors))
         self.assertIn(
-            "input.DM.path: resource_path_missing: 'common/input/dm.csv'",
+            "input.DM.path: resource_path_missing: 'input/dm.csv'",
             '\n'.join(missing),
         )
 
@@ -4515,7 +4514,7 @@ columns:
 
         self.assertIn("producer workflow dependency cycle", message)
 
-    def test_rejects_escaping_producer_link(self):
+    def test_reports_a_missing_parent_relative_producer_source(self):
         self.write_producer_spec(
             self.VALID_PRODUCER_SPEC.replace(
                 "input:\n  RAW: raw.csv",
@@ -4526,8 +4525,7 @@ columns:
         message = "\n".join(self.validate())
 
         self.assertIn(
-            "resource_path_outside_project: '../../escape.csv' resolves "
-            "outside the project root",
+            "resource_path_missing: '../../escape.csv' does not exist",
             message,
         )
 
@@ -4542,7 +4540,7 @@ columns:
 
 
 class TestProjectResourceBoundary(unittest.TestCase):
-    """R021: confine a declared project path and bind the bytes it names."""
+    """R021: declaring-file paths retain kind/link/held-byte checks."""
 
     def setUp(self):
         self.test_dir = tempfile.TemporaryDirectory()
@@ -4555,11 +4553,9 @@ class TestProjectResourceBoundary(unittest.TestCase):
     def tearDown(self):
         self.test_dir.cleanup()
 
-    def resolve(self, written, base_dir=None, project_root=None):
+    def resolve(self, written, base_dir=None):
         return VALIDATOR.resolve_project_path(
-            written,
-            self.root if base_dir is None else base_dir,
-            self.root if project_root is None else project_root,
+            written, self.root if base_dir is None else base_dir,
         )
 
     def test_accepts_nested_in_project_file(self):
@@ -4567,65 +4563,38 @@ class TestProjectResourceBoundary(unittest.TestCase):
         self.assertIsNone(condition)
         self.assertEqual(accepted.read_bytes(), self.source.read_bytes())
 
-    def test_rejects_rooted_paths_naming_no_approved_root(self):
-        for written in ("/etc/passwd", "C:/data/dm.csv"):
-            with self.subTest(written=written):
-                self.assertEqual(
-                    self.resolve(written)[1], "resource_path_not_relative"
-                )
-
-    def test_accepts_a_rooted_path_under_an_approved_data_root(self):
-        store = self.root / "store"
-        store.mkdir()
-        held = store / "lbref.csv"
-        held.write_text("LBTESTCD\nALT\n", encoding="utf-8")
-        confined = self.root / "project"
-        confined.mkdir()
-
-        accepted, condition = VALIDATOR.resolve_project_path(
-            f"{store.as_posix()}/lbref.csv",
-            confined,
-            confined,
-            data_roots=[store],
-        )
-
+    def test_accepts_absolute_paths_outside_the_declaring_directory(self):
+        # REQ-0774: no project/data-root declaration is needed.
+        declaring = self.root / "study"
+        declaring.mkdir()
+        accepted, condition = self.resolve(str(self.source.resolve()), declaring)
         self.assertIsNone(condition)
-        self.assertEqual(accepted.read_bytes(), held.read_bytes())
+        self.assertEqual(accepted.read_bytes(), self.source.read_bytes())
+        self.assertEqual(self.resolve(str(self.source.resolve()) + ".absent", declaring)[1],
+                         "resource_path_missing")
 
-    def test_accepts_a_rooted_path_whose_anchor_is_a_symbolic_link(self):
-        # macOS spells a temporary directory through /var, a link into
-        # /private. REQ-0781 exempts the anchor, so the spelling a user writes
-        # is accepted without resolving the written path first.
-        store = self.root / "store"
-        store.mkdir()
-        (store / "lbref.csv").write_text("LBTESTCD\nALT\n", encoding="utf-8")
-        linked = self.root / "data"
-        linked.symlink_to(store, target_is_directory=True)
-
-        accepted, condition = VALIDATOR.resolve_project_path(
-            f"{linked.as_posix()}/lbref.csv",
-            self.root,
-            self.root,
-            data_roots=[linked],
-        )
-
+    def test_accepts_parent_relative_paths_without_configuration(self):
+        # REQ-0778/0780: the original declaring file supplies the only origin.
+        declaring = self.root / "study"
+        declaring.mkdir()
+        accepted, condition = self.resolve("../input/dm.csv", declaring)
         self.assertIsNone(condition)
-        self.assertEqual(accepted.name, "lbref.csv")
+        self.assertEqual(accepted.resolve(), self.source.resolve())
 
-    def test_rejects_a_symbolic_link_below_a_rooted_anchor(self):
-        store = self.root / "store"
-        store.mkdir()
-        (store / "lbref.csv").write_text("LBTESTCD\nALT\n", encoding="utf-8")
-        (store / "alias.csv").symlink_to("lbref.csv")
+    def test_accepts_the_caller_selected_declaring_directory_alias(self):
+        # REQ-0781 exempts only the selected declaring directory's alias.
+        linked = self.root / "selected"
+        linked.symlink_to(self.input_dir, target_is_directory=True)
+        for written in ("dm.csv", str(linked / "dm.csv")):
+            accepted, condition = self.resolve(written, linked)
+            self.assertIsNone(condition)
+            self.assertEqual(accepted.resolve(), self.source.resolve())
 
-        _, condition = VALIDATOR.resolve_project_path(
-            f"{store.as_posix()}/alias.csv",
-            self.root,
-            self.root,
-            data_roots=[store],
-        )
-
-        self.assertEqual(condition, "resource_path_symlink")
+    def test_rejects_declared_directory_aliases_outside_the_selected_anchor(self):
+        # REQ-0783: declarations cannot select additional exempt directories.
+        linked = self.root / "declared"
+        linked.symlink_to(self.input_dir, target_is_directory=True)
+        self.assertEqual(self.resolve(str(linked / "dm.csv"))[1], "resource_path_symlink")
 
     def test_rooted_and_relative_spellings_reach_one_file(self):
         rooted, rooted_condition = self.resolve(
@@ -4654,12 +4623,12 @@ class TestProjectResourceBoundary(unittest.TestCase):
         self.assertIsNone(condition)
         self.assertEqual(accepted.name, "dm.csv")
 
-    def test_traversal_above_root_is_outside_project(self):
-        for written in ("../dm.csv", "input/../../dm.csv", ".."):
-            with self.subTest(written=written):
-                self.assertEqual(
-                    self.resolve(written)[1], "resource_path_outside_project"
-                )
+    def test_missing_parent_relative_paths_are_missing_without_containment(self):
+        declaring = self.root / "study"
+        declaring.mkdir()
+        for written in ("../absent.csv", "nested/../../absent.csv"):
+            self.assertEqual(self.resolve(written, declaring)[1], "resource_path_missing")
+        self.assertEqual(self.resolve("..", declaring)[1], "resource_path_not_regular_file")
 
     def test_rejects_unnormalized_written_forms(self):
         for written in (
@@ -4668,7 +4637,6 @@ class TestProjectResourceBoundary(unittest.TestCase):
             "input\\dm.csv",
             "",
             "/",
-            "/data/../lbref.csv",
         ):
             with self.subTest(written=written):
                 self.assertEqual(
@@ -4739,42 +4707,28 @@ class TestProjectResourceBoundary(unittest.TestCase):
             self.resolve("input/absent.csv")[1], "resource_path_missing"
         )
 
-    def test_never_reads_beside_a_layer_outside_a_narrower_project_root(self):
-        confined = self.root / "project"
-        confined.mkdir()
-
-        # REQ-0781: the file beside a layer stored outside every approved root
-        # is never an anchor; the path starts at the project root instead.
-        self.assertEqual(
-            self.resolve("input/dm.csv", project_root=confined)[1],
-            "resource_path_missing",
-        )
-        (confined / "input").mkdir()
-        (confined / "input" / "dm.csv").write_text("ID\n1\n", encoding="utf-8")
-        accepted, condition = self.resolve("input/dm.csv", project_root=confined)
+    def test_absolute_dot_segments_normalize_before_walking(self):
+        # REQ-0778: an elided component is never a filesystem authority.
+        written = str(self.root / "absent" / ".." / "input" / "dm.csv")
+        accepted, condition = self.resolve(written)
         self.assertIsNone(condition)
-        self.assertEqual(accepted.resolve(), (confined / "input" / "dm.csv").resolve())
+        self.assertEqual(accepted.resolve(), self.source.resolve())
 
-    def test_retries_a_missing_path_from_the_project_root(self):
+    def test_missing_declaring_file_path_never_retries_the_entry_directory(self):
+        # REQ-1246: the existing entry-directory file cannot satisfy this declaration.
         nested = self.root / "common"
         nested.mkdir()
-
-        accepted, condition = VALIDATOR.resolve_project_path(
-            "input/dm.csv", nested, self.root
-        )
-
-        # REQ-1246: absent beside its layer, the path reads the project root.
+        self.assertEqual(self.resolve("input/dm.csv", nested)[1], "resource_path_missing")
+        accepted, condition = self.resolve("../input/dm.csv", nested)
         self.assertIsNone(condition)
-        self.assertEqual(accepted.resolve(), (self.input_dir / "dm.csv").resolve())
+        self.assertEqual(accepted.resolve(), self.source.resolve())
 
-    def test_an_escape_from_inside_the_project_stays_terminal(self):
-        nested = self.root / "common"
-        nested.mkdir()
-
-        self.assertEqual(
-            VALIDATOR.resolve_project_path("../../dm.csv", nested, self.root)[1],
-            "resource_path_outside_project",
-        )
+    def test_parent_steps_at_filesystem_root_stay_at_root(self):
+        # REQ-0778: parent traversal is textual even above the filesystem root.
+        written = "/../../" + self.source.resolve().as_posix().lstrip("/")
+        accepted, condition = self.resolve(written)
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.resolve(), self.source.resolve())
 
     def test_error_names_the_written_path_and_no_host_path(self):
         message = VALIDATOR.resource_path_error(
@@ -4813,92 +4767,19 @@ class TestProjectResourceBoundary(unittest.TestCase):
         self.assertEqual(accepted.csv_header(), ["STUDYID", "AGE"])
 
 
-class TestProjectConfiguration(unittest.TestCase):
-    """REQ-0767 to REQ-0771: the study says where its own data is kept."""
-
-    def setUp(self):
-        self.test_dir = tempfile.TemporaryDirectory()
-        self.root = Path(self.test_dir.name)
-        self.study = self.root / "study"
-        self.study.mkdir()
-        self.store = self.root / "data"
-        self.store.mkdir()
-        (self.store / "lbref.csv").write_text("LBTESTCD\nALT\n", encoding="utf-8")
-
-    def tearDown(self):
-        self.test_dir.cleanup()
-
-    def configure(self, body):
-        path = self.study / VALIDATOR.PROJECT_CONFIGURATION_NAME
-        path.write_text(body, encoding="utf-8")
-        return path
-
-    def test_a_root_with_no_configuration_declares_nothing(self):
-        roots, errors = VALIDATOR.read_project_configuration(self.study)
-
-        self.assertEqual(roots, ())
-        self.assertEqual(errors, [])
-
-    def test_a_declared_data_root_admits_a_rooted_path(self):
-        # self.root is a temporary directory nobody resolved, so on macOS the
-        # declared root is spelled through /var. Canonicalizing it here would
-        # reject the rooted path the study writes.
-        self.configure(f'version: "1.0"\ndata_roots:\n  - {self.store.as_posix()}\n')
-
-        accepted, condition = VALIDATOR.resolve_project_path(
-            f"{self.store.as_posix()}/lbref.csv",
-            self.study,
-            self.study,
-            VALIDATOR.project_data_roots(self.study),
-        )
-
-        self.assertIsNone(condition)
-        self.assertEqual(accepted.name, "lbref.csv")
-
-    def test_the_same_path_is_rejected_without_a_configuration(self):
-        _, condition = VALIDATOR.resolve_project_path(
-            f"{self.store.as_posix()}/lbref.csv",
-            self.study,
-            self.study,
-            VALIDATOR.project_data_roots(self.study),
-        )
-
-        self.assertEqual(condition, "resource_path_not_relative")
-
-    def test_a_relative_data_root_is_read_from_the_project_root(self):
-        self.configure('version: "1.0"\ndata_roots:\n  - ../data\n')
-
-        declared = VALIDATOR.project_data_roots(self.study)
-
-        self.assertEqual(
-            tuple(root.resolve() for root in declared), (self.store.resolve(),)
-        )
-
-    def test_reports_a_configuration_a_run_cannot_start_from(self):
-        cases = {
-            "- not a mapping\n": "expected a mapping",
-            'version: "2.0"\n': "version: expected '1.0'",
-            'version: "1.0"\nunknown: 1\n': "unknown: unknown field",
-            'version: "1.0"\ndata_roots: "/data"\n': "expected a list",
-            'version: "1.0"\ndata_roots:\n  - ./absent\n': "not an existing directory",
-        }
-        for body, expected in cases.items():
-            with self.subTest(body=body):
-                self.configure(body)
-                _, errors = VALIDATOR.read_project_configuration(self.study)
-                self.assertTrue(
-                    any(expected in error for error in errors),
-                    f"{expected!r} not in {errors!r}",
-                )
-
-    def test_the_repository_sweep_finds_a_broken_configuration(self):
-        self.configure('version: "1.0"\ndata_roots: 7\n')
-
-        errors = VALIDATOR.validate_project_configurations(self.root)
-
-        self.assertTrue(
-            any("data_roots" in error for error in errors), errors
-        )
+class TestRetiredProjectConfiguration(unittest.TestCase):
+    def test_old_root_configuration_does_not_participate_in_resolution(self):
+        # REQ-0772/1246: a malformed legacy configuration is never discovered.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            declaring = root / "study"
+            declaring.mkdir()
+            (declaring / "yamaa-project.yaml").write_bytes(b"invalid: [")
+            source = root / "dm.csv"
+            source.write_text("ID\n1\n")
+            accepted, condition = VALIDATOR.resolve_project_path("../dm.csv", declaring)
+            self.assertIsNone(condition)
+            self.assertEqual(accepted.read_bytes(), source.read_bytes())
 
 
 class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
@@ -4943,8 +4824,7 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
 
     def test_reports_each_rejection_at_the_declaring_field(self):
         cases = {
-            "/etc/passwd": "resource_path_not_relative",
-            "../dm.csv": "resource_path_outside_project",
+            "../missing-declared-ref.csv": "resource_path_missing",
             "https://example.org/ref.csv": "resource_path_uri_scheme",
             "input": "resource_path_not_regular_file",
             "input/absent.csv": "resource_path_missing",
@@ -4980,17 +4860,26 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
     def test_accepts_one_file_declared_under_two_identifiers(self):
         self.assertEqual(self.contracts("input/dm.csv"), [])
 
-    def test_confines_a_source_to_the_approved_root(self):
+    def test_accepts_parent_relative_source_from_the_declaring_file(self):
+        # REQ-0780: no project or data-root configuration is consulted.
+        shared = self.example_dir.parent / (self.example_dir.name + "-shared.csv")
+        try:
+            shared.write_text("STUDYID\nSTUDY1\n", encoding="utf-8")
+            self.assertEqual(self.contracts("../" + shared.name), [])
+        finally:
+            shared.unlink(missing_ok=True)
+
+    def test_accepts_absolute_source_outside_the_declaring_directory(self):
+        # REQ-0774/0784: an absolute location needs no containment grant.
+        with tempfile.TemporaryDirectory() as directory:
+            shared = Path(directory) / "ref.csv"
+            shared.write_text("STUDYID\nSTUDY1\n", encoding="utf-8")
+            self.assertEqual(self.contracts(shared.resolve().as_posix()), [])
+
+    def test_legacy_project_root_argument_cannot_redirect_declaring_file_paths(self):
         confined = self.example_dir / "project"
         confined.mkdir()
-
-        message = "\n".join(
-            self.contracts("input/dm.csv", project_root=confined)
-        )
-
-        # REQ-0781: the example's own input/dm.csv lies outside the narrower
-        # root and is never read; the project root holds no such file.
-        self.assertIn("resource_path_missing", message)
+        self.assertEqual(self.contracts("input/dm.csv", project_root=confined), [])
 
     def test_type_catalog_does_not_read_a_rejected_path(self):
         outside = self.example_dir / "outside.csv"
@@ -5749,20 +5638,22 @@ class TestIntermediateDerivedFilterValidation(unittest.TestCase):
 
 
 class TestDatasetPathExamples(unittest.TestCase):
-    """The committed path fixtures fail for the conditions they declare."""
+    """Current path conditions agree with fixtures; retired ones stay history."""
 
     def setUp(self):
         self.root = TOOL_PATH.parents[3]
         self.env, schema_errors = VALIDATOR.build_schema_env(self.root)
         self.assertEqual(schema_errors, [])
 
-    def test_each_example_reports_its_declared_condition(self):
+    def test_each_current_example_reports_its_declared_condition(self):
         examples = sorted(
             (self.root / "benchmarks").glob("negative-path-*")
         )
         self.assertEqual(len(examples), 6)
 
         for example in examples:
+            if example.name in VALIDATOR.HISTORICAL_RESOURCE_FIXTURES:
+                continue
             with self.subTest(example=example.name):
                 spec_path = example / "spec.yaml"
                 spec = yaml.load(
@@ -5786,6 +5677,27 @@ class TestDatasetPathExamples(unittest.TestCase):
                     reported[0],
                 )
                 self.assertIn(repr(declared["context"]["path"]), reported[0])
+
+    def test_historical_paths_use_declaring_location_without_containment(self):
+        # REQ-0780/0784: these absolute and parent-relative spellings are
+        # allowed. Their files are absent; their committed retired-policy
+        # expectations remain historical rather than current acceptance.
+        for name in sorted(VALIDATOR.HISTORICAL_RESOURCE_FIXTURES):
+            with self.subTest(example=name):
+                spec_path = self.root / "benchmarks" / name / "spec.yaml"
+                spec = yaml.load(
+                    spec_path.read_text(encoding="utf-8"),
+                    Loader=VALIDATOR.UniqueKeyLoader,
+                )
+                source = spec["input"]["LBREF"]
+                written = source if isinstance(source, str) else source["path"]
+                self.assertIsNone(VALIDATOR.classify_written_project_path(written))
+                reported = VALIDATOR.validate_spec_document(
+                    spec, f"{name}/spec.yaml", spec_path, self.env
+                )
+                self.assertEqual(len(reported), 1)
+                self.assertIn("input.LBREF.path: resource_path_missing: ", reported[0])
+                self.assertIn(repr(written), reported[0])
 
 
 class TestValidatorCLI(unittest.TestCase):
