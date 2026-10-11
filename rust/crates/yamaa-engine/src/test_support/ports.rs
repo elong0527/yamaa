@@ -7,6 +7,110 @@ use function_invocation::{
 use output::{ArtifactEncoder, ArtifactPort};
 use run::{SourceDecoder, SourcePort};
 
+pub struct MetadataCaptureStep<E> {
+    pub kind: metadata::Kind,
+    pub declaring_source: String,
+    pub written: String,
+    pub remaining_bytes: usize,
+    pub remaining_identity_bytes: usize,
+    pub outcome: Result<metadata::Reply, E>,
+}
+pub struct ScriptedMetadata<E> {
+    pub steps: VecDeque<MetadataCaptureStep<E>>,
+    pub interrupt_if: fn(&E) -> bool,
+    log: EventLog,
+}
+impl<E> ScriptedMetadata<E> {
+    pub fn new(log: EventLog) -> Self {
+        Self {
+            steps: VecDeque::new(),
+            interrupt_if: |_| false,
+            log,
+        }
+    }
+}
+impl<E> metadata::CapturePort for ScriptedMetadata<E> {
+    type Error = E;
+    fn is_interrupt(&self, error: &E) -> bool {
+        (self.interrupt_if)(error)
+    }
+    fn capture(&mut self, request: metadata::Request<'_>) -> Result<metadata::Reply, E> {
+        self.log.record(Event::MetadataCapture {
+            kind: request.kind,
+            declaring_source: request.declaring_source.into(),
+            written: request.written.into(),
+            remaining_bytes: request.remaining_bytes,
+            remaining_identity_bytes: request.remaining_identity_bytes,
+        });
+        let step = self.steps.pop_front().expect("unexpected metadata capture");
+        assert_eq!(step.kind, request.kind, "metadata kind");
+        assert_eq!(
+            step.declaring_source, request.declaring_source,
+            "declaring source"
+        );
+        assert_eq!(step.written, request.written, "authored path");
+        assert_eq!(
+            step.remaining_bytes, request.remaining_bytes,
+            "metadata bytes"
+        );
+        assert_eq!(
+            step.remaining_identity_bytes, request.remaining_identity_bytes,
+            "metadata identity"
+        );
+        step.outcome
+    }
+}
+
+#[derive(Debug)]
+pub struct MetadataDocument {
+    pub source: metadata::Source,
+    pub document: yamaa_core::schema::Document,
+}
+pub struct MetadataDecodeStep<E> {
+    pub source: metadata::Source,
+    pub target: metadata::DecodeTarget,
+    pub outcome: Result<yamaa_core::schema::Document, E>,
+}
+pub struct ScriptedMetadataDecoder<E> {
+    pub steps: VecDeque<MetadataDecodeStep<E>>,
+    log: EventLog,
+}
+impl<E> ScriptedMetadataDecoder<E> {
+    pub fn new(log: EventLog) -> Self {
+        Self {
+            steps: VecDeque::new(),
+            log,
+        }
+    }
+}
+impl<E> metadata::DecodePort for ScriptedMetadataDecoder<E> {
+    type Error = E;
+    type Document = MetadataDocument;
+    fn decode(
+        &mut self,
+        source: metadata::Source,
+        target: metadata::DecodeTarget,
+    ) -> Result<MetadataDocument, E> {
+        self.log.record(Event::MetadataDecode {
+            target,
+            identity: source.identity.clone(),
+            bytes: source.bytes.clone(),
+        });
+        let step = self.steps.pop_front().expect("unexpected metadata decode");
+        assert_eq!(step.source.identity, source.identity, "decode identity");
+        assert_eq!(step.source.bytes, source.bytes, "decode snapshot");
+        assert_eq!(step.target, target, "structural target");
+        step.outcome
+            .map(|document| MetadataDocument { source, document })
+    }
+    fn document(document: &MetadataDocument) -> &yamaa_core::schema::Document {
+        &document.document
+    }
+    fn source(document: &MetadataDocument) -> &metadata::Source {
+        &document.source
+    }
+}
+
 pub struct InspectionStep<E> {
     pub source: SourceDeclaration,
     pub outcome: Result<(), E>,

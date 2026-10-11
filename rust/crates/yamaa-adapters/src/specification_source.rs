@@ -11,12 +11,8 @@ use yamaa_core::schema::{
 mod inheritance;
 pub use inheritance::{CapturedParent, InheritanceError, InheritancePort, SourceFailure};
 
-/// The host's retained identity and byte snapshot. Names are not content digests.
-#[derive(Clone, Debug)]
-pub struct Source {
-    pub identity: String,
-    pub bytes: Vec<u8>,
-}
+/// The engine-owned identity and byte snapshot shared with metadata preparation.
+pub use yamaa_engine::project_preparation::Source;
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     pub captured_bytes: usize,
