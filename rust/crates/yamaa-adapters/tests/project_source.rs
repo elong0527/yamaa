@@ -445,3 +445,20 @@ fn interrupts_at_every_dependency_boundary_preserve_original_payload_and_abort_l
         assert_eq!(port.trace.len(), observed);
     }
 }
+
+#[test]
+fn root_identity_and_normalized_node_refusals_keep_compatibility_categories_before_capture() {
+    for resource in ["identity_bytes", "nodes"] {
+        let mut port = Port::new();
+        let root = root();
+        let mut limits = Limits::default();
+        if resource == "identity_bytes" {
+            limits.identity_bytes = root.identity.len() - 1;
+        } else {
+            limits.nodes = 0;
+        }
+        let result = project_source::prepare(schema(), root, Language::Python, &mut port, limits);
+        assert!(matches!(result, Err(Failure::Root(Error::Limit(code))) if code == resource));
+        assert!(port.trace.is_empty());
+    }
+}

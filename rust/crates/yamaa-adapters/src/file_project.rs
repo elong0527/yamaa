@@ -65,7 +65,14 @@ impl FileProject {
         entry: crate::file_graph::CapturedEntry,
     ) -> Result<Self, Box<RejectedOrdinary>> {
         let (mut resources, entry, document, environment) = entry.into_ordinary_parts();
-        match PreparedRun::prepare(document, environment) {
+        match PreparedRun::prepare(document, environment).and_then(|run| {
+            let findings = crate::verification_logs::location_findings(&resources, &run);
+            if findings.is_empty() {
+                Ok(run)
+            } else {
+                Err(run.reject(yamaa_core::specification::PrepareError::Invalid(findings)))
+            }
+        }) {
             Ok(run) => {
                 // All capture, selection and compilation has completed. Study
                 // authority uses ordinary build admission, never metadata quota.
@@ -101,6 +108,12 @@ impl FileProject {
         )
         .map_err(Error::Document)?;
         let run = PreparedRun::prepare(document, environment).map_err(Error::Compile)?;
+        let findings = crate::verification_logs::location_findings(&resources, &run);
+        if !findings.is_empty() {
+            return Err(Error::Compile(run.reject(
+                yamaa_core::specification::PrepareError::Invalid(findings),
+            )));
+        }
         Ok(Self {
             run: Arc::new(run),
             resources,
@@ -120,10 +133,16 @@ impl FileProject {
     pub(crate) fn publication_target(
         &self,
     ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {
+        self.publication_field_target("path")
+    }
+    pub(crate) fn publication_field_target(
+        &self,
+        field: &str,
+    ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {
         let origin = self
             .run
             .document()
-            .written_output_origin()
+            .written_output_field_origin(field)
             .ok_or(ResourceError::InvalidPath)?;
         self.resources
             .publication_target_from(origin.declaring_source, origin.written)

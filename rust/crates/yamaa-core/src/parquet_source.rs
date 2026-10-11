@@ -1,16 +1,10 @@
 //! Closed source type admission over portable storage metadata, without a codec.
 use crate::{
-    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
+    diagnostic::{Diagnostic, ParquetFinding, SourceFinding},
     table::{Column, TableSchema},
-    value::{ColumnType, Value},
+    value::ColumnType,
 };
-use alloc::{
-    collections::BTreeSet,
-    format,
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};
+use alloc::{collections::BTreeSet, string::String, vec::Vec};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Physical {
@@ -85,45 +79,31 @@ pub enum Error {
     },
 }
 impl Error {
-    pub fn diagnostic(&self, dataset: &str, path: &str) -> Diagnostic {
-        let mut context = [
-            ("dataset".into(), V::Scalar(Value::Str(dataset.into()))),
-            ("path".into(), V::Scalar(Value::Str(path.into()))),
-        ]
-        .into_iter()
-        .collect::<crate::diagnostic::Context>();
-        let mut text = |key: &str, value: &str| {
-            context.insert(key.into(), V::Scalar(Value::Str(value.into())));
-        };
-        let code = match self {
-            Self::Invalid => C::ParquetInvalid,
-            Self::EmptyName { field } => {
-                context.insert("field".into(), V::Integer(field.to_string()));
-                C::ParquetFieldNameEmpty
-            }
-            Self::DuplicateName { field } => {
-                text("field", field);
-                C::ParquetFieldNameDuplicate
-            }
+    /// Borrow exact physical-schema and raw-value facts from the original failure.
+    pub fn finding<'a>(&'a self, dataset: &'a str, path: &'a str) -> SourceFinding<'a> {
+        let finding = match self {
+            Self::Invalid => ParquetFinding::Invalid,
+            Self::EmptyName { field } => ParquetFinding::EmptyName { field: *field },
+            Self::DuplicateName { field } => ParquetFinding::DuplicateName { field },
             Self::Unsupported { field, stored_type } => {
-                text("field", field);
-                text("stored_type", stored_type);
-                C::ParquetFieldTypeUnsupported
+                ParquetFinding::Unsupported { field, stored_type }
             }
-            Self::Value { field, row, value } => {
-                text("field", field);
-                context.insert("row".into(), V::Integer(row.to_string()));
-                context.insert("value".into(), V::Scalar(Value::Int(*value)));
-                C::ParquetFieldValueInvalid
-            }
+            Self::Value { field, row, value } => ParquetFinding::Value {
+                field,
+                row: *row,
+                value: *value,
+            },
         };
-        Diagnostic {
-            code,
-            spec_paths: vec![format!("input.{dataset}.path")],
-            context,
-            source_span: None,
-            operand_route: None,
+        SourceFinding::Parquet {
+            finding,
+            dataset,
+            path,
         }
+    }
+    /// Unbounded owned compatibility. Complete borrowed report admission is the
+    /// replacement; this original always-semantic return signature is unchanged.
+    pub fn diagnostic(&self, dataset: &str, path: &str) -> Diagnostic {
+        self.finding(dataset, path).owned_compatibility()
     }
 }
 

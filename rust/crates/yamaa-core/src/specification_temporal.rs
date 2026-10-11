@@ -289,6 +289,25 @@ pub(super) fn bind_row(
         if let Some(expression) = rounding::bind_row_operand(
             source, &path, catalog, driver, row, phase, available, edges, findings,
         )? {
+            let binding = catalog
+                .bind(source)
+                .map_err(BindError::Catalog)?
+                .ok_or(BindError::Internal)?;
+            let (reference_binding::Binding::Output { column_type, .. }
+            | reference_binding::Binding::Dataset { column_type, .. }) = binding;
+            if column_type != ColumnType::Date {
+                let actual = match column_type {
+                    ColumnType::Str => "str",
+                    ColumnType::Int => "int",
+                    ColumnType::Float => "float",
+                    ColumnType::DateTime => "datetime",
+                    ColumnType::Date => unreachable!(),
+                };
+                findings.push(BindFinding::Temporal(Temporal::input_diagnostic(
+                    source, &path, actual,
+                )));
+                continue;
+            }
             operands.push(Assignment {
                 column,
                 expression,
