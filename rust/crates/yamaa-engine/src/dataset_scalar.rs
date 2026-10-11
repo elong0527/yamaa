@@ -4,8 +4,46 @@ use yamaa_core::{
     scalar_language,
     text_extract::{Error, Step},
 };
-pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
-    match expression {
+pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
+    match &assignment.expression {
+        Expression::SourceLookup {
+            selection: Some(_), ..
+        } => {
+            counter.register(
+                &alloc::format!("{}.multiple_matches", assignment.path),
+                HandlerKind::MultipleMatches,
+            );
+        }
+        Expression::SourceBinding {
+            source,
+            path,
+            absent,
+            ..
+        } => {
+            if absent.is_some() {
+                counter.register(&alloc::format!("{path}.absent"), HandlerKind::Absent);
+            }
+            if matches!(
+                &source.expression,
+                Expression::Collect {
+                    selection: Some(_),
+                    ..
+                }
+            ) {
+                counter.register(
+                    &alloc::format!("{}.multiple_matches", source.path),
+                    HandlerKind::MultipleMatches,
+                );
+            }
+            register(source, counter);
+        }
+        Expression::FirstAvailable(selection) => {
+            for source in selection.sources() {
+                if let yamaa_core::dataset::SelectionRead::Expression(source) = &source.read {
+                    register(source, counter);
+                }
+            }
+        }
         Expression::StrContains { source, operation } => {
             if operation.handler("missing").is_some() {
                 counter.register(
@@ -13,7 +51,7 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
                     HandlerKind::Missing,
                 );
             }
-            register(&source.expression, counter);
+            register(source, counter);
         }
         Expression::StrConcat {
             operands,
@@ -24,7 +62,7 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
                 counter.register(&alloc::format!("{path}.missing"), HandlerKind::Missing);
             }
             for source in operands {
-                register(&source.expression, counter);
+                register(source, counter);
             }
         }
         Expression::Extreme { operands, .. }
@@ -32,18 +70,18 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
         | Expression::Temporal { operands, .. }
         | Expression::StrTemplate { operands, .. } => {
             for source in operands {
-                register(&source.expression, counter);
+                register(source, counter);
             }
         }
         Expression::Case(branches) => {
             for branch in branches {
-                register(&branch.assignment.expression, counter);
+                register(&branch.assignment, counter);
             }
         }
         Expression::StrCase { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrPad { source, .. }
-        | Expression::Round { source, .. } => register(&source.expression, counter),
+        | Expression::Round { source, .. } => register(source, counter),
         _ => (),
     }
 }

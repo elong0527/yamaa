@@ -226,6 +226,8 @@ conditions! {
     RowFilterPhaseBoundary => ("validation", "phase_boundary", None),
     RowDependencyPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0069")),
     QualifiedNumericReference => ("validation", "qualified_identifier", Some("REQ-0442")),
+    ImplicitSourceKeyType => ("validation", "incompatible_input_type", Some("REQ-0151")),
+    ImplicitSourceNoApplicableKeys => ("validation", "no_applicable_keys", Some("REQ-0152")),
     SourceFilterReference => ("validation", "unknown_field", Some("REQ-0132")),
     SourceFilterSingleValue => ("validation", "prohibited_construct", Some("REQ-0148")),
     SourceUnknownReference => ("validation", "unknown_field", Some("REQ-0103")),
