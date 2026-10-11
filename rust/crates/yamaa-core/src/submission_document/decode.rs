@@ -111,6 +111,7 @@ const SECTION: &[FieldName] = &[
     FieldName::MetadataVersion,
     FieldName::Originator,
     FieldName::Stylesheet,
+    FieldName::SourceSystemVersion,
 ];
 impl Path {
     fn root() -> Self {
@@ -651,6 +652,12 @@ impl<'a> Parser<'a, '_> {
         let originator =
             self.optional_text(node, FieldName::Originator, path, TextRule::NonEmpty)?;
         let stylesheet = self.optional_text(node, FieldName::Stylesheet, path, TextRule::Href)?;
+        let source_system_version = self.optional_text(
+            node,
+            FieldName::SourceSystemVersion,
+            path,
+            TextRule::NonEmpty,
+        )?;
         Ok(standard
             .zip(define)
             .zip(dataset_json)
@@ -677,6 +684,7 @@ impl<'a> Parser<'a, '_> {
                     metadata_version,
                     originator,
                     stylesheet,
+                    source_system_version,
                 },
             ))
     }

@@ -219,7 +219,7 @@ differences.
 
 <a id="req-1080"></a>
 
-**REQ-1080.** The `environment_class` fields have these meanings: `schema_version` selects the schema; `language`, `lock`, and `functions` declare installed code; `codelists` supplies study terminology; `study` and `sdtm`, `adam`, `send` carry submission metadata for [Define-XML](../submission/define-xml.md). A submission section requires `study`. Domain builds do not open submission document links or generate a Define-XML artifact.
+**REQ-1080.** The `environment_class` fields have these meanings: `schema_version` selects the schema; `language`, `lock`, and `functions` declare installed code; `codelists` supplies study terminology; `study` and `sdtm`, `adam`, `send` carry submission metadata for [Define-XML](../submission/define-xml.md). A submission section requires `study`. Domain builds do not open submission document links or generate a Define-XML artifact. Each submission section may declare a nonempty `source_system_version` string. Its value overrides source-system version metadata in both Define-XML and Dataset-JSON; omission selects the actual installed yamaa version. Qualification retains the actual generator version separately from this metadata override.
 
 
 

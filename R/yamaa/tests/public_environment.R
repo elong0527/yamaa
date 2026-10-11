@@ -235,3 +235,36 @@ stopifnot(identical(checked$issues$condition, "redundant_field_type"),
 cat("public R original inherited diamond checks are complete with no study/publication effects\n")
 setwd(previous)
 cat("public R environment static diagnostics, lock/test failure ordering and no data reads passed\n")
+
+# Static submission-version admission opens neither listed specifications,
+# linked documents, prospective outputs nor missing study data.
+qualify_submission_versions <- function() {
+  old <- getwd()
+  directory <- tempfile("submission-version-"); dir.create(directory)
+  on.exit({ setwd(old); unlink(directory, recursive = TRUE) }, add = TRUE)
+  setwd(directory)
+  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+    "input: {SRC: absent.csv}", "columns: [{name: ID, type: int, derivation: SRC.ID}]",
+    "output: {path: result.csv, columns: [ID]}"), "spec.yaml")
+  for (family in c("sdtm", "adam", "send")) {
+    guide <- switch(family, sdtm = "SDTMIG", adam = "ADaMIG", send = "SENDIG")
+    prefix <- c("schema_version: '1.0'", "language: r",
+      "study: {id: STUDY, name: Study, description: Study, protocol_name: Protocol}",
+      paste0(family, ":"),
+      paste0("  standard: {name: ", guide, ", version: '1.0', status: Final}"),
+      "  specs: [absent-spec.yaml]", "  define: absent/define.xml")
+    for (declared in list(NULL, "'1.0'", "'future package build'")) {
+      field <- if (is.null(declared)) character() else paste0("  source_system_version: ", declared)
+      writeLines(c(prefix, field), "environment.yaml")
+      stopifnot(nrow(yamaa_check("spec.yaml", environment = "environment.yaml")$issues) == 0L)
+    }
+    for (declared in c("null", "true", "1", "1.5", "''")) {
+      writeLines(c(prefix, paste0("  source_system_version: ", declared)), "environment.yaml")
+      issues <- yamaa_check("spec.yaml", environment = "environment.yaml")$issues
+      stopifnot(nrow(issues) == 1L,
+        paste0(family, ".source_system_version") %in% issues$spec_paths[[1]])
+    }
+    stopifnot(identical(sort(list.files()), c("environment.yaml", "spec.yaml")))
+  }
+}
+qualify_submission_versions()
