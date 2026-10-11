@@ -57,7 +57,7 @@ stopifnot(count("<def:ValueListDef ", xml) == 1L, count("<def:ValueListRef ", xm
   grepl('<def:ValueListRef ValueListOID="VL.LB.LBORRESU"/>', xml, fixed = TRUE))
 for (case in list(list(i = 1L, code = "GLUC", source = "Vendor", list = "CL_GLUCOSE"),
   list(i = 2L, code = "CREAT", source = "Sponsor", list = "CL_CREATININE"))) {
-  identity <- paste0("LB.LBORRESU.V", case$i)
+  identity <- paste0("LB.LBORRESU.", case$code)
   item_start <- regexpr(paste0('<ItemDef OID="IT.', identity, '"'), xml, fixed = TRUE)[[1L]]
   stopifnot(item_start > 0L)
   item <- substring(xml, item_start)
