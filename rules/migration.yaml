@@ -1107,7 +1107,7 @@ requirements:
   REQ-0031: {"file": "execution/lifecycle.md", "sources": ["R001-1"]}
   REQ-0032: {"file": "execution/lifecycle.md", "sources": ["R001-2"]}
   REQ-0033: {"file": "execution/lifecycle.md", "sources": ["R001-3"]}
-  REQ-0034: {"file": "execution/rows.md", "sources": ["R001-4", "R001-32"]}
+  REQ-0034: {"file": "execution/rows.md", "sources": ["R001-4", "R001-32", "yamaa:issue-2004:req-0034"]}
   REQ-0035: {"file": "execution/rows.md", "sources": ["R001-5"]}
   REQ-0036: {"file": "execution/rows.md", "sources": ["R001-6"]}
   REQ-0037: {"file": "execution/rows.md", "sources": ["R001-7"]}
@@ -1137,11 +1137,11 @@ requirements:
   REQ-0061: {"file": "execution/lifecycle.md", "sources": ["R001-29"]}
   REQ-0062: {"file": "storage/publication.md", "sources": ["R001-31"]}
   REQ-0063: {"file": "execution/rows.md", "sources": ["R001-32"], "retired": true, "replacement": ["REQ-0034"]}
-  REQ-0064: {"file": "execution/rows.md", "sources": ["R001-33"]}
+  REQ-0064: {"file": "execution/rows.md", "sources": ["R001-33", "yamaa:issue-2004:req-0064"]}
   REQ-0065: {"file": "execution/rows.md", "sources": ["R001-34"]}
   REQ-0066: {"file": "execution/rows.md", "sources": ["R001-35"]}
   REQ-0067: {"file": "execution/rows.md", "sources": ["R001-36"]}
-  REQ-0068: {"file": "execution/rows.md", "sources": ["R001-37"]}
+  REQ-0068: {"file": "execution/rows.md", "sources": ["R001-37", "yamaa:issue-2004:req-0068"]}
   REQ-0069: {"file": "execution/lifecycle.md", "sources": ["R001-38"]}
   REQ-0070: {"file": "execution/lifecycle.md", "sources": ["R001-39"]}
   REQ-0071: {"file": "execution/lifecycle.md", "sources": ["R001-40"]}
@@ -1179,7 +1179,7 @@ requirements:
   REQ-0103: {"file": "specification/binding.md", "sources": ["R002-27"]}
   REQ-0104: {"file": "specification/binding.md", "sources": ["R002-28"], "retired": true, "replacement": ["REQ-0080"]}
   REQ-0105: {"file": "specification/binding.md", "sources": ["R002-29"]}
-  REQ-0106: {"file": "specification/binding.md", "sources": ["R002-30"]}
+  REQ-0106: {"file": "specification/binding.md", "sources": ["R002-30", "yamaa:issue-2004:req-0106"]}
   REQ-0107: {"file": "specification/binding.md", "sources": ["R002-31"]}
   REQ-0108: {"file": "specification/binding.md", "sources": ["R002-32"], "retired": true, "replacement": ["REQ-1275"]}
   REQ-0109: {"file": "specification/binding.md", "sources": ["R002-33"], "retired": true, "replacement": ["REQ-1278"]}
@@ -1274,7 +1274,7 @@ requirements:
   REQ-0199: {"file": "specification/structure.md", "sources": ["R005-7", "R005-5", "R005-15"]}
   REQ-0200: {"file": "specification/structure.md", "sources": ["R005-8"]}
   REQ-0201: {"file": "specification/structure.md", "sources": ["R005-9"]}
-  REQ-0202: {"file": "specification/structure.md", "sources": ["R005-10"]}
+  REQ-0202: {"file": "specification/structure.md", "sources": ["R005-10", "yamaa:issue-2004:req-0202"]}
   REQ-0204: {"file": "specification/structure.md", "sources": ["R005-12"]}
   REQ-0205: {"file": "storage/publication.md", "sources": ["R005-13"]}
   REQ-0206: {"file": "specification/structure.md", "sources": ["R005-14"]}
@@ -2363,6 +2363,7 @@ requirements:
   REQ-1294: {"file": "storage/ingestion.md", "sources": ["yamaa:issue-1566:ordinal-collision"]}
   REQ-1295: {"file": "storage/ingestion.md", "sources": ["yamaa:issue-1566:ordinal-odm"]}
   REQ-1296: {"file": "submission/metadata.md", "sources": ["schema_metadata.yaml:submission_dataset_class.has_no_data.description"]}
+  REQ-1297: {"file": "execution/lifecycle.md", "sources": ["yamaa:issue-2004:normative-null"]}
 
 schema_prose:
   - {"source": "schema.yaml:root_class.schema_version.description", "text": "Schema bundle this specification is written against; R006 requires an exact match.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
@@ -3034,3 +3035,9 @@ provenance_addenda:
   - {"source": "yamaa:issue-1758:req-1228", "target": "REQ-1228", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
   - {"source": "yamaa:issue-1758:req-1013", "text": "Approved shared Define migration #1758: the bundled Define 2.1 XSD permits one ValueListRef on each column ItemDef, ordered ItemRefs inside one ValueListDef, and WhereClauseRefs on those entries. ValueListDef precedes WhereClauseDef before ordinary definitions; per-value ItemDefs contain merged typed metadata.", "owner": "submission/define-xml", "group": "value-level metadata", "target": "REQ-1013"}
   - {"source": "yamaa:issue-1758:req-1169", "text": "Approved shared Define migration #1758 consumes every admitted bounded row override, retaining per-value origin and vocabulary admission and complete metadata references. An unconsumed entry still fails loudly; the unchanged reference generator failure remains transition evidence.", "owner": "submission/define-xml", "group": "value-level metadata", "target": "REQ-1169"}
+  - {"source": "yamaa:issue-2004:req-0202", "text": "Approved #1973 item 7 and #2004: undeclared row derivations cite their existing owning rule and preserve the complete authored path and column context.", "owner": "specification/structure", "group": "diagnostic requirement ownership", "target": "REQ-0202"}
+  - {"source": "yamaa:issue-2004:req-0034", "text": "Approved #1973 item 7 and #2004: row driver selection failures cite this rule; explicitly document driver_unavailable for omitted ambiguous and undeclared drivers, retaining separate intermediate eligibility checks.", "owner": "execution/rows", "group": "diagnostic requirement ownership", "target": "REQ-0034"}
+  - {"source": "yamaa:issue-2004:req-0064", "text": "Approved #1973 item 7 and #2004: default driver failures cite this rule; explicitly include empty rows and an explicit base absent from input, even with row templates.", "owner": "execution/rows", "group": "diagnostic requirement ownership", "target": "REQ-0064"}
+  - {"source": "yamaa:issue-2004:req-0068", "text": "Approved #1973 item 7 and #2004: row-filter phase failures cite this rule and explicitly retain phase_boundary with the authored row, identifier and phase context.", "owner": "execution/rows", "group": "diagnostic requirement ownership", "target": "REQ-0068"}
+  - {"source": "yamaa:issue-2004:req-0106", "text": "Approved #1973 item 7 and #2004: both unresolved unqualified output causes cite their existing unknown_field and unresolvable_name owning rule.", "owner": "specification/binding", "group": "diagnostic requirement ownership", "target": "REQ-0106"}
+  - {"source": "yamaa:issue-2004:normative-null", "text": "Approved #1973 item 7 and #2004: only unsupported_operation at planning and engine_rejected at engine retain a null normative requirement; language diagnostics cite their governing rules.", "owner": "execution/lifecycle", "group": "diagnostic requirement ownership", "target": "REQ-1297"}

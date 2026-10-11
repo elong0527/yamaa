@@ -235,7 +235,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "variable",
             "MISSING",
             "unknown_field",
-            None,
+            Some("REQ-0106"),
             vec![("identifier", text("MISSING"))],
         ),
         (
@@ -243,7 +243,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "variable",
             "V",
             "unresolvable_name",
-            None,
+            Some("REQ-0106"),
             vec![("identifier", text("V")), ("suggestion", text("SRC.V"))],
         ),
         (
@@ -360,7 +360,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         reached.insert(check(
             d,
             "phase_boundary",
-            None,
+            Some("REQ-0068"),
             &["rows[0].filter"],
             vec![
                 ("identifier", text(identifier)),

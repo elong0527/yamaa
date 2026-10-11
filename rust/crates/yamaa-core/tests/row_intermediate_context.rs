@@ -207,7 +207,7 @@ fn unknown_and_omitted_drivers_keep_model_preflight_and_exact_typed_context() {
                 diagnostic.definition().condition,
                 diagnostic.definition().requirement
             ),
-            ("validation", "driver_unavailable", None)
+            ("validation", "driver_unavailable", Some("REQ-0034"))
         );
         assert_eq!(diagnostic.spec_paths, ["rows[1].dataset"]);
         assert_eq!(diagnostic.context.len(), 2);

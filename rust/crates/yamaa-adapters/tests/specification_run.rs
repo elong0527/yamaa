@@ -551,13 +551,13 @@ fn compiler_diagnostics_match_independent_reference_paths_context_and_phase() {
         (
             "BOGUS + 1",
             "unknown_field",
-            None,
+            Some("REQ-0106"),
             json!({"identifier":"BOGUS"}),
         ),
         (
             "LBSTRESN + 1",
             "unresolvable_name",
-            None,
+            Some("REQ-0106"),
             json!({"identifier":"LBSTRESN","suggestion":"LB.LBSTRESN"}),
         ),
     ] {
@@ -627,7 +627,7 @@ fn preflight_reports_all_findings_in_reference_order_before_source_access() {
             json!({"phase":"validation","condition":"missing_derivation","spec_paths":["columns.PCHG.derivation"],"requirement":"REQ-0198","context":{"column":"PCHG"}}),
             json!({"phase":"validation","condition":"duplicate_identifier","spec_paths":["input.LB","domain"],"requirement":"REQ-0080","context":{"identifier":"LB"}}),
             json!({"phase":"validation","condition":"undeclared_column","spec_paths":["keys[3]"],"requirement":"REQ-0220","context":{"column":"BOGUS"}}),
-            json!({"phase":"validation","condition":"driver_unavailable","spec_paths":["base"],"requirement":null,"context":{"dataset":"BAD"}}),
+            json!({"phase":"validation","condition":"driver_unavailable","spec_paths":["base"],"requirement":"REQ-0064","context":{"dataset":"BAD"}}),
         ]
     );
 }
@@ -813,7 +813,7 @@ fn binding_collects_ordered_findings_before_dependency_diagnostics() {
     let case = root.join("benchmarks/negative-zero-division");
     let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
     let data = std::fs::read(case.join("input/lb.csv")).unwrap();
-    let unknown = json!({"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"identifier":"BOGUS"}});
+    let unknown = json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0106","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"identifier":"BOGUS"}});
     let cycle = json!({"phase":"validation","condition":"dependency_cycle","requirement":"REQ-0072","spec_paths":["columns.PCHG.derivation.compute"],"context":{"cycle":["PCHG","PCHG"]}});
     let written = raw
         .replace("derivation: LB.LBSTRESN", "derivation: LB.BOGUS")
@@ -1709,7 +1709,7 @@ fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
     let error = PreparedRun::prepare(prepare(&schema, written.as_bytes()))
         .err()
         .unwrap();
-    assert_eq!(specification_diagnostics::findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","requirement":null,"spec_paths":["rows[1].dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
+    assert_eq!(specification_diagnostics::findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","requirement":"REQ-0034","spec_paths":["rows[1].dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
     let written = raw.replace(
         "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]",
         "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT, LB.ABSENT]",
@@ -1972,7 +1972,7 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
     assert_eq!(
         specification_diagnostics::findings(&error, None).unwrap(),
         vec![
-            json!({"phase":"validation","condition":"undeclared_column","requirement":null,"spec_paths":["rows[0].derivations.ABSENT"],"context":{"column":"ABSENT"}}),
+            json!({"phase":"validation","condition":"undeclared_column","requirement":"REQ-0202","spec_paths":["rows[0].derivations.ABSENT"],"context":{"column":"ABSENT"}}),
             json!({"phase":"validation","condition":"missing_derivation","requirement":"REQ-0200","spec_paths":["columns.PARAM.derivation"],"context":{"column":"PARAM","rows":["collected"]}}),
             json!({"phase":"validation","condition":"conflicting_row_construction","requirement":"REQ-1171","spec_paths":["filter","rows"],"context":{}}),
         ]

@@ -196,6 +196,21 @@ derivation:
   unconvertible:
 ```
 
+### Diagnostic citations
+
+<a id="req-1297"></a>
+
+**REQ-1297.** A language diagnostic cites the requirement that owns its
+failure. A missing normative requirement is permitted only for the
+implementation conditions listed below, in their stated phases. These
+conditions report an admitted operation that the implementation does not
+support or an engine refusal; neither asserts a language rule violation.
+
+<!-- normative-null-conditions:start -->
+- `unsupported_operation` (`planning`)
+- `engine_rejected` (`engine`)
+<!-- normative-null-conditions:end -->
+
 ## Error conditions
 
 <a id="req-0069"></a>

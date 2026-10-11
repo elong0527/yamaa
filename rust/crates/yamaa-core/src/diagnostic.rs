@@ -83,8 +83,8 @@ impl ProjectionBudget {
 pub struct Definition {
     pub phase: &'static str,
     pub condition: &'static str,
-    /// Some existing language findings have no individually assigned requirement.
-    /// Preserve that absence rather than inventing an identifier at the boundary.
+    /// Language failures cite their owning rule. Only implementation refusals
+    /// listed by REQ-1297 retain an absent normative requirement.
     pub requirement: Option<&'static str>,
 }
 
@@ -175,16 +175,16 @@ conditions! {
     InheritanceCycle => ("validation", "inheritance_cycle", Some("REQ-0655")),
     InheritanceParentVersion => ("validation", "schema_version_mismatch", Some("REQ-0656")),
     InheritanceEntryVersion => ("validation", "schema_version_mismatch", Some("REQ-0245")),
-    PreflightUndeclaredRowColumn => ("validation", "undeclared_column", None),
+    PreflightUndeclaredRowColumn => ("validation", "undeclared_column", Some("REQ-0202")),
     PreflightDuplicateRowDefault => ("validation", "duplicate_derivation", Some("REQ-1260")),
     PreflightMissingRowDerivation => ("validation", "missing_derivation", Some("REQ-0200")),
     PreflightConflictingRowConstruction => ("validation", "conflicting_row_construction", Some("REQ-1171")),
     PreflightInvalidGroup => ("validation", "invalid_field_type", Some("REQ-0065")),
     PreflightGroupReference => ("validation", "unknown_field", Some("REQ-0066")),
-    PreflightRowDriverUnavailable => ("validation", "driver_unavailable", None),
+    PreflightRowDriverUnavailable => ("validation", "driver_unavailable", Some("REQ-0034")),
     PreflightMissingDerivation => ("validation", "missing_derivation", Some("REQ-0198")),
     PreflightUndeclaredKey => ("validation", "undeclared_column", Some("REQ-0220")),
-    PreflightDriverUnavailable => ("validation", "driver_unavailable", None),
+    PreflightDriverUnavailable => ("validation", "driver_unavailable", Some("REQ-0064")),
     PreflightDomainInputCollision => ("validation", "duplicate_identifier", Some("REQ-0080")),
     PreflightRedundantSourceType => ("validation", "redundant_field_type", Some("REQ-0533")),
     ProducerInvalidContract => ("validation", "invalid_producer_contract", Some("REQ-0534")),
@@ -222,7 +222,7 @@ conditions! {
     GroupedRowReference => ("validation", "ungrouped_driver_field", Some("REQ-0067")),
     GroupedColumnReference => ("validation", "ungrouped_driver_field", Some("REQ-0107")),
     AggregateDriverScope => ("validation", "invalid_aggregate_context", Some("REQ-0329")),
-    RowFilterPhaseBoundary => ("validation", "phase_boundary", None),
+    RowFilterPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0068")),
     RowDependencyPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0069")),
     QualifiedNumericReference => ("validation", "qualified_identifier", Some("REQ-0442")),
     SourceFilterReference => ("validation", "unknown_field", Some("REQ-0132")),
@@ -237,8 +237,8 @@ conditions! {
     VerificationCodelistFailed => ("verification", "allowed_values_failed", Some("REQ-0957")),
     VerificationRangeFailed => ("verification", "range_failed", Some("REQ-0377")),
     VerificationMaxLengthFailed => ("verification", "length_failed", Some("REQ-0378")),
-    OutputUnknownReference => ("validation", "unknown_field", None),
-    OutputUnresolvableReference => ("validation", "unresolvable_name", None),
+    OutputUnknownReference => ("validation", "unknown_field", Some("REQ-0106")),
+    OutputUnresolvableReference => ("validation", "unresolvable_name", Some("REQ-0106")),
     ColumnDependencyCycle => ("validation", "dependency_cycle", Some("REQ-0072")),
     ColumnForwardReference => ("validation", "forward_reference", Some("REQ-0071")),
     ColumnMissingKeyDerivation => ("validation", "key_dependency", Some("REQ-0074")),
