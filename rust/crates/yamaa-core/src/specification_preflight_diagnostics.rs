@@ -32,6 +32,7 @@ impl PreflightFinding {
             Self::Imputation(diagnostic)
             | Self::TextCase(diagnostic)
             | Self::TextTemplate(diagnostic)
+            | Self::Scalar(diagnostic)
             | Self::TextExtract(diagnostic) => {
                 diagnostic.spec_paths.iter().for_each(|path| visit(path));
                 fn values(value: &V, visit: &mut impl FnMut(&str)) {
@@ -144,6 +145,7 @@ impl PreflightFinding {
             Self::Imputation(diagnostic)
             | Self::TextCase(diagnostic)
             | Self::TextTemplate(diagnostic)
+            | Self::Scalar(diagnostic)
             | Self::TextExtract(diagnostic) => return diagnostic.clone(),
             Self::RoundingInput {
                 path,

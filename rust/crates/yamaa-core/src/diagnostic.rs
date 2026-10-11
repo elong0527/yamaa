@@ -133,6 +133,7 @@ conditions! {
     NumericUnknownField => ("validation", "unknown_field", Some("REQ-0443")),
     NumericInputType => ("validation", "incompatible_input_type", Some("REQ-0444")),
     RoundingDigitsType => ("validation", "incompatible_input_type", Some("REQ-0418")),
+    ExtremeIncomparable => ("validation", "incomparable_sources", Some("REQ-0324")),
     StrPadWidth => ("validation", "invalid_field_type", Some("REQ-1261")),
     DeclarativeRoundingInput => ("validation", "incompatible_input_type", Some("REQ-0418")),
     TemporalOperand => ("validation", "incompatible_input_type", Some("REQ-0606")),

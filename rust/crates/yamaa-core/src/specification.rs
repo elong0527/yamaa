@@ -60,6 +60,8 @@ mod flags;
 mod imputation;
 #[path = "specification_rounding.rs"]
 mod rounding;
+#[path = "specification_scalar.rs"]
+mod scalar;
 #[path = "specification_str_case.rs"]
 mod str_case;
 #[path = "specification_str_extract.rs"]
@@ -116,6 +118,7 @@ impl Default for CompilationLimits {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum PreflightFinding {
+    Scalar(crate::diagnostic::Diagnostic),
     TextExtract(crate::diagnostic::Diagnostic),
     TextTemplate(crate::diagnostic::Diagnostic),
     TextCase(crate::diagnostic::Diagnostic),
@@ -216,6 +219,7 @@ pub enum BindError {
 #[derive(Debug)]
 pub enum BindFinding {
     Padding(crate::diagnostic::Diagnostic),
+    Scalar(crate::diagnostic::Diagnostic),
     TextExtract(crate::diagnostic::Diagnostic),
     TextTemplate(crate::diagnostic::Diagnostic),
     Temporal(crate::diagnostic::Diagnostic),
@@ -311,6 +315,8 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    Scalar(alloc::boxed::Box<scalar::Declaration>),
+    StrContains(crate::text_extract::StringExtract),
     Flag(flags::Declaration),
     StrExtract(crate::text_extract::StringExtract),
     StrTemplate(crate::text_template::StringTemplate),
@@ -1007,6 +1013,7 @@ impl PreparedSpecification {
         str_pad::declaration_admission(d, columns, &output)?;
         flags::declaration_admission(d, columns, &output)?;
         str_case::declaration_findings(d, columns, &output, &mut findings)?;
+        scalar::declaration_findings(d, &output, &mut findings)?;
         let extraction = str_extract::Prepared::new(d, &output, &mut findings)?;
         let templates = str_template::Prepared::new(d, &output, &mut findings)?;
         if !findings.is_empty() {
@@ -1270,6 +1277,7 @@ impl PreparedSpecification {
                 catalogue.is_some(),
                 &extraction,
                 &templates,
+                &intermediates,
             )?;
             let project = match project {
                 Some(project) => {
@@ -1404,6 +1412,21 @@ impl PreparedSpecification {
                 ))),
                 "str_template" => Some(Operation::StrTemplate(templates.get(payload)?)),
                 "str_extract" => Some(Operation::StrExtract(extraction.get(payload)?)),
+                "str_contains" => Some(Operation::StrContains(extraction.get(payload)?)),
+                "greatest" | "least" | "str_concat" => {
+                    Some(Operation::Scalar(alloc::boxed::Box::new(scalar::prepare(
+                        d,
+                        payload,
+                        op,
+                        &path,
+                        project.as_ref(),
+                        &intermediates,
+                        keys.contains(&column),
+                        0,
+                        &extraction,
+                        &templates,
+                    )?)))
+                }
                 "str_case" => Some(Operation::StrCase(str_case::prepare(
                     d,
                     payload,
@@ -1488,6 +1511,7 @@ impl PreparedSpecification {
                 }
             };
             if let Some(operation) = operation {
+                scalar::unsupported_relations(&operation, driver, &intermediates, &mut extra);
                 declarations.push(Declaration {
                     handler,
                     path,
@@ -1956,6 +1980,27 @@ impl PreparedSpecification {
                     &self.keys,
                     &catalog,
                     &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
+                Operation::Scalar(operation) => scalar::bind(
+                    self,
+                    operation,
+                    column,
+                    &catalog,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                    declarations_reported,
+                )?,
+                Operation::StrContains(operation) => scalar::bind_contains(
+                    self,
+                    operation,
+                    column,
+                    &catalog,
                     &secondary,
                     &intermediates,
                     &mut edges,

@@ -91,6 +91,7 @@ impl BindFinding {
         let (code, path, values) = match self {
             Self::Padding(diagnostic)
             | Self::TextTemplate(diagnostic)
+            | Self::Scalar(diagnostic)
             | Self::TextExtract(diagnostic)
             | Self::Temporal(diagnostic)
             | Self::Predicate(diagnostic) => return Some(vec![diagnostic.clone()]),
