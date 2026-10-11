@@ -112,7 +112,7 @@ def stage_row_intermediate_truth(destination: Path):
     original = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json"
     shutil.copy2(original, destination / "row-intermediate-reference.json")
     reference = json.loads(original.read_text(encoding="ascii"))
-    root = destination / "row-intermediate-cases"
+    root = destination / "row-cases"
     root.mkdir()
     cases = dict(reference["cases"], **reference["originals"])
     def text(value):
@@ -143,10 +143,10 @@ def stage_row_intermediate_truth(destination: Path):
             findings = reference["eot_native_gates"]
             success = False
         if success:
-            (directory / "row-context-expected.csv").write_text(case["csv"], encoding="utf-8", newline="\n")
+            (directory / "expected.csv").write_text(case["csv"], encoding="utf-8", newline="\n")
             if name in reference["originals"]:
                 assert case["csv"] == case["expected_csv"]
-        (directory / "row-context-findings.json").write_text(json.dumps(findings, ensure_ascii=True, sort_keys=True) + "\n", encoding="ascii")
+        (directory / "findings.json").write_text(json.dumps(findings, ensure_ascii=True, sort_keys=True) + "\n", encoding="ascii")
         fields = []
         for field in ("phase", "condition", "requirement", "spec_paths", "context"):
             values = [finding[field] for finding in findings]

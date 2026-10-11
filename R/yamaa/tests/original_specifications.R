@@ -1484,7 +1484,7 @@ local({
   on.exit(unlink(directory,recursive=TRUE))
   for(name in names(row_intermediate_truth)) {
     truth <- row_intermediate_truth[[name]]
-    stopifnot(file.copy(file.path(root,"row-intermediate-cases",name),directory,recursive=TRUE))
+    stopifnot(file.copy(file.path(root,"row-cases",name),directory,recursive=TRUE))
     case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
     result <- yamaa_domain(entry);check_issue_frame(result$issues,truth$issues)
     observed <- get(".domain_observations",asNamespace("yamaa"))(result)
@@ -1499,8 +1499,8 @@ local({
     stopifnot(!file.exists(output))
     if(truth$success) {
       stopifnot(!is.null(result$output),identical(result$save(),TRUE),
-        identical(rawfile(output),rawfile(file.path(case,"row-context-expected.csv"))),
-        identical(result$save(),TRUE),identical(rawfile(output),rawfile(file.path(case,"row-context-expected.csv"))))
+        identical(rawfile(output),rawfile(file.path(case,"expected.csv"))),
+        identical(result$save(),TRUE),identical(rawfile(output),rawfile(file.path(case,"expected.csv"))))
     } else {
       stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(output))
     }

@@ -1762,9 +1762,9 @@ columns:
             for name, case in cases.items():
                 with self.subTest(name=name):
                     current = root / name
-                    shutil.copytree(ROOT / "row-intermediate-cases" / name, current)
+                    shutil.copytree(ROOT / "row-cases" / name, current)
                     entry = current / "spec.yaml"
-                    expected = json.loads((current / "row-context-findings.json").read_text(encoding="ascii"))
+                    expected = json.loads((current / "findings.json").read_text(encoding="ascii"))
                     result = yamaa.domain(entry)
                     self.assertEqual(issues(result), expected)
                     observations = result._native.observations()
@@ -1774,7 +1774,7 @@ columns:
                     self.assertFalse(output.exists())
                     if not expected:
                         self.assertIsNotNone(result.output)
-                        expected_csv = (current / "row-context-expected.csv").read_bytes()
+                        expected_csv = (current / "expected.csv").read_bytes()
                         self.assertEqual(result.output.write_csv().encode(), expected_csv)
                         self.assertTrue(result.save())
                         self.assertEqual(output.read_bytes(), expected_csv)
