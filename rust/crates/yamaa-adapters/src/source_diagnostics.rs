@@ -72,6 +72,7 @@ fn semantic(error: &Error) -> bool {
         Error::Source(TextTableError::Csv(error)) => error.finding("", "").is_some(),
         Error::TypedSource(crate::typed_csv::Error::Typing(error)) => error.finding("").is_some(),
         Error::ParquetSource(error) => error.finding("", "").is_some(),
+        Error::Ordinal(error) => error.finding("", "").is_some(),
         _ => false,
     }
 }
@@ -80,6 +81,7 @@ fn finding<'a>(error: &'a Error, source: &'a SourceDeclaration) -> Option<Source
         Error::Source(TextTableError::Csv(error)) => error.finding(&source.name, &source.path),
         Error::TypedSource(crate::typed_csv::Error::Typing(error)) => error.finding(&source.name),
         Error::ParquetSource(error) => error.finding(&source.name, &source.path),
+        Error::Ordinal(error) => error.finding(&source.name, source.ordinal.as_deref()?),
         _ => None,
     }
 }

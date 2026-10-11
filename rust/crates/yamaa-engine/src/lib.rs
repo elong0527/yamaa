@@ -45,6 +45,7 @@ pub fn engine_info() -> EngineInfo {
 
 pub mod table_reduction;
 
+pub mod source_ingestion;
 pub mod specification;
 pub mod specification_output;
 pub mod specification_run;

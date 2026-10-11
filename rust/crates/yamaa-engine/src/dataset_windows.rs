@@ -357,44 +357,10 @@ fn sort<E>(
     candidates: &[Candidate],
     budget: &mut Budget,
 ) -> Result<(), Box<ExecutionError<E>>> {
-    let mut scratch = Vec::new();
-    scratch
-        .try_reserve_exact(members.len())
-        .map_err(|_| Box::new(ExecutionError::Allocation))?;
-    scratch.resize(members.len(), 0);
-    let mut width = 1;
-    while width < members.len() {
-        for start in (0..members.len()).step_by(width * 2) {
-            let middle = (start + width).min(members.len());
-            let end = (middle + width).min(members.len());
-            let (mut left, mut right) = (start, middle);
-            for slot in &mut scratch[start..end] {
-                let take_left = right == end
-                    || (left < middle
-                        && ordered(
-                            window,
-                            &candidates[members[left]],
-                            &candidates[members[right]],
-                            budget,
-                        )?
-                        .then_with(|| members[left].cmp(&members[right]))
-                            != Ordering::Greater);
-                *slot = if take_left {
-                    let row = members[left];
-                    left += 1;
-                    row
-                } else {
-                    let row = members[right];
-                    right += 1;
-                    row
-                };
-            }
-        }
-        budget.work(members.len(), 1)?;
-        members.copy_from_slice(&scratch);
-        width *= 2;
-    }
-    Ok(())
+    ordering::sort(members, budget, |left, right, budget| {
+        ordered(window, &candidates[left], &candidates[right], budget)
+            .map(|order| order.then_with(|| left.cmp(&right)))
+    })
 }
 
 /// Baseline admission requires matching temporal types, whose complete fields determine order.

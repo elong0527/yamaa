@@ -221,14 +221,30 @@ fn compiler_retains_admission_binding_and_resource_boundaries() {
     assert!(
         matches!(&findings[..], [BindFinding::Numeric { path, expression, .. }] if path == "columns.VALUE.derivation.compute.expr" && expression == "ID +")
     );
-    let Err(PrepareError::Unsupported(features)) =
+    let Err(PrepareError::Invalid(findings)) =
         PreparedSpecification::prepare(&document("ID + 1", "input.bad"))
     else {
-        panic!("unsupported admission")
+        panic!("unknown source profile admission")
     };
-    assert!(features
-        .iter()
-        .any(|f| f.operation == "source_format" && f.path == "input.SRC.path"));
+    assert_eq!(findings.len(), 1);
+    let diagnostic = findings[0].diagnostic();
+    assert_eq!(
+        diagnostic.code,
+        yamaa_core::diagnostic::ConditionCode::SourceUnknownProfile
+    );
+    assert_eq!(diagnostic.spec_paths, ["input.SRC.path"]);
+    assert_eq!(
+        diagnostic.context,
+        [("dataset", "SRC"), ("path", "input.bad")]
+            .into_iter()
+            .map(|(key, value)| (
+                key.into(),
+                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                    value.into()
+                ))
+            ))
+            .collect()
+    );
     let prepared = PreparedSpecification::prepare(&document("ID + 1", "input.PARQUET")).unwrap();
     assert_eq!(
         prepared.source().profile,

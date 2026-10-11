@@ -29,6 +29,8 @@ mod lookup;
 mod mapping_cut;
 #[path = "dataset_numeric.rs"]
 mod numeric;
+#[path = "dataset_ordering.rs"]
+mod ordering;
 #[path = "dataset_row_drivers.rs"]
 mod row_drivers;
 #[path = "dataset_row_windows.rs"]
@@ -1321,7 +1323,7 @@ impl Executor<'_> {
             )?;
         }
         observer(ExecutionPhase::OutputKeys);
-        let dataset = Dataset {
+        let mut dataset = Dataset {
             schema: self.plan.output().clone(),
             rows: candidates.into_iter().map(|row| row.values).collect(),
         };
@@ -1499,6 +1501,7 @@ impl Executor<'_> {
                 core::mem::take(records),
             )));
         }
+        ordering::apply(self.plan.output_order(), &mut dataset, &mut budget)?;
         Ok(Execution {
             dataset,
             verifications: core::mem::take(records),
