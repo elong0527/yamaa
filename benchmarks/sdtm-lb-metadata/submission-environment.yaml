@@ -1,0 +1,28 @@
+# Independently authored fixed-time submission witness; no study execution.
+schema_version: '1.0'
+study:
+  id: STUDY01
+  name: Laboratory submission study
+  description: Independently completed value-level metadata
+  protocol_name: LB-PROTOCOL
+codelists:
+  - codelists:
+      - id: CL_LBORRESU
+        name: Shared laboratory units
+        data_type: text
+        items: [{value: mg/dL}, {value: mmol/L}]
+      - id: CL_GLUCOSE
+        name: Glucose units
+        data_type: text
+        items: [{value: mg/dL}]
+      - id: CL_CREATININE
+        name: Creatinine units
+        data_type: text
+        items: [{value: mg/dL}]
+sdtm:
+  standard: {name: SDTMIG, version: '3.4', status: Final}
+  specs: [submission-spec.yaml]
+  define: define.xml
+  dataset_json: true
+  context: Other
+  source_system_version: '1.0'
