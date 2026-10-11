@@ -190,7 +190,10 @@ impl Domain {
             .transpose();
         let output = match output {
             Ok(output) => output,
-            Err(_) => {
+            Err(original) => {
+                if result.verification_log().is_none() {
+                    return Err(original);
+                }
                 result
                     .reject_host_output()
                     .map_err(|_| rejected("build", "result_projection"))?;
@@ -613,5 +616,113 @@ mod tests {
             assert!(!study.0.join(name).exists());
         }
         assert!(result.save().unwrap());
+    }
+    #[test]
+    fn actual_host_view_metadata_refusal_preserves_original_code_or_verification_owner() {
+        for verification in [false, true] {
+            let root = std::env::temp_dir().join(format!(
+                "yamaa-host-view-refusal-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir_all(&root).unwrap();
+            let study = Study(fs::canonicalize(root).unwrap());
+            fs::write(study.0.join("input.csv"), "ID\n1\n").unwrap();
+            // Build a real native output whose IPC schema exceeds the public
+            // decoder's 64 KiB metadata admission. The test uses the unchanged
+            // shipped schema with an explicit larger normalization budget;
+            // production admission limits and output bytes remain unchanged.
+            let names = (0..39)
+                .map(|index| format!("V{index}_{}", "a".repeat(2048)))
+                .collect::<Vec<_>>();
+            let columns = std::iter::once("ID")
+                .chain(names.iter().map(String::as_str))
+                .collect::<Vec<_>>();
+            let mut raw = format!(
+                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: out.csv, columns: [{}]{} }}\ncolumns:\n",
+                columns.join(", "),
+                if verification { ", verification_log: checks.csv" } else { "" }
+            );
+            for name in columns {
+                raw.push_str(&format!(
+                    "  - {{name: {name}, type: int, derivation: SRC.ID}}\n"
+                ));
+            }
+            let entry = study.0.join("spec.yaml");
+            fs::write(&entry, raw).unwrap();
+            let written = entry.to_str().unwrap();
+            let (mut resources, entry) = file_configuration::resources(written).unwrap();
+            let mut limits = crate::specification_source::Limits::default();
+            limits.normalization.validation.regex.state_cells = 32_000_000;
+            limits.normalization.validation.regex.work = 32_000_000;
+            limits.normalization.validation.regex.subject_bytes = 32_000_000;
+            let schema = crate::specification_source::CapturedSchema::admit(
+                crate::shipped_schema::capture().unwrap().sources().to_vec(),
+                0,
+                limits,
+            )
+            .unwrap();
+            let document =
+                crate::file_preparation::prepare_document(&mut resources, &entry, Some(schema))
+                    .unwrap();
+            let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
+            let attempt = prepared.execute_with_port(&mut resources);
+            assert!(attempt.result.as_ref().unwrap().execution.is_some());
+            let result = specification_report::build_result(
+                &prepared,
+                &attempt,
+                Identity {
+                    runtime: "test",
+                    runtime_version: "test",
+                    engine_version: yamaa_core::VERSION,
+                    example: "host-view-refusal",
+                    specification: written,
+                    base_directory: ".",
+                },
+            )
+            .unwrap();
+            assert!(result.issues().is_empty());
+            assert!(crate::public_table::PublicTable::decode(result.output().unwrap()).is_err());
+            let domain = Domain::from_build(result, |field| {
+                let origin = prepared
+                    .document()
+                    .written_output_field_origin(field)
+                    .ok_or(crate::file_resources::Error::InvalidPath)?;
+                resources.publication_target_from(origin.declaring_source, origin.written)
+            });
+            if !verification {
+                let failures = match domain {
+                    Err(failures) => failures,
+                    Ok(_) => panic!("rejected public view acquired a Domain owner"),
+                };
+                assert_eq!(failures.len(), 1);
+                assert_eq!(failures[0].condition, "engine_rejected");
+                assert_eq!(
+                    serde_json::from_str::<Value>(&failures[0].context).unwrap(),
+                    serde_json::json!({"stage":"build","code":"output_projection"})
+                );
+            } else {
+                let mut domain = domain.unwrap();
+                assert!(domain.output().is_none());
+                assert!(domain.warning_log().is_none());
+                assert_eq!(domain.log_table(false).unwrap().rows(), 0);
+                assert_eq!(
+                    serde_json::from_str::<Value>(&domain.issues()[0].context).unwrap(),
+                    serde_json::json!({"stage":"output","code":"output_projection"})
+                );
+                fs::write(study.0.join("out.csv"), "primary sentinel").unwrap();
+                fs::remove_file(study.0.join("input.csv")).unwrap();
+                fs::remove_file(study.0.join("spec.yaml")).unwrap();
+                for _ in 0..2 {
+                    assert!(domain.save().is_err());
+                    assert_eq!(
+                        fs::read(study.0.join("out.csv")).unwrap(),
+                        b"primary sentinel"
+                    );
+                    assert_eq!(fs::read_to_string(study.0.join("checks.csv")).unwrap(),
+                        "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n");
+                }
+            }
+        }
     }
 }
