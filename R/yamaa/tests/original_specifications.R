@@ -1478,6 +1478,41 @@ local({
   cat("public canonical scalar padding matches complete independent CSV and findings with missing passthrough, no handlers and original width failure before input without Python passed\n")
 })
 
+local({
+  source(file.path(root,"flag-truth.R"),local=TRUE)
+  stopifnot(length(flag_truth)==33L)
+  directory <- tempfile("flag-originals-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE),add=TRUE)
+  observations <- get(".domain_observations",asNamespace("yamaa"))
+  for(name in names(flag_truth)) {
+    truth <- flag_truth[[name]]
+    stopifnot(file.copy(file.path(root,truth$directory,name),directory,recursive=TRUE))
+    case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
+    stopifnot(identical(rawfile(entry),charToRaw(enc2utf8(truth$specification))))
+    files <- list.files(case,recursive=TRUE,full.names=TRUE)
+    retained <- lapply(files,rawfile)
+    output <- file.path(case,truth$output)
+    for(attempt in seq_len(2L)) {
+      stopifnot(!file.exists(output))
+      result <- yamaa_domain(entry)
+      check_issue_frame(result$issues,truth$findings)
+      wire <- observations(result)
+      if(is.null(wire)) stopifnot(identical(truth$handlers,"[]")) else {
+        ledgers <- regmatches(rawToChar(wire),gregexpr('"handler_counts":\\[[^]]*\\]',rawToChar(wire)))[[1L]]
+        stopifnot(identical(ledgers,rep(paste0('"handler_counts":',truth$handlers),2L)))
+      }
+      if(nzchar(truth$expected_csv)) {
+        expected <- rawfile(file.path(case,truth$expected_csv))
+        stopifnot(is.data.frame(result$output),isTRUE(result$save()),identical(rawfile(output),expected))
+        unlink(output)
+      } else stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+      stopifnot(!file.exists(output),identical(lapply(files,rawfile),retained))
+      if(truth$schema_failure) stopifnot(is.null(wire))
+    }
+  }
+  cat("declarative flags: six unchanged positives/six negatives and 21 authored complete captures match findings/CSV/handlers on two attempts without Python; schema provenance and two held report/case gates remain explicit\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

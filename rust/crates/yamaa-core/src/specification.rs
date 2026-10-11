@@ -47,6 +47,8 @@ mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
 #[path = "specification_cases.rs"]
 mod cases;
+#[path = "specification_flag.rs"]
+mod flags;
 #[path = "specification_temporal_imputation.rs"]
 mod imputation;
 #[path = "specification_rounding.rs"]
@@ -280,6 +282,7 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    Flag(flags::Declaration),
     Case(Vec<cases::Branch>),
     ProjectFunction(usize),
     Literal(crate::value::Value),
@@ -959,6 +962,7 @@ impl PreparedSpecification {
         temporal::declaration_findings(d, columns, &output, &mut findings)?;
         imputation::declaration_findings(d, columns, &output, &mut findings)?;
         str_pad::declaration_admission(d, columns, &output)?;
+        flags::declaration_admission(d, columns, &output)?;
         str_case::declaration_findings(d, columns, &output, &mut findings)?;
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
@@ -1199,6 +1203,7 @@ impl PreparedSpecification {
             let op = text(d, op)?;
             let path = format!("{prefix}.derivation.{op}");
             let operation = match op {
+                "flag" => Some(Operation::Flag(flags::prepare(d, payload, &path)?)),
                 "case" => Some(Operation::Case(cases::prepare(
                     d,
                     payload,
@@ -1654,6 +1659,19 @@ impl PreparedSpecification {
                 Ok(binding)
             };
             let expression = match &declaration.operation {
+                Operation::Flag(operation) => flags::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    &self.source().name,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                    declarations_reported,
+                )?,
                 Operation::Case(branches) => cases::bind(
                     self,
                     branches,

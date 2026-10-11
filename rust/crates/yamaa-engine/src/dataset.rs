@@ -11,6 +11,8 @@ mod conversion;
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use yamaa_core::dataset::*;
+#[path = "dataset_flag.rs"]
+mod flags;
 #[path = "dataset_functions.rs"]
 mod functions;
 pub use crate::function_invocation::FunctionPort;
@@ -381,6 +383,9 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
         )?;
         return Ok(value);
     }
+    if let Expression::Flag(flag) = &assignment.expression {
+        return flags::evaluate(flag, table, candidate, plan, row, assignment, state);
+    }
     if let Expression::Case(branches) = &assignment.expression {
         for branch in branches {
             state.budget.work(1, 1)?;
@@ -518,7 +523,8 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
             }
             value.clone()
         }
-        Expression::Compute(_)
+        Expression::Flag(_)
+        | Expression::Compute(_)
         | Expression::Case(_)
         | Expression::Round { .. }
         | Expression::Temporal { .. }

@@ -30,6 +30,40 @@ pub(super) fn read<T: TableAccess + ?Sized>(
     primary: &T,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    read_with_observations(
+        index, column, assignment, candidate, plan, row, primary, state, true,
+    )
+}
+
+/// Predicate normalization discards an inherited recovery observation, while
+/// sharing the same eligibility and attempt-local record-choice cache.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn read_predicate<T: TableAccess + ?Sized>(
+    index: usize,
+    column: usize,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    primary: &T,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    read_with_observations(
+        index, column, assignment, candidate, plan, row, primary, state, false,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn read_with_observations<T: TableAccess + ?Sized>(
+    index: usize,
+    column: usize,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    primary: &T,
+    state: &mut EvaluationState<'_, T::Error>,
+    observe_handlers: bool,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let item = &plan.intermediates()[index];
     let table = state.secondary[item.source];
     let choice = if let Some(choice) = state.intermediates.choices.get(&(row, index)) {
@@ -160,7 +194,7 @@ pub(super) fn read<T: TableAccess + ?Sized>(
             (value.clone(), Some(HandlerKind::NoMatch))
         }
     };
-    if let Some(handler) = handler {
+    if let Some(handler) = handler.filter(|_| observe_handlers) {
         state
             .handlers
             .record(

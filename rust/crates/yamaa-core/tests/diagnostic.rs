@@ -8,6 +8,9 @@ use yamaa_core::{
     value::{ColumnType, Selection, Value},
 };
 
+#[path = "declarative_flags.rs"]
+mod declarative_flags;
+
 #[path = "diagnostic/dataset.rs"]
 mod dataset;
 
@@ -443,6 +446,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(temporal_imputation::reached());
     reached.extend(text_case::reached());
     reached.extend(text_pad::reached());
+    reached.extend(declarative_flags::reached());
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());
     reached.extend(parquet::reached());
