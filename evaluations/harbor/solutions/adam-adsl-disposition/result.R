@@ -43,7 +43,7 @@ adsl <- dm |>
     DCSREAS = if_else(EOSSTT == "DISCONTINUED", EOSREAS, NA_character_),
     EOTSTT = case_when(
       EOTDECOD == "COMPLETED" ~ "COMPLETED",
-      !is.na(EOTDECOD) ~ "DISCONTINUED",
+      !is.na(EOTDT) ~ "DISCONTINUED",
       .default = "ONGOING"
     ),
     DCTREAS = if_else(EOTSTT == "DISCONTINUED", EOTREAS, NA_character_),

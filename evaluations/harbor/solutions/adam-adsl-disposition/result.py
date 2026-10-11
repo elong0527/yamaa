@@ -55,11 +55,12 @@ adsl = (
         .otherwise(None),
         EOTSTT=pl.when(pl.col("EOTDECOD") == "COMPLETED")
         .then(pl.lit("COMPLETED"))
-        .when(pl.col("EOTDECOD").is_not_null())
+        .when(pl.col("EOTDT").is_not_null())
         .then(pl.lit("DISCONTINUED"))
         .otherwise(pl.lit("ONGOING")),
         DCTREAS=pl.when(
-            pl.col("EOTDECOD").is_not_null() & (pl.col("EOTDECOD") != "COMPLETED")
+            pl.col("EOTDT").is_not_null()
+            & (pl.col("EOTDECOD").fill_null("") != "COMPLETED")
         )
         .then(pl.col("EOTREAS"))
         .otherwise(None),

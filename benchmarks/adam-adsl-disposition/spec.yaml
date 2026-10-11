@@ -114,7 +114,7 @@ columns:
       case:
         - when: "LASTTRT.DSDECOD = 'COMPLETED'"
           then: {literal: COMPLETED}
-        - when: "LASTTRT.DSDECOD IS NOT NULL"
+        - when: "EOTDT IS NOT NULL"
           then: {literal: DISCONTINUED}
         - otherwise: {literal: ONGOING}
     verifications:

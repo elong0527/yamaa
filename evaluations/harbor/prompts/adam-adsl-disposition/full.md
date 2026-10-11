@@ -23,10 +23,12 @@ a DISCONTINUED subject and has no value otherwise.
 
 Independently, summarize the subject's treatment disposition from the
 dated records with category DISPOSITION EVENT and epoch TREATMENT.
-EOTDT is the latest start date of those records, with no value when
-the subject has none. EOTSTT is COMPLETED when the last treatment
-coded term is COMPLETED, DISCONTINUED for any other recorded term,
-and ONGOING when the subject has no dated treatment record. DCTREAS
+When two treatment events share the latest date, select the one with
+the higher DSSEQ. EOTDT is the latest start date of those records,
+with no value when the subject has none. EOTSTT is COMPLETED when the
+last treatment coded term is COMPLETED, DISCONTINUED for any other
+dated treatment record (including a missing coded term), and ONGOING
+when the subject has no dated treatment record. DCTREAS
 is the reported term on the last treatment record for a DISCONTINUED
 subject and has no value otherwise; DCSREASP repeats it when the
 coded treatment term is OTHER and has no value otherwise.
