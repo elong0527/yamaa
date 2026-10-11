@@ -47,6 +47,7 @@ fn source() -> SourceDeclaration {
         types: vec![],
         profile: SourceProfile::Csv,
         empty_string_present: false,
+        ordinal: None,
     }
 }
 

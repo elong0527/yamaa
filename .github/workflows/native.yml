@@ -367,6 +367,7 @@ jobs:
           python "${GITHUB_WORKSPACE}/rust/tools/stage_project_inputs.py" project-original
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_environment.py" installed_public_environment.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_define.py" installed_public_define.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_contract.py" installed_public_contract.py
           python "${GITHUB_WORKSPACE}/rust/tools/stage_define_inputs.py" define-fixtures
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_yaml.py" installed_yaml.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.tsv" yaml_transport.tsv
@@ -431,6 +432,27 @@ jobs:
         run: |
           python -m pip install --no-deps -r table-requirements.txt
           python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz project-dist/*.whl
+      - name: Report installed Python public benchmark conformance
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" plan \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
+          python -I "${GITHUB_WORKSPACE}/rust/tests/public_conformance.py" \
+            --plan public-conformance-plan --fixtures "${GITHUB_WORKSPACE}/benchmarks" \
+            --python-lock "${GITHUB_WORKSPACE}/python/uv.lock" \
+            --output public-conformance/observed --source-revision "${QUALIFICATION_SOURCE_REVISION}" \
+            --package-form "${{ matrix.form }}" \
+            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" compare \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
+            --output public-conformance/inventory.json
+      - name: Preserve Python public benchmark inventory and saved artifacts
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: public-conformance-python-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.form }}
+          path: ${{ runner.temp }}/public-conformance
+          if-no-files-found: error
       - name: Qualify the installed package outside checkout
         working-directory: ${{ runner.temp }}
         env:
@@ -564,7 +586,8 @@ jobs:
         run: cargo clippy --locked --target x86_64-pc-windows-gnu -p yamaa-r -- -D warnings
       - name: Stage standalone R package
         run: python rust/tools/stage_r_package.py "${RUNNER_TEMP}/native-stage/yamaa"
-      - name: Build, install, and test outside checkout
+      - name: Build and install R outside checkout
+        id: r_install
         working-directory: ${{ runner.temp }}
         run: |
           mkdir -p native-r-library
@@ -575,6 +598,35 @@ jobs:
           if [ "${{ runner.os }}" = Windows ]; then
             python -c 'from pathlib import Path; import shutil; dlls = list(Path("native-r-library/yamaa/libs").rglob("yamaa.dll")); assert len(dlls) == 1, "installed R DLL is missing or ambiguous"; shutil.copy2(dlls[0], "windows-r-toolchain/yamaa.dll")'
           fi
+      - name: Report installed R public benchmark conformance
+        if: ${{ always() && steps.r_install.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/native-r-library
+          PUBLIC_CONFORMANCE_PACKAGE_FORM: source
+        run: |
+          python -m pip install py-yaml12==0.2.0 pyarrow==25.0.1
+          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" plan \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
+          Rscript --vanilla "${GITHUB_WORKSPACE}/rust/tests/test_public_conformance.R" \
+            "${GITHUB_WORKSPACE}/rust/tests/public_conformance.R"
+          Rscript --vanilla "${GITHUB_WORKSPACE}/rust/tests/public_conformance.R" \
+            public-conformance-plan "${GITHUB_WORKSPACE}/benchmarks" public-conformance/observed \
+            "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)"
+          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" compare \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
+            --output public-conformance/inventory.json
+      - name: Preserve R public benchmark inventory and saved artifacts
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: public-conformance-r-${{ matrix.os }}
+          path: ${{ runner.temp }}/public-conformance
+          if-no-files-found: error
+      - name: Run installed R supplemental suites outside checkout
+        if: ${{ always() && steps.r_install.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}
+        run: |
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_builds.R" producer_builds.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_producers.R" public_producers.R
@@ -597,6 +649,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_logs.R" producer_logs.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_environment.R" public_environment.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_define.R" public_define.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_contract.R" public_contract.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/inheritance.R" inheritance.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/yaml.R" yaml.R
           YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
@@ -702,4 +755,42 @@ jobs:
         with:
           name: ${{ needs.plan.outputs.full == 'true' && 'native-public-cohort' || 'native-public-cohort-sample' }}
           path: ${{ runner.temp }}/public-cohort
+          if-no-files-found: error
+
+  audit:
+    name: native-run-evidence-audit
+    needs: [plan, rust, dist, qualify, r, math-portability, public-cohort]
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Observational evidence records never make an unrelated merge wait.
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Audit the exact main run and retained installed evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python rust/tools/audit_native_run.py --run-id "${GITHUB_RUN_ID}" \
+            --repository "${GITHUB_REPOSITORY}" --output "${RUNNER_TEMP}/native-run-audit" --check
+      - name: Show the evidence record
+        if: always()
+        run: |
+          if test -f "${RUNNER_TEMP}/native-run-audit/qualification.md"; then
+            cat "${RUNNER_TEMP}/native-run-audit/qualification.md" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+      - name: Preserve independent native run audit
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-run-audit
+          path: ${{ runner.temp }}/native-run-audit
           if-no-files-found: error

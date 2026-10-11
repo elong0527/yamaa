@@ -112,8 +112,25 @@ fn walk(
         if depth > 64 || path.len() > 65_536 {
             return Err(PrepareError::Limit("str_extract_depth"));
         }
-        if let Some(payload) = d.field(id, "str_extract") {
-            visit(payload, &format!("{path}.str_extract"), rows)?;
+        for name in ["str_extract", "str_contains"] {
+            if let Some(payload) = d.field(id, name) {
+                visit(payload, &format!("{path}.{name}"), rows)?;
+            }
+        }
+        if let Some(payload) = d.field(id, "str_concat") {
+            for (index, &child) in sequence(d, field(d, payload, "sources")?)?
+                .iter()
+                .enumerate()
+            {
+                expression(
+                    d,
+                    child,
+                    &format!("{path}.str_concat.sources[{index}]"),
+                    rows,
+                    depth + 1,
+                    visit,
+                )?;
+            }
         }
         if let Some(branches) = d.field(id, "case") {
             for (index, &branch) in sequence(d, branches)?.iter().enumerate() {

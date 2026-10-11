@@ -41,6 +41,7 @@ conditions:
   duplicate_intermediate_records: {phases: [verification]}
   duplicate_key: {phases: [output]}
   duplicate_order_term: {phases: [validation]}
+  empty_string_present_unsupported: {phases: [validation]}
   engine_rejected: {phases: [engine]}
   field_parse_failed: {phases: [ingest]}
   forward_reference: {phases: [validation]}

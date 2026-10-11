@@ -32,6 +32,7 @@ impl PreflightFinding {
             Self::Imputation(diagnostic)
             | Self::TextCase(diagnostic)
             | Self::TextTemplate(diagnostic)
+            | Self::Scalar(diagnostic)
             | Self::TextExtract(diagnostic) => {
                 diagnostic.spec_paths.iter().for_each(|path| visit(path));
                 fn values(value: &V, visit: &mut impl FnMut(&str)) {
@@ -127,6 +128,12 @@ impl PreflightFinding {
                 visit(dataset);
                 visit(field);
             }
+            Self::UnknownSourceProfile { dataset, path } => {
+                visit(dataset);
+                visit(path);
+            }
+            Self::EmptyStringPresentUnsupported { dataset } => visit(dataset),
+            Self::OdmSourceOrdinal { dataset } => visit(dataset),
             Self::ConflictingRowConstruction => (),
         }
     }
@@ -138,6 +145,7 @@ impl PreflightFinding {
             Self::Imputation(diagnostic)
             | Self::TextCase(diagnostic)
             | Self::TextTemplate(diagnostic)
+            | Self::Scalar(diagnostic)
             | Self::TextExtract(diagnostic) => return diagnostic.clone(),
             Self::RoundingInput {
                 path,
@@ -238,6 +246,21 @@ impl PreflightFinding {
                 C::PreflightDomainInputCollision,
                 vec![format!("input.{domain}"), "domain".into()],
                 context([("identifier", text(domain))]),
+            ),
+            Self::UnknownSourceProfile { dataset, path } => (
+                C::SourceUnknownProfile,
+                vec![format!("input.{dataset}.path")],
+                context([("dataset", text(dataset)), ("path", text(path))]),
+            ),
+            Self::EmptyStringPresentUnsupported { dataset } => (
+                C::SourceEmptyStringPresentUnsupported,
+                vec![format!("input.{dataset}.empty_string")],
+                context([("dataset", text(dataset))]),
+            ),
+            Self::OdmSourceOrdinal { dataset } => (
+                C::SourceOdmOrdinal,
+                vec![format!("input.{dataset}.ordinal")],
+                context([("dataset", text(dataset)), ("declared", text("ordinal"))]),
             ),
             Self::RedundantSourceType {
                 dataset,
