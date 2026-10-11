@@ -483,7 +483,7 @@ pub(super) fn bind(
                 for name in compiled.identifiers() {
                     if let Some((index, field)) = spec.intermediates.reference(name) {
                         if let Some(item) = &intermediates[index] {
-                            edges.extend(item.keys.iter().map(|key| key.output_column));
+                            edges.extend(item.output_dependencies());
                             if let Some(column) = secondary[item.source]
                                 .schema
                                 .columns()

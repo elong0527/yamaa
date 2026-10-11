@@ -412,16 +412,28 @@ fn all_six_original_yaml_documents_compile_against_independent_model_expectation
                 );
                 assert_eq!(
                     plan.intermediates()[0].keys,
-                    [yamaa_core::dataset::MatchKey {
+                    [yamaa_core::dataset::IntermediateKey {
                         source_column: 0,
-                        output_column: 0
+                        path: "intermediates[0].key".into(),
+                        value: yamaa_core::dataset::MatchValue::Variable(
+                            yamaa_core::dataset::MatchRead::Output {
+                                column: 0,
+                                identifier: "USUBJID".into()
+                            }
+                        ),
                     }]
                 );
                 assert_eq!(
                     plan.intermediates()[1].keys,
-                    [yamaa_core::dataset::MatchKey {
+                    [yamaa_core::dataset::IntermediateKey {
                         source_column: 0,
-                        output_column: 2
+                        path: "intermediates[1].key".into(),
+                        value: yamaa_core::dataset::MatchValue::Variable(
+                            yamaa_core::dataset::MatchRead::Output {
+                                column: 2,
+                                identifier: "DTHCAUS".into()
+                            }
+                        ),
                     }]
                 );
                 assert_eq!(

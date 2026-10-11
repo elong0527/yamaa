@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     bound_expression::BoundPredicate,
-    dataset::{Intermediate, Keep, MatchKey, OrderTerm, SecondarySource, SourceSelection},
+    dataset::{Intermediate, IntermediateKey, Keep, OrderTerm, SecondarySource, SourceSelection},
     predicate_compiler,
     value::Value,
 };
@@ -12,7 +12,7 @@ struct Declaration {
     name: String,
     path: String,
     source: usize,
-    keys: Option<Vec<(String, String)>>,
+    keys: Option<Vec<(String, match_values::Declaration)>>,
     filter_text: Option<String>,
     filter: Option<Result<crate::predicate::Plan, predicate_compiler::Error>>,
     order: Vec<(String, bool, bool)>,
@@ -93,7 +93,20 @@ impl Declarations {
                 Some(
                     fields
                         .iter()
-                        .map(|&(a, b)| Ok((text(d, a)?.into(), text(d, b)?.into())))
+                        .map(|&(a, b)| {
+                            let name = text(d, a)?;
+                            Ok((
+                                name.into(),
+                                match_values::Declaration::prepare(
+                                    d,
+                                    b,
+                                    &format!("{path}.key.{name}"),
+                                    sources,
+                                    driver,
+                                    extra,
+                                )?,
+                            ))
+                        })
                         .collect::<Result<Vec<_>, PrepareError>>()?,
                 )
             } else {
@@ -244,67 +257,63 @@ impl Declarations {
                 }
                 field
             };
+            let primary = schemas[driver];
+            let output_fields = output
+                .columns()
+                .iter()
+                .map(|column| reference_binding::Field {
+                    name: &column.name,
+                    column_type: column.kind,
+                })
+                .collect::<Vec<_>>();
+            let primary_fields = primary
+                .columns()
+                .iter()
+                .map(|column| reference_binding::Field {
+                    name: &column.name,
+                    column_type: column.kind,
+                })
+                .collect::<Vec<_>>();
+            let catalog = Catalog::compile(
+                &output_fields,
+                &[reference_binding::Dataset {
+                    name: &sources[driver].name,
+                    fields: &primary_fields,
+                }],
+                Default::default(),
+            )
+            .map_err(BindError::Catalog)?;
             let default_keys = keys
                 .iter()
                 .map(|&column| {
                     let name = &output.columns()[column].name;
-                    (name.clone(), name.clone())
+                    (
+                        name.clone(),
+                        match_values::Declaration::Variable(name.clone()),
+                    )
                 })
                 .collect::<Vec<_>>();
             let pairs_declared = item.keys.as_ref().unwrap_or(&default_keys);
-            let mut pairs = Vec::new();
-            let mut record_keys = Vec::new();
-            let primary = schemas[driver];
-            let primary_prefix = format!("{}.", sources[driver].name);
-            // Reference planning reports types before missing donor/output fields.
-            for (field, name) in pairs_declared {
-                let donor = schema.columns().iter().position(|c| c.name == *field);
-                let target = output.columns().iter().position(|c| c.name == *name);
-                if let Some(field) = name.strip_prefix(&primary_prefix) {
-                    if let (Some(source_column), Some(driver_column)) = (
-                        donor,
-                        primary.columns().iter().position(|c| c.name == field),
-                    ) {
-                        let expected = primary.columns()[driver_column].kind;
-                        let actual = schema.columns()[source_column].kind;
-                        if expected != actual {
-                            findings.push(BindFinding::Lookup(LookupFinding::key_type(
-                                &format!("{}.key", item.path),
-                                &item.name,
-                                name,
-                                expected,
-                                actual,
-                            )));
-                            failed = true;
-                        }
-                        record_keys.push(crate::dataset::RecordMatchKey {
-                            source_column,
-                            driver_column,
-                            identifier: name.clone(),
-                        });
-                    }
-                }
-                if let (Some(source_column), Some(output_column)) = (donor, target) {
-                    let actual = schema.columns()[source_column].kind;
-                    let expected = output.columns()[output_column].kind;
-                    if !crate::key_relation::comparable(expected.into(), actual.into()) {
+            // Result types and donor fields precede expression declarations and reads.
+            for (field, declaration) in pairs_declared {
+                if let (Some(donor), Some(expected)) = (
+                    schema.columns().iter().find(|column| column.name == *field),
+                    declaration.result_type(&catalog)?,
+                ) {
+                    if !crate::key_relation::comparable(expected, donor.kind.into()) {
                         findings.push(BindFinding::Lookup(LookupFinding::key_type(
                             &format!("{}.key", item.path),
                             &item.name,
-                            name,
+                            &declaration.display_name(field),
                             expected,
-                            actual,
+                            donor.kind,
                         )));
                         failed = true;
                     }
-                    pairs.push(MatchKey {
-                        source_column,
-                        output_column,
-                    });
                 }
             }
             for (field, _) in pairs_declared {
-                if !schema.columns().iter().any(|c| c.name == *field) {
+                if !schema.columns().iter().any(|column| column.name == *field) {
                     findings.push(BindFinding::Lookup(LookupFinding::reference(
                         &format!("{}.key", item.path),
                         &format!("{source_name}.{field}"),
@@ -315,20 +324,28 @@ impl Declarations {
                     failed = true;
                 }
             }
-            for (_, name) in pairs_declared {
-                if !output.columns().iter().any(|c| c.name == *name)
-                    && !name
-                        .strip_prefix(&primary_prefix)
-                        .is_some_and(|field| primary.columns().iter().any(|c| c.name == field))
-                {
-                    findings.push(BindFinding::Lookup(LookupFinding::reference(
-                        &format!("{}.key", item.path),
-                        name,
-                        Some(&item.name),
-                        ReferenceCause::OutputKey,
-                        None,
-                    )));
-                    failed = true;
+            let mut pairs = Vec::new();
+            for (field, declaration) in pairs_declared {
+                let path = if matches!(declaration, match_values::Declaration::Variable(_)) {
+                    format!("{}.key", item.path)
+                } else {
+                    format!("{}.key.{field}", item.path)
+                };
+                match declaration.bind(&path, &item.name, &catalog, findings)? {
+                    Some(value) => {
+                        if let Some(source_column) = schema
+                            .columns()
+                            .iter()
+                            .position(|column| column.name == *field)
+                        {
+                            pairs.push(IntermediateKey {
+                                source_column,
+                                path,
+                                value,
+                            });
+                        }
+                    }
+                    None => failed = true,
                 }
             }
             let filter = match &item.filter {
@@ -393,7 +410,6 @@ impl Declarations {
                     item.source
                 },
                 keys: pairs,
-                record_keys,
                 filter,
                 selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
                 no_match: item.no_match.clone(),

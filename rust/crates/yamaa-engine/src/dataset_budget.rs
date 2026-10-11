@@ -12,6 +12,10 @@ pub(crate) struct Budget {
     runtime: predicate::Budget,
 }
 impl Budget {
+    /// Borrow the installed capacity policy without charging or changing counters.
+    pub(crate) fn scalar_text_limit(&self) -> usize {
+        self.limits.scalar_text_bytes
+    }
     /// Start a fresh accounting scope; reuse of a plan never reuses counters.
     pub(crate) fn new(limits: Limits) -> Self {
         Self {

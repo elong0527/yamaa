@@ -184,7 +184,7 @@ pub(super) fn bind_operand(
     }
     let source = if let Some((index, field)) = declarations.reference(name) {
         if let Some(item) = &intermediates[index] {
-            edges.extend(item.keys.iter().map(|key| key.output_column));
+            edges.extend(item.output_dependencies());
             let operand = secondary[item.source]
                 .schema
                 .columns()
