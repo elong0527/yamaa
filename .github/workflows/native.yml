@@ -465,12 +465,17 @@ jobs:
   r:
     name: native-r (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 40 || 20 }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15]
+        os: [ubuntu-24.04, macos-15, windows-latest]
     steps:
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -486,14 +491,33 @@ jobs:
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
         with:
           r-version: '4.6.1'
+          rtools-version: ${{ runner.os == 'Windows' && '45' || '' }}
           use-public-rspm: true
       - name: Check benchmark SDK lock versions
         run: python rust/tools/check_benchmark_sdk_versions.py
       - name: Install Rust
-        run: rustup toolchain install 1.90.0 --profile minimal --component clippy
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal --component clippy
+          if [ "${{ runner.os }}" = Windows ]; then
+            rustup target add --toolchain 1.90.0 x86_64-pc-windows-gnu
+          fi
+      - name: Record Windows R build toolchain
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p "${RUNNER_TEMP}/windows-r-toolchain"
+          Rscript --vanilla -e 'writeLines(c(R.version.string, R.version$platform, Sys.info(), Sys.getenv("RTOOLS45_HOME")))' > "${RUNNER_TEMP}/windows-r-toolchain/r-platform.txt"
+          gcc --version > "${RUNNER_TEMP}/windows-r-toolchain/gcc-version.txt"
+          make --version > "${RUNNER_TEMP}/windows-r-toolchain/make-version.txt"
+          rustc -vV > "${RUNNER_TEMP}/windows-r-toolchain/rustc-version.txt"
+          rustc --print cfg --target x86_64-pc-windows-gnu > "${RUNNER_TEMP}/windows-r-toolchain/rust-target.txt"
       - name: Check R binding
+        if: runner.os != 'Windows'
         working-directory: rust
         run: cargo clippy --locked -p yamaa-r -- -D warnings
+      - name: Check Windows R binding
+        if: runner.os == 'Windows'
+        working-directory: rust
+        run: cargo clippy --locked --target x86_64-pc-windows-gnu -p yamaa-r -- -D warnings
       - name: Stage standalone R package
         run: python rust/tools/stage_r_package.py "${RUNNER_TEMP}/native-stage/yamaa"
       - name: Build, install, and test outside checkout
@@ -560,6 +584,13 @@ jobs:
           name: native-r-qualification-${{ matrix.os }}
           path: ${{ runner.temp }}/qualification
           if-no-files-found: error
+      - name: Preserve Windows R build toolchain
+        if: ${{ always() && runner.os == 'Windows' }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: windows-r-toolchain-${{ matrix.os }}
+          path: ${{ runner.temp }}/windows-r-toolchain
+          if-no-files-found: error
       - name: Preserve locked Rust dependency evidence
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -604,17 +635,14 @@ jobs:
           python -m pip install --no-deps -r "${RUNNER_TEMP}/cohort-requirements.txt" "${RUNNER_TEMP}"/cohort-reference/*.whl
       - name: Require complete public runs through the M1 comparator
         working-directory: ${{ runner.temp }}
-        # Both Unix hosts remain mandatory. Windows requires the complete Python
-        # public cohort while retaining the unqualified R route explicitly.
+        # Both installed hosts are required on every platform, including Windows.
+        # Missing R evidence must fail rather than become an unexercised tuple.
         run: |
           revision="$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)"
           for platform in ubuntu-24.04 macos-15 windows-latest; do
             for version in 3.12 3.13 3.14; do
               for form in wheel source; do
-                r_evidence=()
-                if [ "${platform}" != windows-latest ]; then
-                  r_evidence=(--r-evidence "cohort-input/native-r-qualification-${platform}/r-source")
-                fi
+                r_evidence=(--r-evidence "cohort-input/native-r-qualification-${platform}/r-source")
                 python -I "${GITHUB_WORKSPACE}/rust/tools/qualify_public_cohort.py" \
                   --fixtures "${GITHUB_WORKSPACE}/benchmarks" \
                   --python-evidence "cohort-input/native-qualification-${platform}-${version}-${form}/${form}" \

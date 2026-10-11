@@ -35,6 +35,12 @@ python rust/tools/stage_r_package.py /tmp/yamaa-stage/yamaa
 R CMD build /tmp/yamaa-stage/yamaa
 ```
 
+Windows x86_64 source builds use R 4.6.1, Rtools45 and Rust 1.90.0 with the
+`x86_64-pc-windows-gnu` target installed. The Windows Makevars selects that target
+explicitly and links the registered R entry point. See
+[Windows R qualification](../../rust/R_WINDOWS.md) for the required installed
+checks and the remaining full-release gate.
+
 ## Scalar transport probe
 
 `scalar_round_trip(request)` accepts and returns one owned UTF-8 JSON string.

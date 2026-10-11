@@ -1,0 +1,26 @@
+# Rtools45 uses GCC/MinGW-w64 and UCRT for x86_64 R. Select the GNU Rust
+# target explicitly even when the caller's rustup host defaults to MSVC.
+RUST_TARGET = x86_64-pc-windows-gnu
+CARGO_TARGET_DIR = $(CURDIR)/rust/target
+RUST_LIB = $(CARGO_TARGET_DIR)/$(RUST_TARGET)/release/libyamaa_r.a
+PKG_LIBS = "$(RUST_LIB)" -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll
+
+all: $(SHLIB) rust_clean
+
+$(SHLIB): $(RUST_LIB)
+
+# Match upstream extendr's GNU/Rtools library discovery. The temporary gcc_eh
+# placeholder belongs to the build tree and is removed after linking.
+$(RUST_LIB): FORCE
+	mkdir -p "$(CARGO_TARGET_DIR)/libgcc_mock"
+	touch "$(CARGO_TARGET_DIR)/libgcc_mock/libgcc_eh.a"
+	cd rust && LIBRARY_PATH="$(LIBRARY_PATH);$(CARGO_TARGET_DIR)/libgcc_mock" CC_x86_64_pc_windows_gnu="$(CC)" AR_x86_64_pc_windows_gnu="$(AR)" CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER="$(CC)" RUSTFLAGS="$(RUSTFLAGS) --print=native-static-libs" CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" cargo build --locked --release --target $(RUST_TARGET) -p yamaa-r
+
+.PHONY: clean rust_clean FORCE
+FORCE:
+
+rust_clean: $(SHLIB)
+	rm -rf rust/target
+
+clean:
+	rm -rf rust/target

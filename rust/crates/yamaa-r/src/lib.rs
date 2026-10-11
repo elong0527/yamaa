@@ -9,7 +9,7 @@ mod file_specification;
 mod function_callback;
 mod inheritance_callback;
 mod issue_frame;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 mod project_activation;
 mod project_result;
 mod public_table;
