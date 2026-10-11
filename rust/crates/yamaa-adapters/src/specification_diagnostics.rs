@@ -84,6 +84,8 @@ pub(crate) fn portable_definition(
 }
 /// Return semantic findings only. Policy/transport/internal errors deliberately
 /// have no fabricated language condition and must remain host boundary failures.
+/// Unbounded owned compatibility; new callers use findings_with_limit to distinguish
+/// explicit projection refusal from an opaque boundary error before removal.
 pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec<Value>> {
     match error {
         Error::Sources(errors) => {
@@ -101,11 +103,9 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
                 error.diagnostic(&source.name, &source.path)?,
             )?])
         }
-
         Error::TypedSource(crate::typed_csv::Error::Typing(error)) => {
             Some(vec![portable_diagnostic(error.diagnostic(&source?.name)?)?])
         }
-
         Error::Source(TextTableError::Csv(error)) => {
             let source = source?;
             Some(vec![portable_diagnostic(
@@ -115,12 +115,52 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
         _ => None,
     }
 }
+/// Complete ingestion reports are admitted in core before copying codec facts.
+/// Other existing preparation/binding projections retain their admission policy.
+pub fn findings_with_limit(
+    error: &Error,
+    source: Option<&SourceDeclaration>,
+    maximum: usize,
+) -> Result<Option<Vec<Value>>, crate::source_diagnostics::SourceProjectionError> {
+    match error {
+        Error::Sources(_) | Error::ParquetSource(_) | Error::TypedSource(_) | Error::Source(_) => {
+            Ok(
+                crate::source_diagnostics::findings_with_limit(error, source, maximum)?.and_then(
+                    |findings| {
+                        findings
+                            .into_iter()
+                            .map(portable_diagnostic)
+                            .collect::<Option<Vec<_>>>()
+                    },
+                ),
+            )
+        }
+        Error::Prepare(PrepareError::Invalid(errors)) => Ok(errors.iter().map(preparing).collect()),
+        Error::Bind(error) => Ok(source.and_then(|source| binding(error, source))),
+        _ => Ok(None),
+    }
+}
 
 /// Experimental host boundary reply. Semantic findings stay separate from
 /// unsupported vocabulary and resource/internal rejection; no Debug text leaks.
 /// This envelope is not the final whole-run conformance report.
 pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
-    let outcome = if let Some(diagnostics) = findings(error, source) {
+    let projected =
+        findings_with_limit(error, source, yamaa_core::diagnostic::MAX_PROJECTION_BYTES);
+    let outcome = if let Err(error) = projected {
+        let code = match error {
+            crate::source_diagnostics::SourceProjectionError::TraversalLimit => {
+                "diagnostic_traversal_limit"
+            }
+            crate::source_diagnostics::SourceProjectionError::Context(
+                yamaa_core::diagnostic::ProjectionError::Limit,
+            ) => "diagnostic_context_limit",
+            crate::source_diagnostics::SourceProjectionError::Context(
+                yamaa_core::diagnostic::ProjectionError::InvalidContext,
+            ) => "diagnostic_context",
+        };
+        json!({"status":"rejected","stage":"ingest","code":code})
+    } else if let Ok(Some(diagnostics)) = projected {
         json!({"status":"invalid","diagnostics":diagnostics})
     } else if let Error::Prepare(PrepareError::Unsupported(features)) = error {
         json!({"status":"unsupported","features":features.iter().map(|f| json!({"operation":f.operation,"spec_path":f.path})).collect::<Vec<_>>()})

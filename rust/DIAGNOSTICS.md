@@ -208,6 +208,42 @@ Parquet files and complete failed reports remain unchanged, including source
 collection and failed save gates. Physical decoding, compression, text validation
 and Arrow construction retain their separate codec/resource boundaries.
 
+CSV profile, declared CSV typing and closed Parquet findings also expose borrowed
+facts for complete ordered report admission. Core charges every path, source
+identity, field, stored-type spelling, position and complete failed value before
+owned context materialization. Late quota refusal returns no diagnostic prefix.
+The Parquet boundary lends its exact captured codec metadata directly; it no
+longer clones an adapter error into a temporary core error just to project it.
+The original scanner, schema/name precedence, row/field conversion order and
+physical/temporal conversion remain unchanged. Opaque and resource failures
+retain their original payloads and precede projection quota checks. A semantic
+leaf without its held source declaration returns an explicit context refusal.
+Callers must provide the declaration from the same failed attempt; matching a
+name or path alone cannot establish that authority.
+
+`source_diagnostics::findings_with_limit` and the ingestion branch of
+`specification_diagnostics::findings_with_limit` use the admitted report. The
+prototype failure envelope exposes context/limit refusal separately from a
+language diagnostic. Existing owned `csv_source::Error::diagnostic`,
+`typed_csv::Error::diagnostic`, core/adapter `parquet_source::Error::diagnostic`
+and `specification_diagnostics::findings` preserve their former signatures and
+unbounded compatibility behavior. They are scheduled for removal after their
+remaining report callers migrate; the report/log ownership work is separate.
+No existing capture, CSV/Parquet admission or host-output budget is replaced by
+this diagnostic projection policy, and the non-ingestion preparation/binding
+branches keep their existing policies.
+
+Source-collection traversal has a separate structural admission ceiling of 128
+active child-iterator frames. Its fixed borrowed frame array allocates no pending
+sibling list and its footprint is independent of report breadth. Depth is checked
+before adding a frame; excessive nesting returns `TraversalLimit` and the
+prototype's `diagnostic_traversal_limit`, distinct from context quota refusal.
+A reached opaque/resource barrier ends traversal immediately, preserving its
+original precedence over later unreachable deep or oversized semantic facts.
+For structurally admitted reports, even a late opaque/resource barrier precedes
+the semantic context quota. A deeper collection reached before that barrier
+refuses structurally rather than inspecting beyond the declared frame authority.
+
 
 Driver source filters now bind through the core original-document compiler.
 REQ-0132 rejects bare/wrong-dataset predicate identifiers; REQ-0148 rejects filters

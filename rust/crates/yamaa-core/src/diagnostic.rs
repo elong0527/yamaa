@@ -18,6 +18,10 @@ pub use dataset::DatasetFinding;
 mod inheritance;
 pub use inheritance::InheritanceFinding;
 
+#[path = "diagnostic_source.rs"]
+mod source;
+pub use source::{admit_source_diagnostics, ParquetFinding, SourceDiagnosticReport, SourceFinding};
+
 #[path = "diagnostic_grammar.rs"]
 mod grammar;
 #[path = "diagnostic_numeric.rs"]
