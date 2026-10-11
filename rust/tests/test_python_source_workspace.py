@@ -2,6 +2,7 @@
 
 import importlib.util
 import io
+import json
 import subprocess
 import tarfile
 import tempfile
@@ -31,6 +32,103 @@ def write_archive(path, values):
 
 
 class PythonSourceWorkspaceTests(unittest.TestCase):
+    def test_native_fixture_manifest_selects_exact_regular_original_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "rust"
+            manifest = workspace / "qualification/native-source-fixtures.json"
+            manifest.parent.mkdir(parents=True)
+            name = "benchmarks/independent/expected/document.xml"
+            original = root / name
+            original.parent.mkdir(parents=True)
+            original.write_bytes(b"independent fixed-time document\n")
+            (original.parent / "unselected.csv").write_bytes(b"not selected\n")
+            manifest.write_text(
+                json.dumps(
+                    {"format": "yamaa-native-source-fixtures/1", "files": [name]}
+                )
+            )
+            selected = backend.native_test_fixtures(workspace)
+            self.assertEqual(
+                [name for name, _ in selected],
+                ["rust/qualification/native-source-fixtures.json", name],
+            )
+            self.assertEqual(
+                selected[1][1].read_bytes(), b"independent fixed-time document\n"
+            )
+            original.unlink()
+            with self.assertRaisesRegex(ValueError, "missing"):
+                backend.native_test_fixtures(workspace)
+
+    def test_native_fixture_manifest_refuses_ambiguous_or_unselected_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory) / "rust"
+            manifest = workspace / "qualification/native-source-fixtures.json"
+            manifest.parent.mkdir(parents=True)
+            for files in (
+                ["../private"],
+                ["/benchmarks/private"],
+                ["benchmarks/../private"],
+                ["benchmarks/a\\b"],
+                ["benchmarks/a:stream"],
+                ["benchmarks/a", "benchmarks/a"],
+            ):
+                with self.subTest(files=files):
+                    manifest.write_text(
+                        json.dumps(
+                            {"format": "yamaa-native-source-fixtures/1", "files": files}
+                        )
+                    )
+                    with self.assertRaisesRegex(ValueError, "fixture path"):
+                        backend.native_test_fixtures(workspace)
+
+    def test_source_fixture_restore_preserves_bytes_and_refuses_changed_truth(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "rust"
+            workspace.mkdir()
+            manifest = b'[workspace]\nmembers = []\nresolver = "2"\n'
+            lock = b"version = 4\n"
+            toolchain = b'[toolchain]\nchannel = "1.90.0"\n'
+            for name, payload in (
+                ("Cargo.toml", manifest),
+                ("Cargo.lock", lock),
+                ("rust-toolchain.toml", toolchain),
+            ):
+                (workspace / name).write_bytes(payload)
+            truth = root / "original.xml"
+            truth.write_bytes(b"independently committed truth\n")
+            archive = root / "yamaa.tar.gz"
+            values = [
+                ("yamaa/rust/Cargo.toml", manifest),
+                ("yamaa/rust/Cargo.lock", lock),
+            ]
+            selected = [("benchmarks/independent/expected/document.xml", truth)]
+            write_archive(archive, values)
+            backend.preserve_workspace(archive, workspace, selected)
+            with tarfile.open(archive) as result:
+                self.assertEqual(
+                    result.extractfile(
+                        "yamaa/benchmarks/independent/expected/document.xml"
+                    ).read(),
+                    truth.read_bytes(),
+                )
+            write_archive(
+                archive,
+                values
+                + [
+                    (
+                        "yamaa/benchmarks/independent/expected/document.xml",
+                        b"changed truth\n",
+                    )
+                ],
+            )
+            before = archive.read_bytes()
+            with self.assertRaisesRegex(ValueError, "changed a native test fixture"):
+                backend.preserve_workspace(archive, workspace, selected)
+            self.assertEqual(archive.read_bytes(), before)
+            self.assertEqual(truth.read_bytes(), b"independently committed truth\n")
+
     def test_pruned_archive_is_restored_and_resolves_without_rewriting_lock(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

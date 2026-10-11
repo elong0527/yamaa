@@ -1567,7 +1567,8 @@ submission_section_class:
     type: language_tag
     default: en
 - file_oid:
-    type: define_id
+    type: str
+    min_length: 1
 - metadata_version:
     type: metadata_version_class
 - originator:

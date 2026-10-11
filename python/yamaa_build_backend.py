@@ -2,11 +2,54 @@
 
 import argparse
 import io
+import json
 import os
 import tarfile
 import tempfile
 import tomllib
 from pathlib import Path, PurePosixPath
+
+
+def native_test_fixtures(workspace: Path):
+    """Select only the explicitly listed original Cargo test inputs and truth."""
+    repository = workspace.parent
+    relative_manifest = "rust/qualification/native-source-fixtures.json"
+    manifest = repository / relative_manifest
+    declaration = json.loads(manifest.read_bytes())
+    if (
+        not isinstance(declaration, dict)
+        or set(declaration) != {"format", "files"}
+        or declaration["format"] != "yamaa-native-source-fixtures/1"
+        or not isinstance(declaration["files"], list)
+    ):
+        raise ValueError("invalid native source fixture manifest")
+    files = declaration["files"]
+    if len(files) > 4096:
+        raise ValueError("native source fixture manifest is too large")
+    selected = [(relative_manifest, manifest)]
+    seen = set()
+    for name in files:
+        if (
+            not isinstance(name, str)
+            or len(name) > 65_536
+            or not name.startswith("benchmarks/")
+            or "\\" in name
+            or ":" in name
+            or any(part in {"", ".", ".."} for part in name.split("/"))
+            or name in seen
+        ):
+            raise ValueError("invalid or duplicate native source fixture path")
+        seen.add(name)
+        selected.append((name, repository / name))
+    for name, path in selected:
+        if not path.is_file():
+            raise ValueError(f"native source fixture is missing: {name}")
+        parent = repository
+        for part in name.split("/"):
+            parent = parent / part
+            if parent.is_symlink():
+                raise ValueError("native source fixtures must not be symlinks")
+    return selected
 
 
 def member_sources(member_root: Path):
@@ -28,7 +71,7 @@ def member_sources(member_root: Path):
             yield path
 
 
-def preserve_workspace(archive: Path, workspace: Path) -> None:
+def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> None:
     """Keep all lock members without adding an R dependency to the Python binary."""
     manifest = (workspace / "Cargo.toml").read_bytes()
     members = tomllib.loads(manifest.decode())["workspace"]["members"]
@@ -107,6 +150,27 @@ def preserve_workspace(archive: Path, workspace: Path) -> None:
                     else:
                         additions.append((name, path))
 
+            for relative, path in fixture_sources:
+                if (
+                    not isinstance(relative, str)
+                    or "\\" in relative
+                    or ":" in relative
+                    or any(part in {"", ".", ".."} for part in relative.split("/"))
+                    or not path.is_file()
+                    or path.is_symlink()
+                ):
+                    raise ValueError("invalid native source fixture")
+                name = f"{root}/{relative}"
+                if name in names:
+                    entry = source.getmember(name)
+                    if (
+                        not entry.isfile()
+                        or source.extractfile(entry).read() != path.read_bytes()
+                    ):
+                        raise ValueError("source archive changed a native test fixture")
+                else:
+                    additions.append((name, path))
+
             with tempfile.NamedTemporaryFile(
                 dir=archive.parent, suffix=".tar.gz", delete=False
             ) as file:
@@ -141,8 +205,9 @@ def build_sdist(sdist_directory, config_settings=None):
     workspace = (
         (project / config["tool"]["maturin"]["manifest-path"]).resolve().parents[2]
     )
+    fixtures = native_test_fixtures(workspace)
     filename = maturin.build_sdist(sdist_directory, config_settings)
-    preserve_workspace(Path(sdist_directory) / filename, workspace)
+    preserve_workspace(Path(sdist_directory) / filename, workspace, fixtures)
     return filename
 
 
