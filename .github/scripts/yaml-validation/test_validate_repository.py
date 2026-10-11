@@ -115,13 +115,20 @@ class TestYamlLoader(unittest.TestCase):
                 Loader=VALIDATOR.UniqueKeyLoader,
             )
 
-    def test_unanchored_merge_keys_raise_the_intended_diagnostic(self):
-        with self.assertRaises(yaml.YAMLError) as raised:
+    def test_merge_keys_report_the_intended_reason(self):
+        # The merge-key guard lives in flatten_mapping, which only runs when
+        # construct_mapping calls it. This anchor-free merge key is the only
+        # shape that reaches the guard (anchors/aliases die at the composer),
+        # so it pins the intended message instead of the accidental
+        # "could not determine a constructor for the tag
+        # 'tag:yaml.org,2002:merge'".
+        with self.assertRaisesRegex(
+            yaml.YAMLError, "YAML merge keys are not allowed"
+        ):
             yaml.load(
-                "merged: {<<: 1}\n",
+                "merged:\n  <<: just_a_scalar\n",
                 Loader=VALIDATOR.UniqueKeyLoader,
             )
-        self.assertIn("YAML merge keys are not allowed", str(raised.exception))
 
     def test_explicit_tags_are_rejected(self):
         with self.assertRaises(yaml.YAMLError):

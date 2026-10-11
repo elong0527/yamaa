@@ -288,11 +288,30 @@ structural admission precedes model or finding growth. Independent core cases
 cover every current vocabulary, order/default/null/shape distinctions, cumulative
 limits and retention after input deletion. See
 [the boundary](../SPECIFICATION_SUBMISSION_DECLARATIONS.md).
-The document-list occurrence correction #1897 is closed by
-[#1901](https://github.com/elong0527/yamaa/pull/1901), merged as
-`48eb58c30e3cb9ca587b6c237a77a63977b644ef`. Current installed R qualification
-remains affected by the prepared SDK/benchmark-lock mismatch tracked in #1907;
-its corrective [#1909](https://github.com/elong0527/yamaa/pull/1909) is in review.
+[#1897 document-list rejection occurrence facts](https://github.com/elong0527/yamaa/issues/1897)
+is closed by [#1901](https://github.com/elong0527/yamaa/pull/1901), merged through
+GitHub at `48eb58c30e3cb9ca587b6c237a77a63977b644ef`. Malformed environment
+document items now identify their actual sequence container, absent mapping key
+and item node alongside the authored section/index path. Independent cases cover
+all three families, multiple positions, complete quota refusals and unaffected
+valid ownership after input deletion. The originating chat did not execute its
+final merge guard: fresh 0.3.0 strict R qualification failed because five benchmark
+SDK locks still pinned 0.2.0. PR #1904 corrected those pins before #1901 merged.
+The original failure is scoped to its preceding base; earlier passing 0.2.0
+evidence is not current-release proof. See
+[the merge observation](https://github.com/elong0527/yamaa/pull/1901#issuecomment-6102664991).
+
+The active [#1907 SDK lock coherence correction](https://github.com/elong0527/yamaa/issues/1907)
+retains #1904's existing SDK corrections and adds an early repository guard plus
+an actual installed mismatch refusal witness through
+[#1909](https://github.com/elong0527/yamaa/pull/1909). Program versions and
+independent truth remain unchanged. See
+[the correction contract](../BENCHMARK_SDK_LOCKS.md). Local qualification of
+runtime source `6e79094c2352cfccba60ef263a714ac8db09e090` passed both installed
+Python forms and strict installed R, including the SDK mismatch witness. The
+subsequent merge of #1908 changes documentation only; runtime source and fixtures
+remain identical. Complete review, applicable current-head checks, installed
+artifact audits and a fresh protected merge guard remain required.
 Semantic composition, original inherited capture and generators remain #1758.
 The approved [#1887 decision](https://github.com/elong0527/yamaa/issues/1887)
 adds an optional bounded nonempty section-level `source_system_version` override,
@@ -322,10 +341,12 @@ Continue with the following acceptance gates in the
    Implement #1866's approved lifecycle: publication failure stops dependent
    publication while retaining completed execution evidence and prior writes.
 4. #1888 is closed by #1891 and #1893 by #1896 with its evidence limits above;
-   #1897 is closed by #1901. Restore current installed R qualification through
-   #1907, then complete #1758's shared Define-XML/Dataset-JSON implementation,
-   approved source-system-version override and three submission fixtures before
-   retiring the old schema and generator.
+   #1897 is closed by #1901. Local qualification covers #1907's SDK lock
+   coherence correction and installed R as scoped above. Complete its review,
+   applicable current-head checks, artifact audits and protected merge guard,
+   then complete #1758's shared Define-XML/Dataset-JSON implementation, approved
+   source-system-version override and three submission fixtures before retiring
+   the old schema and generator.
 5. Close the remaining language/API gaps in #1751/#1752/#1754 and the executable
    inventory, migrate every supported benchmark runner, and qualify complete
    output, issues, logs and exact saved bytes through both installed public APIs.

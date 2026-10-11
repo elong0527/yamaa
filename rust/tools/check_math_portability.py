@@ -18,7 +18,7 @@ EXPECTED_HOSTS = {
         ("Linux", "x86_64"),
         ("Windows", "AMD64"),
     )
-    for version in ("3.12", "3.14")
+    for version in ("3.12", "3.13", "3.14")
 }
 
 
@@ -60,6 +60,12 @@ def compare(reports):
     return len(expected)
 
 
+def validate_hosts(hosts):
+    """Require one numerical report for each approved OS/architecture/interpreter."""
+    if len(hosts) != len(EXPECTED_HOSTS) or set(hosts) != EXPECTED_HOSTS:
+        raise AssertionError(f"incomplete or duplicate native matrix: {hosts}")
+
+
 def main():
     """Require every OS/Python report and complete per-function samples before comparison."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -80,8 +86,7 @@ def main():
         for name in FUNCTIONS:
             if sum(key[1] == name for key in rows) != 10011:
                 raise AssertionError(f"incomplete {name} sample")
-    if len(hosts) != len(EXPECTED_HOSTS) or set(hosts) != EXPECTED_HOSTS:
-        raise AssertionError(f"incomplete or duplicate native matrix: {hosts}")
+    validate_hosts(hosts)
     count = compare(reports)
     print(
         f"PortableLibmV1: {count} exact observations match across {len(reports)} hosts/versions"

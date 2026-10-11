@@ -74,7 +74,11 @@ def generated(root):
             ]
         )
         for name, descriptor in descriptors(document, classes=classes):
-            target = prose.get(f"{path.name}:{name}.description")
+            # New declarations cite their actual field; older rewrite records
+            # retain the historical description address.
+            target = prose.get(f"{path.name}:{name}") or prose.get(
+                f"{path.name}:{name}.description"
+            )
             entry = migration["requirements"].get(target, {})
             if entry.get("retired"):
                 replacement = entry["replacement"]
@@ -124,8 +128,7 @@ def generated(root):
         if entry.get("retired"):
             continue
         historical = (
-            ", ".join(dict.fromkeys(historical_sources[identifier]))
-            or "Schema prose"
+            ", ".join(dict.fromkeys(historical_sources[identifier])) or "Schema prose"
         )
         index.append(
             f"| [{identifier}](../{entry['file']}#{identifier.lower()}) | `{entry['file']}` | {historical} |"

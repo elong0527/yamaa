@@ -11,11 +11,14 @@ REPOSITORY = WORKSPACE.parent
 
 def stage(destination: Path):
     """Copy shared sources and independent installed-test truth into a new archive tree."""
+    # A source package must never generate its own dependency resolution.
+    if not (WORKSPACE / "Cargo.lock").is_file():
+        raise FileNotFoundError("canonical Cargo.lock is missing")
     # copytree rejects an existing destination, protecting previous builds.
     shutil.copytree(REPOSITORY / "R/yamaa", destination)
     rust = destination / "src/rust"
     rust.mkdir()
-    for name in ("Cargo.toml", "rust-toolchain.toml"):
+    for name in ("Cargo.toml", "rust-toolchain.toml", "Cargo.lock"):
         shutil.copy2(WORKSPACE / name, rust / name)
     shutil.copytree(
         WORKSPACE / "crates",

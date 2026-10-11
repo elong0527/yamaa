@@ -102,6 +102,38 @@ for(attempt in attempts) {
 stopifnot(length(events)==12L)
 cat("R installed graph union, rounded aliases, repeat, held source/report and quota witnesses passed\n")
 
+# A valid but stale SDK lock fails before binding or study-file inspection.
+# Removing the study input makes any accidental data authority observable.
+work <- study()
+write(work,"env/renv.lock",paste0('{"R":{"Version":"4.6.1"},"Packages":{',
+  '"yamaa":{"Package":"yamaa","Version":"99.0.0"},',
+  '"yamaabenchmarks":{"Package":"yamaabenchmarks","Version":"1.0.0"}}}'))
+specification <- prepare_study(work)
+unlink(file.path(work,"raw/raw.csv"))
+lock_events <- character()
+locked_verify <- function(versions,calls) {
+  lock_events <<- c(lock_events,"lock")
+  capabilities$verify(versions,calls)
+}
+forbidden_resolve <- function(call,parameters) {
+  lock_events <<- c(lock_events,"bind")
+  stop("SDK mismatch must precede binding")
+}
+attempt <- reply(.Call(private("wrap__producer_build"),specification,fields,
+  locked_verify,forbidden_resolve,16777216L))
+result <- report(attempt)
+facts <- retained(result)
+evidence <- observe(result)
+stopifnot(identical(lock_events,"lock"),!facts$accepted,length(facts$entered)==0L,
+  identical(status(result),"complete"),
+  grepl('"requirement":"REQ-0697"',evidence,fixed=TRUE),
+  grepl('"reason":"version_mismatch"',evidence,fixed=TRUE),
+  grepl('"expected":["99.0.0"]',evidence,fixed=TRUE),
+  grepl('"source_reads":[]',evidence,fixed=TRUE),
+  grepl('"nodes":[]',evidence,fixed=TRUE))
+rm(specification,attempt,result); unlink(work,recursive=TRUE); invisible(gc())
+cat("R actual SDK mismatch refuses before binding and absent study input\n")
+
 # An original condition and interrupt are rooted native payloads, never messages
 # reconstructed by the report. Ordinary installed callable resolution still runs.
 for(interrupted in c(FALSE,TRUE)) {

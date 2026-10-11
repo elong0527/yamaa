@@ -325,3 +325,28 @@ fn inherited_layer_and_composed_findings_resolve_without_exposing_context_arenas
         json!({"status":"invalid","diagnostics":[{"phase":"validation","condition":"unknown_reference","requirement":"REQ-0070","spec_paths":["columns.ID.derivation"],"context":{"column":"ID","dependency":"UNKNOWN"}}]})
     );
 }
+
+#[test]
+fn shipped_environment_version_override_reaches_the_same_owned_submission_model() {
+    use yamaa_core::submission_document;
+    let schema = shipped_schema::capture_environment().unwrap();
+    for (family, guide) in [("sdtm", "SDTMIG"), ("adam", "ADaMIG"), ("send", "SENDIG")] {
+        for version in [None, Some("1.0")] {
+            let mut text = format!(
+                "schema_version: '1.0'\nlanguage: python\nstudy: {{id: Study, name: Study, description: Study, protocol_name: Protocol}}\n{family}:\n  standard: {{name: {guide}, version: '1.0', status: Final}}\n  specs: [absent.yaml]\n  define: absent/define.xml\n"
+            );
+            if let Some(version) = version {
+                text.push_str(&format!("  source_system_version: '{version}'\n"));
+            }
+            let captured = schema.prepare_structural(source(&text)).unwrap();
+            let input = &captured.normalized().document;
+            let owned =
+                submission_document::decode(input, input.root(), Default::default()).unwrap();
+            drop(captured);
+            let selected = owned.sections()[0].source_versions("0.3.0").unwrap();
+            assert_eq!(selected.metadata(), version.unwrap_or("0.3.0"));
+            assert_eq!(selected.installed(), "0.3.0");
+            assert_eq!(selected.override_origin().is_some(), version.is_some());
+        }
+    }
+}

@@ -6,10 +6,13 @@ The historical evidence below retains each slice's original scope and provenance
 
 The current serial order follows merged #1757/#1858/#1860/#1863/#1867/#1869/#1871/#1874/#1877/#1881/#1883/#1888/#1893/#1897:
 complete #1741 ordered producer publication under the approved #1866 lifecycle;
-restore current installed R qualification through #1907 and complete #1758
-submission composition/outputs after the landed declaration owners. Preserve
-#1893's [recorded evidence limits](1893-qualification.md), then close the
-remaining language/API/release gates. The
+complete #1907's SDK lock coherence guard and installed R qualification after
+#1904's pin correction and merged #1897/#1901, then complete #1758 submission
+composition/outputs after the landed declaration owners. Preserve #1893's
+[recorded evidence limits](1893-qualification.md) and #1901's preceding-base
+qualification failure recorded in the
+[current assessment](migration-status.md), then close the remaining
+language/API/release gates. The
 [2026-10-10 maintainer decisions](maintainer-decisions.md) require Windows R and
 settle the public result representations, source-system-version override,
 declaring-file paths and Cargo packaging exception. The numerical policy was
