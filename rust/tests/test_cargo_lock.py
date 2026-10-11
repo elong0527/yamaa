@@ -100,6 +100,53 @@ class CargoLockTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, message):
                         guard.check_archive(path, b"lock", b"workspace\n")
 
+    def test_absolute_and_dot_rooted_locks_refuse_even_with_matching_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "yamaa.tar.gz"
+            for location in (
+                "/rust/Cargo.lock",
+                "../rust/Cargo.lock",
+                "./yamaa/rust/Cargo.lock",
+                "yamaa/./rust/Cargo.lock",
+                "yamaa//rust/Cargo.lock",
+                "yamaa/src/../rust/Cargo.lock",
+                "C:/rust/Cargo.lock",
+                "C:\\yamaa/rust/Cargo.lock",
+            ):
+                with self.subTest(location=location):
+                    archive(
+                        path,
+                        [
+                            (location, b"lock"),
+                            (
+                                location.removesuffix("Cargo.lock") + "Cargo.toml",
+                                b"manifest",
+                            ),
+                        ],
+                    )
+                    with self.assertRaisesRegex(ValueError, "unexpected"):
+                        guard.check_archive(path, b"lock", b"manifest")
+
+    def test_source_packages_preserve_the_declared_rust_toolchain(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "yamaa.tar.gz"
+            entries = [
+                ("yamaa/rust/Cargo.lock", b"lock"),
+                ("yamaa/rust/Cargo.toml", b"manifest"),
+            ]
+            for declarations, message in (
+                ([], "one regular"),
+                ([("yamaa/rust/rust-toolchain.toml", b"other")], "toolchain differs"),
+                ([("yamaa/rust/rust-toolchain.toml", "elsewhere")], "one regular"),
+                ([("yamaa/rust/rust-toolchain.toml", b"toolchain")] * 2, "one regular"),
+            ):
+                with self.subTest(declarations=declarations):
+                    archive(path, entries + declarations)
+                    with self.assertRaisesRegex(ValueError, message):
+                        guard.check_archive(path, b"lock", b"manifest", b"toolchain")
+            archive(path, entries + [("yamaa/rust/rust-toolchain.toml", b"toolchain")])
+            guard.check_archive(path, b"lock", b"manifest", b"toolchain")
+
 
 if __name__ == "__main__":
     unittest.main()

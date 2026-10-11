@@ -1,9 +1,10 @@
 # Locked Cargo builds
 
 `rust/Cargo.lock` pins one dependency resolution for the shared engine and both
-bindings. Python and R source packages retain that lock and the root workspace
-manifest byte for byte. Tests, probes and release builds use `--locked`, so a
-missing or stale lock fails instead of resolving a new graph during qualification.
+bindings. Python and R source packages retain that lock, the root workspace
+manifest and the Rust toolchain declaration byte for byte. Tests, probes and
+release builds use `--locked`, so a missing or stale lock fails instead of
+resolving a new graph during qualification.
 This implements the packaging decision in
 [#1906](https://github.com/elong0527/yamaa/issues/1906); installed Windows R
 qualification remains required under
@@ -20,8 +21,12 @@ update.
 `python/yamaa_build_backend.py` delegates Python wheel, editable and metadata
 hooks to maturin. Its sdist hook restores the original root workspace manifest
 and includes missing workspace member sources after maturin creates the archive.
+Restoration admits only a member's `Cargo.toml` and `src/**/*.rs` library sources;
+local notes, generated files and symlinks are excluded or refused. Additional
+build scripts or resources require a reviewed source-membership policy update.
 The lock remains unchanged. The backend refuses missing or contradictory locks,
-missing manifests and duplicate archive entries before replacing the archive.
+missing manifests, invalid archive roots and duplicate archive entries before
+replacing the archive.
 Python still builds only `yamaa-python`; including the R sources does not add an
 R dependency to that binary or require R to build it.
 
@@ -50,7 +55,8 @@ for the installed source-package build.
 `rust/tools/check_cargo_lock.py` runs full `cargo metadata --locked`, including
 transitive dependencies. For each supplied Python or R source archive it checks
 that exactly one regular Cargo lock appears at the expected workspace location,
-and compares its bytes and the root workspace manifest against the checkout.
+and compares its bytes, the root workspace manifest and Rust toolchain declaration
+against the checkout.
 
 ```sh
 python rust/tools/check_cargo_lock.py \
