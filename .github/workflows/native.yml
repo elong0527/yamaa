@@ -93,6 +93,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Compare the diagnostic literal allowlist with the prior revision.
+          fetch-depth: 2
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
@@ -137,7 +139,7 @@ jobs:
             uv run --project ../python --locked --no-editable python tools/check_regex.py
             uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-reference-assessment.json"
             python tools/check_dependencies.py
-            python tools/check_diagnostics.py
+            python tools/check_diagnostics.py --baseline-ref HEAD^
             uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p 'test_*.py'
           ) 2>&1 | tee "${RUNNER_TEMP}/shared-crates-check.log"
       - name: Preserve locked Rust dependency evidence
