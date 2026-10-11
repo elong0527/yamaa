@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-EXPRESSION = """
+CAPABILITIES_FIRST = """
 suppressPackageStartupMessages(library(yamaa))
 cat("loaded yamaa\\n"); flush.console()
 print(getDLLRegisteredRoutines("yamaa")$.Call[["wrap__engine_info"]])
@@ -15,6 +15,14 @@ print(dataset_capabilities())
 cat("entering list metadata call\\n"); flush.console()
 print(engine_info())
 cat("native calls completed\\n"); flush.console()
+"""
+
+METADATA_FIRST = """
+suppressPackageStartupMessages(library(yamaa))
+cat("loaded yamaa; first native call is metadata\\n"); flush.console()
+writeLines(c(as.character(getRversion()), as.character(packageVersion("yamaa")),
+             engine_info()$core_version, normalizePath(find.package("yamaa"))))
+cat("native metadata completed\\n"); flush.console()
 """
 
 
@@ -35,21 +43,28 @@ def main():
         env=environment,
         text=True,
     ).strip()
-    command = [executable, "--vanilla", "--slave", "-e", EXPRESSION]
-    result = subprocess.run(
-        command,
-        env=environment,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        check=False,
+    probes = (
+        ("rterm-metadata-first", [executable, "--vanilla", "--slave", "-e", METADATA_FIRST]),
+        ("rscript-metadata-first", ["Rscript", "--vanilla", "-e", METADATA_FIRST]),
+        ("rscript-capabilities-first", ["Rscript", "--vanilla", "-e", CAPABILITIES_FIRST]),
     )
-    (args.output / "native-call.txt").write_text(result.stdout, encoding="utf-8")
-    print(result.stdout, flush=True)
-    if result.returncode:
+    failed = False
+    for name, command in probes:
+        result = subprocess.run(
+            command,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+        (args.output / (name + ".txt")).write_text(result.stdout, encoding="utf-8")
+        print(name, flush=True)
+        print(result.stdout, flush=True)
+        if not result.returncode:
+            continue
+        failed = True
         print(f"Native R call process exit: {result.returncode}", flush=True)
-        for dll in args.library.glob("yamaa/libs/**/*.dll"):
-            shutil.copy2(dll, args.output / dll.name)
         tools = Path(environment["RTOOLS45_HOME"])
         debugger = next(tools.rglob("gdb.exe"), None)
         if debugger is not None:
@@ -76,14 +91,16 @@ def main():
                 text=True,
                 check=False,
             )
-            (args.output / "native-call-debugger.txt").write_text(
+            (args.output / (name + "-debugger.txt")).write_text(
                 diagnostic.stdout, encoding="utf-8"
             )
             print(diagnostic.stdout, flush=True)
         else:
             print("Rtools debugger unavailable", flush=True)
-        return 1
-    return 0
+    if failed:
+        for dll in args.library.glob("yamaa/libs/**/*.dll"):
+            shutil.copy2(dll, args.output / dll.name)
+    return int(failed)
 
 
 if __name__ == "__main__":
