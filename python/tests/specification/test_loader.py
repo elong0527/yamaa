@@ -558,6 +558,21 @@ def test_rejects_unsupported_yaml_features(tmp_path: Path, content: str) -> None
     assert caught.value.diagnostics[0].condition == "invalid_yaml"
 
 
+def test_merge_key_reports_intended_reason(tmp_path: Path) -> None:
+    # The merge-key guard lives in flatten_mapping, which only runs because
+    # the custom construct_mapping calls it. Without that call the key is
+    # still rejected, but with an accidental constructor message.
+    path = tmp_path / "merge.yaml"
+    path.write_text("a: 1\n<<: {b: 2}\n", encoding="ascii")
+
+    with pytest.raises(SpecificationError) as caught:
+        read_yaml_document(path)
+
+    diagnostic = caught.value.diagnostics[0]
+    assert diagnostic.condition == "invalid_yaml"
+    assert diagnostic.context["reason"] == "YAML merge keys are not allowed"
+
+
 def test_rejects_non_ascii_authored_source(tmp_path: Path) -> None:
     path = tmp_path / "non-ascii.yaml"
     path.write_text("label: caf\N{LATIN SMALL LETTER E WITH ACUTE}\n", encoding="utf-8")
