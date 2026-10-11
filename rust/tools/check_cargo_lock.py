@@ -72,7 +72,16 @@ def main():
             ("rustc-version.txt", ["rustc", "-vV"]),
             (
                 "cargo-features.txt",
-                ["cargo", "tree", "--locked", "--target", "all", "-e", "features"],
+                [
+                    "cargo",
+                    "tree",
+                    "--locked",
+                    "--workspace",
+                    "--target",
+                    "all",
+                    "-e",
+                    "features",
+                ],
             ),
         ):
             output = subprocess.check_output(command, cwd=WORKSPACE, text=True)
