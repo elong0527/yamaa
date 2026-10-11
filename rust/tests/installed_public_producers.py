@@ -35,7 +35,7 @@ keys: [ID]
 input:
   FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}
   SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}
-intermediates: [{id: SECOND_REFERENCE, dataset: SECOND, no_match: null}]
+intermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]
 columns:
   - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}
   - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}
