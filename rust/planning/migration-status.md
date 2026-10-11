@@ -43,7 +43,7 @@ assessment. #1970 remains open until both complete acceptance gates pass.
 | Public API and consumers | [#1991](https://github.com/elong0527/yamaa/issues/1991): tested domain/check/define contract; [#1992](https://github.com/elong0527/yamaa/issues/1992): public benchmark runners; [#1993](https://github.com/elong0527/yamaa/issues/1993): R package/docs and deliberate cdiscbuilder retirement. |
 | Repository tooling | [#1995](https://github.com/elong0527/yamaa/issues/1995): declaring-file policy in the validator; [#2002](https://github.com/elong0527/yamaa/issues/2002): validator/style decoupling before reference removal. |
 | Final evidence | [#1996](https://github.com/elong0527/yamaa/issues/1996): Windows R, locked packages and final full matrix; [#1997](https://github.com/elong0527/yamaa/issues/1997): automated provenance/coverage audit; [#1998](https://github.com/elong0527/yamaa/issues/1998): representative cold/warm performance and memory. |
-| Transition/removal | [#1999](https://github.com/elong0527/yamaa/issues/1999): concrete gated transition and rollback; [#1994](https://github.com/elong0527/yamaa/issues/1994): remove the reference and obsolete API after all entry criteria pass. |
+| Transition/removal | [#1999](https://github.com/elong0527/yamaa/issues/1999): the [gated transition and rollback plan](transition.md) requires combined-main acceptance before approval; [#1994](https://github.com/elong0527/yamaa/issues/1994): remove the reference and obsolete API after all entry criteria pass. |
 
 Initial policy questions are tracked in
 [#1973](https://github.com/elong0527/yamaa/issues/1973). Under the maintainer's
