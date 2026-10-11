@@ -4663,7 +4663,7 @@ fn named_item() -> yamaa_engine::dataset::Intermediate {
     Intermediate {
         identifier: "SELECTED".into(),
         path: "intermediates[0]".into(),
-        source: 0,
+        source: yamaa_core::dataset::IntermediateSource::Input(0),
         keys: vec![IntermediateKey {
             source_column: 0,
             path: "intermediates[0].key".into(),

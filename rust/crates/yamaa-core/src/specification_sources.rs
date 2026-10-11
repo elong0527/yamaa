@@ -365,19 +365,14 @@ pub(super) fn bind(
             declaration.bind_filter(
                 path,
                 prepared.source(),
-                &secondary[item.source].schema,
+                item.source_schema(secondary).ok_or(BindError::Internal)?,
                 &prepared.intermediates,
                 findings,
             )?;
-            if let Some(column) = secondary[item.source]
-                .schema
-                .columns()
-                .iter()
-                .position(|c| c.name == field)
-            {
+            if let Some(column) = item.source_column(secondary, field) {
                 edges.extend(item.output_dependencies());
                 Some(Expression::Intermediate { index, column })
-            } else if declaration.absent.is_some() {
+            } else if declaration.absent.is_some() && !item.source.is_self() {
                 variable_absent = true;
                 Some(Expression::Literal(Value::Missing))
             } else {

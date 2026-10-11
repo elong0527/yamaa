@@ -631,3 +631,72 @@ pub(super) fn temporal_reached() -> BTreeSet<ConditionCode> {
     }
     reached
 }
+
+/// Reach SELF admission from normalized original documents, with independent truth.
+pub(super) fn self_reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    for collision in [false, true] {
+        let mut declared_inputs = vec![("SRC", Map(vec![("path", Text("src.csv"))]))];
+        if collision {
+            declared_inputs.push(("SELF", Map(vec![("path", Text("self.csv"))])));
+        }
+        let mut fields = base(
+            "TEST",
+            Map(declared_inputs),
+            vec![column("ID", None)],
+            vec![Text("ID")],
+        );
+        fields.push((
+            "intermediates",
+            List(vec![Map(vec![
+                ("id", Text("P")),
+                ("dataset", Text("SELF")),
+                ("key", List(vec![Text("ID")])),
+            ])]),
+        ));
+        fields.push((
+            "rows",
+            List(vec![Map(vec![
+                ("id", Text("first")),
+                ("dataset", Text("SRC")),
+                (
+                    "derivations",
+                    Map(vec![(
+                        "ID",
+                        Map(vec![(
+                            "value",
+                            Map(vec![(
+                                "source",
+                                Map(vec![(
+                                    "variable",
+                                    Text(if collision { "SRC.ID" } else { "P.ID" }),
+                                )]),
+                            )]),
+                        )]),
+                    )]),
+                ),
+            ])]),
+        ));
+        let expected = if collision {
+            vec![(
+                "duplicate_identifier",
+                Some("REQ-0113"),
+                vec!["intermediates[0].dataset", "input.SELF"],
+                vec![("identifier", text("SELF"))],
+            )]
+        } else {
+            vec![(
+                "phase_boundary",
+                Some("REQ-0120"),
+                vec!["rows[0].derivations.ID.source"],
+                vec![
+                    ("identifier", text("P.ID")),
+                    ("available_phase", text("completed_prior_row_template")),
+                    ("required_phase", text("row_construction")),
+                ],
+            )]
+        };
+        reached.extend(check(fields, expected));
+    }
+    reached
+}

@@ -209,7 +209,7 @@ fn repeated_named_operands_share_choice_and_suppress_inherited_no_match_counts()
         vec![Intermediate {
             identifier: "MATCHED".into(),
             path: "intermediates[0]".into(),
-            source: 0,
+            source: yamaa_core::dataset::IntermediateSource::Input(0),
             keys: vec![IntermediateKey {
                 source_column: 0,
                 path: "intermediates[0].key.K".into(),
@@ -428,7 +428,7 @@ fn named_plan(table: &Table, donor: &Table, filtered: bool) -> DatasetPlan {
         vec![Intermediate {
             identifier: "MATCHED".into(),
             path: "intermediates[0]".into(),
-            source: 0,
+            source: yamaa_core::dataset::IntermediateSource::Input(0),
             keys: vec![IntermediateKey {
                 source_column: 0,
                 path: "intermediates[0].key.K".into(),

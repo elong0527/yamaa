@@ -472,12 +472,7 @@ pub(super) fn bind(
                     if let Some((index, field)) = spec.intermediates.reference(name) {
                         if let Some(item) = &intermediates[index] {
                             edges.extend(item.output_dependencies());
-                            if let Some(column) = secondary[item.source]
-                                .schema
-                                .columns()
-                                .iter()
-                                .position(|candidate| candidate.name == field)
-                            {
+                            if let Some(column) = item.source_column(secondary, field) {
                                 bindings.push(Binding {
                                     name: name.into(),
                                     read: Read::Intermediate { index, column },
@@ -519,6 +514,11 @@ pub(super) fn bind(
                 &branch.path,
                 catalog,
                 None,
+                column,
+                &spec.output,
+                &spec.intermediates,
+                secondary,
+                intermediates,
                 edges,
                 findings,
             )?,
