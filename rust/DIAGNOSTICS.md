@@ -133,6 +133,14 @@ original spellings and character positions without narrowing through runtime i64
 All original binding findings with normative projections use the common adapter
 serializer. Resource policies and inconsistent metadata retain separate failures.
 
+Classified packaging lock diagnostics now borrow their complete ordered host
+facts and held root/captured/authored origins into core. Core owns reason tokens,
+context fields, shape validation and whole-report admission before any authored
+copy. uv/renv parsing, installed metadata selection and version comparison remain
+host operations. The original opaque lock failure survives repeated projection
+and quota refusal without a provider retry or binding/invocation effect; a
+non-Clone, non-Debug, non-Send activation witness checks that identity directly.
+
 The unchanged lookup reports and predicate syntax fixtures pin existing mappings
 and richer parser context. One independently captured malformed window predicate
 also matches a complete original failed report. Three additional independently
