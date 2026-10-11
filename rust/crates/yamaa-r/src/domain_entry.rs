@@ -359,6 +359,14 @@ fn domain_log(handle: Robj, warning: bool) -> List {
         {
             return crate::public_table::frame(table);
         }
+        #[cfg(unix)]
+        if let Some(table) = state
+            .producer
+            .as_ref()
+            .and_then(|result| result.log_table(warning))
+        {
+            return crate::public_table::frame(table);
+        }
         let _ = (state, warning);
         Ok(NULL.into_robj())
     })

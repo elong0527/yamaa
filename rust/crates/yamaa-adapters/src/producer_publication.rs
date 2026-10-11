@@ -170,14 +170,14 @@ impl Publication {
         }
     }
 }
-fn selected_bound(declaring: &str, written: &str) -> Result<usize, AdmissionFailure> {
+pub(crate) fn selected_bound(declaring: &str, written: &str) -> Result<usize, AdmissionFailure> {
     declaring
         .len()
         .checked_add(written.len())
         .and_then(|n| n.checked_add(2))
         .ok_or(AdmissionFailure::Limit("producer_publication_paths"))
 }
-fn same_location(left: &str, right: &str) -> bool {
+pub(crate) fn same_location(left: &str, right: &str) -> bool {
     #[cfg(windows)]
     {
         // Child opens are ordinal case-insensitive, including absent targets.

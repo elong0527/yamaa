@@ -438,6 +438,25 @@ impl Report {
     pub(crate) fn domain_projection_failure(&self) -> Option<String> {
         self.output_error.map(|error| error.to_string())
     }
+    pub(crate) fn domain_log<'py>(
+        &self,
+        py: Python<'py>,
+        warning: bool,
+    ) -> PyResult<Option<Bound<'py, PyBytes>>> {
+        self.domain
+            .as_ref()
+            .map(|result| {
+                let result = result.try_lock().map_err(|_| borrow_error())?;
+                Ok((if warning {
+                    result.warning_log()
+                } else {
+                    result.verification_log()
+                })
+                .map(|bytes| PyBytes::new(py, bytes)))
+            })
+            .transpose()
+            .map(Option::flatten)
+    }
     pub(crate) fn domain_issues(&self) -> PyResult<Vec<yamaa_adapters::issue_rows::Issue>> {
         self.domain
             .as_ref()

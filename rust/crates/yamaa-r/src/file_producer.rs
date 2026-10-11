@@ -33,7 +33,7 @@ pub(crate) mod platform {
             attempt: Rc<Attempt>,
             observations: Option<String>,
             refusal: &'static str,
-            domain: Option<yamaa_adapters::producer_result::RootResult>,
+            domain: Option<Box<yamaa_adapters::producer_result::RootResult>>,
             output_error: Option<yamaa_adapters::table_transport::TableTransportError>,
         },
     }
@@ -235,6 +235,18 @@ pub(crate) mod platform {
                     domain: Some(result),
                     ..
                 } => result.output_table(),
+                _ => None,
+            }
+        }
+        pub(crate) fn log_table(
+            &self,
+            warning: bool,
+        ) -> Option<&yamaa_adapters::public_table::PublicTable> {
+            match &self.state {
+                State::Report {
+                    domain: Some(result),
+                    ..
+                } => result.log_table(warning),
                 _ => None,
             }
         }
@@ -446,7 +458,7 @@ pub(crate) mod platform {
                     &facts,
                 ) {
                     Ok(value) => {
-                        domain = Some(value);
+                        domain = Some(Box::new(value));
                         Ok(None)
                     }
                     Err(yamaa_adapters::producer_result::Error::Report(error)) => Err(error),

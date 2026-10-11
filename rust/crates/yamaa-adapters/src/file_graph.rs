@@ -261,6 +261,7 @@ impl FileGraph {
             &mut origin,
         )
         .and_then(|nodes| {
+            crate::producer_log_publication::admit_locations(&documents, &resources)?;
             let root = documents[0].source().identity.as_str();
             // Resource witnesses and native edge/index ownership share the
             // core's text/work ceilings, rather than receiving a new quota.
