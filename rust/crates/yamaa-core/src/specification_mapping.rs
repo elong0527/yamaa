@@ -165,7 +165,9 @@ fn checked_wrap(
     Some(Expression::MappingCut {
         source: alloc::boxed::Box::new(Assignment {
             column,
-            path: format!("{}.source", declaration.operation.path()),
+            // Collection multiplicity belongs to the enclosing mapping/cut operation.
+            // Static source/type binding still uses the authored `.source` leaf.
+            path: declaration.operation.path().into(),
             expression,
         }),
         operation: declaration.operation.clone(),

@@ -1,6 +1,6 @@
 # Original mapping and cut truth
 
-These twenty authored specifications and complete reports were written from
+These twenty-one authored specifications and complete reports were written from
 REQ-0304, REQ-0306, REQ-0334, REQ-0343 through REQ-0347, REQ-0360,
 REQ-0361, REQ-0364, REQ-0709, REQ-0710, REQ-0714, REQ-1110 and REQ-1118.
 No candidate or reference evaluator authored an expected value. The truth owns

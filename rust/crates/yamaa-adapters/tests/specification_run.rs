@@ -3856,7 +3856,7 @@ fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
         }
         count += 1;
     }
-    assert_eq!(count, 20);
+    assert_eq!(count, 21);
 }
 
 #[test]
