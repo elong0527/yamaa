@@ -25,8 +25,8 @@ class PublicDefine(unittest.TestCase):
         self.base = Path(self.temp.name)
 
     def fixture(self, name, published=False):
-        directory = self.base / name
-        shutil.copytree(ROOT / name, directory)
+        directory = Path(tempfile.mkdtemp(prefix=name + "-", dir=self.base))
+        shutil.copytree(ROOT / name, directory, dirs_exist_ok=True)
         if published:
             dataset = "lb" if name == "sdtm-lb-metadata" else "dm"
             shutil.copy2(directory / "expected" / f"{dataset}.csv", directory / f"{dataset}.csv")
@@ -90,6 +90,7 @@ class PublicDefine(unittest.TestCase):
         reads = result._native.capture_reads()
         for name in ["spec.yaml", "submission-spec.yaml", "environment.yaml"]:
             (directory / name).unlink()
+            self.assertFalse((directory / name).exists())
         (directory / "lb.csv").write_text("changed after preparation\n")
         self.assertTrue(result.save())
         self.assertFalse(result.save())
@@ -116,6 +117,7 @@ class PublicDefine(unittest.TestCase):
                     self.assertEqual((directory / "spec.yaml").read_bytes(), (ROOT / "sdtm-lb-metadata/spec.yaml").read_bytes())
                 else:
                     issue = next(row for row in issues if row["condition"] == "allowed_values_failed")
+                    self.assertEqual(issue["requirement"], "REQ-0957")
                     context = json.loads(issue["context"])
                     self.assertEqual((context["column"], context["codelist"], context["testcd"], context["row"]), ("LBORRESU", "CL_GLUCOSE", "GLUC", 0))
                     self.assertTrue(issue["spec_paths"][0].endswith("rows.glucose.submission.LBORRESU.codelist"))
@@ -126,15 +128,16 @@ class PublicDefine(unittest.TestCase):
                 shutil.rmtree(directory)
 
     def test_lb_metadata_only_and_all_independent_value_admission_controls(self):
-        for case, requirement, condition in [
-            ("valid", None, None),
-            ("arbitrary row ID", None, None),
-            ("domain", "REQ-1163", "value_metadata_requires_testcd"),
-            ("dynamic", "REQ-1164", "value_metadata_requires_literal_testcd"),
-            ("unknown", "REQ-1165", "value_metadata_unknown_column"),
-            ("output", "REQ-1166", "value_metadata_not_output_column"),
-            ("conflict", "REQ-1167", "conflicting_value_metadata"),
-            ("origin", "REQ-1168", "refuted_value_origin"),
+        for case, requirement, condition, suffix in [
+            ("valid", None, None, None),
+            ("arbitrary row ID", None, None, None),
+            ("identical duplicate", None, None, None),
+            ("domain", "REQ-1163", "value_metadata_requires_testcd", "rows.glucose.submission"),
+            ("dynamic", "REQ-1164", "value_metadata_requires_literal_testcd", "rows.glucose.submission"),
+            ("unknown", "REQ-1165", "value_metadata_unknown_column", "rows.glucose.submission.BOGUS"),
+            ("output", "REQ-1166", "value_metadata_not_output_column", "rows.glucose.submission.LBSTRESU"),
+            ("conflict", "REQ-1167", "conflicting_value_metadata", "rows.creatinine.submission.LBORRESU"),
+            ("origin", "REQ-1168", "refuted_value_origin", "rows.glucose.submission.LBORRESU"),
         ]:
             with self.subTest(case=case):
                 directory = self.fixture("sdtm-lb-metadata")
@@ -142,38 +145,55 @@ class PublicDefine(unittest.TestCase):
                 environment["sdtm"]["dataset_json"] = False
                 (directory / "environment.yaml").write_text(yaml.safe_dump(environment, sort_keys=False))
                 spec = yaml.safe_load((directory / "spec.yaml").read_text())
+                overlay = yaml.safe_load((directory / "submission-spec.yaml").read_text())
                 first = spec["rows"][0]
+                effective = overlay["rows"][0]["submission"]
                 if case == "arbitrary row ID":
                     first["id"] = "glucose / primary test: 1"
-                    overlay = yaml.safe_load((directory / "submission-spec.yaml").read_text())
                     overlay["rows"][0]["id"] = first["id"]
-                    (directory / "submission-spec.yaml").write_text(yaml.safe_dump(overlay, sort_keys=False))
+                elif case == "identical duplicate":
+                    spec["rows"][1]["derivations"]["LBTESTCD"] = {"literal": "GLUC"}
+                    overlay["rows"][1]["submission"] = {
+                        "LBORRESU": {"origin": {"type": "Assigned", "source": "Vendor"}, "codelist": "CL_GLUCOSE"},
+                    }
+                    self.assertEqual(overlay["rows"][0]["submission"], overlay["rows"][1]["submission"])
                 elif case == "domain":
                     spec["domain"] = "XX"
                 elif case == "dynamic":
                     first["derivations"]["LBTESTCD"] = {"source": "ODM.TestCode"}
                 elif case == "unknown":
-                    first["submission"]["BOGUS"] = first["submission"].pop("LBORRESU")
+                    effective["BOGUS"] = effective.pop("LBORRESU")
                 elif case == "output":
                     spec["output"]["columns"].remove("LBSTRESU")
-                    first["submission"]["LBSTRESU"] = {"origin": {"type": "Assigned", "source": "Vendor"}}
+                    # Keep the declared internal column reachable independently
+                    # through the effective row filter, without adding it to output.
+                    overlay["rows"][0]["filter"] = "LBSTRESU IS NOT NULL"
+                    effective["LBSTRESU"] = {"origin": {"type": "Assigned", "source": "Vendor"}}
                 elif case == "conflict":
                     spec["rows"][1]["derivations"]["LBTESTCD"] = {"literal": "GLUC"}
+                    self.assertNotEqual(overlay["rows"][0]["submission"], overlay["rows"][1]["submission"])
                 elif case == "origin":
-                    first["submission"]["LBORRESU"]["origin"]["type"] = "Collected"
+                    effective["LBORRESU"]["origin"]["type"] = "Collected"
                 if case != "valid":
                     (directory / "spec.yaml").write_text(yaml.safe_dump(spec, sort_keys=False))
+                    (directory / "submission-spec.yaml").write_text(yaml.safe_dump(overlay, sort_keys=False))
                 result = self.call(directory)
-                if case in {"valid", "arbitrary row ID"}:
+                if requirement is None:
                     self.assertEqual(result.issues.height, 0, result.issues)
                     self.assertEqual([name for name, _, _ in result._native.artifacts()], ["define.xml"])
-                    self.validate_xml(result._native.artifacts()[0][1])
+                    xml = self.validate_xml(result._native.artifacts()[0][1])
+                    if case == "identical duplicate":
+                        ns = {"d": "http://www.cdisc.org/ns/def/v2.1"}
+                        self.assertEqual(len(xml.xpath("//d:WhereClauseDef", namespaces=ns)), 1)
                 else:
-                    self.assertTrue(any(row["requirement"] == requirement and row["condition"] == condition for row in result.issues.to_dicts()), result.issues)
+                    self.assertTrue(any(row["requirement"] == requirement and row["condition"] == condition
+                        and any(path.endswith(suffix) for path in row["spec_paths"])
+                        for row in result.issues.to_dicts()), result.issues)
                     with self.assertRaises(DefineError):
                         result.save()
                 self.assertFalse((directory / "input").exists())
                 self.assertFalse((directory / "lb.csv").exists())
+                self.assertFalse((directory / "lb.json").exists())
                 self.assertFalse((directory / "define.xml").exists())
                 shutil.rmtree(directory)
 
