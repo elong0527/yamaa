@@ -1296,6 +1296,49 @@ local({
   cat("public original declarative rounding matches 16 committed rows and rejects original nonnumeric input before study capture without Python passed\n")
 })
 
+local({
+  directory <- tempfile("public-temporal-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  for(case_name in c("adam-adsl-duration","adam-adsl-analysis-age")) {
+    stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
+    case <- file.path(directory,case_name);entry <- file.path(case,"spec.yaml")
+    written <- rawfile(entry);input <- file.path(case,"input");held <- file.path(case,"held")
+    stopifnot(file.rename(input,held),nrow(yamaa_check(entry)$issues)==0L,file.rename(held,input))
+    result <- yamaa_domain(entry)
+    expected <- read.csv(file.path(case,"expected","adsl.csv"),na.strings="",check.names=FALSE)
+    dates <- if(case_name=="adam-adsl-duration") c("STDT","ENDT") else c("BRTHDT","RANDDT")
+    for(column in dates) expected[[column]] <- as.Date(expected[[column]])
+    integers <- if(case_name=="adam-adsl-duration") c("DURW","DURM") else "AAGE"
+    for(column in integers) expected[[column]] <- structure(as.character(expected[[column]]),class="yamaa_int64_vector")
+    stopifnot(nrow(result$issues)==0L,identical(result$output,expected),identical(rawfile(entry),written),
+      !file.exists(file.path(case,"adsl.csv")),identical(result$save(),TRUE),
+      identical(rawfile(file.path(case,"adsl.csv")),rawfile(file.path(case,"expected","adsl.csv"))))
+  }
+  cases <- list(
+    list("negative-date-diff-endpoints","columns.SURVDD.derivation.date_diff.start","RFSTDTM","datetime"),
+    list("negative-study-day-datetime","columns.DTHDY.derivation.study_day.date","DTHDTM","datetime"),
+    list("negative-epoch-day-non-date","columns.EXSTDY.derivation.to_epoch_day.source","EX.EXSTDT","str"),
+    list("negative-date-diff-units","columns.TRTDURM.derivation.date_diff.bounds",NULL,NULL))
+  for(item in cases) {
+    stopifnot(file.copy(file.path(root,"cases",item[[1L]]),directory,recursive=TRUE))
+    case <- file.path(directory,item[[1L]]);unlink(file.path(case,"input"),recursive=TRUE)
+    bounds <- is.null(item[[3L]])
+    condition <- if(bounds) "value_not_permitted" else "incompatible_input_type"
+    requirement <- if(bounds) "REQ-0613" else "REQ-0606"
+    context_yaml <- if(bounds) "  value: inclusive\n  permitted: [exclusive]\n" else paste0("  source: ",item[[3L]],"\n  expected: date\n  actual: ",item[[4L]],"\n")
+    context <- if(bounds) '{"permitted":["exclusive"],"value":"inclusive"}' else paste0('{"actual":"',item[[4L]],'","expected":"date","source":"',item[[3L]],'"}')
+    stopifnot(identical(rawToChar(rawfile(file.path(case,"expected","error.yaml"))),paste0("phase: validation\ncondition: ",condition,"\nspec_paths:\n  - ",item[[2L]],"\nrequirement: ",requirement,"\ncontext:\n",context_yaml)))
+    checked <- yamaa_check(file.path(case,"spec.yaml"))$issues
+    rejected <- yamaa_domain(file.path(case,"spec.yaml"))
+    stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,condition),
+      identical(checked$requirement,requirement),identical(checked$spec_paths,list(item[[2L]])),
+      identical(checked$context,context),identical(rejected$issues,checked),is.null(rejected$output),
+      is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),
+      inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(case,"input")))
+  }
+  cat("public complete date operations match original independent outputs and four complete static failures without Python passed\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

@@ -1506,6 +1506,61 @@ class PublicDomains(unittest.TestCase):
                 rejected.save()
             self.assertFalse((negative / "adsl.csv").exists())
 
+    def test_public_complete_date_operations_keep_original_outputs_and_static_findings(self):
+        import shutil
+        import polars as pl
+        import yamaa
+        from polars.testing import assert_frame_equal
+
+        with tempfile.TemporaryDirectory() as directory:
+            for name, dates in [
+                ("adam-adsl-duration", ["STDT", "ENDT"]),
+                ("adam-adsl-analysis-age", ["BRTHDT", "RANDDT"]),
+            ]:
+                case = Path(directory) / name
+                shutil.copytree(ROOT / "cases" / name, case)
+                entry = case / "spec.yaml"
+                written = entry.read_bytes()
+                input_dir = case / "input"
+                held = case / "held"
+                input_dir.rename(held)
+                self.assertTrue(yamaa.check(entry).issues.is_empty())
+                held.rename(input_dir)
+                result = yamaa.domain(entry)
+                self.assertTrue(result.issues.is_empty())
+                expected = pl.read_csv(case / "expected/adsl.csv", schema_overrides={name: pl.Date for name in dates})
+                assert_frame_equal(result.output, expected)
+                self.assertEqual(entry.read_bytes(), written)
+                self.assertFalse((case / "adsl.csv").exists())
+                self.assertTrue(result.save())
+                self.assertEqual((case / "adsl.csv").read_bytes(), (case / "expected/adsl.csv").read_bytes())
+            for name, path, source, actual in [
+                ("negative-date-diff-endpoints", "columns.SURVDD.derivation.date_diff.start", "RFSTDTM", "datetime"),
+                ("negative-study-day-datetime", "columns.DTHDY.derivation.study_day.date", "DTHDTM", "datetime"),
+                ("negative-epoch-day-non-date", "columns.EXSTDY.derivation.to_epoch_day.source", "EX.EXSTDT", "str"),
+                ("negative-date-diff-units", "columns.TRTDURM.derivation.date_diff.bounds", None, None),
+            ]:
+                case = Path(directory) / name
+                shutil.copytree(ROOT / "cases" / name, case)
+                shutil.rmtree(case / "input")
+                bounds = source is None
+                condition = "value_not_permitted" if bounds else "incompatible_input_type"
+                requirement = "REQ-0613" if bounds else "REQ-0606"
+                context = {"value": "inclusive", "permitted": ["exclusive"]} if bounds else {"source": source, "expected": "date", "actual": actual}
+                context_yaml = "  value: inclusive\n  permitted: [exclusive]\n" if bounds else f"  source: {source}\n  expected: date\n  actual: {actual}\n"
+                self.assertEqual((case / "expected/error.yaml").read_text(), f"phase: validation\ncondition: {condition}\nspec_paths:\n  - {path}\nrequirement: {requirement}\ncontext:\n{context_yaml}")
+                expected_issue = {"phase": "validation", "condition": condition, "requirement": requirement, "spec_paths": [path], "context": context}
+                for result in [yamaa.check(case / "spec.yaml"), yamaa.domain(case / "spec.yaml")]:
+                    issues = result.issues.to_dicts()
+                    self.assertEqual(len(issues), 1)
+                    issues[0]["context"] = json.loads(issues[0]["context"])
+                    self.assertEqual(issues[0], expected_issue)
+                self.assertIsNone(result.output)
+                self.assertIsNone(result._native.observations())
+                with self.assertRaises(yamaa.DomainError):
+                    result.save()
+                self.assertFalse((case / "input").exists())
+
     def test_public_domain_all_original_issues_outputs_and_saved_bytes(self):
         import datetime
         import shutil
