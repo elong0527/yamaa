@@ -212,7 +212,11 @@ fn actual_engine_failures_project_without_a_second_callback_or_payload_consumpti
     }
     impl FunctionPort for Port {
         type Error = Rc<str>;
-        fn call(&mut self, arguments: &[Argument<'_>]) -> Result<Value, HostError<Self::Error>> {
+        fn call(
+            &mut self,
+            _slot: usize,
+            arguments: &[Argument<'_>],
+        ) -> Result<Value, HostError<Self::Error>> {
             assert!(arguments.is_empty());
             self.calls += 1;
             self.result.take().expect("callback was retried")

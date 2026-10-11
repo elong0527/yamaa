@@ -5406,7 +5406,7 @@ mod dataset_functions {
     use super::*;
     use yamaa_core::value::ValueType;
     use yamaa_engine::{
-        dataset::{BoundFunction, FunctionArgument, FunctionBindings, FunctionInput},
+        dataset::{BoundFunction, FunctionArgument, FunctionInput, FunctionPort},
         function_invocation::{
             Argument, FailureKind, FunctionIdentity, HostError, InvocationPlan, Parameter, Presence,
         },
@@ -5455,7 +5455,7 @@ mod dataset_functions {
         calls: Vec<Vec<(String, String)>>,
         result: Result<Value, &'static str>,
     }
-    impl FunctionBindings for Callbacks {
+    impl FunctionPort for Callbacks {
         type Error = &'static str;
         /// Slot lookup borrows metadata and never invokes the callable.
         fn signature(&self, slot: usize) -> Option<&InvocationPlan> {

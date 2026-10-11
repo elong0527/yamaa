@@ -56,7 +56,7 @@ impl CheckedSpecification {
         &self,
         port: &mut P,
         decoder: &mut D,
-        functions: &mut dyn crate::dataset::FunctionBindings<
+        functions: &mut dyn crate::dataset::FunctionPort<
             Error = <D::Table as yamaa_core::table::TableAccess>::Error,
         >,
         limits: Limits,

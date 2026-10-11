@@ -14,7 +14,7 @@ use yamaa_core::{
     value::{ColumnType, Value},
 };
 use yamaa_engine::{
-    dataset::{self, ExecutionError, FunctionBindings},
+    dataset::{self, ExecutionError, FunctionPort},
     domain,
     function_invocation::{Argument, FailureKind, HostError},
     specification_run::{CapturedAttempt, Limits, SourceDecoder, SourcePort},
@@ -93,7 +93,7 @@ struct Bindings {
     trace: Trace,
     raised: Option<Rc<()>>,
 }
-impl FunctionBindings for Bindings {
+impl FunctionPort for Bindings {
     type Error = Payload;
     fn signature(&self, _: usize) -> Option<&InvocationPlan> {
         None

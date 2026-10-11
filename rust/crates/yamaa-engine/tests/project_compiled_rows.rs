@@ -11,7 +11,7 @@ use yamaa_core::{
     value::{ColumnType, Value},
 };
 use yamaa_engine::{
-    dataset::{DatasetExecution, FunctionBindings, Limits},
+    dataset::{DatasetExecution, FunctionPort, Limits},
     function_invocation::{Argument, HostError},
 };
 fn literal(value: i64) -> Tree {
@@ -61,7 +61,7 @@ struct Bindings {
     signature: ProjectInvocationPlan,
     inputs: Vec<i64>,
 }
-impl FunctionBindings for Bindings {
+impl FunctionPort for Bindings {
     type Error = &'static str;
     fn signature(&self, _: usize) -> Option<&InvocationPlan> {
         None

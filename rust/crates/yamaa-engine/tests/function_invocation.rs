@@ -99,7 +99,7 @@ struct Port<'a> {
 impl FunctionPort for Port<'_> {
     type Error = Payload;
     /// Record one effect before returning a normalized scalar or host failure.
-    fn call(&mut self, args: &[Argument<'_>]) -> Result<Value, HostError<Payload>> {
+    fn call(&mut self, _slot: usize, args: &[Argument<'_>]) -> Result<Value, HostError<Payload>> {
         self.calls += 1;
         self.trace.extend(
             args.iter()
@@ -248,7 +248,11 @@ fn typed_port_retains_temporal_precision_and_needs_no_send_bound() {
     impl FunctionPort for Local {
         type Error = std::convert::Infallible;
         /// Observe the borrowed precision and return the same owned civil value.
-        fn call(&mut self, args: &[Argument<'_>]) -> Result<Value, HostError<Self::Error>> {
+        fn call(
+            &mut self,
+            _slot: usize,
+            args: &[Argument<'_>],
+        ) -> Result<Value, HostError<Self::Error>> {
             self.0.set(self.0.get() + 1);
             let ValueRef::Date(date) = args[0].value else {
                 panic!("date")

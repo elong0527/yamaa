@@ -15,7 +15,22 @@ and codec interfaces are native traits; adapters translate values and errors.
 | `specification_output::ArtifactPort` | engine | Python/R publication bridges; Unix explicit-target Rust/Python/R publisher; native test fake | Original opaque publication error, without retry |
 | `TableAccess` | core | Immutable Arrow snapshots, core normalized CSV tables and engine output tables; test fakes | Bounds or original opaque cell-access error |
 | `inheritance::SourcePort` | engine | Existing inheritance bridge; Unix native captured-file port | Source failure or traversal resource limit |
-| `function_invocation::FunctionPort` and `dataset::FunctionBindings` | engine | Python/R native callback bridges | Original host exception, rejected representation or typed invocation failure |
+| `project_activation::ActivationPort` | engine | Python/R locked-package adapters; native fakes | Original lock, binding, conformance or interrupt failure |
+| `function_invocation::FunctionPort` | engine | Python/R scalar callbacks and activated registries; `project_activation::Bindings`; native fakes | Original host exception, rejected representation or typed invocation failure |
+
+The one function invocation port borrows immutable legacy or versionless
+signatures by stable slot and calls that slot with declaration-order host
+arguments. Signature inspection executes no project code. Dataset admission
+checks every selected slot before source cardinality or cell access. Already-bound
+scalar probes use slot zero through the same invocation service. One generic
+`NoFunctions` implementation supplies no callable authority in every layer.
+
+The opt-in engine `test-support` feature exposes shared scripted native ports.
+Source, decoder, encoder, publisher and function fakes retain owned outcomes and
+one shared ordered event log. They move original opaque errors without requiring
+Clone, Send or Sync and never retry. Default engine unit tests exercise the same
+capture, decode, execution and held-publication lifecycle; the feature also makes
+the fakes available to integration tests without adding production dependencies.
 
 ## Current lifecycle
 
@@ -194,11 +209,10 @@ codelist resources, with resolved paths and declaring-file provenance. Current
 source bridges retain their existing path behavior; the #1751 target resolves
 each path relative to its declaring file without an approved-root boundary.
 
-Public source-file integration, general publication/save policy, environment
-activation, shared reusable test fakes, and consolidation of the two function
-interfaces remain open. The existing inheritance JSON callback bridge also
-remains to be replaced. No new unimplemented port is presented as a working
-capability, and no public default, golden fixture or qualification level changes.
+The existing inheritance JSON callback bridge still has qualification and
+reference-route consumers. Their replacement and retirement remain open under
+#1751/#1755. This function-port consolidation and reusable test support do not
+complete that retirement or change a public default or golden fixture.
 
 ### Captured standalone schema findings
 

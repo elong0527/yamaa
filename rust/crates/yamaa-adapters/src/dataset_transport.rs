@@ -694,7 +694,11 @@ impl PreparedDataset {
         source: &[u8],
         secondary: &[&[u8]],
     ) -> Result<DatasetResponse, Error> {
-        self.execute_sources_functions(source, secondary, &mut functions::Unavailable)
+        self.execute_sources_functions(
+            source,
+            secondary,
+            &mut yamaa_engine::function_invocation::NoFunctions::new(),
+        )
     }
 
     /// Borrow admitted metadata for a host-owned, stable registry; labels do not prove activation.
@@ -708,7 +712,7 @@ impl PreparedDataset {
         &self,
         source: &[u8],
         secondary: &[&[u8]],
-        functions: &mut dyn dataset::FunctionBindings<Error = CallbackError>,
+        functions: &mut dyn dataset::FunctionPort<Error = CallbackError>,
     ) -> Result<DatasetResponse, Error> {
         catch_unwind(AssertUnwindSafe(|| {
             self.execute_bound(source, secondary, functions, None)
@@ -722,7 +726,7 @@ impl PreparedDataset {
         &self,
         source: &[u8],
         secondary: &[&[u8]],
-        functions: &mut dyn dataset::FunctionBindings<Error = CallbackError>,
+        functions: &mut dyn dataset::FunctionPort<Error = CallbackError>,
         profile: &mut DatasetProfile,
     ) -> Result<DatasetResponse, Error> {
         catch_unwind(AssertUnwindSafe(|| {
@@ -736,7 +740,7 @@ impl PreparedDataset {
         &self,
         source: &[u8],
         secondary: &[&[u8]],
-        functions: &mut dyn dataset::FunctionBindings<Error = CallbackError>,
+        functions: &mut dyn dataset::FunctionPort<Error = CallbackError>,
         mut profile: Option<&mut DatasetProfile>,
     ) -> Result<DatasetResponse, Error> {
         for (slot, signature) in self.compiled.functions().iter().enumerate() {
