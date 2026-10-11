@@ -365,6 +365,7 @@ jobs:
           python "${GITHUB_WORKSPACE}/rust/tools/stage_project_inputs.py" project-original
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_environment.py" installed_public_environment.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_define.py" installed_public_define.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_contract.py" installed_public_contract.py
           python "${GITHUB_WORKSPACE}/rust/tools/stage_define_inputs.py" define-fixtures
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_yaml.py" installed_yaml.py
           cp "${GITHUB_WORKSPACE}/rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.tsv" yaml_transport.tsv
@@ -595,6 +596,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_logs.R" producer_logs.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_environment.R" public_environment.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_define.R" public_define.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_contract.R" public_contract.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/inheritance.R" inheritance.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/yaml.R" yaml.R
           YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \

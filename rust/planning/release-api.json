@@ -769,6 +769,10 @@
         "S3:as.integer.yamaa_int64_vector": {
           "disposition": "retain_candidate",
           "rationale": "Approved exact-or-error conversion of lossless public integer output; final release matrix qualification remains required."
+        },
+        "yamaa_define": {
+          "disposition": "retain_candidate",
+          "rationale": "Approved #1973 item 2 public Define API, matching Python define; complete installed release qualification remains required."
         }
       }
     },
