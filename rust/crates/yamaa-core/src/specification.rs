@@ -52,6 +52,8 @@ mod cases;
 mod imputation;
 #[path = "specification_rounding.rs"]
 mod rounding;
+#[path = "specification_str_case.rs"]
+mod str_case;
 #[path = "specification_temporal.rs"]
 mod temporal;
 #[path = "specification_terminology.rs"]
@@ -100,6 +102,7 @@ impl Default for CompilationLimits {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum PreflightFinding {
+    TextCase(crate::diagnostic::Diagnostic),
     Log(LogFinding),
     Imputation(crate::diagnostic::Diagnostic),
     RoundingInput {
@@ -287,6 +290,7 @@ enum Operation {
     Compute(CompiledNumeric),
     Round(crate::dataset::Rounding),
     Temporal(crate::dataset::Temporal),
+    StrCase(crate::text_case::StringCase),
     Imputation(crate::dataset::Imputation),
     /// Reference planning emits formula diagnostics after source ingestion.
     InvalidNumeric {
@@ -954,6 +958,7 @@ impl PreparedSpecification {
         rounding::declaration_findings(d, columns, &output, &mut findings)?;
         temporal::declaration_findings(d, columns, &output, &mut findings)?;
         imputation::declaration_findings(d, columns, &output, &mut findings)?;
+        str_case::declaration_findings(d, columns, &output, &mut findings)?;
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
@@ -1286,6 +1291,14 @@ impl PreparedSpecification {
                 | "baseline_flag" => Some(Operation::Window(alloc::boxed::Box::new(
                     windows::Declaration::prepare(d, payload, op, &path, limits, &mut extra)?,
                 ))),
+                "str_case" => Some(Operation::StrCase(str_case::prepare(
+                    d,
+                    payload,
+                    &path,
+                    Some(driver),
+                    Some(&intermediates),
+                    &mut extra,
+                )?)),
                 "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision"
                 | "to_date" => Some(Operation::Imputation(imputation::prepare(
                     d,
@@ -1728,6 +1741,17 @@ impl PreparedSpecification {
                 Operation::Literal(value) => Some(Expression::Literal(value.clone())),
                 Operation::Round(rounding) => rounding::bind(
                     rounding,
+                    column,
+                    &self.keys,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
+                Operation::StrCase(operation) => str_case::bind(
+                    operation,
                     column,
                     &self.keys,
                     &catalog,

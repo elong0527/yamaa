@@ -25,6 +25,8 @@ mod key_grain;
 mod lookup;
 #[path = "dataset_numeric.rs"]
 mod numeric;
+#[path = "dataset_text_case.rs"]
+mod str_case;
 #[path = "dataset_windows.rs"]
 mod windows;
 
@@ -172,7 +174,7 @@ struct AttemptObservations {
 pub enum ExecutionError<E> {
     /// A pure scalar operation's already classified cause and original field path.
     ScalarDiagnostic(yamaa_core::diagnostic::Diagnostic),
-    ImputationDiagnostic {
+    SemanticDiagnostic {
         diagnostic: yamaa_core::diagnostic::Diagnostic,
         identity: Option<RowIdentity>,
     },
@@ -421,6 +423,11 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
             .apply(ValueRef::from(&value))
             .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)));
     }
+    if let Expression::StrCase { source, operation } = &assignment.expression {
+        return str_case::evaluate(
+            source, operation, table, candidate, plan, row, limits, state,
+        );
+    }
     if let Expression::Imputation {
         operands,
         operation,
@@ -508,7 +515,8 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
         | Expression::Case(_)
         | Expression::Round { .. }
         | Expression::Temporal { .. }
-        | Expression::Imputation { .. } => {
+        | Expression::Imputation { .. }
+        | Expression::StrCase { .. } => {
             unreachable!("recursive evaluation handled above")
         }
         Expression::Column(column) => {
@@ -858,6 +866,7 @@ impl Executor<'_> {
             .chain(self.plan.columns())
         {
             imputation::register(&assignment.expression, &mut observations.handlers);
+            str_case::register(&assignment.expression, &mut observations.handlers);
         }
         let result = self.execute_inner(
             table,
@@ -1449,6 +1458,29 @@ pub(crate) fn identities<E>(
         });
     }
     Ok(identities)
+}
+
+/// Retain known current keys only when the owning semantic phase requests them.
+fn retained_diagnostic<E>(
+    diagnostic: yamaa_core::diagnostic::Diagnostic,
+    retain_keys: bool,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    budget: &mut Budget,
+) -> Box<ExecutionError<E>> {
+    let identity = if retain_keys {
+        match failure_identity(candidate, plan.keys(), row, budget) {
+            Ok(identity) => identity,
+            Err(error) => return error,
+        }
+    } else {
+        None
+    };
+    Box::new(ExecutionError::SemanticDiagnostic {
+        diagnostic,
+        identity,
+    })
 }
 
 /// A partial key is unavailable, whereas a completed missing key is a known value.

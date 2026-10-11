@@ -1379,6 +1379,62 @@ local({
   cat("public temporal imputation preserves two original outputs and ten complete failures without Python passed\n")
 })
 
+local({
+  directory <- tempfile("public-string-case-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  source <- paste0("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\n",
+    "output: {path: output.csv, columns: [ID, UP, LOW, SENT, TITLE]}\ncolumns:\n",
+    "  - {name: ID, type: str, derivation: SRC.ID}\n",
+    "  - {name: UP, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper, missing: MiXeD}}}\n",
+    "  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower, missing: null}}}\n",
+    "  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence, missing: null}}}\n",
+    "  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title, missing: null}}}\n")
+  entry <- file.path(directory,"spec.yaml");writeBin(charToRaw(source),entry)
+  stopifnot(nrow(yamaa_check(entry)$issues)==0L)
+  writeBin(charToRaw("ID,TEXT\n1,FOLLOW-UP\n2,\u00df\u0130\u00e9\U0001f642AbC\n3,\n"),file.path(directory,"input.csv"))
+  result <- yamaa_domain(entry)
+  expected_bytes <- charToRaw(paste0("ID,UP,LOW,SENT,TITLE\n1,FOLLOW-UP,follow-up,Follow-up,Follow-Up\n",
+    "2,\u00df\u0130\u00e9\U0001f642ABC,\u00df\u0130\u00e9\U0001f642abc,\u00df\u0130\u00e9\U0001f642abc,\u00df\u0130\u00e9\U0001f642Abc\n3,MiXeD,,,\n"))
+  expected <- data.frame(ID=c("1","2","3"),UP=c("FOLLOW-UP","\u00df\u0130\u00e9\U0001f642ABC","MiXeD"),
+    LOW=c("follow-up","\u00df\u0130\u00e9\U0001f642abc",NA_character_),
+    SENT=c("Follow-up","\u00df\u0130\u00e9\U0001f642abc",NA_character_),
+    TITLE=c("Follow-Up","\u00df\u0130\u00e9\U0001f642Abc",NA_character_),stringsAsFactors=FALSE)
+  stopifnot(nrow(result$issues)==0L,identical(result$output,expected),!file.exists(file.path(directory,"output.csv")),
+    identical(result$save(),TRUE),identical(rawfile(file.path(directory,"output.csv")),expected_bytes))
+  source <- sub("to: upper, missing: MiXeD","to: upper",source,fixed=TRUE)
+  writeBin(charToRaw(source),entry);writeBin(charToRaw("ID,TEXT\nrow1,\n"),file.path(directory,"input.csv"))
+  rejected <- yamaa_domain(entry);actual <- rejected$issues
+  # The complete independent reference lives in text-case-reference.json; this
+  # literal is its mapping failure with the independently authored UP path.
+  stopifnot(nrow(actual)==1L,identical(actual$phase,"mapping"),identical(actual$condition,"missing_input"),
+    identical(actual$requirement,"REQ-0334"),identical(actual$spec_paths,list("columns.UP.derivation.str_case")),
+    identical(actual$context,'{"keys":[{"ID":"row1"}],"variable":"SRC.TEXT"}'),is.null(rejected$output),
+    inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"))
+  failures <- read.delim(file.path(root,"text-case-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
+  stopifnot(nrow(failures)==2L)
+  for(index in seq_len(nrow(failures))) {
+    finding <- failures[index,]
+    stopifnot(file.copy(file.path(root,"cases",finding$case),directory,recursive=TRUE))
+    case <- file.path(directory,finding$case);entry <- file.path(case,"spec.yaml")
+    unlink(file.path(case,"input"),recursive=TRUE)
+    checked <- yamaa_check(entry)$issues;rejected <- yamaa_domain(entry);actual <- rejected$issues
+    stopifnot(nrow(actual)==1L,identical(actual$phase,finding$phase),identical(actual$condition,finding$condition),
+      identical(actual$requirement,finding$requirement),identical(actual$spec_paths,list(finding$spec_path)),
+      identical(actual$context,finding$context),identical(checked,actual),is.null(rejected$output),
+      is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),
+      inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(case,"input")))
+  }
+  case_name <- "schema-sentence-case"
+  stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
+  case <- file.path(directory,case_name);entry <- file.path(case,"spec.yaml")
+  checked <- yamaa_check(entry)$issues;rejected <- yamaa_domain(entry)
+  stopifnot(nrow(checked)==1L,identical(checked$phase,"planning"),identical(checked$condition,"unsupported_operation"),
+    is.na(checked$requirement),identical(checked$spec_paths,list("output.order_by")),
+    identical(checked$context,'{"operation":"order_by"}'),identical(rejected$issues,checked),is.null(rejected$output),
+    is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),!file.exists(file.path(case,"adlb.csv")))
+  cat("public ASCII string case matches independent exact outputs and original negatives; original sentence fixture retains output.order_by blocker without Python passed\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

@@ -108,6 +108,21 @@ pub(super) fn prepare(
                 record,
                 depth + 1,
             )?),
+            "str_case" => {
+                let mut features = Vec::new();
+                let operation = str_case::prepare(
+                    d,
+                    payload,
+                    &result_path,
+                    None,
+                    Some(intermediates),
+                    &mut features,
+                )?;
+                if !features.is_empty() {
+                    return Err(PrepareError::Unsupported(features));
+                }
+                Operation::StrCase(operation)
+            }
             "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision"
             | "to_date" => {
                 let mut features = Vec::new();
@@ -337,6 +352,17 @@ pub(super) fn bind(
                     Err(_) => return Err(BindError::Internal),
                 }
             }
+            Operation::StrCase(operation) => str_case::bind(
+                operation,
+                column,
+                &spec.keys,
+                catalog,
+                &spec.intermediates,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
             Operation::Imputation(operation) => imputation::bind(
                 operation,
                 column,

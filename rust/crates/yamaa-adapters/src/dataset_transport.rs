@@ -1072,7 +1072,7 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
         // dataset/1 admits only legacy versioned declarations. Versionless
         // package calls use the owned file application rather than this wire.
         ExecutionError::ProjectFunction { .. } => return Err(Error::UnsupportedProtocol),
-        ExecutionError::ImputationDiagnostic {
+        ExecutionError::SemanticDiagnostic {
             diagnostic,
             identity: keys,
         } => Outcome::Condition {
