@@ -1,0 +1,13 @@
+schema_version: "1.0"
+domain: OUT
+input:
+  A: {path: produced.parquet, schema: producer.yaml}
+  B: {path: produced.parquet, schema: producer.yaml}
+base: A
+keys: [ID]
+output: {path: out.csv, columns: [ID]}
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: {source: A.ID}

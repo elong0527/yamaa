@@ -1,0 +1,173 @@
+{
+  "report_version": "0.3.0-draft",
+  "runtime": "python",
+  "backend": "python",
+  "runtime_version": "3.14.0",
+  "engine_version": "0.3.0",
+  "example": "shared-producer-parquet",
+  "outcome": "success",
+  "artifacts": [
+    {
+      "name": "produced",
+      "profile": "parquet",
+      "columns": [
+        "ID"
+      ],
+      "types": [
+        "str"
+      ],
+      "row_count": 1,
+      "records": [
+        "[\"ID\"]",
+        "[\"01\"]"
+      ],
+      "byte_length": 228,
+      "content": ""
+    },
+    {
+      "name": "out",
+      "profile": "csv",
+      "columns": [
+        "ID"
+      ],
+      "types": [
+        "str"
+      ],
+      "row_count": 1,
+      "records": [
+        "ID",
+        "01"
+      ],
+      "byte_length": 6,
+      "content": "ID\n01\n"
+    }
+  ],
+  "diagnostics": [],
+  "unsupported": [],
+  "handler_counts": [],
+  "nodes": [
+    {
+      "specification": "producer.yaml",
+      "outcome": "success",
+      "diagnostics": [],
+      "unsupported": [],
+      "handler_counts": []
+    },
+    {
+      "specification": "spec.yaml",
+      "outcome": "success",
+      "diagnostics": [],
+      "unsupported": [],
+      "handler_counts": []
+    }
+  ],
+  "tables": [
+    {
+      "specification": "producer.yaml",
+      "stage": "source",
+      "name": "SEED",
+      "columns": [
+        "ID"
+      ],
+      "types": [
+        "str"
+      ],
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "01"
+          }
+        ]
+      ]
+    },
+    {
+      "specification": "producer.yaml",
+      "stage": "derived",
+      "name": "output",
+      "columns": [
+        "ID"
+      ],
+      "types": [
+        "str"
+      ],
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "01"
+          }
+        ]
+      ]
+    },
+    {
+      "specification": "spec.yaml",
+      "stage": "source",
+      "name": "A",
+      "columns": [
+        "ID"
+      ],
+      "types": [
+        "str"
+      ],
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "01"
+          }
+        ]
+      ]
+    },
+    {
+      "specification": "spec.yaml",
+      "stage": "source",
+      "name": "B",
+      "columns": [
+        "ID"
+      ],
+      "types": [
+        "str"
+      ],
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "01"
+          }
+        ]
+      ]
+    },
+    {
+      "specification": "spec.yaml",
+      "stage": "derived",
+      "name": "output",
+      "columns": [
+        "ID"
+      ],
+      "types": [
+        "str"
+      ],
+      "rows": [
+        [
+          {
+            "type": "str",
+            "value": "01"
+          }
+        ]
+      ]
+    }
+  ],
+  "verifications": [],
+  "callbacks": [],
+  "source_reads": [
+    {
+      "base_directory": ".",
+      "path": "seed.csv",
+      "outcome": "captured",
+      "condition": null,
+      "snapshots_created": 1
+    }
+  ],
+  "error": null
+}
