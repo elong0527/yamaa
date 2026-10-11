@@ -1651,7 +1651,7 @@ columns:
             entry = root / "spec.yaml"
             entry.write_text(source)
             self.assertEqual(issues(yamaa.check(entry)), [])
-            (root / "input.csv").write_text("ID,TEXT\n1,FOLLOW-UP\n2,\u00df\u0130\u00e9\U0001f642AbC\n3,\n")
+            (root / "input.csv").write_text("ID,TEXT\n1,FOLLOW-UP\n2,\u00df\u0130\u00e9\U0001f642AbC\n3,\n", encoding="utf-8", newline="\n")
             result = yamaa.domain(entry)
             self.assertEqual(issues(result), [])
             self.assertEqual(result.output.rows(), [("1", "FOLLOW-UP", "follow-up", "Follow-up", "Follow-Up"),
