@@ -108,7 +108,7 @@ issues <- function(value) {
        }))
 }
 metadata <- function() {
-  info <- yamaa::engine_info() # First explicit metadata/native call follows Build.
+  info <- get("engine_info", asNamespace("yamaa"))() # Private metadata follows Build.
   collectors <- lapply(names(request$provenance$collectors), function(name) {
     list(version = as.character(utils::packageVersion(name)),
          origin = normalizePath(find.package(name), winslash = "/", mustWork = TRUE))
@@ -189,6 +189,19 @@ for (declaration in request$repetitions) {
           writeBin(bytes, file.path(output, filename))
           row$saved_files[[label]] <<- filename
         }
+        for (name in declaration$artifact_names) {
+          if (identical(name, declaration$output_name) && !is.null(row$saved_files[[label]])) {
+            row$saved_artifacts[[label]][[name]] <<- row$saved_files[[label]]
+            next
+          }
+          artifact <- file.path(declaration$work_directory, name)
+          if (file.exists(artifact)) {
+            filename <- paste0(prefix, "-", label, "-", name)
+            bytes <- readBin(artifact, "raw", n = file.info(artifact)$size)
+            writeBin(bytes, file.path(output, filename))
+            row$saved_artifacts[[label]][[name]] <<- filename
+          }
+        }
       }, error = function(error) secondary_failure(error, paste0(label, "_output")),
          interrupt = function(error) secondary_failure(error, paste0(label, "_output")))
     }
@@ -196,8 +209,14 @@ for (declaration in request$repetitions) {
   tryCatch({
     if (file.exists(target)) stop("fresh Build directory already has an output")
     row$native_call_order <- c(row$native_call_order, list("public_build"))
-    result <- timed(state, "public_build", domain(declaration$entry))
+    result <- timed(state, "public_build", if (is.null(declaration$environment)) domain(declaration$entry)
+                   else domain(declaration$entry, environment = declaration$environment))
     retain_reached("build")
+    if (!is.null(declaration$artifact_names)) {
+      presence <- lapply(declaration$artifact_names, function(name) file.exists(file.path(declaration$work_directory, name)))
+      names(presence) <- unlist(declaration$artifact_names)
+      row$build_artifact_presence <- presence
+    }
     if (length(secondary_conditions)) stop(secondary_conditions[[1L]])
     row$native_call_order <- c(row$native_call_order, list("metadata_after_build"))
     row$metadata <- timed(state, "metadata_after_build", metadata())

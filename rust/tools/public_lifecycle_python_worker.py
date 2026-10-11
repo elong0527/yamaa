@@ -219,6 +219,22 @@ def run(request):
                         )
                         (output / filename).write_bytes(target.read_bytes())
                         row["saved_files"][label] = filename
+                    for name in declaration.get("artifact_names", []):
+                        if (
+                            name == declaration["output_name"]
+                            and label in row["saved_files"]
+                        ):
+                            row.setdefault("saved_artifacts", {}).setdefault(label, {})[
+                                name
+                            ] = row["saved_files"][label]
+                            continue
+                        artifact = Path(declaration["work_directory"]) / name
+                        if artifact.exists():
+                            filename = prefix + "-" + label + "-" + name
+                            (output / filename).write_bytes(artifact.read_bytes())
+                            row.setdefault("saved_artifacts", {}).setdefault(label, {})[
+                                name
+                            ] = filename
                 except BaseException as error:
                     capture_errors.append(error)
                     row["evidence_capture_failures"].append(
@@ -237,9 +253,23 @@ def run(request):
                 )
             row["native_call_order"].append("public_build")
             result = timed(
-                row["durations"], "public_build", lambda: domain(declaration["entry"])
+                row["durations"],
+                "public_build",
+                lambda: domain(
+                    declaration["entry"],
+                    **(
+                        {"environment": declaration["environment"]}
+                        if declaration.get("environment")
+                        else {}
+                    ),
+                ),
             )
             retain_reached("build")
+            if "artifact_names" in declaration:
+                row["build_artifact_presence"] = {
+                    name: (Path(declaration["work_directory"]) / name).exists()
+                    for name in declaration["artifact_names"]
+                }
             if capture_errors:
                 raise capture_errors[0]
             row["native_call_order"].append("metadata_after_build")

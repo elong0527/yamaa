@@ -95,15 +95,86 @@ class NativeCoverage(unittest.TestCase):
             self.assertEqual(run.call_count, 2)
             for call in run.call_args_list:
                 command = call.args[0]
-                self.assertIn(
-                    f"cohort-input/native-qualification-{platform}-3.13-source/source",
-                    command,
-                )
+                self.assertIn("cohort-input/source", command)
                 self.assertIn("--r-evidence", command)
-                self.assertIn(
-                    f"cohort-input/native-r-qualification-{platform}/r-source", command
-                )
+                self.assertIn("cohort-input/r-source", command)
                 self.assertTrue(call.kwargs["check"])
+
+    def test_comparison_reads_single_and_multiple_artifact_download_layouts(self):
+        matrices = (
+            {"include": [{"os": "ubuntu-24.04", "python": "3.13", "form": "source"}]},
+            {
+                "include": [
+                    {"os": "ubuntu-24.04", "python": "3.13", "form": form}
+                    for form in native_matrix.FORMS
+                ]
+            },
+            native_matrix.plan("push", "1")["qualify"],
+        )
+        probe = """import argparse
+import json
+from pathlib import Path
+
+parser = argparse.ArgumentParser()
+for option in ("fixtures", "python-evidence", "r-evidence", "output"):
+    parser.add_argument("--" + option, type=Path, required=True)
+parser.add_argument("--source-revision", required=True)
+args = parser.parse_args()
+python = json.loads((args.python_evidence / "supplemental/supplemental.json").read_text())
+r = json.loads((args.r_evidence / "supplemental.json").read_text())
+assert python["revision"] == r["revision"] == args.source_revision
+args.output.mkdir(parents=True)
+(args.output / "observed.json").write_text(json.dumps([python, r]))
+"""
+        for matrix in matrices:
+            with (
+                self.subTest(matrix=matrix),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory).resolve()
+                tools = root / "repo/rust/tools"
+                tools.mkdir(parents=True)
+                for tool in ("qualify_public_cohort.py", "qualify_producer_cohort.py"):
+                    (tools / tool).write_text(probe)
+                downloads = root / "cohort-input"
+                # Match the action's ZIP extraction: one match is flattened;
+                # multiple matches each retain their artifact-name directory.
+                python_archives = {
+                    f"native-qualification-{row['os']}-{row['python']}-{row['form']}": row
+                    for row in matrix["include"]
+                }
+                for name, row in python_archives.items():
+                    extracted = (
+                        downloads if len(python_archives) == 1 else downloads / name
+                    )
+                    supplemental = extracted / row["form"] / "supplemental"
+                    supplemental.mkdir(parents=True)
+                    (supplemental / "supplemental.json").write_text(
+                        json.dumps({"revision": "revision", "route": row})
+                    )
+                platforms = {row["os"] for row in matrix["include"]}
+                for platform in platforms:
+                    extracted = (
+                        downloads
+                        if len(platforms) == 1
+                        else downloads / f"native-r-qualification-{platform}"
+                    )
+                    supplemental = extracted / "r-source"
+                    supplemental.mkdir(parents=True)
+                    (supplemental / "supplemental.json").write_text(
+                        json.dumps({"revision": "revision", "os": platform})
+                    )
+                previous = Path.cwd()
+                try:
+                    os.chdir(root)
+                    native_matrix.compare_cohorts(matrix, root / "repo", "revision")
+                finally:
+                    os.chdir(previous)
+                observations = list((root / "public-cohort").rglob("observed.json"))
+                self.assertEqual(len(observations), 2 * len(matrix["include"]))
+                for observation in observations:
+                    python, r = json.loads(observation.read_text())
+                    self.assertEqual(python["route"]["os"], r["os"])
 
     def test_failed_cohort_comparison_fails_the_job(self):
         matrix = native_matrix.plan("pull_request", "1")["qualify"]
