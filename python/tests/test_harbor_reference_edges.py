@@ -142,7 +142,7 @@ def test_multiform_repeats_use_numeric_occurrence_and_result(tmp_path, language)
     rows = _run(tmp_path, name, language, {"odm.csv": records})["lb.csv"]
     by_visit = {Decimal(r["VISITNUM"]): r for r in rows}
     assert len(rows) == 3
-    assert set(by_visit) == {Decimal("2.01"), Decimal("2.10"), Decimal("2.11")}
+    assert set(by_visit) == {Decimal("2.01"), Decimal("2.1"), Decimal("2.11")}
     assert by_visit[Decimal("2.01")]["LBORRES"] == "001.20"
     assert Decimal(by_visit[Decimal("2.01")]["LBSTRESN"]) == Decimal("1.2")
     assert Decimal(by_visit[Decimal("2.10")]["LBSTRESN"]) == 0
