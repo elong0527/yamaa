@@ -11,6 +11,7 @@ use yamaa_core::{
     table::{TableAccess, ValueRef},
     value::Value as Scalar,
 };
+use yamaa_engine::specification_run::SourceOrigin;
 
 pub struct Identity<'a> {
     pub runtime: &'a str,
@@ -336,10 +337,16 @@ pub(crate) fn envelope_sources_projected<T: TableAccess>(
             )?);
         }
     }
-    let reads = sources.iter().map(|source| {
-        if !partial && source.read.snapshots_created.is_none() { return Err(Error::InvalidObservation); }
-        Ok(json!({"base_directory":id.base_directory,"path":source.read.source.path,"outcome":if source.read.captured {"captured"} else if partial && source.read.snapshots_created.is_none() {"attempted"} else {"failure"},"condition":source.read.failure.map(|failure| failure.code().definition().condition),"snapshots_created":source.read.snapshots_created}))
-    }).collect::<Result<Vec<_>,Error>>()?;
+    let mut reads = Vec::new();
+    for source in sources
+        .iter()
+        .filter(|source| source.read.origin == Some(SourceOrigin::Resource))
+    {
+        if !partial && source.read.snapshots_created.is_none() {
+            return Err(Error::InvalidObservation);
+        }
+        reads.push(json!({"base_directory":id.base_directory,"path":source.read.source.path,"outcome":if source.read.captured {"captured"} else if partial && source.read.snapshots_created.is_none() {"attempted"} else {"failure"},"condition":source.read.failure.map(|failure| failure.code().definition().condition),"snapshots_created":source.read.snapshots_created}));
+    }
     Ok(
         json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,
         "outcome":"failure","artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],
