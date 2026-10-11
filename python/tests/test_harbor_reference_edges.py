@@ -344,6 +344,29 @@ def test_race_keeps_the_subject_key_in_dm_and_suppdm(tmp_path, language):
             assert r["USUBJID"] == r["IDVARVAL"] == "COLLECTED-SUBJECT"
 
 
+@pytest.mark.parametrize("coded_term", ["", "OTHER"])
+def test_treatment_disposition_uses_date_and_numeric_sequence(
+    tmp_path, language, coded_term
+):
+    name = "adam-adsl-disposition"
+    dm = _input(name, "dm.csv")
+    template = next(r for r in _input(name, "ds.csv") if r["EPOCH"] == "TREATMENT")
+    base = {**template, **dm[0], "DSSTDTC": "2025-02-01"}
+    records = [
+        {**base, "DSSEQ": "2", "DSDECOD": "COMPLETED", "DSTERM": "Completed"},
+        {**base, "DSSEQ": "10", "DSDECOD": coded_term, "DSTERM": "Stopped dosing"},
+        {**base, "DSSEQ": "99", "DSSTDTC": "", "DSDECOD": "COMPLETED"},
+    ]
+    rows = _run(tmp_path, name, language, {"ds.csv": records})["adsl.csv"]
+    row = next(r for r in rows if r["USUBJID"] == dm[0]["USUBJID"])
+    assert row["EOTDT"] == "2025-02-01"
+    assert row["EOTSTT"] == "DISCONTINUED"
+    assert row["DCTREAS"] == "Stopped dosing"
+    assert row["DCSREASP"] == ("Stopped dosing" if coded_term == "OTHER" else "")
+    assert row["EOSSTT"] == "ONGOING"
+    assert row["EOSDT"] == row["DCSREAS"] == ""
+
+
 def test_disposition_always_joins_study_and_subject(tmp_path, language):
     name = "sdtm-ds-multi-form-disposition"
     odm = _input(name, "odm.csv")
