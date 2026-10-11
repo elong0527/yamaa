@@ -1575,6 +1575,9 @@ submission_section_class:
     min_length: 1
 - stylesheet:
     type: relative_href
+- source_system_version:
+    type: str
+    min_length: 1
 implementation_guide_class:
 - name:
     type: standard_name

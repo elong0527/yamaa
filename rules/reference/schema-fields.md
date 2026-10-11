@@ -233,6 +233,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `submission_section_class.metadata_version` | `"metadata_version_class"` | `false` | Absent | -- | Schema constraint |
 | `submission_section_class.originator` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
 | `submission_section_class.stylesheet` | `"relative_href"` | `false` | Absent | -- | Schema constraint |
+| `submission_section_class.source_system_version` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1080](../operations/functions.md#req-1080) |
 | `implementation_guide_class.name` | `"standard_name"` | `true` | Absent | -- | Schema constraint |
 | `implementation_guide_class.version` | `"str"` | `true` | Absent | `{"min_length": 1}` | Schema constraint |
 | `implementation_guide_class.status` | `"str"` | `true` | Absent | `{"values": ["Draft", "Final"]}` | Schema constraint |
