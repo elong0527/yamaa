@@ -95,6 +95,18 @@ pub(super) fn prepare_value_with_driver(
                 templates,
             )?))
         }
+        "mapping" | "cut" => {
+            let mut features = Vec::new();
+            let declaration =
+                mapping_cut::prepare(d, payload, op, &result_path, intermediates, &mut features)?;
+            if !features.is_empty() {
+                return Err(PrepareError::Unsupported(features));
+            }
+            if record && declaration.source.has_filter() {
+                return Err(unsupported(&result_path, "row_selection_filter"));
+            }
+            Operation::MappingCut(alloc::boxed::Box::new(declaration))
+        }
         "str_case" => {
             let mut features = Vec::new();
             let operation = str_case::prepare(
@@ -339,6 +351,21 @@ pub(super) fn bind_row(
         ),
         Operation::StrTemplate(operation) => str_template::bind_row(
             operation, column, catalog, driver, row, phase, available, edges, findings,
+        ),
+        Operation::MappingCut(operation) => mapping_cut::bind_row(
+            operation,
+            column,
+            catalog,
+            driver,
+            row,
+            phase,
+            available,
+            edges,
+            findings,
+            output,
+            named,
+            secondary,
+            intermediates,
         ),
         Operation::StrCase(operation) => str_case::bind_row(
             operation, column, catalog, driver, row, phase, available, edges, findings,

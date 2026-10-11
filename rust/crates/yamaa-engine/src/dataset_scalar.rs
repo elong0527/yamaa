@@ -6,6 +6,21 @@ use yamaa_core::{
 };
 pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
     match &assignment.expression {
+        Expression::MappingCut { source, operation } => {
+            if operation.missing().is_some() {
+                counter.register(
+                    &alloc::format!("{}.missing", operation.path()),
+                    HandlerKind::Missing,
+                );
+            }
+            if operation.unmapped().is_some() {
+                counter.register(
+                    &alloc::format!("{}.unmapped", operation.path()),
+                    HandlerKind::Unmapped,
+                );
+            }
+            register(source, counter);
+        }
         Expression::SourceLookup {
             selection: Some(_), ..
         } => {

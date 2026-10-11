@@ -238,6 +238,7 @@ pub(super) fn bind(
     operation: &Declaration,
     column: usize,
     catalog: &Catalog,
+    driver: &TableSchema,
     secondary: &[SecondarySource],
     intermediates: &[Option<crate::dataset::Intermediate>],
     edges: &mut Vec<usize>,
@@ -314,6 +315,7 @@ pub(super) fn bind(
                         core::slice::from_ref(source),
                         column,
                         catalog,
+                        driver,
                         secondary,
                         intermediates,
                         edges,
@@ -561,6 +563,15 @@ pub(super) fn operand_references(
     }
     if let Some(payload) = d.field(value, "source") {
         names.push(text(d, field(d, payload, "variable")?)?.into());
+    }
+    for op in ["mapping", "cut"] {
+        if let Some(payload) = d.field(value, op) {
+            let source = field(d, payload, "source")?;
+            names.push(match &d.nodes()[source] {
+                N::Text(name) => name.clone(),
+                _ => text(d, field(d, source, "variable")?)?.into(),
+            });
+        }
     }
     for op in ["greatest", "least"] {
         if let Some(payload) = d.field(value, op) {

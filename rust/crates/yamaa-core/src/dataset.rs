@@ -65,6 +65,10 @@ pub use windows::{OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    MappingCut {
+        source: alloc::boxed::Box<Assignment>,
+        operation: crate::mapping_cut::MappingCut,
+    },
     Extreme {
         operands: Vec<Assignment>,
         largest: bool,
@@ -557,7 +561,10 @@ fn validate_assignment_at(
                 available[assignment.column] = false;
             }
         }
-        Expression::StrCase {
+        Expression::MappingCut {
+            source: operand, ..
+        }
+        | Expression::StrCase {
             source: operand, ..
         }
         | Expression::StrPad {
@@ -833,6 +840,7 @@ fn key_expression(expression: &Expression) -> bool {
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::MappingCut { source, .. }
         | Expression::Round { source, .. } => key_expression(&source.expression),
         Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. }
@@ -892,6 +900,7 @@ fn current_record_read(
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::MappingCut { source, .. }
         | Expression::Round { source, .. } => {
             current_record_read(&source.expression, intermediates, scope)
         }
