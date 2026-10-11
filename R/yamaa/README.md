@@ -21,7 +21,8 @@ remain in issues. Output integer columns use lossless canonical decimal vectors
 with class `yamaa_int64_vector`, preserving INT64_MIN separately from NA. Ordinary
 text is character; text containing NUL uses raw values in `yamaa_utf8_vector`.
 Dates use Date and datetimes use POSIXct with UTC. Checks read no study data or
-project code. Paths retain their original declaring-file provenance.
+project code. Document paths use their original declaring YAML layer under
+the approved [local-path policy](../../rules/storage/resources.md).
 
 Declared verification/warning logs are fresh owned data frames. Build never
 writes them. Explicit Save preflights all targets and publishes verification,
@@ -43,6 +44,25 @@ the package compiles `yamaa-r` with `cargo build --locked`. See
 python rust/tools/stage_r_package.py /tmp/yamaa-stage/yamaa
 R CMD build /tmp/yamaa-stage/yamaa
 ```
+
+## Submission generation
+
+```r
+result <- yamaa_define("environment.yaml", "sdtm", created = "2026-09-11T00:00:00")
+result$issues
+result$save()
+```
+
+R transports the same owned Rust Define use case as Python and needs no Python
+runtime. Issues have the shared five-column shape; failed saves signal
+`yamaa_define_error` carrying the current issues and publication cause. The
+selected section admits metadata without executing a specification; only
+explicit Dataset-JSON requests read already published artifacts. Save uses
+held rendered bytes, publishes JSON in specification order and XML last,
+and stops the remainder after an operational failure. Atomic replacement is
+per file. This bounded column-metadata candidate retains the reference renderer
+and unchanged fixture truth pending complete replacement qualification.
+See [the shared Define contract](../../rust/DEFINE_GENERATION.md).
 
 ## Scalar transport probe
 

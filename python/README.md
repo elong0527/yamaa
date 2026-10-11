@@ -30,10 +30,11 @@ warning and primary bytes in order. A failed build may retain a verification log
 its explicit Save publishes that diagnostic sidecar and still raises the
 failed-build error. Repeated Save uses the same held bytes.
 
-The declaring-file path policy retains original output locations. Producer graphs
+Document paths use their original declaring YAML layer under the approved
+[local-path policy](../rules/storage/resources.md). Producer graphs
 with declared logs remain explicitly refused until their ordered sidecars qualify.
 Broader language, API and release qualification remain open. Retained reference
-helpers continue independent migration assessment.
+helpers continue independent migration assessment. ODM helpers below remain available.
 
 ## Install and test
 
@@ -70,6 +71,30 @@ See the [ODM helper documentation](src/yamaa/odm/README.md) for the fixed schema
 and supported XML layouts.
 
 ## Submission documents
+
+`yamaa.define` composes one environment submission section through the shared
+Rust lifecycle. A fixed creation time reproduces the same bytes:
+
+```python
+result = yamaa.define("environment.yaml", "sdtm", created="2026-09-11T00:00:00")
+result.issues
+result.save()
+```
+
+The result has the same five issue columns as `domain`; a failed save raises
+`yamaa.DefineError` with those issues. Preparation reads metadata and parent
+specifications. Dataset-JSON, when requested by the section, reads already
+published CSV/Parquet artifacts. Generation executes no specification, reads
+no ordinary study inputs and opens no supporting-document links. It renders
+and validates the complete output set before publication, then Save publishes
+JSON files in section order and XML last. Replacement is atomic per file;
+an operational failure preserves completed files and stops the remainder.
+
+This is the bounded column-metadata migration candidate. DM's existing XML/JSON
+goldens and AE/VS's independent fixed-time structure/schema witnesses are kept
+unchanged. Value-level generation and the complete replacement qualification
+remain open. The reference route below remains until coordinated retirement.
+See [the native Define contract](../rust/DEFINE_GENERATION.md).
 
 `yamaa.generate_study_document("define.yaml")` composes the declared datasets
 into deterministic, schema-validated Define-XML 2.1. Entries declaring

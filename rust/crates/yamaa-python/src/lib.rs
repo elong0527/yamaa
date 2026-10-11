@@ -1,5 +1,6 @@
 //! Optional Python installation probe; this is not an execution backend.
 use pyo3::prelude::*;
+mod define_entry;
 mod domain_entry;
 #[cfg(any(unix, windows))]
 mod file_producer;
@@ -260,6 +261,12 @@ fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_class::<define_entry::Define>()?;
+    module.add(
+        "DefineError",
+        module.py().get_type::<define_entry::DefineError>(),
+    )?;
+    module.add_function(wrap_pyfunction!(define_entry::_define_file, module)?)?;
     module.add_class::<domain_entry::Domain>()?;
     module.add(
         "DomainError",

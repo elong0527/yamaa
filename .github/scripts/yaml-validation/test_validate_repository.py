@@ -2230,6 +2230,63 @@ class TestValidationManifest(unittest.TestCase):
 
 
 class TestProjectFunctionEnvironment(unittest.TestCase):
+    def test_submission_environment_schema_is_checked_without_domain_or_data_reads(self):
+        real_root = TOOL_PATH.parents[3]
+        schema, errors = VALIDATOR.build_schema_env(real_root, 'schema_environment.yaml')
+        self.assertEqual(errors, [])
+        original = yaml.safe_load((real_root / 'benchmarks/sdtm-dm-metadata/environment.yaml').read_text())
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            case = root / 'benchmarks' / 'submission'
+            case.mkdir(parents=True)
+            environment = case / 'environment.yaml'
+            environment.write_text(yaml.safe_dump(original))
+            with patch('yamaa._native._check_project_metadata') as native:
+                self.assertEqual(VALIDATOR.validate_examples_environment_documents(root, schema), [])
+                for value in ('', 1, [], None):
+                    original['sdtm']['source_system_version'] = value
+                    environment.write_text(yaml.safe_dump(original))
+                    errors = VALIDATOR.validate_examples_environment_documents(root, schema)
+                    self.assertTrue(errors, repr(value))
+                    self.assertTrue(any('source_system_version' in error for error in errors))
+            native.assert_not_called()
+            self.assertFalse((case / 'spec.yaml').exists())
+            self.assertFalse((case / 'dm.csv').exists())
+
+    def test_metadata_only_specification_does_not_enter_domain_function_bridge(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            case = Path(temporary) / 'benchmarks' / 'submission'
+            case.mkdir(parents=True)
+            (case / 'environment.yaml').write_text('schema_version: "1.0"\n')
+            specification = {
+                'submission': {'label': 'Demographics'},
+                'columns': [{'name': 'STUDYID', 'type': 'str',
+                    'submission': {'core': 'Req', 'role': 'Identifier'}}],
+            }
+            with patch('yamaa._native._check_project_metadata') as native:
+                errors = VALIDATOR.validate_spec_functions(
+                    specification, 'submission.spec', case / 'spec.yaml', {})
+            self.assertEqual(errors, [])
+            native.assert_not_called()
+
+    def test_intermediate_function_calls_retain_native_static_admission(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            case = Path(temporary) / 'benchmarks' / 'project'
+            case.mkdir(parents=True)
+            (case / 'environment.yaml').write_text('schema_version: "1.0"\n')
+            (case / 'spec.yaml').write_text('schema_version: "1.0"\n')
+            specification = {'intermediates': [{'id': 'derived',
+                'derivations': {'value': {'function': {'name': 'missing'}}}}]}
+            with patch('yamaa._native._check_project_metadata', return_value=[
+                ('validation', 'unknown_function', 'REQ-0675',
+                    ['intermediates[0].derivations.value'], '{"function":"missing"}'),
+            ]) as native:
+                errors = VALIDATOR.validate_spec_functions(
+                    specification, 'project.spec', case / 'spec.yaml', {})
+            native.assert_called_once()
+            self.assertEqual(len(errors), 1)
+            self.assertIn('unknown_function', errors[0])
+
     def test_invalid_authored_language_reaches_native_schema_diagnostics(self):
         for language in (7, 'julia', []):
             with self.subTest(language=language), tempfile.TemporaryDirectory() as temporary:
