@@ -102,7 +102,7 @@ impl RootResult {
             budget.json(&self.observations)?;
             budget.entries(publication.artifacts().len().saturating_mul(64))?;
             for artifact in publication.artifacts() {
-                for _ in 0..4 {
+                for _ in 0..8 {
                     budget.text(artifact.path())?;
                 }
             }
@@ -280,6 +280,12 @@ impl RootResult {
                 Err(Failure::Publish(failure)) => {
                     self.issues
                         .extend(crate::file_application::publication_failure(&failure.error));
+                    self.issues.push(
+                        Issue::from_core(yamaa_core::application_issue::publication_failed(
+                            &publication.request(failure.request).path,
+                        ))
+                        .expect("publication issue"),
+                    );
                     (false, "publication_failed", Some(failure.request))
                 }
             }
@@ -954,6 +960,29 @@ mod log_tests {
                 .issues()
                 .iter()
                 .any(|issue| issue.spec_paths == ["output.warning_log"]));
+            let normative = result
+                .issues()
+                .iter()
+                .filter(|issue| issue.requirement.as_deref() == Some("REQ-0764"))
+                .collect::<Vec<_>>();
+            if unwind {
+                assert!(
+                    normative.is_empty(),
+                    "an opaque unwind does not establish atomic replacement failure"
+                );
+            } else {
+                assert_eq!(
+                    normative.len(),
+                    1,
+                    "actual publication failure must report REQ-0764"
+                );
+                assert_eq!(normative[0].spec_paths, ["output.warning_log"]);
+                let context: Value = serde_json::from_str(&normative[0].context).unwrap();
+                assert_eq!(context["node"], 0);
+                assert_eq!(context["path"], "generated/root-warnings.csv");
+                assert_eq!(context["entered"], 5);
+                assert_eq!(context["completed"], 4);
+            }
             assert!(result.save().unwrap());
             assert!(result.issues().is_empty());
             assert_eq!(result.log_save_attempt.as_ref().unwrap().entered.len(), 6);
@@ -1028,6 +1057,10 @@ mod log_tests {
             ))
             .unwrap());
         assert!(result.log_save_attempt.as_ref().unwrap().entered.is_empty());
+        assert!(!result
+            .issues()
+            .iter()
+            .any(|issue| issue.requirement.as_deref() == Some("REQ-0764")));
         fs::create_dir(study.0.join("generated")).unwrap();
         assert!(result.save().unwrap());
     }
@@ -1116,6 +1149,10 @@ mod log_tests {
                 .iter()
                 .all(|issue| issue.spec_paths == ["output.warning_log"]));
             assert!(result.log_save_attempt.as_ref().unwrap().entered.is_empty());
+            assert!(!result
+                .issues()
+                .iter()
+                .any(|issue| issue.requirement.as_deref() == Some("REQ-0764")));
             assert_eq!(execution(result.observations().clone()), before);
         }
         assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
