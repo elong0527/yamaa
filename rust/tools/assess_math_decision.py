@@ -15,6 +15,7 @@ import platform
 import shutil
 import tempfile
 from collections import Counter
+from contextlib import contextmanager
 from pathlib import Path
 
 from assess_math import decode, difference, normalized_bits
@@ -269,6 +270,17 @@ def boundaries():
     return results
 
 
+@contextmanager
+def temporary_workspace(prefix):
+    """Restore the caller directory before releasing a temporary workspace."""
+    previous = Path.cwd()
+    with tempfile.TemporaryDirectory(prefix=prefix) as temporary:
+        try:
+            yield temporary
+        finally:
+            os.chdir(previous)
+
+
 def downstream(values):
     """Feed observed policy outputs into real shared predicates/verification/CSV.
 
@@ -279,93 +291,83 @@ def downstream(values):
     import yamaa
 
     result = []
-    previous = Path.cwd()
-    try:
-        with tempfile.TemporaryDirectory(prefix="yamaa-math-decision-") as temporary:
-            os.chdir(temporary)
-            for identity, observed in values:
-                Path("input.csv").write_text(
-                    f"ID,VALUE\n1,{decode(observed)!r}\n", encoding="ascii"
+    with temporary_workspace("yamaa-math-decision-") as temporary:
+        os.chdir(temporary)
+        for identity, observed in values:
+            Path("input.csv").write_text(
+                f"ID,VALUE\n1,{decode(observed)!r}\n", encoding="ascii"
+            )
+            specification = {
+                "schema_version": "1.0",
+                "domain": "TEST",
+                "keys": ["ID"],
+                "input": {
+                    "SRC": {
+                        "path": "input.csv",
+                        "types": {"ID": "int", "VALUE": "float"},
+                    }
+                },
+                "output": {
+                    "path": "result.csv",
+                    "columns": ["ID", "VALUE", "ABOVE", "ROUNDED"],
+                },
+                "columns": [
+                    {"name": "ID", "type": "int", "derivation": "SRC.ID"},
+                    {"name": "VALUE", "type": "float", "derivation": "SRC.VALUE"},
+                    {
+                        "name": "ABOVE",
+                        "type": "int",
+                        "derivation": {
+                            "case": [
+                                {
+                                    "when": "VALUE > 2.718281828459045",
+                                    "then": {"literal": 1},
+                                },
+                                {"otherwise": {"literal": 0}},
+                            ]
+                        },
+                    },
+                    {
+                        "name": "ROUNDED",
+                        "type": "float",
+                        "derivation": {
+                            "compute": {"expr": "ROUND_HALF_AWAY_FROM_ZERO(VALUE, 15)"}
+                        },
+                    },
+                ],
+            }
+            Path("spec.yaml").write_text(json.dumps(specification), encoding="ascii")
+            built = yamaa.domain("spec.yaml")
+            if not built.issues.is_empty() or built.output is None:
+                raise AssertionError(
+                    f"downstream witness could not execute: {built.issues}"
                 )
-                specification = {
-                    "schema_version": "1.0",
-                    "domain": "TEST",
-                    "keys": ["ID"],
-                    "input": {
-                        "SRC": {
-                            "path": "input.csv",
-                            "types": {"ID": "int", "VALUE": "float"},
-                        }
-                    },
-                    "output": {
-                        "path": "result.csv",
-                        "columns": ["ID", "VALUE", "ABOVE", "ROUNDED"],
-                    },
-                    "columns": [
-                        {"name": "ID", "type": "int", "derivation": "SRC.ID"},
-                        {"name": "VALUE", "type": "float", "derivation": "SRC.VALUE"},
-                        {
-                            "name": "ABOVE",
-                            "type": "int",
-                            "derivation": {
-                                "case": [
-                                    {
-                                        "when": "VALUE > 2.718281828459045",
-                                        "then": {"literal": 1},
-                                    },
-                                    {"otherwise": {"literal": 0}},
-                                ]
-                            },
-                        },
-                        {
-                            "name": "ROUNDED",
-                            "type": "float",
-                            "derivation": {
-                                "compute": {
-                                    "expr": "ROUND_HALF_AWAY_FROM_ZERO(VALUE, 15)"
-                                }
-                            },
-                        },
-                    ],
+            rows = [
+                {key: wire(value) for key, value in row.items()}
+                for row in built.output.to_dicts()
+            ]
+            built.save()
+            csv = Path("result.csv").read_bytes()
+            specification["verifications"] = [
+                {
+                    "assert": {
+                        "id": "historical-exp-one-limit",
+                        "require": "VALUE <= 2.718281828459045",
+                    }
                 }
-                Path("spec.yaml").write_text(
-                    json.dumps(specification), encoding="ascii"
-                )
-                built = yamaa.domain("spec.yaml")
-                if not built.issues.is_empty() or built.output is None:
-                    raise AssertionError(
-                        f"downstream witness could not execute: {built.issues}"
-                    )
-                rows = [
-                    {key: wire(value) for key, value in row.items()}
-                    for row in built.output.to_dicts()
-                ]
-                built.save()
-                csv = Path("result.csv").read_bytes()
-                specification["verifications"] = [
-                    {
-                        "assert": {
-                            "id": "historical-exp-one-limit",
-                            "require": "VALUE <= 2.718281828459045",
-                        }
-                    }
-                ]
-                Path("spec.yaml").write_text(
-                    json.dumps(specification), encoding="ascii"
-                )
-                verified = yamaa.domain("spec.yaml")
-                result.append(
-                    {
-                        "policy_observation": identity,
-                        "input_bits": observed,
-                        "rows": rows,
-                        "canonical_csv_hex": csv.hex(),
-                        "verification_issues": verified.issues.to_dicts(),
-                        "verification_succeeded": verified.issues.is_empty(),
-                    }
-                )
-    finally:
-        os.chdir(previous)
+            ]
+            Path("spec.yaml").write_text(json.dumps(specification), encoding="ascii")
+            verified = yamaa.domain("spec.yaml")
+            result.append(
+                {
+                    "policy_observation": identity,
+                    "input_bits": observed,
+                    "rows": rows,
+                    "canonical_csv_hex": csv.hex(),
+                    "verification_issues": verified.issues.to_dicts(),
+                    "verification_succeeded": verified.issues.is_empty(),
+                }
+            )
     return result
 
 
@@ -385,7 +387,6 @@ def fixture_evidence():
         "adam-advs-percentiles",
     )
     evidence = []
-    previous = Path.cwd()
     originals = {"EXP": math.exp, "LN": math.log, "POWER": math.pow}
 
     def captured_calls(policy, calls):
@@ -419,7 +420,7 @@ def fixture_evidence():
         }
 
     try:
-        with tempfile.TemporaryDirectory(prefix="yamaa-math-fixtures-") as temporary:
+        with temporary_workspace("yamaa-math-fixtures-") as temporary:
             for name in names:
                 target = Path(temporary) / name
                 shutil.copytree(WORKSPACE.parent / "benchmarks" / name, target)
@@ -536,7 +537,6 @@ def fixture_evidence():
                     )
                 evidence.append(observed)
     finally:
-        os.chdir(previous)
         math.exp, math.log, math.pow = (
             originals["EXP"],
             originals["LN"],

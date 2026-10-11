@@ -1,18 +1,90 @@
 """Audit retained numerical decisions without generating or loosening goldens."""
 
 import json
+import os
 import sys
+import tempfile
 import unittest
 from collections import Counter
 from pathlib import Path
+from types import ModuleType
+from unittest.mock import patch
 
 TOOLS = Path(__file__).parents[1] / "tools"
 sys.path.insert(0, str(TOOLS))
+import assess_math_decision
 from assess_math import difference
 from assess_math_decision import native_request
 from math_certificates import certify
 from math_corpus import expected_inputs
 from math_decision_corpus import cases
+
+
+class TemporaryWorkspaceCleanup(unittest.TestCase):
+    """Temporary directories can be removed on hosts that lock the current cwd."""
+
+    def checked_directory(self):
+        previous = Path.cwd()
+        directory = tempfile.TemporaryDirectory(prefix="yamaa-math-cleanup-test-")
+        owner = self
+
+        class CheckedDirectory:
+            def __enter__(self):
+                return directory.__enter__()
+
+            def __exit__(self, *exception):
+                owner.assertEqual(Path.cwd(), previous)
+                return directory.__exit__(*exception)
+
+        return CheckedDirectory()
+
+    def test_success_restores_directory_before_cleanup(self):
+        directory = self.checked_directory()
+        with patch.object(
+            assess_math_decision.tempfile, "TemporaryDirectory", return_value=directory
+        ):
+            with assess_math_decision.temporary_workspace("unused-") as temporary:
+                os.chdir(temporary)
+                Path("evidence.txt").write_text("retained", encoding="ascii")
+            self.assertFalse(Path(temporary).exists())
+
+    def test_both_witnesses_restore_directory_before_exception_cleanup(self):
+        failure = RuntimeError("original witness failure")
+        fake = ModuleType("yamaa")
+        fake._native = ModuleType("yamaa._native")
+        reference = ModuleType("yamaa._reference_domain")
+        reference.yamaa_domain = lambda *args, **kwargs: None
+        modules = {
+            "yamaa": fake,
+            "yamaa._reference_domain": reference,
+            "yaml": ModuleType("yaml"),
+        }
+
+        def refuse(*args, **kwargs):
+            raise failure
+
+        def copy_fixture(source, target):
+            target.mkdir()
+
+        fake.domain = refuse
+        for witness, args in (
+            (assess_math_decision.downstream, [("test", "3ff0000000000000")]),
+            (assess_math_decision.fixture_evidence, None),
+        ):
+            with self.subTest(witness=witness.__name__):
+                directory = self.checked_directory()
+                with (
+                    patch.dict(sys.modules, modules),
+                    patch.object(assess_math_decision.shutil, "copytree", copy_fixture),
+                    patch.object(
+                        assess_math_decision.tempfile,
+                        "TemporaryDirectory",
+                        return_value=directory,
+                    ),
+                    self.assertRaises(RuntimeError) as caught,
+                ):
+                    witness() if args is None else witness(args)
+                self.assertIs(caught.exception, failure)
 
 
 class MathDecisionEvidence(unittest.TestCase):
