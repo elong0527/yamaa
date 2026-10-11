@@ -60,3 +60,4 @@ pub mod project_domain;
 pub mod project_diagnostics;
 
 pub mod project_codelist_diagnostics;
+pub mod verification_diagnostics;

@@ -43,7 +43,16 @@ pub(crate) fn predicate_check<E>(
 ) -> Result<Option<CheckRecord>, Box<ExecutionError<E>>> {
     let (when, require, metadata) = match &verification.check {
         Check::Assert { when, require } => {
-            (when.as_ref(), require, Some(("assert_failed", "REQ-0384")))
+            let mapping =
+                yamaa_core::diagnostic::ConditionCode::VerificationAssertFailed.definition();
+            (
+                when.as_ref(),
+                require,
+                Some((
+                    mapping.condition,
+                    mapping.requirement.expect("registered normative check"),
+                )),
+            )
         }
         Check::PredicateDeclaration(predicate) => (None, predicate, None),
         _ => unreachable!("only predicate checks use this service"),

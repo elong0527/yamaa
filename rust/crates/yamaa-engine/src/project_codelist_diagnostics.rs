@@ -23,7 +23,14 @@ pub fn diagnostics<'a>(
     if records.len() > 65_536 {
         return Err(Error::Limit);
     }
-    let facts: Vec<_> = records
+    let facts = observations(records);
+    core::diagnostics(compiled, &facts, maximum)
+}
+
+pub(crate) fn observations(
+    records: &[CheckRecord],
+) -> Vec<core::CheckObservation<'_, RowIdentity>> {
+    records
         .iter()
         .map(|record| core::CheckObservation {
             path: &record.path,
@@ -41,6 +48,5 @@ pub fn diagnostics<'a>(
                     values: &observation.values,
                 }),
         })
-        .collect();
-    core::diagnostics(compiled, &facts, maximum)
+        .collect()
 }
