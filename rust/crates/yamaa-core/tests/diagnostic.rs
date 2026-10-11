@@ -27,6 +27,8 @@ mod project_codelist_binding;
 mod project_environment;
 #[path = "diagnostic/project_functions.rs"]
 mod project_functions;
+#[path = "diagnostic/project_lock.rs"]
+mod project_lock;
 impl NumericResolver for Bindings {
     type Error = Infallible;
     fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
@@ -196,6 +198,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     }
     reached.extend(project_functions::reached());
     reached.extend(project_environment::reached());
+    reached.extend(project_lock::reached());
     let lock = yamaa_core::application_issue::lock_mismatch(
         [(
             "package".into(),

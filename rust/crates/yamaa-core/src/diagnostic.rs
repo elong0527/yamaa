@@ -14,6 +14,12 @@ use crate::{numeric_parser::SourceSpan, value::Value};
 mod grammar;
 #[path = "diagnostic_numeric.rs"]
 mod numeric;
+#[path = "diagnostic_project_lock.rs"]
+mod project_lock;
+pub use project_lock::{
+    lock_diagnostics, lock_diagnostics_with_limit, LockDiagnosticError, LockFinding, LockOrigins,
+    LockReason, MAX_LOCK_DIAGNOSTIC_BYTES,
+};
 
 /// A cause's canonical public vocabulary, including explicit application refusals.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
