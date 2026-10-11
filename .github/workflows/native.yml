@@ -7,23 +7,30 @@ on:
     branches: [main]
     paths:
       - 'rust/**'
+      # Prose is checked by repository validation; Markdown fixtures still run.
+      - '!rust/*.md'
+      - '!rust/planning/**/*.md'
       - 'R/yamaa/**'
       - 'python/**'
       - 'benchmarks/**'
       - '!benchmarks/**/*.md'
       - 'yaml/**'
       - '.github/workflows/native.yml'
-      - '.github/scripts/ci/**'
+      - '.github/scripts/ci/native_matrix.py'
+      - '.github/scripts/ci/test_native_matrix.py'
   pull_request:
     paths:
       - 'rust/**'
+      - '!rust/*.md'
+      - '!rust/planning/**/*.md'
       - 'R/yamaa/**'
       - 'python/**'
       - 'benchmarks/**'
       - '!benchmarks/**/*.md'
       - 'yaml/**'
       - '.github/workflows/native.yml'
-      - '.github/scripts/ci/**'
+      - '.github/scripts/ci/native_matrix.py'
+      - '.github/scripts/ci/test_native_matrix.py'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
