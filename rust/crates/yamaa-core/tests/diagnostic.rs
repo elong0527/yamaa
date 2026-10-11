@@ -18,6 +18,8 @@ mod binding;
 mod csv;
 #[path = "diagnostic/grammar.rs"]
 mod grammar;
+#[path = "diagnostic/inheritance.rs"]
+mod inheritance;
 #[path = "diagnostic/parquet.rs"]
 mod parquet;
 #[path = "diagnostic/preflight.rs"]
@@ -228,6 +230,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(producer::reached());
     reached.extend(preflight::output_reached());
     reached.extend(grammar::reached());
+    reached.extend(inheritance::reached());
     reached.extend(grammar::predicate_reached());
     reached.extend(binding::reached());
     reached.extend(binding::window_reached());

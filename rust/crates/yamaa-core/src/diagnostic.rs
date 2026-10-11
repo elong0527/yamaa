@@ -14,6 +14,10 @@ use crate::{numeric_parser::SourceSpan, value::Value};
 mod dataset;
 pub use dataset::DatasetFinding;
 
+#[path = "diagnostic_inheritance.rs"]
+mod inheritance;
+pub use inheritance::InheritanceFinding;
+
 #[path = "diagnostic_grammar.rs"]
 mod grammar;
 #[path = "diagnostic_numeric.rs"]
@@ -126,6 +130,11 @@ conditions! {
     ConversionTemporal => ("convert", "conversion_failed", Some("REQ-0601")),
     ResourceMissing => ("validation", "resource_path_missing", Some("REQ-0785")),
     ResourceNotRegularFile => ("validation", "resource_path_not_regular_file", Some("REQ-0785")),
+    InheritanceInvalidParent => ("validation", "invalid_parent_path", Some("REQ-0653")),
+    InheritanceParentUnavailable => ("validation", "parent_not_found", Some("REQ-0654")),
+    InheritanceCycle => ("validation", "inheritance_cycle", Some("REQ-0655")),
+    InheritanceParentVersion => ("validation", "schema_version_mismatch", Some("REQ-0656")),
+    InheritanceEntryVersion => ("validation", "schema_version_mismatch", Some("REQ-0245")),
     PreflightUndeclaredRowColumn => ("validation", "undeclared_column", None),
     PreflightDuplicateRowDefault => ("validation", "duplicate_derivation", Some("REQ-1260")),
     PreflightMissingRowDerivation => ("validation", "missing_derivation", Some("REQ-0200")),

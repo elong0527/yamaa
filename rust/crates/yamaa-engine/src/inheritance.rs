@@ -186,6 +186,51 @@ impl<E> From<Exhausted> for Error<E> {
     }
 }
 
+impl<E> Error<E> {
+    /// Project only classified traversal causes. The original error remains
+    /// borrowed, including non-Clone host payloads and retained schema inputs.
+    pub fn diagnostic(&self) -> Option<yamaa_core::diagnostic::Diagnostic> {
+        self.diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
+            .ok()
+            .flatten()
+    }
+
+    pub fn diagnostic_with_limit(
+        &self,
+        maximum: usize,
+    ) -> Result<Option<yamaa_core::diagnostic::Diagnostic>, yamaa_core::diagnostic::ProjectionError>
+    {
+        use yamaa_core::diagnostic::InheritanceFinding as F;
+        match self {
+            Self::InvalidParent { declaring, path } => F::InvalidParent { declaring, path },
+            Self::Unavailable { declaring, path } => F::ParentUnavailable { declaring, path },
+            Self::Cycle {
+                path,
+                returns_to_entry,
+            } => F::Cycle {
+                path,
+                returns_to_entry: *returns_to_entry,
+            },
+            Self::Version {
+                source,
+                entry,
+                expected,
+                actual,
+                is_entry,
+            } => F::Version {
+                source,
+                entry,
+                expected,
+                actual,
+                is_entry: *is_entry,
+            },
+            _ => return Ok(None),
+        }
+        .diagnostic_with_limit(maximum)
+        .map(Some)
+    }
+}
+
 struct Frame {
     layer: Layer,
     parents: Vec<String>,
