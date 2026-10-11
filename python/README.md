@@ -368,7 +368,8 @@ uv run --project python --isolated --extra test pytest python/tests/io
 
 ## Minimal YAML execution
 
-Load and execute one domain specification with the user-facing facade:
+The retained reference engine can load and execute one domain specification
+through its historical facade:
 
 ```python
 from yamaa import yamaa_domain
@@ -385,9 +386,11 @@ print(pilot.issues)  # stable Polars issue table
 pilot.save("expected.parquet")
 ```
 
-`yamaa_domain` searches upward from the specification for `schema.yaml`; a
-specification kept elsewhere supplies `schema_root=`. Project and data roots
-follow the same R021 configuration rules as the lower-level resource API.
+In the retained reference engine, `yamaa_domain` searches upward from the
+specification for `schema.yaml`; a specification kept elsewhere supplies
+`schema_root=`. Its project and data roots follow the historical R021
+configuration rules. The replacement `domain` and `check` routes use the
+declaring-file policy described above.
 Loading, source capture, and execution happen once. The facade writes nothing
 until `save` is called: without an argument it uses the specification's
 `output.path`, while an explicit `.csv` or `.parquet` path selects that output

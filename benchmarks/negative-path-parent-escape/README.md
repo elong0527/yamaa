@@ -29,14 +29,15 @@ together with a reference table of upper limits read from
   equal `LBTESTCD` and `SEX`; missing when no entry matches or the
   sex is missing.
 
-**Note:** the limits live outside the study, so the run is rejected
-before any data is read and no artifact is accepted.
+**Note:** the limits live outside the study, so the historical reference
+engine rejects this fixture before any data is read and accepts no artifact.
 
 **Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
-Bring the governed limits into the study and read them from there:
+For the retained reference engine, bring the governed limits into the study
+and read them from there:
 
 ```yaml
 input:
@@ -45,5 +46,6 @@ input:
 ```
 
 If the limits are maintained centrally, copy the approved version into the
-study when it is approved. A study that reaches above itself for data cannot
-state which version produced its results.
+study when it is approved. That preserves the historical reference policy.
+The replacement public routes permit the parent-relative declaration under
+OS/caller permissions and retain the actual input bytes for the run.
