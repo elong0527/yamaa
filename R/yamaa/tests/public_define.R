@@ -80,8 +80,9 @@ stopifnot(isTRUE(result$save()), identical(result$save(), FALSE))
 for (artifact in held) stopifnot(identical(rawfile(file.path(root, artifact$path)), artifact$bytes))
 unlink(root, recursive = TRUE)
 
-for (mode in c("original source", "value codelist", "metadata only")) {
-  root <- fixture("sdtm-lb-metadata", mode != "metadata only")
+for (mode in c("original source", "value codelist", "metadata only", "arbitrary row ID")) {
+  metadata_only <- mode %in% c("metadata only", "arbitrary row ID")
+  root <- fixture("sdtm-lb-metadata", !metadata_only)
   if (mode == "original source") {
     overlay <- readLines(file.path(root, "submission-spec.yaml"))
     rows <- which(overlay == "rows:")
@@ -94,9 +95,15 @@ for (mode in c("original source", "value codelist", "metadata only")) {
   } else {
     environment <- readLines(file.path(root, "environment.yaml"))
     writeLines(sub("dataset_json: true", "dataset_json: false", environment, fixed = TRUE), file.path(root, "environment.yaml"))
+    if (mode == "arbitrary row ID") {
+      for (file in c("spec.yaml", "submission-spec.yaml")) {
+        path <- file.path(root, file)
+        writeLines(sub("id: glucose", "id: 'glucose / primary test: 1'", readLines(path), fixed = TRUE), path)
+      }
+    }
   }
   result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = "2026-09-11T00:00:00")
-  check_issues(result, mode == "metadata only")
+  check_issues(result, metadata_only)
   if (mode == "original source") {
     stopifnot(any(result$issues$requirement == "REQ-0919" & result$issues$condition == "origin_source_not_admitted"), refused(result))
   } else if (mode == "value codelist") {

@@ -110,9 +110,19 @@ fn specification(case: &str) -> Document {
     let output = a.map(vec![("path", output_path), ("columns", output_names)]);
     let mut rows = Vec::new();
     for index in 0..2 {
-        let id = a.text(if index == 0 { "glucose" } else { "creatinine" });
+        let id = a.text(match (index, case) {
+            (0, "arbitrary row ID" | "arbitrary invalid source") => "glucose / primary test: 1",
+            (0, "empty row ID") => "",
+            (0, _) => "glucose",
+            _ => "creatinine",
+        });
         let literal = if case == "dynamic discriminator" && index == 0 {
             a.texts(&[("source", "ODM.TestCode")])
+        } else if case == "ambiguous discriminator" && index == 0 {
+            a.texts(&[("literal", "GLUC"), ("source", "ODM.TestCode")])
+        } else if case == "nonstring discriminator" && index == 0 {
+            let number = a.node(N::Integer("1".into()));
+            a.map(vec![("literal", number)])
         } else {
             a.texts(&[(
                 "literal",
@@ -123,13 +133,21 @@ fn specification(case: &str) -> Document {
                 },
             )])
         };
+        let literal = if case == "normalized discriminator" {
+            let unconvertible = a.node(N::Null);
+            a.map(vec![("value", literal), ("unconvertible", unconvertible)])
+        } else {
+            literal
+        };
         let derivations = a.map(vec![("LBTESTCD", literal)]);
         let origin_type = if case == "refuted origin" && index == 0 {
             "Collected"
         } else {
             "Assigned"
         };
-        let source = if case == "invalid source" && index == 1 {
+        let source = if (case == "invalid source" && index == 1)
+            || (case == "arbitrary invalid source" && index == 0)
+        {
             "Investigator"
         } else if index == 0 || case == "identical" {
             "Vendor"
@@ -242,6 +260,49 @@ fn complete_row_metadata_is_counted_before_ownership_or_findings() {
     );
 }
 #[test]
+fn arbitrary_row_labels_and_normalized_literal_handlers_retain_their_meaning() {
+    for case in ["arbitrary row ID", "normalized discriminator"] {
+        let document = specification(case);
+        let declared =
+            declarations::decode(&document, document.root(), Default::default()).unwrap();
+        let study = compose(&document).unwrap();
+        let value = &study.datasets()[0].columns()[1].values()[0];
+        assert_eq!(value.test_code(), "GLUC");
+        if case == "arbitrary row ID" {
+            assert_eq!(
+                declared.value_rows()[0].id.value,
+                "glucose / primary test: 1"
+            );
+        }
+    }
+    let findings = compose(&specification("arbitrary invalid source")).unwrap_err();
+    assert!(findings.iter().any(|finding| finding.definition.condition
+        == "origin_source_not_admitted"
+        && finding
+            .path
+            .ends_with("rows.glucose / primary test: 1.submission.LBORRESU.origin")));
+}
+#[test]
+fn an_empty_row_label_is_a_text_refusal_with_its_original_field_occurrence() {
+    let document = specification("empty row ID");
+    let error = declarations::decode(&document, document.root(), Default::default()).unwrap_err();
+    assert!(std::ptr::eq(error.input, &document));
+    let declarations::Cause::Findings(findings) = error.cause else {
+        panic!("expected a structural text refusal");
+    };
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].kind, declarations::Kind::EmptyText);
+    assert!(findings[0].requirement().is_none());
+    assert_eq!(
+        findings[0].path.steps().collect::<Vec<_>>(),
+        [
+            declarations::Step::Field(declarations::FieldName::Rows),
+            declarations::Step::Index(0),
+            declarations::Step::Field(declarations::FieldName::Id),
+        ]
+    );
+}
+#[test]
 fn each_independent_value_admission_control_has_the_required_condition_and_row_path() {
     for (case, condition, requirement, suffix) in [
         (
@@ -252,6 +313,18 @@ fn each_independent_value_admission_control_has_the_required_condition_and_row_p
         ),
         (
             "dynamic discriminator",
+            "value_metadata_requires_literal_testcd",
+            "REQ-1164",
+            "rows.glucose.submission",
+        ),
+        (
+            "ambiguous discriminator",
+            "value_metadata_requires_literal_testcd",
+            "REQ-1164",
+            "rows.glucose.submission",
+        ),
+        (
+            "nonstring discriminator",
             "value_metadata_requires_literal_testcd",
             "REQ-1164",
             "rows.glucose.submission",

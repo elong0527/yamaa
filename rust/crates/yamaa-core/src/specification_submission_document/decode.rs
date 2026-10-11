@@ -637,7 +637,7 @@ impl<'a> Parser<'a, '_> {
             if fields.is_empty() {
                 continue;
             }
-            let id = self.text_field(node, F::Id, path, TextRule::Identifier, true)?;
+            let id = self.text_field(node, F::Id, path, TextRule::NonEmpty, true)?;
             let mut overrides = Vec::new();
             for (column_index, &(key, value)) in fields.iter().enumerate() {
                 let occurrence = Origin {

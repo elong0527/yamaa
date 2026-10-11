@@ -128,6 +128,7 @@ class PublicDefine(unittest.TestCase):
     def test_lb_metadata_only_and_all_independent_value_admission_controls(self):
         for case, requirement, condition in [
             ("valid", None, None),
+            ("arbitrary row ID", None, None),
             ("domain", "REQ-1163", "value_metadata_requires_testcd"),
             ("dynamic", "REQ-1164", "value_metadata_requires_literal_testcd"),
             ("unknown", "REQ-1165", "value_metadata_unknown_column"),
@@ -142,7 +143,12 @@ class PublicDefine(unittest.TestCase):
                 (directory / "environment.yaml").write_text(yaml.safe_dump(environment, sort_keys=False))
                 spec = yaml.safe_load((directory / "spec.yaml").read_text())
                 first = spec["rows"][0]
-                if case == "domain":
+                if case == "arbitrary row ID":
+                    first["id"] = "glucose / primary test: 1"
+                    overlay = yaml.safe_load((directory / "submission-spec.yaml").read_text())
+                    overlay["rows"][0]["id"] = first["id"]
+                    (directory / "submission-spec.yaml").write_text(yaml.safe_dump(overlay, sort_keys=False))
+                elif case == "domain":
                     spec["domain"] = "XX"
                 elif case == "dynamic":
                     first["derivations"]["LBTESTCD"] = {"source": "ODM.TestCode"}
@@ -158,7 +164,7 @@ class PublicDefine(unittest.TestCase):
                 if case != "valid":
                     (directory / "spec.yaml").write_text(yaml.safe_dump(spec, sort_keys=False))
                 result = self.call(directory)
-                if case == "valid":
+                if case in {"valid", "arbitrary row ID"}:
                     self.assertEqual(result.issues.height, 0, result.issues)
                     self.assertEqual([name for name, _, _ in result._native.artifacts()], ["define.xml"])
                     self.validate_xml(result._native.artifacts()[0][1])
