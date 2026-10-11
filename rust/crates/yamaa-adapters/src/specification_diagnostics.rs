@@ -210,14 +210,7 @@ fn capture_response(outcome: Value) -> String {
 pub fn capture_failure(error: &crate::specification_source::Error) -> String {
     use crate::specification_source::Error;
     if let Error::Decode { identity, error } = error {
-        if let Some(mut diagnostics) = crate::yaml_transport::semantic_diagnostics(error) {
-            for finding in &mut diagnostics {
-                finding["phase"] = json!("validation");
-                finding["requirement"] = Value::Null;
-                if finding["condition"] == "non_ascii_source" {
-                    finding["context"]["path"] = json!(identity);
-                }
-            }
+        if let Some(diagnostics) = crate::yaml_transport::capture_diagnostics(error, identity) {
             return capture_response(json!({"status":"invalid","diagnostics":diagnostics}));
         }
     }

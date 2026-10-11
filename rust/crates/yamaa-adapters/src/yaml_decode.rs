@@ -38,13 +38,7 @@ impl Default for DecodeLimits {
     }
 }
 
-/// The first invalid code point in one decoded string, in source traversal order.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UnicodeIssue {
-    pub path: String,
-    pub code_point: u32,
-    pub offset: usize,
-}
+pub use yamaa_core::yaml_diagnostics::UnicodeIssue;
 
 /// Source errors remain distinct from explicit resource refusal or adapter bugs.
 #[derive(Clone, Debug, PartialEq, Eq)]

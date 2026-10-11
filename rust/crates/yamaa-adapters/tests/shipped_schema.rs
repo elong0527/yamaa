@@ -207,7 +207,12 @@ fn source_failures_preserve_independent_decoder_findings_before_any_host_effect(
         expected["protocol"] = json!("specification/prototype");
         for finding in expected["outcome"]["diagnostics"].as_array_mut().unwrap() {
             finding["phase"] = json!("validation");
-            finding["requirement"] = Value::Null;
+            finding["requirement"] = json!(match finding["condition"].as_str().unwrap() {
+                "non_ascii_source" => "REQ-0705",
+                "invalid_text" => "REQ-0029",
+                "invalid_yaml" => "REQ-0280",
+                condition => panic!("unexpected original source condition: {condition}"),
+            });
             if finding["condition"] == "non_ascii_source" {
                 finding["context"]["path"] = json!("source.yaml");
             }

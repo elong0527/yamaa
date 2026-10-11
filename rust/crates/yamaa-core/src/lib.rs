@@ -84,3 +84,5 @@ pub mod project_codelist_binding;
 pub mod project_diagnostics;
 
 pub mod project_codelist_diagnostics;
+
+pub mod yaml_diagnostics;

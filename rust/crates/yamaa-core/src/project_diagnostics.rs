@@ -45,9 +45,12 @@ pub enum Error<'a, E> {
 #[derive(Debug, PartialEq)]
 pub enum Fact<'a> {
     Text(&'a str),
+    /// A computed diagnostic label, never a copied authored scalar.
+    OwnedText(String),
     Scalar(&'a Value),
     Boolean(bool),
     Integer(i64),
+    Unsigned(usize),
     Null,
     Sequence(Vec<Fact<'a>>),
     Object(Context<'a>),

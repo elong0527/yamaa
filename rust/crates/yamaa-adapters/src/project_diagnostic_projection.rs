@@ -9,6 +9,7 @@ use yamaa_core::{
 fn fact(value: Fact<'_>) -> Json {
     match value {
         Fact::Text(text) => json!(text),
+        Fact::OwnedText(text) => json!(text),
         Fact::Scalar(value) => match value {
             Value::Missing => Json::Null,
             Value::Str(value) => json!(value),
@@ -20,6 +21,7 @@ fn fact(value: Fact<'_>) -> Json {
         },
         Fact::Boolean(value) => json!(value),
         Fact::Integer(value) => json!(value),
+        Fact::Unsigned(value) => json!(value),
         Fact::Null => Json::Null,
         Fact::Sequence(values) => Json::Array(values.into_iter().map(fact).collect()),
         Fact::Object(values) => Json::Object(
@@ -30,17 +32,20 @@ fn fact(value: Fact<'_>) -> Json {
         ),
     }
 }
-pub(crate) fn issue(diagnostic: Diagnostic<'_>) -> Result<Issue, InvalidIssue> {
+pub(crate) fn value(diagnostic: Diagnostic<'_>) -> Json {
     let mapping = diagnostic.code.definition();
     let context: Map<_, _> = diagnostic
         .context
         .into_iter()
         .map(|(name, value)| (name.to_owned(), fact(value)))
         .collect();
-    Issue::from_diagnostic(json!({
+    json!({
         "phase":mapping.phase, "condition":mapping.condition, "requirement":mapping.requirement,
         "spec_paths":[diagnostic.spec_path], "context":context,
-    }))
+    })
+}
+pub(crate) fn issue(diagnostic: Diagnostic<'_>) -> Result<Issue, InvalidIssue> {
+    Issue::from_diagnostic(value(diagnostic))
 }
 pub(crate) fn finish<'a, E>(
     diagnostics: Vec<Diagnostic<'_>>,

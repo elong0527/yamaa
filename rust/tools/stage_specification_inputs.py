@@ -427,7 +427,11 @@ def stage_decode_replay(destination: Path):
                 continue
             expected["protocol"] = "specification/prototype"
             for finding in expected["outcome"]["diagnostics"]:
-                finding.update(phase="validation", requirement=None)
+                # Existing private decoder truth receives only its rule citation.
+                finding.update(phase="validation", requirement={
+                    "non_ascii_source": "REQ-0705", "invalid_text": "REQ-0029",
+                    "invalid_yaml": "REQ-0280",
+                }[finding["condition"]])
                 if finding["condition"] == "non_ascii_source":
                     finding["context"]["path"] = "source.yaml"
             writer.writerow(dict(record, expected=json.dumps(expected, sort_keys=True, separators=(",", ":"))))

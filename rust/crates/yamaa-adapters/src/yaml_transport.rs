@@ -75,24 +75,48 @@ pub(crate) fn encode_outcome(
 
 /// Semantic source findings are shared by byte probes and document preparation.
 /// Resource refusals and internal defects are never fabricated language findings.
-pub(crate) fn semantic_diagnostics(error: &DecodeFailure) -> Option<Vec<Value>> {
-    Some(match error {
-        DecodeFailure::NonAscii(position) => vec![json!({
-            "condition":"non_ascii_source", "spec_paths":["$"],
-            "context":{"line":position.line,"column":position.column},
-        })],
-        DecodeFailure::InvalidYaml { position, reason } => vec![json!({
-            "condition":"invalid_yaml", "spec_paths":["$"],
-            "context":{"line":position.line,"column":position.column,"reason":reason},
-        })],
-        DecodeFailure::InvalidText(issues) => {
-            issues.iter().map(|issue| json!({
-                "condition":"invalid_text", "spec_paths":[issue.path],
-                "context":{"code_point":format!("U+{:04X}",issue.code_point),"offset":issue.offset},
-            })).collect::<Vec<_>>()
-        }
+fn source_diagnostics<'a>(
+    error: &'a DecodeFailure,
+    identity: Option<&'a str>,
+) -> Option<Vec<yamaa_core::project_diagnostics::Diagnostic<'a>>> {
+    use yamaa_core::yaml_diagnostics::Failure;
+    let failure = match error {
+        DecodeFailure::NonAscii(position) => Failure::NonAscii {
+            line: position.line,
+            column: position.column,
+        },
+        DecodeFailure::InvalidYaml { position, reason } => Failure::InvalidYaml {
+            line: position.line,
+            column: position.column,
+            reason,
+        },
+        DecodeFailure::InvalidText(issues) => Failure::InvalidText(issues),
         DecodeFailure::Limit(_) | DecodeFailure::Internal => return None,
-    })
+    };
+    Some(yamaa_core::yaml_diagnostics::diagnostics(failure, identity))
+}
+pub(crate) fn capture_diagnostics(error: &DecodeFailure, identity: &str) -> Option<Vec<Value>> {
+    Some(
+        source_diagnostics(error, Some(identity))?
+            .into_iter()
+            .map(crate::project_diagnostic_projection::value)
+            .collect(),
+    )
+}
+/// Retain the yaml/1 compatibility shape; facts and vocabulary belong to core.
+pub(crate) fn semantic_diagnostics(error: &DecodeFailure) -> Option<Vec<Value>> {
+    Some(
+        source_diagnostics(error, None)?
+            .into_iter()
+            .map(|diagnostic| {
+                let mut value = crate::project_diagnostic_projection::value(diagnostic);
+                let object = value.as_object_mut().expect("core diagnostic envelope");
+                object.remove("phase");
+                object.remove("requirement");
+                value
+            })
+            .collect(),
+    )
 }
 
 fn outcome(source: &[u8]) -> Result<Value, TransportError> {

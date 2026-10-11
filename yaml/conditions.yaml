@@ -73,7 +73,8 @@ conditions:
   invalid_producer_contract: {phases: [validation]}
   invalid_regex: {phases: [validation]}
   invalid_string_template: {phases: [validation]}
-  invalid_text: {phases: [ingest]}
+  invalid_text: {phases: [ingest, validation]}
+  invalid_yaml: {phases: [validation]}
   key_dependency: {phases: [validation]}
   length_failed: {phases: [verification]}
   ln_of_nonpositive: {phases: [derivation]}

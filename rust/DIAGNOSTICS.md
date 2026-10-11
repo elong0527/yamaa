@@ -410,3 +410,23 @@ these admitted facts and retains the exact final envelope byte admission.
 Existing complete reports, repeated projection, retained-value pointers and failed
 output observations remain unchanged. This removes three additional active
 adapter literal sites while retaining the immutable bootstrap seed.
+
+## Retained YAML source findings
+
+Core owns source ASCII, decoded invalid Unicode and malformed YAML causes,
+context keys and code-point labels. Original capture diagnostics cite REQ-0705,
+REQ-0029 and REQ-0280 in validation: the ASCII rule names that phase, while the
+decoded-text entry boundary and invalid-YAML rejection precede document validation
+and execution. Data CSV invalid text retains its separate ingest/REQ-0853 cause.
+The decoder retains physical failure precedence, bounded ordered findings and
+original parser facts; capture still precedes all study source effects. Projection
+adds no quota or parser policy, and final envelope admission remains unchanged.
+
+The yaml/1 compatibility envelope retains its original three-field diagnostic
+shape. Private complete-report assertions, installed replay staging and the
+text-template surrogate capture change only normative requirement fields. All
+source, finding and context facts remain unchanged. Complete decoder facts keep
+their independent fixture truth, and benchmark expected files are unchanged.
+Source provenance records
+these existing owners in migration.yaml. Three adapter literal sites retire;
+the frozen seed remains unchanged. yaml/1 retirement remains part of #1990.
