@@ -29,6 +29,12 @@ mod lookup;
 #[path = "dataset_rounding.rs"]
 mod rounding;
 pub use rounding::{InvalidDigits, Rounding};
+#[path = "dataset_temporal_imputation.rs"]
+mod imputation;
+pub use imputation::{
+    date_policy, DatePolicyError, DayDeclaration, DayRule, Imputation, ImputationKind,
+    ImputationStep, PartialDate, TimeRule, MAX_IMPUTATION_POLICY_BYTES,
+};
 #[path = "dataset_temporal.rs"]
 mod temporal;
 pub use temporal::{CalendarUnit, DateBounds, InvalidTemporal, Temporal, TemporalKind};
@@ -51,6 +57,10 @@ pub enum Expression {
     Round {
         source: alloc::boxed::Box<Assignment>,
         rounding: Rounding,
+    },
+    Imputation {
+        operands: Vec<Assignment>,
+        operation: Imputation,
     },
     Temporal {
         operands: Vec<Assignment>,
@@ -432,6 +442,31 @@ fn validate_assignment_at(
                 remaining,
             )?;
             available[assignment.column] = false;
+        }
+        Expression::Imputation {
+            operands,
+            operation,
+        } => {
+            if operands.len() != 1 + usize::from(operation.bound_source().is_some()) {
+                return Err(PlanError::InvalidColumns);
+            }
+            for operand in operands {
+                if operand.column != assignment.column {
+                    return Err(PlanError::InvalidColumns);
+                }
+                validate_assignment_at(
+                    operand,
+                    available,
+                    source,
+                    secondary,
+                    intermediates,
+                    output,
+                    mode,
+                    depth + 1,
+                    remaining,
+                )?;
+                available[assignment.column] = false;
+            }
         }
         Expression::Temporal {
             operands,

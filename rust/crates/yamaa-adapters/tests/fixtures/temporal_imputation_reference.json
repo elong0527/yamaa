@@ -1,0 +1,90 @@
+{
+  "negative-impute-bad-source": [
+    {
+      "phase": "impute",
+      "condition": "invalid_date_text",
+      "spec_paths": [
+        "columns.ASTDT.derivation.date_impute"
+      ],
+      "requirement": "REQ-0588",
+      "context": {
+        "operation": "date_impute",
+        "source": "AE.AESTDTC",
+        "value": "UNKNOWN",
+        "keys": [
+          {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-101",
+            "AESEQ": 4
+          }
+        ]
+      }
+    }
+  ],
+  "negative-precision-bad-source": [
+    {
+      "phase": "impute",
+      "condition": "invalid_date_text",
+      "spec_paths": [
+        "columns.ASTDTF.derivation.date_precision"
+      ],
+      "requirement": "REQ-0588",
+      "context": {
+        "operation": "date_precision",
+        "source": "AE.AESTDTC",
+        "value": "UNK",
+        "keys": [
+          {
+            "STUDYID": "PILOT7",
+            "USUBJID": "P7-341",
+            "AESEQ": 2
+          }
+        ]
+      }
+    }
+  ],
+  "negative-datetime-impute-bad-source": [
+    {
+      "phase": "impute",
+      "condition": "invalid_datetime_text",
+      "spec_paths": [
+        "columns.TRTSDTM.derivation.datetime_impute"
+      ],
+      "requirement": "REQ-1182",
+      "context": {
+        "operation": "datetime_impute",
+        "source": "EX.EXSTDTC",
+        "value": "2025-01",
+        "keys": [
+          {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-101",
+            "EXSEQ": 1
+          }
+        ]
+      }
+    }
+  ],
+  "negative-datetime-precision-bad-source": [
+    {
+      "phase": "impute",
+      "condition": "invalid_datetime_text",
+      "spec_paths": [
+        "columns.TRTSTPR.derivation.datetime_precision"
+      ],
+      "requirement": "REQ-1183",
+      "context": {
+        "operation": "datetime_precision",
+        "source": "EX.EXSTDTC",
+        "value": "2025-01",
+        "keys": [
+          {
+            "STUDYID": "YAMAA-01",
+            "USUBJID": "YAMAA-01-101",
+            "EXSEQ": 1
+          }
+        ]
+      }
+    }
+  ]
+}

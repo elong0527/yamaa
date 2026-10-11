@@ -28,6 +28,20 @@ impl PreflightFinding {
     pub fn visit_diagnostic_text(&self, mut visit: impl FnMut(&str)) {
         use super::FunctionCause;
         match self {
+            Self::Imputation(diagnostic) => {
+                diagnostic.spec_paths.iter().for_each(|path| visit(path));
+                fn values(value: &V, visit: &mut impl FnMut(&str)) {
+                    match value {
+                        V::Scalar(Value::Str(text)) | V::Integer(text) => visit(text),
+                        V::Sequence(items) => items.iter().for_each(|value| values(value, visit)),
+                        _ => (),
+                    }
+                }
+                diagnostic.context.iter().for_each(|(key, value)| {
+                    visit(key);
+                    values(value, &mut visit)
+                });
+            }
             Self::TemporalInput { path, source, .. } => {
                 visit(path);
                 visit(source);
@@ -116,6 +130,7 @@ impl PreflightFinding {
     /// perform validation again, consult a source, or choose a host representation.
     pub fn diagnostic(&self) -> Diagnostic {
         let (code, paths, context): (C, Vec<String>, Context) = match self {
+            Self::Imputation(diagnostic) => return diagnostic.clone(),
             Self::RoundingInput {
                 path,
                 source,
