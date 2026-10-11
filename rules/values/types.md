@@ -164,3 +164,8 @@ Numeric range and integrality failures are defined by [REQ-0021](numbers.md#req-
 
 **REQ-0324.** A `sources` list or an ordering term mixing two runtime types
 that are not mutually comparable: fail rather than convert an operand.
+For `greatest` and `least`, comparability is checked statically against the
+declared source and output column types, including sources whose collected
+values are missing. `int` and `float` remain mutually comparable under
+[REQ-0005](types.md#req-0005). Equal extreme values retain the first source in
+authored order, including that source's type and collected temporal precision.

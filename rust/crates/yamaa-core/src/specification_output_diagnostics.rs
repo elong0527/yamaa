@@ -61,6 +61,16 @@ impl OutputFinding {
                 format!("keys[{position}]"),
                 vec![("column", V::Scalar(Value::Str(name.clone())))],
             ),
+            Self::DuplicateOrderTerm { position, name } => (
+                C::OutputDuplicateOrderTerm,
+                format!("output.order_by[{position}]"),
+                vec![("column", V::Scalar(Value::Str(name.clone())))],
+            ),
+            Self::UndeclaredOrderColumn { position, name } => (
+                C::OutputUndeclaredOrderColumn,
+                format!("output.order_by[{position}]"),
+                vec![("column", V::Scalar(Value::Str(name.clone())))],
+            ),
         };
         Diagnostic {
             code,

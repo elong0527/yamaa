@@ -18,6 +18,7 @@ pub enum Error {
     Source(TextTableError),
     TypedSource(crate::typed_csv::Error),
     ParquetSource(crate::parquet_source::Error),
+    Ordinal(yamaa_engine::source_ingestion::Error),
     Sources(Vec<(SourceDeclaration, Error)>),
     Bind(BindError),
     Execution(DatasetTransportError),
@@ -168,6 +169,7 @@ impl application::SourceDecoder for SourceDecoder {
         matches!(
             error,
             Error::Source(TextTableError::Csv(csv_source::Error::Profile { .. }))
+                | Error::Ordinal(yamaa_engine::source_ingestion::Error::Collision)
                 | Error::TypedSource(crate::typed_csv::Error::Typing(
                     yamaa_core::typed_csv::Error::UnknownField { .. }
                         | yamaa_core::typed_csv::Error::FieldParse { .. }
@@ -196,22 +198,30 @@ pub(crate) fn decode_source(
     bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
 ) -> Result<ArrowTable, Error> {
     let cells = bounded.map_or(262_144, |l| l.cells.min(262_144));
-    if source.profile == yamaa_core::specification::SourceProfile::Parquet {
-        return decode_parquet(source, bytes, bounded);
-    }
-    let csv_limits = bounded.map_or_else(csv_source::Limits::default, bounded_csv_limits);
-    crate::typed_csv::parse(
-        bytes,
-        &source.types,
-        csv_limits,
-        TableLimits {
-            max_rows: 65_536,
-            max_columns: 64,
-            max_batches: 1,
-            max_cells: cells,
-        },
-    )
-    .map_err(typed_source_error)
+    let table_limits = TableLimits {
+        max_rows: 65_536,
+        max_columns: 64,
+        max_batches: 1,
+        max_cells: cells,
+    };
+    let table = if source.profile == yamaa_core::specification::SourceProfile::Parquet {
+        decode_parquet(source, bytes, bounded)?
+    } else {
+        let csv_limits = bounded.map_or_else(csv_source::Limits::default, bounded_csv_limits);
+        crate::typed_csv::parse(
+            bytes,
+            &source.types,
+            csv_limits,
+            TableLimits {
+                max_rows: 65_536,
+                max_columns: 64,
+                max_batches: 1,
+                max_cells: cells,
+            },
+        )
+        .map_err(typed_source_error)?
+    };
+    crate::source_ordinal::append(source, table, table_limits)
 }
 
 pub(crate) fn typed_source_error(error: crate::typed_csv::Error) -> Error {

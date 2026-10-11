@@ -125,6 +125,20 @@ fn collect_calls(
         }
         requests.push((node, format!("{path}.function")));
     }
+    if let Some(payload) = d.field(value, "str_concat") {
+        for (index, &child) in sequence(d, field(d, payload, "sources")?)?
+            .iter()
+            .enumerate()
+        {
+            collect_calls(
+                d,
+                child,
+                &format!("{path}.str_concat.sources[{index}]"),
+                depth + 1,
+                requests,
+            )?;
+        }
+    }
     if let Some(case) = d.field(value, "case") {
         let branches = sequence(d, case)?;
         if branches.len() > 1024 {
