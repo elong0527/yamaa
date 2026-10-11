@@ -183,6 +183,7 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    Temporal(crate::diagnostic::Diagnostic),
     Predicate(crate::diagnostic::Diagnostic),
     ProjectFunction(FunctionFinding),
     Source(SourceFinding),
