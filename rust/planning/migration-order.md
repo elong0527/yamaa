@@ -4,6 +4,12 @@ The concise [current migration assessment](migration-status.md) records the
 qualified implementation frontier and remaining acceptance gates as of 2026-10-11.
 The historical evidence below retains each slice's original scope and provenance.
 
+The 2026-10-11 frontier includes #1927's qualified ordered primary Save and
+#1926's completed numerical decision ledger. Formal producer M1 reports, graph
+sidecars, shared Define/value metadata, public API disposition and the final
+combined Windows R/release matrix remain acceptance gates. The support matrix
+and exclusions are approved; they do not authorize release transition.
+
 The current serial order follows merged #1757/#1858/#1860/#1863/#1867/#1869/#1871/#1874/#1877/#1881/#1883/#1888/#1893/#1897:
 complete #1741 ordered producer publication under the approved #1866 lifecycle;
 complete #1907's SDK lock coherence guard and installed R qualification after

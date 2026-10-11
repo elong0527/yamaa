@@ -1,7 +1,7 @@
 # yamaa Rust engine migration
 
 Assessed 2026-10-11 against main
-`09d8f2cbb1eadab3f15919c658d3adb6c0215833`. This is a progress record for
+`417990f7730f59a99c6268e8b638ae1edb0ded88`. This is a progress record for
 [#1585](https://github.com/elong0527/yamaa/issues/1585), with qualified merged
 changes separated from candidates still awaiting their final gates. It does not
 authorize release cutover.
@@ -16,9 +16,12 @@ authorize release cutover.
 | [#1916](https://github.com/elong0527/yamaa/pull/1916) | Optional submission source-system version with the actual installed-version default. Migrated declarations explicitly preserve `"1.0"`; actual generator versions are recorded separately. Shared generators and old-format retirement remain #1758. |
 | [#1919](https://github.com/elong0527/yamaa/pull/1919) | Original declaring-file resource/output paths, including absolute and parent-relative local paths, without root-configuration search or fallback. Kind, link and held-byte checks remain. Final combined Windows R evidence remains required. |
 | [#1920](https://github.com/elong0527/yamaa/pull/1920) | The public gate requires all eleven original cases, including the five historical timing fixtures. Its complete eighteen-lane audit passes 528 comparisons and explicitly retains 66 unexercised Windows R comparisons. |
+| [#1927](https://github.com/elong0527/yamaa/pull/1927) | Producer-first primary Save, whole-set physical target admission, original publication failure/prefix retention and held-byte retries. Final installed evidence passes 26 suites in every Python lane and 20 in each Unix R lane, both with strict R checks; immutable source/package review and an eleven-case 528-comparison replay pass. Formal producer M1 reports, graph sidecars and final Windows R remain required. |
+| [#1926](https://github.com/elong0527/yamaa/pull/1926) | The PortableLibmV1 decision ledger closes #1740's policy record with exact candidate observations, independent accuracy evidence and documented historical differences. The full affected language scopes and final release qualification remain open; the original ADEG filtered aggregate still reports `unsupported_operation`. |
 
-These changes passed their applicable final-head reviews, hosted checks and
-fresh immutable source/installed-artifact audits before merging. The retained
+The runtime slices passed their applicable final-head reviews, hosted checks and
+fresh immutable source/installed-artifact audits before merging. The numerical
+decision ledger separately identifies its exact retained sample source. The retained
 benchmark inventory and its older assisted-route gaps remain visible. Counts of
 cases, comparisons or component tests are evidence scopes, not migration
 percentages. See the [finite release blocker register](release-readiness.md) and
@@ -28,15 +31,23 @@ percentages. See the [finite release blocker register](release-readiness.md) and
 
 | Candidate | Concrete progress and outstanding gate |
 | --- | --- |
-| [#1927](https://github.com/elong0527/yamaa/pull/1927) | Retained producer-first Save, whole-set physical target admission, exact entered/completed publication prefixes and retries after input deletion pass local package and failure controls. Full hosted matrix audit remains pending. |
-| [#1936](https://github.com/elong0527/yamaa/pull/1936) | Typed resource origins separate actual study reads from generated producer snapshots. Independent original producer Build plus two complete Save comparisons pass in both local Python forms and R against preserved pre-fix report/artifact truth. The checked R deletion follow-up is recorded separately from the original package revision; fresh hosted qualification remains pending. #1741 stays open. |
+| [#1936](https://github.com/elong0527/yamaa/pull/1936) | Typed resource origins separate actual study reads from generated producer snapshots. Independent original producer Build plus two complete Save comparisons pass in both local Python forms and R against preserved pre-fix report/artifact truth. The checked R deletion follow-up is recorded separately from the original package revision. Windows tooling discovery now uses the locked Python dependency environment; fresh hosted qualification remains pending. #1741 stays open. |
 | [#1925](https://github.com/elong0527/yamaa/pull/1925) | Shared Define-XML/Dataset-JSON generation passes fresh local wheel/source/R qualification, strict R checks, immutable source-fixture closure, fixed-time DM truth and independently authored AE/VS structure/XSD checks. The final hosted matrix remains pending. Value metadata and old-format retirement remain #1758. |
-| [#1933](https://github.com/elong0527/yamaa/pull/1933) | Governed verification/warning logs retain native records and held bytes through ordered Save. Review corrections preserve the original no-log output-projection failure and pair platform access with result state. The corrected head passes 1,204 debug/release native tests, fresh wheel/source/R suites, strict R checks and complete package-byte audits. An actual unpacked-source executable passes seven log tests, refuses the missing bundled input, and passes after restoration. Final hosted gates remain pending; producer-graph sidecars remain a separate integration. |
-| [#1912](https://github.com/elong0527/yamaa/pull/1912) | Actual Windows R 4.6.1 source install, native file ports, strict package checks and complete baseline reports have retained evidence. The final combined Save/producer/log/Define source is being integrated and must pass all eighteen Python lanes, three R source lanes, complete public/producer reports and DLL/source-byte audits before #1903 closes. |
+| [#1933](https://github.com/elong0527/yamaa/pull/1933) | Governed verification/warning logs retain native records and held bytes through ordered Save. Runtime `24a16bea` passes 1,204 debug/release native tests, fresh wheel/source/R suites, strict R checks and complete package-byte audits. An actual unpacked-source executable passes seven log tests, refuses the missing bundled input, and passes after restoration. The current witness-only `f6b230f9` explicitly reads UTF-8 warning CSVs after two actual Windows code-page failures; both prior installed forms fail before and pass after that correction. Fresh hosted gates remain pending; producer-graph sidecars remain a separate integration. |
+| [#1912](https://github.com/elong0527/yamaa/pull/1912) | Actual Windows R 4.6.1 source install, native file ports, strict package checks and complete baseline reports have retained evidence. Final combined head `27af5559` integrates Save, producer M1, logs, Define, public facade witnesses and the math ledger. Its source review is clean and both canonical source archives retain all fourteen original native fixture members. Actual hosted qualification must still pass all eighteen Python lanes, three R source lanes, twelve-case public/producer reports and DLL/source-byte audits before #1903 closes. |
 
 Parallel remaining compiler, function-port and diagnostic slices are under
 review. Candidate code and local prototypes do not update the qualified main
 frontier or turn missing release tuples into passes.
+
+The private graph-log source passes review after restoring the unchanged ordinary
+Save path budget and admitting the additional logged failure-diagnostic copies.
+Fresh corrected native and installed qualification remains required. The private
+Define value-metadata runtime passes 1,213 tests in each native mode and five-crate
+Clippy at `0ed730ff`. Corrected installed controls at `eea04e0c` exercise effective
+inherited metadata, arbitrary row IDs, identical/conflicting declarations and all
+six normative value-admission refusals. Fresh package, saved XML/JSON and actual
+extracted-source evidence remains required; no original golden was rewritten.
 
 The later main changes [#1924](https://github.com/elong0527/yamaa/pull/1924)
 and [#1921](https://github.com/elong0527/yamaa/pull/1921) clarify expression
