@@ -5496,6 +5496,13 @@ def validate_spec_functions(spec, spec_label, spec_path, schema_env, sources=Non
                 ):
                     calls.append((payload, path, expected))
 
+    # This bridge validates logical calls, not ordinary domain execution or
+    # submission generation. Independent schema and metadata validators still
+    # inspect a specification without calls. Inspect the complete nested set:
+    # intermediate calls require native validation even when no final column
+    # calls a function directly.
+    if not any(iter_function_calls(spec, spec_label)):
+        return []
     environment_paths = project_environment_paths(spec_path)
     if not environment_paths:
         # A portable specification can declare logical calls before a project

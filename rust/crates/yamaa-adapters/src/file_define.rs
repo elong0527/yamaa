@@ -7,7 +7,7 @@ use crate::{
     project_source::OwnedEnvironment,
     specification_source::PreparedDocument,
 };
-use std::{collections::BTreeSet, path::Path};
+use std::path::Path;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
     project_environment::Submission,
@@ -163,8 +163,7 @@ impl Define {
         let mut locations = Vec::new();
         let mut hrefs = Vec::new();
         let mut outputs = Vec::new();
-        let mut targets = BTreeSet::new();
-        targets.insert(define_location.clone());
+        let mut targets = vec![define_location.clone()];
         for (index, spec) in section.specs.value.iter().enumerate() {
             let path = format!("{standard}.specs[{index}]");
             let document = file_preparation::prepare_document_from(
@@ -200,7 +199,11 @@ impl Define {
             } else {
                 artifact.clone()
             };
-            if section.dataset_json.value && Path::new(&reference).parent() != Some(define_parent) {
+            if section.dataset_json.value
+                && !Path::new(&reference)
+                    .parent()
+                    .is_some_and(|parent| same_location(parent, define_parent))
+            {
                 return Err(Failure::Metadata(vec![Finding::new(
                     "artifact_outside_document",
                     "REQ-1229",
@@ -208,9 +211,19 @@ impl Define {
                     &format!("Dataset-JSON {reference} and Define {define_location} require parent traversal in their mutual references"),
                 )]));
             }
-            if artifact == define_location
-                || (section.dataset_json.value
-                    && (!targets.insert(reference.clone()) || reference == artifact))
+            if same_location(Path::new(&artifact), Path::new(&define_location)) {
+                return Err(Failure::Metadata(vec![Finding::new(
+                    "artifact_path_collision",
+                    "REQ-1195",
+                    &path,
+                    "published dataset overlaps Define target",
+                )]));
+            }
+            if section.dataset_json.value
+                && (targets
+                    .iter()
+                    .any(|target| same_location(Path::new(target), Path::new(&reference)))
+                    || same_location(Path::new(&reference), Path::new(&artifact)))
             {
                 return Err(Failure::Metadata(vec![Finding::new(
                     "dataset_json_path_collision",
@@ -219,20 +232,17 @@ impl Define {
                     "publication target collision",
                 )]));
             }
-            let href = Path::new(&reference)
-                .strip_prefix(define_parent)
-                .ok()
-                .and_then(|relative| relative.to_str())
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
+            if section.dataset_json.value {
+                targets.push(reference.clone());
+            }
+            let href = package_reference(Path::new(&reference), define_parent).ok_or_else(|| {
                     Failure::Metadata(vec![Finding::new(
                         "artifact_outside_document",
                         "REQ-1021",
                         &path,
                         "artifact must be inside the Define package",
                     )])
-                })?
-                .replace('\\', "/");
+                })?;
             locations.push(artifact);
             hrefs.push(href);
             outputs.push((
@@ -244,7 +254,10 @@ impl Define {
         }
         // The selected output set is admitted before any published artifact read.
         for artifact in &locations {
-            if targets.contains(artifact) {
+            if targets
+                .iter()
+                .any(|target| same_location(Path::new(target), Path::new(artifact)))
+            {
                 return Err(Failure::Metadata(vec![Finding::new(
                     "artifact_path_collision",
                     "REQ-1195",
@@ -318,6 +331,11 @@ impl Define {
                                     )])
                                 })
                         })?;
+                    yamaa_core::submission_json::admit_fields(
+                        dataset,
+                        source.names.iter().map(String::as_str),
+                    )
+                        .map_err(|finding| Failure::Metadata(vec![finding]))?;
                     let table = yamaa_core::typed_csv::PreparedTypes::new(&kinds, 16_384)
                         .and_then(|types| types.convert(source))
                         .map_err(|error| {
@@ -398,13 +416,31 @@ impl Define {
         });
         // Preflight all outputs after complete admission/rendering. Recheck them
         // together on Save; no retained metadata or artifact is reopened there.
+        self.preflight()?;
+        Ok(())
+    }
+    fn preflight(&self) -> Result<Vec<file_publication::Publisher>, Failure> {
+        let mut publishers: Vec<file_publication::Publisher> =
+            Vec::with_capacity(self.artifacts.len());
         for (index, artifact) in self.artifacts.iter().enumerate() {
-            artifact
+            let publisher = artifact
                 .target
                 .publisher(&artifact.written)
                 .map_err(|error| Failure::Publication { index, error })?;
+            for previous in &publishers {
+                if publisher
+                    .same_target(previous)
+                    .map_err(|error| Failure::Publication { index, error })?
+                {
+                    return Err(Failure::Publication {
+                        index,
+                        error: file_publication::Error::InvalidTarget,
+                    });
+                }
+            }
+            publishers.push(publisher);
         }
-        Ok(())
+        Ok(publishers)
     }
     fn refuse(&mut self, failure: Failure) {
         self.issues = issues(&failure, self.host);
@@ -456,16 +492,13 @@ impl Define {
         if self.saved {
             return Ok(false);
         }
-        let mut publishers = Vec::with_capacity(self.artifacts.len());
-        for (index, artifact) in self.artifacts.iter().enumerate() {
-            match artifact.target.publisher(&artifact.written) {
-                Ok(publisher) => publishers.push(publisher),
-                Err(error) => {
-                    self.refuse(Failure::Publication { index, error });
-                    return Err(SaveError);
-                }
+        let mut publishers = match self.preflight() {
+            Ok(publishers) => publishers,
+            Err(failure) => {
+                self.refuse(failure);
+                return Err(SaveError);
             }
-        }
+        };
         for (index, (publisher, artifact)) in
             publishers.iter_mut().zip(&mut self.artifacts).enumerate()
         {
@@ -479,6 +512,33 @@ impl Define {
         self.saved = true;
         Ok(true)
     }
+}
+fn same_location(left: &Path, right: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        left.to_str()
+            .zip(right.to_str())
+            .is_some_and(|(left, right)| crate::windows_file::equal_name(left, right))
+    }
+    #[cfg(unix)]
+    {
+        left == right
+    }
+}
+// Component comparison preserves literal report spellings while accepting the
+// same Windows ordinal spelling policy as the descriptor-backed file adapter.
+fn package_reference(target: &Path, parent: &Path) -> Option<String> {
+    let mut components = target.components();
+    for base in parent.components() {
+        if !same_location(
+            Path::new(components.next()?.as_os_str()),
+            Path::new(base.as_os_str()),
+        ) {
+            return None;
+        }
+    }
+    let relative = components.as_path().to_str()?;
+    (!relative.is_empty()).then(|| relative.replace('\\', "/"))
 }
 fn resource(path: &str, written: &str, error: file_resources::Error) -> Failure {
     Failure::Resource {

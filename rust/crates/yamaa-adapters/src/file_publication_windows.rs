@@ -133,6 +133,12 @@ impl AnchoredTarget {
     }
 }
 impl Publisher {
+    /// Compare entries through retained physical parents, including selected-root
+    /// aliases and absent ordinal case aliases. No target is opened or written.
+    pub fn same_target(&self, other: &Self) -> Result<bool, Error> {
+        Ok(self.parent.identity()? == other.parent.identity()?
+            && windows_file::equal_name(&self.name, &other.name))
+    }
     /// Explicit caller-selected target; authored declarations grant no write authority.
     pub fn new(declared: &str, target: &str) -> Result<Self, Error> {
         if declared.len() > MAX_PATH_BYTES || target.len() > MAX_PATH_BYTES {
@@ -458,6 +464,27 @@ mod tests {
             Err(Error::Limit)
         ));
         assert!(study.names().is_empty());
+    }
+    #[test]
+    fn physical_target_comparison_keeps_root_aliases_and_absent_case_aliases() {
+        let study = Study::new();
+        let selected = study.0.join("selected");
+        let moved = study.0.join("moved");
+        std::fs::create_dir(&selected).unwrap();
+        let first = study.publisher("selected/output.csv");
+        std::fs::rename(&selected, &moved).unwrap();
+        let alias = study.publisher("moved/OUTPUT.csv");
+        assert!(first.same_target(&alias).unwrap());
+        let other = study.publisher("moved/other.csv");
+        assert!(!first.same_target(&other).unwrap());
+        std::fs::create_dir(&selected).unwrap();
+        let replacement = study.publisher("selected/output.csv");
+        assert!(!first.same_target(&replacement).unwrap());
+        assert!(std::fs::read_dir(&selected).unwrap().next().is_none());
+        assert!(std::fs::read_dir(&moved).unwrap().next().is_none());
+        std::fs::write(moved.join("output.csv"), b"prior").unwrap();
+        std::fs::hard_link(moved.join("output.csv"), moved.join("other.csv")).unwrap();
+        assert!(!first.same_target(&other).unwrap());
     }
     #[test]
     fn owned_parent_handle_keeps_publication_beneath_the_selected_physical_root() {

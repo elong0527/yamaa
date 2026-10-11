@@ -203,37 +203,56 @@ pub fn render<T: TableAccess>(
     }
     Ok(result.into_bytes())
 }
+fn artifact_mismatch(dataset: &Dataset, detail: &str) -> Finding {
+    let mut finding = Finding::cause(
+        ConditionCode::ProducerContractMismatch,
+        &format!("datasets.{}.artifact", dataset.id),
+        detail,
+    );
+    finding.context.insert(
+        "dataset".into(),
+        ContextValue::Scalar(Value::Str(dataset.id.clone())),
+    );
+    finding.context.insert(
+        "artifact".into(),
+        ContextValue::Scalar(Value::Str(dataset.artifact.clone())),
+    );
+    finding
+}
+/// Admit the original stored names before any declared-type conversion. Missing
+/// or reordered fields are producer-contract failures, not scalar parse errors.
+pub fn admit_fields<'a>(
+    dataset: &Dataset,
+    actual: impl ExactSizeIterator<Item = &'a str>,
+) -> Result<(), Finding> {
+    if actual.len() != dataset.columns.len()
+        || actual
+            .zip(&dataset.columns)
+            .any(|(name, column)| name != column.declaration.name.value)
+    {
+        return Err(artifact_mismatch(
+            dataset,
+            "published artifact fields or order differ from the output contract",
+        ));
+    }
+    Ok(())
+}
 fn validate_artifact<T: TableAccess>(
     study: &Study,
     dataset: &Dataset,
     table: &T,
 ) -> Result<(), Finding> {
-    let mismatch = |detail| {
-        let mut finding = Finding::cause(
-            ConditionCode::ProducerContractMismatch,
-            &format!("datasets.{}.artifact", dataset.id),
-            detail,
-        );
-        finding.context.insert(
-            "dataset".into(),
-            ContextValue::Scalar(Value::Str(dataset.id.clone())),
-        );
-        finding.context.insert(
-            "artifact".into(),
-            ContextValue::Scalar(Value::Str(dataset.artifact.clone())),
-        );
-        finding
-    };
-    if table.schema().columns().len() != dataset.columns.len()
-        || table
+    let mismatch = |detail| artifact_mismatch(dataset, detail);
+    admit_fields(
+        dataset,
+        table.schema().columns().iter().map(|field| field.name.as_str()),
+    )?;
+    if table
             .schema()
             .columns()
             .iter()
             .zip(&dataset.columns)
-            .any(|(actual, expected)| {
-                actual.name != expected.declaration.name.value
-                    || actual.kind != expected.runtime_type()
-            })
+            .any(|(actual, expected)| actual.kind != expected.runtime_type())
     {
         return Err(mismatch(
             "published artifact fields, order or types differ from the output contract",

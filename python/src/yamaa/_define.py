@@ -1,4 +1,5 @@
 """Public argument and issues conversion for shared native Define generation."""
+
 from importlib.metadata import version
 from os import PathLike, fspath
 
@@ -25,9 +26,13 @@ class Define:
             raise
 
 
-def define(environment: str | PathLike[str], standard: str, *, created: str | None = None) -> Define:
+def define(
+    environment: str | PathLike[str], standard: str, *, created: str | None = None
+) -> Define:
     """Compose submission metadata without running a specification."""
-    return Define(_define_file(fspath(environment), standard, created, version("yamaa")))
+    return Define(
+        _define_file(fspath(environment), standard, created, version("yamaa"))
+    )
 
 
 __all__ = ["DefineError", "define"]

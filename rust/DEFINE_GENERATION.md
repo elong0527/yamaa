@@ -50,7 +50,8 @@ importing the reference renderer.
 
 The complete output set is rendered and target-admitted before publication.
 Metadata or artifact failure leaves every target untouched. Save preflights
-every target again, publishes JSON in specification order and XML last, and
+every target again, compares retained physical parent identities and filenames
+for the complete set, publishes JSON in specification order and XML last, and
 uses held bytes without reopening metadata or published datasets. Each file
 has atomic replacement under the existing publisher. A later operational
 failure retains the original cause and any completed files, marks its failed
@@ -58,6 +59,15 @@ target and stops the remainder. There is no package-wide rollback. Python
 raises `DefineError`; R signals `yamaa_define_error`; both carry the shared
 current issue rows. Successful repeated Save returns false without writes;
 failed results remain failed.
+
+Lexical package references retain the written filename spelling. Windows uses
+the file adapter's ordinal case comparison for lexical collision and package
+parent admission. Save also refuses distinct spellings of one physical target
+before any write. On macOS the publisher queries the held parent's case
+sensitivity for ASCII names. A shared-parent pair containing a non-ASCII basename
+is conservatively refused because this bounded publisher has no Unicode
+normalization comparer; that profile limit is not a broader release exclusion.
+Metadata-only supporting leaves may remain absent during composition.
 
 Existing descriptor, regular-file, link, held-byte snapshot and resource-budget
 checks remain. Captured source bytes are cumulatively bounded at 64 MiB; metadata

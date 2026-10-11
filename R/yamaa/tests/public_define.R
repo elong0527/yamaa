@@ -140,10 +140,13 @@ environment <- file.path(root, "environment.yaml")
 result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
 stopifnot("REQ-1229" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
 writeLines(spec, spec_path)
-csv <- readLines(file.path(root, "expected/dm.csv"))
+csv <- readLines(file.path(fixtures, "sdtm-dm-metadata/expected/dm.csv"))
 writeLines(gsub("STUDYID,USUBJID", "USUBJID,STUDYID", csv, fixed = TRUE), file.path(root, "dm.csv"))
 result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
 stopifnot("REQ-0535" %in% result$issues$requirement, refused(result))
+writeLines(gsub("STUDYID", "WRONG", csv, fixed = TRUE), file.path(root, "dm.csv"))
+result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
+stopifnot("REQ-0535" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
 writeLines(gsub(",F,USA", ",Z,USA", csv, fixed = TRUE), file.path(root, "dm.csv"))
 result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
 rows <- result$issues[result$issues$requirement == "REQ-0957", , drop = FALSE]
@@ -163,6 +166,20 @@ source <- gsub("sdtm:\n", "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n   
 writeLines(source, environment)
 result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00"); check_issues(result)
 stopifnot(grepl('"name": "AGE", "label": "Age", "dataType": "float"', rawToChar(artifacts(result)[[1L]]$bytes), fixed = TRUE))
+unlink(root, recursive = TRUE)
+root <- fixture("sdtm-dm-metadata", TRUE)
+sentinel <- file.path(root, "dm.json")
+writeBin(charToRaw("original publication sentinel"), sentinel)
+if (file.exists(file.path(root, "DM.JSON"))) {
+  environment <- file.path(root, "environment.yaml")
+  writeLines(gsub("define: define.xml", "define: DM.JSON", readLines(environment), fixed = TRUE), environment)
+  previous_names <- sort(list.files(root, all.files = TRUE, no.. = TRUE))
+  result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
+  stopifnot(nrow(result$issues) > 0L, refused(result),
+    identical(rawfile(sentinel), charToRaw("original publication sentinel")),
+    identical(sort(list.files(root, all.files = TRUE, no.. = TRUE)), previous_names),
+    !file.exists(file.path(root, "define.xml")))
+}
 unlink(root, recursive = TRUE)
 Sys.setenv(PATH = original_path)
 unlink(native_path, recursive = TRUE)

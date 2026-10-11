@@ -157,6 +157,37 @@ fn semantic_failure_has_zero_writes_and_operational_failure_keeps_stopped_states
     );
 }
 #[test]
+fn case_alias_targets_are_refused_before_overwriting_a_sentinel() {
+    let temp = Temp::fixture("sdtm-dm-metadata", true);
+    let target = temp.0.join("dm.json");
+    fs::write(&target, b"original publication sentinel").unwrap();
+    if !temp.0.join("DM.JSON").exists() {
+        // This witness concerns an actual case-insensitive volume; distinct
+        // names on case-sensitive volumes are distinct publication targets.
+        return;
+    }
+    let environment = temp.0.join("environment.yaml");
+    fs::write(
+        &environment,
+        fs::read_to_string(&environment)
+            .unwrap()
+            .replace("define: define.xml", "define: DM.JSON"),
+    )
+    .unwrap();
+    let mut result = temp.run("2026-09-11T00:00:00");
+    assert!(!result.issues().is_empty());
+    let reads = result.capture_reads();
+    assert!(result.save().is_err());
+    assert_eq!(reads, result.capture_reads());
+    assert_eq!(fs::read(target).unwrap(), b"original publication sentinel");
+    assert!(!temp.0.join("define.xml").exists());
+    let names: Vec<_> = fs::read_dir(&temp.0)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names.len(), 4, "no publication residue: {names:?}");
+}
+#[test]
 fn explicit_section_selector_datetime_and_missing_published_artifact_are_refused() {
     let temp = Temp::fixture("sdtm-dm-metadata", false);
     let mut run = temp.run("2026-09-11T00:00:00");
@@ -246,6 +277,14 @@ fn mutual_references_and_published_contract_fail_before_any_publication() {
         .iter()
         .any(|i| i.condition == "producer_contract_mismatch"
             && i.requirement.as_deref() == Some("REQ-0535")));
+    assert!(run.save().is_err());
+    assert!(!temp.0.join("define.xml").exists());
+    // A missing declared field is the same contract cause, before typed CSV
+    // conversion can misclassify the absent field as a scalar/lookup problem.
+    fs::write(temp.0.join("dm.csv"), csv.replace("STUDYID", "WRONG")).unwrap();
+    let mut run = temp.run("2026-09-11T00:00:00");
+    assert!(run.issues().iter().any(|issue|
+        issue.requirement.as_deref() == Some("REQ-0535")));
     assert!(run.save().is_err());
     assert!(!temp.0.join("define.xml").exists());
     // REQ0957 preserves the verification phase, offending value and row key.

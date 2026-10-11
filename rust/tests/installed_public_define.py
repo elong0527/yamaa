@@ -227,6 +227,10 @@ class PublicDefine(unittest.TestCase):
         result = self.call(directory)
         self.assertIn("REQ-0535", result.issues["requirement"].to_list())
         with self.assertRaises(DefineError): result.save()
+        (directory / "dm.csv").write_text(csv.replace("STUDYID", "WRONG"))
+        result = self.call(directory)
+        self.assertIn("REQ-0535", result.issues["requirement"].to_list())
+        with self.assertRaises(DefineError): result.save()
         (directory / "dm.csv").write_text(csv.replace(",F,USA", ",Z,USA"))
         result = self.call(directory)
         issue = result.issues.filter(result.issues["requirement"] == "REQ-0957").row(0, named=True)
@@ -236,6 +240,24 @@ class PublicDefine(unittest.TestCase):
         self.assertIn("CATH-UCSD-0001", context["key_values"])
         with self.assertRaises(DefineError): result.save()
         self.assertFalse((directory / "dm.json").exists())
+
+    def test_physical_case_aliases_preserve_existing_publication_sentinel(self):
+        directory = self.fixture("sdtm-dm-metadata", published=True)
+        sentinel = directory / "dm.json"
+        sentinel.write_bytes(b"original publication sentinel")
+        if not (directory / "DM.JSON").exists():
+            self.skipTest("This volume admits distinct case-sensitive target names")
+        environment = directory / "environment.yaml"
+        environment.write_text(environment.read_text().replace("define: define.xml", "define: DM.JSON"))
+        names = sorted(path.name for path in directory.iterdir())
+        result = self.call(directory)
+        self.assertGreater(result.issues.height, 0)
+        reads = result._native.capture_reads()
+        with self.assertRaises(DefineError): result.save()
+        self.assertEqual(result._native.capture_reads(), reads)
+        self.assertEqual(sentinel.read_bytes(), b"original publication sentinel")
+        self.assertEqual(sorted(path.name for path in directory.iterdir()), names)
+        self.assertFalse((directory / "define.xml").exists())
 
     def test_numeric_terminology_uses_numeric_equality(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
