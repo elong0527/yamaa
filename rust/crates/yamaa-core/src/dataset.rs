@@ -840,6 +840,11 @@ fn key_expression(expression: &Expression) -> bool {
 fn key_grain_source_read(expression: &Expression) -> bool {
     match expression {
         Expression::Source(_) => true,
+        Expression::SourceBinding { source, .. } => key_grain_source_read(&source.expression),
+        Expression::FirstAvailable(selection) => selection.sources().iter().any(|operand| {
+            matches!(&operand.read, SelectionRead::Expression(source)
+                if key_grain_source_read(&source.expression))
+        }),
         Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
             .iter()
             .any(|source| key_grain_source_read(&source.expression)),
