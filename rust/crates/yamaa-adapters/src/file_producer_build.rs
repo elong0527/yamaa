@@ -1,4 +1,4 @@
-//! Separate whole-graph native builds, with no public host dispatch or publisher.
+//! Whole-graph native builds retain original evidence and explicit Save authority.
 //! Original metadata and attempts remain owned after this resource owner drops.
 use crate::{
     file_resources::{
@@ -140,9 +140,34 @@ pub struct Attempt<E, R, RE> {
     /// A retention quota refusal keeps its own prefix beside the original run.
     pub resources: Result<RetainedSources, RetentionFailure>,
 }
+type ActualBuild<E, R, RE> = (
+    Attempt<E, R, RE>,
+    Result<yamaa_engine::producer_publication::PreparedPublication, &'static str>,
+);
 impl<E, R, RE> Attempt<E, R, RE> {
     pub fn accepted(&self) -> bool {
         self.boundary.is_ok() && self.resources.is_ok() && self.graph.outcome.is_ok()
+    }
+}
+/// Immutable evidence and publication authority produced by the actual native
+/// build. Arbitrary public Attempt records cannot be promoted to this owner.
+pub struct OwnedAttempt<E> {
+    attempt: crate::producer_report::NativeAttempt<E>,
+    publication: Option<Arc<crate::producer_publication::Publication>>,
+    publication_refusal: Option<&'static str>,
+}
+impl<E> std::ops::Deref for OwnedAttempt<E> {
+    type Target = crate::producer_report::NativeAttempt<E>;
+    fn deref(&self) -> &Self::Target {
+        &self.attempt
+    }
+}
+impl<E> OwnedAttempt<E> {
+    pub(crate) fn publication(&self) -> Option<&Arc<crate::producer_publication::Publication>> {
+        self.publication.as_ref()
+    }
+    pub(crate) fn publication_refusal(&self) -> Option<&'static str> {
+        self.publication_refusal
     }
 }
 pub struct FileBuild {
@@ -185,6 +210,41 @@ impl FileBuild {
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
         self.build(activation, &mut report, limits)
     }
+    /// Seal only the actual boundary, retaining metadata/resource/graph failures
+    /// as evidence without granting failed attempts a publication capability.
+    pub fn build_owned_reported<A: ActivationPort>(
+        &mut self,
+        activation: &mut A,
+        id: crate::specification_report::Identity<'_>,
+        limits: Limits,
+    ) -> OwnedAttempt<A::Error> {
+        let provenance = Arc::clone(&self.provenance);
+        let mut report = crate::producer_report::NativeReport::new(&provenance, id);
+        let (attempt, publication) = self.build_actual(activation, &mut report, limits);
+        let (publication, publication_refusal) = if attempt.accepted() {
+            match publication {
+                Ok(prepared) => (
+                    Some(Arc::new(
+                        crate::producer_publication::Publication::from_build(
+                            prepared,
+                            &self.provenance,
+                            &self.resources,
+                            limits.engine.publication,
+                        ),
+                    )),
+                    None,
+                ),
+                Err(code) => (None, Some(code)),
+            }
+        } else {
+            (None, None)
+        };
+        OwnedAttempt {
+            attempt,
+            publication,
+            publication_refusal,
+        }
+    }
     /// Fresh native scope and union activation on every attempt. Only the initial
     /// metadata prefix is verified before activation; cached study snapshots are
     /// inspected/reread by declared study requests after whole-graph activation.
@@ -194,6 +254,14 @@ impl FileBuild {
         report: &mut R,
         limits: Limits,
     ) -> Attempt<A::Error, R::Report, R::Error> {
+        self.build_actual(activation, report, limits).0
+    }
+    fn build_actual<A: ActivationPort, R: ReportPort>(
+        &mut self,
+        activation: &mut A,
+        report: &mut R,
+        limits: Limits,
+    ) -> ActualBuild<A::Error, R::Report, R::Error> {
         let mut attempt = Attempt {
             provenance: Arc::clone(&self.provenance),
             boundary: Ok(()),
@@ -220,10 +288,11 @@ impl FileBuild {
                         error,
                     })
             });
+        let mut publication = Err("producer_build_failed");
         attempt.boundary = match ready {
             Err(error) => Err(error),
             Ok(()) => match catch_unwind(AssertUnwindSafe(|| {
-                self.provenance.build.build_into(
+                publication = self.provenance.build.build_publication_into(
                     engine::Ports {
                         activation,
                         study: &mut Study {
@@ -245,7 +314,7 @@ impl FileBuild {
         attempt.resources = self
             .resources
             .retain_sources(limits.evidence_aliases, limits.evidence_text);
-        attempt
+        (attempt, publication)
     }
 }
 struct Study<'a> {

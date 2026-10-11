@@ -1,4 +1,4 @@
-//! Private whole-graph qualification carriers. Retained evidence has no Save port.
+//! Whole-graph carriers retain actual build evidence and ordered Save authority.
 use crate::project_activation::Error as HostError;
 use pyo3::{
     exceptions::{PyException, PyRuntimeError, PyValueError},
@@ -15,7 +15,7 @@ use yamaa_adapters::{
     project_report::Classified,
 };
 
-type NativeAttempt = producer_report::NativeAttempt<HostError>;
+type NativeAttempt = yamaa_adapters::file_producer_build::OwnedAttempt<HostError>;
 type Prepared = Result<FileBuild, file_workflow::Error>;
 fn borrow_error() -> PyErr {
     PyRuntimeError::new_err("native producer handle is already borrowed or poisoned")
@@ -133,7 +133,7 @@ pub(crate) fn build_selected(
     );
     let mut limits = Limits::default();
     limits.engine.report_bytes = report_bytes;
-    let inner = build.build_reported(
+    let inner = build.build_owned_reported(
         &mut port,
         crate::specification_result::identity(&fields),
         limits,
@@ -269,14 +269,14 @@ impl Attempt {
                 })
                 .collect::<Vec<_>>();
             let projected = if public {
-                match yamaa_adapters::producer_result::prepare_classified(
+                match yamaa_adapters::producer_result::prepare_owned_classified(
                     &state,
                     crate::specification_result::identity(&self.fields),
                     maximum,
                     &facts,
                 ) {
                     Ok(value) => {
-                        domain = Some(value);
+                        domain = Some(Mutex::new(value));
                         Ok(None)
                     }
                     Err(yamaa_adapters::producer_result::Error::Report(error)) => Err(error),
@@ -412,30 +412,73 @@ pub struct Report {
     carrier: Attempt,
     observations: Option<String>,
     refusal: &'static str,
-    domain: Option<yamaa_adapters::producer_result::RootResult>,
+    domain: Option<Mutex<yamaa_adapters::producer_result::RootResult>>,
     output_error: Option<yamaa_adapters::table_transport::TableTransportError>,
 }
 impl Report {
     pub(crate) fn domain_attempt(&self) -> Attempt {
         self.carrier.retained()
     }
-    pub(crate) fn domain_output(&self) -> Option<&[u8]> {
-        self.domain.as_ref().and_then(|result| result.output())
+    pub(crate) fn domain_output<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Option<Bound<'py, PyBytes>>> {
+        self.domain
+            .as_ref()
+            .map(|result| {
+                Ok(result
+                    .try_lock()
+                    .map_err(|_| borrow_error())?
+                    .output()
+                    .map(|bytes| PyBytes::new(py, bytes)))
+            })
+            .transpose()
+            .map(Option::flatten)
     }
     pub(crate) fn domain_projection_failure(&self) -> Option<String> {
         self.output_error.map(|error| error.to_string())
     }
-    pub(crate) fn domain_issues(&self) -> Vec<yamaa_adapters::issue_rows::Issue> {
+    pub(crate) fn domain_issues(&self) -> PyResult<Vec<yamaa_adapters::issue_rows::Issue>> {
         self.domain
             .as_ref()
-            .map(|result| result.issues().to_vec())
-            .unwrap_or_else(|| yamaa_adapters::file_application::rejected("build", self.refusal))
+            .map(|result| {
+                Ok(result
+                    .try_lock()
+                    .map_err(|_| borrow_error())?
+                    .issues()
+                    .to_vec())
+            })
+            .unwrap_or_else(|| {
+                Ok(yamaa_adapters::file_application::rejected(
+                    "build",
+                    self.refusal,
+                ))
+            })
     }
-    pub(crate) fn domain_observations(&self) -> Option<String> {
+    pub(crate) fn domain_observations(&self) -> PyResult<Option<String>> {
         self.domain
             .as_ref()
-            .map(|result| result.observations().to_string())
-            .or_else(|| self.observations.clone())
+            .map(|result| {
+                Ok(Some(
+                    result
+                        .try_lock()
+                        .map_err(|_| borrow_error())?
+                        .observations()
+                        .to_string(),
+                ))
+            })
+            .unwrap_or_else(|| Ok(self.observations.clone()))
+    }
+    pub(crate) fn domain_save(&self) -> PyResult<bool> {
+        let _owner = self.carrier.get()?;
+        let result = self.domain.as_ref().ok_or_else(|| {
+            crate::domain_entry::DomainError::new_err("cannot save a failed build")
+        })?;
+        result
+            .try_lock()
+            .map_err(|_| borrow_error())?
+            .save()
+            .map_err(|_| crate::domain_entry::DomainError::new_err("cannot save a failed build"))
     }
     pub(crate) fn domain_failures(
         &self,

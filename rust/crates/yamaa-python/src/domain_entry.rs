@@ -98,7 +98,7 @@ impl Domain {
         }
         #[cfg(any(unix, windows))]
         if let Some(producer) = &self.producer {
-            return Ok(producer.domain_observations());
+            return producer.domain_observations();
         }
         Ok(None)
     }
@@ -114,9 +114,7 @@ impl Domain {
         }
         #[cfg(any(unix, windows))]
         if let Some(producer) = &self.producer {
-            return Ok(producer
-                .domain_output()
-                .map(|bytes| PyBytes::new(py, bytes)));
+            return producer.domain_output(py);
         }
         let _ = py;
         Ok(None)
@@ -134,7 +132,7 @@ impl Domain {
         #[cfg(any(unix, windows))]
         if let Some(producer) = &self.producer {
             return Ok(crate::specification_result::issue_rows(
-                &producer.domain_issues(),
+                &producer.domain_issues()?,
             ));
         }
         Ok(crate::specification_result::issue_rows(&self.failures))
@@ -171,14 +169,8 @@ impl Domain {
                 .map_err(|_| DomainError::new_err("cannot save a failed build"));
         }
         #[cfg(any(unix, windows))]
-        if self
-            .producer
-            .as_ref()
-            .is_some_and(|result| result.domain_output().is_some())
-        {
-            return Err(DomainError::new_err(
-                "producer workflow publication is not supported",
-            ));
+        if let Some(producer) = &self.producer {
+            return producer.domain_save();
         }
         Err(DomainError::new_err("cannot save a failed build"))
     }

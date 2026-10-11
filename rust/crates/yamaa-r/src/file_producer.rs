@@ -20,7 +20,7 @@ pub(crate) mod platform {
         project_function_diagnostics::HostDetails,
         project_report::Classified,
     };
-    type NativeAttempt = producer_report::NativeAttempt<HostError>;
+    type NativeAttempt = yamaa_adapters::file_producer_build::OwnedAttempt<HostError>;
     type Prepared = Result<FileBuild, file_workflow::Error>;
     struct Attempt {
         inner: RefCell<NativeAttempt>,
@@ -180,7 +180,7 @@ pub(crate) mod platform {
         );
         let mut limits = Limits::default();
         limits.engine.report_bytes = maximum;
-        let inner = prepared.build_reported(
+        let inner = prepared.build_owned_reported(
             &mut port,
             crate::specification_result::identity(&fields),
             limits,
@@ -212,6 +212,23 @@ pub(crate) mod platform {
         })
     }
     impl PublicResult {
+        pub(crate) fn save(
+            &mut self,
+        ) -> Result<bool, yamaa_adapters::file_application::FailedBuild> {
+            let State::Report {
+                domain: Some(result),
+                attempt,
+                ..
+            } = &mut self.state
+            else {
+                return Err(yamaa_adapters::file_application::FailedBuild);
+            };
+            let _owner = attempt
+                .inner
+                .try_borrow_mut()
+                .map_err(|_| yamaa_adapters::file_application::FailedBuild)?;
+            result.save()
+        }
         pub(crate) fn output_table(&self) -> Option<&yamaa_adapters::public_table::PublicTable> {
             match &self.state {
                 State::Report {
@@ -422,7 +439,7 @@ pub(crate) mod platform {
                 })
                 .collect::<Vec<_>>();
             let projected = if public {
-                match yamaa_adapters::producer_result::prepare_classified(
+                match yamaa_adapters::producer_result::prepare_owned_classified(
                     &observations,
                     crate::specification_result::identity(&attempt.fields),
                     maximum,

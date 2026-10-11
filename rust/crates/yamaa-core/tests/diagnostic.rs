@@ -43,6 +43,21 @@ impl NumericResolver for Bindings {
 #[test]
 fn every_registered_cause_is_reached_with_its_normative_mapping() {
     let mut reached = BTreeSet::new();
+    let publication = yamaa_core::application_issue::publication_failed("generated/producer.csv");
+    assert_eq!(
+        (
+            publication.definition().phase,
+            publication.definition().condition,
+            publication.definition().requirement
+        ),
+        ("output", "publication_failed", Some("REQ-0764"))
+    );
+    assert_eq!(publication.spec_paths, ["output.path"]);
+    assert_eq!(
+        publication.context["path"],
+        ContextValue::Scalar(Value::Str("generated/producer.csv".into()))
+    );
+    reached.insert(publication.code);
     for (finding, phase, condition, context) in [
         (
             yamaa_core::application_issue::unsupported("environment", Some("environment")),
