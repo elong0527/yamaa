@@ -34,7 +34,6 @@ def main():
         ],
         env=environment,
         text=True,
-        check=False,
     ).strip()
     command = [executable, "--vanilla", "--slave", "-e", EXPRESSION]
     result = subprocess.run(
