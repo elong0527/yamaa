@@ -72,9 +72,18 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
   plan <- read.delim(file.path(args[[1L]], "r.tsv"), stringsAsFactors = FALSE,
     check.names = FALSE, quote = "", na.strings = character(), fileEncoding = "UTF-8")
   fixtures <- normalizePath(args[[2L]], mustWork = TRUE, winslash = "/")
-  output <- file.path(normalizePath(dirname(args[[3L]]), mustWork = TRUE, winslash = "/"), basename(args[[3L]]))
+  written <- args[[3L]]
+  if (!grepl("^(/|[[:alpha:]]:)", written)) written <- file.path(getwd(), written)
+  ancestor <- dirname(written)
+  suffix <- basename(written)
+  while (!dir.exists(ancestor)) {
+    suffix <- file.path(basename(ancestor), suffix)
+    ancestor <- dirname(ancestor)
+  }
+  output <- file.path(normalizePath(ancestor, mustWork=TRUE, winslash="/"), suffix)
   if (file.exists(output) || startsWith(paste0(output, "/"), paste0(fixtures, "/")))
     stop("output must be a fresh directory outside the fixture tree")
+  dir.create(dirname(output), recursive=TRUE, showWarnings=FALSE)
   library(yamaa)
   package <- normalizePath(find.package("yamaa"), mustWork=TRUE, winslash="/")
   if (startsWith(paste0(package, "/"), paste0(dirname(fixtures), "/")))
