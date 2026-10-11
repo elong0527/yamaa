@@ -4,9 +4,10 @@ use crate::yaml_decode::{decode_yaml, DecodeFailure, DecodeLimits, DecodedYaml, 
 use std::sync::Arc;
 use yamaa_core::schema::{
     BundleError, BundleLimits, NormalizationBudget, NormalizationError, NormalizationLimits,
-    NormalizedDocument, SchemaDiagnostic, SchemaModule, SchemaOrigin, SchemaStructure,
-    SpecificationDocument, ValidationError, WindowReference,
+    NormalizedDocument, SchemaDiagnostic, SchemaOrigin, SchemaStructure, SpecificationDocument,
+    ValidationError, WindowReference,
 };
+use yamaa_engine::schema_capture::{self as capture, RootSelection};
 #[path = "specification_inheritance.rs"]
 mod inheritance;
 pub use inheritance::{CapturedParent, InheritanceError, InheritancePort, SourceFailure};
@@ -110,11 +111,30 @@ impl CapturedDocument {
         &self.normalized
     }
 }
+/// Physical schema YAML representation; closure ordering and admission belong
+/// to the engine. DecodeLimits and original occurrence locations stay here.
+struct SchemaDecoder(DecodeLimits);
+impl capture::DecodePort for SchemaDecoder {
+    type Error = DecodeFailure;
+    type Locations = Vec<SourcePosition>;
+    fn decode(
+        &mut self,
+        _: &str,
+        bytes: &[u8],
+    ) -> Result<capture::DecodedModule<Self::Locations>, DecodeFailure> {
+        let decoded = decode_yaml(bytes, self.0)?;
+        Ok(capture::DecodedModule {
+            document: decoded.document,
+            locations: decoded.locations,
+        })
+    }
+}
+
 impl CapturedSchema {
     /// Decode the complete host-captured closure using the shared YAML semantics.
     /// Cumulative byte/count admission happens before any source is decoded.
     pub fn admit(sources: Vec<Source>, entry: usize, limits: Limits) -> Result<Arc<Self>, Error> {
-        Self::admit_with_root(sources, entry, "root_class", limits)
+        Self::admit_with_root(sources, entry, RootSelection::Default, limits)
     }
     /// Capture a closed schema root without interpreting it as a specification.
     pub fn admit_root(
@@ -123,50 +143,36 @@ impl CapturedSchema {
         root_class: &str,
         limits: Limits,
     ) -> Result<Arc<Self>, Error> {
-        if root_class.len() > limits.identity_bytes {
-            return Err(Error::Limit("root_class"));
-        }
-        Self::admit_with_root(sources, entry, root_class, limits)
+        Self::admit_with_root(sources, entry, RootSelection::Named(root_class), limits)
     }
     fn admit_with_root(
         sources: Vec<Source>,
         entry: usize,
-        root_class: &str,
+        root: RootSelection<'_>,
         limits: Limits,
     ) -> Result<Arc<Self>, Error> {
-        if sources.len() > limits.bundle.modules {
-            return Err(Error::Limit("schema_modules"));
-        }
-        let mut bytes = 0usize;
-        let mut identities = 0usize;
-        for source in &sources {
-            bytes = bytes
-                .checked_add(source.bytes.len())
-                .filter(|&n| n <= limits.captured_bytes)
-                .ok_or(Error::Limit("captured_bytes"))?;
-            identities = identities
-                .checked_add(source.identity.len())
-                .filter(|&n| n <= limits.identity_bytes)
-                .ok_or(Error::Limit("identity_bytes"))?;
-        }
-        let mut locations = Vec::with_capacity(sources.len());
-        let modules = sources
-            .iter()
-            .map(|source| {
-                let decoded =
-                    decode_yaml(&source.bytes, limits.decode).map_err(|error| Error::Decode {
-                        identity: source.identity.clone(),
-                        error,
-                    })?;
-                locations.push(decoded.locations);
-                Ok(SchemaModule {
-                    name: source.identity.clone(),
-                    document: decoded.document,
-                })
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
-        let structure = SchemaStructure::admit(modules, entry, root_class, limits.bundle)
-            .map_err(Error::Bundle)?;
+        let closure = capture::admit(
+            sources,
+            entry,
+            root,
+            capture::Limits {
+                captured_bytes: limits.captured_bytes,
+                identity_bytes: limits.identity_bytes,
+                bundle: limits.bundle,
+            },
+            &mut SchemaDecoder(limits.decode),
+        )
+        .map_err(|error| match error {
+            capture::Error::Limit(resource) => Error::Limit(match resource {
+                capture::Resource::RootClass => "root_class",
+                capture::Resource::SchemaModules => "schema_modules",
+                capture::Resource::CapturedBytes => "captured_bytes",
+                capture::Resource::IdentityBytes => "identity_bytes",
+            }),
+            capture::Error::Decode { identity, error } => Error::Decode { identity, error },
+            capture::Error::Bundle(error) => Error::Bundle(error),
+        })?;
+        let (sources, locations, structure) = closure.into_parts();
         Ok(Arc::new(Self {
             sources,
             locations,
