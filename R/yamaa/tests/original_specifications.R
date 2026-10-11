@@ -1503,8 +1503,10 @@ local({
     observed <- get(".domain_observations",asNamespace("yamaa"))(result)
     if(!is.null(observed)) {
       report <- rawToChar(observed)
-      ledgers <- regmatches(report,gregexpr('"handler_counts":\\[[^]]*\\]',report))[[1L]]
-      stopifnot(identical(ledgers,rep('"handler_counts":[]',2L)))
+      # Literal complete arrays avoid locale-dependent regexp offsets for UTF-8
+      # report bytes on Windows and retain the independent empty-ledger truth.
+      stopifnot(sum(gregexpr('"handler_counts":',report,fixed=TRUE)[[1L]]>0L)==2L,
+        sum(gregexpr('"handler_counts":[],',report,fixed=TRUE)[[1L]]>0L)==2L)
     }
   }
   stopifnot(file.copy(file.path(root,"cases","negative-str-pad-width"),directory,recursive=TRUE))
@@ -1537,8 +1539,10 @@ local({
       check_issue_frame(result$issues,truth$findings)
       wire <- observations(result)
       if(is.null(wire)) stopifnot(identical(truth$handlers,"[]")) else {
-        ledgers <- regmatches(rawToChar(wire),gregexpr('"handler_counts":\\[[^]]*\\]',rawToChar(wire)))[[1L]]
-        stopifnot(identical(ledgers,rep(paste0('"handler_counts":',truth$handlers),2L)))
+        report <- rawToChar(wire)
+        ledger <- paste0('"handler_counts":',truth$handlers,',')
+        stopifnot(sum(gregexpr('"handler_counts":',report,fixed=TRUE)[[1L]]>0L)==2L,
+          sum(gregexpr(ledger,report,fixed=TRUE)[[1L]]>0L)==2L)
       }
       if(nzchar(truth$expected_csv)) {
         expected <- rawfile(file.path(case,truth$expected_csv))

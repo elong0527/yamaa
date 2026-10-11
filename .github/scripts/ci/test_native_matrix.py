@@ -15,7 +15,7 @@ import native_matrix
 
 class NativeCoverage(unittest.TestCase):
     def test_actions_outputs_are_valid_matrices_and_plain_runner_names(self):
-        for event in ("pull_request", "push"):
+        for event in ("pull_request", "push", "workflow_dispatch"):
             with tempfile.TemporaryDirectory() as directory:
                 output = Path(directory) / "output"
                 summary = Path(directory) / "summary"
@@ -35,13 +35,13 @@ class NativeCoverage(unittest.TestCase):
                     line.split("=", 1) for line in output.read_text().splitlines()
                 )
                 self.assertIn(values["compare-os"], native_matrix.PLATFORMS)
-                self.assertEqual(values["full"], str(event == "push").lower())
+                self.assertEqual(values["full"], str(event != "pull_request").lower())
                 self.assertEqual(
                     len(json.loads(values["qualify"])["include"]),
-                    18 if event == "push" else 1,
+                    1 if event == "pull_request" else 18,
                 )
                 self.assertIn(
-                    "Full" if event == "push" else "PR sample", summary.read_text()
+                    "PR sample" if event == "pull_request" else "Full", summary.read_text()
                 )
 
     def test_main_keeps_every_supported_route(self):
@@ -61,6 +61,12 @@ class NativeCoverage(unittest.TestCase):
         self.assertEqual(len(coverage["build"]["include"]), 3)
         self.assertEqual(coverage["r"]["os"], list(native_matrix.PLATFORMS))
         self.assertTrue(coverage["full"])
+
+    def test_dispatch_qualifies_the_same_full_matrix_before_merge(self):
+        self.assertEqual(
+            native_matrix.plan("workflow_dispatch", "2"),
+            native_matrix.plan("push", "1"),
+        )
 
     def test_new_pr_runs_sample_all_routes_and_retries_keep_the_choice(self):
         observed = set()
@@ -111,7 +117,7 @@ class NativeCoverage(unittest.TestCase):
 
     def test_unknown_event_cannot_silently_reduce_coverage(self):
         with self.assertRaises(ValueError):
-            native_matrix.plan("workflow_dispatch", "1")
+            native_matrix.plan("schedule", "1")
 
 
 if __name__ == "__main__":
