@@ -377,14 +377,20 @@ def test_ascii_casing_moves_only_the_ascii_letters_of_a_mixed_value() -> None:
     assert len(ascii_upper(mixed)) == len(mixed)
 
 
-def test_ascii_casing_ranges_include_their_endpoints() -> None:
+@pytest.mark.parametrize(
+    ("func", "value", "expected"),
+    [
+        (ascii_upper, "z", "Z"),
+        (ascii_upper, "abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+        (ascii_lower, "Z", "z"),
+        (ascii_lower, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"),
+    ],
+)
+def test_ascii_casing_ranges_include_their_endpoints(func, value, expected) -> None:
     # REQ-0708 fixes the ranges as a-z and A-Z inclusive. Mutation testing
     # showed `<` in place of `<=` at either endpoint survived, so the
     # endpoints are pinned explicitly here.
-    assert ascii_upper("z") == "Z"
-    assert ascii_upper("abcdefghijklmnopqrstuvwxyz") == "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    assert ascii_lower("Z") == "z"
-    assert ascii_lower("ABCDEFGHIJKLMNOPQRSTUVWXYZ") == "abcdefghijklmnopqrstuvwxyz"
+    assert func(value) == expected
 
 
 def test_title_case_treats_range_endpoints_as_word_letters() -> None:
