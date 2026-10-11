@@ -277,6 +277,51 @@ Eleven complete independent reports and the unchanged negative-paired-dates
 report pin typed source observations and failed publication gates in Rust and both
 installed-host replay suites. Remaining verification families still need migration.
 
+
+Static environment and retained scalar provenance now project in core through
+`project_environment_diagnostics::projection`. The caller supplies the exact
+held draft, normalized root, captured arenas, source identities and authored
+origin slices from one failed attempt. A lifetime or equal source text does not
+prove that relationship. Core validates the supplied ordered typed-to-authored
+relationships and inline/external declaration kinds; the adapter checks retained
+schema ownership. External function paths and codelist paths are selected from
+borrowed semantic path pieces, without parsing rendered diagnostics. Failed
+captures preserve authored index holes, and an invalid function name continues
+to name the authored root declaration even when its definition was external.
+
+Admission consumes each capture/source iterator once into a fixed array of at
+most 128 borrowed descriptors, matching the existing adapter projection ceiling.
+No width-proportional metadata vector, owned path, context text or scalar copy is
+created before the complete report is admitted. Inline function count is separate:
+200 inline functions retain all 600 independent findings. The existing 65,536
+finding ceiling is unchanged, as is the explicit refusal for configured capture
+collections beyond the existing projection ceiling; no prefix is returned.
+
+The historical semantic raw-text policy and conservative issue-byte policy stay
+separate. Root headers and root scalars keep separate semantic text budgets with
+one aggregate issue budget; external scalar sources keep their per-source semantic
+budgets with one aggregate issue budget. The admitted handles retain immutable
+borrowed descriptors through materialization. Ordinary opaque capture failures
+remain held alongside independent semantic findings, and semantic admission
+resource errors retain their original precedence. This does not adopt ingestion's
+opaque-barrier policy or change capture, static validation or activation effects.
+
+The owned `root_diagnostics`, `scalar_diagnostics`, `diagnostics` and
+`diagnostics_with_text_limit` APIs remain explicit compatibility routes with their
+original signatures and raw-text/per-copy policy. They and the admitted report
+share one closed semantic selector. Schema-root/source projections, cross-family
+application aggregation and final serialization admission remain their existing
+services. No registry vocabulary, Mapping representation or dependency is added.
+Independent complete reports cover all static field routes, captured authority,
+wide diagnostic integers, invalid temporal text, late quota refusal with zero
+owned-fact allocations, and original non-Clone/non-Debug/non-Send host payloads.
+Installed Python and R retain 200 valid inline definitions, complete six-record
+static reports and five-record root/scalar reports. Their public route still
+refuses the 600-record invalid-definition report before this projector: existing
+`producer_check` aggregation reserves the entire normalized root for each finding
+under its separate issue budget. The actual retained-capture adapter witness
+admits all 600 records. That existing cross-family aggregation policy is unchanged.
+
 ## Inheritance traversal findings
 
 Borrowed core findings own the five existing parent-path, unavailable-parent,
