@@ -9,6 +9,9 @@ on:
       - 'benchmarks/**'
       - '!benchmarks/**/*.md'
       - 'rust/**'
+      # Match native CI's prose exclusions without excluding Markdown fixtures.
+      - '!rust/*.md'
+      - '!rust/planning/**/*.md'
       - 'yaml/**'
       - '.github/workflows/python.yml'
   pull_request:
@@ -17,6 +20,8 @@ on:
       - 'benchmarks/**'
       - '!benchmarks/**/*.md'
       - 'rust/**'
+      - '!rust/*.md'
+      - '!rust/planning/**/*.md'
       - 'yaml/**'
       - '.github/workflows/python.yml'
 
