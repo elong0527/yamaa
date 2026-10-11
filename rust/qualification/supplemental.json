@@ -24,6 +24,14 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json",
+      "family": "datasets",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_intermediate_keys.rs"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/aggregate_syntax.tsv",
       "family": "aggregate",
       "level": "compile",

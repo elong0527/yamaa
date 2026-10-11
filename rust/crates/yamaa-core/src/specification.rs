@@ -22,6 +22,8 @@ mod binding_diagnostics;
 mod intermediates;
 #[path = "specification_lookup_diagnostics.rs"]
 mod lookup_diagnostics;
+#[path = "specification_match_values.rs"]
+mod match_values;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
 #[path = "specification_output_diagnostics.rs"]
@@ -916,6 +918,7 @@ impl PreparedSpecification {
                 }
             }
         }
+        match_values::declaration_admission(d, limits)?;
         let mut findings = preflight(spec)?;
         let columns = sequence(d, field(d, root, "columns")?)?;
         let output = TableSchema::new(
@@ -1872,7 +1875,7 @@ impl PreparedSpecification {
                     )?;
                     if let Some((index, field)) = self.intermediates.reference(name) {
                         if let Some(item) = &intermediates[index] {
-                            edges.extend(item.keys.iter().map(|key| key.output_column));
+                            edges.extend(item.output_dependencies());
                             let column = secondary[item.source]
                                 .schema
                                 .columns()
@@ -1992,7 +1995,7 @@ impl PreparedSpecification {
                             .reference(name)
                             .ok_or(BindError::Internal)?;
                         if let Some(item) = &intermediates[index] {
-                            edges.extend(item.keys.iter().map(|key| key.output_column));
+                            edges.extend(item.output_dependencies());
                             if let Some(column) = secondary[item.source]
                                 .schema
                                 .columns()

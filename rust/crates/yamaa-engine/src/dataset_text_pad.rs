@@ -15,35 +15,58 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     state.budget.work(1, 1)?;
     let value = evaluate_raw(table, source, candidate, plan, row, limits, state)?;
-    match &value {
+    render(
+        &value,
+        operation,
+        operation.path(),
+        candidate,
+        plan,
+        row,
+        state.budget,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn render<E>(
+    value: &Value,
+    operation: &StringPad,
+    path: &str,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    budget: &mut Budget,
+) -> Result<Value, Box<ExecutionError<E>>> {
+    match value {
         Value::Missing => (),
-        Value::Str(text) => state.budget.work(1, text.len())?,
-        _ => state.budget.work(1, MAX_PRIMITIVE_TEXT_BYTES)?,
+        Value::Str(text) => budget.work(1, text.len())?,
+        _ => budget.work(1, MAX_PRIMITIVE_TEXT_BYTES)?,
     }
-    let prepared = operation.prepare_text(&value).map_err(|error| {
+    let prepared = operation.prepare_text(value).map_err(|error| {
         retained_diagnostic(
-            error.into_diagnostic(operation.path().into()),
+            error.into_diagnostic(path.into()),
             true,
             candidate,
             plan,
             row,
-            state.budget,
+            budget,
         )
     })?;
     let Some(required) = prepared.required_bytes() else {
         return Err(Box::new(ExecutionError::Limit {
             resource: Resource::ScalarTextBytes,
-            limit: limits.scalar_text_bytes,
+            limit: budget.scalar_text_limit(),
             required: None,
         }));
     };
-    state.budget.work(1, required)?;
-    state.budget.scalar_text(required)?;
-    prepared.render(limits.scalar_text_bytes).map_err(|error| {
-        Box::new(ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            limit: limits.scalar_text_bytes,
-            required: error.required,
+    budget.work(1, required)?;
+    budget.scalar_text(required)?;
+    prepared
+        .render(budget.scalar_text_limit())
+        .map_err(|error| {
+            Box::new(ExecutionError::Limit {
+                resource: Resource::ScalarTextBytes,
+                limit: budget.scalar_text_limit(),
+                required: error.required,
+            })
         })
-    })
 }

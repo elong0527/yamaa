@@ -24,6 +24,9 @@ pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, Funct
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
+#[path = "dataset_match_values.rs"]
+mod match_values;
+pub use match_values::{IntermediateKey, MatchRead, MatchValue};
 #[path = "dataset_lookup.rs"]
 mod lookup;
 #[path = "dataset_rounding.rs"]

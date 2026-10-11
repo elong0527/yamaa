@@ -1,6 +1,7 @@
 //! Lazy source eligibility and named record selection within one dataset attempt.
 use super::*;
-use crate::table_grouping::Key;
+#[path = "dataset_match_values.rs"]
+mod match_values;
 use alloc::collections::BTreeMap;
 
 /// Keep only immutable row coordinates and the inherited handler outcome.
@@ -34,6 +35,15 @@ pub(super) fn read<T: TableAccess + ?Sized>(
     let choice = if let Some(choice) = state.intermediates.choices.get(&(row, index)) {
         *choice
     } else {
+        // Newly admitted expressions use the original dependency/filter boundary.
+        // Ordinary selectors retain the established filter-before-raw-key behavior.
+        let current = if item.has_expression_keys() {
+            Some(match_values::resolve(
+                item, candidate, plan, row, primary, state,
+            )?)
+        } else {
+            None
+        };
         if !state.intermediates.eligible.contains_key(&index) {
             // Complete the source-only filter before checking the current match values.
             state.budget.work(table.row_count(), 1)?;
@@ -65,41 +75,13 @@ pub(super) fn read<T: TableAccess + ?Sized>(
             state.budget.work(1, 1)?;
             state.intermediates.eligible.insert(index, eligible);
         }
-        let eligible = &state.intermediates.eligible[&index];
         let mut count = 0;
         let mut selected = None;
-        state
-            .budget
-            .work(1, item.keys.len() + item.record_keys.len())?;
-        let mut keys = Vec::new();
-        for key in &item.keys {
-            let value = &candidate.values[key.output_column];
-            if let Value::Str(text) = value {
-                state.budget.scalar_text(text.len())?;
-            }
-            keys.push((key.source_column, value.clone()));
-        }
-        for key in &item.record_keys {
-            state.budget.work(candidate.members.len(), 1)?;
-            let value = key_grain::collect_bound(
-                primary,
-                key_grain::Collection {
-                    column: key.driver_column,
-                    identifier: &key.identifier,
-                    filter: None,
-                    selection: None,
-                },
-                key_grain::CollectionContext {
-                    path: &item.path,
-                    candidate,
-                    plan,
-                    row,
-                },
-                state.budget,
-                state.handlers,
-            )?;
-            keys.push((key.source_column, value));
-        }
+        let keys = match current {
+            Some(current) => match_values::evaluate(item, &current, candidate, plan, row, state)?,
+            None => match_values::ordinary(item, candidate, plan, row, primary, state)?,
+        };
+        let eligible = &state.intermediates.eligible[&index];
         if !keys
             .iter()
             .any(|(_, value)| matches!(value, Value::Missing))
@@ -114,7 +96,9 @@ pub(super) fn read<T: TableAccess + ?Sized>(
                 let mut matches = true;
                 for (column, expected) in &keys {
                     let value = cell(table, item, source_row, *column, state.budget)?;
-                    if Key::from(value) != Key::from(ValueRef::from(expected)) {
+                    if yamaa_core::value::compare_present_refs(value, ValueRef::from(expected))
+                        != Ok(core::cmp::Ordering::Equal)
+                    {
                         matches = false;
                         break;
                     }

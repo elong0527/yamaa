@@ -10,7 +10,7 @@ impl Declaration {
     pub(super) fn has_width_error(&self) -> bool {
         matches!(self, Self::WidthError { .. })
     }
-    fn source(&self) -> &str {
+    pub(super) fn source(&self) -> &str {
         match self {
             Self::Valid(pad) => pad.source(),
             Self::WidthError { source, .. } => source,
@@ -149,6 +149,26 @@ pub(super) fn declaration_admission(
                             d,
                             value,
                             &format!("rows[{index}].derivations.{}", text(d, name)?),
+                            0,
+                            &mut bytes,
+                        )?;
+                    }
+                }
+            }
+        }
+    }
+    if let Some(items) = d
+        .field(d.root(), "intermediates")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    {
+        for (index, &item) in sequence(d, items)?.iter().enumerate() {
+            if let Some(key) = d.field(item, "key") {
+                if let N::Mapping(fields) = &d.nodes()[key] {
+                    for &(name, value) in fields {
+                        visit(
+                            d,
+                            value,
+                            &format!("intermediates[{index}].key.{}", text(d, name)?),
                             0,
                             &mut bytes,
                         )?;

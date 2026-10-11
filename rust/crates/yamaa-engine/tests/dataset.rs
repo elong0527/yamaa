@@ -4642,15 +4642,20 @@ fn named_plan(
 
 /// A declaration independent of source payloads, including explicit missing absence handling.
 fn named_item() -> yamaa_engine::dataset::Intermediate {
-    use yamaa_engine::dataset::{Intermediate, Keep, MatchKey, OrderTerm, SourceSelection};
+    use yamaa_engine::dataset::{
+        Intermediate, IntermediateKey, Keep, MatchRead, MatchValue, OrderTerm, SourceSelection,
+    };
     Intermediate {
-        record_keys: Vec::new(),
         identifier: "SELECTED".into(),
         path: "intermediates[0]".into(),
         source: 0,
-        keys: vec![MatchKey {
+        keys: vec![IntermediateKey {
             source_column: 0,
-            output_column: 0,
+            path: "intermediates[0].key".into(),
+            value: MatchValue::Variable(MatchRead::Output {
+                column: 0,
+                identifier: "ID".into(),
+            }),
         }],
         filter: None,
         selection: Some(SourceSelection {
@@ -4851,7 +4856,11 @@ fn named_intermediate_filter_scope_and_resources_are_attempt_local() {
         2
     );
     let mut item = named_item();
-    item.keys[0].output_column = 1;
+    item.keys[0].value =
+        yamaa_engine::dataset::MatchValue::Variable(yamaa_engine::dataset::MatchRead::Output {
+            column: 1,
+            identifier: "V".into(),
+        });
     assert_eq!(
         named_plan(&source, &secondary, item),
         Err(PlanError::InvalidLookup)
@@ -6757,7 +6766,7 @@ fn ordered_cases_are_lazy_and_convert_the_selected_raw_value() {
 /// value. Conflicting raw readings are a collection failure, never first-row wins.
 #[test]
 fn named_record_matching_keeps_raw_driver_keys_independent_of_output_columns() {
-    use yamaa_engine::dataset::RecordMatchKey;
+    use yamaa_engine::dataset::{IntermediateKey, MatchRead, MatchValue};
     let driver = table(
         &[("ID", ColumnType::Int), ("RAW", ColumnType::Str)],
         vec![
@@ -6777,11 +6786,13 @@ fn named_record_matching_keeps_raw_driver_keys_independent_of_output_columns() {
         ],
     );
     let mut item = named_item();
-    item.keys.clear();
-    item.record_keys = vec![RecordMatchKey {
+    item.keys = vec![IntermediateKey {
         source_column: 1,
-        driver_column: 1,
-        identifier: "DRIVER.RAW".into(),
+        path: "intermediates[0].key".into(),
+        value: MatchValue::Variable(MatchRead::Record {
+            column: 1,
+            identifier: "DRIVER.RAW".into(),
+        }),
     }];
     use yamaa_engine::dataset::{SecondarySource, SourceSchemas};
     let plan = DatasetPlan::new_with_intermediates(

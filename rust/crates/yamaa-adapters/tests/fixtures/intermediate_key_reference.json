@@ -1,0 +1,834 @@
+{
+  "padding_output_operand": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: N, width: 8}}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "issues": [],
+    "result_type": "ExecutionSuccess",
+    "handlers": [
+      {
+        "spec_path": "columns.V.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 1
+      },
+      {
+        "spec_path": "columns.V2.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 1
+      }
+    ],
+    "csv": "ID,N,V,V2\na,7,A,A\nb,259,B,B\nc,,,\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    }
+  },
+  "padding_raw_operand": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "issues": [],
+    "result_type": "ExecutionSuccess",
+    "handlers": [
+      {
+        "spec_path": "columns.V.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 1
+      },
+      {
+        "spec_path": "columns.V2.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 1
+      }
+    ],
+    "csv": "ID,N,V,V2\na,7,A,A\nb,259,B,B\nc,,,\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    }
+  },
+  "unknown_source_and_width": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.ABSENT, width: 0}}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "issues": [
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "invalid_field_type",
+        "spec_paths": [
+          "intermediates[0].key.K.str_pad.width"
+        ],
+        "context": "{\"expected\":\"a positive integer width\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].key.K"
+        ],
+        "context": "{\"identifier\":\"SRC.ABSENT\",\"intermediate\":\"LOOK\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V.derivation.source"
+        ],
+        "context": "{\"identifier\":\"LOOK.VAL\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V2.derivation.source"
+        ],
+        "context": "{\"identifier\":\"LOOK.VAL\"}"
+      }
+    ],
+    "result_type": "ExecutionFailure",
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_field_type",
+        "spec_paths": [
+          "intermediates[0].key.K.str_pad.width"
+        ],
+        "requirement": "REQ-1261",
+        "context": {
+          "expected": "a positive integer width"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].key.K"
+        ],
+        "requirement": "REQ-0117",
+        "context": {
+          "intermediate": "LOOK",
+          "identifier": "SRC.ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V2.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      }
+    ],
+    "handlers": [],
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    }
+  },
+  "static_type_then_width_then_unknown": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KINT: {str_pad: {source: SRC.ABSENT, width: 0}}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "issues": [
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "intermediates[0].key"
+        ],
+        "context": "{\"actual\":\"int\",\"expected\":\"str\",\"intermediate\":\"LOOK\",\"source\":\"key[KINT]\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "invalid_field_type",
+        "spec_paths": [
+          "intermediates[0].key.KINT.str_pad.width"
+        ],
+        "context": "{\"expected\":\"a positive integer width\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].key.KINT"
+        ],
+        "context": "{\"identifier\":\"SRC.ABSENT\",\"intermediate\":\"LOOK\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V.derivation.source"
+        ],
+        "context": "{\"identifier\":\"LOOK.VAL\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V2.derivation.source"
+        ],
+        "context": "{\"identifier\":\"LOOK.VAL\"}"
+      }
+    ],
+    "result_type": "ExecutionFailure",
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "intermediates[0].key"
+        ],
+        "requirement": "REQ-0323",
+        "context": {
+          "intermediate": "LOOK",
+          "source": "key[KINT]",
+          "expected": "str",
+          "actual": "int"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "invalid_field_type",
+        "spec_paths": [
+          "intermediates[0].key.KINT.str_pad.width"
+        ],
+        "requirement": "REQ-1261",
+        "context": {
+          "expected": "a positive integer width"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].key.KINT"
+        ],
+        "requirement": "REQ-0117",
+        "context": {
+          "intermediate": "LOOK",
+          "identifier": "SRC.ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V2.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      }
+    ],
+    "handlers": [],
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    }
+  },
+  "donor_unknown_then_width_then_unknown": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {ABSENT: {str_pad: {source: SRC.ABSENT, width: 0}}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "issues": [
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].key"
+        ],
+        "context": "{\"identifier\":\"TAB.ABSENT\",\"intermediate\":\"LOOK\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "invalid_field_type",
+        "spec_paths": [
+          "intermediates[0].key.ABSENT.str_pad.width"
+        ],
+        "context": "{\"expected\":\"a positive integer width\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].key.ABSENT"
+        ],
+        "context": "{\"identifier\":\"SRC.ABSENT\",\"intermediate\":\"LOOK\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V.derivation.source"
+        ],
+        "context": "{\"identifier\":\"LOOK.VAL\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V2.derivation.source"
+        ],
+        "context": "{\"identifier\":\"LOOK.VAL\"}"
+      }
+    ],
+    "result_type": "ExecutionFailure",
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].key"
+        ],
+        "requirement": "REQ-0116",
+        "context": {
+          "intermediate": "LOOK",
+          "identifier": "TAB.ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "invalid_field_type",
+        "spec_paths": [
+          "intermediates[0].key.ABSENT.str_pad.width"
+        ],
+        "requirement": "REQ-1261",
+        "context": {
+          "expected": "a positive integer width"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].key.ABSENT"
+        ],
+        "requirement": "REQ-0117",
+        "context": {
+          "intermediate": "LOOK",
+          "identifier": "SRC.ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V2.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      }
+    ],
+    "handlers": [],
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    }
+  },
+  "self_match_source_suggestion": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SELF.N, width: 8}}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "issues": [
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].key.K"
+        ],
+        "context": "{\"identifier\":\"SELF.N\",\"intermediate\":\"LOOK\",\"suggestion\":\"N\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V.derivation.source"
+        ],
+        "context": "{\"identifier\":\"LOOK.VAL\"}"
+      },
+      {
+        "severity": "error",
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V2.derivation.source"
+        ],
+        "context": "{\"identifier\":\"LOOK.VAL\"}"
+      }
+    ],
+    "result_type": "ExecutionFailure",
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].key.K"
+        ],
+        "requirement": "REQ-0117",
+        "context": {
+          "intermediate": "LOOK",
+          "identifier": "SELF.N",
+          "suggestion": "N"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V2.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      }
+    ],
+    "handlers": [],
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    }
+  },
+  "missing_result": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {literal: null}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "issues": [],
+    "result_type": "ExecutionSuccess",
+    "handlers": [
+      {
+        "spec_path": "columns.V.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 3
+      },
+      {
+        "spec_path": "columns.V2.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 3
+      }
+    ],
+    "csv": "ID,N,V,V2\na,7,,\nb,259,,\nc,,,\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    }
+  },
+  "numeric_int_float_key": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: {literal: 7}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "issues": [],
+    "result_type": "ExecutionSuccess",
+    "handlers": [],
+    "csv": "ID,N,V,V2\na,7,A,A\nb,259,A,A\nc,,A,A\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    }
+  },
+  "numeric_large_int_float_key": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: {literal: 9007199254740993}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "issues": [],
+    "result_type": "ExecutionSuccess",
+    "handlers": [
+      {
+        "spec_path": "columns.V.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 3
+      },
+      {
+        "spec_path": "columns.V2.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 3
+      }
+    ],
+    "csv": "ID,N,V,V2\na,7,,\nb,259,,\nc,,,\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    }
+  },
+  "literal_text_not_reference": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {literal: SRC.ABSENT}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "issues": [],
+    "result_type": "ExecutionSuccess",
+    "handlers": [],
+    "csv": "ID,N,V,V2\na,7,TEXT,TEXT\nb,259,TEXT,TEXT\nc,,TEXT,TEXT\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    }
+  },
+  "raw_pad_without_output": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    },
+    "result_type": "ExecutionSuccess",
+    "handlers": [
+      {
+        "spec_path": "columns.V.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 1
+      },
+      {
+        "spec_path": "columns.V2.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 1
+      }
+    ],
+    "csv": "ID,V,V2\na,A,A\nb,B,B\nc,,\n"
+  },
+  "source_key_raw": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: {source: SRC.N}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    },
+    "result_type": "ExecutionSuccess",
+    "handlers": [
+      {
+        "spec_path": "columns.V.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 1
+      },
+      {
+        "spec_path": "columns.V2.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 1
+      }
+    ],
+    "csv": "ID,N,V,V2\na,7,A,A\nb,259,B,B\nc,,,\n"
+  },
+  "width_invalid_source_valid": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 0}}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    },
+    "result_type": "ExecutionFailure",
+    "handlers": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_field_type",
+        "spec_paths": [
+          "intermediates[0].key.K.str_pad.width"
+        ],
+        "requirement": "REQ-1261",
+        "context": {
+          "expected": "a positive integer width"
+        }
+      }
+    ]
+  },
+  "dependency_before_bad_filter": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\n    filter: \"TAB.KINT > 'bad'\"\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\na,8\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    },
+    "result_type": "ExecutionFailure",
+    "handlers": [],
+    "findings": [
+      {
+        "phase": "derivation",
+        "condition": "multiple_values_per_key",
+        "spec_paths": [
+          "intermediates[0]"
+        ],
+        "requirement": "REQ-0075",
+        "context": {
+          "identifier": "SRC.N",
+          "value_count": 2,
+          "keys": [
+            {
+              "ID": "a"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "dependency_before_unknown_filter": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\n    filter: 'TAB.ABSENT > 0'\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\na,8\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    },
+    "result_type": "ExecutionFailure",
+    "handlers": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].filter"
+        ],
+        "requirement": "REQ-0120",
+        "context": {
+          "intermediate": "LOOK",
+          "identifier": "TAB.ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V2.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      }
+    ]
+  },
+  "filter_before_padding_evaluation": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 1000000}}}\n    filter: \"TAB.KINT > 'bad'\"\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    },
+    "result_type": "ExecutionFailure",
+    "handlers": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "intermediates[0].filter"
+        ],
+        "requirement": "REQ-0190",
+        "context": {
+          "left_type": "int",
+          "right_type": "str"
+        }
+      }
+    ]
+  },
+  "width_and_bad_filter_binding": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 0}}}\n    filter: 'TAB.ABSENT > 0'\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    },
+    "result_type": "ExecutionFailure",
+    "handlers": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_field_type",
+        "spec_paths": [
+          "intermediates[0].key.K.str_pad.width"
+        ],
+        "requirement": "REQ-1261",
+        "context": {
+          "expected": "a positive integer width"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].filter"
+        ],
+        "requirement": "REQ-0120",
+        "context": {
+          "intermediate": "LOOK",
+          "identifier": "TAB.ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V2.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      }
+    ]
+  },
+  "all_keys_after_missing": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: {literal: null}, K: {str_pad: {source: SRC.N, width: 8}}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    },
+    "result_type": "ExecutionSuccess",
+    "handlers": [
+      {
+        "spec_path": "columns.V.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 3
+      },
+      {
+        "spec_path": "columns.V2.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 3
+      }
+    ],
+    "csv": "ID,V,V2\na,,\nb,,\nc,,\n"
+  },
+  "both_key_type_findings": {
+    "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KINT: {str_pad: {source: SRC.ABSENT, width: 0}}, K: {literal: 7}}\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "inputs": {
+      "src.csv": "ID,N\na,7\nb,259\nc,\n",
+      "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
+    },
+    "result_type": "ExecutionFailure",
+    "handlers": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "intermediates[0].key"
+        ],
+        "requirement": "REQ-0323",
+        "context": {
+          "intermediate": "LOOK",
+          "source": "key[KINT]",
+          "expected": "str",
+          "actual": "int"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "intermediates[0].key"
+        ],
+        "requirement": "REQ-0323",
+        "context": {
+          "intermediate": "LOOK",
+          "source": "key[K]",
+          "expected": "int",
+          "actual": "str"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "invalid_field_type",
+        "spec_paths": [
+          "intermediates[0].key.KINT.str_pad.width"
+        ],
+        "requirement": "REQ-1261",
+        "context": {
+          "expected": "a positive integer width"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "intermediates[0].key.KINT"
+        ],
+        "requirement": "REQ-0117",
+        "context": {
+          "intermediate": "LOOK",
+          "identifier": "SRC.ABSENT"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      },
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.V2.derivation.source"
+        ],
+        "requirement": "REQ-0103",
+        "context": {
+          "identifier": "LOOK.VAL"
+        }
+      }
+    ]
+  }
+}
