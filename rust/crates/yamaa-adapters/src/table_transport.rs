@@ -158,8 +158,15 @@ pub(crate) fn encode_projected_dataset(
     encode_dataset_projection(table, Some(projection))
 }
 
-fn encode_dataset_projection(
-    table: &yamaa_engine::dataset::Dataset,
+/// Only owned governed log tables enter this transport; arbitrary host inputs
+/// still pass the complete snapshot decoder admission.
+pub(crate) fn encode_log_table(
+    table: &yamaa_core::verification_logs::LogTable,
+) -> Result<Vec<u8>, Error> {
+    encode_dataset_projection(table, None)
+}
+fn encode_dataset_projection<T: TableAccess<Error = std::convert::Infallible>>(
+    table: &T,
     projection: Option<&[usize]>,
 ) -> Result<Vec<u8>, Error> {
     if table.row_count() > LIMITS.max_rows
