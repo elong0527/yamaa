@@ -20,8 +20,8 @@ checked.issues
 
 The current bounded frontend qualifies seventeen original specifications. A failed
 build has no output and its save raises `yamaa.DomainError`. Operational save
-failures return `False` and remain in issues. Checks read no study data and run no
-project code. Context is JSON text and output integers retain their full signed
+failures return `False` and remain in issues. Checks read no study data and do not
+run project code. Context is JSON text and output integers retain their full signed
 64-bit range. Public date/datetime columns retain their ordinary Polars types.
 
 Declared verification/warning logs are fresh owned data frames. Build never
