@@ -303,7 +303,7 @@ save_failure <- function(failed) {
   write(work,"generated/producer.csv","previous producer bytes")
   write(work,"published/root.csv","previous consumer bytes")
   events <- character()
-  versions <- function(lock,calls) {events <<- c(events,"lock");capabilities$verify(lock,calls)}
+  versions <- function(versions,calls) {events <<- c(events,"lock");capabilities$verify(versions,calls)}
   binding <- function(call,parameters) {
     events <<- c(events,"bind");bound <- capabilities$resolve(call,parameters)
     if(bound[[1L]]!=0L) return(bound)
