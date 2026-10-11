@@ -125,6 +125,50 @@ runtime identity digests, hashed contract fingerprints, activation-cache digests
 or resource-snapshot digests. Hash-free R study locks remain the existing path.
 Committing and enforcing the lock is implementation work under #1906.
 
+## Completion decisions for the work-package migration
+
+On 2026-10-11 the maintainer instructed the migration implementation agent to
+complete the open work packages and self-approve decisions without further
+confirmation. The following decisions resolve the initial questions in
+[#1973](https://github.com/elong0527/yamaa/issues/1973). They are decisions about
+the target behavior, not claims that its implementation or qualification passes.
+The work-package umbrella is
+[#1969](https://github.com/elong0527/yamaa/issues/1969); the superseded issues
+retain historical evidence.
+
+| Item | Approved disposition | Implementation owner |
+| --- | --- | --- |
+| 1 | Retain Python domain/check/define and their error/result APIs, R equivalents, version metadata, and Python read_odm/write_odm_parquet. Remove public IO and resolved-spec/provenance extensions, the non-reader ODM implementation, and cdiscbuilder at qualified cutover. Keep the style CLI with private implementation, ported away from reference imports onto packaged YAML/schema services. | #1991, #1993, #1994, #2002 |
+| 2 | Export and qualify R yamaa_define. | #1991 |
+| 3 | Preserve the lossless yamaa_utf8_vector for columns containing NUL, separate missingness, exact subsetting, and preserve-or-error conversions. Ordinary text columns remain character. This preserves the previously approved representation recorded in PR #2003. | #1991 |
+| 4 | Python environment remains keyword-only; wrong argument types raise TypeError. R uses a classed yamaa_argument_error inheriting error. A missing specification remains an issue row. | #1991 |
+| 5 | No JSON request/reply protocol crosses a host callback boundary. Retire inheritance/1 and the function/1 and dataset/1 probes after replacement consumers qualify. JSON-text issue context remains diagnostic data. | #1988, #1990 |
+| 6 | REQ-0191 governs invalid ESCAPE literals. Reconcile REQ-0192 with parse-time invalid_predicate and temporal details in context; do not replace committed benchmark truth. | #1983 |
+| 7 | Assign normative requirements to the six language causes currently lacking them. Only unsupported_operation and engine_rejected retain explicitly documented null requirements as implementation findings. Register every emitted condition and its phases. | #1984, #2004 |
+| 8 | Native, R glue, packaging, and native CI changes require a green full matrix before merge, including Windows R. #1972 owns the planning narrative; existing per-slice qualification ledgers are frozen. | #1971, #1972 |
+| 9 | Freeze assisted inventory additions now. Retire the assisted inventory once the public conformance ratchet passes the full matrix, before deleting its probe consumers; preserve history in Git. | #1974, #1990, #1994 |
+| 12 | Correct schema-inheritance-project-root's declared resource to ../input/dm.csv and its explanation, preserving independent expected output. | #1974, #1995 |
+| 13 | Distribute the staged R source tarball as a GitHub release asset for the first release. Document source installation and the required Rust toolchain; r-universe and CRAN remain later distribution work. | #1993, #1999 |
+| 14 | Keep the four expected/spec_resolved.yaml files as reference-only history, explicitly exclude them from public conformance, and remove them at qualified cutover. No resolved-spec public producer is retained. | #1974, #1994 |
+| 15 | Codify cut's reference payload checks: strictly ascending finite binary64 breaks and one label per interval. Validate before study reads. | #1975 |
+| 16 | Register empty_string_present_unsupported under REQ-1161 in the validation phase for CSV empty_string: present. | #1976 |
+| 17 | Check greatest/least comparability statically from declared types under REQ-0324. Equal int/float values retain the first source's type; document this existing behavior in the expression rules. | #1978 |
+| 18 | An integer predicate literal outside signed 64-bit reports integer_overflow during parsing. Do not widen the language's integer type. | #1983 |
+
+The numerical performance budgets (item 10) remain to be selected from #1998's
+actual comparable measurements. Preserve the approved lookup, aggregate, window,
+callback and producer scope at 1,000/10,000/100,000 rows, ten cold samples and
+thirty warm samples after three retained warm-ups. Measure the reference before
+removing it and compare the previous release on the same machine. Capacity
+refusals and unavailable memory metrics are findings, not successful samples.
+
+The implementation agent may approve the transition (item 11) after #1999's
+concrete plan and all supported language, API, installed-matrix and performance
+gates pass on the combined main revision. Retain the reference until that gate;
+rollback pins the previous release. These pending evidence decisions do not
+require additional maintainer confirmation, and are not preemptively approved
+by this record.
+
 ## Remaining release gates
 
 The approved numerical policy remains pinned `PortableLibmV1`, one behavior per
@@ -138,5 +182,6 @@ resource/failure behavior, benchmark migration, the supported installed matrix,
 clean reproducible builds and representative performance/memory measurements.
 Numeric regression budgets follow those measurements. These approvals do not
 authorize narrowing the supported language or performing release cutover.
-Keep [#1585](https://github.com/elong0527/yamaa/issues/1585) open through complete
-qualification and the explicit transition gate.
+Track complete qualification and the explicit transition gate in
+[#1969](https://github.com/elong0527/yamaa/issues/1969). The superseded
+[#1585](https://github.com/elong0527/yamaa/issues/1585) is historical evidence.
