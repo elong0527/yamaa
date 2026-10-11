@@ -22,10 +22,29 @@ impl Temp {
     fn fixture(name: &str, published: bool) -> Self {
         let this = Self::new();
         let original = root().join("benchmarks").join(name);
-        for file in ["spec.yaml", "environment.yaml"] {
-            fs::copy(original.join(file), this.0.join(file)).unwrap();
+        fs::copy(original.join("spec.yaml"), this.0.join("spec.yaml")).unwrap();
+        if name == "sdtm-lb-metadata" {
+            fs::copy(
+                original.join("submission-spec.yaml"),
+                this.0.join("submission-spec.yaml"),
+            )
+            .unwrap();
+            fs::copy(
+                original.join("submission-environment.yaml"),
+                this.0.join("environment.yaml"),
+            )
+            .unwrap();
+            if published {
+                fs::copy(original.join("expected/lb.csv"), this.0.join("lb.csv")).unwrap();
+            }
+        } else {
+            fs::copy(
+                original.join("environment.yaml"),
+                this.0.join("environment.yaml"),
+            )
+            .unwrap();
         }
-        if published {
+        if published && name != "sdtm-lb-metadata" {
             fs::copy(original.join("expected/dm.csv"), this.0.join("dm.csv")).unwrap();
         }
         this
@@ -39,6 +58,91 @@ impl Temp {
             Language::Python,
         )
     }
+}
+#[test]
+fn lb_value_metadata_uses_original_published_bytes_and_family_valid_completion() {
+    let temp = Temp::fixture("sdtm-lb-metadata", true);
+    let mut run = temp.run("2026-09-11T00:00:00");
+    assert!(run.issues().is_empty(), "{:?}", run.issues());
+    let artifacts: Vec<_> = run
+        .artifacts()
+        .map(|(name, bytes, state)| (name.to_string(), bytes.to_vec(), state))
+        .collect();
+    assert_eq!(
+        artifacts.iter().map(|a| a.0.as_str()).collect::<Vec<_>>(),
+        ["lb.json", "define.xml"]
+    );
+    let xml = std::str::from_utf8(&artifacts[1].1).unwrap();
+    assert_eq!(xml.matches("<def:ValueListDef ").count(), 1);
+    assert_eq!(xml.matches("<def:WhereClauseDef ").count(), 2);
+    assert_eq!(xml.matches("<ItemDef ").count(), 13);
+    for (index, code, source, list) in [
+        (1, "GLUC", "Vendor", "CL_GLUCOSE"),
+        (2, "CREAT", "Sponsor", "CL_CREATININE"),
+    ] {
+        let begin = xml
+            .find(&format!("<ItemDef OID=\"IT.LB.LBORRESU.V{index}\""))
+            .unwrap();
+        let item = &xml[begin..begin + xml[begin..].find("</ItemDef>").unwrap()];
+        assert!(item.contains("Length=\"8\""));
+        assert!(
+            item.contains(&format!("CodeListOID=\"CL.{list}\"")),
+            "{item}"
+        );
+        assert!(item.contains(&format!("Source=\"{source}\"")));
+        assert!(xml.contains(&format!("<CheckValue>{code}</CheckValue>")));
+    }
+    assert!(!temp.0.join("input").exists());
+    let reads = run.capture_reads();
+    for file in ["spec.yaml", "submission-spec.yaml", "environment.yaml"] {
+        fs::remove_file(temp.0.join(file)).unwrap();
+    }
+    fs::write(temp.0.join("lb.csv"), b"changed after preparation").unwrap();
+    assert!(run.save().unwrap());
+    assert_eq!(reads, run.capture_reads());
+    for artifact in artifacts {
+        assert_eq!(fs::read(temp.0.join(artifact.0)).unwrap(), artifact.1);
+    }
+}
+#[test]
+fn original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes() {
+    let temp = Temp::fixture("sdtm-lb-metadata", true);
+    let overlay = fs::read_to_string(temp.0.join("submission-spec.yaml")).unwrap();
+    fs::write(
+        temp.0.join("submission-spec.yaml"),
+        overlay.split("rows:\n").next().unwrap(),
+    )
+    .unwrap();
+    let mut run = temp.run("2026-09-11T00:00:00");
+    assert!(
+        run.issues()
+            .iter()
+            .any(|i| i.requirement.as_deref() == Some("REQ-0919")
+                && i.condition == "origin_source_not_admitted"),
+        "{:?}",
+        run.issues()
+    );
+    assert!(run.save().is_err());
+    assert!(!temp.0.join("define.xml").exists());
+    assert!(!temp.0.join("lb.json").exists());
+    let temp = Temp::fixture("sdtm-lb-metadata", true);
+    let csv = fs::read_to_string(temp.0.join("lb.csv"))
+        .unwrap()
+        .replace("95,mg/dL,95", "95,mmol/L,95");
+    fs::write(temp.0.join("lb.csv"), csv).unwrap();
+    let mut run = temp.run("2026-09-11T00:00:00");
+    assert!(
+        run.issues()
+            .iter()
+            .any(|i| i.condition == "allowed_values_failed"
+                && i.context.contains("CL_GLUCOSE")
+                && i.context.contains("GLUC")),
+        "{:?}",
+        run.issues()
+    );
+    assert!(run.save().is_err());
+    assert!(!temp.0.join("define.xml").exists());
+    assert!(!temp.0.join("lb.json").exists());
 }
 impl Drop for Temp {
     fn drop(&mut self) {

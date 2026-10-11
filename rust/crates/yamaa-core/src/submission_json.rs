@@ -6,6 +6,7 @@ use crate::{
     value::{ColumnType, Value},
 };
 use alloc::{
+    collections::BTreeMap,
     format,
     string::{String, ToString},
     vec::Vec,
@@ -263,7 +264,9 @@ fn validate_artifact<T: TableAccess>(
         ));
     }
     let mut work = 0usize;
-    for column in &dataset.columns {
+    for column in dataset.columns.iter().flat_map(|column| {
+        core::iter::once(column).chain(column.values.iter().map(|value| &value.column))
+    }) {
         let meta = column
             .declaration
             .submission
@@ -292,6 +295,7 @@ fn validate_artifact<T: TableAccess>(
         };
         work = list_work
             .checked_add(inventory_work)
+            .and_then(|n| n.checked_add(column.values.len() + 1))
             .and_then(|n| n.checked_mul(table.row_count()))
             .and_then(|n| work.checked_add(n))
             .filter(|&n| n <= 268_435_456)
@@ -303,27 +307,52 @@ fn validate_artifact<T: TableAccess>(
                 )
             })?;
     }
-    for (index, column) in dataset.columns.iter().enumerate() {
-        let meta = column
-            .declaration
-            .submission
-            .as_ref()
-            .expect("composed metadata");
-        let list = meta
-            .codelist
-            .as_ref()
-            .and_then(|id| {
-                study
-                    .codelists
-                    .iter()
-                    .find(|list| list.declaration.id == id.value)
-            })
-            .map(|list| &list.declaration);
-        let inventory = meta
-            .inventory_vocabulary
-            .as_ref()
-            .is_some_and(|field| field.value);
+    let lists: BTreeMap<_, _> = study
+        .codelists
+        .iter()
+        .map(|list| (list.declaration.id.as_str(), &list.declaration))
+        .collect();
+    let variants: BTreeMap<_, _> = dataset
+        .columns
+        .iter()
+        .enumerate()
+        .flat_map(|(index, column)| {
+            column
+                .values
+                .iter()
+                .map(move |value| ((index, value.test_code.as_str()), value))
+        })
+        .collect();
+    for (index, base) in dataset.columns.iter().enumerate() {
         for row in 0..table.row_count() {
+            let variant = if base.values.is_empty() {
+                None
+            } else {
+                let discriminator = table
+                    .cell(
+                        row,
+                        dataset.discriminator.expect("admitted value discriminator"),
+                    )
+                    .map_err(|_| mismatch("held artifact discriminator access"))?;
+                match discriminator {
+                    ValueRef::Str(code) => variants.get(&(index, code)).copied(),
+                    _ => None,
+                }
+            };
+            let column = variant.map_or(base, |value| &value.column);
+            let meta = column
+                .declaration
+                .submission
+                .as_ref()
+                .expect("composed metadata");
+            let list = meta
+                .codelist
+                .as_ref()
+                .and_then(|id| lists.get(id.value.as_str()).copied());
+            let inventory = meta
+                .inventory_vocabulary
+                .as_ref()
+                .is_some_and(|field| field.value);
             let value = table
                 .cell(row, index)
                 .map_err(|_| mismatch("held artifact access"))?;
@@ -340,9 +369,14 @@ fn validate_artifact<T: TableAccess>(
                 let mut finding = Finding::cause(
                     ConditionCode::VerificationCodelistFailed,
                     &format!(
-                        "datasets.{}.columns.{}.submission.{}",
-                        dataset.id,
-                        column.declaration.name.value,
+                        "{}.{}",
+                        variant.map_or_else(
+                            || format!(
+                                "datasets.{}.columns.{}.submission",
+                                dataset.id, column.declaration.name.value
+                            ),
+                            |value| value.path.clone()
+                        ),
                         if outside_list {
                             "codelist"
                         } else {
@@ -376,6 +410,12 @@ fn validate_artifact<T: TableAccess>(
                 finding
                     .context
                     .insert("value".into(), ContextValue::Scalar(owned(value)));
+                if let Some(variant) = variant {
+                    finding.context.insert(
+                        "testcd".into(),
+                        ContextValue::Scalar(Value::Str(variant.test_code.clone())),
+                    );
+                }
                 if let Some(list) = list {
                     finding.context.insert(
                         "codelist".into(),

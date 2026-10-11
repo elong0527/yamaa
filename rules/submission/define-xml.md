@@ -135,8 +135,9 @@ every identifier it had.
 
 <a id="req-0973"></a>
 
-**REQ-0973.** One `ItemDef` is generated per dataset and column, and never
-shared between datasets.
+**REQ-0973.** One base `ItemDef` is generated per dataset and column. Neither
+base nor per-value `ItemDef` elements are shared between datasets; per-value
+definitions follow [REQ-1013](#req-1013).
 
 ### Document structure
 
@@ -158,10 +159,12 @@ rather than written empty.
       <def:Standards>              standards, in declaration order
       <def:AnnotatedCRF>           annotated_crf documents, declaration order
       <def:SupplementalDoc>        supplemental documents, declaration order
+      <def:ValueListDef>*          dataset order, then output.columns order
+      <def:WhereClauseDef>*        value-list order, then value order
       <ItemGroupDef>*              datasets, in entry order
-      <ItemDef>*                   dataset order, then output.columns order
+      <ItemDef>*                   dataset order, then output.columns order; per-value definitions follow their base column
       <CodeList>*                  codelists, in declaration order
-      <MethodDef>*                 dataset order, then output.columns order
+      <MethodDef>*                 ItemDef order, including per-value methods
       <def:CommentDef>*            see REQ-0976
       <def:leaf>*                  documents, in declaration order
     </MetaDataVersion>
@@ -178,7 +181,8 @@ and it is fixed.
 <a id="req-0976"></a>
 
 **REQ-0976.** Comment definitions are emitted per dataset in entry order: the
-dataset's own comment first, its columns' comments in `output.columns` order.
+dataset's own comment first, its columns' comments in `output.columns` order,
+with each column's per-value comments following its base comment in value order.
 
 <a id="req-0977"></a>
 
@@ -345,7 +349,8 @@ means the presented order survives any later reordering of the document.
 
 <a id="req-0992"></a>
 
-**REQ-0992.** Each column produces one `ItemDef`:
+**REQ-0992.** Each column produces one base `ItemDef`. Per-value definitions
+use the same mapping with the effective metadata under [REQ-1013](#req-1013):
 
 | Attribute or child | Source |
 |---|---|
@@ -367,10 +372,10 @@ means the presented order survives any later reordering of the document.
 which [REQ-0890](metadata.md#req-0890) derives for the `adam` family. Its `Description` child carries
 `origin.description` when declared, and one `def:DocumentRef` child follows per
 document reference in declaration order, including the annotated case report
-form [REQ-0894](metadata.md#req-0894) derives when a collected origin declares none. Exactly one
-`def:Origin` is generated per column: a second would describe a column whose
-rows have different provenance, which needs the value-level metadata [REQ-1007](define-xml.md#req-1007)
-defers.
+form [REQ-0894](metadata.md#req-0894) derives when a collected origin declares none.
+Exactly one `def:Origin` is generated per base or per-value `ItemDef`. Rows with
+different provenance use the separate per-value definitions under
+[REQ-1013](#req-1013).
 
 <a id="req-0994"></a>
 
@@ -574,22 +579,37 @@ metadata against statically enumerated `--TESTCD` literals. The mapping to
 Define-XML is therefore fixed:
 
 - for each column carrying value-level metadata, the document generates one
-  `def:ValueListDef` per distinct test code value, referenced from the
-  column's `ItemRef`;
+  `def:ValueListDef` containing one ordered `ItemRef` per distinct test code
+  value, in row declaration order with each code's first occurrence retained.
+  The column's `ItemDef` carries its single `def:ValueListRef` after
+  its `def:Origin`;
 - each value's entry becomes a per-value `ItemDef` carrying the column-level
   declaration merged with the row-level overrides;
-- each value list entry carries a `def:WhereClauseDef` selecting rows whose
-  `<DOMAIN>TESTCD` equals the literal code; and
-- each per-value `ItemDef` carries the row-level entry's `def:Origin`.
+- each value list `ItemRef` carries a `def:WhereClauseRef` to a generated
+  `def:WhereClauseDef`. Its `RangeCheck` has `Comparator="EQ"`,
+  `SoftHard="Soft"`, `def:ItemOID` referring to the `<DOMAIN>TESTCD`
+  `ItemDef`, and a `CheckValue` containing the literal code; and
+- each per-value `ItemDef` carries its effective inherited or overridden
+  `def:Origin`, codelist and other submission metadata. Associated methods,
+  comments and document references remain resolvable.
+
+This linkage follows the bundled authoritative Define-XML 2.1 XSDs:
+`define-extension.xsd` places `ValueListRef` only in the `ItemDef` extension
+(at most one), places `WhereClauseRef` in the `ItemRef` extension, and orders
+all `ValueListDef` elements before all `WhereClauseDef` elements ahead of
+the ordinary metadata definitions. `define-ns.xsd` requires a nonempty value
+list with unique item references and order numbers. A value list for every
+code linked from the column's `ItemRef` would violate these constraints.
 
 <a id="req-1169"></a>
 
-**REQ-1169.** No generator consumes the row-level `submission` map yet. A
-study document that includes a specification carrying value-level metadata
-therefore fails loudly under the `Submission` context. It does not generate a
-document that quietly omits the per-value definitions. Declared
-and unconsumed is an error; the failure names the row and column whose
-metadata has no generated form.
+**REQ-1169.** Every admitted row-level `submission` map must have its complete
+generated form. A generator that cannot consume an entry fails loudly under
+the `Submission` context, naming its row and column; it never quietly omits
+per-value definitions. The shared generator consumes the bounded typed map
+and the semantics in [REQ-1013](#req-1013). The retained reference generator's
+unconsumed-entry failure remains a historical transition control until its
+replacement is fully qualified.
 
 ### Interface behavior
 

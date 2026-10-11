@@ -36,3 +36,18 @@ submission metadata is validated when the specification loads;
 the engine output is unaffected by it.
 
 **Standard:** SDTM | **Domain:** LB
+
+`submission-spec.yaml` and `submission-environment.yaml` are a separate,
+independently completed submission witness over the original executable
+specification. They add complete dataset/column metadata and retain the
+glucose and creatinine codelist declarations. The completion explicitly uses
+Sponsor for the creatinine Assigned origin: SDTM admits Vendor or Sponsor for
+Assigned, whereas the original family-independent loader fixture retains its
+Investigator declaration. Installed Define tests also exercise that original
+declaration's family-admission failure.
+
+The fixed-time witness reads the unchanged `expected/lb.csv` only when
+Dataset-JSON is explicitly requested; it does not execute the specification
+or open its ODM input. Its independently authored XML structure is validated
+against the bundled offline Define-XML XSD. The original declarations, input,
+CSV expectation and reference loader controls retain their existing meaning.
