@@ -305,9 +305,11 @@ source archive. `tests/installed_python.py` and the R package's
 `tests/installation.R` assert the installed capabilities and resource contents.
 
 CI builds Python 3.12/3.14 on Linux x86_64, macOS arm64, and Windows x86_64;
-the stable ABI wheel targets Python 3.12+. It builds R 4.6.1 on Linux x86_64 and
-macOS arm64. R Windows native installation and other architectures are not
-qualified by this slice. The existing Windows Python engine remains supported.
+the stable ABI wheel targets Python 3.12+. The R 4.6.1 source-package matrix
+includes Linux x86_64, macOS arm64 and Windows x86_64. Windows uses Rtools45 and
+the GNU Rust target; its required installed evidence is described in
+[R_WINDOWS.md](R_WINDOWS.md). Other R architectures and distribution forms
+remain unqualified. The existing Windows Python engine remains supported.
 
 The initial hosted installation matrix passed. Transitive dependency locking,
 typed evaluation/grammar/diagnostics, Arrow tables and host callbacks now have

@@ -1,7 +1,7 @@
 //! Private explicit-target publication transport with registered handles.
 use crate::specification_service::boundary;
 use extendr_api::prelude::*;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(super) mod platform {
     use super::*;
     use crate::specification_service::address;
@@ -97,11 +97,11 @@ pub(super) mod platform {
 #[extendr]
 fn create_file_publisher(declared: Raw, target: Raw) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::create(declared, target)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (declared, target);
             Err("native file publication unavailable on this platform".into())
@@ -111,11 +111,11 @@ fn create_file_publisher(declared: Raw, target: Raw) -> List {
 #[extendr]
 fn publish_file_artifact(handle: Robj, path: Raw, content: Raw) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::publish(handle, path, content)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (handle, path, content);
             Err("native file publication unavailable on this platform".into())
@@ -125,11 +125,11 @@ fn publish_file_artifact(handle: Robj, path: Raw, content: Raw) -> List {
 #[extendr]
 fn save_build_file_artifact(result: Robj, publisher: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::save(result, publisher)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (result, publisher);
             Err("native file publication unavailable on this platform".into())

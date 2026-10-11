@@ -4,8 +4,9 @@ This candidate ports the same approved-root resource policy and owned domain
 lifecycle to Windows Python. Root/configuration/fallback selection remains the
 current contract. The separate declaring-file policy approval is still pending.
 Local drive roots are admitted; remote and device namespaces require additional
-identity and filesystem qualification. R on Windows remains outside the current
-installed matrix and is recorded as unqualified under #1742.
+identity and filesystem qualification. The R binding uses the same adapter on
+Windows; its source build and installed evidence are described in
+[R_WINDOWS.md](R_WINDOWS.md).
 
 The private Windows adapter uses user-mode
 [NtCreateFile](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile)
