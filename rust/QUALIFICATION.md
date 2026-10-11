@@ -28,21 +28,23 @@ The reference CI matrix reports its ordinary Python runs. The native Python
 matrix separately exercises every current fixture from installed host/native
 packages, outside the checkout, after both wheel installation and source rebuild.
 It compares independent expected artifacts and complete reference observations.
-Missing native reports are `not_exercised`, never inferred passes. R currently
-lacks the complete original-YAML entry point targeted by
-[#1739](https://github.com/elong0527/yamaa/issues/1739); `missing-routes.json`
-records that blocker explicitly. The [supplemental contract inventory](SUPPLEMENTAL.md)
+Missing native reports are `not_exercised`, never inferred passes. The broad
+inventory retains R's historical missing route under
+[#1739](https://github.com/elong0527/yamaa/issues/1739) in `missing-routes.json`;
+a separate public cohort now compares actual installed Python/R shared runs. The [supplemental contract inventory](SUPPLEMENTAL.md)
 reconciles component/compile contracts and installed probes separately from the
-benchmark count. The [M2 prerequisite map](planning/m2-prerequisites.md) identifies
-the shared compilation work remaining for the fixed six-case cohort.
+benchmark count. The [M2 prerequisite map](planning/m2-prerequisites.md) records
+the original six-case compilation cohort. The public M1 gate now requires
+eleven cases, adding the five historical timing fixtures described below.
 
 The current committed candidate set contains 76 Python-assisted native passes:
 16 positive and 60 negative fixtures. Some negatives fail in Python frontend
 validation before native evaluation, so this is qualification of the complete
 assisted route, not evidence that Rust owns those validation semantics. The
 remaining 234 fixtures return Unsupported, and five retain explicit timing
-mismatches described below. No route is promoted to `shared_run`, no engine
-readiness flag changes, and Python remains the default.
+mismatches described below. These historical assisted rows are not promoted
+to `shared_run`; the public gate records that route independently. Expanding
+the gate changes neither engine dispatch nor release acceptance.
 
 ## Evidence and gates
 
@@ -80,14 +82,21 @@ finding fails CI until its disposition is reviewed. Reference failures and
 infrastructure failures cannot be exempted. This keeps unfinished migration
 scope visible without turning a known gap into qualified behavior.
 
-For five negative fixtures, the reference route reads one source before reporting
-the diagnostic; native validation reports the same diagnostic before source
+For five negative fixtures in the historical assisted inventory, the reference
+route reads one source before reporting the diagnostic; assisted native
+validation reports the same diagnostic before source
 capture: `negative-formula-flag`, `negative-row-aggregate`,
 `negative-row-no-prior`, `negative-source-missing-field` and
 `negative-source-trivial-filter`. Their source capture and source-table counts
-differ. Those traces are retained unchanged;
-#1585 still owns resolving the compatibility difference. Improving one requires
-removing its exact gap and adding its passing route to `required.json`.
+differ. Those assisted traces and exact gaps are retained unchanged. The
+installed public suites already compare complete shared-run reports for these
+five cases, including the original read timing and source tables. The public
+M1 comparator now requires all five on every installed interpreter/package
+lane and both hosts where qualified. A missing read, source table, diagnostic
+or failed-build save refusal cannot satisfy that shared gate. Windows R
+remains an explicit missing route until its installed evidence passes.
+Retiring an assisted gap requires reviewed evidence for that same route;
+shared evidence does not rewrite its historical result.
 
 The summary groups by host, backend, qualification level and benchmark naming
 family (`adam`, `sdtm`, `schema`, `negative`). Detailed records retain the actual

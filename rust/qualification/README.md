@@ -7,12 +7,13 @@ native readiness.
 
 - `required.json` names 76 fixture/host/backend/level tuples that must pass both
   independent expected truth and the existing portable reference comparator.
-- `known-gaps.json` names five unqualified validation/read-timing differences.
+- `known-gaps.json` names five unqualified validation/read-timing differences
+  in the historical `reference_assisted_run` route.
   Their exact findings must remain visible. A gap never counts as a pass, cannot
   satisfy a required tuple and cannot exempt reference or infrastructure errors.
   Any changed or disappearing difference requires explicit disposition.
-- `missing-routes.json` identifies R's missing original-YAML entry point under
-  #1739. No R execution is fabricated to fill that gap.
+- `missing-routes.json` preserves the broad inventory's missing R route under
+  #1739. The separately qualified public cohort does not fill unexercised rows.
 
 `supplemental.json` separately reconciles component/compile contract files and
 installed Python/R probe suites. Its runner retains actual suite logs and results;
@@ -34,3 +35,17 @@ its exact route here. A shared-compiler route requires its own `shared_run` tupl
 an assisted pass cannot satisfy it. Retire a known gap only when its new evidence
 has been reviewed. Keep the inventory's denominator synchronized with the
 execution manifest rather than fixing it to today's 315 cases.
+
+
+The separate public M1 gate in `tools/qualify_public_cohort.py` requires eleven
+cases from actual installed Python/R public domain runs. It includes the original
+six-case cohort and all five historical timing fixtures. Both installed suites
+already compare their complete reports with independent truth, including source
+reads, source tables, ordered diagnostics and refusal to save a failed build.
+The public comparator now requires those reports rather than leaving them outside
+its selected cohort. Missing or mismatched reports fail the gate. Windows R
+remains required and unqualified until its actual installed evidence passes.
+
+This adds required `shared_run` comparisons for a different executed route. The
+historical assisted gaps, manifest, expected artifacts and broad inventory are
+retained unchanged; an assisted mismatch is never relabeled as a shared pass.
