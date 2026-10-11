@@ -544,8 +544,12 @@ def actual_origins(observed, declared, repository):
             "complete-report runtime label differs from the actual runtime"
         )
     if declared["host"] == "r":
+        collectors = {
+            name: dict(spec, origin=outside_checkout(spec["origin"], repository, roots))
+            for name, spec in observed["collectors"].items()
+        }
         assert_equal(
-            observed["collectors"],
+            collectors,
             declared["collectors"],
             "actual collector origins/versions",
         )

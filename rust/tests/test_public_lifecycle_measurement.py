@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import builtins
 import copy
-from contextlib import contextmanager
 import importlib.util
 import io
 import itertools
@@ -21,6 +20,7 @@ import types
 import unittest
 import venv
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
@@ -241,6 +241,30 @@ class Pipeline(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_actual_r_collector_paths_resolve_and_preserve_versions_and_ownership(self):
+        declared = self.installed["r"]
+        observed = copy.deepcopy(declared)
+        observed["report_runtime_version"] = declared["runtime_version"]
+        observed["clock_library"] = declared["clock_evidence"]["installed_library"]
+        observed["clock"] = {
+            "provider": declared["clock_evidence"]["provider"],
+            "api": "microbenchmark::get_nanotime",
+        }
+        # R reports forward slashes on Windows; also exercise an equivalent
+        # lexical spelling on every host so the control fails without resolution.
+        for spec in observed["collectors"].values():
+            spec["origin"] = Path(spec["origin"]).as_posix() + "/."
+        controller.actual_origins(observed, declared, self.repo)
+        for field, value in (
+            ("version", "different-version"),
+            ("origin", str(self.root / "collectors" / "microbenchmark")),
+            ("origin", str(self.repo)),
+        ):
+            corrupted = copy.deepcopy(observed)
+            corrupted["collectors"]["jsonlite"][field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                controller.actual_origins(corrupted, declared, self.repo)
 
     def fake_launch(self, command, child, mutate=None):
         """Simulated installed process transport; all clock values are authored."""

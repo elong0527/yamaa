@@ -14,7 +14,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from test_public_lifecycle_measurement import TOOLS, controller, fresh_worker_imports, worker
+from test_public_lifecycle_measurement import (
+    TOOLS,
+    controller,
+    fresh_worker_imports,
+    worker,
+)
 
 
 class ReachedEvidence(unittest.TestCase):
