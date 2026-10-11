@@ -41,15 +41,15 @@ class Workloads(unittest.TestCase):
     ):
         expected = self.expected("lookup-20-4")["rows"]
         self.assertEqual(expected[0][1], {"type": "missing", "value": None})
-        self.assertEqual(expected[1][1], {"type": "str", "value": "é,1:0"})
+        self.assertEqual(expected[1][1], {"type": "str", "value": "\u00e9,1:0"})
         record, directory = self.case("lookup-20-4")
         donors = list(
             csv.DictReader(io.StringIO((directory / "donor.csv").read_text()))
         )
         self.assertEqual(
-            [r["TEXT"] for r in donors[:4]], [f"é,1:{i}" for i in range(4)]
+            [r["TEXT"] for r in donors[:4]], [f"\u00e9,1:{i}" for i in range(4)]
         )
-        self.assertIn('"é,1:0"', (directory / "expected/out.csv").read_text())
+        self.assertIn('"\u00e9,1:0"', (directory / "expected/out.csv").read_text())
         self.assertEqual(record["dimensions"], {"donors_per_match": 4})
 
     def test_window_dense_ties_and_missing_offset_differ_from_last_present(self):

@@ -146,8 +146,8 @@ def lookup(case, rows, multiplicity):
             continue
         # Equal order keys pin first stored donor, including non-ASCII text.
         for donor in range(multiplicity):
-            donors.append([key, 1, f"é,{i}:{donor}"])
-        expected.append([key, f"é,{i}:0"])
+            donors.append([key, 1, f"\u00e9,{i}:{donor}"])
+        expected.append([key, f"\u00e9,{i}:0"])
     case.source("base.csv", ["ID"], base)
     case.source("donor.csv", ["KEY", "ORDER", "TEXT"], donors)
     spec = specification(
