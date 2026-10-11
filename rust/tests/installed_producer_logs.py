@@ -195,9 +195,12 @@ class ProducerLogs(unittest.TestCase):
                 before = self.retain(result, f"build-{diamond}")
                 self.assertEqual(len(before["source_reads"]), 1)
                 owners = {record["specification"] for record in before["tables"]}
-                self.assertEqual(
-                    owners, {str(self.work / (name + ".yaml")) for name in self.names}
-                )
+                # Canonical document identities use forward slashes on every
+                # platform (see path_text in file_resources.rs).
+                expected_owners = {
+                    (self.work / (name + ".yaml")).as_posix() for name in self.names
+                }
+                self.assertEqual(owners, expected_owners)
                 verification.replace_column(0, pl.Series("REPORT_VERSION", ["mutated"]))
                 self.assertNotEqual(
                     result.verification_log["REPORT_VERSION"].to_list(), ["mutated"]
@@ -341,13 +344,13 @@ class ProducerLogs(unittest.TestCase):
             ):
                 records = copy.deepcopy(truth[key])
                 for record in records:
-                    record["specification"] = str(self.work / (name + ".yaml"))
+                    record["specification"] = (self.work / (name + ".yaml")).as_posix()
                 output.extend(records)
         self.assertEqual(before["nodes"], expected_nodes)
         self.assertEqual(before["verifications"], expected_checks)
         expected_leaf = copy.deepcopy(truth["tables"])
         for record in expected_leaf:
-            record["specification"] = str(self.work / "producer.yaml")
+            record["specification"] = (self.work / "producer.yaml").as_posix()
         self.assertEqual(
             [
                 record
