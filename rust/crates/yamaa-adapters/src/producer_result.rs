@@ -102,7 +102,7 @@ impl RootResult {
             budget.json(&self.observations)?;
             budget.entries(publication.artifacts().len().saturating_mul(64))?;
             for artifact in publication.artifacts() {
-                for _ in 0..8 {
+                for _ in 0..4 {
                     budget.text(artifact.path())?;
                 }
             }
@@ -200,7 +200,7 @@ impl RootResult {
         let reports = (|| {
             budget.entries(count.saturating_mul(64))?;
             for (_, request) in publication.requests(failed) {
-                for _ in 0..4 {
+                for _ in 0..8 {
                     budget.text(&request.path)?;
                 }
                 budget.text(request.field)?;
