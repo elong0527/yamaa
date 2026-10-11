@@ -284,41 +284,52 @@ impl CapturedSchema {
         source: Source,
         raw: DecodedYaml,
     ) -> Result<PreparedDocument, Error> {
-        if raw.document.field(raw.document.root(), "parents").is_some() {
-            return Err(Error::InheritanceRequired);
-        }
+        use yamaa_engine::standalone_preparation::{self, Error as StandaloneError};
+        let DecodedYaml {
+            document,
+            locations,
+        } = raw;
         let mut budget = NormalizationBudget::new(self.limits.normalization);
-        let normalized = self
-            .structure
-            .normalize_document(&raw.document, &mut budget)
-            .map_err(|error| self.normalization_failure(&source, &raw.document, error))?;
-        let expanded = self
-            .structure
-            .expand_named_windows(&normalized.document, true, &mut budget)
-            .map_err(|error| self.normalization_failure(&source, &normalized.document, error))?;
-        let origins = expanded
-            .origins
-            .iter()
-            .map(|&id| normalized.origins[id])
-            .collect();
-        let model = SpecificationDocument::admit(expanded.document, budget.validation_scope())
-            .map_err(Error::Validation)?
-            .map_err(|findings| {
-                Error::Findings(Box::new(CapturedFindings {
+        let prepared = match standalone_preparation::prepare(&self.structure, document, &mut budget)
+        {
+            Ok(prepared) => prepared,
+            Err(StandaloneError::InheritanceRequired) => return Err(Error::InheritanceRequired),
+            Err(StandaloneError::Normalize(failure)) => {
+                let standalone_preparation::FailureContext { error, input } = *failure;
+                return Err(match error {
+                    NormalizationError::Invalid(findings) => {
+                        Error::Findings(Box::new(CapturedFindings {
+                            schema: Arc::clone(self),
+                            source,
+                            document: input,
+                            findings,
+                        }))
+                    }
+                    error => Error::Normalize(error),
+                });
+            }
+            Err(StandaloneError::Validation(error)) => return Err(Error::Validation(error)),
+            Err(StandaloneError::Model(findings)) => {
+                return Err(Error::Findings(Box::new(CapturedFindings {
                     schema: Arc::clone(self),
-                    source: source.clone(),
+                    source,
                     document: None,
                     findings,
-                }))
-            })?;
+                })));
+            }
+        };
+        let (document, model, origins, windows) = prepared.into_parts();
         Ok(PreparedDocument {
             schema: Arc::clone(self),
             source,
-            raw,
+            raw: DecodedYaml {
+                document,
+                locations,
+            },
             content: PreparedContent::Standalone {
                 model,
                 origins,
-                windows: expanded.references,
+                windows,
             },
             parents: Vec::new(),
         })
