@@ -65,9 +65,10 @@ this preparation loop. Shared scripted metadata ports pin effect order and exact
 remaining allowances and consume non-Clone outcomes once. Engine tests use
 independent normalized documents; adapter tests keep original YAML truth.
 
-Captured schema closure/standalone preparation internals and the adapter-defined
-raw inheritance capture/rebase catalog remain separate migration work. Existing
-engine inheritance trait implementations remain codec/resource adapters. The
+Captured schema closure, standalone preparation and raw inheritance capture/rebase
+now use the dedicated engine services described below. Authored-origin lookup and
+class preparation remain separate migration work. Existing engine inheritance
+trait implementations remain codec/resource adapters. The
 experimental inheritance JSON callback and other component probes remain pending
 retirement after their complete public qualification consumers are preserved.
 
@@ -417,8 +418,8 @@ The adapter retains its public InheritancePort/CapturedParent/SourceFailure and
 InheritanceError shapes through reexports and a physical decoder implementation.
 Existing callers and installed Python/R callback protocols are unchanged.
 
-Standalone/schema-closure preparation, authored-origin lookup helpers and the
-native Parents spelling cache remain separate migration work. The post-success
+Authored-origin lookup helpers and the native Parents spelling cache remain
+separate migration work. The post-success
 native alias checks and entry-base selection stay in file_preparation. Existing
 YAML scanner rules, report/log projection, producer facades and filesystem policy
 are not part of this move. Inheritance callback component probes remain pending
@@ -442,6 +443,33 @@ Original opaque codec payloads move without Clone, Debug, Send or Sync requireme
 The adapter retains its public CapturedSchema/Source/Error shapes and only maps
 closed resource categories and physical decoding. Default resource policies and
 configured larger module capacities remain unchanged; there is no new source
-ceiling or retry. Standalone/class normalization, lifecycle selection and authored
-origin helpers remain separate migration work, as do native alias/cache/entry-base
+ceiling or retry. Class normalization, lifecycle selection and authored-origin
+helpers remain separate migration work, as do native alias/cache/entry-base
 policy and component probe retirement. This slice does not close #1754.
+
+
+`standalone_preparation::prepare` owns the no-parent structural lifecycle over one
+owned raw document and the admitted schema. Presence of `parents`, including null,
+rejects before any normalization charge. Normalization, strict named-window
+expansion, origin remapping and final model admission preserve their checkpoint
+order and share one caller-owned NormalizationBudget. Existing storage, work,
+depth and diagnostic policies stay distinct; no limits or counters are reset.
+Default and window-definition/use-site origins continue to address the retained
+raw/schema arenas. The remapped origin list retains its existing bound from the
+already-admitted expanded arena rather than introducing a new metadata quota.
+
+Success moves the original raw allocation into the result. A semantic
+normalization or expansion failure moves the exact failed-pass input arena with
+its complete ordered findings. Policy/internal errors retain their typed identity
+without a document copy; final model findings retain the existing document-free
+representation. The adapter only moves those results into its CapturedFindings
+and PreparedDocument shapes and rejoins physical occurrence locations with the
+unchanged raw arena. Entry physical decoding/source limits, lifecycle dispatch,
+class/structural preparation and inheritance remain unchanged. This service has
+no host port and introduces no opaque-error classification or callback effect.
+
+Standalone lifecycle ownership does not close the broader #1754 acceptance gates.
+Class preparation, dispatch, authored-origin helpers, native alias/cache/entry-base
+policy and component probe retirement remain separate work. YAML scanning,
+producer/source-origin facades, report/log projection, Define and Windows behavior
+are outside this slice.

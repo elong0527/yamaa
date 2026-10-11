@@ -16,6 +16,7 @@ pub mod inheritance_capture;
 pub mod inheritance_preparation;
 pub mod numeric_lifecycle;
 pub mod schema_capture;
+pub mod standalone_preparation;
 pub mod table_grouping;
 
 #[cfg(any(test, feature = "test-support"))]
