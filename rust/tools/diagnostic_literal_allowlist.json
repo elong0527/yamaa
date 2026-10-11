@@ -32,18 +32,6 @@
   "rust/crates/yamaa-adapters/src/producer_result.rs:267": 1,
   "rust/crates/yamaa-adapters/src/producer_result.rs:997": 1,
   "rust/crates/yamaa-adapters/src/specification_check.rs:104": 1,
-  "rust/crates/yamaa-adapters/src/specification_report.rs:754": 1,
-  "rust/crates/yamaa-adapters/src/specification_report.rs:758": 1,
-  "rust/crates/yamaa-adapters/src/specification_report.rs:761": 1,
-  "rust/crates/yamaa-adapters/src/specification_report.rs:773": 1,
-  "rust/crates/yamaa-adapters/src/specification_report.rs:781": 1,
-  "rust/crates/yamaa-adapters/src/specification_report.rs:782": 1,
-  "rust/crates/yamaa-adapters/src/specification_report.rs:783": 1,
-  "rust/crates/yamaa-adapters/src/specification_report.rs:784": 1,
-  "rust/crates/yamaa-adapters/src/specification_report.rs:785": 1,
-  "rust/crates/yamaa-adapters/src/specification_report.rs:786": 1,
-  "rust/crates/yamaa-adapters/src/specification_report.rs:787": 1,
-  "rust/crates/yamaa-adapters/src/specification_report.rs:847": 1,
   "rust/crates/yamaa-adapters/src/yaml_transport.rs:192": 1,
   "rust/crates/yamaa-adapters/src/yaml_transport.rs:196": 1
 }

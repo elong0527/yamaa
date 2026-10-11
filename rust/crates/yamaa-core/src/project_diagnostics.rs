@@ -42,7 +42,7 @@ pub enum Error<'a, E> {
 
 /// A context tree borrows scalar values and text, including nested failures.
 /// Adapters encode these facts but do not choose keys, reasons or causes.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Fact<'a> {
     Text(&'a str),
     /// A computed diagnostic label, never a copied authored scalar.

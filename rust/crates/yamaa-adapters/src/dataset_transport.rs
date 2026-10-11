@@ -517,16 +517,12 @@ pub struct DatasetResponse {
     // reconstructing execution success from JSON or decoding its own IPC output.
     pub(crate) execution: Option<dataset::Execution>,
     pub(crate) retained_verifications: Vec<dataset::CheckRecord>,
-}
-
-/// Translate the typed failure ledger without extending the dataset wire protocol.
-pub(crate) fn retained_verification_outcome(
-    response: &DatasetResponse,
-) -> Result<serde_json::Value, Error> {
-    serde_json::to_value(Outcome::Success {
-        verifications: records(response.retained_verifications.clone())?,
-    })
-    .map_err(|_| Error::Internal)
+    // Preserve the typed completed failure ledger for core report projection;
+    // the existing standalone dataset wire remains unchanged.
+    pub(crate) failed_verifications: Option<(
+        yamaa_core::verification_diagnostics::Phase,
+        Vec<CheckRecord>,
+    )>,
 }
 
 /// Validate plan bytes before any IPC decoding, then execute once with no fallback.
@@ -1053,17 +1049,39 @@ fn records(records: Vec<CheckRecord>) -> Result<Vec<Record>, Error> {
         .collect()
 }
 /// Expose resource policy separately from semantic conversion/reduction/check failures.
-fn failure(error: ExecutionError<CallbackError>) -> Result<Outcome, Error> {
+type FailedChecks = (
+    yamaa_core::verification_diagnostics::Phase,
+    Vec<CheckRecord>,
+);
+fn failure(error: ExecutionError<CallbackError>) -> Result<(Outcome, Option<FailedChecks>), Error> {
+    use yamaa_core::verification_diagnostics::Phase;
     match error {
         ExecutionError::Function {
             path,
             error,
             identity: keys,
-        } => Ok(Outcome::FunctionCondition {
-            diagnostic: functions::Diagnostic::new(path, error)?,
-            identity: keys.map(identity),
-        }),
-        other => semantic_failure(&other, true),
+        } => Ok((
+            Outcome::FunctionCondition {
+                diagnostic: functions::Diagnostic::new(path, error)?,
+                identity: keys.map(identity),
+            },
+            None,
+        )),
+        other => {
+            // Encode before moving the ledger; no host error is cloned or inspected.
+            let outcome = semantic_failure(&other, true)?;
+            let records = match other {
+                ExecutionError::KeyFailures(records) => Some((Phase::Output, records)),
+                ExecutionError::VerificationFailures(records)
+                | ExecutionError::VerificationDiagnostic { records, .. }
+                | ExecutionError::VerificationDeclaration { records, .. }
+                | ExecutionError::VerificationPredicate { records, .. } => {
+                    Some((Phase::Verification, records))
+                }
+                _ => None,
+            };
+            Ok((outcome, records))
+        }
     }
 }
 
@@ -1316,16 +1334,19 @@ pub(crate) fn response(
     attempt: dataset::ExecutionAttempt<CallbackError>,
 ) -> Result<DatasetResponse, Error> {
     legacy_records(&attempt.retained_verifications)?;
-    let (table, outcome, execution) = match attempt.result {
+    let (table, outcome, execution, failed_verifications) = match attempt.result {
         Ok(result) => {
             legacy_records(&result.verifications)?;
             let table = Some(encode_dataset(&result.dataset).map_err(Error::Table)?);
             let outcome = Outcome::Success {
                 verifications: records(result.verifications.clone())?,
             };
-            (table, outcome, Some(result))
+            (table, outcome, Some(result), None)
         }
-        Err(error) => (None, failure(*error)?, None),
+        Err(error) => {
+            let (outcome, records) = failure(*error)?;
+            (None, outcome, None, records)
+        }
     };
     let outcome = bounded_json(
         &Envelope {
@@ -1355,6 +1376,7 @@ pub(crate) fn response(
         outcome,
         execution,
         retained_verifications: attempt.retained_verifications,
+        failed_verifications,
     })
 }
 

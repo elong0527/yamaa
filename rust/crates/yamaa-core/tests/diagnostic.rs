@@ -26,6 +26,8 @@ mod text_extract;
 mod text_pad;
 #[path = "diagnostic/text_template.rs"]
 mod text_template;
+#[path = "diagnostic/verification.rs"]
+mod verification;
 #[path = "diagnostic/yaml_source.rs"]
 mod yaml_source;
 struct Bindings;
@@ -433,6 +435,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     assert_eq!(diagnostic.source_span, None);
     reached.insert(diagnostic.code);
     reached.extend(dataset::reached());
+    reached.extend(verification::reached());
     let diagnostic = yamaa_core::dataset::Rounding::new(
         "SEX",
         "columns.RND.derivation.round_half_away_from_zero",

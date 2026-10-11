@@ -1191,8 +1191,13 @@ impl Executor<'_> {
             if !missing.is_empty() {
                 failures.push(CheckRecord {
                     path: alloc::format!("keys[{position}]"),
-                    condition: "missing_key",
-                    requirement: "REQ-0240",
+                    condition: yamaa_core::diagnostic::ConditionCode::OutputMissingKeyFailed
+                        .definition()
+                        .condition,
+                    requirement: yamaa_core::diagnostic::ConditionCode::OutputMissingKeyFailed
+                        .definition()
+                        .requirement
+                        .expect("registered normative check"),
                     evaluated_count: dataset.rows.len(),
                     failed_count: missing.len(),
                     output_rows: dataset.rows.len(),
@@ -1217,8 +1222,13 @@ impl Executor<'_> {
         if !duplicates.is_empty() {
             failures.push(CheckRecord {
                 path: "keys".into(),
-                condition: "duplicate_key",
-                requirement: "REQ-0240",
+                condition: yamaa_core::diagnostic::ConditionCode::OutputDuplicateKeyFailed
+                    .definition()
+                    .condition,
+                requirement: yamaa_core::diagnostic::ConditionCode::OutputDuplicateKeyFailed
+                    .definition()
+                    .requirement
+                    .expect("registered normative check"),
                 evaluated_count: groups.len(),
                 failed_count: duplicates.len(),
                 output_rows: dataset.rows.len(),
@@ -1287,8 +1297,14 @@ impl Executor<'_> {
                         groups.iter().filter(|members| members.len() > 1).collect();
                     CheckRecord {
                         path: verification.path.clone(),
-                        condition: "unique_failed",
-                        requirement: "REQ-0381",
+                        condition: yamaa_core::diagnostic::ConditionCode::VerificationUniqueFailed
+                            .definition()
+                            .condition,
+                        requirement:
+                            yamaa_core::diagnostic::ConditionCode::VerificationUniqueFailed
+                                .definition()
+                                .requirement
+                                .expect("registered normative check"),
                         evaluated_count: groups.len(),
                         failed_count: repeated.len(),
                         output_rows: dataset.rows.len(),
@@ -1316,8 +1332,15 @@ impl Executor<'_> {
                         identities(&dataset, self.plan.keys(), offending, &mut budget)?;
                     CheckRecord {
                         path: verification.path.clone(),
-                        condition: "all_or_none_failed",
-                        requirement: "REQ-0382",
+                        condition:
+                            yamaa_core::diagnostic::ConditionCode::VerificationAllOrNoneFailed
+                                .definition()
+                                .condition,
+                        requirement:
+                            yamaa_core::diagnostic::ConditionCode::VerificationAllOrNoneFailed
+                                .definition()
+                                .requirement
+                                .expect("registered normative check"),
                         evaluated_count: dataset.rows.len(),
                         failed_count: offending_rows.len(),
                         output_rows: dataset.rows.len(),
@@ -1332,8 +1355,15 @@ impl Executor<'_> {
                         || max.is_some_and(|max| count > i128::from(max));
                     CheckRecord {
                         path: verification.path.clone(),
-                        condition: "row_count_failed",
-                        requirement: "REQ-0385",
+                        condition:
+                            yamaa_core::diagnostic::ConditionCode::VerificationRowCountFailed
+                                .definition()
+                                .condition,
+                        requirement:
+                            yamaa_core::diagnostic::ConditionCode::VerificationRowCountFailed
+                                .definition()
+                                .requirement
+                                .expect("registered normative check"),
                         evaluated_count: 1,
                         failed_count: usize::from(failed),
                         output_rows: dataset.rows.len(),

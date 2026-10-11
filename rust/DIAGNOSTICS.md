@@ -23,7 +23,8 @@ refusal keeps earlier completed records and stays distinct from semantic failure
 
 Column presence checks now reach `VerificationNotMissingFailed` through the pure
 completed-value service. Core owns REQ-0375 and its column/failure-count context;
-the report adapter adds observed keys and the authored verification ID. Completed
+the core retained-record projection adds observed keys and the authored
+verification ID. Completed
 column records remain attached to an attempted run when a later conversion or
 other error stops derivation. A later declaration error preserves earlier failed
 records while retaining its own primary diagnostic.
@@ -430,3 +431,28 @@ their independent fixture truth, and benchmark expected files are unchanged.
 Source provenance records
 these existing owners in migration.yaml. Three adapter literal sites retire;
 the frozen seed remains unchanged. yaml/1 retirement remains part of #1990.
+
+## Complete retained verification ownership
+
+Core now projects general dataset checks and output-key findings together with
+column checks. Missing/duplicate output keys cite REQ-0240; unique, all_or_none,
+assert and row_count retain REQ-0381, REQ-0382, REQ-0384 and REQ-0385 respectively.
+The engine obtains these existing condition/requirement pairs from the registry
+and supplies shallow borrowed views of its unchanged CheckRecord layout.
+
+Core owns the complete report observation and failure context, including ordered
+unique columns, verification identity, severity, full-width retained counts,
+missing output keys, all offending keys and the complete log context. Unique
+failure counts remain repeated-group counts rather than member counts. Ordinary
+issue display keeps five keys while log/offending-key facts retain every key;
+codelist diagnostics keep the complete keys and values. Borrowed fact-tree clones
+copy tree geometry and computed labels, never authored scalar strings.
+
+The project adapter no longer encodes CheckRecord into JSON for interpretation.
+Standalone dataset responses keep the original wire while retaining the owned
+completed failure records for the same typed projection. Condition precedence,
+warning/error collection, existing codelist admission, final report byte limits,
+log success/failure gates and check/log order remain unchanged. No new projection
+quota or bound carrier is introduced; row_count uses its retained count facts.
+The active literal allowance shrinks from 47 sites/63 occurrences to 35/51; the
+frozen seed and all independent expected reports remain unchanged.

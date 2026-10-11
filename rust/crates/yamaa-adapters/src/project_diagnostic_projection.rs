@@ -6,7 +6,7 @@ use yamaa_core::{
     value::Value,
 };
 
-fn fact(value: Fact<'_>) -> Json {
+pub(crate) fn fact(value: Fact<'_>) -> Json {
     match value {
         Fact::Text(text) => json!(text),
         Fact::OwnedText(text) => json!(text),
