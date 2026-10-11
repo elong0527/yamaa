@@ -142,6 +142,17 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/temporal_imputation_reference.json",
+      "family": "temporal",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_temporal_imputation.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/reference_intermediate.tsv",
       "family": "reference",
       "level": "compile",

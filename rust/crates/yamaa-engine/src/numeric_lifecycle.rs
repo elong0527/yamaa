@@ -16,6 +16,8 @@ use yamaa_core::value::{ColumnType, Value};
 /// Handler sites supported by this application slice, not the full language registry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HandlerKind {
+    Missing,
+    Invalid,
     Unconvertible,
     MultipleMatches,
     NoMatch,
@@ -25,6 +27,8 @@ impl HandlerKind {
     /// Portable handler vocabulary spelling for later host report serialization.
     pub fn name(self) -> &'static str {
         match self {
+            Self::Missing => "missing",
+            Self::Invalid => "invalid",
             Self::Unconvertible => "unconvertible",
             Self::MultipleMatches => "multiple_matches",
             Self::NoMatch => "no_match",

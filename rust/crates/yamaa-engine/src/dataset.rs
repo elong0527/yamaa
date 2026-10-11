@@ -17,6 +17,8 @@ pub use crate::function_invocation::FunctionPort;
 pub(crate) fn unavailable_functions<E>() -> impl FunctionPort<Error = E> {
     crate::function_invocation::NoFunctions::new()
 }
+#[path = "dataset_temporal_imputation.rs"]
+mod imputation;
 #[path = "dataset_keys.rs"]
 mod key_grain;
 #[path = "dataset_lookup.rs"]
@@ -170,6 +172,10 @@ struct AttemptObservations {
 pub enum ExecutionError<E> {
     /// A pure scalar operation's already classified cause and original field path.
     ScalarDiagnostic(yamaa_core::diagnostic::Diagnostic),
+    ImputationDiagnostic {
+        diagnostic: yamaa_core::diagnostic::Diagnostic,
+        identity: Option<RowIdentity>,
+    },
     VerificationDiagnostic {
         diagnostic: yamaa_core::diagnostic::Diagnostic,
         records: Vec<CheckRecord>,
@@ -415,6 +421,15 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
             .apply(ValueRef::from(&value))
             .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)));
     }
+    if let Expression::Imputation {
+        operands,
+        operation,
+    } = &assignment.expression
+    {
+        return imputation::evaluate(
+            operands, operation, table, candidate, plan, row, limits, state,
+        );
+    }
     if let Expression::Temporal {
         operands,
         operation,
@@ -492,7 +507,8 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
         Expression::Compute(_)
         | Expression::Case(_)
         | Expression::Round { .. }
-        | Expression::Temporal { .. } => {
+        | Expression::Temporal { .. }
+        | Expression::Imputation { .. } => {
             unreachable!("recursive evaluation handled above")
         }
         Expression::Column(column) => {
@@ -833,6 +849,15 @@ impl Executor<'_> {
             observations
                 .handlers
                 .register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
+        }
+        for assignment in self
+            .plan
+            .templates()
+            .iter()
+            .flat_map(|template| &template.assignments)
+            .chain(self.plan.columns())
+        {
+            imputation::register(&assignment.expression, &mut observations.handlers);
         }
         let result = self.execute_inner(
             table,
