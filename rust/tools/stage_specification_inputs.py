@@ -116,7 +116,7 @@ def stage_flag_truth(destination: Path):
     original = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json"
     shutil.copy2(original, destination / "flag-reference.json")
     capture = json.loads(original.read_text(encoding="utf-8"))
-    authored = destination / "flag-cases"
+    authored = destination / "flags"
     authored.mkdir()
     for name, case in capture["witnesses"].items():
         directory = authored / name
@@ -138,7 +138,7 @@ def stage_flag_truth(destination: Path):
     outputs = dict(zip(FLAG_POSITIVE_CASES, ("adae.csv", "adae.csv", "adex.csv", "adlb.csv", "adsl.csv", "dm.csv")))
     entries = []
     cohorts = [(name, capture["originals"][name], "cases") for name in FLAG_POSITIVE_CASES + FLAG_NEGATIVE_CASES]
-    cohorts += [(name, case, "flag-cases") for name, case in capture["witnesses"].items() if name not in FLAG_HELD_CASES]
+    cohorts += [(name, case, "flags") for name, case in capture["witnesses"].items() if name not in FLAG_HELD_CASES]
     assert len(cohorts) == 33
     for name, case, directory in cohorts:
         findings = json.loads(json.dumps(case["findings"]))

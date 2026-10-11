@@ -1758,7 +1758,7 @@ columns:
         held = ("nested_case_mixed_declarations", "implicit_raw_ambiguous")
         self.assertEqual(set(held).intersection(reference["witnesses"]), set(held))
         cases = [(name, reference["originals"][name], "cases") for name in positives + negatives]
-        cases += [(name, case, "flag-cases") for name, case in reference["witnesses"].items() if name not in held]
+        cases += [(name, case, "flags") for name, case in reference["witnesses"].items() if name not in held]
         self.assertEqual(len(cases), 33)
         def issues(result):
             rows = result.issues.to_dicts()
@@ -1800,7 +1800,7 @@ columns:
                                     self.assertEqual(json.loads(wire)["handler_counts"], case.get("handlers", []))
                                 if case["result_type"] == "ExecutionSuccess":
                                     expected_path = next((work / "expected").glob("*.csv")) if cohort == "cases" else work / "expected.csv"
-                                    if cohort == "flag-cases":
+                                    if cohort == "flags":
                                         self.assertEqual(expected_path.read_bytes(), case["csv"].encode())
                                         self.assertEqual(result.output.write_csv().encode(), expected_path.read_bytes())
                                     self.assertTrue(result.save())
