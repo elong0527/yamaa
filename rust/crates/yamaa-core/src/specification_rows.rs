@@ -13,12 +13,17 @@ use crate::{
 
 #[derive(Debug)]
 enum RowOperation {
+    Flag(flags::Declaration),
+    StrExtract(crate::text_extract::StringExtract),
+    StrTemplate(crate::text_template::StringTemplate),
     ProjectFunction(usize),
     Output(String),
     Source(String),
     Compute(CompiledNumeric),
     Round(crate::dataset::Rounding),
     Temporal(crate::dataset::Temporal),
+    StrCase(crate::text_case::StringCase),
+    StrPad(str_pad::Declaration),
     Imputation(crate::dataset::Imputation),
     InvalidNumeric {
         expression: String,
@@ -82,6 +87,7 @@ fn closed_fields(
     }
     Ok(())
 }
+#[allow(clippy::too_many_arguments)]
 fn declaration(
     d: &Document,
     id: usize,
@@ -89,6 +95,8 @@ fn declaration(
     prefix: String,
     grouped: bool,
     project: Option<&functions::Prepared>,
+    extraction: &str_extract::Prepared,
+    string_templates: &str_template::Prepared,
 ) -> Result<RowDeclaration, PrepareError> {
     closed_fields(d, id, &["value", "unconvertible"], &prefix)?;
     let handler = literal_handler(d, id, &prefix)?;
@@ -116,7 +124,26 @@ fn declaration(
                 return Err(unsupported("row_output_reference", &path));
             }
         }
+        "flag" => RowOperation::Flag(flags::prepare(d, payload, &path)?),
         "literal" => RowOperation::Literal(literal(d, payload, &path)?),
+        "str_template" => RowOperation::StrTemplate(string_templates.get(payload)?),
+        "str_extract" => RowOperation::StrExtract(extraction.get(payload)?),
+        "str_case" => {
+            let mut features = Vec::new();
+            let operation = str_case::prepare(d, payload, &path, None, None, &mut features)?;
+            if !features.is_empty() {
+                return Err(PrepareError::Unsupported(features));
+            }
+            RowOperation::StrCase(operation)
+        }
+        "str_pad" => {
+            let mut features = Vec::new();
+            let operation = str_pad::prepare(d, payload, &path, None, None, &mut features)?;
+            if !features.is_empty() {
+                return Err(PrepareError::Unsupported(features));
+            }
+            RowOperation::StrPad(operation)
+        }
         "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision" | "to_date" => {
             let mut features = Vec::new();
             let operation = imputation::prepare(d, payload, op, &path, None, None, &mut features)?;
@@ -245,7 +272,11 @@ fn default_reads(
     };
     match operation {
         "literal" => {}
-        "source" => reference(text(d, field(d, payload, "variable")?)?),
+        "source" => {
+            let name = text(d, field(d, payload, "variable")?)?;
+            reference(name);
+            reads.extend(row_intermediates::default_dependencies(d, name, output)?);
+        }
         "round_half_away_from_zero" => reference(text(d, field(d, payload, "source")?)?),
         "date_diff" | "study_day" | "to_epoch_day" => {
             let fields: &[&str] = match operation {
@@ -269,6 +300,23 @@ fn default_reads(
                         reference(name);
                     }
                 }
+            }
+        }
+        "flag" => {
+            let condition = if matches!(d.nodes()[payload], N::Text(_)) {
+                payload
+            } else {
+                field(d, payload, "condition")?
+            };
+            match crate::predicate_parser::parse_predicate(text(d, condition)?, Default::default())
+            {
+                Ok(parsed) => {
+                    for name in parsed.identifiers() {
+                        reference(name);
+                    }
+                }
+                Err(crate::predicate_parser::ParseError::Grammar { .. }) => (),
+                Err(_) => return Err(PrepareError::Limit("predicate_parser")),
             }
         }
         "compute" => {
@@ -549,6 +597,7 @@ fn validate_row_phases(
     ))
 }
 impl Rows {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn prepare(
         d: &Document,
         output: &TableSchema,
@@ -556,12 +605,15 @@ impl Rows {
         limits: CompilationLimits,
         project: Option<&functions::Prepared>,
         column_terminology: bool,
+        extraction: &str_extract::Prepared,
+        string_templates: &str_template::Prepared,
     ) -> Result<Self, PrepareError> {
         let root = d.root();
         let raw_rows = sequence(d, field(d, root, "rows")?)?;
         if raw_rows.is_empty() || raw_rows.len() > 16 {
             return Err(PrepareError::Limit("row_templates"));
         }
+        row_intermediates::admit(d, raw_rows.len())?;
         let columns = sequence(d, field(d, root, "columns")?)?;
         let filters = raw_rows
             .iter()
@@ -625,6 +677,18 @@ impl Rows {
                 }
             }
         }
+        // Complete row-local identity defaults before a newly admitted selector can fail.
+        if present(d, root, "intermediates") {
+            for &key in sequence(d, field(d, root, "keys")?)? {
+                if let Some(column) = output
+                    .columns()
+                    .iter()
+                    .position(|column| text(d, key).is_ok_and(|key| key == column.name))
+                {
+                    filter_defaults.insert(column);
+                }
+            }
+        }
         let mut templates = Vec::new();
         let selected = select_defaults(d, columns, output, raw_rows, filter_defaults, project)?;
         for &column in &selected {
@@ -640,6 +704,8 @@ impl Rows {
                     format!("columns.{}.derivation", metadata.name),
                     false,
                     project,
+                    extraction,
+                    string_templates,
                 )?;
             }
         }
@@ -707,6 +773,8 @@ impl Rows {
                     prefix,
                     groups.is_some(),
                     project,
+                    extraction,
+                    string_templates,
                 )?);
             }
             // Other datasets require lookup/join state outside this closed row language.
@@ -728,6 +796,20 @@ impl Rows {
                 declarations,
                 filter,
             });
+        }
+        for template in &templates {
+            if template.groups.is_some() {
+                for declaration in &template.declarations {
+                    if let RowOperation::Source(reference) = &declaration.operation {
+                        if row_intermediates::named_reference(d, reference)? {
+                            return Err(unsupported(
+                                "grouped_intermediate_source",
+                                &declaration.path,
+                            ));
+                        }
+                    }
+                }
+            }
         }
         validate_row_phases(&templates, project, output)?;
         let mut lowered_columns = Vec::new();
@@ -752,7 +834,21 @@ impl Rows {
                     format!("{prefix}.derivation"),
                     false,
                     project,
+                    extraction,
+                    string_templates,
                 )?);
+            }
+        }
+        if templates.iter().any(|template| template.groups.is_some()) {
+            for declaration in &lowered_columns {
+                if let RowOperation::Source(reference) = &declaration.operation {
+                    if row_intermediates::named_reference(d, reference)? {
+                        return Err(unsupported(
+                            "grouped_intermediate_source",
+                            &declaration.path,
+                        ));
+                    }
+                }
             }
         }
         Ok(Self {
@@ -807,6 +903,23 @@ impl Rows {
         }
         Ok(uses)
     }
+    pub(super) fn admit_sources(
+        &self,
+        schemas: &[&TableSchema],
+        output: &TableSchema,
+    ) -> Result<(), BindError> {
+        row_intermediates::admit_sources(
+            schemas,
+            output,
+            self.templates.len(),
+            self.templates
+                .iter()
+                .flat_map(|t| &t.declarations)
+                .chain(&self.columns)
+                .map(|d| d.path.len()),
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn bind(
         &self,
         source: &TableSchema,
@@ -815,6 +928,10 @@ impl Rows {
         keys: &[usize],
         verifications: &[Verification],
         project: Option<&crate::project_calls::ProjectCalls>,
+        named: &intermediates::Declarations,
+        secondary: Vec<crate::dataset::SecondarySource>,
+        intermediates: Vec<Option<crate::dataset::Intermediate>>,
+        mut findings: Vec<BindFinding>,
     ) -> Result<DatasetPlan, BindError> {
         let output_fields = output
             .columns()
@@ -848,7 +965,6 @@ impl Rows {
             .map(|g| g.iter().map(String::as_str).collect::<Vec<_>>())
             .collect::<Vec<_>>();
         let column_groups = groups.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let mut findings = Vec::new();
         let resolve = |reference: &str, path: &str, findings: &mut Vec<BindFinding>| {
             let selected = reference
                 .split_once('.')
@@ -867,7 +983,8 @@ impl Rows {
                           row: Option<&str>,
                           available: Option<&[usize]>,
                           edges: &mut Vec<usize>,
-                          findings: &mut Vec<BindFinding>|
+                          findings: &mut Vec<BindFinding>,
+                          declarations_reported: bool|
          -> Result<Option<Assignment>, BindError> {
             let expression = match &declaration.operation {
                 RowOperation::ProjectFunction(call) => {
@@ -925,6 +1042,61 @@ impl Rows {
                     }
                 }
                 RowOperation::Literal(value) => Some(Expression::Literal(value.clone())),
+                RowOperation::Flag(operation) => flags::bind_row(
+                    operation,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                    declarations_reported,
+                )?,
+                RowOperation::StrTemplate(operation) => str_template::bind_row(
+                    operation,
+                    declaration.column,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                )?,
+                RowOperation::StrExtract(operation) => str_extract::bind_row(
+                    operation,
+                    declaration.column,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                )?,
+                RowOperation::StrCase(operation) => str_case::bind_row(
+                    operation,
+                    declaration.column,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                )?,
+                RowOperation::StrPad(operation) => str_pad::bind_row(
+                    operation,
+                    declaration.column,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                )?,
                 RowOperation::Imputation(operation) => imputation::bind_row(
                     operation,
                     declaration.column,
@@ -959,11 +1131,13 @@ impl Rows {
                     findings,
                 )?,
                 RowOperation::InvalidNumeric { expression, error } => {
-                    findings.push(BindFinding::Numeric {
-                        path: format!("{}.expr", declaration.path),
-                        expression: expression.clone(),
-                        error: error.clone(),
-                    });
+                    if !declarations_reported {
+                        findings.push(BindFinding::Numeric {
+                            path: format!("{}.expr", declaration.path),
+                            expression: expression.clone(),
+                            error: error.clone(),
+                        });
+                    }
                     None
                 }
                 RowOperation::Compute(compiled) => {
@@ -1043,7 +1217,27 @@ impl Rows {
                     None
                 }
                 RowOperation::Source(reference) => {
-                    if let Some(column) = resolve(reference, &declaration.path, findings) {
+                    if named.reference(reference).is_some() {
+                        if matches!(phase, Phase::Row { group_by: Some(_) })
+                            || matches!(phase, Phase::Column { .. }) && !groups.is_empty()
+                        {
+                            return Err(BindError::InvalidPlan(
+                                crate::dataset::PlanError::InvalidIntermediate,
+                            ));
+                        }
+                        row_intermediates::bind(
+                            reference,
+                            &declaration.path,
+                            named,
+                            &secondary,
+                            &intermediates,
+                            output,
+                            &catalog,
+                            available,
+                            edges,
+                            findings,
+                        )?
+                    } else if let Some(column) = resolve(reference, &declaration.path, findings) {
                         let scoped = reference_scope::validate(
                             &catalog,
                             reference,
@@ -1189,6 +1383,31 @@ impl Rows {
                 .collect::<Vec<_>>();
             let mut graph = alloc::vec![Vec::new(); output.columns().len()];
             let mut assignments = BTreeMap::new();
+            // Reference planning validates one complete row template's authored
+            // derivations before resolving any of that template's references.
+            let declarations_reported = template.declarations.iter().any(|declaration| {
+                matches!(&declaration.operation,
+                    RowOperation::StrPad(operation) if operation.has_width_error())
+                    || matches!(&declaration.operation, RowOperation::Flag(operation) if operation.has_findings())
+            });
+            if declarations_reported {
+                for declaration in &template.declarations {
+                    match &declaration.operation {
+                        RowOperation::Flag(operation) => operation.findings(&mut findings),
+                        RowOperation::StrPad(operation) => {
+                            str_pad::declaration_findings(operation, &mut findings);
+                        }
+                        RowOperation::InvalidNumeric { expression, error } => {
+                            findings.push(BindFinding::Numeric {
+                                path: format!("{}.expr", declaration.path),
+                                expression: expression.clone(),
+                                error: error.clone(),
+                            });
+                        }
+                        _ => (),
+                    }
+                }
+            }
             for declaration in &template.declarations {
                 if let Some(value) = assignment(
                     declaration,
@@ -1197,6 +1416,7 @@ impl Rows {
                     Some(&available),
                     &mut graph[declaration.column],
                     &mut findings,
+                    declarations_reported,
                 )? {
                     assignments.insert(declaration.column, value);
                 }
@@ -1296,6 +1516,9 @@ impl Rows {
         let mut columns = Vec::new();
         let mut dependencies = alloc::vec![None; output.columns().len()];
         for declaration in &self.columns {
+            if let RowOperation::StrPad(operation) = &declaration.operation {
+                str_pad::declaration_findings(operation, &mut findings);
+            }
             let mut edges = Vec::new();
             if let Some(value) = assignment(
                 declaration,
@@ -1306,6 +1529,7 @@ impl Rows {
                 None,
                 &mut edges,
                 &mut findings,
+                false,
             )? {
                 columns.push(value);
             }
@@ -1327,8 +1551,15 @@ impl Rows {
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }
-        DatasetPlan::new(
-            source.clone(),
+        DatasetPlan::new_with_intermediates(
+            crate::dataset::SourceSchemas {
+                primary: source.clone(),
+                secondary,
+            },
+            intermediates
+                .into_iter()
+                .collect::<Option<Vec<_>>>()
+                .ok_or(BindError::Internal)?,
             output.clone(),
             templates,
             columns,

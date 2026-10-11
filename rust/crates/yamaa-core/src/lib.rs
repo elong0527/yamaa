@@ -42,6 +42,9 @@ pub mod submission_document;
 pub mod submission_json;
 pub mod submission_xml;
 pub mod temporal;
+pub mod text_case;
+pub mod text_extract;
+pub mod text_template;
 pub mod typed_csv;
 pub mod value;
 pub mod verification_logs;
@@ -53,6 +56,7 @@ pub mod regex;
 
 pub mod reduction;
 pub mod table;
+pub mod text_pad;
 
 pub mod project_call_binding;
 pub mod project_call_document;

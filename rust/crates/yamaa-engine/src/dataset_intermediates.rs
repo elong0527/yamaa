@@ -1,6 +1,7 @@
 //! Lazy source eligibility and named record selection within one dataset attempt.
 use super::*;
-use crate::table_grouping::Key;
+#[path = "dataset_match_values.rs"]
+mod match_values;
 use alloc::collections::BTreeMap;
 
 /// Keep only immutable row coordinates and the inherited handler outcome.
@@ -14,7 +15,7 @@ enum Choice {
 #[derive(Default)]
 pub(super) struct Run {
     eligible: BTreeMap<usize, Vec<usize>>,
-    choices: BTreeMap<(usize, usize), Choice>,
+    choices: BTreeMap<(SelectionIdentity, usize), Choice>,
 }
 
 /// Reuse a selected record while recording each reading's own inherited handler site.
@@ -29,11 +30,78 @@ pub(super) fn read<T: TableAccess + ?Sized>(
     primary: &T,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    read_with_observations(
+        index, column, assignment, candidate, plan, row, primary, state, true,
+    )
+}
+
+/// Predicate normalization discards an inherited recovery observation, while
+/// sharing the same eligibility and attempt-local record-choice cache.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn read_predicate<T: TableAccess + ?Sized>(
+    index: usize,
+    column: usize,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    primary: &T,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    read_with_observations(
+        index, column, assignment, candidate, plan, row, primary, state, false,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn read_with_observations<T: TableAccess + ?Sized>(
+    index: usize,
+    column: usize,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    primary: &T,
+    state: &mut EvaluationState<'_, T::Error>,
+    observe_handlers: bool,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    // Admission forbids named reads during destination-free key probes.
+    if candidate.selection_identity == SelectionIdentity::Probe {
+        return Err(Box::new(ExecutionError::SchemaMismatch));
+    }
+    // A linear comparison bound admits tree lookups before inspecting retained keys.
+    state.budget.work(
+        state
+            .intermediates
+            .choices
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
+        1,
+    )?;
+    let cache_key = (candidate.selection_identity, index);
     let item = &plan.intermediates()[index];
     let table = state.secondary[item.source];
-    let choice = if let Some(choice) = state.intermediates.choices.get(&(row, index)) {
+    let choice = if let Some(choice) = state.intermediates.choices.get(&cache_key) {
         *choice
     } else {
+        // Newly admitted expressions use the original dependency/filter boundary.
+        // Ordinary selectors retain the established filter-before-raw-key behavior.
+        let current = if item.has_expression_keys() {
+            Some(match_values::resolve(
+                item, candidate, plan, row, primary, state,
+            )?)
+        } else {
+            None
+        };
+        state.budget.work(
+            state
+                .intermediates
+                .eligible
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
+            1,
+        )?;
         if !state.intermediates.eligible.contains_key(&index) {
             // Complete the source-only filter before checking the current match values.
             state.budget.work(table.row_count(), 1)?;
@@ -62,44 +130,33 @@ pub(super) fn read<T: TableAccess + ?Sized>(
                 }
                 eligible.push(source_row);
             }
-            state.budget.work(1, 1)?;
+            state.budget.work(
+                state
+                    .intermediates
+                    .eligible
+                    .len()
+                    .checked_add(1)
+                    .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
+                1,
+            )?;
             state.intermediates.eligible.insert(index, eligible);
         }
-        let eligible = &state.intermediates.eligible[&index];
         let mut count = 0;
         let mut selected = None;
-        state
-            .budget
-            .work(1, item.keys.len() + item.record_keys.len())?;
-        let mut keys = Vec::new();
-        for key in &item.keys {
-            let value = &candidate.values[key.output_column];
-            if let Value::Str(text) = value {
-                state.budget.scalar_text(text.len())?;
-            }
-            keys.push((key.source_column, value.clone()));
-        }
-        for key in &item.record_keys {
-            state.budget.work(candidate.members.len(), 1)?;
-            let value = key_grain::collect_bound(
-                primary,
-                key_grain::Collection {
-                    column: key.driver_column,
-                    identifier: &key.identifier,
-                    filter: None,
-                    selection: None,
-                },
-                key_grain::CollectionContext {
-                    path: &item.path,
-                    candidate,
-                    plan,
-                    row,
-                },
-                state.budget,
-                state.handlers,
-            )?;
-            keys.push((key.source_column, value));
-        }
+        let keys = match current {
+            Some(current) => match_values::evaluate(item, &current, candidate, plan, row, state)?,
+            None => match_values::ordinary(item, candidate, plan, row, primary, state)?,
+        };
+        state.budget.work(
+            state
+                .intermediates
+                .eligible
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
+            1,
+        )?;
+        let eligible = &state.intermediates.eligible[&index];
         if !keys
             .iter()
             .any(|(_, value)| matches!(value, Value::Missing))
@@ -114,7 +171,9 @@ pub(super) fn read<T: TableAccess + ?Sized>(
                 let mut matches = true;
                 for (column, expected) in &keys {
                     let value = cell(table, item, source_row, *column, state.budget)?;
-                    if Key::from(value) != Key::from(ValueRef::from(expected)) {
+                    if yamaa_core::value::compare_present_refs(value, ValueRef::from(expected))
+                        != Ok(core::cmp::Ordering::Equal)
+                    {
                         matches = false;
                         break;
                     }
@@ -156,8 +215,16 @@ pub(super) fn read<T: TableAccess + ?Sized>(
                 identity: failure_identity(candidate, plan.keys(), row, state.budget)?,
             }));
         };
-        state.budget.work(1, 1)?;
-        state.intermediates.choices.insert((row, index), choice);
+        state.budget.work(
+            state
+                .intermediates
+                .choices
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
+            1,
+        )?;
+        state.intermediates.choices.insert(cache_key, choice);
         choice
     };
     let (value, handler) = match choice {
@@ -176,7 +243,7 @@ pub(super) fn read<T: TableAccess + ?Sized>(
             (value.clone(), Some(HandlerKind::NoMatch))
         }
     };
-    if let Some(handler) = handler {
+    if let Some(handler) = handler.filter(|_| observe_handlers) {
         state
             .handlers
             .record(

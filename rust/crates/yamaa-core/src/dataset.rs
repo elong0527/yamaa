@@ -18,12 +18,20 @@ pub use compiler::{
 #[path = "dataset_conversion.rs"]
 mod conversion;
 pub use conversion::ConversionHandler;
+#[path = "dataset_flag.rs"]
+mod flags;
+pub use flags::{
+    flag_condition_diagnostic, Flag, FlagBinding, FlagError, FlagRead, MAX_FLAG_METADATA_BYTES,
+};
 #[path = "dataset_functions.rs"]
 mod functions;
 pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, FunctionInput};
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
+#[path = "dataset_match_values.rs"]
+mod match_values;
+pub use match_values::{IntermediateKey, MatchRead, MatchValue};
 #[path = "dataset_lookup.rs"]
 mod lookup;
 #[path = "dataset_rounding.rs"]
@@ -37,6 +45,10 @@ pub use imputation::{
 };
 #[path = "dataset_temporal.rs"]
 mod temporal;
+pub use crate::text_case::StringCase;
+pub use crate::text_extract::StringExtract;
+pub use crate::text_pad::StringPad;
+pub use crate::text_template::StringTemplate;
 pub use temporal::{CalendarUnit, DateBounds, InvalidTemporal, Temporal, TemporalKind};
 #[path = "dataset_selection.rs"]
 mod selection;
@@ -48,9 +60,27 @@ pub use windows::{OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    StrTemplate {
+        operands: Vec<Assignment>,
+        operation: StringTemplate,
+    },
+    StrExtract {
+        source: alloc::boxed::Box<Assignment>,
+        operation: StringExtract,
+    },
+    StrCase {
+        source: alloc::boxed::Box<Assignment>,
+        operation: StringCase,
+    },
+    StrPad {
+        source: alloc::boxed::Box<Assignment>,
+        operation: StringPad,
+    },
     /// Only the first TRUE branch is evaluated; FALSE and UNKNOWN continue.
     Case(Vec<CaseBranch>),
     Literal(Value),
+    /// One condition selects a raw true/false/UNKNOWN literal.
+    Flag(Flag),
     /// Compiled scalar arithmetic over statically bound source/completed output reads.
     Compute(BoundNumeric),
     /// Declarative rounding over one bound operand; no formula text is invented.
@@ -407,6 +437,9 @@ fn validate_assignment_at(
         // literals. Eager conversion would invent failures for empty templates
         // and move runtime conversion conditions into the planning phase.
         Expression::Literal(_) => {}
+        Expression::Flag(flag) => {
+            flag.validate(source, available, secondary, intermediates, output, mode)?
+        }
         Expression::Compute(expression) => {
             for binding in expression.bindings() {
                 if let crate::bound_expression::Read::Intermediate { index, column } = binding.read
@@ -484,6 +517,56 @@ fn validate_assignment_at(
                 available[assignment.column] = false;
             }
         }
+        Expression::StrCase {
+            source: operand, ..
+        }
+        | Expression::StrPad {
+            source: operand, ..
+        }
+        | Expression::StrExtract {
+            source: operand, ..
+        } => {
+            if operand.column != assignment.column {
+                return Err(PlanError::InvalidColumns);
+            }
+            validate_assignment_at(
+                operand,
+                available,
+                source,
+                secondary,
+                intermediates,
+                output,
+                mode,
+                depth + 1,
+                remaining,
+            )?;
+            available[assignment.column] = false;
+        }
+        Expression::StrTemplate {
+            operands,
+            operation,
+        } => {
+            if operands.len() != operation.identifiers().len() {
+                return Err(PlanError::InvalidColumns);
+            }
+            for operand in operands {
+                if operand.column != assignment.column {
+                    return Err(PlanError::InvalidColumns);
+                }
+                validate_assignment_at(
+                    operand,
+                    available,
+                    source,
+                    secondary,
+                    intermediates,
+                    output,
+                    mode,
+                    depth + 1,
+                    remaining,
+                )?;
+                available[assignment.column] = false;
+            }
+        }
         Expression::Temporal {
             operands,
             operation,
@@ -513,13 +596,12 @@ fn validate_assignment_at(
         Expression::ProjectFunction(function) => function.validate(source, available, mode)?,
         Expression::FirstAvailable(selection) => selection.validate(source, available, mode)?,
         Expression::Intermediate { index, column } => {
-            if !matches!(mode, RowMode::Keys) {
-                return Err(PlanError::InvalidIntermediate);
-            }
             let item = intermediates
                 .get(*index)
                 .ok_or(PlanError::InvalidIntermediate)?;
-            intermediates::validate_read(item, *column, source, secondary, available, output)?;
+            intermediates::validate_context_read(
+                item, *column, source, secondary, available, output, mode,
+            )?;
         }
         Expression::RowLookup(lookup) => lookup::validate_row(lookup, source, secondary, mode)?,
         Expression::Lookup(lookup) => {
@@ -613,6 +695,7 @@ fn validate_assignment_at(
 fn key_expression(expression: &Expression) -> bool {
     match expression {
         Expression::Literal(_) | Expression::Source(_) | Expression::Column(_) => true,
+        Expression::Flag(flag) => flag.key_expression(),
         Expression::Compute(expression) => expression
             .bindings()
             .iter()
@@ -627,6 +710,7 @@ fn key_grain_source_read(expression: &Expression) -> bool {
     match expression {
         Expression::Source(_) => true,
         Expression::Compute(expression) => expression.reads_source(),
+        Expression::Flag(flag) => flag.reads_source(),
         Expression::Function(function) => function.reads_source(),
         Expression::ProjectFunction(function) => function.reads_source(),
         Expression::Case(branches) => branches.iter().any(|branch| {

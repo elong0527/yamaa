@@ -1,9 +1,12 @@
 //! Bounded imputation evaluates a lower bound only after a partial source needs it.
 use super::*;
-use yamaa_core::{dataset::ImputationStep, diagnostic::Diagnostic};
+use yamaa_core::dataset::ImputationStep;
 pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
     match expression {
-        Expression::Imputation { operation, .. } => {
+        Expression::Imputation {
+            operation,
+            operands,
+        } => {
             for (name, kind) in [
                 ("missing", HandlerKind::Missing),
                 ("invalid", HandlerKind::Invalid),
@@ -11,6 +14,18 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
                 if operation.handler(name).is_some() {
                     counter.register(&alloc::format!("{}.{}", operation.path(), name), kind);
                 }
+            }
+            for source in operands {
+                register(&source.expression, counter);
+            }
+        }
+        Expression::StrCase { source, .. }
+        | Expression::StrPad { source, .. }
+        | Expression::StrExtract { source, .. }
+        | Expression::Round { source, .. } => register(&source.expression, counter),
+        Expression::Temporal { operands, .. } | Expression::StrTemplate { operands, .. } => {
+            for source in operands {
+                register(&source.expression, counter);
             }
         }
         Expression::Case(branches) => {
@@ -68,25 +83,8 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         },
         Err(diagnostic) => Err(diagnostic),
     };
-    result.map_err(|diagnostic| with_identity(diagnostic, candidate, plan, row, state.budget))
-}
-fn with_identity<E>(
-    diagnostic: Diagnostic,
-    candidate: &Candidate,
-    plan: &DatasetPlan,
-    row: usize,
-    budget: &mut Budget,
-) -> Box<ExecutionError<E>> {
-    let identity = if diagnostic.definition().phase == "impute" {
-        match failure_identity(candidate, plan.keys(), row, budget) {
-            Ok(identity) => identity,
-            Err(error) => return error,
-        }
-    } else {
-        None
-    };
-    Box::new(ExecutionError::ImputationDiagnostic {
-        diagnostic,
-        identity,
+    result.map_err(|diagnostic| {
+        let retain_keys = diagnostic.definition().phase == "impute";
+        retained_diagnostic(diagnostic, retain_keys, candidate, plan, row, state.budget)
     })
 }

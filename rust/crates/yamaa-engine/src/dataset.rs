@@ -11,6 +11,8 @@ mod conversion;
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use yamaa_core::dataset::*;
+#[path = "dataset_flag.rs"]
+mod flags;
 #[path = "dataset_functions.rs"]
 mod functions;
 pub use crate::function_invocation::FunctionPort;
@@ -25,6 +27,14 @@ mod key_grain;
 mod lookup;
 #[path = "dataset_numeric.rs"]
 mod numeric;
+#[path = "dataset_text_case.rs"]
+mod str_case;
+#[path = "dataset_text_extract.rs"]
+mod str_extract;
+#[path = "dataset_text_pad.rs"]
+mod str_pad;
+#[path = "dataset_text_template.rs"]
+mod str_template;
 #[path = "dataset_windows.rs"]
 mod windows;
 
@@ -172,7 +182,7 @@ struct AttemptObservations {
 pub enum ExecutionError<E> {
     /// A pure scalar operation's already classified cause and original field path.
     ScalarDiagnostic(yamaa_core::diagnostic::Diagnostic),
-    ImputationDiagnostic {
+    SemanticDiagnostic {
         diagnostic: yamaa_core::diagnostic::Diagnostic,
         identity: Option<RowIdentity>,
     },
@@ -290,8 +300,16 @@ pub enum ExecutionError<E> {
     OutputGrouping(GroupingError<Infallible>),
 }
 
+/// A selection identity is distinct from source coordinates and diagnostic row position.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum SelectionIdentity {
+    /// Key probes cannot read named selections in an admitted plan.
+    Probe,
+    Candidate(usize),
+}
 /// Keep source provenance per candidate for the later whole-column phase.
 struct Candidate {
+    selection_identity: SelectionIdentity,
     members: Vec<usize>,
     values: Vec<Value>,
     completed: Vec<bool>,
@@ -349,7 +367,8 @@ fn evaluate<T: TableAccess + ?Sized>(
     limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
-    let value = evaluate_raw(table, assignment, candidate, plan, row, limits, state)?;
+    let value =
+        evaluate_raw_retained(table, assignment, candidate, plan, row, limits, state, true)?;
     finish(
         value,
         assignment,
@@ -370,12 +389,31 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
     limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    evaluate_raw_retained(
+        table, assignment, candidate, plan, row, limits, state, false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn evaluate_raw_retained<T: TableAccess + ?Sized>(
+    table: &T,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    limits: Limits,
+    state: &mut EvaluationState<'_, T::Error>,
+    retained: bool,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
     if let Expression::Intermediate { index, column } = assignment.expression {
         state.budget.work(1, 1)?;
         let value = intermediates::read(
             index, column, assignment, candidate, plan, row, table, state,
         )?;
         return Ok(value);
+    }
+    if let Expression::Flag(flag) = &assignment.expression {
+        return flags::evaluate(flag, table, candidate, plan, row, assignment, state);
     }
     if let Expression::Case(branches) = &assignment.expression {
         for branch in branches {
@@ -401,7 +439,7 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
                 }
             };
             if selected {
-                return evaluate_raw(
+                return evaluate_raw_retained(
                     table,
                     &branch.assignment,
                     candidate,
@@ -409,6 +447,7 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
                     row,
                     limits,
                     state,
+                    retained,
                 );
             }
         }
@@ -420,6 +459,40 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
         return rounding
             .apply(ValueRef::from(&value))
             .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)));
+    }
+    if let Expression::StrTemplate {
+        operands,
+        operation,
+    } = &assignment.expression
+    {
+        return str_template::evaluate(
+            operands,
+            operation,
+            table,
+            candidate,
+            plan,
+            row,
+            limits,
+            state,
+            retained
+                && plan.output().columns()[assignment.column].kind
+                    == yamaa_core::value::ColumnType::Str,
+        );
+    }
+    if let Expression::StrExtract { source, operation } = &assignment.expression {
+        return str_extract::evaluate(
+            source, operation, table, candidate, plan, row, limits, state,
+        );
+    }
+    if let Expression::StrCase { source, operation } = &assignment.expression {
+        return str_case::evaluate(
+            source, operation, table, candidate, plan, row, limits, state,
+        );
+    }
+    if let Expression::StrPad { source, operation } = &assignment.expression {
+        return str_pad::evaluate(
+            source, operation, table, candidate, plan, row, limits, state,
+        );
     }
     if let Expression::Imputation {
         operands,
@@ -504,11 +577,16 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
             }
             value.clone()
         }
-        Expression::Compute(_)
+        Expression::Flag(_)
+        | Expression::Compute(_)
         | Expression::Case(_)
         | Expression::Round { .. }
         | Expression::Temporal { .. }
-        | Expression::Imputation { .. } => {
+        | Expression::Imputation { .. }
+        | Expression::StrCase { .. }
+        | Expression::StrPad { .. }
+        | Expression::StrExtract { .. }
+        | Expression::StrTemplate { .. } => {
             unreachable!("recursive evaluation handled above")
         }
         Expression::Column(column) => {
@@ -858,6 +936,9 @@ impl Executor<'_> {
             .chain(self.plan.columns())
         {
             imputation::register(&assignment.expression, &mut observations.handlers);
+            str_case::register(&assignment.expression, &mut observations.handlers);
+            str_extract::register(&assignment.expression, &mut observations.handlers);
+            str_template::register(&assignment.expression, &mut observations.handlers);
         }
         let result = self.execute_inner(
             table,
@@ -933,6 +1014,7 @@ impl Executor<'_> {
         let mut budget = Budget::new(limits);
         let mut intermediate_run = intermediates::Run::default();
         let mut candidates: Vec<Candidate> = Vec::new();
+        let mut next_selection_identity = 0usize;
         if matches!(self.plan.templates()[0].mode, RowMode::Keys) {
             candidates = key_grain::construct(self, table, limits, &mut budget, handlers)?;
         } else {
@@ -955,7 +1037,16 @@ impl Executor<'_> {
                     .try_reserve(groups.len())
                     .map_err(|_| Box::new(ExecutionError::Allocation))?;
                 for members in groups {
+                    // Discarding a row never refunds its token or evaluated work.
+                    if !self.plan.intermediates().is_empty() {
+                        budget.work(1, 1)?;
+                    }
+                    let selection_identity = SelectionIdentity::Candidate(next_selection_identity);
+                    next_selection_identity = next_selection_identity
+                        .checked_add(1)
+                        .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
                     let mut candidate = Candidate {
+                        selection_identity,
                         members,
                         values: vec![Value::Missing; self.plan.output().columns().len()],
                         completed: vec![false; self.plan.output().columns().len()],
@@ -1449,6 +1540,29 @@ pub(crate) fn identities<E>(
         });
     }
     Ok(identities)
+}
+
+/// Retain known current keys only when the owning semantic phase requests them.
+fn retained_diagnostic<E>(
+    diagnostic: yamaa_core::diagnostic::Diagnostic,
+    retain_keys: bool,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    budget: &mut Budget,
+) -> Box<ExecutionError<E>> {
+    let identity = if retain_keys {
+        match failure_identity(candidate, plan.keys(), row, budget) {
+            Ok(identity) => identity,
+            Err(error) => return error,
+        }
+    } else {
+        None
+    };
+    Box::new(ExecutionError::SemanticDiagnostic {
+        diagnostic,
+        identity,
+    })
 }
 
 /// A partial key is unavailable, whereas a completed missing key is a known value.

@@ -357,19 +357,23 @@ impl Intermediate {
         if self.keys.len() > MAX_COLUMNS {
             return Err(Error::RequestLimit);
         }
+        let keys = self
+            .keys
+            .into_iter()
+            .map(|key| dataset::IntermediateKey {
+                source_column: key.source_column,
+                path: self.path.clone(),
+                value: dataset::MatchValue::Variable(dataset::MatchRead::Output {
+                    column: key.output_column,
+                    identifier: key.output_column.to_string(),
+                }),
+            })
+            .collect();
         Ok(dataset::Intermediate {
-            record_keys: Vec::new(),
             identifier: self.identifier,
             path: self.path,
             source: self.source,
-            keys: self
-                .keys
-                .into_iter()
-                .map(|key| dataset::MatchKey {
-                    source_column: key.source_column,
-                    output_column: key.output_column,
-                })
-                .collect(),
+            keys,
             filter: self.filter.map(Predicate::prepare).transpose()?,
             selection: self.selection.map(SourceSelection::prepare).transpose()?,
             no_match: self
@@ -1072,7 +1076,7 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
         // dataset/1 admits only legacy versioned declarations. Versionless
         // package calls use the owned file application rather than this wire.
         ExecutionError::ProjectFunction { .. } => return Err(Error::UnsupportedProtocol),
-        ExecutionError::ImputationDiagnostic {
+        ExecutionError::SemanticDiagnostic {
             diagnostic,
             identity: keys,
         } => Outcome::Condition {
