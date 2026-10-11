@@ -92,8 +92,8 @@ fn public_preparation_accepts_native_absolute_environment_paths_without_study_re
     .unwrap();
     assert!(project.run().check_diagnostics().is_empty());
     assert!(!study.0.join("entry/input.csv").exists());
-    // Configuration, entry, environment, lock, function and codelist metadata only.
-    assert_eq!(project.capture_reads(), 6);
+    // Entry, environment, lock, function and codelist metadata only.
+    assert_eq!(project.capture_reads(), 5);
 }
 
 #[derive(Default)]

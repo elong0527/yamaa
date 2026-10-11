@@ -119,11 +119,68 @@ check_integer_output_conversions <- function() {
   }
   stopifnot(identical(as.character(output), truth),
             identical(as.character(result$output$VALUE), truth))
+  stopifnot(identical(class(output[[1L]]), "yamaa_int64_vector"),
+            identical(as.character(output[[1L]]), truth[1L]),
+            identical(as.character(output[[10L]]), NA_character_),
+            identical(is.na(output[[10L]]), TRUE))
+  reject(as.double(output[[3L]]), "not exactly representable")
+  reject(output[[11L]])
+  stopifnot(
+    identical(result$output$ID < 9L, c(rep(TRUE, 8L), FALSE, FALSE)),
+    identical(output == 2^53, c(FALSE, FALSE, FALSE, FALSE, TRUE,
+                               FALSE, FALSE, FALSE, FALSE, NA)),
+    identical(output > int64("9007199254740992"),
+              c(FALSE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, NA)),
+    identical(int64("9007199254740992") < output,
+              c(FALSE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, NA)),
+    identical(output < -2^53,
+              c(TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, NA)),
+    identical(output >= -2^63, c(rep(TRUE, 9L), NA)),
+    identical(output < 2^63, c(rep(TRUE, 9L), NA)),
+    identical(output == output, c(rep(TRUE, 9L), NA)),
+    identical(output != output, c(rep(FALSE, 9L), NA)),
+    identical(output <= output, c(rep(TRUE, 9L), NA)),
+    identical(output >= output, c(rep(TRUE, 9L), NA)),
+    identical(output < output, c(rep(FALSE, 9L), NA)),
+    identical(output > output, c(rep(FALSE, 9L), NA)),
+    identical(output > NA, rep(NA, 10L)),
+    identical(output == Inf, rep(NA, 10L)),
+    identical(output[integer()] < 1L, logical()),
+    identical(integer() < output, logical()))
+  for (operation in list(function() output + 1L, function() -output,
+                         function() output & TRUE, function() !output)) {
+    reject(operation(), "unsupported integer output vector operator")
+  }
+  reject(output == "1", "incompatible scalar operands")
+  reject(output == TRUE, "incompatible scalar operands")
+  reject(output == structure(1L, units = "days"),
+         "unsupported integer output comparison")
+  for (fake in list(structure("01", class = "yamaa_int64_vector"),
+                    structure("9223372036854775808", class = "yamaa_int64_vector"),
+                    structure("1", class = c("yamaa_int64_vector", "other")),
+                    structure("1", class = "yamaa_int64_vector", dim = c(1L, 1L)))) {
+    reject(fake == output[[1L]])
+  }
+  warnings <- character()
+  recycled <- withCallingHandlers(output[1:3] > c(0L, 0L), warning = function(w) {
+    warnings <<- c(warnings, conditionMessage(w)); invokeRestart("muffleWarning")
+  })
+  stopifnot(identical(recycled, c(FALSE, TRUE, TRUE)),
+            identical(warnings,
+                      "longer object length is not a multiple of shorter object length"))
   named <- setNames(output[c(8L, 9L, 10L)], c("low", "high", "missing"))
   stopifnot(identical(as.double(named),
                       c(low = -2147483647, high = 2147483647, missing = NA_real_)),
             identical(as.integer(named),
                       c(low = -2147483647L, high = 2147483647L, missing = NA_integer_)))
+  stopifnot(identical(named > 0L, c(low = FALSE, high = TRUE, missing = NA)),
+            identical(0L < named, c(low = FALSE, high = TRUE, missing = NA)),
+            identical(as.character(named[["low"]]), "-2147483647"),
+            identical(class(named[["missing"]]), "yamaa_int64_vector"))
+  subset <- result$output[result$output$ID >= 9L, , drop = FALSE]
+  stopifnot(identical(as.character(subset$VALUE), truth[9:10]),
+            identical(class(subset$VALUE), "yamaa_int64_vector"),
+            identical(as.character(output), truth))
   for (convert in list(as.double, as.integer)) {
     template <- if (identical(convert, as.double)) NA_real_ else NA_integer_
     stopifnot(identical(convert(output[10L]), template),
@@ -139,7 +196,9 @@ check_integer_output_conversions <- function() {
   rm(result); unlink(work, recursive = TRUE); invisible(gc())
   for (attempt in seq_len(5L)) {
     stopifnot(identical(as.double(exact), exact_truth),
-              identical(as.character(output), truth))
+              identical(as.character(output), truth),
+              identical(output > int64("9007199254740992"),
+                        c(FALSE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, NA)))
   }
 }
 check_integer_output_conversions()

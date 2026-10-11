@@ -31,7 +31,7 @@ while it works, down to the leaf a layer wrote. A composed column
 carries values from more than one layer. Provenance is not a field of the
 resolved specification. It is diagnostic state, and for a relative
 `project_path` it also records the layer that wrote the path and that layer's
-own spelling, which [Resource resolution](../storage/resources.md) retries under
+own spelling, which [Resource resolution](../storage/resources.md) resolves once under
 [REQ-0780](../storage/resources.md#req-0780).
 
 ### Parent references
@@ -261,15 +261,15 @@ relative path is rebased relative to the entry file without changing the
 denoted local file. If the local platform cannot express that file relative
 to the entry file, the canonical absolute local path is used. An absolute
 contributed path is materialized exactly as it was written. [Resource resolution](../storage/resources.md)
-resolves it against the approved root it names and reads that written form.
+reads its declared local location subject to the same file-kind, link and snapshot checks.
 `parents` paths are not materialized.
 
 <a id="req-0637"></a>
 
 **REQ-0637.** Rebasing states where a file is, not whether a run may read it.
 [Resource resolution](../storage/resources.md) accepts or rejects a rebased `project_path` at the location its
-rebased form names. When nothing is stored there, it retries the spelling the
-layer wrote against the approved project root and data roots under
+rebased form names. A missing file fails at that location; the run does not
+retry the spelling from another directory under
 [REQ-0780](../storage/resources.md#req-0780).
 
 ### Minimal resolved specification

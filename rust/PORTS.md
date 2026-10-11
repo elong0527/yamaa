@@ -266,9 +266,13 @@ path keys retain their snapshot and fail closed. The adapter interprets no study
 The [qualification scope](crates/yamaa-adapters/tests/fixtures/native_file_resources.md)
 pins real CSV/Parquet input, complete independent reports, cached counters, direct
 byte equality and registered handle lifetime in installed R without Python. The
-existing approved-root/link/fallback behavior remains pending #1751's separate
-path-policy approval. The shared file-preparation and explicit publication adapters compose this reader;
-Windows native IO and the public file facade remain open.
+explicit-root probes retain the historical approved-root/fallback qualification
+behavior. Replacement public routes select `Resources::for_entry` and follow
+[#1905](https://github.com/elong0527/yamaa/issues/1905): each original declaring
+file supplies its own relative location, absolute/parent-relative local paths
+are allowed, and absent files have no fallback. The same native kind, link,
+snapshot and held-byte publication checks apply in both modes. Windows R
+installed release qualification remains separate under #1903.
 
 
 ## Explicit-target native publication

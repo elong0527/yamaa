@@ -49,7 +49,6 @@ pub fn failure(error: &Error, host: Language) -> Failure {
         Error::Configuration(crate::file_configuration::Error::Path(error)) => {
             file_application::resource_failure("prepare", error)
         }
-        Error::Configuration(_) => file_application::rejected("prepare", "project_configuration"),
         Error::Schema(_) => file_application::rejected("prepare", "shipped_schema"),
         Error::Project(file_project::Error::Resource(error)) => {
             file_application::resource_failure("environment", error)
@@ -151,7 +150,6 @@ fn workflow_issues(error: &crate::file_workflow::Error, host: Language) -> Failu
             crate::file_configuration::Error::Path(error) => {
                 file_application::resource_failure("prepare", error)
             }
-            _ => file_application::rejected("prepare", "project_configuration"),
         },
         crate::producer_check::Error::Original(crate::file_workflow::Error::Schema(_)) => {
             file_application::rejected("prepare", "shipped_schema")

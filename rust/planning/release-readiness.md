@@ -22,9 +22,9 @@ Follow [the delivery order](migration-order.md).
 
 ## Declared API inventory
 
-[release-api.json](release-api.json) records 486 declared names in 34 source files:
-363 Python `__all__` entries, 52 native Python stub symbols/members, 22 legacy R
-exports, and 49 native R exports/S3 registrations. Re-exports are counted at each
+[release-api.json](release-api.json) records 425 declared names in 22 source files:
+272 Python `__all__` entries, 80 native Python stub symbols/members, 22 legacy R
+exports, and 51 native R exports/S3 registrations. Re-exports are counted at each
 public location. Private modules and native handles are included for removal
 tracking; their inclusion is not a public compatibility promise.
 
@@ -140,7 +140,7 @@ linked decision. Issue numbers identify the implementation/test or decision owne
 | B01 | The earlier six-case M1 gate qualified 96 tuple comparisons in its audited Python 3.14 matrix. The gate now requires eleven cases, including all five historical timing fixtures. Windows R remains unqualified. | #1739, #1751, #1903 | Preserve complete original-file observations and saved bytes, block reference semantics, and qualify all required Windows R tuples. Promote only evidenced `shared_run` tuples. |
 | B02 | Public domain/check/result/log/save API and benchmark runner migration. | #1751 | Installed signatures, wrong-argument exceptions, issue rows for specification/data/environment/function failures, logs retained on failure, explicit save, and every supported Python/R runner pair migrated. |
 | B03 | Issues-only checks, JSON-text context and full-range `yamaa_int64_vector` are approved; retained helpers and full surface review remain. | #1751, #1742 | Qualify the approved representations, separate missingness and exact-or-error integer conversions. Settle custom schema/provenance and IO/ODM/style helper dispositions; test retained surfaces and deliberate removals, including class members and undocumented imports. |
-| B04 | Declaring-file path replacement is approved; existing implementation still enforces approved roots/fallback. | #1905, #1751, #1755 | Implement the coordinated requirements: original declaring-file provenance, no fallback/configuration search, absolute and parent-relative local paths without yamaa root containment, preserved file-kind/link/snapshot checks, resource preflight and both-host file/error/publication tests. |
+| B04 | Declaring-file path replacement is implemented in the candidate public routes; full cross-platform installed qualification remains open. | #1905, #1751, #1755 | Implement the coordinated requirements: original declaring-file provenance, no fallback/configuration search, absolute and parent-relative local paths without yamaa root containment, preserved file-kind/link/snapshot checks, resource preflight and both-host file/error/publication tests. |
 | B05 | Combined `yamaa` packages qualify in #1811; obsolete probe/duplicate cleanup remains open. | #1751, #1754, #1742 | Clean wheel/source and R package installations exercise combined artifacts; remove duplicate/probe exports only after their replacement consumers qualify. |
 | B06 | #1757 is closed by #1856 for public environment/function admission, lock verification, per-build activation and five equivalent Python/R fixtures. | #1757, #1742 | Retain that bounded qualification and exercise the final installed release matrix, including Windows R and later public workflow/submission integrations, without weakening activation-before-data. |
 | B07 | Public producer builds qualify; ordered publication remains open under the approved #1866 lifecycle. | #1741 | Producer-once execution, activation before study data, exact serialized/rounded consumer input and complete ledgers. Build without writes; explicit Save publishes held bytes producer-first without rereads/callbacks/re-encoding. Failed publication stops dependents and preserves prior writes and completed execution evidence. |

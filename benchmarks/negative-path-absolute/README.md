@@ -3,6 +3,14 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-path-absolute.html)
 [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
 
+This fixture retains the reference engine's historical containment rejection
+and locked expected report. Under the approved declaring-file policy (#1905),
+absolute and parent-relative local spellings are permitted; an absent file
+fails at the declared location. Current public Python/R path behavior is
+qualified by independently authored installed tests. This fixture records
+reference-only policy history until the coordinated reference transition and
+is not evidence that the replacement public routes reject these path forms.
+
 **Goal:** attempt one record per subject and laboratory test
 carrying the collected result in `AVAL` and the upper limit of
 normal for that test and the subject's sex in `ANRHI`.
@@ -23,17 +31,17 @@ plus a reference table of upper limits by test code and sex.
 
 **Note:** the reference table is named by an absolute location,
 `/shared/reference/lbref.csv`, which names a place on the machine
-that runs the study rather than a file the study carries. A run
-opens only files inside the study or in a location the runner
-approved, so the run is rejected before any data is read and no
+that runs the study rather than a file the study carries. The historical
+reference-engine run opens only files inside the study or in a location the
+runner approved, so it rejects this fixture before any data is read and no
 artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
-Copy the governed reference limits into the study and name them where the
-study keeps its data:
+For the retained reference engine, copy the governed reference limits into
+the study and name them where the study keeps its data:
 
 ```yaml
 input:
@@ -41,7 +49,9 @@ input:
     path: input/lbref.csv
 ```
 
-Keep a shared limit table outside the study only when the runner approves the
-directory that holds it as a data root, and then name it by its rooted path.
+Under the historical reference policy, keep a shared limit table outside the
+study only when the runner approves its directory as a data root, then name it
+by its rooted path. The replacement public routes use the declared local
+location under OS/caller permissions; no data-root approval is interpreted.
 Give each study the version it was run against either way: a shared location
 that is edited between runs changes results that were already reported.
