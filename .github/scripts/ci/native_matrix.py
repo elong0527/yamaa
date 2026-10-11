@@ -26,7 +26,7 @@ def plan(event, run_id):
         combinations = [random.Random(int(run_id)).choice(combinations)]
         platforms = [combinations[0]["os"]]
         r_platforms = [platform for platform in platforms if platform in R_PLATFORMS]
-    elif event == "push":
+    elif event in {"push", "workflow_dispatch"}:
         platforms = list(PLATFORMS)
         r_platforms = list(R_PLATFORMS)
     else:
@@ -40,7 +40,7 @@ def plan(event, run_id):
         "qualify": {"include": combinations},
         "r": {"os": r_platforms},
         "run-r": bool(r_platforms),
-        "full": event == "push",
+        "full": event in {"push", "workflow_dispatch"},
         "compare-os": platforms[0],
     }
 
@@ -116,7 +116,7 @@ def main():
     with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
         if coverage["full"]:
             summary.write(
-                "Full post-merge native coverage: all 18 Python combinations and all three R hosts.\n"
+                "Full native coverage: all 18 Python combinations and all three R hosts.\n"
             )
         else:
             selected = coverage["qualify"]["include"][0]

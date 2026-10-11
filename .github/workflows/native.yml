@@ -1,6 +1,8 @@
 name: Native installation prototype
 
 on:
+  # Qualify a reviewed branch's complete installed matrix before issue closure.
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -59,7 +61,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.14'
-      - name: Select one PR combination or the full main matrix
+      - name: Select one PR combination or the full qualification matrix
         id: coverage
         run: python .github/scripts/ci/native_matrix.py plan
 
