@@ -91,7 +91,7 @@ def violations(metadata):
 def main():
     metadata = json.loads(
         subprocess.check_output(
-            ["cargo", "metadata", "--no-deps", "--format-version", "1"],
+            ["cargo", "metadata", "--locked", "--no-deps", "--format-version", "1"],
             cwd=WORKSPACE,
             text=True,
         )

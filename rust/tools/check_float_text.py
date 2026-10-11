@@ -20,6 +20,7 @@ def main():
             "cargo",
             "run",
             "--offline",
+            "--locked",
             "--quiet",
             "-p",
             "yamaa-core",

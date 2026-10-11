@@ -81,9 +81,10 @@ jobs:
             set -e
             python tools/check_benchmark_sdk_versions.py
             cargo fmt --all --check
-            cargo clippy -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
-            cargo test
-            cargo test -p yamaa-core -p yamaa-engine -p yamaa-adapters --profile release-test
+            python tools/check_cargo_lock.py --output-dir "${RUNNER_TEMP}/rust-dependencies"
+            cargo clippy --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
+            cargo test --locked
+            cargo test --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters --profile release-test
             python tools/generate_regex_identifiers.py
             python tools/generate_schema_printable.py
             python tools/generate_shipped_schema.py
@@ -101,6 +102,13 @@ jobs:
             python tools/check_diagnostics.py
             python -m unittest discover -s tests -p 'test_*.py'
           ) 2>&1 | tee "${RUNNER_TEMP}/shared-crates-check.log"
+      - name: Preserve locked Rust dependency evidence
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: rust-dependencies-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/rust-dependencies
+          if-no-files-found: error
       - name: Preserve shared crate diagnostics before independent assessments
         if: ${{ always() && (steps.shared_crates.outcome == 'success' || steps.shared_crates.outcome == 'failure') }}
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -192,12 +200,18 @@ jobs:
           PYTHON
       - name: Build wheel and source archive
         run: |
-          (cd python && maturin build --release --sdist --out "${RUNNER_TEMP}/native-dist")
+          (
+            cd python
+            maturin build --release --locked --out "${RUNNER_TEMP}/native-dist"
+            python yamaa_build_backend.py "${RUNNER_TEMP}/native-dist"
+          )
           python -m pip wheel --no-deps --no-build-isolation rust/tests/project-programs/python --wheel-dir "${RUNNER_TEMP}/project-dist"
           mkdir -p "${RUNNER_TEMP}/reference-dist"
           cp "${RUNNER_TEMP}"/native-dist/*.whl "${RUNNER_TEMP}/reference-dist/"
       - name: Check Python distribution contents
-        run: python rust/tools/check_python_package_hygiene.py "${RUNNER_TEMP}/native-dist"
+        run: |
+          python rust/tools/check_python_package_hygiene.py "${RUNNER_TEMP}/native-dist"
+          python rust/tools/check_cargo_lock.py --output-dir "${RUNNER_TEMP}/rust-dependencies" "${RUNNER_TEMP}"/native-dist/*.tar.gz
       - name: Preserve the reference host wheel
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
@@ -209,6 +223,13 @@ jobs:
         with:
           name: native-project-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/project-dist
+          if-no-files-found: error
+      - name: Preserve locked Rust dependency evidence
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: rust-dependencies-dist-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/rust-dependencies
           if-no-files-found: error
       - name: Preserve distributions
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -460,7 +481,7 @@ jobs:
         run: rustup toolchain install 1.90.0 --profile minimal --component clippy
       - name: Check R binding
         working-directory: rust
-        run: cargo clippy -p yamaa-r -- -D warnings
+        run: cargo clippy --locked -p yamaa-r -- -D warnings
       - name: Stage standalone R package
         run: python rust/tools/stage_r_package.py "${RUNNER_TEMP}/native-stage/yamaa"
       - name: Build, install, and test outside checkout
@@ -468,6 +489,7 @@ jobs:
         run: |
           mkdir -p native-r-library
           R CMD build --no-build-vignettes --no-manual native-stage/yamaa
+          python "${GITHUB_WORKSPACE}/rust/tools/check_cargo_lock.py" --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.3.0.tar.gz
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.3.0.tar.gz
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
@@ -525,6 +547,13 @@ jobs:
         with:
           name: native-r-qualification-${{ matrix.os }}
           path: ${{ runner.temp }}/qualification
+          if-no-files-found: error
+      - name: Preserve locked Rust dependency evidence
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: rust-dependencies-r-${{ matrix.os }}
+          path: ${{ runner.temp }}/rust-dependencies
           if-no-files-found: error
       - name: Preserve source archive
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5

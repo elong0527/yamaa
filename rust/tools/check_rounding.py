@@ -37,6 +37,7 @@ def main():
             "cargo",
             "run",
             "--offline",
+            "--locked",
             "--quiet",
             "--release",
             "-p",
