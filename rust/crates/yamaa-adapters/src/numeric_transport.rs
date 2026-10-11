@@ -520,21 +520,12 @@ fn execute(request: &str) -> Result<String, NumericTransportError> {
     serde_json::to_string(&response).map_err(|_| NumericTransportError::Internal)
 }
 
-/// A compiler finding reached in the engine's verification sequence.
+/// Encode the core-owned declaration finding reached by the verification sequence.
 pub(crate) fn declaration(
     path: String,
-    condition: &'static str,
-    requirement: &'static str,
+    code: yamaa_core::diagnostic::ConditionCode,
     reason: String,
-) -> Box<Diagnostic> {
-    Box::new(Diagnostic {
-        phase: "validation",
-        condition,
-        requirement: Some(requirement),
-        spec_paths: vec![path],
-        context: [("reason".into(), text(reason))].into_iter().collect(),
-        source_span: None,
-        operand_route: None,
-        position: None,
-    })
+) -> Option<Box<Diagnostic>> {
+    yamaa_core::dataset_checks::declaration_diagnostic(path, code, reason)
+        .map(|diagnostic| Box::new(diagnostic.into()))
 }

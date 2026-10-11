@@ -250,8 +250,7 @@ pub enum ExecutionError<E> {
     },
     VerificationDeclaration {
         path: String,
-        condition: &'static str,
-        requirement: &'static str,
+        code: yamaa_core::diagnostic::ConditionCode,
         reason: String,
         records: Vec<CheckRecord>,
     },
@@ -1254,15 +1253,10 @@ impl Executor<'_> {
                         records: core::mem::take(records),
                     }));
                 }
-                Check::InvalidDeclaration {
-                    condition,
-                    requirement,
-                    reason,
-                } => {
+                Check::InvalidDeclaration { code, reason } => {
                     return Err(Box::new(ExecutionError::VerificationDeclaration {
                         path: verification.path.clone(),
-                        condition,
-                        requirement,
+                        code: *code,
                         reason: reason.clone(),
                         records: core::mem::take(records),
                     }));
@@ -1417,15 +1411,10 @@ impl Executor<'_> {
                                 records: core::mem::take(records),
                             }));
                         }
-                        Check::InvalidDeclaration {
-                            condition,
-                            requirement,
-                            reason,
-                        } => {
+                        Check::InvalidDeclaration { code, reason } => {
                             return Err(Box::new(ExecutionError::VerificationDeclaration {
                                 path: verification.path.clone(),
-                                condition,
-                                requirement,
+                                code: *code,
                                 reason: reason.clone(),
                                 records: core::mem::take(records),
                             }));

@@ -465,3 +465,14 @@ actual entered publication remain distinct; normative publication diagnostics
 already use the same core cause. Status, issue and dataset wire bytes do not change.
 The active allowance shrinks from 35 sites/51 occurrences to 32/48. Remaining
 non-Define allowances are exact pre-existing independent tests.
+
+## Typed verification declaration ownership
+
+Declaration detection now selects the existing eight registered causes directly.
+The deferred core check, borrowed static finding and engine failure retain that
+typed cause with the unchanged reason, declaring path and completed record prefix.
+Core projects the closed declaration vocabulary without comparing condition or
+requirement strings. Both standalone dataset and complete producer reports encode
+that same core context. Admission order, missing/duplicate ID rules, quoted reason
+text, inheritance paths and all public phase/condition/requirement bytes remain
+unchanged. CheckRecord compatibility metadata is separate remaining work in #1985.

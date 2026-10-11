@@ -694,8 +694,7 @@ fn failed_observations<'a, E>(
                     }
                     ExecutionError::VerificationDeclaration {
                         path,
-                        condition,
-                        requirement,
+                        code,
                         reason,
                         records,
                     } => {
@@ -705,8 +704,7 @@ fn failed_observations<'a, E>(
                         }
                         let diagnostic = yamaa_core::dataset_checks::declaration_diagnostic(
                             path.clone(),
-                            condition,
-                            requirement,
+                            *code,
                             reason.clone(),
                         )
                         .ok_or(Error::InvalidObservation)?;

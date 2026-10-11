@@ -1282,20 +1282,15 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
         },
         ExecutionError::VerificationDeclaration {
             path,
-            condition,
-            requirement,
+            code,
             reason,
             records: completed,
         } => Outcome::Condition {
             matched_key: None,
             partition: None,
             identity: None,
-            diagnostic: crate::numeric_transport::declaration(
-                path.clone(),
-                condition,
-                requirement,
-                reason.clone(),
-            ),
+            diagnostic: crate::numeric_transport::declaration(path.clone(), *code, reason.clone())
+                .ok_or(Error::Internal)?,
             verifications: if retain_records {
                 Some(records(completed.clone())?)
             } else {

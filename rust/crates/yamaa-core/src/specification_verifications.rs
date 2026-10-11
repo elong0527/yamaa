@@ -14,8 +14,7 @@ use crate::{
 enum DeclarationFinding {
     Reason {
         path: String,
-        condition: &'static str,
-        requirement: &'static str,
+        code: crate::diagnostic::ConditionCode,
         reason: String,
     },
     Diagnostic(Diagnostic),
@@ -272,13 +271,8 @@ impl Verifications {
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
             let path = format!("{prefix}[{index}].{op}");
-            let invalid = |path: String, condition, requirement, reason: String| {
-                Some(DeclarationFinding::Reason {
-                    path,
-                    condition,
-                    requirement,
-                    reason,
-                })
+            let invalid = |path: String, code, reason: String| {
+                Some(DeclarationFinding::Reason { path, code, reason })
             };
             let identity = if let Some(id) = d.field(payload, "id") {
                 match &d.nodes()[id] {
@@ -286,8 +280,7 @@ impl Verifications {
                         if let Some(previous) = ids.get(value) {
                             result.deferred = invalid(
                                 path,
-                                "duplicate_identifier",
-                                "REQ-0398",
+                                ConditionCode::VerificationIdentifierRepeated,
                                 format!("verification id {} repeats {previous}", quote(value)?),
                             );
                             break;
@@ -298,8 +291,7 @@ impl Verifications {
                     _ => {
                         result.deferred = invalid(
                             path,
-                            "invalid_declaration",
-                            "REQ-0374",
+                            ConditionCode::VerificationIdentifierType,
                             "a verification id is text".into(),
                         );
                         break;
@@ -323,13 +315,8 @@ impl Verifications {
                     result.deferred = Some(DeclarationFinding::Diagnostic(diagnostic));
                     break;
                 }
-                if let Check::InvalidDeclaration {
-                    condition,
-                    requirement,
-                    reason,
-                } = check
-                {
-                    result.deferred = invalid(path, condition, requirement, reason);
+                if let Check::InvalidDeclaration { code, reason } = check {
+                    result.deferred = invalid(path, code, reason);
                     break;
                 }
                 check
@@ -342,8 +329,7 @@ impl Verifications {
                 if values.is_empty() {
                     result.deferred = invalid(
                         path,
-                        "invalid_declaration",
-                        "REQ-0397",
+                        ConditionCode::VerificationDeclarationRequired,
                         "columns names at least one column".into(),
                     );
                     break;
@@ -356,8 +342,7 @@ impl Verifications {
                     } else {
                         result.deferred = invalid(
                             format!("{path}.columns"),
-                            "unknown_field",
-                            "REQ-0405",
+                            ConditionCode::VerificationDeclaredColumnUnknown,
                             format!("unknown column {}", quote(name)?),
                         );
                         break;
@@ -370,8 +355,7 @@ impl Verifications {
                     if !columns.iter().any(|column| columns.first() != Some(column)) {
                         result.deferred = invalid(
                             path,
-                            "invalid_declaration",
-                            "REQ-0401",
+                            ConditionCode::VerificationCardinality,
                             "all_or_none names two distinct columns".into(),
                         );
                         break;
@@ -432,7 +416,7 @@ impl Verifications {
                 };
                 if let Some(reason) = reason {
                     result.deferred =
-                        invalid(path, "invalid_declaration", "REQ-0399", reason.into());
+                        invalid(path, ConditionCode::VerificationBounds, reason.into());
                     break;
                 }
                 Check::RowCount { min, max }
@@ -447,16 +431,10 @@ impl Verifications {
         }
         if let Some(finding) = &result.deferred {
             let (path, check) = match finding {
-                DeclarationFinding::Reason {
-                    path,
-                    condition,
-                    requirement,
-                    reason,
-                } => (
+                DeclarationFinding::Reason { path, code, reason } => (
                     path.clone(),
                     Check::InvalidDeclaration {
-                        condition,
-                        requirement,
+                        code: *code,
                         reason: reason.clone(),
                     },
                 ),
