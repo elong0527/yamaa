@@ -270,7 +270,11 @@ fn default_reads(
     };
     match operation {
         "literal" => {}
-        "source" => reference(text(d, field(d, payload, "variable")?)?),
+        "source" => {
+            let name = text(d, field(d, payload, "variable")?)?;
+            reference(name);
+            reads.extend(row_intermediates::default_dependencies(d, name, output)?);
+        }
         "round_half_away_from_zero" => reference(text(d, field(d, payload, "source")?)?),
         "date_diff" | "study_day" | "to_epoch_day" => {
             let fields: &[&str] = match operation {
@@ -590,6 +594,7 @@ impl Rows {
         if raw_rows.is_empty() || raw_rows.len() > 16 {
             return Err(PrepareError::Limit("row_templates"));
         }
+        row_intermediates::admit(d, raw_rows.len())?;
         let columns = sequence(d, field(d, root, "columns")?)?;
         let filters = raw_rows
             .iter()
@@ -650,6 +655,18 @@ impl Rows {
                         }
                         filter_defaults.insert(column);
                     }
+                }
+            }
+        }
+        // Complete row-local identity defaults before a newly admitted selector can fail.
+        if present(d, root, "intermediates") {
+            for &key in sequence(d, field(d, root, "keys")?)? {
+                if let Some(column) = output
+                    .columns()
+                    .iter()
+                    .position(|column| text(d, key).is_ok_and(|key| key == column.name))
+                {
+                    filter_defaults.insert(column);
                 }
             }
         }
@@ -761,6 +778,20 @@ impl Rows {
                 filter,
             });
         }
+        for template in &templates {
+            if template.groups.is_some() {
+                for declaration in &template.declarations {
+                    if let RowOperation::Source(reference) = &declaration.operation {
+                        if row_intermediates::named_reference(d, reference)? {
+                            return Err(unsupported(
+                                "grouped_intermediate_source",
+                                &declaration.path,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
         validate_row_phases(&templates, project, output)?;
         let mut lowered_columns = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
@@ -787,6 +818,18 @@ impl Rows {
                     extraction,
                     string_templates,
                 )?);
+            }
+        }
+        if templates.iter().any(|template| template.groups.is_some()) {
+            for declaration in &lowered_columns {
+                if let RowOperation::Source(reference) = &declaration.operation {
+                    if row_intermediates::named_reference(d, reference)? {
+                        return Err(unsupported(
+                            "grouped_intermediate_source",
+                            &declaration.path,
+                        ));
+                    }
+                }
             }
         }
         Ok(Self {
@@ -841,6 +884,23 @@ impl Rows {
         }
         Ok(uses)
     }
+    pub(super) fn admit_sources(
+        &self,
+        schemas: &[&TableSchema],
+        output: &TableSchema,
+    ) -> Result<(), BindError> {
+        row_intermediates::admit_sources(
+            schemas,
+            output,
+            self.templates.len(),
+            self.templates
+                .iter()
+                .flat_map(|t| &t.declarations)
+                .chain(&self.columns)
+                .map(|d| d.path.len()),
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn bind(
         &self,
         source: &TableSchema,
@@ -849,6 +909,10 @@ impl Rows {
         keys: &[usize],
         verifications: &[Verification],
         project: Option<&crate::project_calls::ProjectCalls>,
+        named: &intermediates::Declarations,
+        secondary: Vec<crate::dataset::SecondarySource>,
+        intermediates: Vec<Option<crate::dataset::Intermediate>>,
+        mut findings: Vec<BindFinding>,
     ) -> Result<DatasetPlan, BindError> {
         let output_fields = output
             .columns()
@@ -882,7 +946,6 @@ impl Rows {
             .map(|g| g.iter().map(String::as_str).collect::<Vec<_>>())
             .collect::<Vec<_>>();
         let column_groups = groups.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let mut findings = Vec::new();
         let resolve = |reference: &str, path: &str, findings: &mut Vec<BindFinding>| {
             let selected = reference
                 .split_once('.')
@@ -1124,7 +1187,27 @@ impl Rows {
                     None
                 }
                 RowOperation::Source(reference) => {
-                    if let Some(column) = resolve(reference, &declaration.path, findings) {
+                    if named.reference(reference).is_some() {
+                        if matches!(phase, Phase::Row { group_by: Some(_) })
+                            || matches!(phase, Phase::Column { .. }) && !groups.is_empty()
+                        {
+                            return Err(BindError::InvalidPlan(
+                                crate::dataset::PlanError::InvalidIntermediate,
+                            ));
+                        }
+                        row_intermediates::bind(
+                            reference,
+                            &declaration.path,
+                            named,
+                            &secondary,
+                            &intermediates,
+                            output,
+                            &catalog,
+                            available,
+                            edges,
+                            findings,
+                        )?
+                    } else if let Some(column) = resolve(reference, &declaration.path, findings) {
                         let scoped = reference_scope::validate(
                             &catalog,
                             reference,
@@ -1436,8 +1519,15 @@ impl Rows {
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }
-        DatasetPlan::new(
-            source.clone(),
+        DatasetPlan::new_with_intermediates(
+            crate::dataset::SourceSchemas {
+                primary: source.clone(),
+                secondary,
+            },
+            intermediates
+                .into_iter()
+                .collect::<Option<Vec<_>>>()
+                .ok_or(BindError::Internal)?,
             output.clone(),
             templates,
             columns,

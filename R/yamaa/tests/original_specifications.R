@@ -1518,6 +1518,42 @@ local({
 })
 
 local({
+  source(file.path(root,"row-intermediate-truth.R"),local=TRUE)
+  directory <- tempfile("public-row-intermediates-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  for(name in names(row_intermediate_truth)) {
+    truth <- row_intermediate_truth[[name]]
+    stopifnot(file.copy(file.path(root,"row-cases",name),directory,recursive=TRUE))
+    case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
+    result <- yamaa_domain(entry);check_issue_frame(result$issues,truth$issues)
+    observed <- get(".domain_observations",asNamespace("yamaa"))(result)
+    if(!is.null(observed)) {
+      report <- rawToChar(observed)
+      # Compare complete arrays literally; authored paths can contain brackets.
+      ledger <- paste0('"handler_counts":',truth$ledger,',')
+      stopifnot(sum(gregexpr('"handler_counts":',report,fixed=TRUE)[[1L]]>0L)==2L,
+        sum(gregexpr(ledger,report,fixed=TRUE)[[1L]]>0L)==2L)
+    }
+    output <- file.path(case,truth$output)
+    stopifnot(!file.exists(output))
+    if(truth$success) {
+      stopifnot(!is.null(result$output),identical(result$save(),TRUE),
+        identical(rawfile(output),rawfile(file.path(case,"expected.csv"))),
+        identical(result$save(),TRUE),identical(rawfile(output),rawfile(file.path(case,"expected.csv"))))
+    } else {
+      stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(output))
+    }
+    if(name %in% c("unknown-row-driver","omitted-row-driver","different-row-drivers","adam-adlb-end-of-treatment")) {
+      check_issue_frame(yamaa_check(entry)$issues,truth$issues)
+    }
+  }
+  original <- file.path(directory,"adam-adlb-supplb-padded-key")
+  unlink(file.path(original,"input"),recursive=TRUE)
+  stopifnot(nrow(yamaa_check(file.path(original,"spec.yaml"))$issues)==0L,!file.exists(file.path(original,"input")))
+  cat("common input record rows match unchanged padded-key bytes, complete independent findings and reached handler ledgers without Python; EOT and distinct/grouped sources remain gated passed\n")
+})
+
+local({
   directory <- tempfile("public-text-extract-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
   handler_truth <- read.delim(file.path(root,"text-extract-handlers.tsv"),quote="",colClasses="character",check.names=FALSE)

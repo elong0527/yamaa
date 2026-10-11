@@ -586,13 +586,12 @@ fn validate_assignment_at(
         Expression::ProjectFunction(function) => function.validate(source, available, mode)?,
         Expression::FirstAvailable(selection) => selection.validate(source, available, mode)?,
         Expression::Intermediate { index, column } => {
-            if !matches!(mode, RowMode::Keys) {
-                return Err(PlanError::InvalidIntermediate);
-            }
             let item = intermediates
                 .get(*index)
                 .ok_or(PlanError::InvalidIntermediate)?;
-            intermediates::validate_read(item, *column, source, secondary, available, output)?;
+            intermediates::validate_context_read(
+                item, *column, source, secondary, available, output, mode,
+            )?;
         }
         Expression::RowLookup(lookup) => lookup::validate_row(lookup, source, secondary, mode)?,
         Expression::Lookup(lookup) => {
