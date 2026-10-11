@@ -38,6 +38,9 @@ pub use imputation::{
 #[path = "dataset_temporal.rs"]
 mod temporal;
 pub use crate::text_case::StringCase;
+pub use crate::text_extract::StringExtract;
+pub use crate::text_pad::StringPad;
+pub use crate::text_template::StringTemplate;
 pub use temporal::{CalendarUnit, DateBounds, InvalidTemporal, Temporal, TemporalKind};
 #[path = "dataset_selection.rs"]
 mod selection;
@@ -49,9 +52,21 @@ pub use windows::{OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    StrTemplate {
+        operands: Vec<Assignment>,
+        operation: StringTemplate,
+    },
+    StrExtract {
+        source: alloc::boxed::Box<Assignment>,
+        operation: StringExtract,
+    },
     StrCase {
         source: alloc::boxed::Box<Assignment>,
         operation: StringCase,
+    },
+    StrPad {
+        source: alloc::boxed::Box<Assignment>,
+        operation: StringPad,
     },
     /// Only the first TRUE branch is evaluated; FALSE and UNKNOWN continue.
     Case(Vec<CaseBranch>),
@@ -491,6 +506,12 @@ fn validate_assignment_at(
         }
         Expression::StrCase {
             source: operand, ..
+        }
+        | Expression::StrPad {
+            source: operand, ..
+        }
+        | Expression::StrExtract {
+            source: operand, ..
         } => {
             if operand.column != assignment.column {
                 return Err(PlanError::InvalidColumns);
@@ -507,6 +528,31 @@ fn validate_assignment_at(
                 remaining,
             )?;
             available[assignment.column] = false;
+        }
+        Expression::StrTemplate {
+            operands,
+            operation,
+        } => {
+            if operands.len() != operation.identifiers().len() {
+                return Err(PlanError::InvalidColumns);
+            }
+            for operand in operands {
+                if operand.column != assignment.column {
+                    return Err(PlanError::InvalidColumns);
+                }
+                validate_assignment_at(
+                    operand,
+                    available,
+                    source,
+                    secondary,
+                    intermediates,
+                    output,
+                    mode,
+                    depth + 1,
+                    remaining,
+                )?;
+                available[assignment.column] = false;
+            }
         }
         Expression::Temporal {
             operands,

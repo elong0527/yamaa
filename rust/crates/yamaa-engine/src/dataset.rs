@@ -27,6 +27,12 @@ mod lookup;
 mod numeric;
 #[path = "dataset_text_case.rs"]
 mod str_case;
+#[path = "dataset_text_extract.rs"]
+mod str_extract;
+#[path = "dataset_text_pad.rs"]
+mod str_pad;
+#[path = "dataset_text_template.rs"]
+mod str_template;
 #[path = "dataset_windows.rs"]
 mod windows;
 
@@ -351,7 +357,8 @@ fn evaluate<T: TableAccess + ?Sized>(
     limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
-    let value = evaluate_raw(table, assignment, candidate, plan, row, limits, state)?;
+    let value =
+        evaluate_raw_retained(table, assignment, candidate, plan, row, limits, state, true)?;
     finish(
         value,
         assignment,
@@ -371,6 +378,22 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
     row: usize,
     limits: Limits,
     state: &mut EvaluationState<'_, T::Error>,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    evaluate_raw_retained(
+        table, assignment, candidate, plan, row, limits, state, false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn evaluate_raw_retained<T: TableAccess + ?Sized>(
+    table: &T,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    limits: Limits,
+    state: &mut EvaluationState<'_, T::Error>,
+    retained: bool,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     if let Expression::Intermediate { index, column } = assignment.expression {
         state.budget.work(1, 1)?;
@@ -403,7 +426,7 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
                 }
             };
             if selected {
-                return evaluate_raw(
+                return evaluate_raw_retained(
                     table,
                     &branch.assignment,
                     candidate,
@@ -411,6 +434,7 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
                     row,
                     limits,
                     state,
+                    retained,
                 );
             }
         }
@@ -423,8 +447,37 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
             .apply(ValueRef::from(&value))
             .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)));
     }
+    if let Expression::StrTemplate {
+        operands,
+        operation,
+    } = &assignment.expression
+    {
+        return str_template::evaluate(
+            operands,
+            operation,
+            table,
+            candidate,
+            plan,
+            row,
+            limits,
+            state,
+            retained
+                && plan.output().columns()[assignment.column].kind
+                    == yamaa_core::value::ColumnType::Str,
+        );
+    }
+    if let Expression::StrExtract { source, operation } = &assignment.expression {
+        return str_extract::evaluate(
+            source, operation, table, candidate, plan, row, limits, state,
+        );
+    }
     if let Expression::StrCase { source, operation } = &assignment.expression {
         return str_case::evaluate(
+            source, operation, table, candidate, plan, row, limits, state,
+        );
+    }
+    if let Expression::StrPad { source, operation } = &assignment.expression {
+        return str_pad::evaluate(
             source, operation, table, candidate, plan, row, limits, state,
         );
     }
@@ -516,7 +569,10 @@ fn evaluate_raw<T: TableAccess + ?Sized>(
         | Expression::Round { .. }
         | Expression::Temporal { .. }
         | Expression::Imputation { .. }
-        | Expression::StrCase { .. } => {
+        | Expression::StrCase { .. }
+        | Expression::StrPad { .. }
+        | Expression::StrExtract { .. }
+        | Expression::StrTemplate { .. } => {
             unreachable!("recursive evaluation handled above")
         }
         Expression::Column(column) => {
@@ -867,6 +923,8 @@ impl Executor<'_> {
         {
             imputation::register(&assignment.expression, &mut observations.handlers);
             str_case::register(&assignment.expression, &mut observations.handlers);
+            str_extract::register(&assignment.expression, &mut observations.handlers);
+            str_template::register(&assignment.expression, &mut observations.handlers);
         }
         let result = self.execute_inner(
             table,

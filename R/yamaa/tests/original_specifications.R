@@ -1472,6 +1472,167 @@ local({
   cat("public ASCII string case matches independent exact outputs and original negatives; original sentence fixture retains output.order_by blocker without Python passed\n")
 })
 
+local({
+  directory <- tempfile("public-string-padding-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  cases <- file.path(root,"text-pad-cases")
+  findings <- read.delim(file.path(root,"text-pad-findings.tsv"),quote="",colClasses="character",check.names=FALSE)
+  for(name in list.dirs(cases,full.names=FALSE,recursive=FALSE)) {
+    stopifnot(file.copy(file.path(cases,name),directory,recursive=TRUE))
+    case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
+    if(name=="width-noninteger") unlink(file.path(case,"input.csv"))
+    result <- yamaa_domain(entry)
+    expected_csv <- file.path(case,"expected.csv")
+    if(file.exists(expected_csv)) {
+      stopifnot(nrow(result$issues)==0L,!is.null(result$output),!file.exists(file.path(case,"output.csv")),
+        identical(result$save(),TRUE),identical(rawfile(file.path(case,"output.csv")),rawfile(expected_csv)))
+    } else {
+      expected <- findings[findings$case==name,]
+      actual <- result$issues
+      stopifnot(nrow(actual)==nrow(expected),is.null(result$output),identical(actual$phase,expected$phase),
+        identical(actual$condition,expected$condition),identical(actual$requirement,expected$requirement),
+        identical(actual$context,expected$context))
+      for(index in seq_len(nrow(expected))) {
+        # Each captured padding cause has one independently authored full path.
+        stopifnot(identical(paste0('["',actual$spec_paths[[index]],'"]'),expected$spec_paths[[index]]))
+      }
+      stopifnot(inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(case,"output.csv")))
+      if(name=="width-noninteger") stopifnot(identical(yamaa_check(entry)$issues,actual),
+        is.null(get(".domain_observations",asNamespace("yamaa"))(result)),!file.exists(file.path(case,"input.csv")))
+    }
+    observed <- get(".domain_observations",asNamespace("yamaa"))(result)
+    if(!is.null(observed)) {
+      report <- rawToChar(observed)
+      ledgers <- regmatches(report,gregexpr('"handler_counts":\\[[^]]*\\]',report))[[1L]]
+      stopifnot(identical(ledgers,rep('"handler_counts":[]',2L)))
+    }
+  }
+  stopifnot(file.copy(file.path(root,"cases","negative-str-pad-width"),directory,recursive=TRUE))
+  case <- file.path(directory,"negative-str-pad-width");unlink(file.path(case,"input"),recursive=TRUE)
+  entry <- file.path(case,"spec.yaml");checked <- yamaa_check(entry)$issues;rejected <- yamaa_domain(entry)
+  stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,"invalid_field_type"),
+    identical(checked$requirement,"REQ-0287"),identical(checked$spec_paths,list("columns.IDVARVAL.derivation.str_pad.width")),
+    identical(checked$context,'{"actual":"str","expected":"int"}'),identical(rejected$issues,checked),
+    is.null(rejected$output),!file.exists(file.path(case,"input")))
+  cat("public canonical scalar padding matches complete independent CSV and findings with missing passthrough, no handlers and original width failure before input without Python passed\n")
+})
+
+local({
+  directory <- tempfile("public-text-extract-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  handler_truth <- read.delim(file.path(root,"text-extract-handlers.tsv"),quote="",colClasses="character",check.names=FALSE)
+  check_handlers <- function(result,case_name) {
+    report <- get(".domain_observations",asNamespace("yamaa"))(result)
+    expected <- handler_truth$handlers[handler_truth$case==case_name]
+    if(!is.null(report) && length(expected)) stopifnot(length(expected)==1L,
+      grepl(paste0('"handler_counts":',expected),rawToChar(report),fixed=TRUE))
+  }
+  case_name <- "adam-adae-text-cleanup"
+  stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
+  case <- file.path(directory,case_name);entry <- file.path(case,"spec.yaml")
+  written <- rawfile(entry);input <- file.path(case,"input");held <- file.path(case,"held")
+  stopifnot(file.rename(input,held),nrow(yamaa_check(entry)$issues)==0L,file.rename(held,input))
+  result <- yamaa_domain(entry)
+  check_handlers(result,case_name)
+  expected <- read.csv(file.path(case,"expected","adae.csv"),colClasses="character",na.strings="",check.names=FALSE)
+  for(column in c("AESEQ","AEREFNUM")) expected[[column]] <- structure(expected[[column]],class="yamaa_int64_vector")
+  stopifnot(nrow(result$issues)==0L,identical(result$output,expected),identical(rawfile(entry),written),
+    !file.exists(file.path(case,"adae.csv")),identical(result$save(),TRUE),
+    identical(rawfile(file.path(case,"adae.csv")),rawfile(file.path(case,"expected","adae.csv"))))
+  case_name <- "negative-str-uncaptured-group"
+  stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
+  case <- file.path(directory,case_name);unlink(file.path(case,"input"),recursive=TRUE)
+  checked <- yamaa_check(file.path(case,"spec.yaml"))$issues;rejected <- yamaa_domain(file.path(case,"spec.yaml"))
+  stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,"regex_group_out_of_range"),
+    identical(checked$requirement,"REQ-0816"),identical(checked$spec_paths,list("columns.SITEID.derivation.str_extract.group")),
+    identical(checked$context,'{"group":2,"group_count":1,"pattern":"^CATH-([^-]+)-[0-9]{4}$"}'),
+    identical(rejected$issues,checked),is.null(rejected$output),is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),
+    inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"))
+  failures <- read.delim(file.path(root,"text-extract-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
+  for(index in seq_len(nrow(failures))) {
+    finding <- failures[index,];case_name <- finding$case
+    stopifnot(file.copy(file.path(root,"text-extract-cases",case_name),directory,recursive=TRUE))
+    case <- file.path(directory,case_name);rejected <- yamaa_domain(file.path(case,"spec.yaml"));actual <- rejected$issues
+    check_handlers(rejected,case_name)
+    stopifnot(nrow(actual)==1L,identical(actual$phase,finding$phase),identical(actual$condition,finding$condition),
+      identical(actual$requirement,finding$requirement),identical(actual$spec_paths,list(finding$spec_path)),identical(actual$context,finding$context),
+      is.null(rejected$output),inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(case,"output.csv")))
+  }
+  for(case_name in c("optional-unentered","entered-empty","whole-empty","leftmost-alternative","last-repeated-capture","literal-null","nested-case","row-extract")) {
+    stopifnot(file.copy(file.path(root,"text-extract-cases",case_name),directory,recursive=TRUE))
+    case <- file.path(directory,case_name);result <- yamaa_domain(file.path(case,"spec.yaml"))
+    check_handlers(result,case_name)
+    stopifnot(nrow(result$issues)==0L,!file.exists(file.path(case,"output.csv")),identical(result$save(),TRUE),
+      identical(rawfile(file.path(case,"output.csv")),rawfile(file.path(case,"expected.csv"))))
+    if(case_name=="optional-unentered") stopifnot(identical(result$output$RESULT,NA_character_))
+    if(case_name %in% c("entered-empty","whole-empty")) stopifnot(identical(result$output$RESULT,""))
+  }
+  cat("public str_extract matches unchanged ADAE bytes and complete independent failures/captures without Python passed\n")
+})
+
+local({
+  directory <- tempfile("yamaa-template-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE),add=TRUE)
+  rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
+  handlers <- read.delim(file.path(root,"text-template-handlers.tsv"),quote="",colClasses="character",check.names=FALSE)
+  paths <- read.delim(file.path(root,"text-template-directories.tsv"),quote="",colClasses="character",check.names=FALSE)
+  directories <- setNames(paths$directory,paths$case)
+  check_handlers <- function(result,name) {
+    observed <- get(".domain_observations",asNamespace("yamaa"))(result)
+    expected <- handlers$handlers[handlers$case==name]
+    if(!is.null(observed) && length(expected)) stopifnot(length(expected)==1L,
+      grepl(paste0('"handler_counts":',expected),rawToChar(observed),fixed=TRUE))
+  }
+  name <- "adam-adsl-site-parse"
+  stopifnot(file.copy(file.path(root,"cases",name),directory,recursive=TRUE))
+  case <- file.path(directory,name);entry <- file.path(case,"spec.yaml");written <- rawfile(entry)
+  stopifnot(file.rename(file.path(case,"input"),file.path(case,"held")),nrow(yamaa_check(entry)$issues)==0L,
+    file.rename(file.path(case,"held"),file.path(case,"input")))
+  result <- yamaa_domain(entry);check_handlers(result,name)
+  expected <- read.csv(file.path(case,"expected","adsl.csv"),colClasses="character",na.strings="",check.names=FALSE)
+  stopifnot(nrow(result$issues)==0L,identical(result$output,expected),identical(rawfile(entry),written),
+    !file.exists(file.path(case,"adsl.csv")),identical(result$save(),TRUE),
+    identical(rawfile(file.path(case,"adsl.csv")),rawfile(file.path(case,"expected","adsl.csv"))))
+  name <- "negative-subject-reference"
+  stopifnot(file.copy(file.path(root,"cases",name),directory,recursive=TRUE))
+  case <- file.path(directory,name);unlink(file.path(case,"input"),recursive=TRUE)
+  checked <- yamaa_check(file.path(case,"spec.yaml"))$issues;result <- yamaa_domain(file.path(case,"spec.yaml"))
+  stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,"invalid_string_template"),
+    identical(checked$requirement,"REQ-0461"),identical(checked$spec_paths,list("columns.SUBJREF.derivation.str_template")),
+    identical(checked$context,'{"placeholder":"SITEID + \':\' + SUBJID","reason":"invalid_placeholder"}'),
+    identical(result$issues,checked),is.null(result$output),is.null(get(".domain_observations",asNamespace("yamaa"))(result)),
+    inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+  failures <- read.delim(file.path(root,"text-template-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
+  failures$requirement[!nzchar(failures$requirement)] <- NA_character_
+  for(name in unique(failures$case)) {
+    stopifnot(file.copy(file.path(root,"text-template-cases",directories[[name]]),directory,recursive=TRUE))
+    case <- file.path(directory,name)
+    if(directories[[name]]!=name) stopifnot(file.rename(file.path(directory,directories[[name]]),case))
+    result <- yamaa_domain(file.path(case,"spec.yaml"));actual <- result$issues
+    expected <- failures[failures$case==name,];check_handlers(result,name)
+    stopifnot(nrow(actual)==nrow(expected),identical(actual$phase,expected$phase),identical(actual$condition,expected$condition),
+      identical(actual$requirement,expected$requirement),identical(actual$spec_paths,lapply(expected$spec_path,identity)),
+      identical(actual$context,expected$context),is.null(result$output),
+      inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(case,"output.csv")))
+  }
+  cases <- sort(paths$case)
+  for(name in cases) {
+    if(name %in% failures$case || name=="nul-value") next
+    # NUL scalar materialization is qualified at pure/native-codec and Python
+    # boundaries; the existing R character facade does not admit embedded NUL.
+    stopifnot(file.copy(file.path(root,"text-template-cases",directories[[name]]),directory,recursive=TRUE))
+    case <- file.path(directory,name)
+    if(directories[[name]]!=name) stopifnot(file.rename(file.path(directory,directories[[name]]),case))
+    result <- yamaa_domain(file.path(case,"spec.yaml"));check_handlers(result,name)
+    stopifnot(nrow(result$issues)==0L,!file.exists(file.path(case,"output.csv")),identical(result$save(),TRUE),
+      identical(rawfile(file.path(case,"output.csv")),rawfile(file.path(case,"expected.csv"))))
+    if(name=="empty-template") stopifnot(identical(result$output$RESULT,""))
+    if(name=="empty-string-value") stopifnot(identical(result$output$RESULT,"<>"))
+    if(name=="missing-null") stopifnot(identical(result$output$RESULT,NA_character_))
+  }
+  cat("public str_template matches unchanged site bytes and complete ordered independent findings/handlers without Python passed\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

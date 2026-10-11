@@ -21,12 +21,26 @@ struct InvalidPredicate {
     expression: String,
     error: crate::predicate_parser::ParseError,
 }
+impl InvalidPredicate {
+    fn diagnostic(&self) -> Result<crate::diagnostic::Diagnostic, BindError> {
+        let crate::predicate_parser::ParseError::Grammar {
+            position, failure, ..
+        } = &self.error
+        else {
+            return Err(BindError::Internal);
+        };
+        failure
+            .original_diagnostic(&self.path, &self.expression, position.character)
+            .map_err(|_| BindError::PredicateDiagnosticLimit)
+    }
+}
 fn unsupported(path: &str, operation: &str) -> PrepareError {
     PrepareError::Unsupported(vec![UnsupportedFeature {
         operation: operation.into(),
         path: path.into(),
     }])
 }
+#[allow(clippy::too_many_arguments)]
 pub(super) fn prepare(
     d: &Document,
     node: usize,
@@ -35,6 +49,8 @@ pub(super) fn prepare(
     intermediates: &intermediates::Declarations,
     record: bool,
     depth: usize,
+    extraction: &str_extract::Prepared,
+    templates: &str_template::Prepared,
 ) -> Result<Vec<Branch>, PrepareError> {
     if depth > 64 || path.len() > 65_536 {
         return Err(PrepareError::Limit("case_depth"));
@@ -107,7 +123,11 @@ pub(super) fn prepare(
                 intermediates,
                 record,
                 depth + 1,
+                extraction,
+                templates,
             )?),
+            "str_template" => Operation::StrTemplate(templates.get(payload)?),
+            "str_extract" => Operation::StrExtract(extraction.get(payload)?),
             "str_case" => {
                 let mut features = Vec::new();
                 let operation = str_case::prepare(
@@ -122,6 +142,21 @@ pub(super) fn prepare(
                     return Err(PrepareError::Unsupported(features));
                 }
                 Operation::StrCase(operation)
+            }
+            "str_pad" => {
+                let mut features = Vec::new();
+                let operation = str_pad::prepare(
+                    d,
+                    payload,
+                    &result_path,
+                    None,
+                    Some(intermediates),
+                    &mut features,
+                )?;
+                if !features.is_empty() {
+                    return Err(PrepareError::Unsupported(features));
+                }
+                Operation::StrPad(operation)
             }
             "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision"
             | "to_date" => {
@@ -224,6 +259,57 @@ pub(super) fn prepare(
     }
     Ok(branches)
 }
+/// A width defect shares its derivation's authored declaration-validation order
+/// with predicate and numeric grammar defects, before any reference binding.
+/// Consumers without a width defect retain their existing binding checkpoint.
+pub(super) fn padding_findings(
+    operation: &Operation,
+    findings: &mut Vec<BindFinding>,
+) -> Result<bool, BindError> {
+    fn has_width_error(operation: &Operation) -> bool {
+        match operation {
+            Operation::StrPad(operation) => operation.has_width_error(),
+            Operation::Case(branches) => branches
+                .iter()
+                .any(|branch| has_width_error(&branch.operation)),
+            _ => false,
+        }
+    }
+    fn append(
+        operation: &Operation,
+        path: &str,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        match operation {
+            Operation::StrPad(operation) => str_pad::declaration_findings(operation, findings),
+            Operation::InvalidNumeric { expression, error } => {
+                findings.push(BindFinding::Numeric {
+                    path: format!("{path}.expr"),
+                    expression: expression.clone(),
+                    error: error.clone(),
+                })
+            }
+            Operation::Case(branches) => {
+                for branch in branches {
+                    if let Some(Err(invalid)) = &branch.when {
+                        findings.push(BindFinding::Predicate(invalid.diagnostic()?));
+                    }
+                    append(&branch.operation, &branch.path, findings)?;
+                }
+            }
+            _ => (),
+        }
+        Ok(())
+    }
+    if !has_width_error(operation) {
+        return Ok(false);
+    }
+    // A top-level numeric declaration cannot also contain padding. Its path is
+    // only needed for the branch-owned InvalidNumeric cases visited by append.
+    append(operation, "", findings)?;
+    Ok(true)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
     spec: &PreparedSpecification,
@@ -234,6 +320,7 @@ pub(super) fn bind(
     intermediates: &[Option<Intermediate>],
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
+    declarations_reported: bool,
 ) -> Result<Option<Expression>, BindError> {
     let start = findings.len();
     let mut result = Vec::new();
@@ -245,20 +332,9 @@ pub(super) fn bind(
                 let plan = match compiled {
                     Ok(plan) => plan,
                     Err(invalid) => {
-                        let crate::predicate_parser::ParseError::Grammar {
-                            position, failure, ..
-                        } = &invalid.error
-                        else {
-                            return Err(BindError::Internal);
-                        };
-                        let diagnostic = failure
-                            .original_diagnostic(
-                                &invalid.path,
-                                &invalid.expression,
-                                position.character,
-                            )
-                            .map_err(|_| BindError::PredicateDiagnosticLimit)?;
-                        findings.push(BindFinding::Predicate(diagnostic));
+                        if !declarations_reported {
+                            findings.push(BindFinding::Predicate(invalid.diagnostic()?));
+                        }
                         return Ok(None);
                     }
                 };
@@ -296,11 +372,13 @@ pub(super) fn bind(
             .flatten();
         let expression = match branch.operation.as_ref() {
             Operation::InvalidNumeric { expression, error } => {
-                findings.push(BindFinding::Numeric {
-                    path: format!("{}.expr", branch.path),
-                    expression: expression.clone(),
-                    error: error.clone(),
-                });
+                if !declarations_reported {
+                    findings.push(BindFinding::Numeric {
+                        path: format!("{}.expr", branch.path),
+                        expression: expression.clone(),
+                        error: error.clone(),
+                    });
+                }
                 None
             }
             Operation::Literal(value) => Some(Expression::Literal(value.clone())),
@@ -313,6 +391,7 @@ pub(super) fn bind(
                 intermediates,
                 edges,
                 findings,
+                declarations_reported,
             )?,
             Operation::ProjectFunction(call) => {
                 let calls = spec.project_calls.as_ref().ok_or(BindError::Internal)?;
@@ -352,7 +431,40 @@ pub(super) fn bind(
                     Err(_) => return Err(BindError::Internal),
                 }
             }
+            Operation::StrTemplate(operation) => str_template::bind(
+                operation,
+                column,
+                &spec.keys,
+                catalog,
+                &spec.intermediates,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
+            Operation::StrExtract(operation) => str_extract::bind(
+                operation,
+                column,
+                &spec.keys,
+                catalog,
+                &spec.intermediates,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
             Operation::StrCase(operation) => str_case::bind(
+                operation,
+                column,
+                &spec.keys,
+                catalog,
+                &spec.intermediates,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
+            Operation::StrPad(operation) => str_pad::bind(
                 operation,
                 column,
                 &spec.keys,
