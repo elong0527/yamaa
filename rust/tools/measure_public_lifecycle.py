@@ -23,7 +23,7 @@ import sys
 import tarfile
 import traceback
 import zipfile
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 CASES = ("adam-adlb-ordered-sum", "schema-window-functions", "schema-lookup")
 OUTPUTS = dict(zip(CASES, ("adlb.csv", "advs.csv", "adsl.csv")))
@@ -393,6 +393,17 @@ def worker_executable(path, repository):
     if not invoked.is_file():
         raise ValueError("worker executable has the wrong file kind")
     return invoked
+
+
+def specification_identity(path):
+    # Match the native caller-path identity, including Windows verbatim/UNC
+    # prefixes, while retaining literal backslashes in Unix filenames.
+    text = path.as_posix()
+    if isinstance(path, PureWindowsPath):
+        if text.startswith("//?/UNC/"):
+            return "//" + text.removeprefix("//?/UNC/")
+        return text.removeprefix("//?/")
+    return text
 
 
 def compilation_probe():
@@ -852,7 +863,7 @@ def prepare(args):
                 dict(
                     repetition,
                     work_directory=str(work),
-                    entry=str(work / "spec.yaml"),
+                    entry=specification_identity(work / "spec.yaml"),
                     output_name=OUTPUTS[step["case"]],
                 )
             )

@@ -21,7 +21,7 @@ import unittest
 import venv
 import zipfile
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from unittest import mock
 
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
@@ -269,14 +269,14 @@ class Pipeline(unittest.TestCase):
     def fake_launch(self, command, child, mutate=None):
         """Simulated installed process transport; all clock values are authored."""
         self.calls.append((command, child))
-        request = json.loads((child / "request.json").read_text())
+        request = json.loads((child / "request.json").read_text(encoding="utf-8"))
         host = request["host"]
         declared = request["provenance"]
         original = json.loads(
             (
                 self.repo
                 / f"rust/crates/yamaa-adapters/tests/fixtures/specs/{request['case']}.json"
-            ).read_text()
+            ).read_text(encoding="utf-8")
         )
         timing = {"start_ns": 100, "end_ns": 140, "duration_ns": 40}
         if host == "r":
@@ -418,7 +418,7 @@ class Pipeline(unittest.TestCase):
 
     def test_complete_pipeline_retains_every_child_warmup_and_original(self):
         result = self.collect()
-        self.assertTrue(result["accepted"])
+        self.assertTrue(result["accepted"], json.dumps(result["children"], indent=2))
         self.assertEqual(len(self.calls), 12)
         self.assertNotIn(
             "distribution", result
@@ -426,7 +426,7 @@ class Pipeline(unittest.TestCase):
         reps = []
         for row in result["children"]:
             response = json.loads(
-                (self.args.output / row["child"] / "response.json").read_text()
+                (self.args.output / row["child"] / "response.json").read_text(encoding="utf-8")
             )
             reps.extend(
                 r["declaration"]["work_directory"] for r in response["repetitions"]
@@ -446,6 +446,30 @@ class Pipeline(unittest.TestCase):
                 (self.args.output / "originals" / row["path"]).read_bytes(),
                 controller.git_bytes(self.repo, self.args.revision, row["path"]),
             )
+
+    def test_pipeline_utf8_transport_does_not_use_windows_default_encoding(self):
+        original_read = Path.read_text
+
+        def windows_default(path, *args, **kwargs):
+            if not args and not kwargs.get("encoding"):
+                kwargs["encoding"] = "cp1252"
+            return original_read(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "read_text", windows_default):
+            result = self.collect()
+        self.assertTrue(result["accepted"], json.dumps(result["children"], indent=2))
+
+    def test_worker_specification_identities_match_native_windows_and_unix_paths(self):
+        cases = (
+            (PureWindowsPath(r"C:\work\spec.yaml"), "C:/work/spec.yaml"),
+            (PureWindowsPath(r"\\?\C:\work\spec.yaml"), "C:/work/spec.yaml"),
+            (PureWindowsPath(r"\\server\share\spec.yaml"), "//server/share/spec.yaml"),
+            (PureWindowsPath(r"\\?\UNC\server\share\spec.yaml"), "//server/share/spec.yaml"),
+            (PurePosixPath(r"/work\name/spec.yaml"), r"/work\name/spec.yaml"),
+        )
+        for path, expected in cases:
+            with self.subTest(path=path):
+                self.assertEqual(controller.specification_identity(path), expected)
 
     def test_distinct_harness_and_truth_repositories_keep_untracked_bytes_authoritative(
         self,
@@ -500,7 +524,7 @@ class Pipeline(unittest.TestCase):
         def changed_file(key, change):
             def mutate(request, response, child):
                 path = child / response["repetitions"][0][key]
-                data = json.loads(path.read_text())
+                data = json.loads(path.read_text(encoding="utf-8"))
                 change(data)
                 dump(path, data)
 
@@ -508,7 +532,7 @@ class Pipeline(unittest.TestCase):
 
         def corrupt_report(request, response, child):
             path = child / response["repetitions"][0]["reports"]["build"]
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             data["source_reads"]["created"] = 0
             dump(path, data)
 
@@ -606,7 +630,7 @@ class Pipeline(unittest.TestCase):
                     self.collect()
                 self.assertEqual(self.calls, [])
                 self.assertEqual(
-                    json.loads((self.args.output / "collection.json").read_text())[
+                    json.loads((self.args.output / "collection.json").read_text(encoding="utf-8"))[
                         "state"
                     ],
                     "rejected",
@@ -718,7 +742,7 @@ class Pipeline(unittest.TestCase):
         self.assertEqual(
             (
                 self.args.output / result["children"][0]["child"] / "stderr.txt"
-            ).read_text(),
+            ).read_text(encoding="utf-8"),
             "original startup failure",
         )
 
@@ -866,7 +890,7 @@ cat("actual jsonlite authored binary64 transport PASS\\n")
                     "explicit jsonlite collector unavailable for transport control"
                 )
             self.assertEqual(process.returncode, 0, process.stderr)
-            records = json.loads((root / "lossless.json").read_text())
+            records = json.loads((root / "lossless.json").read_text(encoding="utf-8"))
             self.assertEqual(len(records), len(pairs))
             for record, (start, end) in zip(records, pairs):
                 for field, expected in (
@@ -883,7 +907,7 @@ cat("actual jsonlite authored binary64 transport PASS\\n")
                         struct.pack(">d", expected),
                     )
                 self.assertEqual(controller.validate_duration(record, "r"), end - start)
-            rounded = json.loads((root / "rounded-json.json").read_text())
+            rounded = json.loads((root / "rounded-json.json").read_text(encoding="utf-8"))
             self.assertNotEqual(
                 rounded["end_ns"] - rounded["start_ns"], rounded["duration_ns"]
             )
@@ -1020,7 +1044,7 @@ cat("actual jsonlite authored binary64 transport PASS\\n")
                 self.assertEqual(worker.run(request), 0)
             self.assertEqual(calls, ["build", "metadata", "build", "metadata"])
             self.assertIsNot(domains[0], domains[1])
-            response = json.loads((root / "response.json").read_text())
+            response = json.loads((root / "response.json").read_text(encoding="utf-8"))
             self.assertEqual(
                 [r["declaration"]["warmup"] for r in response["repetitions"]],
                 [True, False],
@@ -1028,12 +1052,12 @@ cat("actual jsonlite authored binary64 transport PASS\\n")
             for row in response["repetitions"]:
                 self.assertEqual(
                     [
-                        json.loads((root / row["reports"][key]).read_text())["saves"]
+                        json.loads((root / row["reports"][key]).read_text(encoding="utf-8"))["saves"]
                         for key in ("build", "save_1", "save_2")
                     ],
                     [0, 1, 2],
                 )
-                views = json.loads((root / row["views"]).read_text())
+                views = json.loads((root / row["views"]).read_text(encoding="utf-8"))
                 self.assertEqual(
                     views["output"]["rows"],
                     [[{"type": "float", "value": "3fb999999999999a"}]],
@@ -1052,7 +1076,7 @@ cat("actual jsonlite authored binary64 transport PASS\\n")
             with mock.patch.dict(sys.modules, {"yamaa": candidate}):
                 self.assertEqual(worker.run(request), 1)
                 self.assertIs(sys.modules["yamaa"], candidate)
-            response = json.loads((root / "response.json").read_text())
+            response = json.loads((root / "response.json").read_text(encoding="utf-8"))
             self.assertEqual(response["repetitions"], [])
             self.assertIsNone(response["import_duration"])
             self.assertEqual(response["failure"]["class"], "RuntimeError")

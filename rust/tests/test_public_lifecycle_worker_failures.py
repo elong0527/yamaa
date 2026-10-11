@@ -133,10 +133,10 @@ class ReachedEvidence(unittest.TestCase):
                     b"independent completed prefix",
                 )
                 self.assertEqual(
-                    json.loads((root / row["reports"]["save_1"]).read_text()),
+                    json.loads((root / row["reports"]["save_1"]).read_text(encoding="utf-8")),
                     {"owner": "failed-publication"},
                 )
-                partial = json.loads((root / "response.json").read_text())
+                partial = json.loads((root / "response.json").read_text(encoding="utf-8"))
                 self.assertIsNone(partial["repetitions"][0]["failure"])
                 del reached["frame"]
 
@@ -228,7 +228,7 @@ class ReachedEvidence(unittest.TestCase):
                     mock.patch.object(sys, "stderr", new=io.StringIO()),
                 ):
                     self.assertEqual(worker.run(request), 1)
-                response = json.loads((root / "response.json").read_text())
+                response = json.loads((root / "response.json").read_text(encoding="utf-8"))
                 self.assertEqual(
                     len(response["repetitions"]), 1 if mode == "interrupt" else 2
                 )
@@ -236,7 +236,7 @@ class ReachedEvidence(unittest.TestCase):
                 for row in response["repetitions"]:
                     self.assertEqual(row["status"], "failure")
                     self.assertEqual(
-                        json.loads((root / row["reports"]["build"]).read_text()),
+                        json.loads((root / row["reports"]["build"]).read_text(encoding="utf-8")),
                         {"independent_owner_state": "build"},
                     )
                     self.assertIn("public_build", row["durations"])
@@ -267,7 +267,7 @@ class ReachedEvidence(unittest.TestCase):
                         )
                     else:
                         self.assertEqual(
-                            json.loads((root / row["reports"]["save_1"]).read_text()),
+                            json.loads((root / row["reports"]["save_1"]).read_text(encoding="utf-8")),
                             {"independent_owner_state": "failed-publication"},
                         )
 
