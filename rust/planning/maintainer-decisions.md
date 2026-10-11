@@ -1,15 +1,18 @@
 # Rust migration maintainer decisions
 
-The maintainer approved these eight choices on 2026-10-10 in the Rust migration
-assessment conversation. They set the implementation targets for the first shared
-Rust release. Implementation, installed qualification and release transition
-remain subject to their acceptance gates.
+The maintainer approved the first eight choices on 2026-10-10 in the Rust
+migration assessment conversation, then approved the complete first-release
+platform matrix and its exclusions in the implementation conversation. They set
+the implementation targets for the first shared Rust release. Implementation,
+installed qualification and release transition remain subject to their
+acceptance gates.
 
 | Decision | Approved behavior | Implementation and qualification |
 | --- | --- | --- |
 | Producer lifecycle | Build the graph in memory; explicit Save publishes retained bytes in producer-first order. | [#1741](https://github.com/elong0527/yamaa/issues/1741); decision [#1866](https://github.com/elong0527/yamaa/issues/1866). |
 | Submission version | Optional section-level `source_system_version`, defaulting to the actual installed yamaa version. | [#1758](https://github.com/elong0527/yamaa/issues/1758); decision [#1887](https://github.com/elong0527/yamaa/issues/1887). |
 | Windows R | Required in the first shared Rust release. | [#1903](https://github.com/elong0527/yamaa/issues/1903), [#1742](https://github.com/elong0527/yamaa/issues/1742); decision [#1857](https://github.com/elong0527/yamaa/issues/1857). |
+| First-release support matrix | CPython 3.12–3.14 and R 4.6.1 on Linux x86_64, macOS arm64 and Windows x64; Python wheel/source and R source packages. Other combinations are excluded from this first release. | [#1742](https://github.com/elong0527/yamaa/issues/1742); installed Windows R [#1903](https://github.com/elong0527/yamaa/issues/1903). |
 | Static check result | Diagnostic issues only. | [#1751](https://github.com/elong0527/yamaa/issues/1751). |
 | R integer output | A lossless full-range `yamaa_int64_vector`, with missingness separate from every signed 64-bit value. | [#1751](https://github.com/elong0527/yamaa/issues/1751). |
 | Diagnostic context | JSON text in both Python and R. | [#1751](https://github.com/elong0527/yamaa/issues/1751). |
@@ -47,8 +50,34 @@ Windows R is a required first-release platform alongside Linux/macOS R and the
 existing Python Windows scope. Complete native Windows R file ports, source
 package build/install, public and cohort suites, and strict `R CMD check` before
 cutover. The twelve currently missing Windows R cohort tuples remain unqualified.
-Other version, architecture and distribution promises still require a supported
-matrix and installed evidence under #1742.
+The approved complete target and explicit exclusions are recorded below.
+
+## First-release support matrix
+
+The maintainer selected “Use this matrix and explicitly exclude other
+combinations for the first release” in response to the implementation
+conversation's support-scope question. This resolves the B15 scope decision;
+installed qualification remains required.
+
+| Runtime | Required platforms | Required distribution forms |
+| --- | --- | --- |
+| CPython 3.12, 3.13 and 3.14 | Linux x86_64, macOS arm64 and Windows x64 | Wheel and independent source-package rebuild on every interpreter/platform pair. |
+| R 4.6.1 | Linux x86_64, macOS arm64 and Windows x64 | Source-package build/install, full installed suites and strict `R CMD check`. |
+
+Other runtime versions or Python implementations, free-threaded Python, other
+architectures (including macOS x86_64, Linux arm64 and Windows arm64), musl/Alpine
+and R binary distributions are explicitly excluded from this first release.
+This decision does not remove language or API requirements within the approved
+matrix. Future releases may add combinations with a separate decision and
+installed evidence.
+
+The qualification environments are Ubuntu 24.04/glibc, macOS 15/arm64 and the
+Windows x64 Actions image. Record their exact runtime/image versions in each
+release audit; the target does not promise additional OS baselines or binary
+compatibility merely because a package manifest accepts them. The abi3-py312
+wheel is built once per platform and must pass installed qualification on all
+three interpreter versions. Source packages must independently build and run on
+each interpreter. Qualification of one tuple never substitutes for another.
 
 ## Public result representations
 
