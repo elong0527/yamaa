@@ -6,7 +6,8 @@ not measure the current shared original-YAML public Python/R lifecycle. The
 earlier backend defaults and execution-support flags describe that prototype,
 not the current public engine. See the
 [shared public measurement plan](planning/shared-public-measurement-plan.md)
-for the remaining B17/B18 work; no release performance budget is approved here.
+for the implemented bounded collector and remaining B17/B18 work; no release
+performance budget is approved here.
 
 ## Boundaries
 

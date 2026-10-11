@@ -2,16 +2,107 @@
 
 This is the implementation plan for B17/B18 in the
 [release blocker register](release-readiness.md), assessed against main
-`8e97023fe93a1d40a762be35c286bbbd5695137d` on 2026-10-11. It proposes evidence
+`1696cc6bb66c0efc64f3f0b177a07540f007efab` on 2026-10-11. It proposes evidence
 collection, not approved workload sizes, numeric budgets or release transition.
 The first-release support matrix and exclusions are already approved in the
 [maintainer decisions](maintainer-decisions.md#first-release-support-matrix).
 
 The [existing phase harness](../PHASE_MEASUREMENTS.md) measures Python's older
-host-normalized dataset route. Keep its historical observations intact. A new
-opt-in harness must first measure ordinary installed `yamaa.domain(...)` and
-`yamaa_domain(...)`, copied result views and explicit held `save()` independently.
+host-normalized dataset route. Keep its historical observations intact. The new
+[opt-in collector](../tools/measure_public_lifecycle.py) measures ordinary installed
+`yamaa.domain(...)` and `yamaa_domain(...)`, copied result views and explicit held
+`save()` independently.
 Optional instrumentation must delegate to those same implementations.
+
+## Bounded collector and replay
+
+The implemented [worker protocol](../tools/public_lifecycle_worker_protocol.json)
+selects three unchanged cases: ordered-sum, window-functions and lookup. A
+correctness smoke uses one cold child and one warm child for every host/case;
+the warm child retains one declared warm-up and one measured repetition. This
+creates twelve children and eighteen public Builds, each with a new Domain and
+fresh directory, followed by two Saves of the held result. A smoke establishes
+collector execution and exact truth, not a performance distribution or B17/B18
+completion. The other workloads below still need implementation and decisions.
+
+For an already qualified installed Python wheel/source and R source package,
+provide separate installation-provenance JSON files and absolute paths:
+
+```sh
+python3 /path/to/yamaa/rust/tools/measure_public_lifecycle.py \
+  --repository /path/to/unchanged/source-checkout \
+  --revision <complete-source-commit> \
+  --python-provenance /outside/python-installation.json \
+  --r-provenance /outside/r-installation.json \
+  --python-executable /outside/installed-venv/bin/python \
+  --r-executable /path/to/Rscript \
+  --output /outside/fresh-lifecycle-evidence \
+  --purpose correctness-smoke --repeats 1 --warmups 1 --compilation-clear
+```
+
+Each provenance file declares the exact source commit, artifact reference/path,
+package form, runtime/package/core versions, actual package/native origins,
+system, build-attested toolchain and CPU or explicit null, and a retained
+installation record tying those facts together. The controller directly compares
+a supplied wheel's native bytes or a supplied source archive's original native
+sources, manifests, lock and toolchain. Source-build binary association remains
+an installation/build attestation. The executed harness bytes are retained;
+its surrounding checkout head is separate from the installed source identity.
+The output directory must be fresh and outside every checkout.
+The worker launches the supplied absolute Python executable spelling so that a
+virtual environment retains its `pyvenv.cfg` context. Its real executable target
+is independently audited; both invocation and loaded origins must be outside
+every checkout.
+
+R additionally requires explicitly located `jsonlite` and `microbenchmark`
+1.5.0 collectors, their actual versions/origins, the selected timer build config,
+and byte-identical built/installed timer libraries. A reviewed monotonic provider
+is required; the wall-clock fallback refuses. Collector import and request
+JSON decoding precede the timed `yamaa` import. The worker uses raw nanosecond
+timestamps without a timing wrapper, implicit warm-ups or overhead adjustment.
+R's binary64 timestamps are transported as 17-significant-digit decimal strings
+and exact IEEE bytes. The controller requires their round-trip identity and
+exact binary64 subtraction. Python timestamps remain integer nanoseconds.
+
+Import is timed once per child. Public Build is the first explicit native call;
+metadata follows Build. Copied output/issues/logs include their actual host
+transport. Each held Save has its own timer. Raw report and saved-byte retention
+and controller comparison occur outside these boundaries. Complete Build and
+both Save reports, typed copied values/order/float bits, issue rows, null logs,
+both original CSV comparisons and repeated held bytes must pass before any
+sample is accepted. Every warm-up and failure remains visible.
+
+Phase attribution, actual callback counts, process startup, shipped-schema
+initialization and filesystem-cache observations are currently null. Python
+Linux/macOS peak RSS uses child-lifetime `ru_maxrss` with original KiB/bytes;
+it is cumulative across warm repetitions. R and Windows peak RSS remain null.
+Characterization is separately opt-in and does not supply an approved budget.
+
+Keep all compilation stopped through collection. The explicit
+`--compilation-clear` attestation is supplemented by a process-name inventory
+before every child; an unavailable probe or active compiler refuses that slot.
+The inventory is not an atomic global lock. The first retained local attempt
+correctly refused all twelve slots when a Cargo process appeared, before any
+candidate launch or sample. Replays must use a fresh directory and a new clear
+interval; failed attempts are retained. Independent synthetic-owner and actual
+R-worker controls cover reached-report preservation, original failures and
+interruptions, secondary transport failures and owner release without retries.
+The second retained attempt launched all twelve children but remained rejected:
+Python lost its virtual-environment invocation context and ordinary R JSON
+numeric printing lost timestamp precision. A separate read-only audit of the
+reached R observations passes nine repetitions, 27 complete reports and eighteen
+original CSV comparisons; that functional evidence does not accept the rejected
+collection or reconstruct its clocks. The third fresh attempt, with corrected
+launches and lossless transport, passes independent read-only replay of all twelve
+actual children, eighteen Builds including six warm-ups, 54 complete reports,
+36 exact CSV comparisons and 156 unadjusted raw clock boundaries. All 51 retained
+original files and the four executed harness files compare byte-for-byte with
+their immutable source and reviewed snapshot. This observation covers installed
+`ad34de8d75fbbcc4392d42b93c0fa86745823788` Python wheel and R source packages on
+local macOS arm64, CPython 3.14.0 and R 4.6.1. Harness regression discovery passes
+123 tests, including actual symlink launch, authored binary64 transport and
+owner-failure controls. It establishes this bounded collector's correctness;
+characterization and B17/B18 remain open.
 
 ## Workloads and truth
 
