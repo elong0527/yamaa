@@ -114,6 +114,7 @@ jobs:
             python tools/check_cargo_lock.py --output-dir "${RUNNER_TEMP}/rust-dependencies"
             cargo clippy --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
             cargo test --locked
+            cargo test --locked -p yamaa-engine --features test-support
             cargo test --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters --profile release-test
             python tools/generate_regex_identifiers.py
             python tools/generate_schema_printable.py
