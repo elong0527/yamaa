@@ -35,6 +35,8 @@ mod source_expressions;
 pub use source_expressions::SourceFinding;
 #[path = "specification_column_checks.rs"]
 mod column_checks;
+#[path = "specification_row_intermediates.rs"]
+mod row_intermediates;
 #[path = "specification_rows.rs"]
 mod rows;
 #[path = "specification_verifications.rs"]
@@ -986,13 +988,14 @@ impl PreparedSpecification {
         }
         let inputs = mapping(d, field(d, root, "input")?)?;
         let mut source_findings = Vec::new();
-        if has_rows && inputs.len() != 1 {
-            reject(&mut extra, "multiple_source_rows", "rows".into());
-        }
-        let driver = match spec.default_driver() {
-            Some(driver) => driver,
-            None if !extra.is_empty() => return Err(PrepareError::Unsupported(extra)),
-            None => return Err(PrepareError::Internal),
+        let driver = if has_rows {
+            row_intermediates::common_driver(d, inputs)?
+        } else {
+            match spec.default_driver() {
+                Some(driver) => driver,
+                None if !extra.is_empty() => return Err(PrepareError::Unsupported(extra)),
+                None => return Err(PrepareError::Internal),
+            }
         };
         let driver_index = inputs
             .iter()
@@ -1141,9 +1144,6 @@ impl PreparedSpecification {
         let verifications = verifications::Verifications::prepare(d, &output)?;
         let intermediates =
             intermediates::Declarations::prepare(d, &sources, driver_index, limits, &mut extra)?;
-        if has_rows && !intermediates.is_empty() {
-            reject(&mut extra, "intermediate_rows", "rows".into());
-        }
         if has_rows {
             if !extra.is_empty() {
                 return Err(PrepareError::Unsupported(extra));
@@ -1563,6 +1563,18 @@ impl PreparedSpecification {
         }
         let source = schemas[self.driver];
         if let Some(rows) = &self.rows {
+            if !self.intermediates.is_empty() {
+                rows.admit_sources(schemas, &self.output)?;
+            }
+            let mut findings = Vec::new();
+            let (secondary, intermediates) = self.intermediates.bind(
+                &self.sources,
+                self.driver,
+                schemas,
+                &self.output,
+                &self.keys,
+                &mut findings,
+            )?;
             return rows
                 .bind(
                     source,
@@ -1571,6 +1583,10 @@ impl PreparedSpecification {
                     &self.keys,
                     self.verifications(),
                     self.project_calls.as_ref(),
+                    &self.intermediates,
+                    secondary,
+                    intermediates,
+                    findings,
                 )
                 .and_then(|plan| {
                     plan.with_column_verifications(self.column_verification_groups())

@@ -142,6 +142,13 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json",
+      "family": "datasets", "level": "component",
+      "consumers": ["rust/crates/yamaa-adapters/tests/declarative_row_intermediates.rs",
+        "rust/tools/stage_specification_inputs.py", "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/text_pad_reference.json",
       "family": "text", "level": "component",
       "consumers": ["rust/crates/yamaa-adapters/tests/declarative_text_pad.rs",

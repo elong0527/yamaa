@@ -294,8 +294,16 @@ pub enum ExecutionError<E> {
     OutputGrouping(GroupingError<Infallible>),
 }
 
+/// A selection identity is distinct from source coordinates and diagnostic row position.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum SelectionIdentity {
+    /// Key probes cannot read named selections in an admitted plan.
+    Probe,
+    Candidate(usize),
+}
 /// Keep source provenance per candidate for the later whole-column phase.
 struct Candidate {
+    selection_identity: SelectionIdentity,
     members: Vec<usize>,
     values: Vec<Value>,
     completed: Vec<bool>,
@@ -950,6 +958,7 @@ impl Executor<'_> {
         let mut budget = Budget::new(limits);
         let mut intermediate_run = intermediates::Run::default();
         let mut candidates: Vec<Candidate> = Vec::new();
+        let mut next_selection_identity = 0usize;
         if matches!(self.plan.templates()[0].mode, RowMode::Keys) {
             candidates = key_grain::construct(self, table, limits, &mut budget, handlers)?;
         } else {
@@ -972,7 +981,16 @@ impl Executor<'_> {
                     .try_reserve(groups.len())
                     .map_err(|_| Box::new(ExecutionError::Allocation))?;
                 for members in groups {
+                    // Discarding a row never refunds its token or evaluated work.
+                    if !self.plan.intermediates().is_empty() {
+                        budget.work(1, 1)?;
+                    }
+                    let selection_identity = SelectionIdentity::Candidate(next_selection_identity);
+                    next_selection_identity = next_selection_identity
+                        .checked_add(1)
+                        .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
                     let mut candidate = Candidate {
+                        selection_identity,
                         members,
                         values: vec![Value::Missing; self.plan.output().columns().len()],
                         completed: vec![false; self.plan.output().columns().len()],
