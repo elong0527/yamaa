@@ -82,6 +82,15 @@ use that same projection without a tagged-scalar encode/decode round trip.
 
 ## Evidence and remaining work
 
+Captured structural schema reports resolve context in core against the exact
+caller-held pass arena and admitted schema. Core admits the complete ordered
+report before adapters copy its borrowed scalar or permitted-list facts. Default
+references require their descriptor's declaring-module arena; paths never infer
+that provenance. Mathematical integers, distinct value/layer kind vocabularies
+and duplicate permitted values retain their existing meaning. Invalid references
+or duplicate context/provenance names refuse separately from byte exhaustion.
+The schema prototype's path/context-reference wrapper remains compatible.
+
 The core integration test reaches every registered cause through evaluation,
 conversion, resource classification or actual original-document compilation and
 compares independently stated public vocabulary and preflight context. It also checks
