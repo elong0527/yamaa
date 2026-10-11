@@ -59,6 +59,11 @@ class UniqueKeyLoader(yaml.SafeLoader):
         return super().flatten_mapping(node)
 
     def construct_mapping(self, node, deep=False):
+        # SafeConstructor.construct_mapping starts with this call; without it
+        # the merge-key guard in flatten_mapping above never runs and a merge
+        # key dies later with "could not determine a constructor" instead of
+        # the intended "YAML merge keys are not allowed".
+        self.flatten_mapping(node)
         mapping = {}
         for key_node, value_node in node.value:
             key = self.construct_object(key_node, deep=deep)
