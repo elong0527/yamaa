@@ -34,8 +34,9 @@ Admission limits are 4,096 completed records, 65,536 cells per log-table request
 8 MiB of log text and 1,048,576 JSON nodes with maximum depth 64. Each encoded
 file and log observation has an 8 MiB ceiling. Report/copy admission shares the
 existing 16 MiB policy across retained enrichment copies and across a Save's
-at-most-four prefix reports. These are explicit capacity policies, not a promise
-about process RSS or recovery from allocation failure.
+possible prefix reports. Single-domain Save owns at most four such reports.
+These are explicit capacity policies, not a promise about process RSS or recovery
+from allocation failure.
 
 The unchanged `schema-verification-log` document has three unchanged CSV goldens.
 The native source fixture manifest lists that original document, input and three
@@ -49,6 +50,28 @@ tests cover warning continuation followed by a later failure, typed empty logs,
 full keys, Unicode IDs, fresh owned views, expired original inputs, target refusal,
 late errors/unwinds and retries. Parquet tests use governed logical rows and types.
 
-Producer graphs with declared logs are explicitly refused before activation or
-study access until ordered graph sidecar publication is implemented and qualified.
+Producer graphs prepare each entered node's logs after its actual check prefix
+and before primary encoding or dependent entry. Native owners retain those tables,
+exact bytes and original declaration locations. Successful Save admits the whole
+graph target set and publishes each node's verification, warning and primary
+before its dependents. Failed graphs grant only completed verification requests;
+explicit diagnostic Save still raises the failed-build result. An entered native
+publication error reports REQ-0764 with its actual node, output field and target.
+Admission refusals, preflight failures and opaque unwinds retain their distinct
+causes. Repeated Save replaces publication state and preserves execution evidence.
+
+Graph limits share record admission across nodes and cell/text/JSON/encoded-log
+admission across potential node/log slots. Cumulative publication admission
+covers 64 nodes, 1 MiB of authored/selected paths, 16 MiB of held artifact bytes
+and 64 MiB of work. All possible entered/completed prefix reports share 16 MiB
+before the first publisher opens. Lexical duplicate targets fail during metadata
+preparation; retained physical parent/entry comparisons run before any Save write.
+Output parents can remain absent during metadata preparation and Build.
+
+Installed graph witnesses retain complete Build and repeated Save reports and
+saved bytes after checked input/YAML deletion. They compare the unchanged original
+log document and CSV goldens, plus independently authored alias/diamond warning
+records, exact int64 keys and actual failure prefixes. These supplemental proofs
+leave the broader original-producer M1 criterion open. The R graph accessor follows
+the existing Unix state; Windows R graph integration remains a separate gate.
 Broader compiler, API, native ownership and release gates remain open.
