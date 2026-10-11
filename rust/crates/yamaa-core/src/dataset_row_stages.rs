@@ -24,7 +24,7 @@ fn expression_deferred(
         Expression::ProjectFunction(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if read_deferred(*read,deferred,intermediates))),
         Expression::Case(branches) => branches.iter().any(|branch| branch.when.as_ref().is_some_and(|predicate| predicate.bindings().iter().any(|binding| read_deferred(binding.read,deferred,intermediates))) || expression_deferred(&branch.assignment.expression,deferred,intermediates)),
         Expression::Extreme {operands,..} | Expression::StrConcat {operands,..} | Expression::StrTemplate {operands,..} | Expression::Imputation {operands,..} | Expression::Temporal {operands,..} => operands.iter().any(|operand| expression_deferred(&operand.expression,deferred,intermediates)),
-        Expression::StrContains {source,..} | Expression::StrExtract {source,..} | Expression::StrCase {source,..} | Expression::StrPad {source,..} | Expression::Round {source,..} => expression_deferred(&source.expression,deferred,intermediates),
+        Expression::StrContains {source,..} | Expression::StrExtract {source,..} | Expression::StrCase {source,..} | Expression::StrPad {source,..} | Expression::MappingCut {source,..} | Expression::Round {source,..} => expression_deferred(&source.expression,deferred,intermediates),
         Expression::SourceBinding { source, .. } => expression_deferred(&source.expression, deferred, intermediates),
         Expression::FirstAvailable(selection) => selection.sources().iter().any(|operand| match &operand.read {
             SelectionRead::Column(column) => deferred[*column],

@@ -3747,6 +3747,119 @@ fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
 }
 
 #[test]
+fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
+    use std::collections::BTreeMap;
+    use yamaa_adapters::{
+        specification_report::{self, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_engine::specification::SourceDeclaration;
+    fn bytes(hex: &str) -> Vec<u8> {
+        (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+            .collect()
+    }
+    struct Port {
+        inputs: BTreeMap<String, Arc<[u8]>>,
+        calls: Vec<String>,
+        expected: Vec<u8>,
+        saves: usize,
+    }
+    impl SourcePort for Port {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.calls.len()
+        }
+        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+            assert_eq!(source.path, format!("{}.csv", source.name.to_lowercase()));
+            self.calls.push(source.name.clone());
+            let input = &self.inputs[&source.name];
+            assert!(input.len() <= maximum);
+            Ok(Arc::clone(input))
+        }
+    }
+    impl specification_report::ArtifactPort for Port {
+        type Error = ();
+        fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), ()> {
+            assert!(!self.expected.is_empty(), "failed mapping/cut published");
+            assert_eq!(path, "result.csv");
+            assert_eq!(content, self.expected);
+            self.saves += 1;
+            Ok(())
+        }
+    }
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let mut count = 0;
+    for line in include_str!("fixtures/original_mapping_cut.tsv")
+        .lines()
+        .skip(1)
+    {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        assert_eq!(fields.len(), 6);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&bytes(fields[5])).unwrap(),
+            serde_json::from_str::<serde_json::Value>(fields[3]).unwrap()
+        );
+        let run = PreparedRun::prepare(prepare(&schema, &bytes(fields[1]))).unwrap();
+        let inputs: BTreeMap<String, String> = serde_json::from_str(fields[2]).unwrap();
+        let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
+        // A second attempt must neither inherit choices nor accumulate handler counts.
+        for _ in 0..2 {
+            let mut port = Port {
+                inputs: inputs
+                    .iter()
+                    .map(|(n, h)| (n.clone(), bytes(h).into()))
+                    .collect(),
+                calls: vec![],
+                expected: bytes(fields[4]),
+                saves: 0,
+            };
+            let attempt = run.execute_with_port(&mut port);
+            let example = format!("mapping-cut-{}", fields[0]);
+            let result = specification_report::build_result(
+                &run,
+                &attempt,
+                Identity {
+                    runtime: "python",
+                    runtime_version: "fixture-runtime",
+                    engine_version: "fixture-engine",
+                    example: &example,
+                    specification: "spec.yaml",
+                    base_directory: ".",
+                },
+            )
+            .unwrap();
+            let mut unsaved = expected.clone();
+            unsaved["artifacts"] = serde_json::json!([]);
+            assert_eq!(result.observations(), unsaved, "{}", fields[0]);
+            if port.expected.is_empty() {
+                assert!(result.output().is_none());
+                assert!(matches!(
+                    result.save(&mut port),
+                    Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                ));
+            } else {
+                for _ in 0..2 {
+                    assert_eq!(*result.save(&mut port).unwrap(), expected, "{}", fields[0]);
+                }
+                assert_eq!(port.saves, 2);
+            }
+            assert_eq!(
+                port.calls,
+                if inputs.contains_key("DONOR") {
+                    vec!["SRC", "DONOR"]
+                } else {
+                    vec!["SRC"]
+                }
+            );
+        }
+        count += 1;
+    }
+    assert_eq!(count, 20);
+}
+
+#[test]
 fn source_condition_stays_unknown_under_the_normative_grammar() {
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let raw=b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: src.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation:\n      source: {variable: SRC.ID, condition: TRUE}\n";
@@ -3768,4 +3881,32 @@ fn source_condition_stays_unknown_under_the_normative_grammar() {
         .any(|issue| issue["condition"] == "unknown_field"
             && issue["spec_paths"]
                 == serde_json::json!(["columns.ID.derivation.source.condition"])));
+}
+
+#[test]
+fn original_mapping_cut_admission_has_complete_findings_before_study_ports() {
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    for line in include_str!("fixtures/mapping_cut_admission.tsv")
+        .lines()
+        .skip(1)
+    {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        let bytes = (0..fields[1].len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&fields[1][i..i + 2], 16).unwrap())
+            .collect::<Vec<_>>();
+        let error =
+            yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &bytes))
+                .unwrap_err();
+        let expected: serde_json::Value = serde_json::from_str(fields[2]).unwrap();
+        assert_eq!(
+            yamaa_adapters::specification_diagnostics::findings(&error, None).unwrap(),
+            expected["outcome"]["diagnostics"]
+                .as_array()
+                .unwrap()
+                .clone(),
+            "{}",
+            fields[0]
+        );
+    }
 }
