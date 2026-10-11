@@ -873,12 +873,17 @@ fn current_record_read(
                         .any(|read| matches!(read, MatchRead::Record { .. }))
                 })
         }
+        Expression::SourceBinding { source, .. } => {
+            current_record_read(&source.expression, intermediates, scope)
+        }
         Expression::FirstAvailable(selection) => {
-            include_raw
-                && selection
-                    .sources()
-                    .iter()
-                    .any(|source| matches!(source.read, SelectionRead::Source(_)))
+            selection.sources().iter().any(|source| match &source.read {
+                SelectionRead::Source(_) => include_raw,
+                SelectionRead::Expression(source) => {
+                    current_record_read(&source.expression, intermediates, scope)
+                }
+                SelectionRead::Column(_) | SelectionRead::Collect { .. } => false,
+            })
         }
         Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
             .iter()
