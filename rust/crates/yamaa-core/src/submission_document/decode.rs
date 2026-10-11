@@ -642,7 +642,7 @@ impl<'a> Parser<'a, '_> {
             TextRule::Language,
             Some("en"),
         )?;
-        let file_oid = self.optional_text(node, FieldName::FileOid, path, TextRule::DefineId)?;
+        let file_oid = self.optional_text(node, FieldName::FileOid, path, TextRule::NonEmpty)?;
         let metadata_origin = self.get(node, FieldName::MetadataVersion);
         let metadata_version = if metadata_origin.node.is_some() {
             self.metadata(metadata_origin, path.field(FieldName::MetadataVersion))?

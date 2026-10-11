@@ -890,7 +890,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0942](../submission/terminology.md#req-0942) | `submission/terminology.md` | R025-17, R025-18 |
 | [REQ-0944](../submission/terminology.md#req-0944) | `submission/terminology.md` | R025-19 |
 | [REQ-0945](../submission/terminology.md#req-0945) | `submission/terminology.md` | R025-20 |
-| [REQ-0946](../submission/terminology.md#req-0946) | `submission/terminology.md` | R025-21 |
+| [REQ-0946](../submission/terminology.md#req-0946) | `submission/terminology.md` | R025-21, R025-31 |
 | [REQ-0947](../submission/terminology.md#req-0947) | `submission/terminology.md` | R025-22 |
 | [REQ-0948](../submission/terminology.md#req-0948) | `submission/terminology.md` | R025-23 |
 | [REQ-0949](../submission/terminology.md#req-0949) | `submission/terminology.md` | R025-24 |
@@ -900,7 +900,6 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0953](../submission/terminology.md#req-0953) | `submission/terminology.md` | R025-28 |
 | [REQ-0954](../submission/terminology.md#req-0954) | `submission/terminology.md` | R025-29 |
 | [REQ-0955](../submission/terminology.md#req-0955) | `submission/terminology.md` | R025-30 |
-| [REQ-0956](../submission/terminology.md#req-0956) | `submission/terminology.md` | R025-31 |
 | [REQ-0957](../submission/terminology.md#req-0957) | `submission/terminology.md` | R025-32 |
 | [REQ-0958](../submission/terminology.md#req-0958) | `submission/terminology.md` | R025-33 |
 | [REQ-0959](../submission/define-xml.md#req-0959) | `submission/define-xml.md` | R026-1 |

@@ -100,6 +100,12 @@ def stage(destination: Path):
     project_helper = importlib.util.module_from_spec(project_spec)
     project_spec.loader.exec_module(project_helper)
     project_helper.stage(resources / "project-original")
+    define_spec = importlib.util.spec_from_file_location(
+        "stage_define_inputs", Path(__file__).with_name("stage_define_inputs.py")
+    )
+    define_helper = importlib.util.module_from_spec(define_spec)
+    define_spec.loader.exec_module(define_helper)
+    define_helper.stage(resources / "define-fixtures")
     print(destination)
 
 

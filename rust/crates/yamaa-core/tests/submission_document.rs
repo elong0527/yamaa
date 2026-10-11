@@ -404,7 +404,7 @@ fn invalid() -> Document {
     let flag = a.text("true");
     let context = a.text("submission");
     let language = a.text("e-123456789");
-    let file = a.text("9FILE");
+    let file = a.text("");
     let metadata = a.text_map(&[("id", "MDV"), ("name", ""), ("description", "")]);
     let originator = a.node(N::Boolean(true));
     let style = a.text("/absolute.xsl");
@@ -452,7 +452,7 @@ fn structural_findings_are_complete_ordered_and_only_supported_causes_are_portab
             Kind::ExpectedBoolean,
             Kind::InvalidChoice,
             Kind::InvalidLanguage,
-            Kind::InvalidDefineId,
+            Kind::EmptyText,
             Kind::EmptyText,
             Kind::EmptyText,
             Kind::ExpectedText,
@@ -477,7 +477,7 @@ fn structural_findings_are_complete_ordered_and_only_supported_causes_are_portab
             .iter()
             .filter_map(|f| f.requirement())
             .collect::<Vec<_>>(),
-        ["REQ-1068", "REQ-1074", "REQ-1046", "REQ-1070", "REQ-1073", "REQ-1068", "REQ-1070"]
+        ["REQ-1068", "REQ-1074", "REQ-1046", "REQ-1070", "REQ-1073", "REQ-1070"]
     );
     assert_eq!(findings[7].requirement(), None); // null is an original shape, not a fabricated normative message.
     assert!(matches!(error.input.nodes()[findings[7].node], N::Null));

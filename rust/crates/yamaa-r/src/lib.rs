@@ -1,5 +1,6 @@
 //! Optional R installation probe; all R interactions occur on the calling thread.
 use extendr_api::prelude::*;
+mod define_entry;
 mod domain_entry;
 mod file_producer;
 mod file_project;
@@ -283,6 +284,7 @@ fn engine_info() -> List {
 extendr_module! {
     mod yamaa;
     use domain_entry;
+    use define_entry;
     use scalars;
     use specification_service;
     use specification_result;

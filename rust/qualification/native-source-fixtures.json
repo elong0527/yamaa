@@ -5,6 +5,15 @@
     "benchmarks/schema-verification-log/input/dm.csv",
     "benchmarks/schema-verification-log/expected/adsl.csv",
     "benchmarks/schema-verification-log/expected/adsl-checks.csv",
-    "benchmarks/schema-verification-log/expected/adsl-warnings.csv"
+    "benchmarks/schema-verification-log/expected/adsl-warnings.csv",
+    "benchmarks/sdtm-dm-metadata/environment.yaml",
+    "benchmarks/sdtm-dm-metadata/spec.yaml",
+    "benchmarks/sdtm-dm-metadata/expected/dm.csv",
+    "benchmarks/sdtm-dm-metadata/expected/dm.json",
+    "benchmarks/sdtm-dm-metadata/expected/define.xml",
+    "benchmarks/sdtm-ae-coding/environment.yaml",
+    "benchmarks/sdtm-ae-coding/spec.yaml",
+    "benchmarks/sdtm-vs-epoch-from-subject-elements/environment.yaml",
+    "benchmarks/sdtm-vs-epoch-from-subject-elements/spec.yaml"
   ]
 }

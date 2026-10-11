@@ -2013,7 +2013,7 @@ requirements:
   REQ-0943: {"file": "submission/terminology.md", "sources": ["R025-18"], "retired": true, "replacement": ["REQ-0942"]}
   REQ-0944: {"file": "submission/terminology.md", "sources": ["R025-19"]}
   REQ-0945: {"file": "submission/terminology.md", "sources": ["R025-20"]}
-  REQ-0946: {"file": "submission/terminology.md", "sources": ["R025-21"]}
+  REQ-0946: {"file": "submission/terminology.md", "sources": ["R025-21", "yamaa:issue-1758:req-0946"]}
   REQ-0947: {"file": "submission/terminology.md", "sources": ["R025-22"]}
   REQ-0948: {"file": "submission/terminology.md", "sources": ["R025-23"]}
   REQ-0949: {"file": "submission/terminology.md", "sources": ["R025-24"]}
@@ -2023,16 +2023,16 @@ requirements:
   REQ-0953: {"file": "submission/terminology.md", "sources": ["R025-28"]}
   REQ-0954: {"file": "submission/terminology.md", "sources": ["R025-29"]}
   REQ-0955: {"file": "submission/terminology.md", "sources": ["R025-30"]}
-  REQ-0956: {"file": "submission/terminology.md", "sources": ["R025-31"]}
+  REQ-0956: {"file": "submission/terminology.md", "sources": ["R025-31", "yamaa:issue-1758:req-0956"], "retired": true, "replacement": ["REQ-0946"]}
   REQ-0957: {"file": "submission/terminology.md", "sources": ["R025-32"]}
   REQ-0958: {"file": "submission/terminology.md", "sources": ["R025-33"]}
-  REQ-0959: {"file": "submission/define-xml.md", "sources": ["R026-1"]}
-  REQ-0960: {"file": "submission/define-xml.md", "sources": ["R026-2"]}
-  REQ-0961: {"file": "submission/define-xml.md", "sources": ["R026-3"]}
-  REQ-0962: {"file": "submission/define-xml.md", "sources": ["R026-4"]}
+  REQ-0959: {"file": "submission/define-xml.md", "sources": ["R026-1", "yamaa:issue-1758:req-0959"]}
+  REQ-0960: {"file": "submission/define-xml.md", "sources": ["R026-2", "yamaa:issue-1758:req-0960"]}
+  REQ-0961: {"file": "submission/define-xml.md", "sources": ["R026-3", "yamaa:issue-1758:req-0961"]}
+  REQ-0962: {"file": "submission/define-xml.md", "sources": ["R026-4", "yamaa:issue-1758:req-0962"]}
   REQ-0963: {"file": "submission/define-xml.md", "sources": ["R026-5"]}
-  REQ-0964: {"file": "submission/define-xml.md", "sources": ["R026-6"]}
-  REQ-0965: {"file": "submission/define-xml.md", "sources": ["R026-7"]}
+  REQ-0964: {"file": "submission/define-xml.md", "sources": ["R026-6", "yamaa:issue-1758:req-0964"]}
+  REQ-0965: {"file": "submission/define-xml.md", "sources": ["R026-7", "yamaa:issue-1758:req-0965"]}
   REQ-0966: {"file": "submission/define-xml.md", "sources": ["R026-8"]}
   REQ-0967: {"file": "submission/define-xml.md", "sources": ["R026-9"]}
   REQ-0968: {"file": "submission/define-xml.md", "sources": ["R026-10"]}
@@ -2046,11 +2046,11 @@ requirements:
   REQ-0976: {"file": "submission/define-xml.md", "sources": ["R026-18"]}
   REQ-0977: {"file": "submission/define-xml.md", "sources": ["R026-19"]}
   REQ-0978: {"file": "submission/define-xml.md", "sources": ["R026-20"]}
-  REQ-0979: {"file": "submission/define-xml.md", "sources": ["R026-21"]}
+  REQ-0979: {"file": "submission/define-xml.md", "sources": ["R026-21", "yamaa:issue-1758:req-0979"]}
   REQ-0980: {"file": "submission/define-xml.md", "sources": ["R026-22"]}
   REQ-0981: {"file": "submission/define-xml.md", "sources": ["R026-23"]}
   REQ-0982: {"file": "submission/define-xml.md", "sources": ["R026-24"]}
-  REQ-0983: {"file": "submission/define-xml.md", "sources": ["R026-25"]}
+  REQ-0983: {"file": "submission/define-xml.md", "sources": ["R026-25", "yamaa:issue-1758:req-0983"]}
   REQ-0984: {"file": "submission/define-xml.md", "sources": ["R026-26"]}
   REQ-0985: {"file": "submission/define-xml.md", "sources": ["R026-27"]}
   REQ-0986: {"file": "submission/define-xml.md", "sources": ["R026-28"]}
@@ -2128,7 +2128,7 @@ requirements:
   REQ-1058: {"file": "specification/binding.md", "sources": ["schema.yaml:regex.description"]}
   REQ-1059: {"file": "storage/ingestion.md", "sources": ["schema.yaml:dataset_source.description"]}
   REQ-1060: {"file": "storage/ingestion.md", "sources": ["schema.yaml:dataset_class.path.description", "schema.yaml:dataset_class.types.description", "schema.yaml:dataset_class.schema.description", "yamaa:issue-1905:req-1060"]}
-  REQ-1061: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:define_class.schema_version.description", "schema_define.yaml:define_class.define_version.description", "schema_define.yaml:define_class.context.description", "schema_define.yaml:define_class.language.description", "schema_define.yaml:define_class.file_oid.description", "schema_define.yaml:define_class.creation_datetime.description", "schema_define.yaml:define_class.originator.description", "schema_define.yaml:define_class.source_system.description", "schema_define.yaml:define_class.source_system_version.description", "schema_define.yaml:define_class.stylesheet.description", "schema_define.yaml:define_class.study.description", "schema_define.yaml:define_class.metadata_version.description", "schema_define.yaml:define_class.standards.description", "schema_define.yaml:define_class.default_standard.description", "schema_define.yaml:define_class.documents.description", "schema_define.yaml:define_class.datasets.description", "schema_define.yaml:define_class.output.description"]}
+  REQ-1061: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:define_class.schema_version.description", "schema_define.yaml:define_class.define_version.description", "schema_define.yaml:define_class.context.description", "schema_define.yaml:define_class.language.description", "schema_define.yaml:define_class.file_oid.description", "schema_define.yaml:define_class.creation_datetime.description", "schema_define.yaml:define_class.originator.description", "schema_define.yaml:define_class.source_system.description", "schema_define.yaml:define_class.source_system_version.description", "schema_define.yaml:define_class.stylesheet.description", "schema_define.yaml:define_class.study.description", "schema_define.yaml:define_class.metadata_version.description", "schema_define.yaml:define_class.standards.description", "schema_define.yaml:define_class.default_standard.description", "schema_define.yaml:define_class.documents.description", "schema_define.yaml:define_class.datasets.description", "schema_define.yaml:define_class.output.description", "yamaa:issue-1758:req-1061", "schema_environment.yaml:submission_section_class.file_oid"]}
   REQ-1062: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:study_class.id.description", "schema_define.yaml:study_class.name.description", "schema_define.yaml:study_class.description.description", "schema_define.yaml:study_class.protocol_name.description", "schema_environment.yaml:study_class.id.description", "schema_environment.yaml:study_class.name.description", "schema_environment.yaml:study_class.description.description", "schema_environment.yaml:study_class.protocol_name.description"]}
   REQ-1063: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:metadata_version_class.id.description", "schema_define.yaml:metadata_version_class.name.description", "schema_define.yaml:metadata_version_class.description.description", "schema_environment.yaml:metadata_version_class.id.description", "schema_environment.yaml:metadata_version_class.name.description", "schema_environment.yaml:metadata_version_class.description.description"]}
   REQ-1064: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:standard_class.id.description", "schema_define.yaml:standard_class.name.description", "schema_define.yaml:standard_class.type.description", "schema_define.yaml:standard_class.publishing_set.description", "schema_define.yaml:standard_class.version.description", "schema_define.yaml:standard_class.status.description"]}
@@ -2287,10 +2287,10 @@ requirements:
   REQ-1262: {"file": "execution/rows.md", "sources": ["yamaa:issue-1113:intermediate-row-driver"]}
   REQ-1263: {"file": "operations/lookup.md", "sources": ["yamaa:issue-1369:intermediate-reads-intermediate"]}
   REQ-1264: {"file": "operations/lookup.md", "sources": ["yamaa:issue-1316:lazy-intermediate-match"]}
-  REQ-1193: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-declaration"]}
-  REQ-1194: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-study-document"]}
-  REQ-1195: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-distinctness"]}
-  REQ-1196: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-has-no-data"]}
+  REQ-1193: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-declaration", "yamaa:issue-1758:req-1193"]}
+  REQ-1194: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-study-document", "yamaa:issue-1758:req-1194"]}
+  REQ-1195: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-distinctness", "yamaa:issue-1758:req-1195"]}
+  REQ-1196: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-has-no-data", "yamaa:issue-1758:req-1196"]}
   REQ-1197: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-version"]}
   REQ-1198: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-ndjson"]}
   REQ-1199: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-rows-source"]}
@@ -2300,8 +2300,8 @@ requirements:
   REQ-1203: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-members"]}
   REQ-1204: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-absent-members"]}
   REQ-1205: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-empty-rows"]}
-  REQ-1206: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-metadata-ref"]}
-  REQ-1207: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-source-system"]}
+  REQ-1206: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-metadata-ref", "yamaa:issue-1758:req-1206"]}
+  REQ-1207: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-source-system", "yamaa:issue-1758:req-1207"]}
   REQ-1208: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-members-never-written"]}
   REQ-1209: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-column-block"]}
   REQ-1210: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-data-type-mapping"]}
@@ -2309,7 +2309,7 @@ requirements:
   REQ-1212: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-values"]}
   REQ-1213: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-temporal-text"]}
   REQ-1214: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-missing-and-empty"]}
-  REQ-1215: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-leaf"]}
+  REQ-1215: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-leaf", "yamaa:issue-1758:req-1215"]}
   REQ-1216: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-encoding"]}
   REQ-1217: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-layout"]}
   REQ-1218: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-escaping"]}
@@ -2319,9 +2319,9 @@ requirements:
   REQ-1222: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-publication-failure"]}
   REQ-1223: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-not-a-source"]}
   REQ-1225: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-interface", "schema_define.yaml:dataset_json_path.description"]}
-  REQ-1226: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-collision"]}
-  REQ-1227: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-without-data"]}
-  REQ-1228: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-source-system-incomplete"]}
+  REQ-1226: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-collision", "yamaa:issue-1758:req-1226"]}
+  REQ-1227: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-without-data", "yamaa:issue-1758:req-1227"]}
+  REQ-1228: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-source-system-incomplete", "yamaa:issue-1758:req-1228"]}
   REQ-1229: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-outside-document"]}
   REQ-1230: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-artifact-mismatch"]}
   REQ-1231: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-schema-invalid"]}
@@ -3010,3 +3010,25 @@ provenance_addenda:
   - {"source": "yamaa:issue-1905:req-1080", "text": "Issue #1905, approved 2026-10-10: environment lock and external function/codelist paths use the shared declaring-file local resource policy with no root configuration or fallback search.", "owner": "operations/functions", "group": "environment_class", "target": "REQ-1080"}
   - {"source": "yamaa:issue-1887:submission-source-system-version", "text": "See REQ-1080; approved submission version decision #1887.", "owner": "operations/functions", "group": "submission_section_class", "target": "REQ-1080"}
   - {"source": "schema_environment.yaml:submission_section_class.source_system_version", "text": "See REQ-1080; this is the actual schema field shape, with behavior approved in #1887.", "owner": "operations/functions", "group": "submission_section_class", "target": "REQ-1080"}
+  - {"source": "yamaa:issue-1758:req-0959", "text": "Issue #1758, approved migration: compose one selected environment submission section, derive stable defaults, retain explicit version metadata and emit only bound terminology. Reference renderer/schema retirement follows complete replacement qualification.", "owner": "submission/define-xml", "group": "environment submission generation", "target": "REQ-0959"}
+  - {"source": "yamaa:issue-1758:req-0960", "text": "Issue #1758, approved migration: compose one selected environment submission section, derive stable defaults, retain explicit version metadata and emit only bound terminology. Reference renderer/schema retirement follows complete replacement qualification.", "owner": "submission/define-xml", "group": "environment submission generation", "target": "REQ-0960"}
+  - {"source": "yamaa:issue-1758:req-0961", "text": "Issue #1758, approved migration: compose one selected environment submission section, derive stable defaults, retain explicit version metadata and emit only bound terminology. Reference renderer/schema retirement follows complete replacement qualification.", "owner": "submission/define-xml", "group": "environment submission generation", "target": "REQ-0961"}
+  - {"source": "yamaa:issue-1758:req-0962", "text": "Issue #1758, approved migration: compose one selected environment submission section, derive stable defaults, retain explicit version metadata and emit only bound terminology. Reference renderer/schema retirement follows complete replacement qualification.", "owner": "submission/define-xml", "group": "environment submission generation", "target": "REQ-0962"}
+  - {"source": "yamaa:issue-1758:req-0964", "text": "Issue #1758, approved migration: compose one selected environment submission section, derive stable defaults, retain explicit version metadata and emit only bound terminology. Reference renderer/schema retirement follows complete replacement qualification.", "owner": "submission/define-xml", "group": "environment submission generation", "target": "REQ-0964"}
+  - {"source": "yamaa:issue-1758:req-0965", "text": "Issue #1758, approved migration: compose one selected environment submission section, derive stable defaults, retain explicit version metadata and emit only bound terminology. Reference renderer/schema retirement follows complete replacement qualification.", "owner": "submission/define-xml", "group": "environment submission generation", "target": "REQ-0965"}
+  - {"source": "yamaa:issue-1758:req-1061", "text": "Issue #1758, approved migration: compose one selected environment submission section, derive stable defaults, retain explicit version metadata and emit only bound terminology. Reference renderer/schema retirement follows complete replacement qualification.", "owner": "submission/define-xml", "group": "environment submission generation", "target": "REQ-1061"}
+  - {"source": "yamaa:issue-1758:req-0946", "text": "Issue #1758, approved migration: compose one selected environment submission section, derive stable defaults, retain explicit version metadata and emit only bound terminology. Reference renderer/schema retirement follows complete replacement qualification.", "owner": "submission/terminology", "group": "environment submission generation", "target": "REQ-0946"}
+  - {"source": "yamaa:issue-1758:req-0956", "text": "Issue #1758, approved migration: compose one selected environment submission section, derive stable defaults, retain explicit version metadata and emit only bound terminology. Reference renderer/schema retirement follows complete replacement qualification.", "owner": "submission/terminology", "group": "environment submission generation", "target": "REQ-0956"}
+  - {"source": "schema_environment.yaml:submission_section_class.file_oid", "text": "REQ-1061 admits optional nonempty file-identity text. The existing DM golden carries a URL-style FileOID; generated object and leaf identifiers keep their separate validity checks.", "owner": "submission/define-xml", "group": "submission_section_class", "target": "REQ-1061"}
+  - {"source": "yamaa:issue-1758:req-0979", "text": "Issue #1758, approved migration: the shared generator stamps yamaa and the selected source version; supporting documents carry literal links relative to define.xml and need not exist during generation.", "owner": "submission/define-xml", "group": "environment submission generation", "target": "REQ-0979"}
+  - {"source": "yamaa:issue-1758:req-0983", "text": "Issue #1758, approved migration: the shared generator stamps yamaa and the selected source version; supporting documents carry literal links relative to define.xml and need not exist during generation.", "owner": "submission/define-xml", "group": "environment submission generation", "target": "REQ-0983"}
+  - {"source": "yamaa:issue-1758:req-1193", "target": "REQ-1193", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
+  - {"source": "yamaa:issue-1758:req-1194", "target": "REQ-1194", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
+  - {"source": "yamaa:issue-1758:req-1195", "target": "REQ-1195", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
+  - {"source": "yamaa:issue-1758:req-1196", "target": "REQ-1196", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
+  - {"source": "yamaa:issue-1758:req-1206", "target": "REQ-1206", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
+  - {"source": "yamaa:issue-1758:req-1207", "target": "REQ-1207", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
+  - {"source": "yamaa:issue-1758:req-1215", "target": "REQ-1215", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
+  - {"source": "yamaa:issue-1758:req-1226", "target": "REQ-1226", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
+  - {"source": "yamaa:issue-1758:req-1227", "target": "REQ-1227", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
+  - {"source": "yamaa:issue-1758:req-1228", "target": "REQ-1228", "decision": "Approved environment-section Define API and adjacent published Dataset-JSON targets in #1758; preserve reference document history until transition."}
