@@ -1111,9 +1111,21 @@ for(path in c(strrep("x",65537L),strrep("\u00e9",32769L))) {
 unlink(directory,recursive=TRUE)
 cat("public check without study data, full-range integers, retained save retry and environment refusal passed\n")
 
+remove_directory_link <- function(path) {
+  if(.Platform$OS.type=="windows") {
+    # R's unlink treats directory symbolic links as mount-point reparse tags.
+    # rmdir without /s removes only this link, preserving its external target.
+    command <- Sys.getenv("COMSPEC")
+    stopifnot(nzchar(command),file.exists(command))
+    system2(command,c("/d","/c","rmdir",shQuote(chartr("/","\\",path),type="cmd")))
+  } else unlink(path,recursive=TRUE)
+}
 for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
   directory <- tempfile("public-linked-output-");dir.create(directory)
   outside <- tempfile("public-output-outside-");dir.create(outside)
+  sentinel <- file.path(outside,"sentinel")
+  sentinel_bytes <- charToRaw("outside sentinel")
+  writeBin(sentinel_bytes,sentinel)
   entry <- file.path(directory,"spec.yaml")
   writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
                "output: {path: link/output.csv, columns: [ID]}","columns:",
@@ -1125,12 +1137,19 @@ for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
   if(late) dir.create(link) else stopifnot(file.symlink(outside,link))
   built <- yamaa_domain(entry)
   stopifnot(identical(as.character(built$output$ID),"1"))
-  if(late) { unlink(link,recursive=TRUE);stopifnot(file.symlink(outside,link)) }
+  if(late) {
+    stopifnot(identical(unlink(link,recursive=TRUE),0L),!file.exists(link),file.symlink(outside,link))
+  }
   stopifnot(identical(built$save(),FALSE),identical(built$issues$context,'{"code":"invalid_target","stage":"output"}'),
-            identical(list.files(outside,all.files=TRUE,no..=TRUE),if(existing) "output.csv" else character()))
+            identical(list.files(outside,all.files=TRUE,no..=TRUE),if(existing) c("output.csv","sentinel") else "sentinel"))
+  stopifnot(identical(rawfile(sentinel),sentinel_bytes))
   if(existing) stopifnot(identical(rawfile(target),charToRaw("retained")))
-  unlink(link);dir.create(link)
+  stopifnot(identical(remove_directory_link(link),0L),!file.exists(link),
+            identical(rawfile(sentinel),sentinel_bytes))
+  if(existing) stopifnot(identical(rawfile(target),charToRaw("retained")))
+  stopifnot(dir.create(link))
   stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(file.path(link,"output.csv")),charToRaw("ID\n1\n")))
+  stopifnot(identical(rawfile(sentinel),sentinel_bytes))
   unlink(directory,recursive=TRUE);unlink(outside,recursive=TRUE)
 }
 cat("public save rejects linked parents before or after build, retains external targets and permits safe retry passed\n")
