@@ -429,6 +429,27 @@ jobs:
         run: |
           python -m pip install --no-deps -r table-requirements.txt
           python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz project-dist/*.whl
+      - name: Report installed Python public benchmark conformance
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" plan \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
+          python -I "${GITHUB_WORKSPACE}/rust/tests/public_conformance.py" \
+            --plan public-conformance-plan --fixtures "${GITHUB_WORKSPACE}/benchmarks" \
+            --python-lock "${GITHUB_WORKSPACE}/python/uv.lock" \
+            --output public-conformance/observed --source-revision "${QUALIFICATION_SOURCE_REVISION}" \
+            --package-form "${{ matrix.form }}" \
+            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" compare \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
+            --output public-conformance/inventory.json
+      - name: Preserve Python public benchmark inventory and saved artifacts
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: public-conformance-python-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.form }}
+          path: ${{ runner.temp }}/public-conformance
+          if-no-files-found: error
       - name: Qualify the installed package outside checkout
         working-directory: ${{ runner.temp }}
         env:
@@ -562,7 +583,8 @@ jobs:
         run: cargo clippy --locked --target x86_64-pc-windows-gnu -p yamaa-r -- -D warnings
       - name: Stage standalone R package
         run: python rust/tools/stage_r_package.py "${RUNNER_TEMP}/native-stage/yamaa"
-      - name: Build, install, and test outside checkout
+      - name: Build and install R outside checkout
+        id: r_install
         working-directory: ${{ runner.temp }}
         run: |
           mkdir -p native-r-library
@@ -573,6 +595,35 @@ jobs:
           if [ "${{ runner.os }}" = Windows ]; then
             python -c 'from pathlib import Path; import shutil; dlls = list(Path("native-r-library/yamaa/libs").rglob("yamaa.dll")); assert len(dlls) == 1, "installed R DLL is missing or ambiguous"; shutil.copy2(dlls[0], "windows-r-toolchain/yamaa.dll")'
           fi
+      - name: Report installed R public benchmark conformance
+        if: ${{ always() && steps.r_install.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/native-r-library
+          PUBLIC_CONFORMANCE_PACKAGE_FORM: source
+        run: |
+          python -m pip install py-yaml12==0.2.0 pyarrow==25.0.1
+          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" plan \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
+          Rscript --vanilla "${GITHUB_WORKSPACE}/rust/tests/test_public_conformance.R" \
+            "${GITHUB_WORKSPACE}/rust/tests/public_conformance.R"
+          Rscript --vanilla "${GITHUB_WORKSPACE}/rust/tests/public_conformance.R" \
+            public-conformance-plan "${GITHUB_WORKSPACE}/benchmarks" public-conformance/observed \
+            "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)"
+          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" compare \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
+            --output public-conformance/inventory.json
+      - name: Preserve R public benchmark inventory and saved artifacts
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: public-conformance-r-${{ matrix.os }}
+          path: ${{ runner.temp }}/public-conformance
+          if-no-files-found: error
+      - name: Run installed R supplemental suites outside checkout
+        if: ${{ always() && steps.r_install.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}
+        run: |
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_builds.R" producer_builds.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_producers.R" public_producers.R
