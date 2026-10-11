@@ -20,7 +20,7 @@ carried alongside. An untreated subject appears in ADSL with an empty
 
 - `TEENDDTM` is the end of the treatment-emergent window: 30 days
   after last exposure.
-- `TRTEMFL` holds `Y` when the event started inside the window —
+- `TRTEMFL` holds `Y` when the event started inside the window  - 
   at or after first exposure and at or before the window end. It
   stays empty for an earlier or later event. A missing onset cannot
   be ruled pre-treatment, so the conservative convention flags it
