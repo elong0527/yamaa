@@ -152,6 +152,16 @@ class NativeAudit(unittest.TestCase):
             any(c["result"] == "missing" for r in record["lanes"] for c in r["checks"])
         )
 
+    def test_artifact_directory_without_metadata_is_recorded_as_missing(self):
+        directory = Path(self.temporary.name) / "artifact-only"
+        directory.mkdir()
+        record = audit.Audit(directory).collect()
+        self.assertEqual(len(record["lanes"]), 97)
+        self.assertFalse(record["complete"])
+        self.assertIsNone(record["source"]["sha"])
+        self.assertFalse(any(row["result"] == "pass" for row in record["lanes"]))
+        self.assertTrue(all(check["result"] == "missing" for check in record["checks"]))
+
     def test_historical_windows_r_job_failure_cannot_be_upgraded(self):
         record = self.auditor.collect()
         windows = next(
@@ -303,6 +313,8 @@ class NativeAudit(unittest.TestCase):
                     "source_revision": self.auditor.source["sha"],
                     "evidence": self.auditor.run["html_url"],
                     "artifact_reference": f"github-actions:38161000385/attempt-1/{artifact}/authored-package",
+                    "host_package_version": "0.3.0",
+                    "core_version": "0.1.0",
                 }
             )
             report = (
@@ -317,6 +329,19 @@ class NativeAudit(unittest.TestCase):
                     "example": "shared-producer-parquet",
                     "runtime": runtime,
                     "backend": backend,
+                    "report_version": "0.3.0-draft",
+                    "outcome": "success",
+                    "error": None,
+                    "engine_version": "0.3.0" if backend == "python" else "0.1.0",
+                    "nodes": [],
+                    "tables": [],
+                    "verifications": [],
+                    "callbacks": [],
+                    "source_reads": [],
+                    "artifacts": [],
+                    "diagnostics": [],
+                    "unsupported": [],
+                    "handler_counts": [],
                 },
             )
         audit.write(

@@ -206,15 +206,44 @@ def snapshot(repository, run_id, destination):
 class Audit:
     def __init__(self, directory):
         self.directory = directory
-        self.run = read(directory / "run.json")
-        self.source = read(directory / "source.json")
-        self.jobs = read(directory / "jobs.json")
-        self.artifacts = read(directory / "artifacts.json")
+        self.global_checks = []
+        defaults = {
+            "run.json": {
+                "id": None,
+                "head_sha": None,
+                "head_branch": None,
+                "event": None,
+                "run_attempt": None,
+                "path": None,
+                "status": "unavailable",
+                "conclusion": None,
+                "html_url": None,
+            },
+            "source.json": {"sha": None, "parents": []},
+            "jobs.json": [],
+            "artifacts.json": [],
+        }
+        values = {}
+        for name, default in defaults.items():
+            path = directory / name
+            if path.is_file():
+                values[name] = read(path)
+            else:
+                values[name] = default
+                self.global_checks.append(
+                    {
+                        "name": name,
+                        "result": "missing",
+                        "detail": "snapshot metadata unavailable: " + name,
+                    }
+                )
+        self.run, self.source = values["run.json"], values["source.json"]
+        self.jobs, self.artifacts = values["jobs.json"], values["artifacts.json"]
         self.rows = []
         self.packages = {}
         self.math = []
-        self.global_checks = []
-        self.check(self.global_checks, "source", self.check_source)
+        if not self.global_checks:
+            self.check(self.global_checks, "source", self.check_source)
 
     def check_source(self):
         require(
@@ -536,6 +565,8 @@ class Audit:
         return {"host": host, "policy": report["policy"], "observations": len(values)}
 
     def math_comparison(self):
+        if len(self.math) != 9:
+            raise FileNotFoundError("complete nine-host math evidence is unavailable")
         validate_hosts(
             [
                 (
@@ -629,14 +660,53 @@ class Audit:
                 "cohort package bytes missing",
             )
         # Reports are retained under portable names, never read stale absolute paths.
-        report_files = {p.name for p in directory.rglob("*.json")}
-        require(
-            all(
-                f"{name}.{host}.{backend}.json" in report_files
-                for name, (host, backend, _) in expected
-            ),
-            "cohort retained reports missing",
-        )
+        for name, (host, backend, _) in expected:
+            filename = f"{name}.{host}.{backend}.json"
+            paths = list(directory.rglob(filename))
+            require(
+                len(paths) == 1, "cohort retained report missing/duplicate: " + filename
+            )
+            report = read(paths[0])
+            require(
+                (report["example"], report["runtime"], report["backend"])
+                == (name, host, backend),
+                "retained report identity differs",
+            )
+            require(
+                report["report_version"] == "0.3.0-draft"
+                and report["outcome"] in ("success", "failure")
+                and report["error"] is None,
+                "retained report protocol/outcome differs",
+            )
+            batch = next(
+                b
+                for b in inventory["batches"]
+                if (b["runtime"], b["backend"]) == (host, backend)
+            )
+            version_key = (
+                "host_package_version" if backend == "python" else "core_version"
+            )
+            require(
+                report["engine_version"] == batch[version_key],
+                "retained report engine version differs from installed batch",
+            )
+            require(
+                all(
+                    isinstance(report[k], list)
+                    for k in (
+                        "nodes",
+                        "tables",
+                        "verifications",
+                        "callbacks",
+                        "source_reads",
+                        "artifacts",
+                        "diagnostics",
+                        "unsupported",
+                        "handler_counts",
+                    )
+                ),
+                "retained complete report observations missing",
+            )
         if producer:
             comparisons = read(directory / "complete-comparisons.json")
             require(
@@ -974,11 +1044,15 @@ def main(argv=None):
     args = parser.parse_args(argv)
     require(not args.output.exists(), "output must be a fresh evidence directory")
     args.output.mkdir(parents=True)
-    directory = (
-        snapshot(args.repository, args.run_id, args.output / "input")
-        if args.run_id
-        else args.input
-    )
+    directory = args.input if args.input else args.output / "input"
+    if args.run_id:
+        try:
+            snapshot(args.repository, args.run_id, directory)
+        except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+            write(
+                directory / "download-errors.json",
+                [{"stage": "metadata/source snapshot", "error": str(exc)}],
+            )
     record = Audit(directory).collect()
     write(args.output / "qualification.json", record)
     (args.output / "qualification.md").write_text(markdown(record), encoding="utf-8")

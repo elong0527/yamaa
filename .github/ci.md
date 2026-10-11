@@ -91,7 +91,9 @@ To replay downloaded evidence without network access, pass the retained `input`
 directory using `--input /tmp/yamaa-native-audit/input` and another fresh
 `--output`. This snapshot contains `run.json`, `source.json`, `jobs.json`,
 `artifacts.json`, canonical files under `source/`, and artifact directories under
-`artifacts/` using their Actions artifact names. `--check` returns failure for
+`artifacts/` using their Actions artifact names. An artifact-only directory also produces a
+record: missing metadata and exact source remain unavailable, and no tuple can
+pass. `--check` returns failure for
 failed or missing evidence after writing both records; omit it for a report-only
 local audit. API artifact digest fields are discarded, and package checks compare
 actual archive and wheel bytes.
