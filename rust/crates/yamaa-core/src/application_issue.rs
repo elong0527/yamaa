@@ -53,3 +53,19 @@ pub fn rejected(stage: &str, code: &str) -> Diagnostic {
         operand_route: None,
     }
 }
+
+/// A classified failure during the actual atomic publication request. Target
+/// admission refusals and opaque interrupts do not establish this cause.
+pub fn publication_failed(target: &str) -> Diagnostic {
+    Diagnostic {
+        code: ConditionCode::OutputPublicationFailed,
+        spec_paths: vec!["output.path".into()],
+        context: [(
+            String::from("path"),
+            ContextValue::Scalar(Value::Str(target.into())),
+        )]
+        .into(),
+        source_span: None,
+        operand_route: None,
+    }
+}

@@ -113,6 +113,8 @@ pub mod producer_check;
 mod producer_diagnostics;
 pub mod producer_graph;
 #[cfg(any(unix, windows))]
+pub mod producer_publication;
+#[cfg(any(unix, windows))]
 pub mod producer_report;
 #[cfg(any(unix, windows))]
 pub mod producer_result;

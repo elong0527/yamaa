@@ -372,6 +372,269 @@ fn prepared() -> build::PreparedBuild {
     .into_build()
 }
 
+fn publication_diamond() -> build::PreparedBuild {
+    let leaf = document(&[("RAW", None)], Some("beta"));
+    let left = document(&[("FIRST", Some("/p"))], None);
+    let right = document(&[("FIRST", Some("/p"))], None);
+    let root = document(
+        &[("FIRST", Some("/left")), ("SECOND", Some("/right"))],
+        Some("alpha"),
+    );
+    let roots = [
+        candidate("/root", "FIRST", "/left", &left),
+        candidate("/root", "SECOND", "/right", &right),
+    ];
+    let lefts = [candidate("/left", "FIRST", "/p", &leaf)];
+    let rights = [candidate("/right", "FIRST", "/p", &leaf)];
+    yamaa_engine::producer_graph::check(
+        "/root",
+        &[
+            node("/root", &root, &roots),
+            node("/left", &left, &lefts),
+            node("/right", &right, &rights),
+            node("/p", &leaf, &[]),
+        ],
+        environment(&["beta", "unused", "alpha"]),
+        Default::default(),
+    )
+    .unwrap()
+    .into_build()
+}
+struct Publication {
+    calls: Vec<String>,
+    writes: Vec<usize>,
+    failure: Option<usize>,
+    interrupt: bool,
+    unwind: Option<usize>,
+    original: Rc<()>,
+    payload: Arc<()>,
+    preflight_failure: bool,
+}
+impl Publication {
+    fn new() -> Self {
+        Self {
+            calls: vec![],
+            writes: vec![],
+            failure: None,
+            interrupt: false,
+            unwind: None,
+            original: Rc::new(()),
+            payload: Arc::new(()),
+            preflight_failure: false,
+        }
+    }
+}
+impl yamaa_engine::producer_publication::PublicationPort for Publication {
+    type Error = Payload;
+    fn preflight(
+        &mut self,
+        artifacts: &[yamaa_engine::producer_publication::Artifact],
+    ) -> Result<(), Payload> {
+        self.calls.push("preflight".into());
+        assert!(artifacts.iter().all(|a| a.bytes() == b"ID,VALUE\n1,1\n"));
+        if self.preflight_failure {
+            Err(Payload {
+                original: Rc::clone(&self.original),
+                interrupt: self.interrupt,
+            })
+        } else {
+            Ok(())
+        }
+    }
+    fn publish(
+        &mut self,
+        artifact: &yamaa_engine::producer_publication::Artifact,
+    ) -> Result<(), Payload> {
+        let node = artifact.node();
+        self.calls.push(format!("publish:{node}"));
+        assert_eq!(artifact.path(), "produced.csv");
+        assert_eq!(artifact.bytes(), b"ID,VALUE\n1,1\n");
+        if self.unwind == Some(node) {
+            std::panic::panic_any(Arc::clone(&self.payload));
+        }
+        if self.failure == Some(node) {
+            return Err(Payload {
+                original: Rc::clone(&self.original),
+                interrupt: self.interrupt,
+            });
+        }
+        self.writes.push(node);
+        Ok(())
+    }
+}
+#[test]
+fn actual_build_seals_aliases_and_diamond_order_without_any_build_publication_or_save_replay() {
+    for (build, order) in [
+        (prepared(), vec![1, 0]),
+        (publication_diamond(), vec![3, 1, 2, 0]),
+    ] {
+        let mut ports = Ports::new();
+        let mut evidence = Attempt::default();
+        let held = build
+            .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+            .unwrap();
+        assert_eq!(ports.study.reads, 1);
+        let build_events = ports.activation.trace.borrow().clone();
+        assert!(!build_events.iter().any(|e| e.starts_with("publish")));
+        assert_eq!(
+            held.artifacts()
+                .iter()
+                .map(|a| a.node())
+                .collect::<Vec<_>>(),
+            order
+        );
+        // Mutable caller evidence is not publication authority and cannot change
+        // any privately held request, even after the prepared owner drops.
+        evidence.nodes.clear();
+        drop(build);
+        let mut publisher = Publication::new();
+        let mut saved = Default::default();
+        for _ in 0..2 {
+            held.save_into(&mut publisher, Default::default(), &mut saved);
+            assert!(saved.outcome.is_ok());
+            assert_eq!(
+                saved
+                    .entered
+                    .iter()
+                    .map(|n| (n.node, n.published))
+                    .collect::<Vec<_>>(),
+                order.iter().map(|&n| (n, true)).collect::<Vec<_>>()
+            );
+        }
+        assert_eq!(publisher.writes, order.repeat(2));
+        assert_eq!(*ports.activation.trace.borrow(), build_events);
+    }
+}
+#[test]
+fn every_save_failure_and_interrupt_keeps_original_and_actual_prefix_and_prior_writes() {
+    use yamaa_engine::producer_publication::Failure as SaveFailure;
+    for failed in [3, 1, 0] {
+        for interrupt in [false, true] {
+            let mut ports = Ports::new();
+            let mut evidence = Attempt::default();
+            let held = publication_diamond()
+                .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+                .unwrap();
+            let build_events = ports.activation.trace.borrow().clone();
+            let mut publisher = Publication::new();
+            publisher.failure = Some(failed);
+            publisher.interrupt = interrupt;
+            let mut saved = Default::default();
+            held.save_into(&mut publisher, Default::default(), &mut saved);
+            let order = [3, 1, 2, 0];
+            let position = order.iter().position(|&n| n == failed).unwrap();
+            assert_eq!(
+                saved
+                    .entered
+                    .iter()
+                    .map(|n| (n.node, n.published))
+                    .collect::<Vec<_>>(),
+                order[..=position]
+                    .iter()
+                    .map(|&n| (n, n != failed))
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(publisher.writes, order[..position]);
+            assert!(
+                matches!(&saved.outcome,Err(SaveFailure::Publish {node,error}) if *node==failed && Rc::ptr_eq(&error.original,&publisher.original) && error.interrupt==interrupt)
+            );
+            publisher.failure = None;
+            held.save_into(&mut publisher, Default::default(), &mut saved);
+            assert!(saved.outcome.is_ok());
+            assert_eq!(*ports.activation.trace.borrow(), build_events);
+            assert!(evidence.outcome.is_ok() && evidence.nodes.len() == 4);
+        }
+    }
+}
+#[test]
+fn save_unwind_and_whole_set_preflight_refusal_preserve_the_actual_evidence_without_replay() {
+    use yamaa_engine::producer_publication::Failure as SaveFailure;
+    let mut ports = Ports::new();
+    let mut evidence = Attempt::default();
+    let held = publication_diamond()
+        .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+        .unwrap();
+    let mut publisher = Publication::new();
+    publisher.unwind = Some(2);
+    let mut saved = Default::default();
+    let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        held.save_into(&mut publisher, Default::default(), &mut saved)
+    }))
+    .unwrap_err();
+    assert!(Arc::ptr_eq(
+        payload.downcast_ref::<Arc<()>>().unwrap(),
+        &publisher.payload
+    ));
+    assert_eq!(
+        saved
+            .entered
+            .iter()
+            .map(|n| (n.node, n.published))
+            .collect::<Vec<_>>(),
+        [(3, true), (1, true), (2, false)]
+    );
+    assert!(matches!(saved.outcome, Err(SaveFailure::Incomplete)));
+    assert_eq!(publisher.writes, [3, 1]);
+    publisher.calls.clear();
+    publisher.preflight_failure = true;
+    held.save_into(&mut publisher, Default::default(), &mut saved);
+    assert!(saved.entered.is_empty());
+    assert_eq!(publisher.calls, ["preflight"]);
+    assert!(
+        matches!(&saved.outcome,Err(SaveFailure::Preflight(e)) if Rc::ptr_eq(&e.original,&publisher.original))
+    );
+}
+#[test]
+fn cumulative_save_quotas_and_failed_actual_build_never_cross_publication_ports() {
+    use yamaa_engine::producer_publication::{Failure as SaveFailure, Limits as SaveLimits};
+    let build = publication_diamond();
+    let mut ports = Ports::new();
+    let mut evidence = Attempt::default();
+    let held = build
+        .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+        .unwrap();
+    for limits in [
+        SaveLimits {
+            nodes: 3,
+            ..Default::default()
+        },
+        SaveLimits {
+            path_bytes: 47,
+            ..Default::default()
+        },
+        SaveLimits {
+            artifact_bytes: 51,
+            ..Default::default()
+        },
+        SaveLimits {
+            work: 3,
+            ..Default::default()
+        },
+    ] {
+        let mut publisher = Publication::new();
+        let mut saved = Default::default();
+        held.save_into(&mut publisher, limits, &mut saved);
+        assert!(publisher.calls.is_empty() && saved.entered.is_empty());
+        assert!(matches!(saved.outcome, Err(SaveFailure::Limit(_))));
+    }
+    // Forged caller success is discarded on actual failed activation.
+    ports.activation.mode = Mode::Lock;
+    evidence.outcome = Ok(());
+    assert!(build
+        .build_publication_into(ports.borrow(), Default::default(), &mut evidence)
+        .is_err());
+    assert!(evidence.nodes.is_empty());
+    assert!(matches!(evidence.outcome, Err(Failure::Activation(_))));
+    ports.activation.mode = Mode::Pass;
+    let mut limits = build::Limits::default();
+    limits.publication.artifact_bytes = 51;
+    assert!(matches!(
+        build.build_publication_into(ports.borrow(), limits, &mut evidence),
+        Err("producer_publication_bytes")
+    ));
+    assert!(evidence.outcome.is_ok() && evidence.nodes.len() == 4);
+}
+
 #[test]
 fn whole_union_activates_before_study_and_two_aliases_ingest_one_producer_artifact_arc() {
     let build = prepared();

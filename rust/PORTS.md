@@ -87,6 +87,32 @@ engine's actual handler counts, including inherited named-selection handlers.
 
 ## Output lifecycle
 
+The bounded original-YAML producer route builds the complete graph in memory.
+Its consumers ingest the producer's retained serialized artifact, including CSV
+reporting precision, and public root output keeps its original table precision.
+Build writes no artifacts. Explicit Save preflights the complete target set, then
+publishes held bytes in producer-before-consumer order without recapturing inputs,
+reencoding artifacts, rerunning activation or invoking functions.
+
+`producer_publication::PreparedPublication` has no public constructor. Only the
+actual completed engine build creates it; the native adapter seals that capability
+beside immutable complete build evidence. Caller-authored public attempt records
+remain evidence and cannot gain Save authority. Report and root-output projection
+must finish before the host result can expose Save. Cumulative node, path, held-byte
+and work limits, duplicate normalized targets and publication-report admission are
+checked before the first write.
+Native target admission reserves both retained canonical path copies before
+resolving locations. Windows duplicate-target comparison uses the transport's
+ordinal case-insensitive equality, including targets that do not yet exist.
+
+Each Save retains its actual entered prefix, including the failing call, and the
+original publication error or unwind. A failure stops later dependent writes;
+earlier successful writes and the completed build remain. Repeating Save clears
+only the previous publication result and repeats publication from the same bytes.
+This qualifies the original rounded CSV alias/diamond fixture; general workflows,
+other codec combinations, sidecar publication and concurrent Save remain separate
+migration work.
+
 Building can now stop before publication and return an owned result.
 `specification_output::prepare` checks the output declaration, resolves the
 projection, bounds encoding and prepares observations without accepting any

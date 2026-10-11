@@ -92,6 +92,291 @@ const PRODUCER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [I
 const CONSUMER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\nintermediates: [{id: SECOND_REFERENCE, dataset: SECOND, no_match: null}]\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n  - {name: VALUE, type: float, label: Reported value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\noutput: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}\n";
 
 #[test]
+fn sealed_native_save_keeps_original_held_bytes_after_sources_change_and_other_owners_drop() {
+    use yamaa_adapters::producer_result::prepare_owned_classified;
+    for language in [Language::Python, Language::R] {
+        let study = Study::new();
+        study.rounded();
+        fs::create_dir(study.0.join("generated")).unwrap();
+        let mut build = study.build(language);
+        let mut activation = Activation::new(&study, Mode::Pass);
+        let owned = build.build_owned_reported(&mut activation, report_id(), Limits::default());
+        let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+        let before = result.observations().clone();
+        let output = result.output().unwrap().to_vec();
+        let events = activation.trace.clone();
+        assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+        study.write("raw/raw.csv", b"ID,VALUE\n1,99.99\n");
+        fs::remove_dir_all(study.0.join("producer")).unwrap();
+        fs::remove_dir_all(study.0.join("consumer")).unwrap();
+        fs::remove_dir_all(study.0.join("raw")).unwrap();
+        drop(build);
+        for _ in 0..2 {
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read(study.0.join("generated/producer.csv")).unwrap(),
+                b"ID,VALUE\n1,1.23\n2,2.35\n"
+            );
+            assert_eq!(
+                fs::read(study.0.join("generated/root.csv")).unwrap(),
+                b"ID,VALUE\n1,2.46\n2,4.70\n"
+            );
+            assert_eq!(
+                result.observations()["publication"],
+                serde_json::json!({"status":"success","entered":[{"node":1,"published":true},{"node":0,"published":true}],"error":null})
+            );
+            assert_eq!(result.output().unwrap(), output);
+            assert!(result.issues().is_empty());
+            let mut report = result.observations().clone();
+            report.as_object_mut().unwrap().remove("publication");
+            assert_eq!(report, before);
+            assert_eq!(activation.trace, events);
+        }
+        assert!(owned.accepted());
+        assert_eq!(owned.graph.nodes.len(), 2);
+    }
+}
+#[test]
+fn authored_public_success_evidence_and_failed_owned_graph_never_obtain_save_authority() {
+    use yamaa_adapters::{
+        producer_report::NativeAttempt,
+        producer_result::{prepare_classified, prepare_owned_classified},
+    };
+    let study = Study::new();
+    study.rounded();
+    fs::create_dir(study.0.join("generated")).unwrap();
+    let mut build = study.build(Language::Python);
+    let mut activation = Activation::new(&study, Mode::Pass);
+    let actual = build.build_reported(&mut activation, report_id(), Default::default());
+    // Every field is deliberately public evidence: a caller can author this
+    // success, but that construction cannot create the private OwnedAttempt.
+    let authored = NativeAttempt {
+        provenance: Arc::clone(&actual.provenance),
+        boundary: Ok(()),
+        graph: actual.graph,
+        resources: actual.resources,
+    };
+    let mut result = prepare_classified(&authored, report_id(), 16_777_216, &[]).unwrap();
+    assert!(result.output().is_some());
+    assert!(result.save().is_err());
+    let limits = Limits {
+        evidence_aliases: 0,
+        ..Default::default()
+    };
+    let failed = build.build_owned_reported(&mut activation, report_id(), limits);
+    assert!(!failed.accepted());
+    assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+    assert!(prepare_owned_classified(&failed, report_id(), 16_777_216, &[]).is_err());
+}
+#[test]
+fn whole_set_invalid_target_and_duplicate_normalized_alias_refuse_every_write() {
+    use yamaa_adapters::producer_result::prepare_owned_classified;
+    for duplicate in [false, true] {
+        let study = Study::new();
+        study.rounded();
+        fs::create_dir(study.0.join("generated")).unwrap();
+        if duplicate {
+            study.write(
+                "consumer/root.yaml",
+                CONSUMER.replace("../generated/root.csv", "../generated/dir/../producer.csv"),
+            );
+        } else {
+            fs::create_dir(study.0.join("generated/root.csv")).unwrap();
+        }
+        let mut build = study.build(Language::Python);
+        let mut activation = Activation::new(&study, Mode::Pass);
+        let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+        assert!(owned.accepted());
+        let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+        assert!(!result.save().unwrap());
+        assert!(!study.0.join("generated/producer.csv").exists());
+        assert!(result
+            .publication_attempt()
+            .unwrap()
+            .entered
+            .entered
+            .is_empty());
+        assert_eq!(result.observations()["outcome"], "success");
+        assert!(result.output().is_some());
+        assert_eq!(
+            result.observations()["publication"]["entered"],
+            serde_json::json!([])
+        );
+    }
+}
+#[test]
+fn native_save_admits_cumulative_limits_and_whole_report_before_first_write() {
+    use yamaa_adapters::producer_result::prepare_owned_classified;
+    use yamaa_engine::producer_publication::{Failure as SaveFailure, Limits as SaveLimits};
+    let study = Study::new();
+    study.rounded();
+    fs::create_dir(study.0.join("generated")).unwrap();
+    let mut build = study.build(Language::Python);
+    let mut activation = Activation::new(&study, Mode::Pass);
+    let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+    let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+    let first = owned.graph.nodes[0]
+        .output
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .artifact()
+        .unwrap();
+    for limits in [
+        SaveLimits {
+            nodes: 1,
+            ..Default::default()
+        },
+        SaveLimits {
+            artifact_bytes: first.bytes().len(),
+            ..Default::default()
+        },
+        SaveLimits {
+            path_bytes: first.path().len(),
+            ..Default::default()
+        },
+        SaveLimits {
+            work: 2,
+            ..Default::default()
+        },
+    ] {
+        assert!(!result.save_with_limits(limits, 16_777_216).unwrap());
+        let saved = result.publication_attempt().unwrap();
+        assert!(saved.entered.entered.is_empty());
+        assert!(matches!(saved.entered.outcome, Err(SaveFailure::Limit(_))));
+        assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+    }
+    assert!(!result.save_with_limits(Default::default(), 1).unwrap());
+    assert!(result.publication_attempt().is_none());
+    assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+    assert!(result.save().unwrap());
+    assert!(result.issues().is_empty());
+}
+#[test]
+fn canonical_target_path_quota_refuses_before_target_ownership_and_every_write() {
+    use yamaa_adapters::producer_result::prepare_owned_classified;
+    let study = Study::new();
+    study.rounded();
+    fs::create_dir(study.0.join("generated")).unwrap();
+    let mut build = study.build(Language::Python);
+    let mut activation = Activation::new(&study, Mode::Pass);
+    let mut limits = Limits::default();
+    // Enough for the engine's two held authored paths, insufficient for the
+    // adapter's complete authored+canonical target ownership admission.
+    limits.engine.publication.path_bytes = 128;
+    let owned = build.build_owned_reported(&mut activation, report_id(), limits);
+    assert!(owned.accepted());
+    let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+    assert!(!result.save().unwrap());
+    assert_eq!(result.observations()["outcome"], "success");
+    assert_eq!(
+        result.observations()["publication"]["error"]["code"],
+        "producer_publication_paths"
+    );
+    assert!(result
+        .publication_attempt()
+        .unwrap()
+        .entered
+        .entered
+        .is_empty());
+    assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+}
+#[cfg(windows)]
+#[test]
+fn absent_windows_case_alias_targets_refuse_before_every_write() {
+    use yamaa_adapters::producer_result::prepare_owned_classified;
+    let study = Study::new();
+    study.rounded();
+    study.write(
+        "consumer/root.yaml",
+        CONSUMER.replace("../generated/root.csv", "../generated/PRODUCER.csv"),
+    );
+    fs::create_dir(study.0.join("generated")).unwrap();
+    let mut build = study.build(Language::Python);
+    let mut activation = Activation::new(&study, Mode::Pass);
+    let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+    assert!(owned.accepted());
+    let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+    assert!(!result.save().unwrap());
+    assert_eq!(
+        result.observations()["publication"]["error"]["code"],
+        "target_admission"
+    );
+    assert!(result
+        .publication_attempt()
+        .unwrap()
+        .entered
+        .entered
+        .is_empty());
+    assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+    assert!(result.output().is_some());
+}
+#[cfg(unix)]
+#[test]
+fn actual_late_consumer_publication_failure_keeps_producer_bytes_original_io_and_completed_build() {
+    use rustix::fs::{self as unix, FlockOperation, Mode as OpenMode, OFlags};
+    use yamaa_adapters::producer_result::prepare_owned_classified;
+    use yamaa_engine::producer_publication::Failure as SaveFailure;
+    let study = Study::new();
+    study.rounded();
+    study.write(
+        "consumer/root.yaml",
+        CONSUMER.replace("../generated/root.csv", "../published/root.csv"),
+    );
+    fs::create_dir(study.0.join("generated")).unwrap();
+    study.write("published/root.csv", b"previous consumer bytes");
+    let mut build = study.build(Language::Python);
+    let mut activation = Activation::new(&study, Mode::Pass);
+    let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+    let events = activation.trace.clone();
+    let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+    let before = result.observations().clone();
+    let lock = unix::open(
+        study.0.join("published"),
+        OFlags::RDONLY | OFlags::DIRECTORY,
+        OpenMode::empty(),
+    )
+    .unwrap();
+    unix::flock(&lock, FlockOperation::NonBlockingLockExclusive).unwrap();
+    assert!(!result.save().unwrap());
+    assert_eq!(
+        fs::read(study.0.join("generated/producer.csv")).unwrap(),
+        b"ID,VALUE\n1,1.23\n2,2.35\n"
+    );
+    assert_eq!(
+        fs::read(study.0.join("published/root.csv")).unwrap(),
+        b"previous consumer bytes"
+    );
+    let saved = result.publication_attempt().unwrap();
+    assert_eq!(
+        saved
+            .entered
+            .entered
+            .iter()
+            .map(|n| (n.node, n.published))
+            .collect::<Vec<_>>(),
+        [(1, true), (0, false)]
+    );
+    assert!(
+        matches!(&saved.entered.outcome,Err(SaveFailure::Publish {node:0,error}) if matches!(&error.error,yamaa_adapters::file_publication::Error::Io(e) if e.kind()==std::io::ErrorKind::WouldBlock))
+    );
+    assert!(result.issues().iter().any(
+        |i| i.condition == "publication_failed" && i.requirement.as_deref() == Some("REQ-0764")
+    ));
+    assert!(owned.accepted());
+    assert_eq!(owned.graph.nodes.len(), 2);
+    assert!(result.output().is_some());
+    unix::flock(&lock, FlockOperation::Unlock).unwrap();
+    assert!(result.save().unwrap());
+    assert!(result.issues().is_empty());
+    let mut report = result.observations().clone();
+    report.as_object_mut().unwrap().remove("publication");
+    assert_eq!(report, before);
+    assert_eq!(activation.trace, events);
+}
+
+#[test]
 fn whole_graph_report_views_keep_original_document_and_plan_together() {
     use yamaa_adapters::specification_run_view::RunView;
     let study = Study::new();
