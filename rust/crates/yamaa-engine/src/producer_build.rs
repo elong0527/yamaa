@@ -573,19 +573,30 @@ impl<P: StudyPort, D, T: TableAccess, R, RE, CE> SourcePort for Sources<'_, P, D
         source: &SourceDeclaration,
         maximum: usize,
     ) -> Result<Arc<[u8]>, Self::Error> {
+        self.capture_observed(source, maximum, &mut None)
+    }
+    fn capture_observed(
+        &mut self,
+        source: &SourceDeclaration,
+        maximum: usize,
+        origin: &mut Option<run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, Self::Error> {
         let maximum = maximum.min(*self.bytes_left);
         let bytes = match self.producer(source)? {
             Some(producer) => {
+                *origin = Some(run::SourceOrigin::Generated);
                 let artifact = self.artifact(producer)?;
                 if artifact.bytes().len() > maximum {
                     return Err(CaptureError::Limit("producer_source_bytes"));
                 }
                 artifact.retained_bytes()
             }
-            None => self
-                .external
-                .capture(self.node, source, maximum)
-                .map_err(CaptureError::External)?,
+            None => {
+                *origin = Some(run::SourceOrigin::Resource);
+                self.external
+                    .capture(self.node, source, maximum)
+                    .map_err(CaptureError::External)?
+            }
         };
         if bytes.len() > maximum {
             return Err(CaptureError::Limit("producer_source_bytes"));

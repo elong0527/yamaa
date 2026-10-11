@@ -25,14 +25,16 @@ class Domain:
 
     @property
     def verification_log(self) -> pl.DataFrame | None:
-        return None
+        data = self._native.log(False)
+        return None if data is None else pl.read_ipc_stream(data)
 
     @property
     def warning_log(self) -> pl.DataFrame | None:
-        return None
+        data = self._native.log(True)
+        return None if data is None else pl.read_ipc_stream(data)
 
     def save(self) -> bool:
-        """Publish the declared artifact; a failed build raises DomainError."""
+        """Publish held logs and output; a failed build raises DomainError."""
         return self._native.save()
 
 

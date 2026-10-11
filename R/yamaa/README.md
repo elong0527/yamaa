@@ -9,6 +9,8 @@ library(yamaa)
 result <- yamaa_domain("spec.yaml")
 result$output
 result$issues
+result$verification_log
+result$warning_log
 result$save()
 yamaa_check("spec.yaml")$issues
 ```
@@ -22,9 +24,16 @@ Dates use Date and datetimes use POSIXct with UTC. Checks read no study data or
 project code. Document paths use their original declaring YAML layer under
 the approved [local-path policy](../../rules/storage/resources.md).
 
-Environment activation, declared logs, complete benchmark coverage and the final
-release surface remain unqualified. Component interfaces below are retained for
-migration qualification; their presence is not a final release API promise.
+Declared verification/warning logs are fresh owned data frames. Build never
+writes them. Explicit Save preflights all targets and publishes verification,
+warning and primary bytes in order. A failed build may retain a verification log;
+its explicit Save publishes that diagnostic sidecar and still raises the
+failed-build error. Repeated Save uses the same held bytes.
+
+The declaring-file path policy retains original output locations. Producer graphs
+with declared logs remain explicitly refused until their ordered sidecars qualify.
+Broader language, API and release qualification remain open. Retained reference
+helpers continue independent migration assessment.
 
 Stage the shared sources before building this repository template. Staging
 copies the canonical `rust/Cargo.lock` and workspace manifest without changes;
