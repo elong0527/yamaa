@@ -422,3 +422,24 @@ YAML scanner rules, report/log projection, producer facades and filesystem polic
 are not part of this move. Inheritance callback component probes remain pending
 retirement under #1751; this application service does not qualify their API as a
 permanent public surface or close the remaining #1754 acceptance gates.
+
+`schema_capture::admit` owns admission of the complete captured schema closure
+before any physical decoding. The default root retains its existing absence of a
+separate root-name charge; a named root checks that text before module admission.
+Module count then per-source captured bytes and identity text are admitted in
+supplied order, with bytes checked first. Each module is decoded once through a
+physical codec port. Only after every physical decode succeeds does unchanged
+core bundle admission resolve entry/module/include/descriptor semantics. The
+original source snapshots, decoded arenas and occurrence locations move into the
+admitted closure without replacement; defaults retain their original module and
+descriptor provenance and keep their later normalization gate.
+
+This service does not resolve files or scan YAML. Codec limits and the guarantee
+that occurrence locations address the exact decoded arena remain codec authority.
+Original opaque codec payloads move without Clone, Debug, Send or Sync requirements.
+The adapter retains its public CapturedSchema/Source/Error shapes and only maps
+closed resource categories and physical decoding. Default resource policies and
+configured larger module capacities remain unchanged; there is no new source
+ceiling or retry. Standalone/class normalization, lifecycle selection and authored
+origin helpers remain separate migration work, as do native alias/cache/entry-base
+policy and component probe retirement. This slice does not close #1754.
