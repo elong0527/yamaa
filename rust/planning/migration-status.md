@@ -1,7 +1,7 @@
 # yamaa Rust engine migration
 
 Assessed 2026-10-11 against main
-`976c38b27c6fd7dbb33e6f03bbb219a9596ed21c`. This is a progress record for
+`09d8f2cbb1eadab3f15919c658d3adb6c0215833`. This is a progress record for
 [#1585](https://github.com/elong0527/yamaa/issues/1585), with qualified merged
 changes separated from candidates still awaiting their final gates. It does not
 authorize release cutover.
@@ -31,12 +31,19 @@ percentages. See the [finite release blocker register](release-readiness.md) and
 | [#1927](https://github.com/elong0527/yamaa/pull/1927) | Retained producer-first Save, whole-set physical target admission, exact entered/completed publication prefixes and retries after input deletion pass local package and failure controls. Full hosted matrix audit remains pending. |
 | [#1936](https://github.com/elong0527/yamaa/pull/1936) | Typed resource origins separate actual study reads from generated producer snapshots. Independent original producer Build plus two complete Save comparisons pass in both local Python forms and R against preserved pre-fix report/artifact truth. The checked R deletion follow-up is recorded separately from the original package revision; fresh hosted qualification remains pending. #1741 stays open. |
 | [#1925](https://github.com/elong0527/yamaa/pull/1925) | Shared Define-XML/Dataset-JSON generation passes fresh local wheel/source/R qualification, strict R checks, immutable source-fixture closure, fixed-time DM truth and independently authored AE/VS structure/XSD checks. The final hosted matrix remains pending. Value metadata and old-format retirement remain #1758. |
-| [#1933](https://github.com/elong0527/yamaa/pull/1933) | Governed verification/warning logs retain native records and held bytes through ordered Save. Review corrections preserve the original no-log output-projection failure and pair platform access with result state. The actual before/after failure control and full corrected-head native tests pass; final corrected-head package and hosted gates remain pending. Producer-graph sidecars remain a separate integration. |
+| [#1933](https://github.com/elong0527/yamaa/pull/1933) | Governed verification/warning logs retain native records and held bytes through ordered Save. Review corrections preserve the original no-log output-projection failure and pair platform access with result state. The corrected head passes 1,204 debug/release native tests, fresh wheel/source/R suites, strict R checks and complete package-byte audits. An actual unpacked-source executable passes seven log tests, refuses the missing bundled input, and passes after restoration. Final hosted gates remain pending; producer-graph sidecars remain a separate integration. |
 | [#1912](https://github.com/elong0527/yamaa/pull/1912) | Actual Windows R 4.6.1 source install, native file ports, strict package checks and complete baseline reports have retained evidence. The final combined Save/producer/log/Define source is being integrated and must pass all eighteen Python lanes, three R source lanes, complete public/producer reports and DLL/source-byte audits before #1903 closes. |
 
 Parallel remaining compiler, function-port and diagnostic slices are under
 review. Candidate code and local prototypes do not update the qualified main
 frontier or turn missing release tuples into passes.
+
+The later main changes [#1924](https://github.com/elong0527/yamaa/pull/1924)
+and [#1921](https://github.com/elong0527/yamaa/pull/1921) clarify expression
+nesting and report the actual retained Python YAML parser problem. Both passed
+their required hosted checks; the YAML change also passes 141 specification
+tests and two independent regressions that fail on the prior source. These
+changes preserve the shared Rust implementation frontier above.
 
 ## Remaining acceptance gates
 

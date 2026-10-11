@@ -1,7 +1,7 @@
 # Shared Rust migration implementation order
 
 The concise [current migration assessment](migration-status.md) records the
-qualified implementation frontier and remaining acceptance gates as of 2026-10-10.
+qualified implementation frontier and remaining acceptance gates as of 2026-10-11.
 The historical evidence below retains each slice's original scope and provenance.
 
 The current serial order follows merged #1757/#1858/#1860/#1863/#1867/#1869/#1871/#1874/#1877/#1881/#1883/#1888/#1893/#1897:
