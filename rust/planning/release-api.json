@@ -667,9 +667,11 @@
     "R/yamaa/NAMESPACE": {
       "names": [
         "S3:Ops.yamaa_int64",
+        "S3:Ops.yamaa_int64_vector",
         "S3:Ops.yamaa_utf8",
         "S3:[.yamaa_int64_vector",
         "S3:[.yamaa_utf8_vector",
+        "S3:[[.yamaa_int64_vector",
         "S3:as.character.yamaa_int64",
         "S3:as.character.yamaa_int64_vector",
         "S3:as.character.yamaa_utf8",
@@ -720,6 +722,14 @@
       "issue": "#1751",
       "rationale": "The yamaa package includes the public domain/check candidate; qualification interfaces remain pending removal from the release surface. Full migration coverage and the final public API remain unqualified.",
       "overrides": {
+        "S3:Ops.yamaa_int64_vector": {
+          "disposition": "retain_candidate",
+          "rationale": "Exact Rust scalar comparisons for approved lossless public integer output; remaining vector methods and full release qualification stay open."
+        },
+        "S3:[[.yamaa_int64_vector": {
+          "disposition": "retain_candidate",
+          "rationale": "Retain the approved integer representation and separate missingness on single-element output extraction; full release qualification stays open."
+        },
         "S3:[.yamaa_int64_vector": {
           "disposition": "retain_candidate",
           "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."

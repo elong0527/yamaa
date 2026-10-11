@@ -21,6 +21,11 @@ COHORT = (
     "schema-inheritance",
     "negative-zero-division",
     "negative-integer-overflow",
+    "negative-formula-flag",
+    "negative-row-aggregate",
+    "negative-row-no-prior",
+    "negative-source-missing-field",
+    "negative-source-trivial-filter",
     "schema-verification-log",
 )
 
