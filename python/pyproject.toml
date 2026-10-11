@@ -1,6 +1,7 @@
 [build-system]
 requires = ["maturin==1.9.6"]
-build-backend = "maturin"
+build-backend = "yamaa_build_backend"
+backend-path = ["."]
 
 [project]
 name = "yamaa"
@@ -35,6 +36,8 @@ benchmark = ["yamaa-benchmarks"]
 harbor = ["harbor==0.23.0"]
 
 [tool.maturin]
+locked = true
+include = [{path = "yamaa_build_backend.py", format = "sdist"}]
 bindings = "pyo3"
 module-name = "yamaa._native"
 manifest-path = "../rust/crates/yamaa-python/Cargo.toml"

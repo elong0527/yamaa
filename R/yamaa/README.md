@@ -25,7 +25,10 @@ Environment activation, declared logs, complete benchmark coverage and the final
 release surface remain unqualified. Component interfaces below are retained for
 migration qualification; their presence is not a final release API promise.
 
-Stage the shared sources before building this repository template:
+Stage the shared sources before building this repository template. Staging
+copies the canonical `rust/Cargo.lock` and workspace manifest without changes;
+the package compiles `yamaa-r` with `cargo build --locked`. See
+[the Cargo build contract](../../rust/CARGO_LOCKING.md).
 
 ```sh
 python rust/tools/stage_r_package.py /tmp/yamaa-stage/yamaa
