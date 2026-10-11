@@ -7,7 +7,7 @@ their extensions. Their locations retain the original declaring-file provenance;
 exact and normalized collisions fail before study access (REQ-0756/1180).
 
 Completed native check records determine the fixed governed tables in REQ-0393
-and REQ-1173–1179. Verification rows preserve the evaluated prefix, including held
+and REQ-1173-1179. Verification rows preserve the evaluated prefix, including held
 checks and violations. A warning violation continues execution without becoming
 a fatal issue. Warning rows retain all offending keys, independently of the
 five-key public issue sample. JSON cell text is compact, sorted and ASCII escaped;
