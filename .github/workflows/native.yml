@@ -312,6 +312,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_project_functions.py" installed_project_functions.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_builds.py" installed_producer_builds.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_producers.py" installed_public_producers.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_cohort.py" installed_producer_cohort.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_profile.py" installed_profile.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_dependencies.py" installed_dependencies.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_references.py" installed_references.py
@@ -400,6 +401,7 @@ jobs:
           python -I conformance-suite/qualify_native.py \
             --fixtures conformance-suite/benchmarks --schema conformance-suite/yaml \
             --gates conformance-suite/gates --output "qualification/${FORM}" \
+            --producer-fixtures conformance-suite/gates/producer-cohort \
             --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form "${FORM}" \
             --reference-artifacts reference-dist --native-artifacts native-dist \
             --reference-artifact-prefix "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}" \
@@ -507,6 +509,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/installation.R" installation.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_builds.R" producer_builds.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_producers.R" public_producers.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/producer_cohort.R" producer_cohort.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/scalars.R" scalars.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/functions.R" functions.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/datasets.R" datasets.R
@@ -620,6 +623,11 @@ jobs:
                   --python-evidence "cohort-input/native-qualification-${platform}-${version}-${form}/${form}" \
                   "${r_evidence[@]}" \
                   --output "public-cohort/${platform}/${version}/${form}" --source-revision "${revision}"
+                python -I "${GITHUB_WORKSPACE}/rust/tools/qualify_producer_cohort.py" \
+                  --fixtures "${GITHUB_WORKSPACE}/rust/qualification/producer-cohort" \
+                  --python-evidence "cohort-input/native-qualification-${platform}-${version}-${form}/${form}" \
+                  "${r_evidence[@]}" \
+                  --output "public-cohort/${platform}/${version}/${form}/producer-cohort" --source-revision "${revision}"
               done
             done
           done
