@@ -173,6 +173,11 @@ print.yamaa_utf8 <- function(x, ...) {
 
 #' Dispatch a closed scalar operator without vector recycling.
 .scalar_ops <- function(e1, e2) {
+  if (inherits(e1, "yamaa_int64_vector") ||
+      (!missing(e2) && inherits(e2, "yamaa_int64_vector"))) {
+    if (missing(e2)) return(.int64_vector_ops(e1, operator = .Generic))
+    return(.int64_vector_ops(e1, e2, .Generic))
+  }
   unary <- missing(e2)
   code <- if (unary) switch(.Generic, `+` = 6L, `-` = 7L) else {
     switch(.Generic, `+` = 1L, `-` = 2L, `*` = 3L, `/` = 4L,
@@ -188,6 +193,8 @@ print.yamaa_utf8 <- function(x, ...) {
 
 #' @export
 Ops.yamaa_int64 <- .scalar_ops
+#' @export
+Ops.yamaa_int64_vector <- .scalar_ops
 #' @export
 Ops.yamaa_utf8 <- .scalar_ops
 

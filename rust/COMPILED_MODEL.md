@@ -52,12 +52,58 @@ Dataset admission tests now run directly in core. Core compiler tests prepare
 and bind a normalized document without linking the engine, including deferred
 division by zero, formula syntax findings and unsupported source formats.
 
-This foundation does not complete #1752. Complete source/inheritance provenance, broader compiler coverage and the public
-six-document frontend remain required. Private installed entry points already
-exercise all six original documents. Adapters still assemble some
-typed probe plans; #1754 retires those semantic responsibilities as domain APIs
-replace the probes. No public API cutover, benchmark inventory promotion or
-numerical-policy change is included here.
+The temporary `dataset/1` codec now decodes typed declarations with no execution
+interface. Core's pure `compile_dataset` service accepts `DatasetDeclaration`;
+its `DatasetCompiler` draft also accepts those declarations in authored order.
+These services compile numerical text, bind supplied names, resolve function
+slots, enforce one cumulative signature-copy budget across row and column
+phases, classify the legacy number/value-window forms, and admit the complete
+dependency graph and conversion handlers. Only final admission returns an
+immutable `CompiledDataset` containing the same `DatasetPlan` used by original YAML.
+An adapter cannot publish a partly admitted plan or construct an executable plan
+directly. JSON parsing, lossless scalar/decimal codecs and transport bounds remain
+in adapters; the existing core predicate/signature component services admit their
+typed carriers. Neither declaration decoding nor compilation activates functions,
+reads table cells or evaluates arithmetic.
+
+The codec feeds each decoded assignment to the pure draft in its original
+admission order. Core grammar and function-slot admission occur before subordinate
+binding/scalar codecs, and expression faults precede later verification, handler
+and intermediate payload faults. Wire-wide quotas still run first. Window-form
+admission likewise precedes subordinate payload limits. The draft exposes no
+executable plan; any failed expression poisons it, and unused numeric/function
+reservations prevent final admission. Mixed-fault regressions pin the existing
+temporary protocol's `InvalidPlan`/`RequestLimit` precedence before bad IPC.
+
+Original-YAML preparation retains the exact entry and parent bytes, a location
+for each raw occurrence, normalized node origins and inherited written-layer
+provenance alongside the compiled model in one checked application handle.
+Compiler findings retain authored paths; those paths resolve against the held
+document's declaring source and raw locations without another read. The original
+compiler resolves declarations, operation vocabulary and dependency phases at
+preparation. Source-field binding uses captured immutable schemas at ingestion,
+because undeclared CSV fields and physical Parquet types are not known earlier.
+Unsupported operations fail during preparation, before study inspection,
+capture, decoding or any callback activation. Arithmetic and value-dependent
+checks retain their required execution timing.
+
+`yamaa-adapters/tests/compiled_model.rs` prepares the six unchanged #1739 YAML
+documents and binds independently enumerated source schemas without study data.
+It checks keys, output/declaration order, row phases, ordered SUM, all nine window
+operations, lookup match coordinates, inheritance pruning and written origins.
+A changed inherited source profile is refused with its authored path, parent
+identity and retained raw location before study effects. Pure core regressions
+also cover numeric grammar/binding/phase rejection, cumulative function-copy
+budgets, legacy window vocabulary and atomic recovery admission. Existing
+complete-report fixtures supply independent value/type/order/CSV and failure
+observations for these same documents.
+
+The bounded public six-document qualification completed in
+[#1813](https://github.com/elong0527/yamaa/pull/1813), closing #1739 with 96 installed
+complete-run tuples on its applicable Python/R matrix. The twelve Windows R
+tuples are explicitly separate #1903 work. This compiled-model gate does not
+claim full-language coverage, temporary protocol retirement, numerical-policy
+changes or completion of that remaining platform qualification.
 
 Original output-window declarations now compile into core `Window` values after
 shared schema admission expands named windows. Column binding records the actual
@@ -77,9 +123,9 @@ A direct integration test prepares the unchanged `spec_study.yaml`, reads its
 shared parent once, prunes the unused input and column, and produces the exact
 committed CSV. The adapter retains raw parent bytes and locations and compares
 the complete report against independent reference-checked truth. Installed Python
-and R prototypes now exercise all six original documents, including exact parent
+and R routes now exercise all six original documents, including exact parent
 callback errors/interruptions and cached source capture. The existing conformance
-frontend still needs routing through this owned lifecycle before inventory promotion.
+frontend uses this owned lifecycle and compares complete public cohort reports.
 Non-governed descriptive metadata can reach compilation; reserved metadata keys
 remain explicitly unsupported pending submission validation integration.
 

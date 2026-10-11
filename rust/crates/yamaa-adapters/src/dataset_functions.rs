@@ -7,14 +7,10 @@ use yamaa_core::{
     value::Value,
 };
 use yamaa_engine::{
-    dataset::{BoundFunction, FunctionArgument, FunctionBindings, FunctionInput},
+    dataset::{ExpressionDeclaration, FunctionArgument, FunctionBindings, FunctionInput},
     dataset_predicate::Read,
-    function_invocation::{Argument, HostError, InvocationFailure, InvocationPlan, Presence},
+    function_invocation::{Argument, HostError, InvocationFailure, InvocationPlan},
 };
-
-const MAX_FUNCTIONS: usize = 64;
-const MAX_BOUND_PARAMETERS: usize = 16_384;
-const MAX_BOUND_TEXT: usize = 1_048_576;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -37,62 +33,19 @@ enum Input {
     Collect { column: usize, identifier: String },
 }
 
-pub(super) struct Admission {
-    pub signatures: Vec<InvocationPlan>,
-    parameters_left: usize,
-    text_left: usize,
-}
-impl Admission {
-    /// Bound the declaration collection before preparing any reusable signature.
-    pub fn new(signatures: Vec<function_signature::Signature>) -> Result<Self, Error> {
-        if signatures.len() > MAX_FUNCTIONS {
-            return Err(Error::RequestLimit);
-        }
-        Ok(Self {
-            signatures: signatures
-                .into_iter()
-                .map(|s| s.prepare().map_err(Error::Function))
-                .collect::<Result<_, _>>()?,
-            parameters_left: MAX_BOUND_PARAMETERS,
-            text_left: MAX_BOUND_TEXT,
-        })
-    }
-    /// Charge expanded metadata before cloning a shared signature into each bound call.
-    pub fn bind(&mut self, call: Call) -> Result<BoundFunction, Error> {
+impl Call {
+    /// Decode logical arguments without binding a signature or copying its metadata.
+    pub fn decode(
+        self,
+        compiler: &mut yamaa_core::dataset::DatasetCompiler,
+    ) -> Result<ExpressionDeclaration, Error> {
+        let call = self;
         if call.arguments.len() > function_signature::MAX_PARAMETERS {
             return Err(Error::RequestLimit);
         }
-        let signature = self.signatures.get(call.slot).ok_or(Error::InvalidPlan)?;
-        self.parameters_left = self
-            .parameters_left
-            .checked_sub(signature.parameters().len())
-            .ok_or(Error::RequestLimit)?;
-        let identity = signature.identity();
-        for text in [
-            &identity.name,
-            &identity.contract_version,
-            &identity.implementation_version,
-            &identity.call,
-        ] {
-            self.text_left = self
-                .text_left
-                .checked_sub(text.len())
-                .ok_or(Error::RequestLimit)?;
-        }
-        for parameter in signature.parameters() {
-            for text in [&parameter.name, &parameter.host_name] {
-                self.text_left = self
-                    .text_left
-                    .checked_sub(text.len())
-                    .ok_or(Error::RequestLimit)?;
-            }
-            if let Presence::Optional(Value::Str(text)) = &parameter.presence {
-                self.text_left = self
-                    .text_left
-                    .checked_sub(text.len())
-                    .ok_or(Error::RequestLimit)?;
-            }
-        }
+        compiler
+            .reserve_function(call.slot)
+            .map_err(super::compile_error)?;
         let arguments = call
             .arguments
             .into_iter()
@@ -114,7 +67,10 @@ impl Admission {
                 })
             })
             .collect::<Result<_, Error>>()?;
-        BoundFunction::new(call.slot, signature.clone(), arguments).map_err(|_| Error::InvalidPlan)
+        Ok(ExpressionDeclaration::Function {
+            slot: call.slot,
+            arguments,
+        })
     }
 }
 
