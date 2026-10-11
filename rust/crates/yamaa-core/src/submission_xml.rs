@@ -123,6 +123,7 @@ impl Element {
         identities: &mut BTreeSet<String>,
         leaves: &mut BTreeSet<String>,
         references: &mut Vec<String>,
+        oid_references: &mut Vec<String>,
     ) -> Result<(), Finding> {
         let invalid = |detail| Finding::new("value_not_permitted", "REQ-1026", &self.path, detail);
         for (name, value) in &self.attributes {
@@ -147,6 +148,11 @@ impl Element {
                     }
                 }
                 "leafID" => references.push(value.clone()),
+                "def:ArchiveLocationID" => references.push(value.clone()),
+                "ItemOID" | "def:ItemOID" | "CodeListOID" | "MethodOID" | "def:StandardOID"
+                | "def:CommentOID" | "ValueListOID" | "WhereClauseOID" => {
+                    oid_references.push(value.clone())
+                }
                 "xml:lang" if !language(value) => {
                     return Err(invalid("schema_violation: xml:lang language"))
                 }
@@ -154,7 +160,7 @@ impl Element {
             }
         }
         for child in &self.children {
-            child.validate(identities, leaves, references)?;
+            child.validate(identities, leaves, references, oid_references)?;
         }
         Ok(())
     }
@@ -228,6 +234,71 @@ fn comment(node: &mut Element, comment: &s::Comment, language: &str) {
         }
     }
 }
+fn item_definition(column: &model::Column, identity: &str, path: &str, language: &str) -> Element {
+    let name = &column.declaration.name.value;
+    let meta = column
+        .declaration
+        .submission
+        .as_ref()
+        .expect("composed column");
+    let origin = meta.origin_metadata.as_ref().expect("composed origin");
+    let mut item = Element::new("ItemDef", path)
+        .attr("OID", format!("IT.{identity}"))
+        .attr("Name", name)
+        .attr("DataType", column.data_type.name())
+        .optional("Length", column.length.as_ref())
+        .optional(
+            "SignificantDigits",
+            meta.significant_digits.as_ref().map(|v| &v.value),
+        )
+        .optional("SASFieldName", model::sas_name(name).then_some(name))
+        .optional(
+            "def:DisplayFormat",
+            meta.display_format.as_ref().map(|v| &v.value),
+        )
+        .optional(
+            "def:CommentOID",
+            meta.comment.as_ref().map(|_| format!("COM.{identity}")),
+        );
+    item.translated(
+        "Description",
+        &column
+            .declaration
+            .label
+            .as_ref()
+            .expect("composed label")
+            .value,
+        language,
+    );
+    if let Some(list) = &meta.codelist {
+        item.push(
+            Element::new("CodeListRef", &item.path)
+                .attr("CodeListOID", format!("CL.{}", list.value)),
+        );
+    }
+    let mut node = Element::new("def:Origin", &item.path)
+        .attr("Type", origin.kind.value.name())
+        .optional("Source", column.source.map(|v| v.name()));
+    if let Some(description) = &origin.description {
+        node.translated("Description", &description.value, language);
+    }
+    node.refs(&column.documents);
+    item.push(node);
+    item
+}
+fn variants(dataset: &model::Dataset) -> impl Iterator<Item = (&model::Column, String)> {
+    dataset.columns.iter().flat_map(move |column| {
+        let identity = format!("{}.{}", dataset.id, column.declaration.name.value);
+        core::iter::once((column, identity.clone())).chain(
+            column
+                .values
+                .iter()
+                .enumerate()
+                .map(move |(index, value)| (&value.column, format!("{identity}.V{}", index + 1))),
+        )
+    })
+}
+
 /// The writer's closed element construction fixes official schema order and
 /// references. Composition admits required attributes, numeric ranges, types,
 /// keys and cross-references; character admission happens before bytes escape.
@@ -302,6 +373,68 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         }
     }
     for dataset in &study.datasets {
+        for column in &dataset.columns {
+            if column.values.is_empty() {
+                continue;
+            }
+            let identity = format!("{}.{}", dataset.id, column.declaration.name.value);
+            let mut list = Element::new("def:ValueListDef", &format!("datasets.{identity}.values"))
+                .attr("OID", format!("VL.{identity}"));
+            for (index, value) in column.values.iter().enumerate() {
+                let identity = format!("{identity}.V{}", index + 1);
+                let meta = value
+                    .column
+                    .declaration
+                    .submission
+                    .as_ref()
+                    .expect("composed value");
+                let mut reference = Element::new("ItemRef", &value.path)
+                    .attr("ItemOID", format!("IT.{identity}"))
+                    .attr("OrderNumber", index + 1)
+                    .attr("Mandatory", yes(value.column.mandatory))
+                    .optional("Role", meta.role.as_ref().map(|v| &v.value))
+                    .optional(
+                        "MethodOID",
+                        meta.method.as_ref().map(|_| format!("MT.{identity}")),
+                    );
+                reference.push(
+                    Element::new("def:WhereClauseRef", &value.path)
+                        .attr("WhereClauseOID", format!("WC.{identity}")),
+                );
+                list.push(reference);
+            }
+            metadata.push(list);
+        }
+    }
+    for dataset in &study.datasets {
+        for column in &dataset.columns {
+            for (index, value) in column.values.iter().enumerate() {
+                let identity = format!(
+                    "{}.{}.V{}",
+                    dataset.id,
+                    column.declaration.name.value,
+                    index + 1
+                );
+                let discriminator = &dataset.columns
+                    [dataset.discriminator.expect("admitted discriminator")]
+                .declaration
+                .name
+                .value;
+                let mut clause = Element::new("def:WhereClauseDef", &value.path)
+                    .attr("OID", format!("WC.{identity}"));
+                let mut check = Element::new("RangeCheck", &value.path)
+                    .attr("Comparator", "EQ")
+                    .attr("SoftHard", "Soft")
+                    .attr("def:ItemOID", format!("IT.{}.{discriminator}", dataset.id));
+                let mut code = Element::new("CheckValue", &value.path);
+                code.text = Some(value.test_code.clone());
+                check.push(code);
+                clause.push(check);
+                metadata.push(clause);
+            }
+        }
+    }
+    for dataset in &study.datasets {
         let id = &dataset.id;
         let sub = &dataset.metadata;
         let mut group = Element::new("ItemGroupDef", &format!("datasets.{id}.submission"))
@@ -373,60 +506,19 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         metadata.push(group);
     }
     for dataset in &study.datasets {
-        for column in &dataset.columns {
-            let id = &dataset.id;
-            let name = &column.declaration.name.value;
-            let meta = column
-                .declaration
-                .submission
-                .as_ref()
-                .expect("composed column");
-            let origin = meta.origin_metadata.as_ref().expect("composed origin");
-            let mut item = Element::new(
-                "ItemDef",
-                &format!("datasets.{id}.columns.{name}.submission"),
-            )
-            .attr("OID", format!("IT.{id}.{name}"))
-            .attr("Name", name)
-            .attr("DataType", column.data_type.name())
-            .optional("Length", column.length.as_ref())
-            .optional(
-                "SignificantDigits",
-                meta.significant_digits.as_ref().map(|v| &v.value),
-            )
-            .optional("SASFieldName", model::sas_name(name).then_some(name))
-            .optional(
-                "def:DisplayFormat",
-                meta.display_format.as_ref().map(|v| &v.value),
-            )
-            .optional(
-                "def:CommentOID",
-                meta.comment.as_ref().map(|_| format!("COM.{id}.{name}")),
-            );
-            item.translated(
-                "Description",
-                &column
-                    .declaration
-                    .label
-                    .as_ref()
-                    .expect("composed label")
-                    .value,
+        for (column, identity) in variants(dataset) {
+            let mut item = item_definition(
+                column,
+                &identity,
+                &format!("datasets.{identity}.submission"),
                 language,
             );
-            if let Some(list) = &meta.codelist {
+            if !column.values.is_empty() {
                 item.push(
-                    Element::new("CodeListRef", &item.path)
-                        .attr("CodeListOID", format!("CL.{}", list.value)),
+                    Element::new("def:ValueListRef", &item.path)
+                        .attr("ValueListOID", format!("VL.{identity}")),
                 );
             }
-            let mut node = Element::new("def:Origin", &item.path)
-                .attr("Type", origin.kind.value.name())
-                .optional("Source", column.source.map(|v| v.name()));
-            if let Some(description) = &origin.description {
-                node.translated("Description", &description.value, language);
-            }
-            node.refs(&column.documents);
-            item.push(node);
             metadata.push(item);
         }
     }
@@ -494,14 +586,13 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         metadata.push(code);
     }
     for dataset in &study.datasets {
-        for column in &dataset.columns {
+        for (column, name) in variants(dataset) {
             let meta = column
                 .declaration
                 .submission
                 .as_ref()
                 .expect("composed column");
             let Some(method) = &meta.method else { continue };
-            let name = format!("{}.{}", dataset.id, column.declaration.name.value);
             let mut node = Element::new("MethodDef", &format!("datasets.{name}.submission.method"))
                 .attr("OID", format!("MT.{name}"));
             match method {
@@ -527,16 +618,11 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         }
     }
     for dataset in &study.datasets {
-        let mut comments: Vec<(&str, &s::Comment)> = Vec::new();
+        let mut comments: Vec<(String, &s::Comment)> = Vec::new();
         if let Some(c) = &dataset.metadata.comment {
-            comments.push((&dataset.id, c));
+            comments.push((dataset.id.clone(), c));
         }
-        let column_names: Vec<_> = dataset
-            .columns
-            .iter()
-            .map(|c| format!("{}.{}", dataset.id, c.declaration.name.value))
-            .collect();
-        for (column, name) in dataset.columns.iter().zip(&column_names) {
+        for (column, name) in variants(dataset) {
             if let Some(c) = &column
                 .declaration
                 .submission
@@ -566,7 +652,24 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     let mut identities = BTreeSet::new();
     let mut leaves = BTreeSet::new();
     let mut references = Vec::new();
-    odm.validate(&mut identities, &mut leaves, &mut references)?;
+    let mut oid_references = Vec::new();
+    odm.validate(
+        &mut identities,
+        &mut leaves,
+        &mut references,
+        &mut oid_references,
+    )?;
+    if oid_references
+        .iter()
+        .any(|reference| !identities.contains(reference))
+    {
+        return Err(Finding::new(
+            "value_not_permitted",
+            "REQ-1026",
+            "metadata_version",
+            "schema_violation: unresolved generated metadata reference",
+        ));
+    }
     if references
         .iter()
         .any(|reference| !leaves.contains(reference))
