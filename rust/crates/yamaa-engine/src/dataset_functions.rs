@@ -1,57 +1,6 @@
 //! Resolve authored scalar arguments before the shared exact-type invocation lifecycle.
 use super::*;
-use crate::{
-    dataset_predicate::Read,
-    function_invocation::{
-        Argument, FunctionPort, HostError, InvocationPlan, ProjectInvocationPlan,
-    },
-};
-
-/// Caller-owned activated functions. Metadata inspection must not execute project code.
-/// Signatures and slot mappings stay stable throughout a run. Callbacks use the same
-/// opaque error type as table ports (an adapter may use an enum for both payloads).
-/// No Send/Sync or thread migration is required. Host allocation, interruption and
-/// exception containment remain the adapter's responsibility, as for FunctionPort.
-pub trait FunctionBindings {
-    type Error;
-    /// Borrow immutable resolved metadata; return None for an unavailable slot.
-    fn signature(&self, slot: usize) -> Option<&InvocationPlan>;
-    /// Borrow an activated versionless package signature without host effects.
-    fn project_signature(&self, _slot: usize) -> Option<&ProjectInvocationPlan> {
-        None
-    }
-    /// Invoke the selected already-bound callback with declaration-order host arguments.
-    fn call(
-        &mut self,
-        slot: usize,
-        arguments: &[Argument<'_>],
-    ) -> Result<Value, HostError<Self::Error>>;
-}
-
-pub(super) struct UnavailableFunctions<E>(pub core::marker::PhantomData<E>);
-impl<E> FunctionBindings for UnavailableFunctions<E> {
-    type Error = E;
-    /// Legacy execution has no implicit callback resolution.
-    fn signature(&self, _: usize) -> Option<&InvocationPlan> {
-        None
-    }
-    /// Signature admission prevents any callback attempt through the legacy entrypoint.
-    fn call(&mut self, _: usize, _: &[Argument<'_>]) -> Result<Value, HostError<E>> {
-        unreachable!("callback signatures were admitted before table access")
-    }
-}
-
-struct Selected<'a, E> {
-    bindings: &'a mut dyn FunctionBindings<Error = E>,
-    slot: usize,
-}
-impl<E> FunctionPort for Selected<'_, E> {
-    type Error = E;
-    /// Forward exactly one invocation to its stable activated slot.
-    fn call(&mut self, arguments: &[Argument<'_>]) -> Result<Value, HostError<E>> {
-        self.bindings.call(self.slot, arguments)
-    }
-}
+use crate::{dataset_predicate::Read, function_invocation::FunctionPort};
 
 pub(super) struct Context<'a> {
     pub plan: &'a DatasetPlan,
@@ -67,7 +16,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     context: Context<'_>,
     budget: &mut Budget,
     handlers: &mut HandlerCounter,
-    bindings: &mut dyn FunctionBindings<Error = T::Error>,
+    bindings: &mut dyn FunctionPort<Error = T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let supplied = supplied(
         function.arguments(),
@@ -77,13 +26,11 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         budget,
         handlers,
     )?;
-    let result = crate::function_invocation::invoke(
+    let result = crate::function_invocation::invoke_at(
         function.signature(),
         &supplied,
-        &mut Selected {
-            bindings,
-            slot: function.slot(),
-        },
+        function.slot(),
+        bindings,
     );
     match result {
         Ok(value) => retain_result(value, budget),
@@ -102,7 +49,7 @@ pub(super) fn evaluate_project<T: TableAccess + ?Sized>(
     context: Context<'_>,
     budget: &mut Budget,
     handlers: &mut HandlerCounter,
-    bindings: &mut dyn FunctionBindings<Error = T::Error>,
+    bindings: &mut dyn FunctionPort<Error = T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let supplied = supplied(
         function.arguments(),
@@ -112,13 +59,11 @@ pub(super) fn evaluate_project<T: TableAccess + ?Sized>(
         budget,
         handlers,
     )?;
-    let result = crate::function_invocation::invoke_project(
+    let result = crate::function_invocation::invoke_project_at(
         function.signature(),
         &supplied,
-        &mut Selected {
-            bindings,
-            slot: function.slot(),
-        },
+        function.slot(),
+        bindings,
     );
     match result {
         Ok(value) => retain_result(value, budget),

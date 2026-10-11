@@ -140,8 +140,35 @@ pub(super) fn bind(
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
-    let path = format!("{}.source", rounding.path());
-    let name = rounding.source();
+    bind_operand(
+        rounding.source(),
+        &format!("{}.source", rounding.path()),
+        column,
+        keys,
+        catalog,
+        declarations,
+        secondary,
+        intermediates,
+        edges,
+        findings,
+    )
+    .map(|source| source.map(|source| wrap(rounding, column, source)))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn bind_operand(
+    name: &str,
+    path: &str,
+    column: usize,
+    keys: &[usize],
+    catalog: &Catalog,
+    declarations: &intermediates::Declarations,
+    secondary: &[crate::dataset::SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<Expression>, BindError> {
+    let path = String::from(path);
     if !name.contains('.') {
         if let Some(finding) = catalog
             .validate_output(name, None, None, &[0])
@@ -210,7 +237,7 @@ pub(super) fn bind(
         }
     };
 
-    Ok(Some(wrap(rounding, column, source)))
+    Ok(Some(source))
 }
 pub(super) fn wrap(rounding: &Rounding, column: usize, source: Expression) -> Expression {
     Expression::Round {
@@ -238,9 +265,34 @@ pub(super) fn bind_row(
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
+    bind_row_operand(
+        rounding.source(),
+        &format!("{}.source", rounding.path()),
+        catalog,
+        driver,
+        row,
+        phase,
+        available,
+        edges,
+        findings,
+    )
+    .map(|source| source.map(|source| wrap(rounding, column, source)))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn bind_row_operand(
+    name: &str,
+    path: &str,
+    catalog: &Catalog,
+    driver: &str,
+    row: Option<&str>,
+    phase: crate::reference_scope::Phase<'_>,
+    available: Option<&[usize]>,
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<Expression>, BindError> {
     use crate::reference_scope::{self, Reach, Scope};
-    let path = format!("{}.source", rounding.path());
-    let name = rounding.source();
+    let path = String::from(path);
     if name.contains('.') {
         let scoped = reference_scope::validate(
             catalog,
@@ -294,5 +346,5 @@ pub(super) fn bind_row(
             return Ok(None);
         }
     };
-    Ok(Some(wrap(rounding, column, source)))
+    Ok(Some(source))
 }

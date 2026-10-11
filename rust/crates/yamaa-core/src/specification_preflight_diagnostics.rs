@@ -29,6 +29,14 @@ impl PreflightFinding {
         use super::FunctionCause;
         match self {
             Self::Log(finding) => finding.visit_text(visit),
+            Self::TemporalInput { path, source, .. } => {
+                visit(path);
+                visit(source);
+            }
+            Self::TemporalBounds { path, value } => {
+                visit(path);
+                visit(value);
+            }
             Self::RoundingInput { path, source, .. } => {
                 visit(path);
                 visit(source);
@@ -115,6 +123,14 @@ impl PreflightFinding {
                 source,
                 actual,
             } => return crate::dataset::Rounding::input_diagnostic(source, path, actual),
+            Self::TemporalInput {
+                path,
+                source,
+                actual,
+            } => return crate::dataset::Temporal::input_diagnostic(source, path, actual),
+            Self::TemporalBounds { path, value } => {
+                return crate::dataset::Temporal::bounds_diagnostic(path, value)
+            }
             Self::ProjectFunction(finding) => return finding.diagnostic(),
             Self::ProjectCodelist(finding) => return finding.diagnostic(),
             Self::RowPhase {

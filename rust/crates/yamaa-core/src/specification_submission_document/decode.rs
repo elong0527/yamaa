@@ -116,6 +116,35 @@ impl Budget {
         }
         Ok(())
     }
+    fn rows(&mut self, input: &Document, node: usize) -> Result<(), Cause> {
+        let N::Sequence(items) = &input.nodes()[node] else {
+            // Rows without metadata remain ordinary compiler/schema declarations.
+            return Ok(());
+        };
+        self.node(2)?;
+        self.charge(Resource::ListItems, items.len())?;
+        self.multiply(Resource::Work, items.len(), 64)?;
+        for &row in items {
+            let N::Mapping(fields) = &input.nodes()[row] else {
+                continue;
+            };
+            self.node(3)?;
+            self.mapping(input, fields, 3)?;
+            for &(key, value) in fields {
+                if let N::Text(text) = &input.nodes()[key] {
+                    if text == "id" || text == "submission" {
+                        if text == "submission" {
+                            if let N::Mapping(entries) = &input.nodes()[value] {
+                                self.charge(Resource::Declarations, entries.len())?;
+                            }
+                        }
+                        self.tree(input, value, 4)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 const DATASET: &[F] = &[
     F::HasNoData,
@@ -163,7 +192,7 @@ impl Path {
         }
     }
     fn child(mut self, step: Step) -> Self {
-        // The closed parser reaches at most eight segments, regardless of input.
+        // A row override's deepest pages field reaches ten segments.
         self.steps[self.len] = Some(step);
         self.len += 1;
         self
@@ -191,6 +220,7 @@ pub fn decode(input: &Document, root: usize, limits: Limits) -> Result<Declarati
                         budget.tree(input, node, 2)?;
                     }
                     "columns" => budget.columns(input, node)?,
+                    "rows" => budget.rows(input, node)?,
                     _ => {}
                 }
             }
@@ -580,6 +610,72 @@ impl<'a> Parser<'a, '_> {
             submission,
         }))
     }
+    fn value_rows(&mut self, root: usize) -> Result<Vec<ValueRow>, Cause> {
+        let Some(N::Sequence(rows)) = self.get(root, F::Rows).node.map(|n| &self.input.nodes()[n])
+        else {
+            return Ok(Vec::new());
+        };
+        let mut owned = Vec::new();
+        for (index, &node) in rows.iter().enumerate() {
+            let origin = self.get(node, F::Submission);
+            let Some(submission) = origin.node else {
+                continue;
+            };
+            if matches!(&self.input.nodes()[submission], N::Null) {
+                continue;
+            }
+            let path = Path::root().field(F::Rows).child(Step::Index(index));
+            let N::Mapping(fields) = &self.input.nodes()[submission] else {
+                self.fault(
+                    origin,
+                    path.field(F::Submission),
+                    Kind::ExpectedMapping,
+                    None,
+                )?;
+                continue;
+            };
+            if fields.is_empty() {
+                continue;
+            }
+            let id = self.text_field(node, F::Id, path, TextRule::NonEmpty, true)?;
+            let mut overrides = Vec::new();
+            for (column_index, &(key, value)) in fields.iter().enumerate() {
+                let occurrence = Origin {
+                    container: submission,
+                    key: Some(key),
+                    node: Some(value),
+                    field: F::Submission,
+                };
+                let field_path = path.field(F::Submission).child(Step::Index(column_index));
+                let name = self.text(
+                    Origin {
+                        node: Some(key),
+                        ..occurrence
+                    },
+                    field_path,
+                    TextRule::Identifier,
+                    true,
+                )?;
+                let metadata = self.submission(occurrence, field_path)?;
+                if self.model {
+                    if let Some((name, submission)) = name.zip(metadata) {
+                        overrides.push(ValueOverride { name, submission });
+                    }
+                }
+            }
+            if self.model {
+                if let Some(id) = id {
+                    owned.push(ValueRow {
+                        node,
+                        id,
+                        origin,
+                        overrides,
+                    });
+                }
+            }
+        }
+        Ok(owned)
+    }
     fn submission(
         &mut self,
         origin: Origin,
@@ -906,9 +1002,10 @@ impl<'a> Parser<'a, '_> {
         }
         Ok(Declarations {
             root,
-            fields: self.fields(root, &[F::Submission, F::Columns]),
+            fields: self.fields(root, &[F::Submission, F::Columns, F::Rows]),
             dataset,
             columns,
+            value_rows: self.value_rows(root)?,
         })
     }
 }

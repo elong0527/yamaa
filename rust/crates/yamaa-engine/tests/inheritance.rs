@@ -431,6 +431,197 @@ fn failed_attempts_retain_charges_and_fresh_requests_recover() {
 }
 
 #[test]
+fn real_traversal_failures_project_canonical_causes_and_original_provenance() {
+    use yamaa_core::{diagnostic::ContextValue as C, value::Value as S};
+    fn check(
+        error: &Error<(&str, u32)>,
+        condition: &str,
+        requirement: &str,
+        path: &str,
+        fields: &[(&str, &str)],
+    ) {
+        let diagnostic = error.diagnostic().unwrap();
+        let definition = diagnostic.definition();
+        assert_eq!(
+            (
+                definition.phase,
+                definition.condition,
+                definition.requirement
+            ),
+            ("validation", condition, Some(requirement))
+        );
+        assert_eq!(diagnostic.spec_paths, [path]);
+        for &(name, value) in fields {
+            assert_eq!(diagnostic.context[name], C::Scalar(S::Str(value.into())));
+        }
+    }
+    let mut port = Port::default();
+    let error = run(layer("1.0", &["https://bad", "later"]), &mut port).unwrap_err();
+    check(
+        &error,
+        "invalid_parent_path",
+        "REQ-0653",
+        "parents",
+        &[
+            ("source", "entry"),
+            ("parent", "https://bad"),
+            ("reason", "remote_reference"),
+        ],
+    );
+    assert!(port.calls.is_empty());
+
+    let mut port = Port {
+        unavailable: Some("missing"),
+        ..Port::default()
+    };
+    let error = run(layer("1.0", &["missing", "later"]), &mut port).unwrap_err();
+    check(
+        &error,
+        "parent_not_found",
+        "REQ-0654",
+        "parents",
+        &[("source", "entry"), ("path", "missing")],
+    );
+    assert_eq!(port.calls, ["resolve:entry:missing"]);
+
+    for target in ["entry", "a"] {
+        let mut port = Port::default().with("a", &["b"]).with("b", &["alias"]);
+        port.aliases.insert("alias".into(), target.into());
+        let error = run(layer("1.0", &["a", "later"]), &mut port).unwrap_err();
+        check(
+            &error,
+            "inheritance_cycle",
+            "REQ-0655",
+            "parents",
+            &[
+                ("source", "b"),
+                (
+                    "reason",
+                    if target == "entry" {
+                        "parent_chain_returns_to_entry"
+                    } else {
+                        "parent_chain_returns_to_active_layer"
+                    },
+                ),
+            ],
+        );
+        let expected = if target == "entry" {
+            vec!["entry", "a", "b", "entry"]
+        } else {
+            vec!["a", "b", "a"]
+        };
+        assert_eq!(
+            error.diagnostic().unwrap().context["cycle"],
+            C::Sequence(
+                expected
+                    .into_iter()
+                    .map(|s| C::Scalar(S::Str(s.into())))
+                    .collect()
+            )
+        );
+        assert_eq!(
+            port.calls,
+            [
+                "resolve:entry:a",
+                "read:a",
+                "resolve:a:b",
+                "read:b",
+                "resolve:b:alias"
+            ]
+        );
+    }
+
+    let mut port = Port::default();
+    let error = run(layer("0", &["later"]), &mut port).unwrap_err();
+    check(
+        &error,
+        "schema_version_mismatch",
+        "REQ-0245",
+        "schema_version",
+        &[
+            ("source", "entry"),
+            ("entry", "entry"),
+            ("expected", "1.0"),
+            ("actual", "0"),
+        ],
+    );
+    assert!(port.calls.is_empty());
+    port.documents.insert("a".into(), layer("0", &["unread"]));
+    let error = run(layer("1.0", &["a", "later"]), &mut port).unwrap_err();
+    check(
+        &error,
+        "schema_version_mismatch",
+        "REQ-0656",
+        "parents",
+        &[
+            ("source", "a"),
+            ("entry", "entry"),
+            ("entry_version", "1.0"),
+            ("parent_version", "0"),
+        ],
+    );
+    assert_eq!(port.calls, ["resolve:entry:a", "read:a"]);
+}
+
+#[test]
+fn unclassified_failures_and_contradictory_cycles_have_no_semantic_projection() {
+    struct Opaque(Box<u8>);
+    let payload = Box::new(73);
+    let address = &*payload as *const u8;
+    let error = Error::Host(Opaque(payload));
+    assert!(error.diagnostic().is_none());
+    let Error::Host(Opaque(payload)) = error else {
+        panic!("original host failure replaced")
+    };
+    assert_eq!(&*payload as *const u8, address);
+    for path in [vec![], vec!["one".into()], vec!["a".into(), "b".into()]] {
+        assert!(Error::<()>::Cycle {
+            path,
+            returns_to_entry: true
+        }
+        .diagnostic()
+        .is_none());
+    }
+    assert!(Error::<()>::Resource(Exhausted {
+        resource: Resource::Layers,
+        limit: 0
+    })
+    .diagnostic()
+    .is_none());
+    assert!(Error::<()>::InvalidIdentity.diagnostic().is_none());
+}
+
+#[test]
+fn whole_traversal_projection_budget_precedes_context_copy_and_retains_error() {
+    use yamaa_core::diagnostic::ProjectionError;
+    let error = Error::<()>::Unavailable {
+        declaring: "entry".into(),
+        path: "p".repeat(512),
+    };
+    for _ in 0..2 {
+        assert_eq!(
+            error.diagnostic_with_limit(2048),
+            Err(ProjectionError::Limit)
+        );
+    }
+    let Error::Unavailable { declaring, path } = &error else {
+        panic!("retained error replaced")
+    };
+    assert_eq!(declaring, "entry");
+    assert_eq!(path.len(), 512);
+    assert!(error.diagnostic_with_limit(4096).unwrap().is_some());
+    let cycle = Error::<()>::Cycle {
+        path: vec!["entry".into(), "base".into(), "entry".into()],
+        returns_to_entry: true,
+    };
+    assert_eq!(
+        cycle.diagnostic_with_limit(256),
+        Err(ProjectionError::Limit)
+    );
+    assert!(cycle.diagnostic_with_limit(2048).unwrap().is_some());
+}
+
+#[test]
 fn cumulative_input_budget_includes_all_unique_layers() {
     let first = layer("1.0", &["a"]);
     let mut port = Port::default().with("a", &[]);

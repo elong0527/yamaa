@@ -241,7 +241,7 @@ impl<'a, P: ActivationPort> Bindings<'a, P> {
         }
     }
 }
-impl<P: ActivationPort> crate::dataset::FunctionBindings for Bindings<'_, P> {
+impl<P: ActivationPort> crate::dataset::FunctionPort for Bindings<'_, P> {
     type Error = P::Error;
     fn signature(&self, _: usize) -> Option<&crate::function_invocation::InvocationPlan> {
         None
@@ -274,7 +274,11 @@ struct BoundPort<'a, P: ActivationPort> {
 }
 impl<P: ActivationPort> FunctionPort for BoundPort<'_, P> {
     type Error = P::Error;
-    fn call(&mut self, arguments: &[Argument<'_>]) -> Result<Value, HostError<Self::Error>> {
+    fn call(
+        &mut self,
+        _slot: usize,
+        arguments: &[Argument<'_>],
+    ) -> Result<Value, HostError<Self::Error>> {
         self.calls += 1;
         if let Some(invoked) = self.observed_invocation.as_deref_mut() {
             *invoked = true;
@@ -479,7 +483,7 @@ fn activate_observed<P: ActivationPort>(
                 cases: Vec::new(),
             }),
             Err(error) if interrupted => {
-                return Err(Failure::InterruptedBinding { function, error })
+                return Err(Failure::InterruptedBinding { function, error });
             }
             Err(error) => binding_failures.push(BindingFailure { function, error }),
         }

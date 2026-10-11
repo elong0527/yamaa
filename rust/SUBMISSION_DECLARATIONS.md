@@ -54,8 +54,11 @@ This model supplies no execution plan, activation, callable resolution, study
 or artifact read, rendering, publisher or Save capability. It does not derive
 generator identities, compose submission semantics, bind codelists or capture
 recursive specification files. The separate [shared Define use case](DEFINE_GENERATION.md) supplies those
-services for the bounded column-metadata profile. The old Define-XML
-implementation and independently authored XML/JSON expected bytes remain
+services for the bounded column and value-level metadata profile. Specification
+submission admission owns typed row overrides and their nonempty text IDs,
+retains original occurrence facts, and reserves the complete selected metadata
+set before cloning. Composition performs inheritance and effective semantics.
+The old Define-XML implementation and independently authored XML/JSON expected bytes remain
 until the complete replacement and transition qualify.
 
 The approved #1887 decision permits a nonempty `source_system_version` string
@@ -67,8 +70,8 @@ generator version supplied by the calling package. An empty installed version
 refuses even when an override is present; core's crate version is never substituted.
 
 This model owns declaration admission and version selection. The shared
-column-metadata generator and three side-by-side environment fixtures advance
-#1758; value-level generation, full contract qualification and coordinated
-reference loader/schema retirement remain open. Existing independent XML/JSON
+column and typed value-level metadata generator and independently completed
+fixtures advance #1758; full contract qualification and coordinated reference
+loader/schema retirement remain open. Existing independent XML/JSON
 truth stays unchanged. Producer publication and Windows R retain their own
 implementation and qualification gates.

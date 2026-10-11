@@ -9,7 +9,7 @@ use yamaa_core::{
     evaluation::NumericResolver,
     numeric_compiler::{compile_numeric_with_policy, CompileError, CompileLimits, MathPolicy},
     numeric_parser::{GrammarFailure, ParseError, ParseResource, SourcePosition, SourceSpan},
-    value::{ColumnType, Selection, Value, ValueType},
+    value::{ColumnType, Selection, Value},
 };
 use yamaa_engine::numeric_lifecycle::{
     HandlerCounter, LiteralHandler, NumericDerivation, NumericLifecycleError,
@@ -273,59 +273,22 @@ impl NumericResolver for Resolver {
     }
 }
 
-/// Stable vocabulary names for typed diagnostic data.
-fn type_name(value: ValueType) -> &'static str {
-    match value {
-        ValueType::Str => "str",
-        ValueType::Int => "int",
-        ValueType::Float => "float",
-        ValueType::Bool => "bool",
-        ValueType::Date => "date",
-        ValueType::DateTime => "datetime",
-    }
-}
-
 /// Retain native predicate provenance; host reports may project site-specific fields.
 pub(crate) fn predicate<E>(
     error: &yamaa_core::predicate::EvaluationError<yamaa_core::table::CellError<E>>,
 ) -> Result<Box<Diagnostic>, crate::dataset_transport::DatasetTransportError> {
-    use yamaa_core::predicate::{Condition, ErrorKind};
-    let ErrorKind::Condition(condition) = &error.kind else {
-        return Err(crate::dataset_transport::DatasetTransportError::Internal);
-    };
-    let mut context = Context::new();
-    match &condition {
-        Condition::UnknownField { identifier } => {
-            context.insert("identifier".into(), text(identifier));
-        }
-        Condition::IncompatiblePair { left, right } => {
-            context.insert("left_type".into(), text(type_name(*left)));
-            context.insert("right_type".into(), text(type_name(*right)));
-        }
-        Condition::ExpectedText { actual } | Condition::ContainsExpectedText { actual } => {
-            context.insert("expected".into(), text("str"));
-            context.insert("actual".into(), text(type_name(*actual)));
-        }
-        Condition::DanglingEscape => {
-            context.insert("reason".into(), text("LIKE pattern has a dangling escape"));
-        }
-    }
-    Ok(Box::new(Diagnostic {
-        phase: condition.phase(),
-        condition: condition.condition(),
-        requirement: Some(condition.requirement()),
-        spec_paths: vec![error.spec_path.clone()],
-        context,
-        source_span: None,
-        operand_route: Some(
-            error
-                .route
-                .iter()
-                .map(|route| format!("{route:?}"))
-                .collect(),
-        ),
-        position: None,
-    }))
+    use yamaa_core::diagnostic::PredicateDiagnosticError;
+    error
+        .diagnostic()
+        .map(|d| Box::new(d.into()))
+        .map_err(|e| match e {
+            PredicateDiagnosticError::OutputLimit => {
+                crate::dataset_transport::DatasetTransportError::OutputLimit
+            }
+            PredicateDiagnosticError::Resolution(_) | PredicateDiagnosticError::Resource(_) => {
+                crate::dataset_transport::DatasetTransportError::Internal
+            }
+        })
 }
 /// Serialize core-owned completed-result diagnostics, including wide integers.
 pub(crate) fn conversion(error: ConversionError, path: String) -> Box<Diagnostic> {

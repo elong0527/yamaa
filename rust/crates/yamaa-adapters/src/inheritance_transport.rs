@@ -195,11 +195,63 @@ fn encode(outcome: Value) -> Result<String, TransportError> {
     )?;
     String::from_utf8(output.0).map_err(|_| TransportError::Internal)
 }
-fn text(name: &str, value: impl Into<Value>) -> Value {
-    json!({"name":name,"value":{"kind":"text","value":value.into()}})
-}
-fn invalid(condition: &str, path: &str, requirement: &str, context: Vec<Value>) -> Value {
-    json!({"status":"invalid","diagnostics":[{"condition":condition,"path":path,"requirement":requirement,"context":context}]})
+/// The legacy inheritance/1 transport retains its context-list compatibility
+/// encoding. All vocabulary and provenance come from the common core finding.
+fn legacy_diagnostic(
+    mut finding: yamaa_core::diagnostic::Diagnostic,
+) -> Result<Value, TransportError> {
+    use yamaa_core::{diagnostic::ContextValue as C, value::Value as S};
+    let definition = finding.definition();
+    let [path]: [String; 1] = finding
+        .spec_paths
+        .try_into()
+        .map_err(|_| TransportError::Internal)?;
+    let mut outcome = json!({"status":"invalid"});
+    for name in ["source", "entry", "parent"] {
+        if let Some(value) = finding.context.remove(name) {
+            let C::Scalar(S::Str(text)) = value else {
+                return Err(TransportError::Internal);
+            };
+            outcome[name] = json!(text);
+        }
+    }
+    let mut context = Vec::new();
+    // Preserve the historical ordered list representation of these named facts.
+    for name in [
+        "reason",
+        "path",
+        "expected",
+        "actual",
+        "entry_version",
+        "parent_version",
+        "cycle",
+    ] {
+        let Some(value) = finding.context.remove(name) else {
+            continue;
+        };
+        let value = match value {
+            C::Scalar(S::Str(text)) => json!({"kind":"text","value":text}),
+            C::Sequence(values) => {
+                let texts = values
+                    .into_iter()
+                    .map(|value| match value {
+                        C::Scalar(S::Str(text)) => Ok(text),
+                        _ => Err(TransportError::Internal),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                json!({"kind":"text_list","value":texts})
+            }
+            _ => return Err(TransportError::Internal),
+        };
+        context.push(json!({"name":name,"value":value}));
+    }
+    if !finding.context.is_empty() {
+        return Err(TransportError::Internal);
+    }
+    outcome["diagnostics"] = json!([{
+        "condition":definition.condition,"path":path,"requirement":definition.requirement,"context":context,
+    }]);
+    Ok(outcome)
 }
 fn outcome<E>(error: graph::Error<PortError<E>>) -> Result<Value, Failure<E>> {
     match traversal_outcome(error) {
@@ -213,6 +265,16 @@ fn outcome<E>(error: graph::Error<PortError<E>>) -> Result<Value, Failure<E>> {
 
 /// Reuse typed traversal diagnostics independently of the JSON source transport.
 pub(crate) fn traversal_outcome<E>(error: graph::Error<E>) -> Result<Value, Failure<E>> {
+    match error.diagnostic_with_limit(MAX_RESPONSE_BYTES) {
+        Ok(Some(finding)) => return legacy_diagnostic(finding).map_err(Into::into),
+        Ok(None) => {}
+        Err(yamaa_core::diagnostic::ProjectionError::Limit) => {
+            return Err(TransportError::ResponseLimit.into())
+        }
+        Err(yamaa_core::diagnostic::ProjectionError::InvalidContext) => {
+            return Err(TransportError::Internal.into())
+        }
+    }
     Ok(match error {
         graph::Error::Host(error) => return Err(Failure::Host(error)),
         graph::Error::Resource(error) => limit(
@@ -243,79 +305,10 @@ pub(crate) fn traversal_outcome<E>(error: graph::Error<E>) -> Result<Value, Fail
             value["context_document"] = json!(Tree::from_core(&input));
             value
         }
-        graph::Error::InvalidParent { declaring, path } => {
-            let mut value = invalid(
-                "invalid_parent_path",
-                "parents",
-                "REQ-0653",
-                vec![text("reason", "remote_reference")],
-            );
-            value["source"] = json!(declaring);
-            value["parent"] = json!(path);
-            value
-        }
-        graph::Error::Unavailable { declaring, path } => {
-            let mut value = invalid(
-                "parent_not_found",
-                "parents",
-                "REQ-0654",
-                vec![text("path", path)],
-            );
-            value["source"] = json!(declaring);
-            value
-        }
-        graph::Error::Cycle {
-            path,
-            returns_to_entry,
-        } => {
-            let source = path.get(path.len().saturating_sub(2)).cloned();
-            let mut value = invalid(
-                "inheritance_cycle",
-                "parents",
-                "REQ-0655",
-                vec![
-                    text(
-                        "reason",
-                        if returns_to_entry {
-                            "parent_chain_returns_to_entry"
-                        } else {
-                            "parent_chain_returns_to_active_layer"
-                        },
-                    ),
-                    json!({"name":"cycle","value":{"kind":"text_list","value":path}}),
-                ],
-            );
-            value["source"] = json!(source);
-            value
-        }
-        graph::Error::Version {
-            source,
-            entry,
-            expected,
-            actual,
-            is_entry,
-        } => {
-            let (path, requirement, context) = if is_entry {
-                (
-                    "schema_version",
-                    "REQ-0245",
-                    vec![text("expected", expected), text("actual", actual)],
-                )
-            } else {
-                (
-                    "parents",
-                    "REQ-0656",
-                    vec![
-                        text("entry_version", expected),
-                        text("parent_version", actual),
-                    ],
-                )
-            };
-            let mut value = invalid("schema_version_mismatch", path, requirement, context);
-            value["source"] = json!(source);
-            value["entry"] = json!(entry);
-            value
-        }
+        graph::Error::InvalidParent { .. }
+        | graph::Error::Unavailable { .. }
+        | graph::Error::Cycle { .. }
+        | graph::Error::Version { .. } => return Err(TransportError::Internal.into()),
     })
 }
 

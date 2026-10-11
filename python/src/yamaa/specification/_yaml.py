@@ -153,8 +153,11 @@ def _yaml_error(error: yaml.YAMLError) -> SpecificationError:
     mark = getattr(error, "problem_mark", None)
     # Prefer the structured problem message: the first line of str(error) is
     # the construction context (e.g. "while constructing a mapping"), not the
-    # actual problem (e.g. "found duplicate key 'a'").
-    reason = getattr(error, "problem", None) or str(error).splitlines()[0]
+    # actual problem (e.g. "found duplicate key 'a'"). A bare yaml.YAMLError
+    # carries neither a problem attribute nor any text, so fall back to a
+    # fixed reason instead of indexing an empty line list.
+    first_line = next(iter(str(error).splitlines()), None)
+    reason = getattr(error, "problem", None) or first_line or "invalid YAML document"
     context: dict[str, str | int] = {"reason": reason}
     if mark is not None:
         context.update(line=mark.line + 1, column=mark.column + 1)

@@ -117,6 +117,52 @@ def test_rejects_missing_length(tmp_path: Path) -> None:
     )
 
 
+def test_rejects_missing_length_with_max_length_on_int_column(
+    tmp_path: Path,
+) -> None:
+    # REQ-0875 derives length from max_length on str columns only; an int
+    # column with no declared length still fails REQ-0872.
+    source = (EXAMPLE / "spec.yaml").read_text(encoding="ascii")
+    old = (
+        "  - name: AGE\n"
+        "    type: int\n"
+        "    label: Age\n"
+        "    derivation: DM_RAW.AGE\n"
+        "    verifications:\n"
+        "      range:\n"
+        "        min: 0\n"
+        "        max: 120\n"
+        "    submission:\n"
+        "      core: Exp\n"
+        "      role: Record Qualifier\n"
+        "      length: 3\n"
+    )
+    new = (
+        "  - name: AGE\n"
+        "    type: int\n"
+        "    label: Age\n"
+        "    derivation: DM_RAW.AGE\n"
+        "    verifications:\n"
+        "      - range:\n"
+        "          min: 0\n"
+        "          max: 120\n"
+        "      - max_length:\n"
+        "          max: 5\n"
+        "    submission:\n"
+        "      core: Exp\n"
+        "      role: Record Qualifier\n"
+    )
+    assert old in source
+    path = tmp_path / "spec.yaml"
+    path.write_text(source.replace(old, new, 1), encoding="ascii")
+
+    assert _condition(path) == (
+        "submission_length_missing",
+        ("columns.AGE.submission",),
+        "REQ-0912",
+    )
+
+
 def test_rejects_length_where_prohibited(tmp_path: Path) -> None:
     # REQ-0872: a `date` submission type carries fixed-form values.
     path = _mutated(

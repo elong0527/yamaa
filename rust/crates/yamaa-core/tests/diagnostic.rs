@@ -10,6 +10,8 @@ use yamaa_core::{
 
 #[path = "diagnostic/dataset.rs"]
 mod dataset;
+#[path = "diagnostic/predicate_evaluation.rs"]
+mod predicate_evaluation;
 
 struct Bindings;
 #[path = "diagnostic/binding.rs"]
@@ -18,6 +20,8 @@ mod binding;
 mod csv;
 #[path = "diagnostic/grammar.rs"]
 mod grammar;
+#[path = "diagnostic/inheritance.rs"]
+mod inheritance;
 #[path = "diagnostic/parquet.rs"]
 mod parquet;
 #[path = "diagnostic/preflight.rs"]
@@ -228,7 +232,9 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(producer::reached());
     reached.extend(preflight::output_reached());
     reached.extend(grammar::reached());
+    reached.extend(inheritance::reached());
     reached.extend(grammar::predicate_reached());
+    reached.extend(predicate_evaluation::reached());
     reached.extend(binding::reached());
     reached.extend(binding::window_reached());
     reached.extend(binding::lookup_reached());
@@ -430,6 +436,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     assert_eq!(diagnostic.source_span, None);
     assert_eq!(diagnostic.operand_route, None);
     reached.insert(diagnostic.code);
+    reached.extend(preflight::temporal_reached());
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());
     reached.extend(parquet::reached());

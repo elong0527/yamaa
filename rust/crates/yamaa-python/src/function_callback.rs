@@ -135,7 +135,7 @@ struct PythonBindings<'a, 'py> {
     callbacks: Vec<Bound<'py, PyAny>>,
     interrupted: Option<PyErr>,
 }
-impl yamaa_engine::dataset::FunctionBindings for PythonBindings<'_, '_> {
+impl yamaa_engine::dataset::FunctionPort for PythonBindings<'_, '_> {
     type Error = CallbackError;
     /// Metadata is borrowed from the fully admitted request and remains stable for the run.
     fn signature(&self, slot: usize) -> Option<&yamaa_engine::function_invocation::InvocationPlan> {
@@ -151,7 +151,7 @@ impl yamaa_engine::dataset::FunctionBindings for PythonBindings<'_, '_> {
             callback: &self.callbacks[slot],
             interrupted: None,
         };
-        let result = port.call(arguments);
+        let result = port.call(0, arguments);
         self.interrupted = port.interrupted;
         result
     }
@@ -218,7 +218,11 @@ struct PythonPort<'a, 'py> {
 impl FunctionPort for PythonPort<'_, '_> {
     type Error = CallbackError;
     /// Build owned Python scalars and call exactly once while the GIL stays held.
-    fn call(&mut self, arguments: &[Argument<'_>]) -> Result<Value, HostError<Self::Error>> {
+    fn call(
+        &mut self,
+        _slot: usize,
+        arguments: &[Argument<'_>],
+    ) -> Result<Value, HostError<Self::Error>> {
         let py = self.callback.py();
         let kwargs = PyDict::new(py);
         for argument in arguments {

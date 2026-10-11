@@ -18,7 +18,11 @@ struct Port {
 impl FunctionPort for Port {
     type Error = CallbackError;
     /// One counted effect precedes the supplied scalar, host error or unwind.
-    fn call(&mut self, arguments: &[Argument<'_>]) -> Result<Value, HostError<Self::Error>> {
+    fn call(
+        &mut self,
+        _slot: usize,
+        arguments: &[Argument<'_>],
+    ) -> Result<Value, HostError<Self::Error>> {
         self.calls += 1;
         assert_eq!(arguments[0].name, "host_x");
         assert_eq!(
@@ -52,7 +56,10 @@ fn values_and_conditions_have_independent_wire_truth() {
     let prepared = PreparedInvocation::parse(&request().to_string()).unwrap();
     assert_eq!(prepared.host_names().collect::<Vec<_>>(), ["host_x"]);
     let mut port = port();
-    assert_eq!(prepared.invoke(&mut port).unwrap(), "{\"protocol\":\"function/1\",\"outcome\":{\"status\":\"value\",\"value\":{\"int\":\"7\"}}}");
+    assert_eq!(
+        prepared.invoke(&mut port).unwrap(),
+        "{\"protocol\":\"function/1\",\"outcome\":{\"status\":\"value\",\"value\":{\"int\":\"7\"}}}"
+    );
     port.value = Some(Value::Str("wrong".into()));
     let actual: Json = serde_json::from_str(&prepared.invoke(&mut port).unwrap()).unwrap();
     assert_eq!(
@@ -179,8 +186,13 @@ fn pre_call_outcomes_have_zero_host_effects() {
     let mut request = request();
     request["arguments"][0]["value"] = json!({"missing":null});
     let mut port = port();
-    assert_eq!(PreparedInvocation::parse(&request.to_string()).unwrap().invoke(&mut port).unwrap(),
-        "{\"protocol\":\"function/1\",\"outcome\":{\"status\":\"value\",\"value\":{\"missing\":null}}}");
+    assert_eq!(
+        PreparedInvocation::parse(&request.to_string())
+            .unwrap()
+            .invoke(&mut port)
+            .unwrap(),
+        "{\"protocol\":\"function/1\",\"outcome\":{\"status\":\"value\",\"value\":{\"missing\":null}}}"
+    );
     request["arguments"]
         .as_array_mut()
         .unwrap()

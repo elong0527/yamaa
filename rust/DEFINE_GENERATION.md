@@ -27,6 +27,18 @@ omitted origin document references select that CRF. Submission context retains
 its alias and transport-name requirements. Literal supporting links may name
 files that do not exist yet.
 
+Row-level `submission` overrides inherit every absent field from the selected
+column declaration. Each covered row requires a declared `<DOMAIN>TESTCD`
+string literal and an effective derivation for every selected output column.
+Row IDs remain arbitrary nonempty text. Identical declarations for one
+(column, test code) pair describe one value; conflicting declarations refuse.
+Effective family, origin/refutation, method/document, type and terminology
+admission is shared with the base columns. One value list per column links
+ordered per-value items and where clauses using the bundled XSD's structure.
+When Dataset-JSON is requested, each held row's discriminator selects the
+effective per-value codelist and inventory vocabulary; an unmatched code
+retains the column declaration.
+
 An omitted FileOID is `study.id.section.Define-XML_2.1`; omitted metadata-version
 ID and name are `study.id.section` and `study.name section metadata`. Section
 keys are lower case. Explicit admitted overrides replace those defaults.
@@ -41,12 +53,19 @@ omission captures current UTC during preparation.
 The closed XML construction fixes element/attribute order, required structure
 and reference forms. Shared generation checks its scalar schema facets,
 generated identifiers, references and XML character/whitespace admission
-before returning bytes. Installed Python witnesses independently validate all
-three fixture outputs against the unchanged official offline XSD and DM JSON
-against the unchanged Dataset-JSON schema. DM also compares both outputs with
-the committed goldens byte for byte. AE/VS use independently authored fixed-time
+before returning bytes. Installed Python witnesses independently validate the
+three original fixture outputs against the unchanged official offline XSD
+and DM JSON against the unchanged Dataset-JSON schema. DM also compares both
+outputs with the committed goldens byte for byte. AE/VS use independently authored fixed-time
 schema and structure expectations, without generating new expected bytes or
 importing the reference renderer.
+
+The separate LB metadata completion preserves its original specification and
+CSV. It supplies complete column facts and an explicit SDTM-valid Sponsor
+source for the creatinine override; the original Assigned/Investigator claim
+remains an independent family-rejection control. Fixed-time LB XML structure,
+offline XSD, Dataset-JSON schema/rows and selected-value codelist refusal have
+independently authored witnesses in both installed hosts.
 
 The complete output set is rendered and target-admitted before publication.
 Metadata or artifact failure leaves every target untouched. Save preflights
@@ -79,10 +98,9 @@ has at most 16,777,216 cells, and vocabulary comparison reserves bounded
 cumulative work before scanning values. Complete retained rendered publication bytes are
 bounded at 64 MiB and a capacity refusal returns an issue before any write.
 
-This slice advances the column-metadata generator and adds the three environment
-fixtures alongside the reference inputs. Value-level metadata returns an
-explicit unsupported issue; its shared generation and full language acceptance
-remain open under #1758. The historical renderer/loaders, `define.yaml`, schema,
+This slice advances column and typed value-level metadata generation alongside
+the original reference inputs. Full language acceptance and transition remain
+open under #1758. The historical renderer/loaders, `define.yaml`, schema,
 benchmark tooling and expected bytes are preserved for the transition gate.
 They are not invoked by either new installed entry point. This implementation
 does not close the complete issue or authorize release cutover.

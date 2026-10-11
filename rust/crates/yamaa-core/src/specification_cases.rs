@@ -9,9 +9,17 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub(super) struct Branch {
-    when: Option<Result<Plan, crate::diagnostic::Diagnostic>>,
+    when: Option<Result<Plan, InvalidPredicate>>,
     path: String,
     operation: alloc::boxed::Box<Operation>,
+}
+/// Keep the complete parser cause on the prepared branch; document reporting
+/// projects it only after source ingestion reaches predicate binding.
+#[derive(Clone, Debug)]
+struct InvalidPredicate {
+    path: String,
+    expression: String,
+    error: crate::predicate_parser::ParseError,
 }
 fn unsupported(path: &str, operation: &str) -> PrepareError {
     PrepareError::Unsupported(vec![UnsupportedFeature {
@@ -65,10 +73,12 @@ pub(super) fn prepare(
                     Ok(plan)
                 }
                 Err(predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::Grammar {
-                        position, failure, ..
-                    },
-                )) => Err(failure.diagnostic(&format!("{prefix}.when"), when, position.character)),
+                    error @ crate::predicate_parser::ParseError::Grammar { .. },
+                )) => Err(InvalidPredicate {
+                    path: format!("{prefix}.when"),
+                    expression: when.into(),
+                    error,
+                }),
                 Err(_) => return Err(unsupported(&format!("{prefix}.when"), "case_predicate")),
             };
             (
@@ -98,6 +108,22 @@ pub(super) fn prepare(
                 record,
                 depth + 1,
             )?),
+            "date_diff" | "study_day" | "to_epoch_day" => {
+                let mut features = Vec::new();
+                let operation = temporal::prepare(
+                    d,
+                    payload,
+                    op,
+                    &result_path,
+                    None,
+                    Some(intermediates),
+                    &mut features,
+                )?;
+                if !features.is_empty() {
+                    return Err(PrepareError::Unsupported(features));
+                }
+                Operation::Temporal(operation)
+            }
             "round_half_away_from_zero" => {
                 let mut features = Vec::new();
                 let rounding = rounding::prepare(
@@ -186,8 +212,21 @@ pub(super) fn bind(
             .map(|compiled| {
                 let plan = match compiled {
                     Ok(plan) => plan,
-                    Err(diagnostic) => {
-                        findings.push(BindFinding::Predicate(diagnostic.clone()));
+                    Err(invalid) => {
+                        let crate::predicate_parser::ParseError::Grammar {
+                            position, failure, ..
+                        } = &invalid.error
+                        else {
+                            return Err(BindError::Internal);
+                        };
+                        let diagnostic = failure
+                            .original_diagnostic(
+                                &invalid.path,
+                                &invalid.expression,
+                                position.character,
+                            )
+                            .map_err(|_| BindError::PredicateDiagnosticLimit)?;
+                        findings.push(BindFinding::Predicate(diagnostic));
                         return Ok(None);
                     }
                 };
@@ -281,6 +320,17 @@ pub(super) fn bind(
                     Err(_) => return Err(BindError::Internal),
                 }
             }
+            Operation::Temporal(operation) => temporal::bind(
+                operation,
+                column,
+                &spec.keys,
+                catalog,
+                &spec.intermediates,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
             Operation::Round(rounding) => rounding::bind(
                 rounding,
                 column,

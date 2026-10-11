@@ -14,10 +14,23 @@ use crate::{numeric_parser::SourceSpan, value::Value};
 mod dataset;
 pub use dataset::DatasetFinding;
 
+#[path = "diagnostic_inheritance.rs"]
+mod inheritance;
+pub use inheritance::InheritanceFinding;
+
+#[path = "diagnostic_source.rs"]
+mod source;
+pub use source::{admit_source_diagnostics, ParquetFinding, SourceDiagnosticReport, SourceFinding};
+
 #[path = "diagnostic_grammar.rs"]
 mod grammar;
 #[path = "diagnostic_numeric.rs"]
 mod numeric;
+#[path = "diagnostic_predicate.rs"]
+mod predicate;
+pub use predicate::{
+    PredicateDiagnosticError, PredicateGrammarDiagnosticError, MAX_PREDICATE_DIAGNOSTIC_BYTES,
+};
 #[path = "diagnostic_project_lock.rs"]
 mod project_lock;
 pub use project_lock::{
@@ -116,6 +129,8 @@ conditions! {
     NumericInputType => ("validation", "incompatible_input_type", Some("REQ-0444")),
     RoundingDigitsType => ("validation", "incompatible_input_type", Some("REQ-0418")),
     DeclarativeRoundingInput => ("validation", "incompatible_input_type", Some("REQ-0418")),
+    TemporalOperand => ("validation", "incompatible_input_type", Some("REQ-0606")),
+    TemporalBounds => ("validation", "value_not_permitted", Some("REQ-0613")),
     IntegerOverflow => ("derivation", "integer_overflow", Some("REQ-0434")),
     DivisionByZero => ("derivation", "division_by_zero", Some("REQ-0430")),
     SqrtOfNegative => ("derivation", "sqrt_of_negative", Some("REQ-0431")),
@@ -126,6 +141,11 @@ conditions! {
     ConversionTemporal => ("convert", "conversion_failed", Some("REQ-0601")),
     ResourceMissing => ("validation", "resource_path_missing", Some("REQ-0785")),
     ResourceNotRegularFile => ("validation", "resource_path_not_regular_file", Some("REQ-0785")),
+    InheritanceInvalidParent => ("validation", "invalid_parent_path", Some("REQ-0653")),
+    InheritanceParentUnavailable => ("validation", "parent_not_found", Some("REQ-0654")),
+    InheritanceCycle => ("validation", "inheritance_cycle", Some("REQ-0655")),
+    InheritanceParentVersion => ("validation", "schema_version_mismatch", Some("REQ-0656")),
+    InheritanceEntryVersion => ("validation", "schema_version_mismatch", Some("REQ-0245")),
     PreflightUndeclaredRowColumn => ("validation", "undeclared_column", None),
     PreflightDuplicateRowDefault => ("validation", "duplicate_derivation", Some("REQ-1260")),
     PreflightMissingRowDerivation => ("validation", "missing_derivation", Some("REQ-0200")),
@@ -202,6 +222,11 @@ conditions! {
     LookupOutputKeyReference => ("validation", "unknown_field", Some("REQ-0117")),
     LookupValueReference => ("validation", "unknown_field", Some("REQ-0125")),
     LookupKeyType => ("validation", "incompatible_input_type", Some("REQ-0323")),
+    PredicateUnknownField => ("validation", "unknown_field", Some("REQ-0189")),
+    PredicateIncompatiblePair => ("validation", "incompatible_input_type", Some("REQ-0190")),
+    PredicateExpectedText => ("validation", "incompatible_input_type", Some("REQ-0190")),
+    PredicateContainsExpectedText => ("validation", "incompatible_input_type", Some("REQ-1244")),
+    PredicateDanglingEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
     PredicateInvalidExpression => ("validation", "invalid_predicate", Some("REQ-0188")),
     PredicateInvalidEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
     PredicateInvalidRegex => ("validation", "invalid_predicate", Some("REQ-1244")),

@@ -1,0 +1,62 @@
+# Independent submission completion over the unchanged executable LB fixture.
+# The original loader accepts Assigned/Investigator without a study family;
+# SDTM REQ-0889 instead requires Vendor/Sponsor for Assigned. This positive
+# witness explicitly selects Sponsor, while tests retain the original rejection.
+schema_version: '1.0'
+parents: spec.yaml
+submission:
+  label: Laboratory Tests
+  class: FINDINGS
+  structure: One record per subject and laboratory test
+  repeating: true
+  reference_data: false
+columns:
+  - name: DOMAIN
+    submission: {core: Exp, length: 2, origin: {type: Assigned, source: Sponsor}}
+  - name: STUDYID
+    submission: {core: Exp, length: 20, origin: {type: Collected, source: Vendor}}
+  - name: USUBJID
+    submission: {core: Exp, length: 20, origin: {type: Collected, source: Vendor}}
+  - name: LBSEQ
+    submission:
+      core: Exp
+      length: 8
+      origin: {type: Derived, source: Sponsor}
+      method: Sequence within each subject by collection date and test code
+  - name: LBTESTCD
+    submission: {core: Exp, length: 8, origin: {type: Assigned, source: Sponsor}}
+  - name: LBTEST
+    submission: {core: Exp, length: 40, origin: {type: Assigned, source: Sponsor}}
+  - name: LBORRES
+    submission:
+      core: Exp
+      length: 20
+      origin: {type: Derived, source: Sponsor}
+      method: Select the only matching ODM result for the subject and visit
+  - name: LBORRESU
+    submission: {core: Exp, length: 8, origin: {type: Assigned, source: Sponsor}}
+  - name: LBSTRESN
+    submission:
+      core: Exp
+      length: 8
+      significant_digits: 2
+      origin: {type: Assigned, source: Sponsor}
+      method: Convert the original result to the declared numeric type
+  - name: LBSTRESU
+    submission: {core: Exp, length: 8, origin: {type: Assigned, source: Sponsor}}
+  - name: LBDTC
+    submission:
+      core: Exp
+      origin: {type: Derived, source: Sponsor}
+      method: Select the only collection date for the subject and visit
+rows:
+  - id: glucose
+    submission:
+      LBORRESU:
+        origin: {type: Assigned, source: Vendor}
+        codelist: CL_GLUCOSE
+  - id: creatinine
+    submission:
+      LBORRESU:
+        origin: {type: Assigned, source: Sponsor}
+        codelist: CL_CREATININE

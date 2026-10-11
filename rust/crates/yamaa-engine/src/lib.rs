@@ -16,6 +16,9 @@ pub mod inheritance_preparation;
 pub mod numeric_lifecycle;
 pub mod table_grouping;
 
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
+
 /// Bootstrap capability information, independent of Python and R representations.
 #[derive(Debug, PartialEq, Eq)]
 pub struct EngineInfo {
@@ -40,6 +43,7 @@ pub mod specification_output;
 pub mod specification_run;
 
 pub mod project_activation;
+pub mod project_preparation;
 
 pub mod producer_admission;
 pub mod producer_build;

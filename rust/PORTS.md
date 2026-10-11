@@ -15,7 +15,24 @@ and codec interfaces are native traits; adapters translate values and errors.
 | `specification_output::ArtifactPort` | engine | Python/R publication bridges; Unix explicit-target Rust/Python/R publisher; native test fake | Original opaque publication error, without retry |
 | `TableAccess` | core | Immutable Arrow snapshots, core normalized CSV tables and engine output tables; test fakes | Bounds or original opaque cell-access error |
 | `inheritance::SourcePort` | engine | Existing inheritance bridge; Unix native captured-file port | Source failure or traversal resource limit |
-| `function_invocation::FunctionPort` and `dataset::FunctionBindings` | engine | Python/R native callback bridges | Original host exception, rejected representation or typed invocation failure |
+| `project_activation::ActivationPort` | engine | Python/R locked-package adapters; native fakes | Original lock, binding, conformance or interrupt failure |
+| `project_preparation::CapturePort` | engine | Adapter native file metadata capture; shared scripted native fake | Original capture/interrupt payload, bounded source/byte/identity refusal or malformed native reply kind |
+| `project_preparation::DecodePort` | engine | Adapter captured YAML/schema codec; shared scripted native fake | Original structural failure with retained source/context; closed environment/function/codelist target |
+| `function_invocation::FunctionPort` | engine | Python/R scalar callbacks and activated registries; `project_activation::Bindings`; native fakes | Original host exception, rejected representation or typed invocation failure |
+
+The one function invocation port borrows immutable legacy or versionless
+signatures by stable slot and calls that slot with declaration-order host
+arguments. Signature inspection executes no project code. Dataset admission
+checks every selected slot before source cardinality or cell access. Already-bound
+scalar probes use slot zero through the same invocation service. One generic
+`NoFunctions` implementation supplies no callable authority in every layer.
+
+The opt-in engine `test-support` feature exposes shared scripted native ports.
+Source, decoder, encoder, publisher and function fakes retain owned outcomes and
+one shared ordered event log. They move original opaque errors without requiring
+Clone, Send or Sync and never retry. Default engine unit tests exercise the same
+capture, decode, execution and held-publication lifecycle; the feature also makes
+the fakes available to integration tests without adding production dependencies.
 
 ## Current lifecycle
 
@@ -27,6 +44,32 @@ host adapters retain the checked capability and call its `build_into` operation
 inside their existing panic boundary, so partial source observations survive.
 Native fake-port tests pin unsupported-before-capture behavior, cached repeated
 builds, opaque error identity and incomplete attempts after a host panic.
+
+`project_preparation::prepare` owns environment declaration lowering, dependency
+capture order, cumulative source/byte/identity/node accounting, function/codelist
+lowering and final environment admission. Root structural and scalar gates precede
+every dependency request. Declared capture-count admission precedes the first
+port, including attempts that fail. Lock capture is first, followed by external
+functions and codelists in written order; inline definitions retain the same
+authored coordinates. The engine supplies remaining byte and identity allowances
+before capture and rejects oversized replies before decoding. It charges decoded
+nodes before lowering or retaining a definition. Ordinary independent source
+failures collect; original interrupts abort immediately without later authority.
+
+Success and rejection move the original captured bytes, normalized documents,
+origins and opaque errors. A failed authored lock capture does not invent an
+absent-lock finding. The service has no activation, study, invocation, publication
+or retry port. The adapter implements structural decoding and preserves its
+existing result/error shapes; it no longer assembles environment drafts or owns
+this preparation loop. Shared scripted metadata ports pin effect order and exact
+remaining allowances and consume non-Clone outcomes once. Engine tests use
+independent normalized documents; adapter tests keep original YAML truth.
+
+Captured schema closure/standalone preparation internals and the adapter-defined
+raw inheritance capture/rebase catalog remain separate migration work. Existing
+engine inheritance trait implementations remain codec/resource adapters. The
+experimental inheritance JSON callback and other component probes remain pending
+retirement after their complete public qualification consumers are preserved.
 
 This internal check is vocabulary admission, not the complete public `check`
 contract in #1751. Binding findings that depend on source schemas, and existing
@@ -196,11 +239,10 @@ codelist resources, with resolved paths and declaring-file provenance. Current
 source bridges retain their existing path behavior; the #1751 target resolves
 each path relative to its declaring file without an approved-root boundary.
 
-Public source-file integration, general publication/save policy, environment
-activation, shared reusable test fakes, and consolidation of the two function
-interfaces remain open. The existing inheritance JSON callback bridge also
-remains to be replaced. No new unimplemented port is presented as a working
-capability, and no public default, golden fixture or qualification level changes.
+The existing inheritance JSON callback bridge still has qualification and
+reference-route consumers. Their replacement and retirement remain open under
+#1751/#1755. This function-port consolidation and reusable test support do not
+complete that retirement or change a public default or golden fixture.
 
 ### Captured standalone schema findings
 
