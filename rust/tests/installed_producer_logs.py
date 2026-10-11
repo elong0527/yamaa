@@ -26,7 +26,7 @@ WHEADER = "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFIC
 
 def golden(name, warning=False, severity="warning"):
     """Independently authored range records, derived from the normative schema."""
-    identifier = "é𝄞" if name == "root" else name + "-range"
+    identifier = "\u00e9\U0001d11e" if name == "root" else name + "-range"
     details = '"{""column"":""ID""}"'
     if warning:
         keys = '"' + KEYS.replace('"', '""') + '"'
@@ -181,7 +181,9 @@ class ProducerLogs(unittest.TestCase):
                     result.output.to_dicts(), [{"ID": value} for value in IDS]
                 )
                 verification, warning = result.verification_log, result.warning_log
-                self.assertEqual(verification["VERIFICATION_ID"].to_list(), ["é𝄞"])
+                self.assertEqual(
+                    verification["VERIFICATION_ID"].to_list(), ["\u00e9\U0001d11e"]
+                )
                 self.assertEqual(verification["EVALUATED_COUNT"].to_list(), [8])
                 self.assertEqual(warning["FAILURE_COUNT"].to_list(), [8])
                 self.assertEqual(warning["OFFENDING_KEYS"].to_list(), [KEYS])
@@ -309,12 +311,12 @@ class ProducerLogs(unittest.TestCase):
         consumer = (
             original.decode("ascii")
             .replace("domain: ADSL", "domain: ADSL\nbase: A")
+            .replace("adsl", "root")
             .replace(
                 "  DM: input/dm.csv",
                 "  A: {path: adsl.csv, schema: producer.yaml}\n  B: {path: adsl.csv, schema: ./producer.yaml}",
             )
             .replace("DM.", "A.")
-            .replace("adsl", "root")
         )
         self.write("root.yaml", consumer)
         self.paths = [
@@ -439,7 +441,12 @@ class ProducerLogs(unittest.TestCase):
             else:
                 self.assertIsNotNone(result.output)
                 self.assertFalse(result.save())
-                report = self.retain(result, "case-" + name.split("/")[0])
+                phase = (
+                    "case-parent-alias"
+                    if name.startswith("GENERATED")
+                    else "case-entry-alias"
+                )
+                report = self.retain(result, phase)
                 self.assertEqual(report["publication"]["entered"], [])
                 self.assertEqual(
                     report["publication"]["error"]["field"], "verification_log"
