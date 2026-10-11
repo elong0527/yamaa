@@ -1256,6 +1256,44 @@ local({
   cat("owned installed R project runs retain fresh activation, held lock/source, i64/missing evidence, original conditions/interrupts, lock rejection and registered handle authority passed\n")
 })
 
+local({
+  directory <- tempfile("public-rounding-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  case_name <- "schema-round-half-away-from-zero-ties"
+  stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
+  case <- file.path(directory,case_name)
+  entry <- file.path(case,"spec.yaml")
+  written <- rawfile(entry)
+  input <- file.path(case,"input","adsl.csv")
+  captured <- rawfile(input);unlink(input)
+  stopifnot(nrow(yamaa_check(entry)$issues)==0L)
+  writeBin(captured,input)
+  result <- yamaa_domain(entry)
+  expected <- read.csv(file.path(case,"expected","adsl.csv"),colClasses=c("character","character",rep("numeric",4L)),na.strings="",check.names=FALSE)
+  stopifnot(nrow(expected)==16L,nrow(result$issues)==0L,identical(result$output,expected),
+            identical(rawfile(entry),written),!file.exists(file.path(case,"adsl.csv")))
+  stopifnot(identical(result$save(),TRUE),identical(read.csv(file.path(case,"adsl.csv"),colClasses=c("character","character",rep("numeric",4L)),na.strings="",check.names=FALSE),expected))
+  case_name <- "negative-round-half-away-from-zero-non-numeric-source"
+  stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
+  case <- file.path(directory,case_name)
+  unlink(file.path(case,"input"),recursive=TRUE)
+  expected_error <- paste0("phase: validation\ncondition: incompatible_input_type\nspec_paths:\n",
+    "  - columns.RNDVAL.derivation.round_half_away_from_zero.source\n",
+    "requirement: REQ-0418\ncontext:\n  source: SEX\n  expected: numeric\n  actual: str\n")
+  stopifnot(identical(rawToChar(rawfile(file.path(case,"expected","error.yaml"))),expected_error))
+  checked <- yamaa_check(file.path(case,"spec.yaml"))$issues
+  rejected <- yamaa_domain(file.path(case,"spec.yaml"))
+  stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),
+    identical(checked$condition,"incompatible_input_type"),identical(checked$requirement,"REQ-0418"),
+    identical(checked$spec_paths,list("columns.RNDVAL.derivation.round_half_away_from_zero.source")),
+    identical(checked$context,'{"actual":"str","expected":"numeric","source":"SEX"}'),
+    identical(rejected$issues,checked),is.null(rejected$output),
+    is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),
+    inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),
+    !file.exists(file.path(case,"adsl.csv")))
+  cat("public original declarative rounding matches 16 committed rows and rejects original nonnumeric input before study capture without Python passed\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

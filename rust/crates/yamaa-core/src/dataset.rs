@@ -26,6 +26,9 @@ mod intermediates;
 pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
 #[path = "dataset_lookup.rs"]
 mod lookup;
+#[path = "dataset_rounding.rs"]
+mod rounding;
+pub use rounding::{InvalidDigits, Rounding};
 #[path = "dataset_selection.rs"]
 mod selection;
 pub use selection::{FirstAvailable, SelectionRead, SelectionSource};
@@ -41,6 +44,11 @@ pub enum Expression {
     Literal(Value),
     /// Compiled scalar arithmetic over statically bound source/completed output reads.
     Compute(BoundNumeric),
+    /// Declarative rounding over one bound operand; no formula text is invented.
+    Round {
+        source: alloc::boxed::Box<Assignment>,
+        rounding: Rounding,
+    },
     /// Explicit prebound host invocation; never discovered or activated during execution.
     Function(BoundFunction),
     /// Versionless package invocation, activated before any study read.
@@ -394,6 +402,29 @@ fn validate_assignment_at(
                         PlanError::UnavailableColumn
                     }
                 })?;
+        }
+        Expression::Round {
+            source: operand,
+            rounding,
+        } => {
+            if rounding.source().is_empty() || rounding.path().is_empty() {
+                return Err(PlanError::EmptyPath);
+            }
+            if operand.column != assignment.column {
+                return Err(PlanError::InvalidColumns);
+            }
+            validate_assignment_at(
+                operand,
+                available,
+                source,
+                secondary,
+                intermediates,
+                output,
+                mode,
+                depth + 1,
+                remaining,
+            )?;
+            available[assignment.column] = false;
         }
         Expression::Function(function) => function.validate(source, available, mode)?,
         Expression::ProjectFunction(function) => function.validate(source, available, mode)?,

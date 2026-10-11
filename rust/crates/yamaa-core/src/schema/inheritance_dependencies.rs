@@ -6,6 +6,7 @@ use super::{
     NormalizationResource, NormalizedDocument, SchemaOrigin, SchemaSource, SchemaStructure,
     ValidationError,
 };
+use crate::dependency_analysis;
 use alloc::{string::String, vec, vec::Vec};
 
 /// Ordered semantic findings; hosts render paths without discovering dependencies again.
@@ -461,20 +462,25 @@ impl<'a> Run<'a, '_> {
         }
         self.budget.reserve(0, selected.len())?;
         let mut emitted = vec![false; selected.len()];
-        loop {
-            let mut next = None;
-            for (i, edges) in dependencies.iter().enumerate() {
+        // The shared scheduler needs its own bounded state. Keep this request's
+        // normalization policy rather than imposing dependency-analysis caps.
+        self.budget
+            .reserve(0, dependency_analysis::stable_order_slots(&dependencies))?;
+        dependency_analysis::visit_stable_order(&dependencies, |next| -> Result<(), Error> {
+            // Retain the legacy scan's charge sequence, including emitted
+            // prefixes and the final exhausted pass. Scheduling itself has one
+            // shared implementation; this is only request-policy accounting.
+            let scanned = next.map_or(dependencies.len(), |node| node + 1);
+            for edges in dependencies.iter().take(scanned) {
                 self.budget.work(edges.len().saturating_add(1))?;
-                if !emitted[i] && edges.iter().all(|&j| emitted[j]) {
-                    next = Some(i);
-                    break;
-                }
             }
-            let Some(i) = next else { break };
-            emitted[i] = true;
-            self.budget.reserve(0, 1)?;
-            self.ordered_columns.push(selected[i].node);
-        }
+            if let Some(i) = next {
+                emitted[i] = true;
+                self.budget.reserve(0, 1)?;
+                self.ordered_columns.push(selected[i].node);
+            }
+            Ok(())
+        })?;
         if self.ordered_columns.len() != selected.len() {
             let mut columns = Vec::new();
             for (i, column) in selected.iter().enumerate() {

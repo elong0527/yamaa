@@ -25,6 +25,9 @@ use yamaa_engine::{
     table_reduction::TableReductionError,
 };
 
+#[path = "dataset_failure_diagnostic.rs"]
+mod diagnostics;
+
 #[path = "dataset_functions.rs"]
 mod functions;
 pub(crate) use functions::Snapshot;
@@ -1065,6 +1068,13 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
         // dataset/1 admits only legacy versioned declarations. Versionless
         // package calls use the owned file application rather than this wire.
         ExecutionError::ProjectFunction { .. } => return Err(Error::UnsupportedProtocol),
+        ExecutionError::ScalarDiagnostic(diagnostic) => Outcome::Condition {
+            diagnostic: Box::new(diagnostic.clone().into()),
+            identity: None,
+            matched_key: None,
+            partition: None,
+            verifications: None,
+        },
         ExecutionError::Numeric {
             error,
             identity: keys,
@@ -1076,19 +1086,8 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             partition: None,
             verifications: None,
         },
-        ExecutionError::BaselineAmbiguity {
-            path,
-            column,
-            date,
-            match_count,
-            partition,
-        } => Outcome::Condition {
-            diagnostic: crate::numeric_transport::baseline_ambiguity(
-                path.clone(),
-                column.clone(),
-                date.clone(),
-                *match_count,
-            )?,
+        ExecutionError::BaselineAmbiguity { partition, .. } => Outcome::Condition {
+            diagnostic: diagnostics::failure(error, MAX_OUTPUT_BYTES)?,
             identity: None,
             matched_key: None,
             partition: Some(
@@ -1104,19 +1103,11 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
         },
 
         ExecutionError::MultipleMatches {
-            path,
-            dataset,
-            intermediate,
-            match_count,
             matched_key,
             identity: keys,
+            ..
         } => Outcome::Condition {
-            diagnostic: crate::numeric_transport::join_condition(
-                path.clone(),
-                dataset.clone(),
-                intermediate.clone(),
-                Some(*match_count),
-            )?,
+            diagnostic: diagnostics::failure(error, MAX_OUTPUT_BYTES)?,
             identity: keys.clone().map(identity),
             partition: None,
             verifications: None,
@@ -1131,18 +1122,11 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             ),
         },
         ExecutionError::UnmatchedKey {
-            path,
-            dataset,
-            intermediate,
             matched_key,
             identity: keys,
+            ..
         } => Outcome::Condition {
-            diagnostic: crate::numeric_transport::join_condition(
-                path.clone(),
-                dataset.clone(),
-                intermediate.clone(),
-                None,
-            )?,
+            diagnostic: diagnostics::failure(error, MAX_OUTPUT_BYTES)?,
             identity: keys.clone().map(identity),
             partition: None,
             verifications: None,
@@ -1156,19 +1140,10 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
                     .collect(),
             ),
         },
-        ExecutionError::MultipleValues {
-            path,
-            identifier,
-            value_count,
-            identity: keys,
-        } => Outcome::Condition {
+        ExecutionError::MultipleValues { identity: keys, .. } => Outcome::Condition {
             matched_key: None,
             partition: None,
-            diagnostic: crate::numeric_transport::multiple_values(
-                path.clone(),
-                identifier.clone(),
-                *value_count,
-            )?,
+            diagnostic: diagnostics::failure(error, MAX_OUTPUT_BYTES)?,
             identity: keys.clone().map(identity),
             verifications: None,
         },
@@ -1237,24 +1212,12 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             diagnostic: crate::numeric_transport::predicate(error)?,
             identity: None,
         },
-        ExecutionError::ReductionType {
-            path,
-            expression,
-            reducer,
-            source,
-            actual,
-        } => Outcome::Condition {
+        ExecutionError::ReductionType { .. } => Outcome::Condition {
             matched_key: None,
             partition: None,
             verifications: None,
             identity: None,
-            diagnostic: crate::numeric_transport::reduction_type(
-                path.clone(),
-                expression.clone(),
-                reducer.name(),
-                source.clone(),
-                *actual,
-            ),
+            diagnostic: diagnostics::failure(error, MAX_OUTPUT_BYTES)?,
         },
         ExecutionError::Reduction {
             path,

@@ -1432,6 +1432,80 @@ class PublicDomains(unittest.TestCase):
         guard.start()
         self.addCleanup(guard.stop)
 
+    def test_public_declarative_rounding_original_yaml_and_independent_csv(self):
+        import shutil
+
+        import polars as pl
+        import yamaa
+        from polars.testing import assert_frame_equal
+
+        with tempfile.TemporaryDirectory() as directory:
+            case = Path(directory) / "positive"
+            shutil.copytree(
+                ROOT / "cases" / "schema-round-half-away-from-zero-ties", case
+            )
+            entry = case / "spec.yaml"
+            written = entry.read_bytes()
+            source = case / "input" / "adsl.csv"
+            captured = source.read_bytes()
+            source.unlink()
+            self.assertTrue(yamaa.check(entry).issues.is_empty())
+            source.write_bytes(captured)
+            result = yamaa.domain(entry)
+            self.assertTrue(result.issues.is_empty())
+            types = {name: pl.Float64 for name in ("VAL1", "VAL0", "RND1", "RND0")}
+            expected = pl.read_csv(
+                case / "expected" / "adsl.csv", schema_overrides=types
+            )
+            self.assertEqual(expected.height, 16)
+            assert_frame_equal(result.output, expected)
+            self.assertEqual(entry.read_bytes(), written)
+            self.assertFalse((case / "adsl.csv").exists())
+            self.assertTrue(result.save())
+            assert_frame_equal(
+                pl.read_csv(case / "adsl.csv", schema_overrides=types), expected
+            )
+            negative = Path(directory) / "negative"
+            shutil.copytree(
+                ROOT
+                / "cases"
+                / "negative-round-half-away-from-zero-non-numeric-source",
+                negative,
+            )
+            shutil.rmtree(negative / "input")
+            # This literal is pinned to the independent original error fixture,
+            # not a candidate-generated report or formula diagnostic.
+            self.assertEqual(
+                (negative / "expected" / "error.yaml").read_text(),
+                "phase: validation\ncondition: incompatible_input_type\nspec_paths:\n"
+                "  - columns.RNDVAL.derivation.round_half_away_from_zero.source\n"
+                "requirement: REQ-0418\ncontext:\n  source: SEX\n  expected: numeric\n  actual: str\n",
+            )
+            expected_issue = {
+                "phase": "validation",
+                "condition": "incompatible_input_type",
+                "requirement": "REQ-0418",
+                "spec_paths": [
+                    "columns.RNDVAL.derivation.round_half_away_from_zero.source"
+                ],
+                "context": {"source": "SEX", "expected": "numeric", "actual": "str"},
+            }
+
+            def issue(result):
+                rows = result.issues.to_dicts()
+                self.assertEqual(len(rows), 1)
+                rows[0]["context"] = json.loads(rows[0]["context"])
+                return rows[0]
+
+            self.assertEqual(issue(yamaa.check(negative / "spec.yaml")), expected_issue)
+            rejected = yamaa.domain(negative / "spec.yaml")
+            self.assertIsNone(rejected.output)
+            self.assertIsNone(rejected._native.observations())
+            self.assertEqual(issue(rejected), expected_issue)
+            with self.assertRaises(yamaa.DomainError):
+                rejected.save()
+            self.assertFalse((negative / "adsl.csv").exists())
+
     def test_public_domain_all_original_issues_outputs_and_saved_bytes(self):
         import datetime
         import shutil
