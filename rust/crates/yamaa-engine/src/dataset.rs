@@ -449,7 +449,15 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             let value = match &operand.read {
                 yamaa_core::dataset::SelectionRead::Expression(source) => evaluate_raw_retained(
                     table, source, candidate, plan, row, limits, state, retained,
-                )?,
+                )
+                .map_err(|mut error| {
+                    // Collection cardinality belongs to the enclosing selection.
+                    // Keep operand metadata for handlers and every other failure.
+                    if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
+                        path.clone_from(&assignment.path);
+                    }
+                    error
+                })?,
                 yamaa_core::dataset::SelectionRead::Source(column) => {
                     let source_row = candidate.members[0];
                     let value = table.cell(source_row, *column).map_err(|error| {
