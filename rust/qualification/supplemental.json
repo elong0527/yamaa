@@ -920,7 +920,9 @@
       "consumers": [
         "rust/crates/yamaa-adapters/tests/verification_logs.rs",
         "rust/tests/installed_verification_logs.py",
-        "R/yamaa/tests/verification_logs.R"
+        "R/yamaa/tests/verification_logs.R",
+        "rust/tests/installed_producer_logs.py",
+        "R/yamaa/tests/producer_logs.R"
       ]
     }
   ],
@@ -1273,6 +1275,20 @@
       "runtime": "r",
       "path": "R/yamaa/tests/verification_logs.R",
       "staged_path": "verification_logs.R",
+      "level": "shared_run"
+    },
+    {
+      "id": "python/producer-logs",
+      "runtime": "python",
+      "path": "rust/tests/installed_producer_logs.py",
+      "staged_path": "installed_producer_logs.py",
+      "level": "shared_run"
+    },
+    {
+      "id": "r/producer-logs",
+      "runtime": "r",
+      "path": "R/yamaa/tests/producer_logs.R",
+      "staged_path": "producer_logs.R",
       "level": "shared_run"
     },
     {

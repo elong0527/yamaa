@@ -153,6 +153,8 @@ impl<E, R, RE> Attempt<E, R, RE> {
 /// build. Arbitrary public Attempt records cannot be promoted to this owner.
 pub struct OwnedAttempt<E> {
     attempt: crate::producer_report::NativeAttempt<E>,
+    logs: Arc<[crate::producer_report::NodeLogs]>,
+    log_publication: Option<Arc<crate::producer_log_publication::Publication>>,
     publication: Option<Arc<crate::producer_publication::Publication>>,
     publication_refusal: Option<&'static str>,
 }
@@ -163,6 +165,14 @@ impl<E> std::ops::Deref for OwnedAttempt<E> {
     }
 }
 impl<E> OwnedAttempt<E> {
+    pub(crate) fn log_publication(
+        &self,
+    ) -> Option<&Arc<crate::producer_log_publication::Publication>> {
+        self.log_publication.as_ref()
+    }
+    pub(crate) fn logs(&self) -> &Arc<[crate::producer_report::NodeLogs]> {
+        &self.logs
+    }
     pub(crate) fn publication(&self) -> Option<&Arc<crate::producer_publication::Publication>> {
         self.publication.as_ref()
     }
@@ -210,8 +220,8 @@ impl FileBuild {
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
         self.build(activation, &mut report, limits)
     }
-    /// Seal only the actual boundary, retaining metadata/resource/graph failures
-    /// as evidence without granting failed attempts a publication capability.
+    /// Seal only the actual boundary. Failed graphs retain their original
+    /// evidence and any completed V capability, with primary/W authority revoked.
     pub fn build_owned_reported<A: ActivationPort>(
         &mut self,
         activation: &mut A,
@@ -221,9 +231,29 @@ impl FileBuild {
         let provenance = Arc::clone(&self.provenance);
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
         let (attempt, publication) = self.build_actual(activation, &mut report, limits);
-        let (publication, publication_refusal) = if attempt.accepted() {
+        let logs: Arc<[crate::producer_report::NodeLogs]> = report.take_logs().into();
+        let logged = self
+            .provenance
+            .report_views()
+            .any(|view| view.compiled().output_logs().declared());
+        let (log_publication, publication, publication_refusal) = if logged {
+            (
+                Some(Arc::new(
+                    crate::producer_log_publication::Publication::from_build(
+                        &attempt,
+                        publication,
+                        Arc::clone(&logs),
+                        &self.resources,
+                        limits.engine.publication,
+                    ),
+                )),
+                None,
+                None,
+            )
+        } else if attempt.accepted() {
             match publication {
                 Ok(prepared) => (
+                    None,
                     Some(Arc::new(
                         crate::producer_publication::Publication::from_build(
                             prepared,
@@ -234,13 +264,15 @@ impl FileBuild {
                     )),
                     None,
                 ),
-                Err(code) => (None, Some(code)),
+                Err(code) => (None, None, Some(code)),
             }
         } else {
-            (None, None)
+            (None, None, None)
         };
         OwnedAttempt {
             attempt,
+            logs,
+            log_publication,
             publication,
             publication_refusal,
         }

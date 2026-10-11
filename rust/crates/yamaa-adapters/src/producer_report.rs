@@ -176,6 +176,41 @@ fn successful_observations<C, D, T: TableAccess>(
     Ok(value)
 }
 
+fn log_observations<C, D, T: TableAccess>(
+    view: &NodeReport<'_>,
+    attempt: &CapturedAttempt<C, D, T>,
+    id: &Identity<'_>,
+    budget: &mut Budget,
+) -> Result<Value, Error> {
+    use yamaa_engine::dataset::ExecutionError;
+    let mut checks = Vec::new();
+    if let Ok(entered) = &attempt.result {
+        let tail: &[CheckRecord] = match &entered.result {
+            Ok(success) => &success.verifications,
+            Err(error) => match error.as_ref() {
+                ExecutionError::VerificationFailures(records)
+                | ExecutionError::KeyFailures(records)
+                | ExecutionError::VerificationDiagnostic { records, .. }
+                | ExecutionError::VerificationDeclaration { records, .. } => records,
+                _ => &[],
+            },
+        };
+        for actual in [&entered.retained_verifications[..], tail] {
+            records(budget, view, actual)?;
+            let (observed, _) = project_report::checked_records(view, actual, "verification", id)?;
+            checks.extend(observed);
+        }
+    }
+    Ok(json!({"verifications":checks}))
+}
+
+/// Only the actual entered report port fills these private diagnostic slots.
+/// Publication remains sealed separately beside FileBuild's retained attempt.
+pub(crate) struct NodeLogs {
+    pub(crate) node: usize,
+    pub(crate) logs: crate::verification_logs::PreparedLogs,
+}
+
 /// Native successful node reports are completed inside the build, before the
 /// artifact becomes available to consumers. Each selection starts fresh state.
 pub struct NativeReport<'a, 'i> {
@@ -185,6 +220,7 @@ pub struct NativeReport<'a, 'i> {
     maximum: usize,
     budget: Option<Budget>,
     value: Option<Value>,
+    logs: Vec<NodeLogs>,
 }
 impl<'a, 'i> NativeReport<'a, 'i> {
     pub fn new(provenance: &'a Provenance, id: Identity<'i>) -> Self {
@@ -195,6 +231,7 @@ impl<'a, 'i> NativeReport<'a, 'i> {
             maximum: 0,
             budget: None,
             value: None,
+            logs: Vec::new(),
         }
     }
     fn view(&self) -> Result<NodeReport<'a>, Error> {
@@ -209,8 +246,73 @@ impl<'a, 'i> NativeReport<'a, 'i> {
         }
         report::bounded(value)
     }
+    pub(crate) fn take_logs(&mut self) -> Vec<NodeLogs> {
+        std::mem::take(&mut self.logs)
+    }
 }
 impl ReportPort for NativeReport<'_, '_> {
+    fn prepare_diagnostics<C, D, T: TableAccess>(
+        &mut self,
+        node: &Node,
+        attempt: &CapturedAttempt<C, D, T>,
+        output_bytes: usize,
+        report_bytes: usize,
+    ) -> Result<usize, Error> {
+        use crate::verification_logs::{self as logs, PreparationLimits};
+        let count = self.provenance.metadata().nodes().len();
+        let index = self
+            .provenance
+            .metadata()
+            .nodes()
+            .iter()
+            .position(|held| std::ptr::eq(held, node))
+            .ok_or(Error::InvalidObservation)?;
+        let view = self
+            .provenance
+            .report_views()
+            .nth(index)
+            .ok_or(Error::InvalidObservation)?;
+        let declarations = view.compiled().output_logs();
+        if !declarations.declared() {
+            return Ok(0);
+        }
+        let mut budget = Budget::new(report_bytes);
+        budget.entries(count)?;
+        budget.work(count.checked_mul(3).ok_or(Error::OutputLimit)?)?;
+        if self.logs.len() >= count || self.logs.iter().any(|held| held.node == index) {
+            return Err(Error::InvalidObservation);
+        }
+        let slots = usize::from(declarations.verification().is_some())
+            + usize::from(declarations.warning().is_some());
+        let value = log_observations(&view, attempt, &identity(&view, &self.id), &mut budget)?;
+        let success = attempt
+            .result
+            .as_ref()
+            .is_ok_and(|entered| entered.result.is_ok())
+            && view.compiled().output_findings().is_empty();
+        self.logs.push(NodeLogs {
+            node: index,
+            logs: Default::default(),
+        });
+        let retained = &mut self.logs.last_mut().expect("entered diagnostic slot").logs;
+        logs::prepare_into(
+            &view,
+            &value,
+            success,
+            PreparationLimits::graph(count, slots, output_bytes, report_bytes),
+            retained,
+        )?;
+        if let Some(error) = retained.failure.take() {
+            return Err(error);
+        }
+        retained
+            .verification
+            .iter()
+            .chain(retained.warning.iter())
+            .try_fold(0usize, |sum, log| {
+                sum.checked_add(log.bytes().len()).ok_or(Error::OutputLimit)
+            })
+    }
     fn select<C, D, T: TableAccess>(
         &mut self,
         node: &Node,

@@ -98,6 +98,21 @@ pub(super) fn prepare(
                 record,
                 depth + 1,
             )?),
+            "round_half_away_from_zero" => {
+                let mut features = Vec::new();
+                let rounding = rounding::prepare(
+                    d,
+                    payload,
+                    &result_path,
+                    None,
+                    Some(intermediates),
+                    &mut features,
+                )?;
+                if !features.is_empty() {
+                    return Err(PrepareError::Unsupported(features));
+                }
+                Operation::Round(rounding)
+            }
             "compute" => {
                 let expression = text(d, field(d, payload, "expr")?)?;
                 match compile_numeric_with_policy(
@@ -266,6 +281,17 @@ pub(super) fn bind(
                     Err(_) => return Err(BindError::Internal),
                 }
             }
+            Operation::Round(rounding) => rounding::bind(
+                rounding,
+                column,
+                &spec.keys,
+                catalog,
+                &spec.intermediates,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
             Operation::Source(source) => {
                 if source.has_filter() {
                     return Err(BindError::Internal);

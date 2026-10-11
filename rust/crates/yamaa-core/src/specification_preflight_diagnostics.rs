@@ -29,6 +29,10 @@ impl PreflightFinding {
         use super::FunctionCause;
         match self {
             Self::Log(finding) => finding.visit_text(visit),
+            Self::RoundingInput { path, source, .. } => {
+                visit(path);
+                visit(source);
+            }
             Self::ProjectFunction(finding) => {
                 visit(&finding.path);
                 visit(&finding.function);
@@ -106,6 +110,11 @@ impl PreflightFinding {
     pub fn diagnostic(&self) -> Diagnostic {
         let (code, paths, context): (C, Vec<String>, Context) = match self {
             Self::Log(finding) => return finding.diagnostic(),
+            Self::RoundingInput {
+                path,
+                source,
+                actual,
+            } => return crate::dataset::Rounding::input_diagnostic(source, path, actual),
             Self::ProjectFunction(finding) => return finding.diagnostic(),
             Self::ProjectCodelist(finding) => return finding.diagnostic(),
             Self::RowPhase {

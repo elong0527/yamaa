@@ -154,6 +154,10 @@ impl Domain {
                     pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
                 });
         }
+        #[cfg(any(unix, windows))]
+        if let Some(producer) = &self.producer {
+            return producer.domain_log(py, warning);
+        }
         let _ = (py, warning);
         Ok(None)
     }
