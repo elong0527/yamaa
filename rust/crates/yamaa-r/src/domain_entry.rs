@@ -351,7 +351,7 @@ fn domain_log(handle: Robj, warning: bool) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(table) = state
             .result
             .as_ref()
