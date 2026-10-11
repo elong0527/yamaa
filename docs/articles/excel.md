@@ -98,7 +98,7 @@ as `core`, `codelist`, `length`, or `comment`.
 | Excel spec | yamaa | Notes |
 |---|---|---|
 | Dataset Name | `domain` | One dataset per spec |
-| Dataset Label / Class / Structure | free keys under `metadata:` | Never validated; carried along |
+| Dataset Label / Class / Structure | `submission.label` / `submission.class` / `submission.structure` | Governed dataset metadata, written under `submission:`; reserved in `metadata:`, which rejects them with `reserved_metadata_key` (REQ-0910) |
 | Key Variables | `keys` | Non-missing and unique are enforced |
 | Sort Order (submission sort) | `output.order_by` | A presentation order applied after every check |
 | Input datasets (usually only in a Comment) | `input:` | Every input is declared and named |

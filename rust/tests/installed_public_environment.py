@@ -26,6 +26,36 @@ CASES = (
 
 
 class PublicEnvironment(unittest.TestCase):
+    def test_submission_version_schema_admission_precedes_any_artifact_or_study_read(self):
+        os.chdir(self.directory)
+        Path("spec.yaml").write_text(
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            "input: {SRC: absent.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n"
+            "output: {path: result.csv, columns: [ID]}\n"
+        )
+        for family, guide in (("sdtm", "SDTMIG"), ("adam", "ADaMIG"), ("send", "SENDIG")):
+            prefix = (
+                "schema_version: '1.0'\nlanguage: python\n"
+                "study: {id: STUDY, name: Study, description: Study, protocol_name: Protocol}\n"
+                f"{family}:\n  standard: {{name: {guide}, version: '1.0', status: Final}}\n"
+                "  specs: [absent-spec.yaml]\n  define: absent/define.xml\n"
+            )
+            with (
+                patch.object(host, "verify_versions", side_effect=AssertionError("unexpected activation")),
+                patch.object(host, "resolve_callable", side_effect=AssertionError("unexpected binding")),
+            ):
+                for declared in (None, "'1.0'", "'future package build'"):
+                    field = "" if declared is None else f"  source_system_version: {declared}\n"
+                    Path("environment.yaml").write_text(prefix + field)
+                    checked = yamaa.check("spec.yaml", environment="environment.yaml")
+                    self.assertTrue(checked.issues.is_empty(), checked.issues)
+                for declared in ("null", "true", "1", "1.5", "''"):
+                    Path("environment.yaml").write_text(prefix + f"  source_system_version: {declared}\n")
+                    checked = yamaa.check("spec.yaml", environment="environment.yaml")
+                    self.assertEqual(checked.issues.height, 1, checked.issues)
+                    self.assertIn(f"{family}.source_system_version", checked.issues["spec_paths"][0])
+            self.assertEqual(sorted(p.name for p in self.directory.iterdir()), ["environment.yaml", "spec.yaml"])
+
     def test_selected_functionless_producer_failure_retains_actual_source_prefix(self):
         os.chdir(self.directory)
         (self.directory / "environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")

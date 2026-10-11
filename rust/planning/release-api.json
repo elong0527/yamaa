@@ -669,7 +669,9 @@
         "S3:as.character.yamaa_int64_vector",
         "S3:as.character.yamaa_utf8",
         "S3:as.double.yamaa_int64",
+        "S3:as.double.yamaa_int64_vector",
         "S3:as.integer.yamaa_int64",
+        "S3:as.integer.yamaa_int64_vector",
         "S3:format.yamaa_int64",
         "S3:format.yamaa_utf8",
         "S3:is.na.yamaa_int64",
@@ -736,6 +738,14 @@
         "yamaa_domain": {
           "disposition": "retain_candidate",
           "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."
+        },
+        "S3:as.double.yamaa_int64_vector": {
+          "disposition": "retain_candidate",
+          "rationale": "Approved exact-or-error conversion of lossless public integer output; final release matrix qualification remains required."
+        },
+        "S3:as.integer.yamaa_int64_vector": {
+          "disposition": "retain_candidate",
+          "rationale": "Approved exact-or-error conversion of lossless public integer output; final release matrix qualification remains required."
         }
       }
     }
