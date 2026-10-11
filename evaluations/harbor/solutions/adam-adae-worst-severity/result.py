@@ -17,7 +17,7 @@ adae_raw = (
 )
 
 adae = adae_raw.with_columns(
-    AESEVN=pl.when(pl.col("AESEV") == "MILD")
+    ASEVN=pl.when(pl.col("AESEV") == "MILD")
     .then(1)
     .when(pl.col("AESEV") == "MODERATE")
     .then(2)
@@ -31,8 +31,8 @@ adae = adae_raw.with_columns(
 # by earliest date, then lowest sequence. Only a treatment-emergent event
 # with a graded severity is eligible. ISO dates sort as text.
 best = (
-    adae.filter(pl.col("TRTEMFL") == "Y", pl.col("AESEVN").is_not_null())
-    .sort(["AESEVN", "ASTDT", "AESEQ"], descending=[True, False, False], nulls_last=True)
+    adae.filter(pl.col("TRTEMFL") == "Y", pl.col("ASEVN").is_not_null())
+    .sort(["ASEVN", "ASTDT", "AESEQ"], descending=[True, False, False], nulls_last=True)
     .unique(["USUBJID", "AEDECOD"], keep="first", maintain_order=True)
     .select("USUBJID", "AEDECOD", "AESEQ")
     .with_columns(BEST=pl.lit("Y"))
@@ -40,7 +40,7 @@ best = (
 
 adae = (
     adae.join(best, on=["USUBJID", "AEDECOD", "AESEQ"], how="left")
-    .with_columns(AWSEVFL=pl.col("BEST"))
+    .with_columns(AOCCPIFL=pl.col("BEST"))
     .select(
         "STUDYID",
         "USUBJID",
@@ -50,8 +50,8 @@ adae = (
         "ASTDT",
         "AESEV",
         "TRTEMFL",
-        "AESEVN",
-        "AWSEVFL",
+        "ASEVN",
+        "AOCCPIFL",
     )
 )
 

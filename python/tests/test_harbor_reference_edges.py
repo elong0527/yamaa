@@ -202,7 +202,7 @@ def test_repeated_checklist_uses_last_collected_answer(tmp_path, language, answe
 @pytest.mark.parametrize(
     "name,file,seq,severity,flag",
     [
-        ("adam-adae-worst-severity", "adae_raw.csv", "AESEQ", "AESEV", "AWSEVFL"),
+        ("adam-adae-worst-severity", "adae_raw.csv", "AESEQ", "AESEV", "AOCCPIFL"),
         ("adam-adce-worst-toxicity", "ce.csv", "CESEQ", "CESEV", "AOCCFL"),
     ],
 )
