@@ -13,7 +13,7 @@ use alloc::{
     vec::Vec,
 };
 
-/// Large context values remain references until the adapter's bounded serialization.
+/// Large context values remain references until core admits the complete projection.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SchemaContext {
     Text(String),
