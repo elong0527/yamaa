@@ -146,6 +146,7 @@ conditions! {
     DatetimePrecisionInvalid => ("impute", "invalid_datetime_text", Some("REQ-1183")),
     ToDateInput => ("validation", "incompatible_input_type", Some("REQ-0607")),
     ToDateInvalid => ("validation", "invalid_date_text", Some("REQ-0607")),
+    TemplateInvalid => ("validation", "invalid_string_template", Some("REQ-0461")),
     ExtractGroup => ("validation", "regex_group_out_of_range", Some("REQ-0816")),
     ExtractNoMatch => ("mapping", "unmatched_pattern", Some("REQ-0334")),
     ExtractUnknown => ("validation", "unknown_field", Some("REQ-0308")),

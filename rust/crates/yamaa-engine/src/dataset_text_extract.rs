@@ -20,7 +20,9 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
                 register(&branch.assignment.expression, counter);
             }
         }
-        Expression::Imputation { operands, .. } | Expression::Temporal { operands, .. } => {
+        Expression::Imputation { operands, .. }
+        | Expression::StrTemplate { operands, .. }
+        | Expression::Temporal { operands, .. } => {
             for source in operands {
                 register(&source.expression, counter);
             }
