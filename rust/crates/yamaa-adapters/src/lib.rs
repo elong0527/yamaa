@@ -127,3 +127,5 @@ pub mod producer_result;
 #[cfg(any(unix, windows))]
 pub mod project_application;
 pub mod project_check;
+
+mod project_diagnostic_projection;

@@ -376,3 +376,24 @@ schema/1 compatibility representation translates these core facts without
 assigning conditions or requirements. The regex/1 syntax projection similarly
 uses the core registry's existing invalid-pattern cause. Legacy protocol shape
 retirement remains part of #1751/#1753.
+
+## Retained project activation and invocation failures
+
+`project_diagnostics` in core admits the complete binding or conformance report
+before allocating projected paths or context containers. Its context tree borrows
+authored strings, exact scalar values and classified host facts; core owns the
+context keys, closed reasons, condition selection and nested invocation facts.
+The engine maps retained failures to bounded borrowed views without another port
+call, retry, clone, error formatting or interruption classification. Unknown
+arguments, missing required parameters and argument types retain REQ-0700; raised
+calls retain REQ-0701; rejected, Boolean, missing and mistyped results retain
+REQ-0702. Binding and conformance retain REQ-0695 and REQ-0703.
+
+The adapter encodes this tree into the existing sorted JSON context and five-field
+issue envelope, then checks the exact serialized byte limit. Nested conformance
+failures use the same core projection directly, without decoding an intermediate
+JSON context. Borrowed admission retains existing invalid-context and opaque
+error precedence, selected function/case order, whole-report quotas, signed-zero
+comparisons and original host payload identity. Complete existing activation,
+invocation and project report expectations remain unchanged. The frozen literal
+seed is unchanged; the migrated binding site is removed from the active allowlist.

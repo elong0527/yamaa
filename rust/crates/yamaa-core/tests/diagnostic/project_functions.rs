@@ -1,5 +1,4 @@
-#[path = "../support/project_call_compiler.rs"]
-mod support;
+use super::project_support as support;
 use std::collections::BTreeSet;
 use support::{call, function, specification, specification_with_rows, Tree};
 use yamaa_core::{

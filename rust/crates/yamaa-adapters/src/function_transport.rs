@@ -18,7 +18,7 @@ use yamaa_engine::function_invocation::{
 pub const MAX_REQUEST_BYTES: usize = 1_048_576;
 pub const MAX_RESULT_BYTES: usize = 1_048_576;
 pub const MAX_OUTPUT_BYTES: usize = 8 * 1_048_576;
-pub const MAX_ERROR_BYTES: usize = 8192;
+pub const MAX_ERROR_BYTES: usize = yamaa_core::project_diagnostics::MAX_HOST_DETAIL_BYTES;
 const PROTOCOL: &str = "function/1";
 
 /// Boundary failures are distinct from normative function conditions.

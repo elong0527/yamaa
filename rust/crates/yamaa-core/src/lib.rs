@@ -80,3 +80,5 @@ pub mod project_terminology_document;
 pub mod project_environment_diagnostics;
 
 pub mod project_codelist_binding;
+
+pub mod project_diagnostics;

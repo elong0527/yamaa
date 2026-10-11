@@ -56,3 +56,5 @@ pub mod producer_build;
 pub mod producer_graph;
 pub mod producer_publication;
 pub mod project_domain;
+
+pub mod project_diagnostics;
