@@ -5,6 +5,7 @@ mod rules;
 use super::{
     Document, DocumentNode as N, SchemaContext, SchemaDiagnostic, ValidationBudget, ValidationError,
 };
+use crate::diagnostic::ConditionCode;
 use alloc::{
     format,
     string::{String, ToString},
@@ -113,8 +114,19 @@ impl Run<'_> {
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         Ok(vec![self.budget.diagnostic(
             path,
-            "model_contract_mismatch",
-            None,
+            ConditionCode::SchemaModelInvalidValue,
+            vec![("reason", SchemaContext::Text(reason.into()))],
+        )?])
+    }
+    fn owned_finding(
+        &mut self,
+        path: &str,
+        code: ConditionCode,
+        reason: impl Into<String>,
+    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        Ok(vec![self.budget.diagnostic(
+            path,
+            code,
             vec![("reason", SchemaContext::Text(reason.into()))],
         )?])
     }
@@ -194,8 +206,9 @@ impl Run<'_> {
             Kind::Expression => {
                 let result = self.dictionary(id, Kind::Json, path, depth + 1)?;
                 if result.is_empty() && matches!(node, N::Mapping(items) if items.len() != 1) {
-                    self.finding(
+                    self.owned_finding(
                         path,
+                        ConditionCode::SchemaModelInvalidOperationCount,
                         "Value error, an expression must contain exactly one operation",
                     )
                 } else {
@@ -303,7 +316,11 @@ impl Run<'_> {
                 result.extend(if let Some(value) = value {
                     self.check(value, field.kind, &p, depth + 1)?
                 } else {
-                    self.finding(&p, "Field required")?
+                    self.owned_finding(
+                        &p,
+                        ConditionCode::SchemaModelMissingField,
+                        "Field required",
+                    )?
                 });
             }
         }
@@ -320,7 +337,11 @@ impl Run<'_> {
                 result.extend(self.finding(&p, "Keys should be strings")?);
             } else if !model.fields.iter().any(|field| field.name == name) {
                 let p = self.path(path, &name)?;
-                result.extend(self.finding(&p, "Extra inputs are not permitted")?);
+                result.extend(self.owned_finding(
+                    &p,
+                    ConditionCode::SchemaModelUnknownField,
+                    "Extra inputs are not permitted",
+                )?);
             }
         }
         if result.is_empty() {

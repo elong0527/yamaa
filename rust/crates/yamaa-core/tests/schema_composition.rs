@@ -529,7 +529,11 @@ fn missing_and_required_clears_fail_in_contribution_order_even_for_new_members()
         result
             .diagnostics
             .iter()
-            .map(|d| (d.path.as_str(), d.condition, d.requirement))
+            .map(|d| (
+                d.path.as_str(),
+                d.definition().condition,
+                d.definition().requirement
+            ))
             .collect::<Vec<_>>(),
         vec![
             ("metadata", "invalid_clear", Some("REQ-0660")),
@@ -681,7 +685,10 @@ fn materialization_failure_precedes_collected_clear_diagnostics_without_partial_
         panic!("expected normalization failure")
     };
     assert_eq!(diagnostics.len(), 1);
-    assert_eq!(diagnostics[0].condition, "missing_required_field");
+    assert_eq!(
+        diagnostics[0].definition().condition,
+        "missing_required_field"
+    );
     assert_eq!(diagnostics[0].path, "<normalization>.one");
     let layers = [document(Map(vec![("metadata", Null)]))];
     let Err(yamaa_core::schema::LayerCompositionError {
@@ -691,6 +698,6 @@ fn materialization_failure_precedes_collected_clear_diagnostics_without_partial_
     else {
         panic!("expected clear failure")
     };
-    assert_eq!(diagnostics[0].condition, "invalid_clear");
+    assert_eq!(diagnostics[0].definition().condition, "invalid_clear");
     assert_eq!(diagnostics[0].path, "metadata");
 }

@@ -1,5 +1,7 @@
 """Installed shared schema loading, inheritance and execution against authored truth."""
 
+from private_schema_requirements import reconciled_schema_requirements
+
 import copy
 import json
 import os
@@ -707,7 +709,7 @@ class InstalledSchemaLoading(unittest.TestCase):
         )
         self.assertEqual(
             [d.model_dump() for d in diagnostics],
-            [
+            reconciled_schema_requirements([
                 {
                     "phase": "validation",
                     "condition": "schema_version_mismatch",
@@ -715,7 +717,7 @@ class InstalledSchemaLoading(unittest.TestCase):
                     "requirement": None,
                     "context": {"expected": "1.0", "actual": "old"},
                 }
-            ],
+            ]),
         )
         descriptor = {"type": "identifier"}
         diagnostics = reference.validate_descriptor_value(

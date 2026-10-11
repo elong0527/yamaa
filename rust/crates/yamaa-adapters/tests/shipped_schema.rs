@@ -1,4 +1,7 @@
 //! Shipped schema identity and raw preparation without host schema interpretation.
+#[path = "support/schema_requirement_expectations.rs"]
+mod schema_requirement_expectations;
+
 use yamaa_adapters::{
     shipped_schema,
     specification_source::{Error, InheritanceError, InheritancePort, Source},
@@ -69,7 +72,10 @@ fn unsupported_or_missing_version_is_rejected_before_any_parent_authority() {
             panic!("expected shared schema version finding");
         };
         assert_eq!(captured.findings().len(), 1);
-        assert_eq!(captured.findings()[0].condition, "schema_version_mismatch");
+        assert_eq!(
+            captured.findings()[0].definition().condition,
+            "schema_version_mismatch"
+        );
     }
     let malformed =
         shipped_schema::prepare(source("[unclosed"), "domain.yaml".into(), &mut NoParents);
@@ -128,7 +134,7 @@ fn standalone_findings_retain_source_and_resolve_context_without_host_interpreta
         let actual: Value = serde_json::from_str(&capture_failure(&error)).unwrap();
         assert_eq!(
             actual,
-            json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[expected]}})
+            schema_requirement_expectations::reconciled(&json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[expected]}}).to_string(), false)
         );
     }
     let integer = "922337203685477580812345678901234567890";
@@ -318,7 +324,7 @@ fn inherited_layer_and_composed_findings_resolve_without_exposing_context_arenas
     let outcome: Value = serde_json::from_str(&inheritance_failure(missing).unwrap()).unwrap();
     assert_eq!(
         outcome["outcome"],
-        json!({"status":"invalid","diagnostics":[{"phase":"validation","condition":"missing_required_field","requirement":null,"spec_paths":["domain"],"context":{"field":"domain","class":"root_class"}}]})
+        schema_requirement_expectations::reconciled(&json!({"status":"invalid","diagnostics":[{"phase":"validation","condition":"missing_required_field","requirement":null,"spec_paths":["domain"],"context":{"field":"domain","class":"root_class"}}]}).to_string(), true)
     );
     let unknown = inherited_error(
         &entry.replace("source: SRC.ID", "compute: {expr: UNKNOWN}"),

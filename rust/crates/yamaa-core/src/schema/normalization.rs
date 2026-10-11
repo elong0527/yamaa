@@ -707,8 +707,28 @@ impl SchemaStructure {
         input: &Document,
         budget: &mut NormalizationBudget,
     ) -> Result<NormalizedDocument, NormalizationError> {
+        self.normalize_document_mode(input, budget, false)
+    }
+    /// Normalize the final composed specification with resolved-output citation ownership.
+    pub fn normalize_resolved_document(
+        &self,
+        input: &Document,
+        budget: &mut NormalizationBudget,
+    ) -> Result<NormalizedDocument, NormalizationError> {
+        self.normalize_document_mode(input, budget, true)
+    }
+    fn normalize_document_mode(
+        &self,
+        input: &Document,
+        budget: &mut NormalizationBudget,
+        resolved_output: bool,
+    ) -> Result<NormalizedDocument, NormalizationError> {
         self.normalization_defaults(budget)?;
-        let findings = self.validate_document(input, &mut budget.validation)?;
+        let findings = if resolved_output {
+            self.validate_resolved_document(input, &mut budget.validation)?
+        } else {
+            self.validate_document(input, &mut budget.validation)?
+        };
         if !findings.is_empty() {
             return Err(NormalizationError::Invalid(findings));
         }

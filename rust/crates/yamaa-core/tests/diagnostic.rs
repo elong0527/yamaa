@@ -16,6 +16,8 @@ mod dataset;
 #[path = "diagnostic/predicate_evaluation.rs"]
 mod predicate_evaluation;
 
+#[path = "diagnostic/schema.rs"]
+mod schema;
 #[path = "diagnostic/temporal_imputation.rs"]
 mod temporal_imputation;
 #[path = "diagnostic/text_case.rs"]
@@ -224,6 +226,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         assert_eq!(diagnostic.context.len(), 2);
         reached.insert(diagnostic.code);
     }
+    reached.extend(schema::reached());
     reached.extend(yaml_source::reached());
     reached.extend(project_activation::reached());
     reached.extend(project_functions::reached());

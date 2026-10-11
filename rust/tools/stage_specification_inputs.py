@@ -5,9 +5,15 @@ import csv
 import json
 import datetime
 import shutil
+import importlib.util
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[2]
+_requirement_spec = importlib.util.spec_from_file_location(
+    "private_schema_requirements", Path(__file__).with_name("private_schema_requirements.py"))
+_requirement_module = importlib.util.module_from_spec(_requirement_spec)
+_requirement_spec.loader.exec_module(_requirement_module)
+reconciled_schema_requirements = _requirement_module.reconciled_schema_requirements
 CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter", "negative-paired-dates", "negative-not-missing-age", "negative-implausible-age", "negative-invalid-sex", "negative-sex-code", "negative-matches-bad-pattern")
 ROUNDING_CASES = ("schema-round-half-away-from-zero-ties", "negative-round-half-away-from-zero-non-numeric-source")
 TEMPORAL_CASES = ("adam-adsl-duration", "adam-adsl-analysis-age", "negative-date-diff-endpoints", "negative-date-diff-units", "negative-study-day-datetime", "negative-epoch-day-non-date")
@@ -532,6 +538,19 @@ def stage(destination: Path):
     stage_inheritance_replay(destination)
     stage_decode_replay(destination)
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv", destination / "inheritance-preparation.tsv")
+    # Preserve historical reports and stage only approved citation dispositions separately.
+    with (destination / "inheritance-preparation.tsv").open(encoding="ascii", newline="") as stream:
+        reader = csv.DictReader(stream, delimiter="\t")
+        fields, rows = reader.fieldnames, list(reader)
+    with (destination / "normative-inheritance-preparation.tsv").open("w", encoding="ascii", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields, delimiter="\t", lineterminator="\n",
+                                quoting=csv.QUOTE_NONE, quotechar=None)
+        writer.writeheader()
+        for row in rows:
+            row["expected"] = json.dumps(reconciled_schema_requirements(
+                json.loads(row["expected"]), resolved_output=True), sort_keys=True,
+                separators=(",", ":"), ensure_ascii=True)
+            writer.writerow(row)
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv", destination / "preflight.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv", destination / "output-declarations.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv", destination / "grammar-diagnostics.tsv")

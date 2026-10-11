@@ -1352,13 +1352,13 @@ requirements:
   REQ-0278: {"file": "reference/schema-language.md", "sources": ["R006-37"]}
   REQ-0279: {"file": "reference/schema-language.md", "sources": ["R006-38"]}
   REQ-0280: {"file": "reference/schema-language.md", "sources": ["R006-39", "yamaa:issue-1984:yaml-source-req-0280"]}
-  REQ-0281: {"file": "reference/schema-language.md", "sources": ["R006-40"]}
+  REQ-0281: {"file": "reference/schema-language.md", "sources": ["R006-40", "yamaa:issue-1973:item-7:schema-version-citation"]}
   REQ-0282: {"file": "reference/schema-language.md", "sources": ["R006-41"]}
   REQ-0283: {"file": "reference/schema-language.md", "sources": ["R006-42"]}
   REQ-0284: {"file": "reference/schema-language.md", "sources": ["R006-43"]}
-  REQ-0285: {"file": "reference/schema-language.md", "sources": ["R006-44"]}
-  REQ-0286: {"file": "reference/schema-language.md", "sources": ["R006-45"]}
-  REQ-0287: {"file": "reference/schema-language.md", "sources": ["R006-46"]}
+  REQ-0285: {"file": "reference/schema-language.md", "sources": ["R006-44", "yamaa:issue-1973:item-7:field-citations"]}
+  REQ-0286: {"file": "reference/schema-language.md", "sources": ["R006-45", "yamaa:issue-1973:item-7:registry-citations"]}
+  REQ-0287: {"file": "reference/schema-language.md", "sources": ["R006-46", "yamaa:issue-1973:item-7:model-value-citation"]}
   REQ-0288: {"file": "operations/expressions.md", "sources": ["R007-1"]}
   REQ-0289: {"file": "operations/expressions.md", "sources": ["R007-2"]}
   REQ-0290: {"file": "operations/expressions.md", "sources": ["R007-3"]}
@@ -1724,7 +1724,7 @@ requirements:
   REQ-0654: {"file": "specification/composition.md", "sources": ["R017-41"]}
   REQ-0655: {"file": "specification/composition.md", "sources": ["R017-42"]}
   REQ-0656: {"file": "specification/composition.md", "sources": ["R017-43"]}
-  REQ-0657: {"file": "specification/composition.md", "sources": ["R017-44", "yamaa:issue-845:resolved-output-required"]}
+  REQ-0657: {"file": "specification/composition.md", "sources": ["R017-44", "yamaa:issue-845:resolved-output-required", "yamaa:issue-1973:item-7:resolved-output-citation"]}
   REQ-0658: {"file": "specification/composition.md", "sources": ["R017-45"]}
   REQ-0659: {"file": "specification/composition.md", "sources": ["R017-46"]}
   REQ-0660: {"file": "specification/composition.md", "sources": ["R017-47"]}
@@ -3045,3 +3045,8 @@ provenance_addenda:
   - {"source": "yamaa:issue-1984:yaml-source-req-0029", "text": "Issue #1984: retained YAML source capture diagnostics cite REQ-0029 under REQ-1297; decoder facts and yaml/1 compatibility shape remain unchanged.", "owner": "values/text", "group": "yaml-diagnostics", "target": "REQ-0029"}
   - {"source": "yamaa:issue-1984:yaml-source-req-0280", "text": "Issue #1984: retained YAML source capture diagnostics cite REQ-0280 under REQ-1297; decoder facts and yaml/1 compatibility shape remain unchanged.", "owner": "reference/schema-language", "group": "yaml-diagnostics", "target": "REQ-0280"}
   - {"source": "yamaa:issue-1984:yaml-source-req-0705", "text": "Issue #1984: retained YAML source capture diagnostics cite REQ-0705 under REQ-1297; decoder facts and yaml/1 compatibility shape remain unchanged.", "owner": "specification/structure", "group": "yaml-diagnostics", "target": "REQ-0705"}
+  - {"source": "yamaa:issue-1973:item-7:schema-version-citation", "text": "Approved issue #1973 item 7 and #1985 typed ownership assign existing language failures their governing REQ-0281 citation; historical missing citations remain captured reference evidence.", "owner": "reference/schema-language", "group": "schema-version-citation", "target": "REQ-0281"}
+  - {"source": "yamaa:issue-1973:item-7:field-citations", "text": "Approved issue #1973 item 7 and #1985 typed ownership assign existing language failures their governing REQ-0285 citation; historical missing citations remain captured reference evidence.", "owner": "reference/schema-language", "group": "field-citations", "target": "REQ-0285"}
+  - {"source": "yamaa:issue-1973:item-7:registry-citations", "text": "Approved issue #1973 item 7 and #1985 typed ownership assign existing language failures their governing REQ-0286 citation; historical missing citations remain captured reference evidence.", "owner": "reference/schema-language", "group": "registry-citations", "target": "REQ-0286"}
+  - {"source": "yamaa:issue-1973:item-7:model-value-citation", "text": "Approved issue #1973 item 7 and #1985 typed ownership assign existing language failures their governing REQ-0287 citation; historical missing citations remain captured reference evidence.", "owner": "reference/schema-language", "group": "model-value-citation", "target": "REQ-0287"}
+  - {"source": "yamaa:issue-1973:item-7:resolved-output-citation", "text": "Approved issue #1973 item 7 and #1985 typed ownership assign existing language failures their governing REQ-0657 citation; historical missing citations remain captured reference evidence.", "owner": "specification/composition", "group": "resolved-output-citation", "target": "REQ-0657"}

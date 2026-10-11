@@ -58,8 +58,10 @@ fn environment_schema(limits: Limits) -> Arc<CapturedSchema> {
 fn finding(path: &str, condition: &'static str, field: &str, class: &str) -> SchemaDiagnostic {
     SchemaDiagnostic {
         path: path.into(),
-        condition,
-        requirement: None,
+        code: match condition {
+            "unknown_field" => yamaa_core::diagnostic::ConditionCode::SchemaUnknownField,
+            _ => panic!("unexpected test cause"),
+        },
         context: vec![
             ("field", C::Text(field.into())),
             ("class", C::Text(class.into())),
@@ -149,8 +151,7 @@ fn version_priority_precedes_every_other_environment_finding() {
         ),
         vec![SchemaDiagnostic {
             path: "schema_version".into(),
-            condition: "schema_version_mismatch",
-            requirement: None,
+            code: yamaa_core::diagnostic::ConditionCode::SchemaVersionMismatch,
             context: vec![
                 ("expected", C::Text("1.0".into())),
                 ("actual", C::InputValue(1))

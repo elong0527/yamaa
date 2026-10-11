@@ -207,7 +207,7 @@ pub fn prepare<P: PathPort>(
         .resolve_inheritance_dependencies(&expanded.document, normalization)
         .map_err(|error| Error::Dependencies(dependency_context(error, &expanded.document)))?;
     let normalized = schema
-        .normalize_document(&pruned.document, normalization)
+        .normalize_resolved_document(&pruned.document, normalization)
         .map_err(|error| Error::Normalize(normalization_context(error, &pruned.document)))?;
     let expanded = schema
         .expand_named_windows(&normalized.document, true, normalization)

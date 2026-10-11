@@ -489,3 +489,51 @@ requirement strings. Both standalone dataset and complete producer reports encod
 that same core context. Admission order, missing/duplicate ID rules, quoted reason
 text, inheritance paths and all public phase/condition/requirement bytes remain
 unchanged. CheckRecord compatibility metadata is separate remaining work in #1985.
+
+
+## Schema citation ownership decision
+
+The approved #1973 item 7 policy applies to authored schema and final normalized
+model findings. They are language failures with governing rules, not implementation
+conditions. #1985 retains typed causes in `SchemaDiagnostic`; the borrowed report
+iterator resolves registry metadata while preserving the exact context arenas,
+paths, finding order, default provenance and complete-report refusal behavior.
+
+| Detection context | Condition | Governing requirement |
+| --- | --- | --- |
+| Specification version differs from admitted bundle | `schema_version_mismatch` | REQ-0281 |
+| Missing required class field | `missing_required_field` | REQ-0285 |
+| Undeclared class field | `unknown_field` | REQ-0285 |
+| Registry-backed value has zero or multiple operations | `invalid_operation_count` | REQ-0286 |
+| Registry-backed value names an unknown operation | `unknown_operation` | REQ-0286 |
+| No inherited layer contributed final output | `missing_required_field` | REQ-0657 |
+| Normalized model type, key-kind or value constraint | `model_contract_mismatch` | REQ-0287 |
+| Normalized model required or extra field | `model_contract_mismatch` | REQ-0285 |
+| Normalized model expression operation cardinality | `model_contract_mismatch` | REQ-0286 |
+
+REQ-0281, REQ-0285, REQ-0286 and REQ-0287 already require these failures. Their
+clarifications name their diagnostic citations rather than introduce new rejection
+behavior. REQ-0657 historically explicitly requested no requirement; that disposition
+is superseded by the approved item 7 rule. REQ-0657 itself governs the failure and
+now cites itself. A raw standalone document missing output remains governed by
+REQ-0285; only final inherited output admission selects REQ-0657.
+
+Committed historical fixture reports, including their null requirement fields,
+remain unchanged. Explicit private reconciliation changes only those approved
+requirement fields and is checked independently from candidate results. The private
+schema families reconcile 43 citations, and inherited preparation reconciles one
+missing-domain citation to REQ-0285 in a separate normative sidecar. No benchmark
+expected bytes change, and the normative null exception remains exactly the two
+implementation causes in REQ-1297. Existing constraint and layer rule owners keep
+their original citations; portable kind labels, complete reasons and borrowed
+arbitrary-width numeric context remain attached to the exact retained facts.
+
+The standalone installed original-specification controls independently assert
+REQ-0281 for malformed and mismatched schema versions, retaining the complete
+original context and path. These authored controls follow the approved owner;
+all historical captured reports and benchmark expected bytes remain unchanged.
+
+This schema ownership slice reduces the frozen core/engine active allowance
+from 127 sites/171 occurrences to 98/138. Both immutable seeds and the host
+active allowance remain unchanged; deferred submission metadata stays visible
+under the guarded ceiling.

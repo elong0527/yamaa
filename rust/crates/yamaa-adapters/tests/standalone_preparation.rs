@@ -127,7 +127,7 @@ fn both_semantic_passes_keep_source_identity_and_independent_complete_reports() 
     assert_eq!(captured.source().identity.as_ptr(), identity);
     let decoded = decode_yaml(text.as_bytes(), DecodeLimits::default()).unwrap();
     assert_eq!(captured.document(), Some(&decoded.document));
-    let expected:Value=serde_json::from_str("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":null,\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
+    let expected:Value=serde_json::from_str("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":\"REQ-0281\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
     assert_eq!(outcome(&error), invalid(json!([expected])));
     let text="schema_version: '1.0'\ninput: {}\nkeys: []\noutput: {}\ncolumns:\n  - {name: Z, type: int, derivation: {value: {row_number: {window: SECOND}}}}\n  - {name: A, type: int, derivation: {value: {row_number: {window: FIRST}}}}\n";
     let entry = source(text);
@@ -177,9 +177,9 @@ fn final_model_findings_retain_no_pass_document_and_move_original_source() {
     assert_eq!(
         outcome(&error),
         invalid(json!([
-            {"phase":"validation","condition":"model_contract_mismatch","requirement":null,"spec_paths":["domain"],"context":{"reason":"Input should be a valid string"}},
-            {"phase":"validation","condition":"model_contract_mismatch","requirement":null,"spec_paths":["output.path"],"context":{"reason":"Field required"}},
-            {"phase":"validation","condition":"model_contract_mismatch","requirement":null,"spec_paths":["output.columns"],"context":{"reason":"Field required"}}
+            {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"reason":"Input should be a valid string"}},
+            {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0285","spec_paths":["output.path"],"context":{"reason":"Field required"}},
+            {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0285","spec_paths":["output.columns"],"context":{"reason":"Field required"}}
         ]))
     );
 }
@@ -275,7 +275,10 @@ fn schema_default_checkpoint_precedes_authored_version_and_window_errors() {
     };
     assert_eq!(defaults.len(), 1);
     assert_eq!(defaults[0].diagnostics.len(), 1);
-    assert_eq!(defaults[0].diagnostics[0].condition, "invalid_field_type");
+    assert_eq!(
+        defaults[0].diagnostics[0].definition().condition,
+        "invalid_field_type"
+    );
     // This remains an admitted-schema default failure, not a language finding
     // addressing the authored entry or a strict-window/model failure.
     let descriptor = &schema.structure().descriptors()[defaults[0].descriptor];

@@ -83,8 +83,7 @@ fn schema() -> SchemaStructure {
 fn issue(path: &str, context: Vec<(&'static str, C)>) -> SchemaDiagnostic {
     SchemaDiagnostic {
         path: path.into(),
-        condition: "pattern_mismatch",
-        requirement: Some("REQ-0287"),
+        code: yamaa_core::diagnostic::ConditionCode::SchemaDescriptorPatternMismatch,
         context,
     }
 }
@@ -522,18 +521,23 @@ fn whole_report_and_reused_budget_admission_preserve_exact_quota_and_error_order
     let schema = schema();
     let findings = [SchemaDiagnostic {
         path: "p".into(),
-        condition: "x",
-        requirement: None,
+        code: yamaa_core::diagnostic::ConditionCode::SchemaInvalidFieldType,
         context: vec![("k", C::Text("v".into()))],
     }];
-    // Independent original cost: 128 initial + 128 record + four eight-byte
-    // escaped one-byte strings (path, condition, key, value) + two-byte field.
-    let total = 290;
+    // Independent cost: 128 initial + 128 record + 8 path + 110 condition +
+    // 50 requirement + 8 context name + 8 value + 2 context field.
+    let total = 442;
     let mut budget = Budget::with_limit(total);
     let report = admit_schema_diagnostics(&schema, None, &findings, &[], &mut budget).unwrap();
     assert_eq!(
         records(&report),
-        vec![("validation", "p", "x", None, vec![("k", V::Text("v"))])]
+        vec![(
+            "validation",
+            "p",
+            "invalid_field_type",
+            Some("REQ-0287"),
+            vec![("k", V::Text("v"))]
+        )]
     );
     assert_eq!(budget.bytes_used(), total);
     let Err(error) = admit_schema_diagnostics(&schema, None, &findings, &[], &mut budget) else {

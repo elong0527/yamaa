@@ -5,6 +5,7 @@ use super::{
     NormalizationError, NormalizationResource, NormalizedDocument, SchemaContext as C,
     SchemaDiagnostic, SchemaField, SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
 };
+use crate::diagnostic::ConditionCode;
 use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
 #[derive(Clone, Copy)]
@@ -116,16 +117,11 @@ impl Run<'_, '_> {
     fn finding(
         &mut self,
         path: &str,
-        condition: &'static str,
-        requirement: &'static str,
+        code: ConditionCode,
         context: Vec<(&'static str, C)>,
     ) -> Result<(), NormalizationError> {
-        self.findings.push(self.budget.validation.diagnostic(
-            path,
-            condition,
-            Some(requirement),
-            context,
-        )?);
+        self.findings
+            .push(self.budget.validation.diagnostic(path, code, context)?);
         Ok(())
     }
 
@@ -133,8 +129,7 @@ impl Run<'_, '_> {
         let actual = self.input.nodes()[node].kind();
         self.finding(
             path,
-            "invalid_field_type",
-            "REQ-0658",
+            ConditionCode::SchemaLayerInvalidFieldType,
             vec![("expected", expected), ("actual", C::LayerKind(actual))],
         )
     }
@@ -164,8 +159,7 @@ impl Run<'_, '_> {
                 };
                 self.finding(
                     &logical,
-                    "unknown_field",
-                    "REQ-0658",
+                    ConditionCode::SchemaLayerUnknownField,
                     vec![("field", C::Text(name)), ("class", C::Text(class.into()))],
                 )?;
             }
@@ -231,8 +225,7 @@ impl Run<'_, '_> {
                 let logical = self.join(path, identity)?;
                 self.finding(
                     &logical,
-                    "missing_required_field",
-                    "REQ-0658",
+                    ConditionCode::SchemaLayerMissingRequiredField,
                     vec![
                         ("field", C::Text(identity.into())),
                         ("class", C::Text(kind.class.into())),
@@ -254,8 +247,7 @@ impl Run<'_, '_> {
                 {
                     self.finding(
                         &logical,
-                        "invalid_clear",
-                        "REQ-0660",
+                        ConditionCode::SchemaLayerInvalidClear,
                         vec![("field", C::Text(field.name.clone()))],
                     )?;
                 }
@@ -310,8 +302,7 @@ impl Run<'_, '_> {
                         let logical = self.join(&logical, identity)?;
                         self.finding(
                             &logical,
-                            "duplicate_identifier",
-                            "REQ-0659",
+                            ConditionCode::SchemaLayerIdentifierRepeated,
                             vec![("identifier", C::Text(label))],
                         )?;
                     }
@@ -346,8 +337,7 @@ impl Run<'_, '_> {
         if self.field(root, "schema_version")?.is_none() {
             self.finding(
                 "schema_version",
-                "schema_version_mismatch",
-                "REQ-0656",
+                ConditionCode::SchemaLayerVersionMismatch,
                 vec![
                     ("expected", C::Text(self.schema.version().into())),
                     ("actual", C::Null),
@@ -369,8 +359,7 @@ impl Run<'_, '_> {
                 {
                     self.finding(
                         &field.name,
-                        "invalid_clear",
-                        "REQ-0660",
+                        ConditionCode::SchemaLayerInvalidClear,
                         vec![("field", C::Text(field.name.clone()))],
                     )?;
                 }

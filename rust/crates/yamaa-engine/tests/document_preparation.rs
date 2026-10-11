@@ -313,8 +313,15 @@ fn finding(
 ) -> SchemaDiagnostic {
     SchemaDiagnostic {
         path: path.into(),
-        condition,
-        requirement,
+        code: match (condition, requirement) {
+            ("schema_version_mismatch", None) => {
+                yamaa_core::diagnostic::ConditionCode::SchemaVersionMismatch
+            }
+            ("invalid_field_type", Some("REQ-0287")) => {
+                yamaa_core::diagnostic::ConditionCode::SchemaInvalidFieldType
+            }
+            _ => panic!("unexpected test cause"),
+        },
         context,
     }
 }

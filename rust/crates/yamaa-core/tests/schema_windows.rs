@@ -197,8 +197,8 @@ fn non_strict_expansion_precedes_pruning_and_strict_failure_names_surviving_use(
         panic!()
     };
     assert_eq!(findings.len(), 1);
-    assert_eq!(findings[0].condition, "unknown_window");
-    assert_eq!(findings[0].requirement, Some("REQ-1253"));
+    assert_eq!(findings[0].definition().condition, "unknown_window");
+    assert_eq!(findings[0].definition().requirement, Some("REQ-1253"));
     assert_eq!(
         findings[0].path,
         "columns.DEAD.derivation.row_number.window"
@@ -231,7 +231,7 @@ fn unused_malformed_definition_precedes_reference_errors() {
             panic!()
         };
         assert_eq!(findings[0].path, "windows.UNUSED");
-        assert_eq!(findings[0].condition, "invalid_field_type");
+        assert_eq!(findings[0].definition().condition, "invalid_field_type");
     }
 }
 

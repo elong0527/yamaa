@@ -5,6 +5,7 @@ use super::{
     NormalizationBudget, NormalizationError, NormalizationResource, SchemaContext,
     SchemaDiagnostic, SchemaField, SchemaStructure, ValidationError,
 };
+use crate::diagnostic::ConditionCode;
 use alloc::{format, string::String, vec, vec::Vec};
 
 /// A written logical path and its retained input layer. Hosts attach their file identities.
@@ -206,8 +207,7 @@ impl Run<'_, '_, '_> {
     fn invalid_clear(&mut self, path: &str, name: &str) -> Result<(), NormalizationError> {
         self.diagnostics.push(self.budget.validation.diagnostic(
             path,
-            "invalid_clear",
-            Some("REQ-0660"),
+            ConditionCode::SchemaLayerInvalidClear,
             vec![("field", SchemaContext::Text(name.into()))],
         )?);
         Ok(())
