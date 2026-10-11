@@ -1877,6 +1877,10 @@ columns:
                     shutil.copytree(ROOT / "row-cases" / name, current)
                     entry = current / "spec.yaml"
                     expected = json.loads((current / "findings.json").read_text(encoding="ascii"))
+                    if name == "different-row-drivers":
+                        # Stored drivers now use the complete historical success witness.
+                        self.assertEqual(expected, case["findings"])
+                        self.assertEqual((current / "expected.csv").read_bytes(), case["csv"].encode())
                     if name == "adam-adlb-end-of-treatment":
                         gates = list(reference["eot_native_gates"])
                         self.assertEqual(len(gates), 5)

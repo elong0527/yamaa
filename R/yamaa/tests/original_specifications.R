@@ -1562,6 +1562,7 @@ local({
   on.exit(unlink(directory,recursive=TRUE))
   for(name in names(row_intermediate_truth)) {
     truth <- row_intermediate_truth[[name]]
+    if(identical(name,"different-row-drivers")) stopifnot(truth$success,length(truth$issues$phase)==0L)
     stopifnot(file.copy(file.path(root,"row-cases",name),directory,recursive=TRUE))
     case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
     result <- yamaa_domain(entry);check_issue_frame(result$issues,truth$issues)
@@ -1589,7 +1590,7 @@ local({
   original <- file.path(directory,"adam-adlb-supplb-padded-key")
   unlink(file.path(original,"input"),recursive=TRUE)
   stopifnot(nrow(yamaa_check(file.path(original,"spec.yaml"))$issues)==0L,!file.exists(file.path(original,"input")))
-  cat("common input record rows match unchanged padded-key bytes, complete independent findings and reached handler ledgers without Python; EOT and distinct/grouped sources remain gated passed\n")
+  cat("common input record rows match unchanged padded-key bytes, complete independent findings and reached handler ledgers without Python; EOT intermediate/grouped named-source scopes remain gated passed\n")
 })
 
 local({
