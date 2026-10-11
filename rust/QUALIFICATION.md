@@ -159,3 +159,31 @@ is preserved as the exact issue body plus title, URL and retrieval metadata befo
 its next-wave condensation. The JSON uses escaped Unicode for lossless text
 preservation. Historical owner-merge/review limitations remain historical; this
 archive does not upgrade their qualification claims.
+
+## Independent native run evidence audit
+
+`rust/tools/audit_native_run.py` checks one exact native Actions run and attempt
+without executing candidate or reference engines. It records the source revision
+and parents, every required installed Python/R/math/public/producer tuple, actual
+runtime and image metadata, package and toolchain versions, and retained verdicts.
+Its downloaded `input` snapshot can be replayed offline using the same script.
+Missing artifacts or tuples remain missing, and a failed job cannot be upgraded
+by a successful inventory from another lane or run.
+
+Package inspection reuses `check_cargo_lock.check_archive` and
+`check_python_package_hygiene.check_archive`: source-package Cargo lock, workspace
+manifest and toolchain bytes must equal the exact source files, generated Python
+caches must be absent, and the reference wheel must equal the installed candidate
+wheel bytes. The math audit reuses the existing corpus, host and exact observation
+comparators; its sample portability verdict still makes no historical parity or
+complete accuracy claim. The audit checks cohort required routes, retained report
+presence and comparator results, rather than rerunning either engine.
+
+A public conformance inventory is complete only when every original manifest
+entry has a recorded verdict with matching counts. Its unsupported, mismatch,
+error and excluded counts are preserved. A passing *evidence completeness* row
+does not promote those semantic verdicts into passes and does not seed #1974's
+ratchet. Whole-corpus qualification and issue closure still require the approved
+full-matrix evidence and acceptance rules. The main-push audit job is observational
+and nonblocking; JSON and Markdown records are kept as CI artifacts, not committed
+qualification ledgers. See `.github/ci.md` for run-ID and offline replay commands.
