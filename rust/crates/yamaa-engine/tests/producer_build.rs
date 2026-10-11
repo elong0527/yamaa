@@ -231,8 +231,36 @@ struct Report {
     node: String,
     maximum: usize,
     failure: bool,
+    diagnostics: bool,
+    diagnostic_bytes: usize,
+    diagnostic_failure: bool,
+    diagnostic_unwind: Option<Arc<()>>,
+    diagnostic_capacities: Vec<(usize, usize)>,
 }
 impl ReportPort for Report {
+    fn prepare_diagnostics<C, D, T: TableAccess>(
+        &mut self,
+        node: &Node,
+        _attempt: &yamaa_engine::specification_run::CapturedAttempt<C, D, T>,
+        output_bytes: usize,
+        report_bytes: usize,
+    ) -> Result<usize, Self::Error> {
+        if !self.diagnostics {
+            return Ok(0);
+        }
+        self.trace
+            .borrow_mut()
+            .push(format!("diagnostics:{}", node.identity()));
+        self.diagnostic_capacities
+            .push((output_bytes, report_bytes));
+        if let Some(payload) = &self.diagnostic_unwind {
+            std::panic::panic_any(Arc::clone(payload));
+        }
+        if self.diagnostic_failure {
+            return Err("original diagnostic refusal");
+        }
+        Ok(self.diagnostic_bytes)
+    }
     fn select<C, D, T: TableAccess>(
         &mut self,
         node: &Node,
@@ -339,6 +367,11 @@ impl Ports {
                 node: String::new(),
                 maximum: 0,
                 failure: false,
+                diagnostics: false,
+                diagnostic_bytes: 0,
+                diagnostic_failure: false,
+                diagnostic_unwind: None,
+                diagnostic_capacities: Vec::new(),
             },
             codec: Codec {
                 trace,
@@ -405,6 +438,165 @@ fn publication_diamond() -> build::PreparedBuild {
     .unwrap()
     .into_build()
 }
+
+#[test]
+fn diagnostic_preparation_precedes_primary_and_dependent_entry_with_one_shared_byte_budget() {
+    let mut ports = Ports::new();
+    ports.report.diagnostics = true;
+    ports.report.diagnostic_bytes = 4;
+    let primary = b"ID,VALUE\n1,1\n".len();
+    let limits = build::Limits {
+        output_bytes: primary * 2 + 8,
+        report_bytes: 100,
+        ..Default::default()
+    };
+    let mut attempt = Attempt::default();
+    assert!(prepared()
+        .build_publication_into(ports.borrow(), limits, &mut attempt)
+        .is_ok());
+    assert!(attempt.outcome.is_ok());
+    assert_eq!(ports.study.reads, 1);
+    assert_eq!(
+        ports.report.diagnostic_capacities,
+        [(primary * 2 + 8, 50), (primary + 4, 50)]
+    );
+    let events = ports.activation.trace.borrow();
+    let at = |event: &str| events.iter().position(|e| e == event).unwrap();
+    assert!(at("diagnostics:/p") < at("encode:RAW"));
+    assert!(at("encode:RAW") < at("decode:FIRST"));
+    assert!(at("decode:SECOND") < at("diagnostics:/root"));
+    assert!(at("diagnostics:/root") < at("encode:FIRST"));
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| e.starts_with("diagnostics:"))
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn diagnostic_refusal_stops_primary_encoding_and_every_dependent_source() {
+    let mut ports = Ports::new();
+    ports.report.diagnostics = true;
+    ports.report.diagnostic_failure = true;
+    let mut attempt = Attempt::default();
+    assert!(prepared()
+        .build_publication_into(ports.borrow(), Default::default(), &mut attempt)
+        .is_err());
+    assert_eq!(attempt.nodes.len(), 1);
+    assert_eq!(attempt.nodes[0].node, 1);
+    assert!(attempt.nodes[0]
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .is_ok());
+    assert!(matches!(
+        attempt.nodes[0].output,
+        Err(CompleteError::Report("original diagnostic refusal"))
+    ));
+    assert!(!ports
+        .activation
+        .trace
+        .borrow()
+        .iter()
+        .any(|e| e.starts_with("encode:") || e == "decode:FIRST" || e == "decode:SECOND"));
+}
+
+#[test]
+fn failed_execution_diagnostic_refusal_retains_the_original_live_payload() {
+    let mut ports = Ports::new();
+    ports.activation.mode = Mode::Producer;
+    ports.report.diagnostics = true;
+    ports.report.diagnostic_failure = true;
+    let mut attempt = Attempt::default();
+    prepared().build_into(ports.borrow(), Default::default(), &mut attempt);
+    assert_eq!(attempt.nodes.len(), 1);
+    let entered = &attempt.nodes[0];
+    let error = entered
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .as_ref()
+        .unwrap_err();
+    let ExecutionError::ProjectFunction { error, .. } = error.as_ref() else {
+        panic!("original execution error")
+    };
+    let FailureKind::CallFailed(error) = &error.kind else {
+        panic!("original live error")
+    };
+    assert!(Rc::ptr_eq(&error.original, &ports.activation.original));
+    assert!(matches!(
+        entered.output,
+        Err(CompleteError::Report("original diagnostic refusal"))
+    ));
+    let events = ports.activation.trace.borrow();
+    assert!(events.iter().any(|e| e == "diagnostics:/p"));
+    assert!(!events.iter().any(|e| e.starts_with("encode:")));
+    assert_eq!(events.iter().filter(|e| *e == "invoke:beta:1").count(), 1);
+}
+
+#[test]
+fn diagnostic_accounting_refusal_precedes_the_first_primary_encoder() {
+    let mut ports = Ports::new();
+    ports.report.diagnostics = true;
+    ports.report.diagnostic_bytes = 4;
+    let limits = build::Limits {
+        output_bytes: 3,
+        ..Default::default()
+    };
+    let mut attempt = Attempt::default();
+    prepared().build_into(ports.borrow(), limits, &mut attempt);
+    assert_eq!(attempt.nodes.len(), 1);
+    assert!(matches!(
+        attempt.nodes[0].output,
+        Err(CompleteError::OutputLimit)
+    ));
+    assert_eq!(ports.report.diagnostic_capacities[0].0, 3);
+    assert!(!ports
+        .activation
+        .trace
+        .borrow()
+        .iter()
+        .any(|e| e.starts_with("encode:")));
+}
+
+#[test]
+fn diagnostic_unwind_preserves_entered_execution_and_original_payload() {
+    let mut ports = Ports::new();
+    ports.report.diagnostics = true;
+    let original = Arc::new(());
+    ports.report.diagnostic_unwind = Some(Arc::clone(&original));
+    let mut attempt = Attempt::default();
+    let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        prepared().build_into(ports.borrow(), Default::default(), &mut attempt);
+    }))
+    .unwrap_err();
+    assert!(Arc::ptr_eq(
+        error.downcast_ref::<Arc<()>>().unwrap(),
+        &original
+    ));
+    assert_eq!(attempt.nodes.len(), 1);
+    assert!(attempt.nodes[0]
+        .dataset
+        .result
+        .as_ref()
+        .unwrap()
+        .result
+        .is_ok());
+    assert!(matches!(attempt.nodes[0].output, Ok(None)));
+    assert!(!ports
+        .activation
+        .trace
+        .borrow()
+        .iter()
+        .any(|e| e.starts_with("encode:")));
+}
+
 struct Publication {
     calls: Vec<String>,
     writes: Vec<usize>,
