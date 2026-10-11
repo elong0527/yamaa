@@ -646,6 +646,27 @@ fn unknown_dependencies_are_lexical_and_precede_cycle_reporting() {
             }
         ]))
     );
+    let E::Invalid(issues) = schema()
+        .resolve_inheritance_dependencies(&input, &mut budget())
+        .unwrap_err()
+    else {
+        panic!("expected completed dependency findings")
+    };
+    let diagnostics =
+        yamaa_core::diagnostic::inheritance_dependency_diagnostics(&issues, 4096).unwrap();
+    assert_eq!(diagnostics.len(), 2);
+    assert_eq!(diagnostics[0].spec_paths, ["columns.X.derivation"]);
+    assert_eq!(diagnostics[1].spec_paths, ["columns.X.derivation"]);
+    for (diagnostic, expected) in diagnostics.iter().zip(["A", "Z"]) {
+        assert_eq!(diagnostic.definition().condition, "unknown_reference");
+        assert_eq!(diagnostic.definition().requirement, Some("REQ-0070"));
+        assert_eq!(
+            diagnostic.context["dependency"],
+            yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                expected.into()
+            ))
+        );
+    }
 }
 
 #[test]

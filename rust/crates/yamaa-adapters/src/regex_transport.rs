@@ -110,9 +110,11 @@ fn process(request: &str) -> Result<String, TransportError> {
     let pattern = match Pattern::compile(&request.pattern, CompileLimits::default()) {
         Ok(pattern) => pattern,
         Err(CompileError::Invalid { byte, reason }) => {
+            let definition =
+                yamaa_core::diagnostic::ConditionCode::RegexInvalidPattern.definition();
             return encode(Outcome::Invalid {
-                condition: "invalid_regex",
-                requirement: "REQ-0827",
+                condition: definition.condition,
+                requirement: definition.requirement.ok_or(TransportError::Internal)?,
                 position: position(byte),
                 reason,
             });

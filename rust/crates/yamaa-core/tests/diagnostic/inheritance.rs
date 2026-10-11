@@ -113,5 +113,40 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         }
         reached.insert(finding.code);
     }
+    let dependencies = yamaa_core::diagnostic::inheritance_dependency_diagnostics(
+        &[yamaa_core::schema::InheritanceDependencyIssue::Unknown {
+            column: "VALUE".into(),
+            dependency: "MISSING".into(),
+        }],
+        4096,
+    )
+    .unwrap();
+    assert_eq!(dependencies.len(), 1);
+    let dependency = &dependencies[0];
+    assert_eq!(
+        (
+            dependency.definition().phase,
+            dependency.definition().condition,
+            dependency.definition().requirement
+        ),
+        ("validation", "unknown_reference", Some("REQ-0070"))
+    );
+    assert_eq!(dependency.spec_paths, ["columns.VALUE.derivation"]);
+    assert_eq!(
+        dependency.context,
+        [
+            (
+                "column".into(),
+                ContextValue::Scalar(Value::Str("VALUE".into()))
+            ),
+            (
+                "dependency".into(),
+                ContextValue::Scalar(Value::Str("MISSING".into()))
+            ),
+        ]
+        .into_iter()
+        .collect()
+    );
+    reached.insert(dependency.code);
     reached
 }
