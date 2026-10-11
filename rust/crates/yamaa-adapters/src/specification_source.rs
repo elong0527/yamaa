@@ -367,15 +367,114 @@ impl CapturedSchema {
         display_path: String,
         port: &mut P,
     ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
-        let raw = self
-            .decode_entry(&source)
-            .map_err(InheritanceError::Entry)?;
-        if raw.document.field(raw.document.root(), "parents").is_some() {
-            self.prepare_inherited_decoded(source, display_path, raw, port)
-        } else {
-            self.prepare_standalone_decoded(source, raw)
-                .map_err(InheritanceError::Entry)
-        }
+        use yamaa_engine::document_preparation::{self as application, Content, Error as Failure};
+        let prepared = application::prepare(
+            &self.structure,
+            source,
+            display_path,
+            &mut DocumentEntry(self),
+            &mut inheritance::Decoder::new(self.limits.decode),
+            port,
+            yamaa_engine::inheritance_capture::Limits {
+                captured_bytes: self.limits.captured_bytes,
+                identity_bytes: self.limits.identity_bytes,
+                normalization: self.limits.normalization,
+                ..Default::default()
+            },
+        )
+        .map_err(|error| match error {
+            Failure::Entry(error) => InheritanceError::Entry(error),
+            Failure::Standalone { source, error } => {
+                InheritanceError::Entry(standalone_dispatch_error(self, source, error))
+            }
+            Failure::Inherited(yamaa_engine::inheritance_capture::Error::Entry(error)) => {
+                InheritanceError::Entry(error)
+            }
+            Failure::Inherited(yamaa_engine::inheritance_capture::Error::Preparation {
+                error,
+                captured_parents,
+            }) => InheritanceError::Preparation {
+                schema: Arc::clone(self),
+                error,
+                captured_parents,
+            },
+        })?;
+        let (source, content) = prepared.into_parts();
+        let (raw, content, parents) = match content {
+            Content::Standalone {
+                prepared,
+                locations,
+            } => {
+                let (document, model, origins, windows) = prepared.into_parts();
+                (
+                    DecodedYaml {
+                        document,
+                        locations,
+                    },
+                    PreparedContent::Standalone {
+                        model,
+                        origins,
+                        windows,
+                    },
+                    Vec::new(),
+                )
+            }
+            Content::Inherited { raw, prepared } => (
+                raw,
+                PreparedContent::Inherited(Box::new(prepared.inheritance)),
+                prepared.parents,
+            ),
+        };
+        Ok(PreparedDocument {
+            schema: Arc::clone(self),
+            source,
+            raw,
+            content,
+            parents,
+        })
+    }
+}
+
+// Physical entry admission remains exactly decode_entry's byte/identity/codec policy.
+struct DocumentEntry<'a>(&'a CapturedSchema);
+impl yamaa_engine::document_preparation::EntryCodec for DocumentEntry<'_> {
+    type Raw = DecodedYaml;
+    type Locations = Vec<SourcePosition>;
+    type Error = Error;
+    fn decode(&mut self, source: &Source) -> Result<DecodedYaml, Error> {
+        self.0.decode_entry(source)
+    }
+    fn document(raw: &DecodedYaml) -> &yamaa_core::schema::Document {
+        &raw.document
+    }
+    fn into_parts(raw: DecodedYaml) -> (yamaa_core::schema::Document, Vec<SourcePosition>) {
+        (raw.document, raw.locations)
+    }
+}
+fn standalone_dispatch_error(
+    schema: &Arc<CapturedSchema>,
+    source: Source,
+    error: yamaa_engine::standalone_preparation::Error,
+) -> Error {
+    use yamaa_engine::standalone_preparation::Error as Failure;
+    match error {
+        Failure::InheritanceRequired => Error::InheritanceRequired,
+        Failure::Normalize(failure) => match failure.error {
+            NormalizationError::Invalid(findings) => Error::Findings(Box::new(CapturedFindings {
+                schema: Arc::clone(schema),
+                source,
+                document: failure.input,
+                findings,
+            })),
+            error => Error::Normalize(error),
+        },
+        Failure::Validation(error) => Error::Validation(error),
+        Failure::Model(findings) => Error::Findings(Box::new(CapturedFindings {
+            schema: Arc::clone(schema),
+            source,
+            document: None,
+            findings,
+        })),
     }
 }
 
@@ -397,6 +496,15 @@ enum PreparedContent {
         windows: Vec<WindowReference>,
     },
     Inherited(Box<yamaa_engine::inheritance_preparation::PreparedInheritance>),
+}
+impl yamaa_engine::file_preparation::PreparedView for PreparedDocument {
+    type Parent = CapturedParent;
+    fn parents(&self) -> &[CapturedParent] {
+        &self.parents
+    }
+    fn parent_source(parent: &CapturedParent) -> &Source {
+        parent.source()
+    }
 }
 impl PreparedDocument {
     pub fn schema(&self) -> &CapturedSchema {

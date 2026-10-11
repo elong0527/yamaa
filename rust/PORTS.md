@@ -504,3 +504,35 @@ component probes remain unchanged for planned #1751 retirement, rather than bein
 refactored. Dispatch, authored/producer-origin helpers, native alias/cache/entry-base
 policy and other owners' scanner/report/log/Define/Save/Windows work remain separate
 #1754 debt; this move does not claim whole-issue closure.
+
+The live document preparation gate delegates to `document_preparation::prepare`.
+Its entry codec addresses the exact retained raw arena, decodes the entry once,
+and keeps its physical source/location admission separate from parent capture.
+The engine selects inheritance by raw `parents` presence, including null, scalar
+and empty values. It composes the existing standalone and inheritance services
+without moving version/default gates ahead of that selection. Standalone passes
+share one existing normalization budget; inherited capture, traversal and
+normalization keep their existing separate cumulative policies. Source, raw
+arenas, opaque locations and original port errors move without new clone, debug
+or thread-safety bounds. Equal strings or a lifetime do not establish arena
+provenance; the codec must expose the exact held document.
+
+`file_preparation::prepare` owns entry capture ordering and the private parent
+alias ledger. Native `Resources` remains the physical authority for resolution,
+snapshots, path spelling, byte equality, descriptor witnesses and resource policy.
+Entry resolve/capture/admitted preparation copy precede schema selection. Every
+parent canonicalization charges identity/display metadata; a distinct alias pair
+is admitted before its ledger key/pair copies. Duplicate pairs are compared by
+borrowed strings. No new count ceiling or budget reset is introduced, and failed
+native charges keep their original spent counters. The document connector only
+selects held/package schema authority and delegates to the document application.
+
+After semantic success the application borrows the immutable first-capture
+parent catalog and verifies every distinct authored alias in encounter order,
+including each first capture, without another preparation byte copy. Only after
+all aliases succeed does it select the original entry base. A missing ledger key
+is an explicit native representation refusal; early/late opaque errors move and
+stop subsequent effects. This service does not add a root-byte reread: the
+existing native entry-base verification remains the policy. Physical codecs,
+authored producer origins, reporting/publication and compatibility component
+entry points remain their separate boundaries.
