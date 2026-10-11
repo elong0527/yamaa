@@ -41,7 +41,8 @@ class NativeCoverage(unittest.TestCase):
                     1 if event == "pull_request" else 18,
                 )
                 self.assertIn(
-                    "PR sample" if event == "pull_request" else "Full", summary.read_text()
+                    "PR sample" if event == "pull_request" else "Full",
+                    summary.read_text(),
                 )
 
     def test_main_keeps_every_supported_route(self):
