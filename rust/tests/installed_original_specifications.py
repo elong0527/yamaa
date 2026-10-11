@@ -2289,5 +2289,20 @@ columns:
                 with self.assertRaises(yamaa.DomainError): result.save()
                 self.assertFalse((entry.parent / "src.csv").exists())
 
+    def test_public_primary_donor_selection_retains_one_record_and_complete_handlers(self):
+        import yamaa
+        body = 'schema_version: \'1.0\'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: [ID]\n    filter: "SRC.ELIG = \'Y\'"\n    order_by: [SRC.SEQ]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = root / "spec.yaml"
+            entry.write_text(body)
+            (root / "src.csv").write_text("ID,SEQ,ELIG,A,B\n1,1,Y,early,x\n1,2,Y,last,\n2,1,N,hidden,hidden\n")
+            self.assertTrue(yamaa.check(entry).issues.is_empty())
+            result = yamaa.domain(entry)
+            self.assertEqual(result.issues.rows(), [])
+            self.assertEqual(json.loads(result._native.observations())["handler_counts"], [{'spec_path': 'columns.A.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 2}, {'spec_path': 'columns.A.derivation.source.no_match', 'handler': 'no_match', 'count': 1}, {'spec_path': 'columns.B.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 2}, {'spec_path': 'columns.B.derivation.source.no_match', 'handler': 'no_match', 'count': 1}])
+            self.assertTrue(result.save())
+            self.assertEqual((root / "result.csv").read_bytes(), b"ID,SEQ,A,B\n1,1,last,\n1,2,last,\n2,1,,\n")
+
 if __name__ == "__main__":
     unittest.main()

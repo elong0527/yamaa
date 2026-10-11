@@ -20,6 +20,8 @@ use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 mod binding_diagnostics;
 #[path = "specification_intermediate_admission.rs"]
 mod intermediate_admission;
+#[path = "specification_intermediate_sources.rs"]
+mod intermediate_sources;
 #[path = "specification_intermediates.rs"]
 mod intermediates;
 #[path = "specification_lookup_diagnostics.rs"]

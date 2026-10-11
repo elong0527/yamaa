@@ -1835,6 +1835,24 @@ local({
   cat("inferred applicable intermediate keys, stable shared selection and complete declaration failures passed without Python\n")
 })
 
+local({
+  body <- "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: [ID]\n    filter: \"SRC.ELIG = 'Y'\"\n    order_by: [SRC.SEQ]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n"
+  directory <- tempfile("yamaa-primary-donors-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE),add=TRUE)
+  entry <- file.path(directory,"spec.yaml")
+  writeBin(charToRaw(body),entry)
+  writeBin(charToRaw("ID,SEQ,ELIG,A,B\n1,1,Y,early,x\n1,2,Y,last,\n2,1,N,hidden,hidden\n"),file.path(directory,"src.csv"))
+  stopifnot(nrow(yamaa_check(entry)$issues)==0L)
+  result <- yamaa_domain(entry)
+  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
+    identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,SEQ,A,B\n1,1,last,\n1,2,last,\n2,1,,\n")))
+  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  ledger <- paste0('"handler_counts":','[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]',',')
+  stopifnot(sum(gregexpr('"handler_counts":',observed,fixed=TRUE)[[1L]]>0L)==2L,
+    sum(gregexpr(ledger,observed,fixed=TRUE)[[1L]]>0L)==2L)
+  cat("same-input donor grain, shared missing field and complete handler accounting passed without Python\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

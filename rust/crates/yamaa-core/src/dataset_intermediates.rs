@@ -56,7 +56,7 @@ pub(super) fn validate(
         validate_read(
             item,
             match &item.source {
-                IntermediateSource::Input(_) => 0,
+                IntermediateSource::Input(_) | IntermediateSource::Primary { .. } => 0,
                 IntermediateSource::SelfRows { columns, .. } => columns
                     .first()
                     .copied()
@@ -72,6 +72,11 @@ pub(super) fn validate(
             .ok_or(PlanError::InvalidIntermediate)?
             .columns()
             .len();
+        if let IntermediateSource::Primary { schema, name } = &item.source {
+            if schema != primary || name.is_empty() {
+                return Err(PlanError::InvalidIntermediate);
+            }
+        }
         if let IntermediateSource::SelfRows { schema, columns } = &item.source {
             if schema != output
                 || columns
