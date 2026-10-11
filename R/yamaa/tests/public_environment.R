@@ -266,6 +266,7 @@ stopifnot(nrow(absolute$issues) == 0L, identical(as.character(absolute$output$ID
 unlink(output)
 writeLines(c("version: '1.0'", "data_roots: [shared]"), "yamaa-project.yaml")
 writeLines(c("ID", "999"), "data.csv")
+unlink("entry/data.csv")
 dir.create("shared/directory.csv")
 for (input in c("data.csv", "../shared/directory.csv")) {
   writeLines(local_document(input), "entry/spec.yaml")
