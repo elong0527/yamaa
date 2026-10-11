@@ -52,7 +52,11 @@ pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Fai
         E::Limit => "publication_limit",
         E::InvalidTarget => "invalid_target",
         E::PathMismatch => "path_mismatch",
-        E::Io(_) => "publication_failed",
+        E::Io(_) => {
+            yamaa_core::diagnostic::ConditionCode::OutputPublicationFailed
+                .definition()
+                .condition
+        }
     };
     let mut finding = yamaa_core::application_issue::rejected("output", code);
     if let E::Cleanup {

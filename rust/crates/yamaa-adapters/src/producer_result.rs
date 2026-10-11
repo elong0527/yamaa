@@ -155,7 +155,13 @@ impl RootResult {
                             .expect("publication issue"),
                         );
                     }
-                    (false, "publication_failed", Some(*node))
+                    (
+                        false,
+                        yamaa_core::diagnostic::ConditionCode::OutputPublicationFailed
+                            .definition()
+                            .condition,
+                        Some(*node),
+                    )
                 }
             }
         };
@@ -264,7 +270,13 @@ impl RootResult {
                         ))
                         .expect("publication issue"),
                     );
-                    (false, "publication_failed", Some(failure.request))
+                    (
+                        false,
+                        yamaa_core::diagnostic::ConditionCode::OutputPublicationFailed
+                            .definition()
+                            .condition,
+                        Some(failure.request),
+                    )
                 }
             }
         };

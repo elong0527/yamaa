@@ -456,3 +456,12 @@ log success/failure gates and check/log order remain unchanged. No new projectio
 quota or bound carrier is introduced; row_count uses its retained count facts.
 The active literal allowance shrinks from 47 sites/63 occurrences to 35/51; the
 frozen seed and all independent expected reports remain unchanged.
+
+## Publication spelling ownership
+
+The remaining three production publication status/classification aliases use the
+OutputPublicationFailed registry spelling. Adapter-owned I/O classification and
+actual entered publication remain distinct; normative publication diagnostics
+already use the same core cause. Status, issue and dataset wire bytes do not change.
+The active allowance shrinks from 35 sites/51 occurrences to 32/48. Remaining
+non-Define allowances are exact pre-existing independent tests.
