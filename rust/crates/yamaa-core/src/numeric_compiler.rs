@@ -199,19 +199,56 @@ pub fn compile_numeric_with_policy(
             required: resolutions,
         });
     }
+    Ok(compile_parsed(&parsed, spec_path, math_policy, resolutions))
+}
+
+/// R013 shares the same arithmetic evaluator and original spans. The parser has
+/// already admitted the full aggregate; this projection cannot extend its grammar.
+pub(crate) fn compile_aggregate_subtree(
+    parsed: &crate::aggregate_parser::ParsedAggregate,
+    root: usize,
+    spec_path: &str,
+    resolution_limit: usize,
+) -> Result<CompiledNumeric, CompileError> {
+    let parsed = ParsedNumeric::aggregate_subtree(parsed, root);
+    let resolutions = parsed
+        .nodes()
+        .iter()
+        .filter(|node| node.kind == ParsedKind::Identifier)
+        .count();
+    if resolutions > resolution_limit {
+        return Err(CompileError::ResolutionLimit {
+            limit: resolution_limit,
+            required: resolutions,
+        });
+    }
+    Ok(compile_parsed(
+        &parsed,
+        spec_path,
+        MathPolicy::PortableLibmV1,
+        resolutions,
+    ))
+}
+
+fn compile_parsed(
+    parsed: &ParsedNumeric,
+    spec_path: &str,
+    math_policy: MathPolicy,
+    resolutions: usize,
+) -> CompiledNumeric {
     let mut sources = Vec::new();
-    let root = lower(&parsed, parsed.root(), &mut Vec::new(), &mut sources);
-    Ok(CompiledNumeric {
+    let root = lower(parsed, parsed.root(), &mut Vec::new(), &mut sources);
+    CompiledNumeric {
         math_policy,
         plan: NumericPlan {
             spec_path: spec_path.into(),
-            expression: text.into(),
+            expression: parsed.expression().into(),
             root,
         },
         sources,
         resolutions,
         identifiers: parsed.identifiers().map(String::from).collect(),
-    })
+    }
 }
 
 /// Convert unsigned validated digits without arbitrary precision or float narrowing.

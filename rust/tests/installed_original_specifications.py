@@ -561,6 +561,9 @@ class OriginalSpecifications(unittest.TestCase):
     def test_row_reductions_complete_reports_and_exact_csv(self):
         self._source_selection_reports("row-reductions.tsv", "row-reduction", 25)
 
+    def test_aggregate_relations_complete_reports_and_exact_csv(self):
+        self._source_selection_reports("correlated-aggregates.tsv", "correlated-aggregate", 16)
+
     def test_row_column_checks_complete_reports_and_exact_csv(self):
         self._source_selection_reports("row-column-checks.tsv", "row-column", 48)
 

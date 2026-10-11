@@ -131,6 +131,14 @@ impl Budget {
                 }
                 Ok(())
             }
+            ContextValue::Object(values) => {
+                self.entries(values.len())?;
+                for (key, value) in values {
+                    self.text(key)?;
+                    self.context(value, depth + 1)?;
+                }
+                Ok(())
+            }
         }
     }
     /// Immutable JSON is charged completely before a caller clones it. Depth

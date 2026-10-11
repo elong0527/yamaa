@@ -52,6 +52,8 @@ pub use windows::WindowFinding;
 #[path = "specification_functions.rs"]
 mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
+#[path = "specification_aggregate.rs"]
+mod aggregates;
 #[path = "specification_cases.rs"]
 mod cases;
 #[path = "specification_derivations.rs"]
@@ -210,6 +212,7 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    AggregateDiagnostic(crate::diagnostic::Diagnostic),
     Padding(crate::diagnostic::Diagnostic),
     Scalar(crate::diagnostic::Diagnostic),
     TextExtract(crate::diagnostic::Diagnostic),
@@ -242,6 +245,12 @@ pub enum BindFinding {
         path: String,
         expression: String,
         relation: Option<String>,
+        driver: String,
+    },
+    AggregateGroupScope {
+        path: String,
+        expression: String,
+        relation: String,
     },
     QualifiedNumericReference {
         path: String,
@@ -306,6 +315,7 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    Aggregate(alloc::boxed::Box<aggregates::Declaration>),
     Scalar(alloc::boxed::Box<scalar::Declaration>),
     StrContains(crate::text_extract::StringExtract),
     Flag(flags::Declaration),
@@ -1653,6 +1663,17 @@ impl PreparedSpecification {
                 Ok(binding)
             };
             let expression = match &declaration.operation {
+                Operation::Aggregate(operation) => aggregates::bind(
+                    operation,
+                    &catalog,
+                    &self.source().name,
+                    None,
+                    crate::reference_scope::Phase::Column { groups: &[] },
+                    &self.output,
+                    &secondary,
+                    &mut edges,
+                    &mut findings,
+                )?,
                 Operation::Flag(operation) => flags::bind(
                     operation,
                     column,

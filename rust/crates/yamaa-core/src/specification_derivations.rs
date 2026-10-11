@@ -60,6 +60,11 @@ pub(super) fn prepare_value_with_driver(
     let op = text(d, op)?;
     let result_path = format!("{result_path}.{op}");
     let operation = match op {
+        "aggregate" => Operation::Aggregate(alloc::boxed::Box::new(aggregates::prepare(
+            d,
+            payload,
+            &result_path,
+        )?)),
         "flag" => Operation::Flag(flags::prepare(d, payload, &result_path)?),
         "literal" => Operation::Literal(literal(d, payload, &result_path)?),
         "function" => Operation::ProjectFunction(
@@ -285,6 +290,9 @@ pub(super) fn bind_row(
     intermediates: &[Option<Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
     match operation {
+        Operation::Aggregate(operation) => aggregates::bind(
+            operation, catalog, driver, row, phase, output, secondary, edges, findings,
+        ),
         Operation::Literal(value) => Ok(Some(Expression::Literal(value.clone()))),
         Operation::Source(source) => {
             if named.reference(&source.variable).is_some() {
@@ -664,6 +672,25 @@ pub(super) fn references(
     names: &mut Vec<String>,
     depth: usize,
 ) -> Result<(), PrepareError> {
+    references_mode(d, value, project, names, depth, true)
+}
+pub(super) fn current_references(
+    d: &Document,
+    value: usize,
+    project: Option<&functions::Prepared>,
+    names: &mut Vec<String>,
+    depth: usize,
+) -> Result<(), PrepareError> {
+    references_mode(d, value, project, names, depth, false)
+}
+fn references_mode(
+    d: &Document,
+    value: usize,
+    project: Option<&functions::Prepared>,
+    names: &mut Vec<String>,
+    depth: usize,
+    aggregate_relation: bool,
+) -> Result<(), PrepareError> {
     if depth > 64 {
         return Err(PrepareError::Limit("expression_depth"));
     }
@@ -690,6 +717,89 @@ pub(super) fn references(
             Ok(parsed) => names.extend(parsed.identifiers().map(String::from)),
             Err(crate::numeric_parser::ParseError::Grammar { .. }) => (),
             Err(_) => return Err(PrepareError::Limit("numeric_parser")),
+        }
+    }
+    if let Some(payload) = d.field(value, "aggregate") {
+        let id = if matches!(d.nodes()[payload], N::Text(_)) {
+            payload
+        } else {
+            field(d, payload, "expr")?
+        };
+        match crate::aggregate_parser::parse_aggregate(text(d, id)?, Default::default()) {
+            Ok(parsed) => {
+                names.extend(
+                    parsed
+                        .identifiers()
+                        .filter(|name| aggregate_relation || !name.contains('.'))
+                        .map(String::from),
+                );
+                if aggregate_relation {
+                    names.extend(parsed.star_datasets().map(|dataset| format!("{dataset}.*")));
+                }
+            }
+            Err(crate::aggregate_parser::ParseError::Grammar { .. }) => (),
+            Err(_) => return Err(PrepareError::Limit("aggregate_parser")),
+        }
+        if let Some(key) = d.field(payload, "key") {
+            match &d.nodes()[key] {
+                N::Text(name) => names.push(name.clone()),
+                N::Sequence(ids) => {
+                    for &id in ids {
+                        names.push(text(d, id)?.into());
+                    }
+                }
+                N::Mapping(pairs) => {
+                    for &(_, value) in pairs {
+                        if let N::Text(name) = &d.nodes()[value] {
+                            names.push(name.clone());
+                        } else {
+                            references_mode(
+                                d,
+                                value,
+                                project,
+                                names,
+                                depth + 1,
+                                aggregate_relation,
+                            )?;
+                        }
+                    }
+                }
+                N::Null => (),
+                _ => return Err(PrepareError::Internal),
+            }
+        }
+        if let Some(groups) = d
+            .field(payload, "group_by")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            for &id in sequence(d, groups)? {
+                let name = text(d, id)?;
+                if aggregate_relation || !name.contains('.') {
+                    names.push(name.into());
+                }
+            }
+        }
+        if let Some(filter) = d
+            .field(payload, "filter")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            let mut filter_names = Vec::new();
+            predicate_references(d, filter, &mut filter_names)?;
+            names.extend(
+                filter_names
+                    .into_iter()
+                    .filter(|name| aggregate_relation || !name.contains('.')),
+            );
+        }
+        if let Some(between) = d
+            .field(payload, "between")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            if let Some(value) = d.field(between, "value") {
+                if let N::Text(name) = &d.nodes()[value] {
+                    names.push(name.clone());
+                }
+            }
         }
     }
     if let Some(payload) = d.field(value, "flag") {
@@ -725,13 +835,13 @@ pub(super) fn references(
                 predicate_references(d, when, names)?;
             }
             if let Some(child) = d.field(item, "then").or_else(|| d.field(item, "otherwise")) {
-                references(d, child, project, names, depth + 1)?;
+                references_mode(d, child, project, names, depth + 1, aggregate_relation)?;
             }
         }
     }
     if let Some(payload) = d.field(value, "str_concat") {
         for &child in sequence(d, field(d, payload, "sources")?)? {
-            references(d, child, project, names, depth + 1)?;
+            references_mode(d, child, project, names, depth + 1, aggregate_relation)?;
         }
     }
     for op in [

@@ -3442,6 +3442,14 @@ fn row_reductions_match_complete_independent_reports_and_exact_csv() {
     );
 }
 #[test]
+fn aggregate_relations_match_complete_independent_reports_and_exact_csv() {
+    replay_source_selection_truth(
+        include_str!("fixtures/correlated_aggregates.tsv"),
+        "correlated-aggregate",
+        16,
+    );
+}
+#[test]
 fn row_column_checks_match_complete_independent_reports_and_exact_csv() {
     replay_source_selection_truth(
         include_str!("fixtures/row_column_checks.tsv"),
@@ -3609,9 +3617,14 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
         )
         .unwrap_or_else(|error| {
             panic!(
-                "{}: {error:?}; execution: {:?}",
+                "{}: {error:?}; execution: {:?}; outcome: {:?}",
                 fields[0],
-                attempt.result.as_ref().err()
+                attempt.result.as_ref().err(),
+                attempt
+                    .result
+                    .as_ref()
+                    .ok()
+                    .map(|response| &response.outcome)
             )
         });
         let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();

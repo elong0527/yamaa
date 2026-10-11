@@ -19,6 +19,8 @@ pub use crate::function_invocation::FunctionPort;
 pub(crate) fn unavailable_functions<E>() -> impl FunctionPort<Error = E> {
     crate::function_invocation::NoFunctions::new()
 }
+#[path = "dataset_aggregate.rs"]
+mod aggregates;
 #[path = "dataset_temporal_imputation.rs"]
 mod imputation;
 #[path = "dataset_keys.rs"]
@@ -315,6 +317,7 @@ enum SelectionIdentity {
 }
 /// Keep source provenance per candidate for the later whole-column phase.
 struct Candidate {
+    template: Option<usize>,
     selection_identity: SelectionIdentity,
     members: Vec<usize>,
     values: Vec<Value>,
@@ -361,6 +364,7 @@ struct EvaluationState<'a, E> {
     budget: &'a mut Budget,
     handlers: &'a mut HandlerCounter,
     intermediates: &'a mut intermediates::Run,
+    output_rows: &'a [Candidate],
 }
 
 /// Evaluate one admitted assignment and finish conversion before publishing it.
@@ -622,6 +626,9 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     if let Expression::Compute(expression) = &assignment.expression {
         return numeric::evaluate(expression, table, candidate, plan, row, assignment, state);
     }
+    if let Expression::Aggregate(expression) = &assignment.expression {
+        return aggregates::evaluate(expression, table, candidate, plan, row, state);
+    }
     let EvaluationState {
         budget,
         handlers,
@@ -678,6 +685,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         | Expression::StrContains { .. }
         | Expression::Flag(_)
         | Expression::Compute(_)
+        | Expression::Aggregate(_)
         | Expression::Case(_)
         | Expression::Round { .. }
         | Expression::Temporal { .. }
@@ -1118,7 +1126,7 @@ impl Executor<'_> {
         if matches!(self.plan.templates()[0].mode, RowMode::Keys) {
             candidates = key_grain::construct(self, table, limits, &mut budget, handlers)?;
         } else {
-            for template in self.plan.templates() {
+            for (template_index, template) in self.plan.templates().iter().enumerate() {
                 let table =
                     row_drivers::Driver::new(table, secondary, template.mode.source_index());
                 let table = &table;
@@ -1156,6 +1164,7 @@ impl Executor<'_> {
                         .checked_add(1)
                         .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
                     let mut candidate = Candidate {
+                        template: Some(template_index),
                         selection_identity,
                         members,
                         values: vec![Value::Missing; self.plan.output().columns().len()],
@@ -1179,6 +1188,7 @@ impl Executor<'_> {
                                 budget: &mut budget,
                                 handlers,
                                 intermediates: &mut intermediate_run,
+                                output_rows: &[],
                             },
                         )?;
                         candidate.completed[assignment.column] = true;
@@ -1223,6 +1233,7 @@ impl Executor<'_> {
                         budget: &mut budget,
                         handlers,
                         intermediates: &mut intermediate_run,
+                        output_rows: &[],
                     },
                 )?;
                 if matches!(template.mode.local_mode(), RowMode::Groups(_)) {
@@ -1278,8 +1289,8 @@ impl Executor<'_> {
                 } else {
                     None
                 };
-                let candidate = &mut candidates[row];
-                candidate.values[assignment.column] = if let Some(value) = number {
+                let candidate = &candidates[row];
+                let value = if let Some(value) = number {
                     finish(
                         value,
                         assignment,
@@ -1303,10 +1314,12 @@ impl Executor<'_> {
                             budget: &mut budget,
                             handlers,
                             intermediates: &mut intermediate_run,
+                            output_rows: &candidates,
                         },
                     )?
                 };
-                candidate.completed[assignment.column] = true;
+                candidates[row].values[assignment.column] = value;
+                candidates[row].completed[assignment.column] = true;
             }
             completed[assignment.column] = true;
             self.check_columns(

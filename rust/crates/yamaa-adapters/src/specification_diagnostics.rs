@@ -55,6 +55,12 @@ pub(crate) fn portable_definition(
     fn value(cell: yamaa_core::diagnostic::ContextValue) -> Option<Value> {
         use yamaa_core::{diagnostic::ContextValue as C, value::Value as S};
         Some(match cell {
+            C::Object(values) => Value::Object(
+                values
+                    .into_iter()
+                    .map(|(key, cell)| Some((key, value(cell)?)))
+                    .collect::<Option<_>>()?,
+            ),
             C::Sequence(values) => {
                 Value::Array(values.into_iter().map(value).collect::<Option<_>>()?)
             }

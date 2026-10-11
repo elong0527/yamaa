@@ -17,6 +17,12 @@ fn expression_deferred(
 ) -> bool {
     match expression {
         Expression::Window(_) => true,
+        Expression::Aggregate(aggregate) => match aggregate.relation() {
+            AggregateRelation::Output { group_by } => group_by.iter().any(|&column| deferred[column])
+                || aggregate.bindings().iter().any(|binding| deferred[binding.column]),
+            AggregateRelation::Matched { keys, .. } => keys.iter().any(|key| key.value.read().and_then(MatchRead::output_column).is_some_and(|column| deferred[column])),
+            AggregateRelation::CurrentGroup => false,
+        },
         Expression::Column(column) => deferred[*column],
         Expression::Compute(plan) => plan.bindings().iter().any(|binding| read_deferred(binding.read, deferred, intermediates)),
         Expression::Flag(plan) => plan.bindings().iter().any(|binding| matches!(&binding.read, FlagRead::Read(read) if read_deferred(*read,deferred,intermediates))),

@@ -11,6 +11,8 @@ use yamaa_core::{
 #[path = "declarative_flags.rs"]
 mod declarative_flags;
 
+#[path = "diagnostic/aggregate.rs"]
+mod aggregate;
 #[path = "diagnostic/dataset.rs"]
 mod dataset;
 #[path = "diagnostic/predicate_evaluation.rs"]
@@ -439,6 +441,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     assert_eq!(diagnostic.source_span, None);
     reached.insert(diagnostic.code);
     reached.extend(dataset::reached());
+    reached.extend(aggregate::reached());
     let diagnostic = yamaa_core::dataset::Rounding::new(
         "SEX",
         "columns.RND.derivation.round_half_away_from_zero",

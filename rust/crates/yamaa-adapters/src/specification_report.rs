@@ -28,19 +28,42 @@ pub enum Error {
     OutputLimit,
 }
 fn plain(value: &Value) -> Result<Value, Error> {
-    let scalar: ScalarValue =
-        serde_json::from_value(value.clone()).map_err(|_| Error::InvalidObservation)?;
-    Ok(
-        match scalar.into_core().map_err(|_| Error::InvalidObservation)? {
-            Scalar::Missing => Value::Null,
-            Scalar::Str(v) => json!(v),
-            Scalar::Int(v) => json!(v),
-            Scalar::Float(v) => json!(v.get()),
-            Scalar::Bool(v) => json!(v),
-            Scalar::Date(v) => json!(v.to_string()),
-            Scalar::DateTime(v) => json!(v.to_string()),
-        },
-    )
+    if let Ok(scalar) = serde_json::from_value::<ScalarValue>(value.clone()) {
+        return Ok(
+            match scalar.into_core().map_err(|_| Error::InvalidObservation)? {
+                Scalar::Missing => Value::Null,
+                Scalar::Str(v) => json!(v),
+                Scalar::Int(v) => json!(v),
+                Scalar::Float(v) => json!(v.get()),
+                Scalar::Bool(v) => json!(v),
+                Scalar::Date(v) => json!(v.to_string()),
+                Scalar::DateTime(v) => json!(v.to_string()),
+            },
+        );
+    }
+    if let Value::Array(values) = value {
+        return values
+            .iter()
+            .map(plain)
+            .collect::<Result<Vec<_>, _>>()
+            .map(Value::Array);
+    }
+    if let Value::Object(values) = value {
+        if values.len() == 1 {
+            if let Some(integer) = values.get("integer").and_then(Value::as_str) {
+                return integer
+                    .parse()
+                    .map(Value::Number)
+                    .map_err(|_| Error::InvalidObservation);
+            }
+        }
+        return values
+            .iter()
+            .map(|(key, value)| Ok((key.clone(), plain(value)?)))
+            .collect::<Result<Map<_, _>, Error>>()
+            .map(Value::Object);
+    }
+    Err(Error::InvalidObservation)
 }
 pub(crate) fn condition(run: &dyn RunView, value: &Value) -> Result<Value, Error> {
     let diagnostic = value.get("diagnostic").ok_or(Error::InvalidObservation)?;

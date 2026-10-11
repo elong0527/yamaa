@@ -28,6 +28,17 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         row,
         assignment,
     });
+    project_result(result, candidate, plan, row, state.budget)
+}
+
+/// Keep scalar and aggregate arithmetic failures on the same typed route.
+pub(super) fn project_result<E>(
+    result: Result<yamaa_core::numeric::Number, CompiledEvaluationError<Box<ExecutionError<E>>>>,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    budget: &mut Budget,
+) -> Result<Value, Box<ExecutionError<E>>> {
     match result {
         Ok(value) => Ok(Value::from(value)),
         Err(error) => {
@@ -40,7 +51,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                 EvaluationErrorKind::Resolution { error, .. } => Err(error),
                 EvaluationErrorKind::Numeric(condition) => {
                     let identity = if condition.phase() == "derivation" {
-                        failure_identity(candidate, plan.keys(), row, state.budget)?
+                        failure_identity(candidate, plan.keys(), row, budget)?
                     } else {
                         None
                     };

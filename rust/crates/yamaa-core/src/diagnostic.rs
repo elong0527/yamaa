@@ -14,6 +14,10 @@ use crate::{numeric_parser::SourceSpan, value::Value};
 mod dataset;
 pub use dataset::DatasetFinding;
 
+#[path = "diagnostic_aggregate.rs"]
+mod aggregate;
+pub use aggregate::{AggregateContextCause, AggregateEmptyKey, AggregateFinding};
+
 #[path = "diagnostic_inheritance.rs"]
 mod inheritance;
 pub use inheritance::InheritanceFinding;
@@ -210,6 +214,16 @@ conditions! {
     AggregateProhibitedConstruct => ("validation", "prohibited_construct", Some("REQ-0512")),
     AggregateProhibitedFunction => ("validation", "prohibited_function", Some("REQ-0500")),
     AggregateNestedReduction => ("validation", "nested_reduction", Some("REQ-0502")),
+    AggregateMultipleRecords => ("derivation", "aggregate_multiple_records", Some("REQ-0501")),
+    AggregateRowMultipleRecords => ("row_construction", "aggregate_multiple_records", Some("REQ-0501")),
+    AggregateIdentifierNotGrouped => ("validation", "aggregate_identifier_not_grouped", Some("REQ-0503")),
+    AggregateIncomparableSources => ("validation", "incomparable_sources", Some("REQ-0511")),
+    AggregateOutputGroups => ("validation", "invalid_aggregate_context", Some("REQ-0507")),
+    AggregateOwnGroupKeys => ("validation", "invalid_aggregate_context", Some("REQ-0142")),
+    AggregateMixedRelations => ("validation", "mixed_relations", Some("REQ-0504")),
+    AggregateKeyReference => ("validation", "unknown_field", Some("REQ-0141")),
+    AggregateKeyType => ("validation", "incompatible_input_type", Some("REQ-0004")),
+    AggregateMissingKeys => ("validation", "missing_aggregate_keys", Some("REQ-0140")),
     CsvInvalidText => ("ingest", "invalid_text", Some("REQ-0853")),
     CsvByteOrderMark => ("ingest", "source_byte_order_mark", Some("REQ-0851")),
     CsvHeaderAbsent => ("ingest", "source_header_absent", Some("REQ-0851")),
@@ -292,6 +306,7 @@ pub enum ContextValue {
     Scalar(Value),
     Integer(String),
     Sequence(Vec<ContextValue>),
+    Object(BTreeMap<String, ContextValue>),
 }
 
 pub type Context = BTreeMap<String, ContextValue>;

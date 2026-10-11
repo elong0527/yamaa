@@ -1,7 +1,7 @@
 //! Lazy source eligibility and named record selection within one dataset attempt.
 use super::*;
 #[path = "dataset_match_values.rs"]
-mod match_values;
+pub(super) mod match_values;
 use alloc::collections::BTreeMap;
 
 /// Keep only immutable row coordinates and the inherited handler outcome.

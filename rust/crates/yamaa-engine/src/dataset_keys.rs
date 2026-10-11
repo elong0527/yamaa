@@ -64,6 +64,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
     for &row in &retained {
         let mut probe = Candidate {
+            template: None,
             selection_identity: SelectionIdentity::Probe,
             members: vec![row],
             values: vec![Value::Missing; plan.output().columns().len()],
@@ -83,6 +84,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
                     handlers,
                     secondary: &[],
                     intermediates: &mut intermediates::Run::default(),
+                    output_rows: &[],
                 },
             )?;
             probe.completed[assignment.column] = true;
@@ -134,6 +136,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
             key_table.rows[duplicate].clear();
         }
         let mut candidate = Candidate {
+            template: None,
             selection_identity: SelectionIdentity::Candidate(candidates.len()),
             members: members.into_iter().map(|member| retained[member]).collect(),
             values: vec![Value::Missing; plan.output().columns().len()],

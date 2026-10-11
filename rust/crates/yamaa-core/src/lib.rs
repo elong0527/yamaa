@@ -5,7 +5,9 @@
 extern crate alloc;
 pub mod application_issue;
 
+pub mod aggregate_compiler;
 pub mod aggregate_parser;
+pub mod aggregate_reduction;
 pub mod bound_expression;
 pub mod column_dependencies;
 pub mod conversion;

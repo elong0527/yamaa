@@ -90,6 +90,7 @@ impl BindFinding {
     pub fn diagnostics(&self, source: &SourceDeclaration) -> Option<Vec<Diagnostic>> {
         let (code, path, values) = match self {
             Self::Padding(diagnostic)
+            | Self::AggregateDiagnostic(diagnostic)
             | Self::TextTemplate(diagnostic)
             | Self::Scalar(diagnostic)
             | Self::TextExtract(diagnostic)
@@ -169,12 +170,13 @@ impl BindFinding {
                 path,
                 expression,
                 relation,
+                driver,
             } => {
                 let reason = match relation {
                     None => "a grouped row aggregate reads its row driver".into(),
                     Some(relation) => {
                         let mut budget = ValidationBudget::new(Default::default());
-                        let driver = quoted_diagnostic_text(&source.name, &mut budget).ok()?;
+                        let driver = quoted_diagnostic_text(driver, &mut budget).ok()?;
                         let relation = quoted_diagnostic_text(relation, &mut budget).ok()?;
                         format!("a grouped row aggregate reads {driver}, not {relation}")
                     }
@@ -185,6 +187,27 @@ impl BindFinding {
                     context([
                         ("expr", text(expression)),
                         ("reason", V::Scalar(Value::Str(reason))),
+                    ]),
+                )
+            }
+            Self::AggregateGroupScope {
+                path,
+                expression,
+                relation,
+            } => {
+                let mut budget = ValidationBudget::new(Default::default());
+                let relation = quoted_diagnostic_text(relation, &mut budget).ok()?;
+                (
+                    C::AggregateDriverScope,
+                    path,
+                    context([
+                        ("expr", text(expression)),
+                        (
+                            "reason",
+                            V::Scalar(Value::Str(format!(
+                                "a qualified reduction groups on columns of {relation}"
+                            ))),
+                        ),
                     ]),
                 )
             }

@@ -466,6 +466,17 @@ pub(super) fn bind(
                     }
                 }
             }
+            Operation::Aggregate(operation) => aggregates::bind(
+                operation,
+                catalog,
+                &spec.source().name,
+                None,
+                crate::reference_scope::Phase::Column { groups: &[] },
+                &spec.output,
+                secondary,
+                edges,
+                findings,
+            )?,
             Operation::Compute(compiled) => {
                 let mut bindings = Vec::new();
                 for name in compiled.identifiers() {

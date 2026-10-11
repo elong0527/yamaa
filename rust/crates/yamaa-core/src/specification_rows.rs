@@ -2,10 +2,8 @@
 use super::*;
 use crate::dataset::Verification;
 use crate::{
-    aggregate_parser::{parse_aggregate, ParsedKind, Reducer},
     bound_expression::{Binding, BoundPredicate, Read},
     predicate_compiler,
-    reduction::NumericReducer,
     reference_scope::{self, Phase, Reach, Scope},
 };
 
@@ -15,15 +13,6 @@ enum RowOperation {
     ProjectFunction(usize),
     Output(String),
     Source(String),
-    InvalidAggregate {
-        expression: String,
-        error: crate::aggregate_parser::GrammarFailure,
-    },
-    Reduction {
-        name: String,
-        expression: String,
-        reducer: RowReducer,
-    },
 }
 impl RowOperation {
     fn calls(&self) -> Vec<usize> {
@@ -35,11 +24,6 @@ impl RowOperation {
         }
         calls
     }
-}
-#[derive(Debug)]
-enum RowReducer {
-    Numeric(NumericReducer),
-    Count { records: bool },
 }
 #[derive(Debug)]
 struct RowDeclaration {
@@ -90,7 +74,7 @@ fn declaration(
     id: usize,
     column: usize,
     prefix: String,
-    grouped: bool,
+    _grouped: bool,
     limits: CompilationLimits,
     project: Option<&functions::Prepared>,
     extraction: &str_extract::Prepared,
@@ -120,51 +104,6 @@ fn declaration(
                 RowOperation::Source(name.into())
             } else {
                 RowOperation::Output(name.into())
-            }
-        }
-        "aggregate" if grouped => {
-            closed_fields(d, payload, &["expr"], &path)?;
-            let expression = text(d, field(d, payload, "expr")?)?;
-            let parsed = match parse_aggregate(expression, Default::default()) {
-                Ok(parsed) => parsed,
-                Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
-                    return Ok(RowDeclaration {
-                        handler,
-                        column,
-                        path,
-                        operation: RowOperation::InvalidAggregate {
-                            expression: expression.into(),
-                            error: failure,
-                        },
-                    })
-                }
-                Err(crate::aggregate_parser::ParseError::Limit { .. }) => {
-                    return Err(PrepareError::Limit("aggregate_parser"))
-                }
-            };
-            let ParsedKind::Reduction {
-                reducer, operand, ..
-            } = parsed.nodes()[parsed.root()].kind
-            else {
-                return Err(unsupported("aggregate_expression", &path));
-            };
-            let reducer = match (reducer, &parsed.nodes()[operand].kind) {
-                (Reducer::Sum, ParsedKind::Identifier) => RowReducer::Numeric(NumericReducer::Sum),
-                (Reducer::Mean, ParsedKind::Identifier) => {
-                    RowReducer::Numeric(NumericReducer::Mean)
-                }
-                (Reducer::Count, ParsedKind::Identifier) => RowReducer::Count { records: false },
-                (Reducer::Count, ParsedKind::Star) => RowReducer::Count { records: true },
-                (Reducer::Sum | Reducer::Mean | Reducer::Count, _) => {
-                    return Err(unsupported("aggregate_argument", &path));
-                }
-                _ => return Err(unsupported("aggregate_expression", &path)),
-            };
-            let span = parsed.nodes()[operand].span;
-            RowOperation::Reduction {
-                name: expression[span.start..span.end].into(),
-                expression: expression.into(),
-                reducer,
             }
         }
         _ => RowOperation::Shared(derivations::prepare_value_with_driver(
@@ -1015,14 +954,6 @@ impl Rows {
                     &secondary,
                     &intermediates,
                 )?,
-                RowOperation::InvalidAggregate { expression, error } => {
-                    findings.push(BindFinding::Aggregate {
-                        path: declaration.path.clone(),
-                        expression: expression.clone(),
-                        error: error.clone(),
-                    });
-                    None
-                }
                 RowOperation::Source(reference) => {
                     if named.reference(reference).is_some() {
                         if matches!(phase, Phase::Row { group_by: Some(_) })
@@ -1073,43 +1004,6 @@ impl Rows {
                         valid.then_some(Expression::Source(column))
                     } else {
                         None
-                    }
-                }
-                RowOperation::Reduction {
-                    name: operand,
-                    expression,
-                    reducer,
-                } => {
-                    let relation = operand.split_once('.').map(|(relation, _)| relation);
-                    if relation != Some(name) {
-                        // Scope findings follow ingestion, like grammar findings,
-                        // and suppress generic field binding for the invalid operand.
-                        findings.push(BindFinding::AggregateScope {
-                            path: declaration.path.clone(),
-                            expression: expression.clone(),
-                            relation: relation.map(String::from),
-                        });
-                        None
-                    } else if matches!(reducer, RowReducer::Count { records: true }) {
-                        Some(Expression::Count {
-                            column: None,
-                            text: expression.clone(),
-                        })
-                    } else {
-                        resolve(operand, &declaration.path, source, name, findings).map(|column| {
-                            match reducer {
-                                RowReducer::Numeric(reducer) => Expression::Reduce {
-                                    identifier: Some(operand.clone()),
-                                    column,
-                                    reducer: *reducer,
-                                    text: expression.clone(),
-                                },
-                                RowReducer::Count { .. } => Expression::Count {
-                                    column: Some(column),
-                                    text: expression.clone(),
-                                },
-                            }
-                        })
                     }
                 }
             };
@@ -1446,6 +1340,27 @@ impl Rows {
             verifications.to_vec(),
         )
         .and_then(|plan| {
+            let contexts = self
+                .templates
+                .iter()
+                .zip(plan.templates())
+                .map(|(declaration, template)| {
+                    match (&declaration.groups, template.mode.local_mode()) {
+                        (Some(names), RowMode::Groups(columns)) => {
+                            Some(crate::dataset::AggregateRowContext {
+                                row: declaration.id.clone(),
+                                groups: names
+                                    .iter()
+                                    .cloned()
+                                    .zip(columns.iter().copied())
+                                    .collect(),
+                            })
+                        }
+                        _ => None,
+                    }
+                })
+                .collect();
+            let plan = plan.with_row_contexts(contexts)?;
             // Repeated defaults in several templates share one declaration and
             // one counter. Only effective row declarations register handlers.
             let mut seen = alloc::collections::BTreeSet::new();

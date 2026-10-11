@@ -972,6 +972,17 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.tsv",
+      "family": "specification",
+      "level": "compile",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/specification_run.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/row_reductions.tsv",
       "family": "specification",
       "level": "compile",
@@ -1905,6 +1916,10 @@
     },
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/row_column_checks.md",
+      "role": "documentation"
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.md",
       "role": "documentation"
     },
     {

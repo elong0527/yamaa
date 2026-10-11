@@ -908,6 +908,7 @@ source_selection_truth("row-filters.tsv","row-filter",27L)
 cat("row-template filters complete reports, cached reads and exact saved CSV passed\n")
 
 source_selection_truth("row-reductions.tsv","row-reduction",25L)
+source_selection_truth("correlated-aggregates.tsv","correlated-aggregate",16L)
 cat("row-template MEAN and COUNT complete reports, cached reads and exact saved CSV passed\n")
 
 source_selection_truth("row-column-checks.tsv","row-column",48L)

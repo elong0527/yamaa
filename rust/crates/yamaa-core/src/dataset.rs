@@ -26,6 +26,12 @@ pub use flags::{
 #[path = "dataset_functions.rs"]
 mod functions;
 pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, FunctionInput};
+#[path = "dataset_aggregate.rs"]
+mod aggregate;
+pub use aggregate::{
+    AggregateBinding, AggregateBindingError, AggregatePhase, AggregateRelation,
+    AggregateRowContext, AggregateSource, BoundAggregate,
+};
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
@@ -65,6 +71,7 @@ pub use windows::{OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    Aggregate(alloc::boxed::Box<BoundAggregate>),
     Extreme {
         operands: Vec<Assignment>,
         largest: bool,
@@ -368,6 +375,7 @@ pub struct DatasetPlan {
     intermediates: Vec<Intermediate>,
     output: TableSchema,
     templates: Vec<RowTemplate>,
+    row_contexts: Vec<Option<AggregateRowContext>>,
     columns: Vec<Assignment>,
     keys: Vec<usize>,
     verifications: Vec<Verification>,
@@ -790,6 +798,9 @@ fn validate_assignment_at(
                 }
             }
         }
+        Expression::Aggregate(aggregate) => {
+            aggregate.validate(source, secondary, output, available, mode)?;
+        }
         Expression::Count { column, text } => {
             if column.is_some_and(|column| column >= source.columns().len()) {
                 return Err(PlanError::InvalidSource);
@@ -863,6 +874,17 @@ fn current_record_read(
 ) -> bool {
     let include_raw = scope != RecordReadScope::PrimaryMatching;
     match expression {
+        Expression::Aggregate(aggregate) => match aggregate.relation() {
+            AggregateRelation::CurrentGroup => include_raw,
+            AggregateRelation::Matched { keys, .. } => {
+                scope != RecordReadScope::Driver
+                    && keys
+                        .iter()
+                        .filter_map(|key| key.value.read())
+                        .any(|read| matches!(read, MatchRead::Record { .. }))
+            }
+            AggregateRelation::Output { .. } => false,
+        },
         Expression::Source(_) | Expression::RowLookup(_) => include_raw,
         Expression::Intermediate { index, .. } => {
             scope != RecordReadScope::Driver
@@ -1147,6 +1169,7 @@ impl DatasetPlan {
             columns,
             keys,
             verifications,
+            row_contexts: Vec::new(),
             column_verifications: Vec::new(),
             warning_verifications: Default::default(),
             conversion_handlers: Vec::new(),
