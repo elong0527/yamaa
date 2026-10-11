@@ -34,7 +34,7 @@ pub fn document(
     input: Tree<'_>,
     columns: &[(&str, &str, Option<&str>)],
     output: &[&str],
-    ordinal: bool,
+    unsupported_filter: bool,
 ) -> SpecificationDocument {
     use Tree::*;
     let first = match &input {
@@ -81,8 +81,8 @@ pub fn document(
             ]),
         ),
     ];
-    if ordinal {
-        fields.push(("filter", Text("ID > 0")));
+    if unsupported_filter {
+        fields.push(("filter", Text("SRC.ID = 9223372036854775808")));
     }
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);

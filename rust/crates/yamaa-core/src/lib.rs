@@ -35,6 +35,7 @@ pub mod reference_binding;
 pub mod reference_scope;
 pub mod resource;
 pub mod schema;
+pub mod source_ordinal;
 pub mod specification;
 pub mod specification_submission_document;
 pub mod submission_composition;
