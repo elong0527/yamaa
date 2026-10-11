@@ -7,8 +7,10 @@ The shared compiler admits the three REQ-0467 contexts: the current grouped
 input, a qualified relation matched to a constructed row, and constructed
 output rows partitioned by declared output columns. A qualifier equal to the
 primary input still selects the complete donor relation before matching. An
-ungrouped row template may use that qualified form. The grouped form retains
-its enclosing input group and rejects a second local grouping declaration.
+ungrouped row aggregate receives the existing invalid-context finding required
+by REQ-0508, rather than an unsupported-language refusal. The grouped form
+retains its enclosing input group and rejects a second local grouping
+declaration.
 
 The compiler reuses the aggregate grammar and the scalar numeric compiler.
 Reducer arguments and the surrounding arithmetic retain the complete authored
