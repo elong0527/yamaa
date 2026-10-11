@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import builtins
 import copy
+from contextlib import contextmanager
 import importlib.util
 import io
 import itertools
@@ -35,6 +36,15 @@ def module(name, file):
 
 controller = module("public_measure_controller", "measure_public_lifecycle.py")
 worker = module("public_measure_worker", "public_lifecycle_python_worker.py")
+
+
+@contextmanager
+def fresh_worker_imports():
+    # These in-process controls stand in for a fresh worker child. Other tests
+    # may already have imported the installed candidate into the test runner.
+    with mock.patch.dict(sys.modules):
+        sys.modules.pop("yamaa", None)
+        yield
 
 
 def dump(path, value):
@@ -977,6 +987,7 @@ cat("actual jsonlite authored binary64 transport PASS\\n")
                 return real_import(name, *args, **kwargs)
 
             with (
+                fresh_worker_imports(),
                 mock.patch("builtins.__import__", side_effect=control_import),
                 mock.patch.object(
                     worker.time, "perf_counter_ns", side_effect=itertools.count(100, 10)
@@ -1003,6 +1014,25 @@ cat("actual jsonlite authored binary64 transport PASS\\n")
                     views["output"]["rows"],
                     [[{"type": "float", "value": "3fb999999999999a"}]],
                 )
+
+    def test_python_worker_rejects_preimported_candidate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidate = types.ModuleType("yamaa")
+            request = {
+                "output": str(root),
+                "protocol": "public-lifecycle/1",
+                "child": "preimported-control",
+                "repetitions": [],
+            }
+            with mock.patch.dict(sys.modules, {"yamaa": candidate}):
+                self.assertEqual(worker.run(request), 1)
+                self.assertIs(sys.modules["yamaa"], candidate)
+            response = json.loads((root / "response.json").read_text())
+            self.assertEqual(response["repetitions"], [])
+            self.assertIsNone(response["import_duration"])
+            self.assertEqual(response["failure"]["class"], "RuntimeError")
+            self.assertIn("already imported", response["failure"]["message"])
 
     def test_python_float_bits_dates_int_extremes_and_missing_are_independent(self):
         import datetime

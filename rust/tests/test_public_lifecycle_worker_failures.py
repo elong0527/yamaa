@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from test_public_lifecycle_measurement import TOOLS, controller, worker
+from test_public_lifecycle_measurement import TOOLS, controller, fresh_worker_imports, worker
 
 
 class ReachedEvidence(unittest.TestCase):
@@ -88,6 +88,7 @@ class ReachedEvidence(unittest.TestCase):
                 }
                 stderr = io.StringIO()
                 with (
+                    fresh_worker_imports(),
                     mock.patch("builtins.__import__", side_effect=control_import),
                     mock.patch.object(worker, "write_json", side_effect=write),
                     mock.patch.object(worker, "metadata", return_value={}),
@@ -205,6 +206,7 @@ class ReachedEvidence(unittest.TestCase):
                     "unavailable": controller.UNAVAILABLE,
                 }
                 with (
+                    fresh_worker_imports(),
                     mock.patch("builtins.__import__", side_effect=control_import),
                     mock.patch.object(worker, "metadata", side_effect=metadata),
                     mock.patch.object(
