@@ -500,19 +500,17 @@ fn first_available_admits_every_operand_before_any_source_access() {
         ),
         Err(PlanError::InvalidKeyMode)
     );
-    assert_eq!(
-        DatasetPlan::new(
-            source,
-            output,
-            vec![RowTemplate {
-                mode: RowMode::Records,
-                assignments: vec![assign(0, Expression::Source(0))],
-                filter: None
-            }],
-            vec![assign(1, selection)],
-            vec![0],
-            vec![]
-        ),
-        Err(PlanError::InvalidKeyMode)
-    );
+    assert!(DatasetPlan::new(
+        source,
+        output,
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None
+        }],
+        vec![assign(1, selection)],
+        vec![0],
+        vec![]
+    )
+    .is_ok());
 }

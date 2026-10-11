@@ -53,6 +53,9 @@ pub use temporal::{CalendarUnit, DateBounds, InvalidTemporal, Temporal, Temporal
 #[path = "dataset_selection.rs"]
 mod selection;
 pub use selection::{FirstAvailable, SelectionRead, SelectionSource};
+#[path = "dataset_row_stages.rs"]
+mod row_stages;
+pub use row_stages::window_stages;
 #[path = "dataset_windows.rs"]
 mod windows;
 pub use windows::{OrderTerm, Window, WindowKind};
@@ -113,7 +116,7 @@ pub enum Expression {
     Function(BoundFunction),
     /// Versionless package invocation, activated before any study read.
     ProjectFunction(BoundProjectFunction),
-    /// Column-phase windows over completed key-grain output rows.
+    /// Windows over completed output rows in their column or row-template context.
     Window(Window),
     /// First present raw operand in authored order, followed by one output conversion.
     FirstAvailable(alloc::boxed::Box<FirstAvailable>),
@@ -367,6 +370,7 @@ fn validate_columns(columns: &[usize], width: usize) -> Result<(), PlanError> {
 }
 
 /// Enforce grouped source scope and already-completed output dependencies.
+#[allow(clippy::too_many_arguments)]
 fn validate_assignment(
     assignment: &Assignment,
     available: &mut [bool],
@@ -375,6 +379,7 @@ fn validate_assignment(
     intermediates: &[Intermediate],
     output: &TableSchema,
     mode: &RowMode,
+    template: bool,
 ) -> Result<(), PlanError> {
     validate_assignment_at(
         assignment,
@@ -384,6 +389,7 @@ fn validate_assignment(
         intermediates,
         output,
         mode,
+        template,
         0,
         &mut 65_536,
     )
@@ -397,6 +403,7 @@ fn validate_assignment_at(
     intermediates: &[Intermediate],
     output: &TableSchema,
     mode: &RowMode,
+    template: bool,
     depth: usize,
     remaining: &mut usize,
 ) -> Result<(), PlanError> {
@@ -425,12 +432,13 @@ fn validate_assignment_at(
                     return Err(PlanError::InvalidColumns);
                 }
                 if let Some(when) = &branch.when {
-                    when.validate(
-                        source.columns().len(),
-                        available,
-                        matches!(mode, RowMode::Groups(_)),
-                    )
-                    .map_err(PlanError::Filter)?;
+                    if let RowMode::Groups(keys) = mode {
+                        if when.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !keys.contains(&column))) {
+                            return Err(PlanError::NonGroupSource);
+                        }
+                    }
+                    when.validate(source.columns().len(), available, false)
+                        .map_err(PlanError::Filter)?;
                 }
                 validate_assignment_at(
                     &branch.assignment,
@@ -440,6 +448,7 @@ fn validate_assignment_at(
                     intermediates,
                     output,
                     mode,
+                    template,
                     depth + 1,
                     remaining,
                 )?;
@@ -468,12 +477,13 @@ fn validate_assignment_at(
                     )?;
                 }
             }
+            if let RowMode::Groups(keys) = mode {
+                if expression.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !keys.contains(&column))) {
+                    return Err(PlanError::NonGroupSource);
+                }
+            }
             expression
-                .validate(
-                    source.columns().len(),
-                    available,
-                    matches!(mode, RowMode::Groups(_)),
-                )
+                .validate(source.columns().len(), available, false)
                 .map_err(|error| match error {
                     crate::bound_expression::ScopeError::GroupedSource => PlanError::NonGroupSource,
                     crate::bound_expression::ScopeError::InvalidSource => PlanError::InvalidSource,
@@ -500,6 +510,7 @@ fn validate_assignment_at(
                 intermediates,
                 output,
                 mode,
+                template,
                 depth + 1,
                 remaining,
             )?;
@@ -524,6 +535,7 @@ fn validate_assignment_at(
                     intermediates,
                     output,
                     mode,
+                    template,
                     depth + 1,
                     remaining,
                 )?;
@@ -553,6 +565,7 @@ fn validate_assignment_at(
                 intermediates,
                 output,
                 mode,
+                template,
                 depth + 1,
                 remaining,
             )?;
@@ -571,6 +584,7 @@ fn validate_assignment_at(
                     intermediates,
                     output,
                     mode,
+                    template,
                     depth + 1,
                     remaining,
                 )?;
@@ -596,6 +610,7 @@ fn validate_assignment_at(
                     intermediates,
                     output,
                     mode,
+                    template,
                     depth + 1,
                     remaining,
                 )?;
@@ -621,6 +636,7 @@ fn validate_assignment_at(
                     intermediates,
                     output,
                     mode,
+                    template,
                     depth + 1,
                     remaining,
                 )?;
@@ -646,7 +662,7 @@ fn validate_assignment_at(
             lookup::validate(lookup, secondary, available, output)?;
         }
         Expression::Window(window) => {
-            if depth != 0 || !matches!(mode, RowMode::Keys) {
+            if depth != 0 || !template && !matches!(mode, RowMode::Keys) {
                 return Err(PlanError::InvalidWindow);
             }
             window.validate(available, output)?;
@@ -886,12 +902,21 @@ impl DatasetPlan {
                     &intermediates,
                     &output,
                     &template.mode,
+                    true,
                 )?;
             }
             if keyed && keys.iter().any(|&column| !available[column]) {
                 return Err(PlanError::InvalidKeyMode);
             }
             if let Some(filter) = &template.filter {
+                let deferred = window_stages(&template.assignments, width, &intermediates);
+                if filter
+                    .bindings()
+                    .iter()
+                    .any(|binding| matches!(binding.read, Read::Column(column) if deferred[column]))
+                {
+                    return Err(PlanError::Filter(BindingError::UnavailableColumn));
+                }
                 filter
                     .validate(
                         source.columns().len(),
@@ -919,6 +944,7 @@ impl DatasetPlan {
                     &intermediates,
                     &output,
                     &template.mode,
+                    false,
                 )?;
             }
             if available.contains(&false) {

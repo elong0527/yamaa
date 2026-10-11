@@ -1,0 +1,340 @@
+use std::{cell::RefCell, rc::Rc};
+use yamaa_core::{
+    bound_expression::{Binding, BoundPredicate, Read},
+    dataset::{
+        Assignment, CaseBranch, DatasetPlan, Expression, FirstAvailable, OrderTerm, RowMode,
+        RowTemplate, SelectionRead, SelectionSource, Window, WindowKind,
+    },
+    table::{CellError, Column, TableAccess, TableSchema, ValueRef},
+    value::{ColumnType, Value},
+};
+use yamaa_engine::dataset::{DatasetExecution, ExecutionError, Limits};
+struct Table {
+    schema: TableSchema,
+    rows: Vec<Vec<Value>>,
+    reads: RefCell<Vec<(usize, usize)>>,
+    failure: Option<(usize, usize, Rc<str>)>,
+}
+impl TableAccess for Table {
+    type Error = Rc<str>;
+    fn schema(&self) -> &TableSchema {
+        &self.schema
+    }
+    fn row_count(&self) -> usize {
+        self.rows.len()
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Self::Error>> {
+        self.reads.borrow_mut().push((row, column));
+        if let Some((r, c, error)) = &self.failure {
+            if (*r, *c) == (row, column) {
+                return Err(CellError::Access(error.clone()));
+            }
+        }
+        Ok((&self.rows[row][column]).into())
+    }
+}
+fn schema(names: &[(&str, ColumnType)]) -> TableSchema {
+    TableSchema::new(
+        names
+            .iter()
+            .map(|(name, kind)| Column {
+                name: (*name).into(),
+                kind: *kind,
+            })
+            .collect(),
+    )
+    .unwrap()
+}
+fn assign(column: usize, expression: Expression, path: &str) -> Assignment {
+    Assignment {
+        column,
+        expression,
+        path: path.into(),
+    }
+}
+fn limits() -> Limits {
+    Limits {
+        source_rows: 10,
+        output_rows: 10,
+        output_cells: 100,
+        key_cells: 100,
+        work_cells: 10_000,
+        scalar_text_bytes: 1000,
+        output_text_bytes: 1000,
+        identity_cells: 100,
+        identity_text_bytes: 1000,
+    }
+}
+#[test]
+fn windows_number_each_template_after_filter_without_revisiting_sources() {
+    let source = schema(&[("ID", ColumnType::Int)]);
+    let table = Table {
+        schema: source.clone(),
+        rows: vec![
+            vec![Value::Int(3)],
+            vec![Value::Int(1)],
+            vec![Value::Int(2)],
+        ],
+        reads: RefCell::default(),
+        failure: None,
+    };
+    let output = schema(&[
+        ("ID", ColumnType::Int),
+        ("SECTION", ColumnType::Str),
+        ("SEQ", ColumnType::Int),
+        ("NEXT", ColumnType::Int),
+    ]);
+    let window = |kind| {
+        Expression::Window(Window {
+            kind,
+            group_by: vec![],
+            order_by: vec![OrderTerm {
+                column: 0,
+                descending: false,
+                nulls_first: false,
+            }],
+            filter: None,
+        })
+    };
+    let filter = BoundPredicate::new(
+        yamaa_core::predicate_compiler::compile("ID > 1", "row.filter", Default::default())
+            .unwrap(),
+        vec![Binding {
+            name: "ID".into(),
+            read: Read::Column(0),
+        }],
+    )
+    .unwrap();
+    let template = |section: &str, filter| RowTemplate {
+        mode: RowMode::Records,
+        assignments: vec![
+            assign(0, Expression::Source(0), "row.ID"),
+            assign(
+                1,
+                Expression::Literal(Value::Str(section.into())),
+                "row.SECTION",
+            ),
+            assign(2, window(WindowKind::RowNumber), "row.SEQ"),
+            assign(
+                3,
+                Expression::Window(Window {
+                    kind: WindowKind::RowValue {
+                        column: 2,
+                        offset: 1,
+                    },
+                    group_by: vec![],
+                    order_by: vec![OrderTerm {
+                        column: 2,
+                        descending: false,
+                        nulls_first: false,
+                    }],
+                    filter: None,
+                }),
+                "row.NEXT",
+            ),
+        ],
+        filter,
+    };
+    let plan = DatasetPlan::new(
+        source,
+        output,
+        vec![template("all", None), template("screened", Some(filter))],
+        vec![],
+        vec![0, 1],
+        vec![],
+    )
+    .unwrap();
+    let result = plan.execute(&table, limits()).unwrap();
+    assert_eq!(
+        result.dataset.rows(),
+        [
+            vec![
+                Value::Int(3),
+                Value::Str("all".into()),
+                Value::Int(3),
+                Value::Missing
+            ],
+            vec![
+                Value::Int(1),
+                Value::Str("all".into()),
+                Value::Int(1),
+                Value::Int(2)
+            ],
+            vec![
+                Value::Int(2),
+                Value::Str("all".into()),
+                Value::Int(2),
+                Value::Int(3)
+            ],
+            vec![
+                Value::Int(3),
+                Value::Str("screened".into()),
+                Value::Int(2),
+                Value::Missing
+            ],
+            vec![
+                Value::Int(2),
+                Value::Str("screened".into()),
+                Value::Int(1),
+                Value::Int(2)
+            ]
+        ]
+    );
+    assert_eq!(
+        *table.reads.borrow(),
+        [(0, 0), (1, 0), (2, 0), (0, 0), (1, 0), (2, 0)]
+    );
+}
+#[test]
+fn nested_case_selection_keeps_authored_reads_and_original_failure() {
+    let source = schema(&[
+        ("ID", ColumnType::Int),
+        ("FIRST", ColumnType::Str),
+        ("LAST", ColumnType::Str),
+    ]);
+    let payload: Rc<str> = Rc::from("original source failure");
+    let table = Table {
+        schema: source.clone(),
+        rows: vec![
+            vec![
+                Value::Int(1),
+                Value::Str("first".into()),
+                Value::Str("unread".into()),
+            ],
+            vec![Value::Int(2), Value::Missing, Value::Str("failed".into())],
+        ],
+        reads: RefCell::default(),
+        failure: Some((1, 2, payload.clone())),
+    };
+    let output = schema(&[("ID", ColumnType::Int), ("RESULT", ColumnType::Str)]);
+    let path = "rows[0].derivations.RESULT.case[0].then.first_available";
+    let predicate = BoundPredicate::new(
+        yamaa_core::predicate_compiler::compile("ID > 0", "row.case.when", Default::default())
+            .unwrap(),
+        vec![Binding {
+            name: "ID".into(),
+            read: Read::Column(0),
+        }],
+    )
+    .unwrap();
+    let selection = Expression::FirstAvailable(Box::new(FirstAvailable::new(
+        [1, 2]
+            .iter()
+            .enumerate()
+            .map(|(index, column)| SelectionSource {
+                path: format!("{path}.sources[{index}]"),
+                read: SelectionRead::Source(*column),
+            })
+            .collect(),
+        Value::Missing,
+    )));
+    let plan = DatasetPlan::new(
+        source,
+        output,
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![
+                assign(0, Expression::Source(0), "row.ID"),
+                assign(
+                    1,
+                    Expression::Case(vec![CaseBranch {
+                        when: Some(predicate),
+                        assignment: Box::new(assign(1, selection, path)),
+                    }]),
+                    "row.RESULT",
+                ),
+            ],
+            filter: None,
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    let attempt = plan.execute_observed(&table, limits());
+    let error = attempt.result.unwrap_err();
+    let ExecutionError::Cell {
+        path: actual,
+        source_row,
+        error: CellError::Access(held),
+    } = *error
+    else {
+        panic!("source error changed")
+    };
+    assert_eq!(actual, format!("{path}.sources[1]"));
+    assert_eq!(source_row, 1);
+    assert!(Rc::ptr_eq(&held, &payload));
+    assert_eq!(
+        *table.reads.borrow(),
+        [(0, 0), (0, 1), (1, 0), (1, 1), (1, 2)]
+    );
+    assert!(attempt.retained_verifications.is_empty());
+}
+
+#[test]
+fn unselected_nested_function_requires_activation_before_every_table_method() {
+    use yamaa_core::{
+        dataset::BoundFunction,
+        function_signature::{FunctionIdentity, InvocationPlan},
+    };
+    let source = schema(&[("ID", ColumnType::Int)]);
+    let table = Table {
+        schema: source.clone(),
+        rows: vec![vec![Value::Int(1)]],
+        reads: RefCell::default(),
+        failure: None,
+    };
+    let predicate = BoundPredicate::new(
+        yamaa_core::predicate_compiler::compile("ID < 0", "case.when", Default::default()).unwrap(),
+        vec![Binding {
+            name: "ID".into(),
+            read: Read::Column(0),
+        }],
+    )
+    .unwrap();
+    let signature = InvocationPlan::new(
+        FunctionIdentity {
+            name: "id".into(),
+            contract_version: "1".into(),
+            implementation_version: "1".into(),
+            call: "project.id".into(),
+        },
+        vec![],
+        ColumnType::Int,
+        false,
+    )
+    .unwrap();
+    let function = Expression::Function(BoundFunction::new(0, signature, vec![]).unwrap());
+    let plan = DatasetPlan::new(
+        source.clone(),
+        schema(&[("ID", ColumnType::Int), ("RESULT", ColumnType::Int)]),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![
+                assign(0, Expression::Source(0), "row.ID"),
+                assign(
+                    1,
+                    Expression::Case(vec![CaseBranch {
+                        when: Some(predicate),
+                        assignment: Box::new(assign(
+                            1,
+                            function,
+                            "row.RESULT.case[0].then.function",
+                        )),
+                    }]),
+                    "row.RESULT",
+                ),
+            ],
+            filter: None,
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    assert!(matches!(
+        *plan.execute(&table, limits()).unwrap_err(),
+        ExecutionError::FunctionBinding { slot: 0 }
+    ));
+    assert!(table.reads.borrow().is_empty());
+}

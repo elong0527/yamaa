@@ -4,6 +4,7 @@ use super::*;
 #[derive(Clone, Debug, PartialEq)]
 pub enum SelectionRead {
     Column(usize),
+    Source(usize),
     Collect {
         column: usize,
         identifier: String,
@@ -38,14 +39,21 @@ impl FirstAvailable {
         available: &[bool],
         mode: &RowMode,
     ) -> Result<(), PlanError> {
-        if !matches!(mode, RowMode::Keys) {
-            return Err(PlanError::InvalidKeyMode);
-        }
         for operand in &self.sources {
             if operand.path.is_empty() {
                 return Err(PlanError::EmptyPath);
             }
             match &operand.read {
+                SelectionRead::Source(column) => {
+                    if matches!(mode, RowMode::Keys) || *column >= source.columns().len() {
+                        return Err(PlanError::InvalidSource);
+                    }
+                    if let RowMode::Groups(keys) = mode {
+                        if !keys.contains(column) {
+                            return Err(PlanError::InvalidSource);
+                        }
+                    }
+                }
                 SelectionRead::Column(column) => {
                     if !available.get(*column).copied().unwrap_or(false) {
                         return Err(PlanError::UnavailableColumn);
@@ -56,6 +64,9 @@ impl FirstAvailable {
                     identifier,
                     filter,
                 } => {
+                    if !matches!(mode, RowMode::Keys) {
+                        return Err(PlanError::InvalidKeyMode);
+                    }
                     if *column >= source.columns().len() {
                         return Err(PlanError::InvalidSource);
                     }
