@@ -12,6 +12,7 @@ CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-order
 ROUNDING_CASES = ("schema-round-half-away-from-zero-ties", "negative-round-half-away-from-zero-non-numeric-source")
 TEMPORAL_CASES = ("adam-adsl-duration", "adam-adsl-analysis-age", "negative-date-diff-endpoints", "negative-date-diff-units", "negative-study-day-datetime", "negative-epoch-day-non-date")
 IMPUTATION_CASES = ("schema-birth-date", "sdtm-dm-age", "negative-impute-bad-month", "negative-impute-unreachable-month", "negative-impute-missing-month", "negative-impute-day-rule", "negative-impute-bad-day", "negative-date-conversion", "negative-impute-bad-source", "negative-precision-bad-source", "negative-datetime-impute-bad-source", "negative-datetime-precision-bad-source")
+TEXT_CASES = ("schema-sentence-case", "negative-str-case-number", "negative-str-case-unknown")
 # Archive aliases shorten installed paths without changing original fixture identities or bytes.
 CASE_DIRECTORY_NAMES = {"negative-round-half-away-from-zero-non-numeric-source": "negative-rounding-source"}
 # The current specification schema closure, not other standalone schema roots.
@@ -56,6 +57,26 @@ def stage_temporal_imputation_truth(destination: Path):
         writer.writerow(("case", "phase", "condition", "requirement", "spec_path", "context"))
         for name, phase, condition, requirement, path, context in cases:
             writer.writerow((name, phase, condition, requirement, path, json.dumps(context, sort_keys=True, separators=(",", ":"))))
+
+
+
+def stage_text_case_truth(destination: Path):
+    """Keep complete legacy captures and stage their shared normative facts."""
+    original = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/text_case_reference.json"
+    shutil.copy2(original, destination / "text-case-reference.json")
+    capture = json.loads(original.read_text())
+    with (destination / "text-case-diagnostics.tsv").open("w", newline="", encoding="ascii") as stream:
+        writer = csv.writer(stream, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE, quotechar=None)
+        writer.writerow(("case", "phase", "condition", "requirement", "spec_path", "context"))
+        for name in TEXT_CASES[1:]:
+            finding, = capture[name]
+            context = dict(finding["context"])
+            if name == "negative-str-case-unknown":
+                # Loader source/entry provenance is retained above, separately
+                # from native schema diagnostics' normative context.
+                source, entry = context.pop("source"), context.pop("entry")
+                assert source == entry == "/private/tmp/yamaa-root-text-operators/benchmarks/negative-str-case-unknown/spec.yaml"
+            writer.writerow((name, finding["phase"], finding["condition"], finding["requirement"], finding["spec_paths"][0], json.dumps(context, sort_keys=True, separators=(",", ":"))))
 
 
 def stage_inheritance_replay(destination: Path):
@@ -262,7 +283,7 @@ def stage(destination: Path):
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.tsv", destination / "original-row-conversion-handlers.tsv")
     for name in SCHEMA_MODULES:
         shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
-    for name in CASES + ROUNDING_CASES + TEMPORAL_CASES + IMPUTATION_CASES:
+    for name in CASES + ROUNDING_CASES + TEMPORAL_CASES + IMPUTATION_CASES + TEXT_CASES:
         shutil.copytree(REPOSITORY / "benchmarks" / name, destination / "cases" / CASE_DIRECTORY_NAMES.get(name, name))
     shutil.copytree(
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specs",
@@ -281,6 +302,7 @@ def stage(destination: Path):
     stage_issue_frame_truth(destination)
     stage_public_output_truth(destination)
     stage_temporal_imputation_truth(destination)
+    stage_text_case_truth(destination)
 
 
 if __name__ == "__main__":

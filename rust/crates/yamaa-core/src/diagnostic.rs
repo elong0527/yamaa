@@ -137,6 +137,8 @@ conditions! {
     DatetimePrecisionInvalid => ("impute", "invalid_datetime_text", Some("REQ-1183")),
     ToDateInput => ("validation", "incompatible_input_type", Some("REQ-0607")),
     ToDateInvalid => ("validation", "invalid_date_text", Some("REQ-0607")),
+    StrCaseInput => ("validation", "incompatible_input_type", Some("REQ-0308")),
+    StrCaseMissing => ("mapping", "missing_input", Some("REQ-0334")),
     TemporalBounds => ("validation", "value_not_permitted", Some("REQ-0613")),
     IntegerOverflow => ("derivation", "integer_overflow", Some("REQ-0434")),
     DivisionByZero => ("derivation", "division_by_zero", Some("REQ-0430")),

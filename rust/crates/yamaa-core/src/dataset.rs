@@ -37,6 +37,7 @@ pub use imputation::{
 };
 #[path = "dataset_temporal.rs"]
 mod temporal;
+pub use crate::text_case::StringCase;
 pub use temporal::{CalendarUnit, DateBounds, InvalidTemporal, Temporal, TemporalKind};
 #[path = "dataset_selection.rs"]
 mod selection;
@@ -48,6 +49,10 @@ pub use windows::{OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    StrCase {
+        source: alloc::boxed::Box<Assignment>,
+        operation: StringCase,
+    },
     /// Only the first TRUE branch is evaluated; FALSE and UNKNOWN continue.
     Case(Vec<CaseBranch>),
     Literal(Value),
@@ -467,6 +472,25 @@ fn validate_assignment_at(
                 )?;
                 available[assignment.column] = false;
             }
+        }
+        Expression::StrCase {
+            source: operand, ..
+        } => {
+            if operand.column != assignment.column {
+                return Err(PlanError::InvalidColumns);
+            }
+            validate_assignment_at(
+                operand,
+                available,
+                source,
+                secondary,
+                intermediates,
+                output,
+                mode,
+                depth + 1,
+                remaining,
+            )?;
+            available[assignment.column] = false;
         }
         Expression::Temporal {
             operands,

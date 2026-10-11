@@ -1623,6 +1623,81 @@ class PublicDomains(unittest.TestCase):
                     result.save()
                 self.assertEqual(sorted(p.name for p in case.glob("*.csv")), [])
 
+    def test_public_string_case_modes_original_negatives_and_ordering_blocker(self):
+        import shutil
+
+        import yamaa
+
+        def issues(result):
+            records = result.issues.to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
+            return records
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = """schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: input.csv}
+output: {path: output.csv, columns: [ID, UP, LOW, SENT, TITLE]}
+columns:
+  - {name: ID, type: str, derivation: SRC.ID}
+  - {name: UP, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper, missing: MiXeD}}}
+  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower, missing: null}}}
+  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence, missing: null}}}
+  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title, missing: null}}}
+"""
+            entry = root / "spec.yaml"
+            entry.write_text(source)
+            self.assertEqual(issues(yamaa.check(entry)), [])
+            (root / "input.csv").write_text("ID,TEXT\n1,FOLLOW-UP\n2,\u00df\u0130\u00e9\U0001f642AbC\n3,\n")
+            result = yamaa.domain(entry)
+            self.assertEqual(issues(result), [])
+            self.assertEqual(result.output.rows(), [("1", "FOLLOW-UP", "follow-up", "Follow-up", "Follow-Up"),
+                ("2", "\u00df\u0130\u00e9\U0001f642ABC", "\u00df\u0130\u00e9\U0001f642abc", "\u00df\u0130\u00e9\U0001f642abc", "\u00df\u0130\u00e9\U0001f642Abc"), ("3", "MiXeD", None, None, None)])
+            self.assertFalse((root / "output.csv").exists())
+            self.assertTrue(result.save())
+            self.assertEqual((root / "output.csv").read_bytes(), "ID,UP,LOW,SENT,TITLE\n1,FOLLOW-UP,follow-up,Follow-up,Follow-Up\n2,\u00df\u0130\u00e9\U0001f642ABC,\u00df\u0130\u00e9\U0001f642abc,\u00df\u0130\u00e9\U0001f642abc,\u00df\u0130\u00e9\U0001f642Abc\n3,MiXeD,,,\n".encode())
+            source = source.replace("to: upper, missing: MiXeD", "to: upper")
+            entry.write_text(source)
+            (root / "input.csv").write_bytes(b"ID,TEXT\nrow1,\n")
+            rejected = yamaa.domain(entry)
+            expected = json.loads((ROOT / "text-case-reference.json").read_text())["missing"][0]
+            expected = dict(expected, spec_paths=["columns.UP.derivation.str_case"])
+            self.assertEqual(issues(rejected), [expected])
+            self.assertIsNone(rejected.output)
+            with self.assertRaises(yamaa.DomainError):
+                rejected.save()
+            with (ROOT / "text-case-diagnostics.tsv").open() as stream:
+                failures = list(csv.DictReader(stream, delimiter="\t"))
+            self.assertEqual(len(failures), 2)
+            for finding in failures:
+                case = root / finding["case"]
+                shutil.copytree(ROOT / "cases" / finding["case"], case)
+                shutil.rmtree(case / "input")
+                expected = {key: finding[key] for key in ("phase", "condition", "requirement")}
+                expected.update(spec_paths=[finding["spec_path"]], context=json.loads(finding["context"]))
+                checked = yamaa.check(case / "spec.yaml")
+                rejected = yamaa.domain(case / "spec.yaml")
+                self.assertEqual(issues(checked), [expected])
+                self.assertEqual(issues(rejected), [expected])
+                self.assertIsNone(rejected.output)
+                self.assertIsNone(rejected._native.observations())
+                with self.assertRaises(yamaa.DomainError):
+                    rejected.save()
+                self.assertFalse((case / "input").exists())
+            case = root / "schema-sentence-case"
+            shutil.copytree(ROOT / "cases" / case.name, case)
+            expected = [{"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                "spec_paths":["output.order_by"], "context":{"operation":"order_by"}}]
+            self.assertEqual(issues(yamaa.check(case / "spec.yaml")), expected)
+            rejected = yamaa.domain(case / "spec.yaml")
+            self.assertEqual(issues(rejected), expected)
+            self.assertIsNone(rejected.output)
+            self.assertIsNone(rejected._native.observations())
+            self.assertFalse((case / "adlb.csv").exists())
+
     def test_public_domain_all_original_issues_outputs_and_saved_bytes(self):
         import datetime
         import shutil
