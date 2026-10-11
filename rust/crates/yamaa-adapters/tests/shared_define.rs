@@ -125,7 +125,7 @@ fn ae_and_vs_metadata_only_fixed_time_projection_has_independent_structure() {
     }
 }
 #[test]
-fn semantic_failure_has_zero_writes_and_operational_failure_keeps_stopped_states() {
+fn semantic_failure_and_target_admission_have_zero_writes() {
     let temp = Temp::fixture("sdtm-dm-metadata", true);
     let spec = fs::read_to_string(temp.0.join("spec.yaml"))
         .unwrap()
@@ -146,10 +146,14 @@ fn semantic_failure_has_zero_writes_and_operational_failure_keeps_stopped_states
     assert!(run.save().is_err());
     assert!(run.failure().is_some());
     assert!(!temp.0.join("dm.json").exists());
-    assert!(run
-        .issues()
-        .iter()
-        .any(|i| i.phase == "output" && i.requirement.as_deref() == Some("REQ-0764")));
+    assert!(run.issues().iter().any(|i| i.phase == "engine"
+        && i.condition == "engine_rejected"
+        && i.requirement.is_none()
+        && i.context.contains("publication_target_admission")));
+    assert!(matches!(
+        run.failure(),
+        Some(yamaa_adapters::file_define::Failure::TargetAdmission { index: 1, .. })
+    ));
     let states: Vec<_> = run.artifacts().map(|(_, _, state)| state).collect();
     assert_eq!(
         states,
@@ -171,21 +175,47 @@ fn case_alias_targets_are_refused_before_overwriting_a_sentinel() {
         &environment,
         fs::read_to_string(&environment)
             .unwrap()
-            .replace("define: define.xml", "define: DM.JSON"),
+            .replace("  - spec.yaml", "  - spec.yaml\n  - second.yaml"),
     )
     .unwrap();
+    fs::write(
+        temp.0.join("second.yaml"),
+        fs::read_to_string(temp.0.join("spec.yaml"))
+            .unwrap()
+            .replace("domain: DM", "domain: DM2")
+            .replace("path: dm.csv", "path: DM.csv"),
+    )
+    .unwrap();
+    fs::write(temp.0.join("define.xml"), b"original Define sentinel").unwrap();
+    let mut names: Vec<_> = fs::read_dir(&temp.0)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    names.sort();
     let mut result = temp.run("2026-09-11T00:00:00");
-    assert!(!result.issues().is_empty());
+    assert_eq!(result.issues().len(), 1, "{:?}", result.issues());
+    let issue = &result.issues()[0];
+    assert_eq!(issue.phase, "validation");
+    assert_eq!(issue.condition, "dataset_json_path_collision");
+    assert_eq!(issue.requirement.as_deref(), Some("REQ-1226"));
+    assert!(issue.context.contains("dm.json") && issue.context.contains("DM.json"));
     let reads = result.capture_reads();
     assert!(result.save().is_err());
     assert_eq!(reads, result.capture_reads());
     assert_eq!(fs::read(target).unwrap(), b"original publication sentinel");
-    assert!(!temp.0.join("define.xml").exists());
-    let names: Vec<_> = fs::read_dir(&temp.0)
+    assert_eq!(
+        fs::read(temp.0.join("define.xml")).unwrap(),
+        b"original Define sentinel"
+    );
+    assert!(result
+        .artifacts()
+        .all(|(_, _, state)| state == PublicationState::Stopped));
+    let mut after: Vec<_> = fs::read_dir(&temp.0)
         .unwrap()
         .map(|entry| entry.unwrap().file_name())
         .collect();
-    assert_eq!(names.len(), 4, "no publication residue: {names:?}");
+    after.sort();
+    assert_eq!(after, names, "no publication residue");
 }
 #[test]
 fn explicit_section_selector_datetime_and_missing_published_artifact_are_refused() {

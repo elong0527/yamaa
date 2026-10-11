@@ -246,7 +246,7 @@ listed:
 - one of kind `supplemental` is also listed in `def:SupplementalDoc`; and
 - one of kind `other` is listed in neither.
 
-Every kind may be referenced from an origin, a method, or a comment. `href`
+Every kind may be referenced from an origin, a method, or a comment. `link`
 names a file the submission package carries. This contract does not require
 the file to exist when the document is generated. Supporting documents are
 assembled outside this language. A document generated before its annotated
@@ -269,17 +269,17 @@ document reference on such an origin that names any other document fails.
 | Attribute or child | Source |
 |---|---|
 | `OID` | generated |
-| `Name` | the entry's `id` |
+| `Name` | the specification's `domain`, per [REQ-0964](define-xml.md#req-0964) |
 | `Domain` | `submission.domain`, default `domain`; omit for `adam` |
 | `Purpose` | `Tabulation` for `sdtm` and `send`, `Analysis` for `adam` |
-| `SASDatasetName` | the entry's `id`, when [REQ-1002](define-xml.md#req-1002) admits it |
+| `SASDatasetName` | the specification's `domain`, when [REQ-1002](define-xml.md#req-1002) admits it |
 | `Repeating` | `Yes` when `submission.repeating`, else `No` |
 | `IsReferenceData` | `Yes` when `submission.reference_data`, else `No` |
 | `def:Structure` | `submission.structure` |
 | `def:ArchiveLocationID` | the dataset's generated leaf identifier |
 | `def:StandardOID` | the generated identifier of the standard [REQ-0965](define-xml.md#req-0965) binds |
 | `def:CommentOID` | generated, when `submission.comment` is declared |
-| `def:HasNoData` | `Yes` when the entry declares it, else omitted |
+| `def:HasNoData` | `Yes` when `submission.has_no_data`, else omitted |
 | `Description` | `submission.label` |
 | `ItemRef` | one per `output.columns` entry, in that order |
 | `def:Class` | `submission.class`, with `def:SubClass` when declared |
@@ -295,7 +295,8 @@ declared value could only agree with or contradict the derivation.
 <a id="req-0987"></a>
 
 **REQ-0987.** The dataset's `def:leaf` names the file the package carries for
-that dataset: the entry's `dataset_json` when it declares one, per
+that dataset: the JSON target derived from its specification's output path when
+the selected section requests `dataset_json`, per
 [REQ-1215](dataset-json.md#req-1215), and otherwise the artifact its
 specification produces. `xlink:href` is that path expressed relative
 to the directory holding the generated document, written with `/` separators,

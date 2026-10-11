@@ -329,22 +329,6 @@ pub fn compose(
     let mut work = 0usize;
     let mut allowed = inputs.len() <= 1024;
     for input in inputs {
-        // Covers complete list scans, name/order/reference lookups and closed
-        // semantic passes before allocating selected metadata or findings.
-        work = match input
-            .document
-            .nodes()
-            .len()
-            .checked_mul(input.document.nodes().len())
-            .and_then(|n| n.checked_mul(8))
-            .and_then(|n| work.checked_add(n))
-        {
-            Some(n) => n,
-            None => {
-                allowed = false;
-                break;
-            }
-        };
         nodes = match nodes.checked_add(input.document.nodes().len()) {
             Some(n) => n,
             None => {
@@ -352,9 +336,18 @@ pub fn compose(
                 break;
             }
         };
+        let Some(mut input_text) = input
+            .source
+            .len()
+            .checked_add(input.artifact.len())
+            .and_then(|n| n.checked_add(input.href.len()))
+        else {
+            allowed = false;
+            break;
+        };
         for node in input.document.nodes() {
             if let N::Text(value) | N::Integer(value) = node {
-                text_bytes = match text_bytes.checked_add(value.len()) {
+                input_text = match input_text.checked_add(value.len()) {
                     Some(n) => n,
                     None => {
                         allowed = false;
@@ -363,15 +356,51 @@ pub fn compose(
                 };
             }
         }
-    }
-    if !allowed
-        || nodes > 524_288
-        || text_bytes > 16_777_216
-        || text_bytes
-            .checked_mul(8)
+        text_bytes = match text_bytes.checked_add(input_text) {
+            Some(n) => n,
+            None => {
+                allowed = false;
+                break;
+            }
+        };
+        // Each selected column can scan the column/key lists and every row's
+        // derivation mapping. Charge those complete scans, including textual
+        // comparisons, rather than unrelated pairs of arena nodes. Constant
+        // passes cover declaration/verification/reference and metadata scans.
+        let output_columns = input
+            .document
+            .field(input.document.root(), "output")
+            .and_then(|output| input.document.field(output, "columns"))
+            .and_then(|columns| match &input.document.nodes()[columns] {
+                N::Sequence(values) => Some(values.len()),
+                _ => None,
+            })
+            .unwrap_or(0);
+        work = match input
+            .document
+            .nodes()
+            .len()
+            .checked_mul(32)
+            .and_then(|n| {
+                input_text
+                    .checked_mul(8)
+                    .and_then(|text| n.checked_add(text))
+            })
+            .and_then(|n| {
+                output_columns
+                    .checked_add(1)
+                    .and_then(|count| n.checked_mul(count))
+            })
             .and_then(|n| work.checked_add(n))
-            .is_none_or(|n| n > 268_435_456)
-    {
+        {
+            Some(n) => n,
+            None => {
+                allowed = false;
+                break;
+            }
+        };
+    }
+    if !allowed || nodes > 524_288 || text_bytes > 16_777_216 || work > 268_435_456 {
         return Err(alloc::vec![Finding::cause(
             crate::diagnostic::ConditionCode::ApplicationRejected,
             "specs",

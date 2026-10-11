@@ -76,7 +76,8 @@ unlink(root, recursive = TRUE)
 root <- fixture("sdtm-dm-metadata", TRUE)
 result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = "2026-09-11T00:00:00"); check_issues(result)
 dir.create(file.path(root, "define.xml"))
-stopifnot(refused(result), !file.exists(file.path(root, "dm.json")), identical(result$issues$phase, "output"), identical(result$issues$requirement, "REQ-0764"),
+stopifnot(refused(result), !file.exists(file.path(root, "dm.json")), identical(result$issues$phase, "engine"), identical(result$issues$condition, "engine_rejected"),
+  all(is.na(result$issues$requirement)), grepl("publication_target_admission", result$issues$context, fixed = TRUE), grepl("cause", result$issues$context, fixed = TRUE),
   identical(vapply(artifacts(result), `[[`, character(1), "state"), c("Stopped", "Failed")))
 unlink(root, recursive = TRUE)
 
@@ -172,13 +173,19 @@ sentinel <- file.path(root, "dm.json")
 writeBin(charToRaw("original publication sentinel"), sentinel)
 if (file.exists(file.path(root, "DM.JSON"))) {
   environment <- file.path(root, "environment.yaml")
-  writeLines(gsub("define: define.xml", "define: DM.JSON", readLines(environment), fixed = TRUE), environment)
+  writeLines(gsub("  - spec.yaml", "  - spec.yaml\n  - second.yaml", readLines(environment), fixed = TRUE), environment)
+  spec <- gsub("domain: DM", "domain: DM2", readLines(file.path(root, "spec.yaml")), fixed = TRUE)
+  writeLines(gsub("path: dm.csv", "path: DM.csv", spec, fixed = TRUE), file.path(root, "second.yaml"))
+  define_sentinel <- file.path(root, "define.xml")
+  writeBin(charToRaw("original Define sentinel"), define_sentinel)
   previous_names <- sort(list.files(root, all.files = TRUE, no.. = TRUE))
   result <- yamaa_define(environment, "sdtm", created = "2026-09-11T00:00:00")
-  stopifnot(nrow(result$issues) > 0L, refused(result),
+  stopifnot(identical(result$issues$phase, "validation"), identical(result$issues$condition, "dataset_json_path_collision"), identical(result$issues$requirement, "REQ-1226"),
+    grepl("dm.json", result$issues$context, fixed = TRUE), grepl("DM.json", result$issues$context, fixed = TRUE), refused(result),
     identical(rawfile(sentinel), charToRaw("original publication sentinel")),
+    identical(rawfile(define_sentinel), charToRaw("original Define sentinel")),
     identical(sort(list.files(root, all.files = TRUE, no.. = TRUE)), previous_names),
-    !file.exists(file.path(root, "define.xml")))
+    all(vapply(artifacts(result), `[[`, character(1), "state") == "Stopped"))
 }
 unlink(root, recursive = TRUE)
 Sys.setenv(PATH = original_path)

@@ -122,7 +122,7 @@ order, which is the order the standard presents them:
 | `metaDataRef` | the generated document, per [REQ-1206](dataset-json.md#req-1206) |
 | `itemGroupOID` | the dataset's generated identifier |
 | `records` | the number of rows |
-| `name` | the entry's `id` |
+| `name` | the specification's `domain`, per [REQ-0964](define-xml.md#req-0964) |
 | `label` | `submission.label` |
 | `columns` | one entry per `output.columns` entry, in that order |
 | `rows` | the artifact's rows, in artifact order |

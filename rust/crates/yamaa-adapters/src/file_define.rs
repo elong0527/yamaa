@@ -32,6 +32,10 @@ pub enum Failure {
     },
     Metadata(Vec<Finding>),
     Diagnostic(Vec<Diagnostic>),
+    TargetAdmission {
+        index: usize,
+        error: file_publication::Error,
+    },
     Publication {
         index: usize,
         error: file_publication::Error,
@@ -219,18 +223,22 @@ impl Define {
                     "published dataset overlaps Define target",
                 )]));
             }
-            if section.dataset_json.value
-                && (targets
+            if section.dataset_json.value {
+                if let Some(conflict) = targets
                     .iter()
-                    .any(|target| same_location(Path::new(target), Path::new(&reference)))
-                    || same_location(Path::new(&reference), Path::new(&artifact)))
-            {
-                return Err(Failure::Metadata(vec![Finding::new(
-                    "dataset_json_path_collision",
-                    "REQ-1226",
-                    &path,
-                    "publication target collision",
-                )]));
+                    .find(|target| same_location(Path::new(target), Path::new(&reference)))
+                    .or_else(|| {
+                        same_location(Path::new(&reference), Path::new(&artifact))
+                            .then_some(&artifact)
+                    })
+                {
+                    return Err(Failure::Metadata(vec![Finding::new(
+                        "dataset_json_path_collision",
+                        "REQ-1226",
+                        &path,
+                        &format!("{reference} and {conflict} name one publication target"),
+                    )]));
+                }
             }
             if section.dataset_json.value {
                 targets.push(reference.clone());
@@ -427,16 +435,21 @@ impl Define {
             let publisher = artifact
                 .target
                 .publisher(&artifact.written)
-                .map_err(|error| Failure::Publication { index, error })?;
-            for previous in &publishers {
+                .map_err(|error| Failure::TargetAdmission { index, error })?;
+            for (previous_index, previous) in publishers.iter().enumerate() {
                 if publisher
                     .same_target(previous)
-                    .map_err(|error| Failure::Publication { index, error })?
+                    .map_err(|error| Failure::TargetAdmission { index, error })?
                 {
-                    return Err(Failure::Publication {
-                        index,
-                        error: file_publication::Error::InvalidTarget,
-                    });
+                    return Err(Failure::Metadata(vec![Finding::new(
+                        "dataset_json_path_collision",
+                        "REQ-1226",
+                        "define.targets",
+                        &format!(
+                            "{} and {} name one physical publication target",
+                            self.artifacts[previous_index].written, artifact.written
+                        ),
+                    )]));
                 }
             }
             publishers.push(publisher);
@@ -451,15 +464,19 @@ impl Define {
         ) {
             self.issues = crate::file_application::rejected("define", "issue_limit");
         }
-        if let Failure::Publication { index, .. } = &failure {
-            for (i, artifact) in self.artifacts.iter_mut().enumerate() {
-                if artifact.state != PublicationState::Published {
-                    artifact.state = if i == *index {
-                        PublicationState::Failed
-                    } else {
-                        PublicationState::Stopped
-                    };
-                }
+        let failed = match &failure {
+            Failure::TargetAdmission { index, .. } | Failure::Publication { index, .. } => {
+                Some(*index)
+            }
+            _ => None,
+        };
+        for (i, artifact) in self.artifacts.iter_mut().enumerate() {
+            if artifact.state != PublicationState::Published {
+                artifact.state = if failed == Some(i) {
+                    PublicationState::Failed
+                } else {
+                    PublicationState::Stopped
+                };
             }
         }
         self.failure = Some(failure);
@@ -608,6 +625,16 @@ fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
                 }
                 rows
             }
+        }
+        Failure::TargetAdmission { index, error } => {
+            let definition = ConditionCode::ApplicationRejected.definition();
+            vec![issue(
+                definition.phase,
+                definition.condition,
+                definition.requirement,
+                "define",
+                serde_json::json!({"artifact":index,"stage":"publication_target_admission","cause":error.message()}),
+            )]
         }
         Failure::Publication { index, error } => vec![issue(
             "output",
@@ -785,6 +812,9 @@ mod publication_failure_tests {
         };
         assert_eq!(*index, 1);
         assert!(matches!(error, file_publication::Error::InvalidTarget));
+        assert_eq!(result.issues()[0].phase, "output");
+        assert_eq!(result.issues()[0].condition, "publication_failed");
+        assert_eq!(result.issues()[0].requirement.as_deref(), Some("REQ-0764"));
         assert!(result.issues()[0].context.contains(&error.message()));
         assert_eq!(result.capture_reads(), reads);
         assert!(result.save().is_err());

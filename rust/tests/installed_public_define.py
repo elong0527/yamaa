@@ -128,9 +128,12 @@ class PublicDefine(unittest.TestCase):
         with self.assertRaises(DefineError): result.save()
         self.assertFalse((directory / "dm.json").exists())
         self.assertEqual([s for _, _, s in result._native.artifacts()], ["Stopped", "Failed"])
-        self.assertEqual(result.issues["phase"].to_list(), ["output"])
-        self.assertEqual(result.issues["requirement"].to_list(), ["REQ-0764"])
-        self.assertIn("cause", json.loads(result.issues["context"][0]))
+        self.assertEqual(result.issues["phase"].to_list(), ["engine"])
+        self.assertEqual(result.issues["condition"].to_list(), ["engine_rejected"])
+        self.assertEqual(result.issues["requirement"].to_list(), [None])
+        context = json.loads(result.issues["context"][0])
+        self.assertEqual(context["stage"], "publication_target_admission")
+        self.assertIn("cause", context)
 
     def test_source_version_defaults_and_schema_facet_failures(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
@@ -248,16 +251,25 @@ class PublicDefine(unittest.TestCase):
         if not (directory / "DM.JSON").exists():
             self.skipTest("This volume admits distinct case-sensitive target names")
         environment = directory / "environment.yaml"
-        environment.write_text(environment.read_text().replace("define: define.xml", "define: DM.JSON"))
+        environment.write_text(environment.read_text().replace("  - spec.yaml", "  - spec.yaml\n  - second.yaml"))
+        (directory / "second.yaml").write_text((directory / "spec.yaml").read_text().replace("domain: DM", "domain: DM2").replace("path: dm.csv", "path: DM.csv"))
+        define_sentinel = directory / "define.xml"
+        define_sentinel.write_bytes(b"original Define sentinel")
         names = sorted(path.name for path in directory.iterdir())
         result = self.call(directory)
-        self.assertGreater(result.issues.height, 0)
+        self.assertEqual(result.issues["phase"].to_list(), ["validation"])
+        self.assertEqual(result.issues["condition"].to_list(), ["dataset_json_path_collision"])
+        self.assertEqual(result.issues["requirement"].to_list(), ["REQ-1226"])
+        context = result.issues["context"][0]
+        self.assertIn("dm.json", context)
+        self.assertIn("DM.json", context)
         reads = result._native.capture_reads()
         with self.assertRaises(DefineError): result.save()
         self.assertEqual(result._native.capture_reads(), reads)
         self.assertEqual(sentinel.read_bytes(), b"original publication sentinel")
+        self.assertEqual(define_sentinel.read_bytes(), b"original Define sentinel")
         self.assertEqual(sorted(path.name for path in directory.iterdir()), names)
-        self.assertFalse((directory / "define.xml").exists())
+        self.assertTrue(all(state == "Stopped" for _, _, state in result._native.artifacts()))
 
     def test_numeric_terminology_uses_numeric_equality(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
