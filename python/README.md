@@ -18,8 +18,8 @@ checked = yamaa.check("spec.yaml")
 checked.issues
 ```
 
-The current bounded frontend qualifies seventeen original specifications. A failed
-build has no output and its save raises `yamaa.DomainError`. Operational save
+The bounded frontend retains original specification witnesses. A failed build
+has no output and its save raises `yamaa.DomainError`. Operational save
 failures return `False` and remain in issues. Checks read no study data and do not
 run project code. Context is JSON text and output integers retain their full signed
 64-bit range. Public date/datetime columns retain their ordinary Polars types.
@@ -31,9 +31,12 @@ its explicit Save publishes that diagnostic sidecar and still raises the
 failed-build error. Repeated Save uses the same held bytes.
 
 Document paths use their original declaring YAML layer under the approved
-[local-path policy](../rules/storage/resources.md). Producer graphs with declared
-logs remain explicitly refused until their ordered sidecars qualify. Broader
-language, API and release qualification remain open. Retained reference helpers
+[local-path policy](../rules/storage/resources.md). Producer graphs retain each
+entered node's declared logs and held bytes. Explicit Save publishes each node's
+verification, warning and primary artifacts before its dependents; failed graphs
+retain diagnostic verification publication. See the
+[graph log contract](../rust/VERIFICATION_LOGS.md). Broader language, API and
+release qualification remain open. Retained reference helpers
 continue independent migration assessment and are never a fallback from the
 public native frontend. ODM helpers below remain available.
 
@@ -91,10 +94,12 @@ and validates the complete output set before publication, then Save publishes
 JSON files in section order and XML last. Replacement is atomic per file;
 an operational failure preserves completed files and stops the remainder.
 
-This is the bounded column-metadata migration candidate. DM's existing XML/JSON
-goldens and AE/VS's independent fixed-time structure/schema witnesses are kept
-unchanged. Value-level generation and the complete replacement qualification
-remain open. The reference route below remains until coordinated retirement.
+This bounded candidate covers column metadata and the independently completed
+LB value metadata slice. DM's existing XML/JSON goldens and AE/VS's independent
+fixed-time structure/schema witnesses remain unchanged. LB retains its original
+specification and CSV alongside an explicit metadata completion. Full language
+acceptance and replacement qualification remain open. The reference route below
+remains until coordinated retirement.
 See [the native Define contract](../rust/DEFINE_GENERATION.md).
 
 `yamaa.generate_study_document("define.yaml")` composes the declared datasets

@@ -72,6 +72,9 @@ Installed graph witnesses retain complete Build and repeated Save reports and
 saved bytes after checked input/YAML deletion. They compare the unchanged original
 log document and CSV goldens, plus independently authored alias/diamond warning
 records, exact int64 keys and actual failure prefixes. These supplemental proofs
-leave the broader original-producer M1 criterion open. The R graph accessor follows
-the existing Unix state; Windows R graph integration remains a separate gate.
+leave the broader original-producer M1 criterion open. The R graph accessor uses
+the paired public result state on Unix and Windows. Actual installed Windows R
+qualification is required by [the Windows gate](R_WINDOWS.md). The graph
+denied-write permission witness remains Unix-only; R graph case-alias witnesses
+remain macOS-only.
 Broader compiler, API, native ownership and release gates remain open.

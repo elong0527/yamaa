@@ -31,9 +31,12 @@ its explicit Save publishes that diagnostic sidecar and still raises the
 failed-build error. Repeated Save uses the same held bytes.
 
 The declaring-file path policy retains original output locations. Producer graphs
-with declared logs remain explicitly refused until their ordered sidecars qualify.
-Broader language, API and release qualification remain open. Retained reference
-helpers continue independent migration assessment.
+retain each entered node's declared logs and held bytes. Explicit Save publishes
+each node's verification, warning and primary artifacts before its dependents;
+failed graphs retain diagnostic verification publication. See the
+[graph log contract](../../rust/VERIFICATION_LOGS.md). Broader language, API and
+release qualification remain open. Retained reference helpers continue
+independent migration assessment.
 
 Stage the shared sources before building this repository template. Staging
 copies the canonical `rust/Cargo.lock` and workspace manifest without changes;
@@ -66,8 +69,11 @@ selected section admits metadata without executing a specification; only
 explicit Dataset-JSON requests read already published artifacts. Save uses
 held rendered bytes, publishes JSON in specification order and XML last,
 and stops the remainder after an operational failure. Atomic replacement is
-per file. This bounded column-metadata candidate retains the reference renderer
-and unchanged fixture truth pending complete replacement qualification.
+per file. This bounded candidate covers column metadata and the independently
+completed LB value metadata slice. It retains original specification/CSV truth
+alongside an explicit metadata completion. Full language acceptance and
+replacement qualification remain open; the reference renderer remains for that
+transition.
 See [the shared Define contract](../../rust/DEFINE_GENERATION.md).
 
 ## Scalar transport probe
