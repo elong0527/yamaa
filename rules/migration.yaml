@@ -1131,7 +1131,7 @@ requirements:
   REQ-0055: {"file": "execution/lifecycle.md", "sources": ["R001-23"]}
   REQ-0056: {"file": "execution/lifecycle.md", "sources": ["R001-24"]}
   REQ-0057: {"file": "execution/lifecycle.md", "sources": ["R001-25"]}
-  REQ-0058: {"file": "execution/lifecycle.md", "sources": ["R001-26"]}
+  REQ-0058: {"file": "execution/lifecycle.md", "sources": ["R001-26", "yamaa:issue-1981:req-0058"]}
   REQ-0059: {"file": "execution/lifecycle.md", "sources": ["R001-27"]}
   REQ-0060: {"file": "execution/lifecycle.md", "sources": ["R001-28"]}
   REQ-0061: {"file": "execution/lifecycle.md", "sources": ["R001-29"]}
@@ -2693,6 +2693,7 @@ schema_prose:
   - {"source": "schema_shared.yaml:comment:3", "text": "Types shared by specification and project-environment schema entry points.", "owner": "values/types", "group": "module", "target": "REQ-1150"}
   - {"source": "schema_verification.yaml:comment:43", "text": "Bounds how many rows a group holds, or the whole output. group_by partitions the artifact's rows and applies both bounds to every group; a group's count is how many of its rows filter admits, and a row is admitted only when the predicate is TRUE. A grouped count requires id, which an ungrouped count does not.", "owner": "execution/verification", "group": "dataset_verifications.row_count", "target": "REQ-1152"}
 provenance_addenda:
+  - {"source": "yamaa:issue-1981:req-0058", "text": "Authorized self-approved migration reconciliation #1981, 2026-10-11: align the older predicate-site summary with REQ-0068 and REQ-0218. Ungrouped row filters read completed non-window candidate derivations and lookup state before the window pass; grouped filters read completed grouped derivations. Preserve the historical R001-26 source record and independent benchmark truth.", "owner": "execution/lifecycle", "group": "row filter lifecycle reconciliation", "target": "REQ-0058"}
   - {"source": "schema.yaml:dataset_class.ordinal.description", "text": "Issue #1566: Input datasets may expose a generated source record ordinal.", "owner": "storage/ingestion", "group": "source-ordinal", "target": "REQ-1291"}
   - {"source": "yamaa:issue-1566:ordinal-declaration", "text": "Issue #1566: ordinal optionally names an appended int field on CSV and Parquet inputs.", "owner": "storage/ingestion", "group": "source-ordinal", "target": "REQ-1291"}
   - {"source": "yamaa:issue-1566:ordinal-assignment", "text": "Issue #1566: One-based data record positions are assigned before filtering and retained across row templates.", "owner": "storage/ingestion", "group": "source-ordinal", "target": "REQ-1292"}
