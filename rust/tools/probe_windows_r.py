@@ -25,6 +25,12 @@ writeLines(c(as.character(getRversion()), as.character(packageVersion("yamaa")),
 cat("native metadata completed\\n"); flush.console()
 """
 
+BASE_ONLY = """
+cat("entered base-only frontend control\\n"); flush.console()
+writeLines(c(as.character(getRversion()), normalizePath(R.home())))
+cat("base-only frontend completed\\n"); flush.console()
+"""
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -43,10 +49,16 @@ def main():
         env=environment,
         text=True,
     ).strip()
+    metadata_script = args.output.resolve() / "metadata-first.R"
+    metadata_script.write_text(METADATA_FIRST, encoding="utf-8")
+    base_script = args.output.resolve() / "base-only.R"
+    base_script.write_text(BASE_ONLY, encoding="utf-8")
     probes = (
         ("rterm-metadata-first", [executable, "--vanilla", "--slave", "-e", METADATA_FIRST]),
         ("rscript-metadata-first", ["Rscript", "--vanilla", "-e", METADATA_FIRST]),
-        ("rscript-capabilities-first", ["Rscript", "--vanilla", "-e", CAPABILITIES_FIRST]),
+        ("rscript-base-only", ["Rscript", "--vanilla", "-e", BASE_ONLY]),
+        ("rscript-file-metadata-first", ["Rscript", "--vanilla", str(metadata_script)]),
+        ("rscript-file-base-only", ["Rscript", "--vanilla", str(base_script)]),
     )
     failed = False
     for name, command in probes:
