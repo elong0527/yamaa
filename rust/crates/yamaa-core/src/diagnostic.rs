@@ -18,6 +18,11 @@ pub use dataset::DatasetFinding;
 mod grammar;
 #[path = "diagnostic_numeric.rs"]
 mod numeric;
+#[path = "diagnostic_predicate.rs"]
+mod predicate;
+pub use predicate::{
+    PredicateDiagnosticError, PredicateGrammarDiagnosticError, MAX_PREDICATE_DIAGNOSTIC_BYTES,
+};
 #[path = "diagnostic_project_lock.rs"]
 mod project_lock;
 pub use project_lock::{
@@ -199,6 +204,11 @@ conditions! {
     LookupOutputKeyReference => ("validation", "unknown_field", Some("REQ-0117")),
     LookupValueReference => ("validation", "unknown_field", Some("REQ-0125")),
     LookupKeyType => ("validation", "incompatible_input_type", Some("REQ-0323")),
+    PredicateUnknownField => ("validation", "unknown_field", Some("REQ-0189")),
+    PredicateIncompatiblePair => ("validation", "incompatible_input_type", Some("REQ-0190")),
+    PredicateExpectedText => ("validation", "incompatible_input_type", Some("REQ-0190")),
+    PredicateContainsExpectedText => ("validation", "incompatible_input_type", Some("REQ-1244")),
+    PredicateDanglingEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
     PredicateInvalidExpression => ("validation", "invalid_predicate", Some("REQ-0188")),
     PredicateInvalidEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
     PredicateInvalidRegex => ("validation", "invalid_predicate", Some("REQ-1244")),

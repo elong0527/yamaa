@@ -89,7 +89,15 @@ impl LookupFinding {
         }
         finding
     }
-    pub(super) fn grammar(path: &str, text: &str, position: usize, error: &GrammarFailure) -> Self {
-        Self(error.diagnostic(path, text, position))
+    pub(super) fn grammar(
+        path: &str,
+        text: &str,
+        position: usize,
+        error: &GrammarFailure,
+    ) -> Result<Self, BindError> {
+        error
+            .original_diagnostic(path, text, position)
+            .map(Self)
+            .map_err(|_| BindError::PredicateDiagnosticLimit)
     }
 }
