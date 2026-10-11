@@ -1,0 +1,1312 @@
+{
+  "adam-adae-text-cleanup": {
+    "handler_counts": [
+      {
+        "spec_path": "columns.AEREFNUM.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 2
+      },
+      {
+        "spec_path": "columns.AEREFNUM.derivation.str_extract.no_match",
+        "handler": "no_match",
+        "count": 3
+      },
+      {
+        "spec_path": "columns.AERELLC.derivation.str_case.missing",
+        "handler": "missing",
+        "count": 2
+      }
+    ],
+    "csv": "STUDYID,USUBJID,AESEQ,AESPID,AEREFNUM,AETERM,AETERMLO,AERELLC,AREL\nCATH-01,CATH-01-001,1,AE-001,1,Headache,headache,related,RELATED\nCATH-01,CATH-01-001,2,,0,HEADACHE,headache,possibly related,POSSIBLY RELATED\nCATH-01,CATH-01-001,3,BAD-ID,-1,Nausea,nausea,not reported,NOT REPORTED\nCATH-01,CATH-01-002,1,AE-104,104,Fatigue,fatigue,not related,NOT RELATED\nCATH-01,CATH-01-002,2,,0,Dizziness,dizziness,not related,NOT RELATED\nCATH-01,CATH-01-002,3,AE-999,999,hEADACHE,headache,related,RELATED\nCATH-01,CATH-01-003,1,AE-000,0,Vomiting,vomiting,not related,NOT RELATED\nCATH-01,CATH-01-003,2,AE-1000,-1,Abdominal Pain,abdominal pain,possibly related,POSSIBLY RELATED\nCATH-01,CATH-01-003,3,ae-007,-1,Rash,rash,not reported,NOT REPORTED\nCATH-01,CATH-01-003,4,AE-007,7,Pruritus,pruritus,not related,NOT RELATED\n"
+  },
+  "negative-str-uncaptured-group": {
+    "handler_counts": [
+      {
+        "spec_path": "columns.SITEID.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.SITEID.derivation.str_extract.no_match",
+        "handler": "no_match",
+        "count": 0
+      }
+    ],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "regex_group_out_of_range",
+        "spec_paths": [
+          "columns.SITEID.derivation.str_extract.group"
+        ],
+        "requirement": "REQ-0816",
+        "context": {
+          "group": 2,
+          "group_count": 1,
+          "pattern": "^CATH-([^-]+)-[0-9]{4}$"
+        }
+      }
+    ]
+  },
+  "missing": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "(a)",
+              "group": 1
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "mapping",
+        "condition": "missing_input",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_extract"
+        ],
+        "requirement": "REQ-0334",
+        "context": {
+          "variable": "TEXT",
+          "keys": [
+            {
+              "ID": "row1"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "no-match": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "(x)",
+              "group": 1
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,abc\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "mapping",
+        "condition": "unmatched_pattern",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_extract"
+        ],
+        "requirement": "REQ-0334",
+        "context": {
+          "value": "abc",
+          "pattern": "(x)",
+          "keys": [
+            {
+              "ID": "row1"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "non-string": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "int",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "(a)",
+              "group": 1
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,12\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_extract.source"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "source": "TEXT",
+          "expected": "str",
+          "actual": "int"
+        }
+      }
+    ]
+  },
+  "invalid-pattern": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "[",
+              "group": 0
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,abc\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_regex",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_extract.pattern"
+        ],
+        "requirement": "REQ-0827",
+        "context": {
+          "pattern": "[",
+          "reason": "a character class is never closed"
+        }
+      }
+    ]
+  },
+  "negative-group": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "(a)",
+              "group": -1
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,abc\n",
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "regex_group_out_of_range",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_extract.group"
+        ],
+        "requirement": "REQ-0816",
+        "context": {
+          "group": -1,
+          "group_count": 1,
+          "pattern": "(a)"
+        }
+      }
+    ]
+  },
+  "wide-group": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "(a)",
+              "group": 100000000000000000000000000000000000000000000000000000000000000000000000000000000
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,abc\n",
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_field_type",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_extract.group"
+        ],
+        "requirement": "REQ-0287",
+        "context": {
+          "expected": "int",
+          "actual": "float",
+          "source": "/private/tmp/yamaa-root-str-extract-audit/wide-group/spec.yaml",
+          "entry": "/private/tmp/yamaa-root-str-extract-audit/wide-group/spec.yaml"
+        }
+      }
+    ]
+  },
+  "optional-unentered": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "(a)?b",
+              "group": 1,
+              "no_match": "wrong"
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,b\n",
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.str_extract.no_match",
+        "handler": "no_match",
+        "count": 0
+      }
+    ],
+    "csv": "ID,TEXT,RESULT\nrow1,b,\n"
+  },
+  "entered-empty": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "()b",
+              "group": 1,
+              "no_match": "wrong"
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,b\n",
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.str_extract.no_match",
+        "handler": "no_match",
+        "count": 0
+      }
+    ],
+    "csv": "ID,TEXT,RESULT\nrow1,b,\"\"\n"
+  },
+  "whole-empty": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "()",
+              "no_match": "wrong"
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,abc\n",
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.str_extract.no_match",
+        "handler": "no_match",
+        "count": 0
+      }
+    ],
+    "csv": "ID,TEXT,RESULT\nrow1,abc,\"\"\n"
+  },
+  "leftmost-alternative": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "(a|ab)",
+              "group": 1
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,zab\n",
+    "handler_counts": [],
+    "csv": "ID,TEXT,RESULT\nrow1,zab,a\n"
+  },
+  "last-repeated-capture": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "(a|b)+",
+              "group": 1
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,ab\n",
+    "handler_counts": [],
+    "csv": "ID,TEXT,RESULT\nrow1,ab,b\n"
+  },
+  "literal-null": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "(a)",
+              "group": 1,
+              "missing": null,
+              "no_match": null
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,\nrow2,x\n",
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 1
+      },
+      {
+        "spec_path": "columns.RESULT.derivation.str_extract.no_match",
+        "handler": "no_match",
+        "count": 1
+      }
+    ],
+    "csv": "ID,TEXT,RESULT\nrow1,,\nrow2,x,\n"
+  },
+  "one-final-conversion": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "int",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "(a)",
+              "group": 1,
+              "missing": "not-an-int"
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,\n",
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 1
+      }
+    ],
+    "findings": [
+      {
+        "phase": "convert",
+        "condition": "conversion_failed",
+        "spec_paths": [
+          "columns.RESULT"
+        ],
+        "requirement": "REQ-0013",
+        "context": {
+          "from": "str",
+          "to": "int",
+          "value": "not-an-int",
+          "keys": [
+            {
+              "ID": "row1"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "wide-group-pure-expression": {
+    "status": "condition",
+    "condition": {
+      "phase": "validation",
+      "condition": "regex_group_out_of_range",
+      "context": {
+        "group": 100000000000000000000000000000000000000000000000000000000000000000000000000000000,
+        "group_count": 1,
+        "pattern": "(a)"
+      },
+      "applicable_handler": null,
+      "requirement": "REQ-0816",
+      "path_suffix": "group"
+    }
+  },
+  "wide-group-authored-yaml": {
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "invalid_field_type",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_extract.group"
+        ],
+        "requirement": "REQ-0287",
+        "context": {
+          "expected": "int",
+          "actual": "float",
+          "source": "/private/tmp/yamaa-root-str-extract-audit/wide-group/spec-yaml.yaml",
+          "entry": "/private/tmp/yamaa-root-str-extract-audit/wide-group/spec-yaml.yaml"
+        }
+      }
+    ]
+  },
+  "combined-nonstring-group": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "int",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "(a)",
+              "group": 2
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,12\n",
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_extract.source"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "source": "TEXT",
+          "expected": "str",
+          "actual": "int"
+        }
+      }
+    ]
+  },
+  "combined-unknown-group": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "UNKNOWN",
+              "pattern": "(a)",
+              "group": 2
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,12\n",
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_extract.source"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "identifier": "UNKNOWN"
+        }
+      }
+    ]
+  },
+  "combined-nonstring-invalid-pattern": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "int",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "[",
+              "group": 0
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,12\n",
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "incompatible_input_type",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_extract.source"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "source": "TEXT",
+          "expected": "str",
+          "actual": "int"
+        }
+      }
+    ]
+  },
+  "combined-unknown-invalid-pattern": {
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "UNKNOWN",
+              "pattern": "[",
+              "group": 0
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,12\n",
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [
+          "columns.RESULT.derivation.str_extract.source"
+        ],
+        "requirement": "REQ-0308",
+        "context": {
+          "identifier": "UNKNOWN"
+        }
+      }
+    ]
+  },
+  "scope-before-pattern": {
+    "handler_counts": [],
+    "findings": [
+      {
+        "phase": "validation",
+        "condition": "ungrouped_driver_field",
+        "spec_paths": [
+          "rows[0].derivations.TEXT.str_extract.source"
+        ],
+        "requirement": "REQ-0067",
+        "context": {
+          "identifier": "SRC.TEXT",
+          "row": "grouped",
+          "dataset": "SRC"
+        }
+      }
+    ],
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str"
+        }
+      ],
+      "rows": [
+        {
+          "id": "grouped",
+          "dataset": "SRC",
+          "group_by": [
+            "SRC.ID"
+          ],
+          "derivations": {
+            "TEXT": {
+              "str_extract": {
+                "source": "SRC.TEXT",
+                "pattern": "[",
+                "group": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,abc\nrow2,\n"
+  },
+  "nested-case": {
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.case[0].then.case[0].then.str_extract.missing",
+        "handler": "missing",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.RESULT.derivation.case[0].then.case[0].then.str_extract.no_match",
+        "handler": "no_match",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.RESULT.derivation.case[1].otherwise.str_extract.missing",
+        "handler": "missing",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.RESULT.derivation.case[1].otherwise.str_extract.no_match",
+        "handler": "no_match",
+        "count": 0
+      }
+    ],
+    "csv": "ID,TEXT,RESULT\nrow1,abc,a\nrow2,x,\"\"\n",
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str",
+          "derivation": "SRC.ID"
+        },
+        {
+          "name": "TEXT",
+          "type": "str",
+          "derivation": "SRC.TEXT"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "case": [
+              {
+                "when": "ID = 'row1'",
+                "then": {
+                  "case": [
+                    {
+                      "when": "ID = 'row1'",
+                      "then": {
+                        "str_extract": {
+                          "source": "TEXT",
+                          "pattern": "(.)",
+                          "group": 1,
+                          "missing": null,
+                          "no_match": "wrong"
+                        }
+                      }
+                    },
+                    {
+                      "otherwise": {
+                        "literal": "never"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "otherwise": {
+                  "str_extract": {
+                    "source": "TEXT",
+                    "pattern": "()",
+                    "group": 0,
+                    "missing": null,
+                    "no_match": "wrong"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,abc\nrow2,x\n"
+  },
+  "row-extract": {
+    "handler_counts": [
+      {
+        "spec_path": "rows[0].derivations.TEXT.str_extract.missing",
+        "handler": "missing",
+        "count": 1
+      },
+      {
+        "spec_path": "rows[0].derivations.TEXT.str_extract.no_match",
+        "handler": "no_match",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.RESULT.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.RESULT.derivation.str_extract.no_match",
+        "handler": "no_match",
+        "count": 0
+      }
+    ],
+    "csv": "ID,TEXT,RESULT\nrow1,a,a\nrow2,MiXeD,M\n",
+    "specification": {
+      "schema_version": "1.0",
+      "domain": "TEST",
+      "keys": [
+        "ID"
+      ],
+      "input": {
+        "SRC": "input.csv"
+      },
+      "output": {
+        "path": "output.csv",
+        "columns": [
+          "ID",
+          "TEXT",
+          "RESULT"
+        ]
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "type": "str"
+        },
+        {
+          "name": "TEXT",
+          "type": "str"
+        },
+        {
+          "name": "RESULT",
+          "type": "str",
+          "derivation": {
+            "str_extract": {
+              "source": "TEXT",
+              "pattern": "(.)",
+              "group": 1,
+              "missing": null,
+              "no_match": "wrong"
+            }
+          }
+        }
+      ],
+      "rows": [
+        {
+          "id": "records",
+          "dataset": "SRC",
+          "derivations": {
+            "ID": "SRC.ID",
+            "TEXT": {
+              "str_extract": {
+                "source": "SRC.TEXT",
+                "pattern": "(.)",
+                "group": 1,
+                "missing": "MiXeD",
+                "no_match": null
+              }
+            }
+          }
+        }
+      ]
+    },
+    "input": "ID,TEXT\nrow1,abc\nrow2,\n"
+  }
+}

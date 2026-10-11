@@ -2,6 +2,28 @@
   "version": "1",
   "contracts": [
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json",
+      "family": "text",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_text_template.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/text_extract_reference.json",
+      "family": "text",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_text_extract.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json",
       "family": "datasets",
       "level": "component",
