@@ -29,6 +29,69 @@ fn assign(column: usize, expression: Expression) -> Assignment {
 }
 
 #[test]
+fn every_row_mode_rejects_filters_that_read_deferred_windows() {
+    use yamaa_core::{
+        bound_expression::{Binding, BindingError, BoundPredicate, Read},
+        dataset::{OrderTerm, Window, WindowKind},
+    };
+    let source = schema(&[("ID", ColumnType::Int)]);
+    let output = schema(&[
+        ("ID", ColumnType::Int),
+        ("SEQ", ColumnType::Int),
+        ("COPY", ColumnType::Int),
+    ]);
+    for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
+        for column in [0, 1, 2] {
+            let filter = BoundPredicate::new(
+                yamaa_core::predicate_compiler::compile("F > 0", "row.filter", Default::default())
+                    .unwrap(),
+                vec![Binding {
+                    name: "F".into(),
+                    read: Read::Column(column),
+                }],
+            )
+            .unwrap();
+            let plan = DatasetPlan::new(
+                source.clone(),
+                output.clone(),
+                vec![RowTemplate {
+                    mode: mode.clone(),
+                    assignments: vec![
+                        assign(0, Expression::Source(0)),
+                        assign(
+                            1,
+                            Expression::Window(Window {
+                                kind: WindowKind::RowNumber,
+                                group_by: vec![],
+                                order_by: vec![OrderTerm {
+                                    column: 0,
+                                    descending: false,
+                                    nulls_first: false,
+                                }],
+                                filter: None,
+                            }),
+                        ),
+                        assign(2, Expression::Column(1)),
+                    ],
+                    filter: Some(filter),
+                }],
+                vec![],
+                vec![0],
+                vec![],
+            );
+            if column == 0 {
+                assert!(plan.is_ok(), "{plan:?}");
+            } else {
+                assert_eq!(
+                    plan,
+                    Err(PlanError::Filter(BindingError::UnavailableColumn))
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn whole_column_windows_cannot_be_hidden_inside_selected_case_branches() {
     use yamaa_core::{
         bound_expression::{Binding, BoundPredicate, Read},
