@@ -4,10 +4,11 @@ The concise [current migration assessment](migration-status.md) records the
 qualified implementation frontier and remaining acceptance gates as of 2026-10-11.
 The historical evidence below retains each slice's original scope and provenance.
 
-The 2026-10-11 frontier includes #1927's qualified ordered primary Save and
-#1926's completed numerical decision ledger. Formal producer M1 reports, graph
-sidecars, shared Define/value metadata, public API disposition and the final
-combined Windows R/release matrix remain acceptance gates. The support matrix
+The 2026-10-11 frontier includes #1927's qualified ordered primary Save,
+#1926's completed numerical decision ledger, #1925's shared Define generators,
+and #1932/#1928's classified lock/rounding findings. Formal producer M1 reports,
+graph sidecars, value metadata/full submission retirement, public API disposition
+and the final combined Windows R/release matrix remain acceptance gates. The support matrix
 and exclusions are approved; they do not authorize release transition.
 
 The current serial order follows merged #1757/#1858/#1860/#1863/#1867/#1869/#1871/#1874/#1877/#1881/#1883/#1888/#1893/#1897:
@@ -473,8 +474,10 @@ the non-transcendental cohort:
   using the API replacement in #1751 rather than assuming legacy API preservation.
   Cargo locking and required Windows R scope are approved; complete #1906 and
   #1903 and the rest of the supported matrix. Numeric performance budgets still
-  need representative measurements and a recorded decision. Measure shared
-  workloads once their paths exist; tiny fixtures cannot support speedup claims.
+  need representative measurements and a recorded decision. Follow the
+  [shared public measurement plan](shared-public-measurement-plan.md) for exact
+  truth, cold/warm samples, phase attribution and explicit memory availability;
+  tiny fixtures cannot support speedup claims.
 - **#1751:** qualify the approved issues-only check result, JSON-text context and
   full-range `yamaa_int64_vector` with missingness separate from INT64_MIN. Finish
   the retained-helper dispositions and implement the approved paths under #1905.

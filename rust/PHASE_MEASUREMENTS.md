@@ -1,8 +1,12 @@
 # Prototype phase measurements
 
-This is a measurement prerequisite for issue #1585, step 6. It does not enable
-another operation or qualify full Rust execution. Python remains the default and
-both hosts continue to report `execution_supported=false`.
+This records the historical Python dataset prototype used for issue #1585,
+step 6. Its host-normalized preparation and private dataset instrumentation do
+not measure the current shared original-YAML public Python/R lifecycle. The
+earlier backend defaults and execution-support flags describe that prototype,
+not the current public engine. See the
+[shared public measurement plan](planning/shared-public-measurement-plan.md)
+for the remaining B17/B18 work; no release performance budget is approved here.
 
 ## Boundaries
 
@@ -35,7 +39,7 @@ Observers do not retry callbacks, reread sources or publish intermediate values.
 
 ## Reproduce with installed packages
 
-Build a release native wheel and the current ordinary Python wheel, install both
+Install a release package that retains this prototype's measurement entrypoints
 in an isolated environment, and run from outside the source tree. For example,
 with absolute paths substituted for the environment and checkout:
 
@@ -48,9 +52,11 @@ The script imports installed packages; the checkout supplies unchanged fixtures
 and schema resources. Every sample starts a fresh isolated interpreter. Project
 activation caching is disabled. It rotates reference, ordinary native and
 instrumented native mode order across repeats and retains every raw observation.
-It executes the original ordered ADLB sum, window-functions, lookup and project
-functions benchmarks. Every sample must succeed and exactly match the committed
-CSV bytes. It never updates expected output.
+The current script selects the original ordered ADLB sum, window-functions and
+lookup benchmarks. The fourth project-functions case in the 2026-10-05 report
+belongs to that historical harness revision. Every current sample must succeed
+and exactly match the committed CSV bytes. The script never updates expected
+output and does not exercise the public environment callback lifecycle.
 
 `process_wall` includes process startup, script imports, package imports, the
 sample, truth comparison, metadata serialization and process shutdown. It is not
