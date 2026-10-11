@@ -107,6 +107,9 @@ pub fn spec(
             ])]),
         ));
     }
+    if extra == Some("root_metadata") {
+        fields.push(("metadata", m(vec![("has_no_data", t("true"))])));
+    }
     let mut nodes = vec![];
     let root = append(m(fields), &mut nodes);
     SpecificationDocument::admit(
