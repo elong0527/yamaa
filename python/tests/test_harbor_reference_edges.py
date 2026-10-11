@@ -81,6 +81,70 @@ def _run(tmp_path, name, language, changes):
     return {p.name: _read(p)[1] for p in output.glob("*.csv")}
 
 
+@pytest.fixture(params=["yamaa", "python", "r", "opensas"])
+def worsening_track(request):
+    return request.param
+
+
+def _worsening_flags(tmp_path, track, changes):
+    name = "adam-adae-worsening-emergence"
+    ae = _input(name, "ae.csv")
+    for row in ae:
+        if row["USUBJID"] == "P7-101" and row["AESEQ"] in changes:
+            row.update(changes[row["AESEQ"]])
+    if track == "yamaa":
+        from yamaa import yamaa_domain
+
+        study = tmp_path / "study"
+        shutil.copytree(ROOT / "benchmarks" / name, study)
+        header, _ = _read(study / "input/ae.csv")
+        with (study / "input/ae.csv").open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=header)
+            writer.writeheader()
+            writer.writerows(ae)
+        rows = yamaa_domain(study / "spec.yaml").output.to_dicts()
+    else:
+        rows = _run(tmp_path, name, track, {"ae.csv": ae})["adae.csv"]
+    return {
+        str(row["AESEQ"]): row["TRTEMFL"] or ""
+        for row in rows
+        if row["USUBJID"] == "P7-101" and row["AEDECOD"] == "HEADACHE"
+    }
+
+
+@pytest.mark.parametrize(
+    ("end", "flag"),
+    [
+        ("", ""),
+        ("2025-03-04T11:44:59", ""),
+        ("2025-03-04T11:45:01", ""),
+        ("2025-03-04T11:45", "Y"),
+    ],
+    ids=["missing", "gap", "overlap", "equal-minute-precision"],
+)
+def test_worsening_requires_every_episode_boundary(
+    tmp_path, worsening_track, end, flag
+):
+    # The unchanged middle episode links both earlier episodes to worsening.
+    # Moving its end by even one second must break that link for both rows.
+    flags = _worsening_flags(tmp_path, worsening_track, {"5": {"AEENDTC": end}})
+    assert flags == {"1": flag, "2": "Y", "5": flag, "6": ""}
+
+
+@pytest.mark.parametrize(
+    ("severity", "grade", "flag"),
+    [("", "2", "Y"), ("MODERATE", "", "Y"), ("", "", ""), ("MILD", "1", "")],
+    ids=["grade-only", "severity-only", "both-missing", "unchanged"],
+)
+def test_continuous_worsening_compares_severity_and_grade_independently(
+    tmp_path, worsening_track, severity, grade, flag
+):
+    flags = _worsening_flags(
+        tmp_path, worsening_track, {"2": {"AESEV": severity, "AETOXGR": grade}}
+    )
+    assert flags == {"1": flag, "2": "Y", "5": flag, "6": ""}
+
+
 def test_missing_age_has_no_group_and_ranks_last(tmp_path, language):
     name = "adam-adsl-flag-chain"
     dm = _input(name, "dm.csv")

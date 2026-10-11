@@ -2,14 +2,21 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE: {path: input/ae.csv, types: {AESTDTC: datetime, AETOXGR: int}}
+  AE:
+    path: input/ae.csv
+    types: {AESTDTC: datetime, AEENDTC: datetime, AETOXGR: int}
   ADSL: {path: input/adsl.csv, types: {TRTSDTM: datetime}}
 base: AE
 
 output:
   path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDTM, TRTSDTM, AESEV,
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDTM, AENDTM, TRTSDTM, AESEV,
             AETOXGR, TRTEMFL]
+
+windows:
+  EPISODE_ORDER:
+    group_by: [STUDYID, USUBJID, AEDECOD]
+    order_by: [ASTDTM, AESEQ]
 
 columns:
   - name: STUDYID
@@ -36,6 +43,11 @@ columns:
     type: datetime
     label: Analysis Start Date/Time
     derivation: AE.AESTDTC
+
+  - name: AENDTM
+    type: datetime
+    label: Analysis End Date/Time
+    derivation: AE.AEENDTC
 
   - name: TRTSDTM
     type: datetime
@@ -72,29 +84,58 @@ columns:
           SEVERE: 3
         missing: null
 
-  # Highest severity reached at or after first exposure, within the
-  # subject and term. A comparison with a missing moment is unknown,
-  # so rows with no onset or no exposure never contribute. Not in
-  # the output.
+  # The immediately preceding episode's end, in chronological term order.
+  # Missing ends are retained: continuity must never skip an episode.
+  - name: PREVEND
+    type: datetime
+    label: Previous Episode End Date/Time
+    derivation:
+      row_value:
+        source: AENDTM
+        offset: -1
+        window: EPISODE_ORDER
+
+  # Start a new chain unless the preceding end equals this onset exactly.
+  # Unknown boundaries, gaps, and overlaps all start a new chain.
+  - name: CHAINSTART
+    type: int
+    label: First Sequence Number in Continuous Chain
+    derivation:
+      case:
+        - when: "PREVEND = ASTDTM"
+          then: {literal: null}
+        - otherwise: AESEQ
+
+  # Carry the chain's first sequence number through every linked episode,
+  # including unchanged episodes before treatment or before worsening.
+  - name: CHAINID
+    type: int
+    label: Continuous Episode Chain Identifier
+    derivation:
+      locf:
+        source: CHAINSTART
+        window: EPISODE_ORDER
+
+  # Highest severity at or after exposure in the same continuous chain.
+  # Rows with no onset or no exposure never contribute. Not in the output.
   - name: POSTMAX
     type: int
     label: Maximum Post-Treatment Severity (N)
     derivation:
       aggregate:
         filter: "ASTDTM >= TRTSDTM"
-        group_by: [STUDYID, USUBJID, AEDECOD]
+        group_by: [STUDYID, USUBJID, AEDECOD, CHAINID]
         expr: "MAX(AESEVN)"
 
-  # Highest toxicity grade reached at or after first exposure,
-  # within the subject and term. Rows with no onset, no grade, or
-  # no exposure never contribute. Not in the output.
+  # Highest toxicity grade at or after exposure in the same chain.
+  # Rows with no onset, no grade, or no exposure never contribute.
   - name: POSTMAXG
     type: int
     label: Maximum Post-Treatment Toxicity Grade
     derivation:
       aggregate:
         filter: "ASTDTM >= TRTSDTM"
-        group_by: [STUDYID, USUBJID, AEDECOD]
+        group_by: [STUDYID, USUBJID, AEDECOD, CHAINID]
         expr: "MAX(AETOXGR)"
 
   # A comparison with a missing value is unknown, never true, so the
@@ -115,8 +156,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 18
-      max: 18
+      min: 20
+      max: 20
   - assert:
       id: treatment-emergent-event-has-known-onset-and-exposure
       when: "TRTEMFL = 'Y'"

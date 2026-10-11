@@ -23,9 +23,13 @@ normalize <- function(x) {
 }
 
 adae <- ae |>
-  left_join(adsl |> select(USUBJID, TRTSDTM), by = "USUBJID") |>
+  left_join(
+    adsl |> select(STUDYID, USUBJID, TRTSDTM),
+    by = c("STUDYID", "USUBJID")
+  ) |>
   mutate(
     ASTDTM = normalize(AESTDTC),
+    AENDTM = normalize(AEENDTC),
     TRTSDTM = normalize(TRTSDTM),
     SEVN = case_when(
       AESEV == "MILD" ~ 1L,
@@ -34,16 +38,21 @@ adae <- ae |>
     ),
     TOXN = suppressWarnings(as.integer(AETOXGR))
   ) |>
-  group_by(USUBJID, AEDECOD) |>
+  arrange(STUDYID, USUBJID, AEDECOD, ASTDTM, AESEQ) |>
+  group_by(STUDYID, USUBJID, AEDECOD) |>
+  mutate(
+    # Unknown boundaries, gaps and overlaps start a new continuous chain.
+    CHAIN = cumsum(coalesce(lag(AENDTM) != ASTDTM, TRUE))
+  ) |>
+  group_by(STUDYID, USUBJID, AEDECOD, CHAIN) |>
   mutate(
     TRTEMFL = map_chr(seq_along(ASTDTM), function(i) {
       ast <- ASTDTM[i]
       trt <- TRTSDTM[i]
       if (is.na(ast) || is.na(trt)) return(NA_character_)
       if (ast >= trt) return("Y")
-      # Before exposure: Y when the same term reaches a higher severity or
-      # grade after exposure. A missing value on either side shows no
-      # worsening for that dimension.
+      # Before exposure: only worsening in the same continuous chain counts.
+      # A missing value on either side shows no worsening for that dimension.
       after <- !is.na(ASTDTM) & ASTDTM >= trt
       sev <- any(!is.na(SEVN[after]) & !is.na(SEVN[i]) & SEVN[after] > SEVN[i])
       tox <- any(!is.na(TOXN[after]) & !is.na(TOXN[i]) & TOXN[after] > TOXN[i])
@@ -52,7 +61,8 @@ adae <- ae |>
   ) |>
   ungroup() |>
   select(
-    STUDYID, USUBJID, AESEQ, AEDECOD, ASTDTM, TRTSDTM, AESEV, AETOXGR, TRTEMFL
+    STUDYID, USUBJID, AESEQ, AEDECOD, ASTDTM, AENDTM, TRTSDTM, AESEV,
+    AETOXGR, TRTEMFL
   )
 
 dir.create("/app/output", showWarnings = FALSE)

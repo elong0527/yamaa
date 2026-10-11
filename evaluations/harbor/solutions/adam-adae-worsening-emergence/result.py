@@ -22,13 +22,14 @@ ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
     pl.col("AESEQ").cast(pl.Int64)
 )
 adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False).select(
-    "USUBJID", "TRTSDTM"
+    "STUDYID", "USUBJID", "TRTSDTM"
 )
 
 base = (
-    ae.join(adsl, on="USUBJID", how="left")
+    ae.join(adsl, on=["STUDYID", "USUBJID"], how="left")
     .with_columns(
         ASTDTM=normalize(pl.col("AESTDTC")),
+        AENDTM=normalize(pl.col("AEENDTC")),
         TRTSDTM=normalize(pl.col("TRTSDTM")),
     )
     .with_columns(
@@ -44,15 +45,29 @@ base = (
     )
 )
 
-# The worst severity and grade the same term reaches after exposure.
+term = ["STUDYID", "USUBJID", "AEDECOD"]
+# Only adjacent episodes with a known, exactly equal boundary can link.
+# Number each break after sorting, then accumulate it to identify chains.
+base = (
+    base.sort([*term, "ASTDTM", "AESEQ"], nulls_last=True)
+    .with_columns(PREVEND=pl.col("AENDTM").shift(1).over(term))
+    .with_columns(
+        BREAK=(pl.col("PREVEND") != pl.col("ASTDTM"))
+        .fill_null(True)
+        .cast(pl.Int64)
+    )
+    .with_columns(CHAIN=pl.col("BREAK").cum_sum().over(term))
+)
+chain = [*term, "CHAIN"]
+# The worst severity and grade after exposure in this continuous chain.
 after = base.filter(
     pl.col("ASTDTM").is_not_null(),
     pl.col("TRTSDTM").is_not_null(),
     pl.col("ASTDTM") >= pl.col("TRTSDTM"),
-).group_by(["USUBJID", "AEDECOD"]).agg(
+).group_by(chain).agg(
     MAXSEV=pl.col("SEVN").max(), MAXTOX=pl.col("TOXN").max()
 )
-joined = base.join(after, on=["USUBJID", "AEDECOD"], how="left")
+joined = base.join(after, on=chain, how="left")
 
 sev_worse = (
     pl.col("MAXSEV").is_not_null()
@@ -82,6 +97,7 @@ adae = (
         "AESEQ",
         "AEDECOD",
         "ASTDTM",
+        "AENDTM",
         "TRTSDTM",
         "AESEV",
         "AETOXGR",
