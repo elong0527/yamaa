@@ -10,6 +10,8 @@ import yamaa
 result = yamaa.domain("spec.yaml")
 result.output
 result.issues
+result.verification_log
+result.warning_log
 result.save()
 
 checked = yamaa.check("spec.yaml")
@@ -22,11 +24,17 @@ failures return `False` and remain in issues. Checks read no study data and run 
 project code. Context is JSON text and output integers retain their full signed
 64-bit range. Public date/datetime columns retain their ordinary Polars types.
 
-Environment activation, declared logs, complete language coverage, Windows native
-file IO and the final release API remain unqualified. Document paths use their original declaring YAML layer under the approved
-[local-path policy](../rules/storage/resources.md). Legacy
-reference helpers remain for migration assessment and are never a fallback from
-the public native frontend. ODM helpers below remain available.
+Declared verification/warning logs are fresh owned data frames. Build never
+writes them. Explicit Save preflights all targets and publishes verification,
+warning and primary bytes in order. A failed build may retain a verification log;
+its explicit Save publishes that diagnostic sidecar and still raises the
+failed-build error. Repeated Save uses the same held bytes.
+
+Document paths use their original declaring YAML layer under the approved
+[local-path policy](../rules/storage/resources.md). Producer graphs
+with declared logs remain explicitly refused until their ordered sidecars qualify.
+Broader language, API and release qualification remain open. Retained reference
+helpers continue independent migration assessment. ODM helpers below remain available.
 
 ## Install and test
 

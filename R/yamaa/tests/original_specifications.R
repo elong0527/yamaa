@@ -1265,7 +1265,8 @@ local({
   entry <- file.path(case,"spec.yaml")
   written <- rawfile(entry)
   input <- file.path(case,"input","adsl.csv")
-  captured <- rawfile(input);unlink(input)
+  captured <- rawfile(input)
+  stopifnot(unlink(input)==0L,!file.exists(input))
   stopifnot(nrow(yamaa_check(entry)$issues)==0L)
   writeBin(captured,input)
   result <- yamaa_domain(entry)
@@ -1276,7 +1277,8 @@ local({
   case_name <- "negative-rounding-source"
   stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
   case <- file.path(directory,case_name)
-  unlink(file.path(case,"input"),recursive=TRUE)
+  input_directory <- file.path(case,"input")
+  stopifnot(unlink(input_directory,recursive=TRUE)==0L,!file.exists(input_directory))
   expected_error <- paste0("phase: validation\ncondition: incompatible_input_type\nspec_paths:\n",
     "  - columns.RNDVAL.derivation.round_half_away_from_zero.source\n",
     "requirement: REQ-0418\ncontext:\n  source: SEX\n  expected: numeric\n  actual: str\n")

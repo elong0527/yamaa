@@ -1,4 +1,4 @@
-"""Stage original function studies and the one existing packaging lock."""
+"""Stage original project studies and the one existing packaging lock."""
 
 from __future__ import annotations
 
@@ -24,6 +24,15 @@ def stage(destination: Path) -> None:
         # The sole repository Python lock is packaging-tool-owned. Its exact
         # bytes become local study metadata; no second lock is committed.
         shutil.copyfile(REPOSITORY / "python/uv.lock", case / "python/uv.lock")
+    producer = destination / "shared-producer-parquet"
+    producer.mkdir()
+    for name in ("seed.csv", "producer.yaml", "spec.yaml"):
+        # The native execution fixture has only the original authored inputs.
+        # Independent expected reports and artifacts stay in the comparator tree.
+        shutil.copyfile(
+            REPOSITORY / "rust/qualification/producer-cohort/shared-producer-parquet" / name,
+            producer / name,
+        )
 
 
 if __name__ == "__main__":

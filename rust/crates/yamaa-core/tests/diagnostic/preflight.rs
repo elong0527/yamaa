@@ -272,6 +272,83 @@ fn base<'a>(
 }
 
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
+    let mut log_codes = BTreeSet::new();
+    for (warning, verification, condition, requirement, paths) in [
+        (
+            Some("result.csv"),
+            None,
+            "artifact_path_collision",
+            "REQ-0756",
+            vec!["output.path", "output.warning_log"],
+        ),
+        (
+            None,
+            Some("result.csv"),
+            "artifact_path_collision",
+            "REQ-1180",
+            vec!["output.path", "output.verification_log"],
+        ),
+        (
+            Some("same.csv"),
+            Some("same.csv"),
+            "artifact_path_collision",
+            "REQ-1180",
+            vec!["output.warning_log", "output.verification_log"],
+        ),
+    ] {
+        let mut fields = base(
+            "TEST",
+            Map(vec![("SRC", Map(vec![("path", Text("input.csv"))]))]),
+            vec![column("ID", Some(source()))],
+            vec![Text("ID")],
+        );
+        let mut output = vec![
+            ("path", Text("result.csv")),
+            ("columns", List(vec![Text("ID")])),
+        ];
+        if let Some(path) = warning {
+            output.push(("warning_log", Text(path)));
+        }
+        if let Some(path) = verification {
+            output.push(("verification_log", Text(path)));
+        }
+        fields
+            .iter_mut()
+            .find(|(name, _)| *name == "output")
+            .unwrap()
+            .1 = Map(output);
+        log_codes.extend(check(
+            fields,
+            vec![(
+                condition,
+                Some(requirement),
+                paths,
+                vec![("path", text(verification.unwrap_or("result.csv")))],
+            )],
+        ));
+    }
+    let mut fields = base(
+        "TEST",
+        Map(vec![("SRC", Map(vec![("path", Text("input.csv"))]))]),
+        vec![column("ID", Some(source()))],
+        vec![Text("ID")],
+    );
+    fields.push((
+        "verifications",
+        List(vec![Map(vec![(
+            "row_count",
+            Map(vec![("min", Integer("1")), ("severity", Text("warning"))]),
+        )])]),
+    ));
+    log_codes.extend(check(
+        fields,
+        vec![(
+            "missing_warning_log",
+            Some("REQ-0391"),
+            vec!["output.warning_log"],
+            vec![("warnings", texts(&["verifications[0].row_count"]))],
+        )],
+    ));
     let mut fields = base(
         "SRC",
         inputs(),
@@ -308,6 +385,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             ),
         ],
     );
+    reached.extend(log_codes);
     reached.extend(check(
         base(
             "TEST",

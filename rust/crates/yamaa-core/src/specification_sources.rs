@@ -145,11 +145,11 @@ impl Declaration {
                     position, failure, ..
                 },
             )) => {
-                findings.push(BindFinding::Source(SourceFinding(failure.diagnostic(
-                    &path,
-                    expression,
-                    position.character,
-                ))));
+                findings.push(BindFinding::Source(SourceFinding(
+                    failure
+                        .original_diagnostic(&path, expression, position.character)
+                        .map_err(|_| BindError::PredicateDiagnosticLimit)?,
+                )));
                 return Ok(None);
             }
             Err(error) => return Err(BindError::PredicatePolicy(error.clone())),

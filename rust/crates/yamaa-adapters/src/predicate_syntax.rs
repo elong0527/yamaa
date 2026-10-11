@@ -5,11 +5,10 @@ use std::{fmt, panic::catch_unwind};
 use yamaa_core::{
     predicate::Comparison,
     predicate_parser::{
-        parse_predicate, GrammarFailure, ParseError, ParseLimits, ParseResource, ParsedKind,
-        ParsedPredicate, TemporalKind,
+        parse_predicate, ParseError, ParseLimits, ParseResource, ParsedKind, ParsedPredicate,
+        TemporalKind,
     },
     regex::Resource,
-    temporal::TemporalError,
 };
 
 /// Bound the entire untrusted JSON envelope before decoding it.
@@ -56,11 +55,8 @@ pub fn analyze_predicate(request: &str) -> Result<String, TransportError> {
         let outcome=match parse_predicate(&request.expression,ParseLimits::default()) {
             Ok(parsed)=>json!({"status":"parsed","ast":ast(&parsed,parsed.root()),"identifiers":parsed.identifiers().collect::<Vec<_>>()}),
             Err(ParseError::Grammar{position,failure,message})=> {
-                let context=match &failure {
-                    GrammarFailure::InvalidExpression | GrammarFailure::InvalidEscape=>json!({}),
-                    GrammarFailure::InvalidRegex{byte,reason}=>json!({"pattern_byte":byte,"reason":reason}),
-                    GrammarFailure::InvalidTemporal{kind,error}=>json!({"literal_type":temporal_name(*kind),"temporal_error":match error {TemporalError::InvalidForm=>"invalid_form",TemporalError::InvalidDate=>"invalid_date",TemporalError::InvalidTime=>"invalid_time"}}),
-                };
+                let mut represented=crate::specification_diagnostics::portable_diagnostic(failure.syntax_diagnostic()).ok_or(TransportError::Internal)?;
+                let context=represented["context"].take();
                 json!({"status":"invalid","message":message,"condition":failure.condition(),"requirement":failure.requirement(),"position":{"byte":position.byte,"character":position.character},"context":context})
             }
             Err(ParseError::Limit{position,resource,limit})=>json!({"status":"resource_limit","phase":"parse","resource":match resource {ParseResource::Bytes=>"bytes",ParseResource::Tokens=>"tokens",ParseResource::Nodes=>"nodes",ParseResource::Depth=>"depth"},"limit":limit,"position":{"byte":position.byte,"character":position.character}}),

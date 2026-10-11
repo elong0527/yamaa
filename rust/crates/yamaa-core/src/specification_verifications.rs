@@ -128,6 +128,8 @@ fn predicate(
 pub(super) struct Verifications {
     pub checks: Vec<Verification>,
     pub identities: Vec<Option<String>>,
+    pub warning_paths: Vec<String>,
+    pub declared_warning_paths: Vec<String>,
     deferred: Option<DeclarationFinding>,
 }
 fn operation(d: &Document, id: usize) -> Result<(&str, usize), PrepareError> {
@@ -219,7 +221,9 @@ impl Verifications {
                 }
             }
             if let Some(id) = d.field(payload, "severity") {
-                if text(d, id)? != "error" {
+                if text(d, id)? == "warning" {
+                    result.declared_warning_paths.push(path.clone());
+                } else if text(d, id)? != "error" {
                     reject(&mut extra, "verification_severity", path.clone());
                 }
             }
@@ -433,6 +437,11 @@ impl Verifications {
                 }
                 Check::RowCount { min, max }
             };
+            if d.field(payload, "severity")
+                .is_some_and(|id| matches!(&d.nodes()[id], N::Text(value) if value == "warning"))
+            {
+                result.warning_paths.push(path.clone());
+            }
             result.checks.push(Verification { path, check });
             result.identities.push(identity);
         }
