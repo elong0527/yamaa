@@ -1,0 +1,55 @@
+{
+  "version": "1",
+  "cases": [
+    {
+      "name": "schema-inheritance",
+      "sources": [
+        {
+          "name": "spec_study.yaml",
+          "text": "schema_version: \"1.0\"\nparents: [spec_organization.yaml, spec_compound.yaml]\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\n\noutput:\n  path: adlb.csv\n  columns: [USUBJID, PARAMCD, AVAL, AVALU]\n\ncolumns:\n  - name: AVAL\n    label: Analysis Value\n\n  - name: AVALU\n    label: Standardized Analysis Unit\n\nmetadata:\n  scope: study\n"
+        },
+        {
+          "name": "spec_organization.yaml",
+          "text": "schema_version: \"1.0\"\ninput:\n  LB: input/lb.csv\n  UNUSED: input/not-used.csv\nbase: LB\n\nintermediates:\n  - id: unused_reference\n    dataset: UNUSED\n    key:\n      - USUBJID\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n\n  - name: AVAL\n    type: float\n    label: Standardized Numeric Result\n    derivation: LB.LBSTRESN\n    metadata:\n      analysis_role: analysis-value\n\n  - name: AVALU\n    type: str\n    label: Analysis Value Unit\n    derivation: LB.LBSTRESU\n\n  - name: TEMP\n    type: str\n    label: Unused Intermediate Value\n    derivation: {literal: unused}\n\nverifications:\n  unique:\n    columns: [USUBJID, PARAMCD]\n\nmetadata:\n  scope: organization\n"
+        },
+        {
+          "name": "spec_compound.yaml",
+          "text": "schema_version: \"1.0\"\nparents: spec_organization.yaml\ninput:\n  LB:\n    types:\n      USUBJID: str\n      LBTESTCD: str\n      LBSTRESN: float\n      LBSTRESU: str\n\ncolumns:\n  - name: AVAL\n    label: Compound Standardized Result\n\nmetadata:\n  scope: compound\n"
+        }
+      ],
+      "resolved": "schema_version: \"1.0\"\ndomain: ADLB\nkeys:\n  - USUBJID\n  - PARAMCD\ninput:\n  LB:\n    path: input/lb.csv\n    types:\n      USUBJID: str\n      LBTESTCD: str\n      LBSTRESN: float\n      LBSTRESU: str\nbase: LB\noutput:\n  path: adlb.csv\n  columns:\n    - USUBJID\n    - PARAMCD\n    - AVAL\n    - AVALU\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation:\n      value:\n        source:\n          variable: LB.USUBJID\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation:\n      value:\n        source:\n          variable: LB.LBTESTCD\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation:\n      value:\n        source:\n          variable: LB.LBSTRESN\n    metadata:\n      analysis_role: analysis-value\n  - name: AVALU\n    type: str\n    label: Standardized Analysis Unit\n    derivation:\n      value:\n        source:\n          variable: LB.LBSTRESU\nverifications:\n  - unique:\n      columns:\n        - USUBJID\n        - PARAMCD\n      severity: error\nmetadata:\n  scope: study\n"
+    },
+    {
+      "name": "schema-column-composition",
+      "sources": [
+        {
+          "name": "spec_study.yaml",
+          "text": "schema_version: \"1.0\"\nparents: [spec_organization.yaml, spec_compound.yaml]\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\n\noutput:\n  path: adlb.csv\n  columns: [USUBJID, PARAMCD, AVAL, ANRIND, PARCAT1]\n\ncolumns:\n  # A case is a different operation from the inherited plain source, so it\n  # replaces it whole. The verification list replaces the organization's\n  # range check (lists never merge); the metadata entry joins the other two.\n  - name: AVAL\n    derivation:\n      case:\n        - when: \"USUBJID = '01' AND PARAMCD = 'AST'\"\n          then: {literal: 31.0}\n        - otherwise: LB.LBSTRESN\n    verifications:\n      - not_missing: {}\n    metadata:\n      review_status: adjudicated\n\n  # Adds only the handlers to the inherited mapping: an absent indicator\n  # and one with no dict entry (such as x) both come out missing.\n  - name: ANRIND\n    derivation:\n      mapping:\n        missing: null\n        unmapped: null\n\n  # A literal replaces the inherited mapping whole.\n  - name: PARCAT1\n    derivation: {literal: CHEMISTRY}\n\nmetadata:\n  scope: study\n"
+        },
+        {
+          "name": "spec_organization.yaml",
+          "text": "schema_version: \"1.0\"\ninput:\n  LB:\n    path: input/lb.csv\n    types:\n      USUBJID: str\n      LBTESTCD: str\n      LBSTRESN: float\n      LBNRIND: str\nbase: LB\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n\n  # The compound and study levels each add a metadata entry; the study\n  # level also replaces the derivation and the whole verification list.\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation: LB.LBSTRESN\n    verifications:\n      - range:\n          min: 0\n    metadata:\n      analysis_role: analysis-value\n\n  # Later levels add an entry to dict and the mapping handlers; source and\n  # case_sensitive are inherited from here unchanged.\n  - name: ANRIND\n    type: str\n    label: Analysis Reference Range Indicator\n    derivation:\n      mapping:\n        source: LB.LBNRIND\n        dict:\n          N: NORMAL\n          H: HIGH\n        case_sensitive: false\n\n  # The study level replaces this mapping with a literal.\n  - name: PARCAT1\n    type: str\n    label: Parameter Category\n    derivation:\n      mapping:\n        source: LB.LBTESTCD\n        dict:\n          ALT: HEPATIC\n          AST: HEPATIC\n\nmetadata:\n  scope: organization\n"
+        },
+        {
+          "name": "spec_compound.yaml",
+          "text": "schema_version: \"1.0\"\nparents: spec_organization.yaml\n\ncolumns:\n  # Merged into the organization's AVAL: this entry joins analysis_role.\n  - name: AVAL\n    metadata:\n      source_system: central-laboratory\n\n  # Merged into the organization's mapping: L joins N and H, and the\n  # source and case_sensitive setting carry over.\n  - name: ANRIND\n    derivation:\n      mapping:\n        dict:\n          L: LOW\n\nmetadata:\n  scope: compound\n"
+        }
+      ],
+      "resolved": "schema_version: \"1.0\"\ndomain: ADLB\nkeys:\n  - USUBJID\n  - PARAMCD\ninput:\n  LB:\n    path: input/lb.csv\n    types:\n      USUBJID: str\n      LBTESTCD: str\n      LBSTRESN: float\n      LBNRIND: str\nbase: LB\noutput:\n  path: adlb.csv\n  columns:\n    - USUBJID\n    - PARAMCD\n    - AVAL\n    - ANRIND\n    - PARCAT1\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation:\n      value:\n        source:\n          variable: LB.USUBJID\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation:\n      value:\n        source:\n          variable: LB.LBTESTCD\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation:\n      value:\n        case:\n          - when: USUBJID = '01' AND PARAMCD = 'AST'\n            then: {literal: 31.0}\n          - otherwise:\n              source:\n                variable: LB.LBSTRESN\n    verifications:\n      - not_missing:\n          severity: error\n    metadata:\n      analysis_role: analysis-value\n      source_system: central-laboratory\n      review_status: adjudicated\n  - name: ANRIND\n    type: str\n    label: Analysis Reference Range Indicator\n    derivation:\n      value:\n        mapping:\n          source: LB.LBNRIND\n          dict:\n            N: NORMAL\n            H: HIGH\n            L: LOW\n          case_sensitive: false\n          missing: null\n          unmapped: null\n  - name: PARCAT1\n    type: str\n    label: Parameter Category\n    derivation:\n      value: {literal: CHEMISTRY}\nmetadata:\n  scope: study\n"
+    },
+    {
+      "name": "schema-inherited-output",
+      "sources": [
+        {
+          "name": "spec_study.yaml",
+          "text": "schema_version: \"1.0\"\nparents: spec_shared.yaml\n\n# The study's own demographics file. The keys, the columns and the\n# whole output come from the shared level.\ninput:\n  DM: input/dm.csv\n\nmetadata:\n  scope: study\n"
+        },
+        {
+          "name": "spec_shared.yaml",
+          "text": "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\n\n# Written once here and inherited whole. The path is read from this\n# file's directory; a study that writes its own output replaces all of it.\noutput:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, AGE, AGEU]\n\n# The columns read DM, which this level does not declare: each study\n# supplies its own DM input.\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: DM.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n\n  - name: AGE\n    type: int\n    label: Age\n    derivation: DM.AGE\n\n  - name: AGEU\n    type: str\n    label: Age Units\n    derivation: DM.AGEU\n\nmetadata:\n  scope: shared\n"
+        }
+      ],
+      "resolved": "schema_version: \"1.0\"\ndomain: ADSL\nkeys:\n  - STUDYID\n  - USUBJID\ninput:\n  DM:\n    path: input/dm.csv\noutput:\n  path: adsl.csv\n  columns:\n    - STUDYID\n    - USUBJID\n    - AGE\n    - AGEU\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation:\n      value:\n        source:\n          variable: DM.STUDYID\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation:\n      value:\n        source:\n          variable: DM.USUBJID\n  - name: AGE\n    type: int\n    label: Age\n    derivation:\n      value:\n        source:\n          variable: DM.AGE\n  - name: AGEU\n    type: str\n    label: Age Units\n    derivation:\n      value:\n        source:\n          variable: DM.AGEU\nmetadata:\n  scope: study\n"
+    }
+  ]
+}

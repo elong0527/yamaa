@@ -14,7 +14,7 @@ and codec interfaces are native traits; adapters translate values and errors.
 | `specification_output::OutputReport` | engine | Portable JSON report formatter; native test fake | Observation or report-budget failure before publication |
 | `specification_output::ArtifactPort` | engine | Python/R publication bridges; Unix explicit-target Rust/Python/R publisher; native test fake | Original opaque publication error, without retry |
 | `TableAccess` | core | Immutable Arrow snapshots, core normalized CSV tables and engine output tables; test fakes | Bounds or original opaque cell-access error |
-| `inheritance::SourcePort` | engine | Existing inheritance bridge; Unix native captured-file port | Source failure or traversal resource limit |
+| `inheritance::SourcePort` | engine | Typed inheritance capture adapter; native captured-file port; remaining R JSON compatibility probe | Source failure or traversal resource limit |
 | `project_activation::ActivationPort` | engine | Python/R locked-package adapters; native fakes | Original lock, binding, conformance or interrupt failure |
 | `project_preparation::CapturePort` | engine | Adapter native file metadata capture; shared scripted native fake | Original capture/interrupt payload, bounded source/byte/identity refusal or malformed native reply kind |
 | `project_preparation::DecodePort` | engine | Adapter captured YAML/schema codec; shared scripted native fake | Original structural failure with retained source/context; closed environment/function/codelist target |
@@ -65,11 +65,15 @@ this preparation loop. Shared scripted metadata ports pin effect order and exact
 remaining allowances and consume non-Clone outcomes once. Engine tests use
 independent normalized documents; adapter tests keep original YAML truth.
 
-Captured schema closure/standalone preparation internals and the adapter-defined
-raw inheritance capture/rebase catalog remain separate migration work. Existing
-engine inheritance trait implementations remain codec/resource adapters. The
-experimental inheritance JSON callback and other component probes remain pending
-retirement after their complete public qualification consumers are preserved.
+Captured schema closure, standalone preparation and raw inheritance capture/rebase
+now use the dedicated engine services described below. Authored-origin lookup and
+class preparation remain separate migration work. Existing engine inheritance
+trait implementations remain codec/resource adapters. The
+Python inheritance JSON callbacks are retired after their qualification consumers
+move to typed native preparation and retained-arena oracles. The R JSON callback
+probe and shared transport remain for owner-coordinated retirement; Python-only
+removal does not close the No JSON host callback criterion. Other schema query
+component probes and custom/reference resolver dispositions remain unchanged.
 
 This internal check is vocabulary admission, not the complete public `check`
 contract in #1751. Binding findings that depend on source schemas, and existing
@@ -395,3 +399,146 @@ early findings, cached counters, exact saved CSV and retained failed-save gates.
 runs without Python and uses registered handles. The public facade, Windows native
 file transport and complete environment/function/workflow/submission semantics remain
 open. No reference-assisted qualification level or path authorization is promoted.
+
+`inheritance_capture::prepare` now owns the raw inheritance capture application
+around the existing traversal/composition lifecycle. It borrows the exact already
+decoded entry, reuses `project_preparation::Source`, admits cumulative captured
+bytes and identity text, and moves successful parent snapshots into a retained
+catalog. Parent decoding happens once per requested unique canonical source;
+raw snapshots remain in first-decode order while normalized layers remain in
+postorder. The decoder port retains physical YAML limits and source positions.
+Its closed limit-error constructor preserves the existing adapter representation
+without classifying host errors. Neither raw byte admission nor identity admission
+is substituted for traversal, normalization, document-storage or rebasing policy.
+
+The fail-fast capture port preserves separate canonicalize, capture and rebase
+operations, including their original unavailable/raised distinction. The engine
+supplies remaining capture bytes and forwards the lifecycle's remaining rebasing
+allowance. Original host and decoder payloads move without Clone, Debug, Send or
+Sync requirements. A later failure retains the completed raw-parent catalog;
+opaque failures stop immediately, with no independent-error collection or retry.
+The adapter retains its public InheritancePort/CapturedParent/SourceFailure and
+InheritanceError shapes through reexports and a physical decoder implementation.
+The existing typed Python/R native preparation callbacks retain their signatures.
+Python module/snapshot inheritance JSON source callbacks are retired; the R-only
+component JSON bridge remains separately scheduled for removal.
+
+Authored-origin lookup helpers and the native Parents spelling cache remain
+separate migration work. The post-success
+native alias checks and entry-base selection stay in file_preparation. Existing
+YAML scanner rules, report/log projection, producer facades and filesystem policy
+are not part of this move. Inheritance callback component probes remain pending
+retirement under #1751; this application service does not qualify their API as a
+permanent public surface or close the remaining #1754 acceptance gates.
+
+`schema_capture::admit` owns admission of the complete captured schema closure
+before any physical decoding. The default root retains its existing absence of a
+separate root-name charge; a named root checks that text before module admission.
+Module count then per-source captured bytes and identity text are admitted in
+supplied order, with bytes checked first. Each module is decoded once through a
+physical codec port. Only after every physical decode succeeds does unchanged
+core bundle admission resolve entry/module/include/descriptor semantics. The
+original source snapshots, decoded arenas and occurrence locations move into the
+admitted closure without replacement; defaults retain their original module and
+descriptor provenance and keep their later normalization gate.
+
+This service does not resolve files or scan YAML. Codec limits and the guarantee
+that occurrence locations address the exact decoded arena remain codec authority.
+Original opaque codec payloads move without Clone, Debug, Send or Sync requirements.
+The adapter retains its public CapturedSchema/Source/Error shapes and only maps
+closed resource categories and physical decoding. Default resource policies and
+configured larger module capacities remain unchanged; there is no new source
+ceiling or retry. Class normalization, lifecycle selection and authored-origin
+helpers remain separate migration work, as do native alias/cache/entry-base
+policy and component probe retirement. This slice does not close #1754.
+
+
+`standalone_preparation::prepare` owns the no-parent structural lifecycle over one
+owned raw document and the admitted schema. Presence of `parents`, including null,
+rejects before any normalization charge. Normalization, strict named-window
+expansion, origin remapping and final model admission preserve their checkpoint
+order and share one caller-owned NormalizationBudget. Existing storage, work,
+depth and diagnostic policies stay distinct; no limits or counters are reset.
+Default and window-definition/use-site origins continue to address the retained
+raw/schema arenas. The remapped origin list retains its existing bound from the
+already-admitted expanded arena rather than introducing a new metadata quota.
+
+Success moves the original raw allocation into the result. A semantic
+normalization or expansion failure moves the exact failed-pass input arena with
+its complete ordered findings. Policy/internal errors retain their typed identity
+without a document copy; final model findings retain the existing document-free
+representation. The adapter only moves those results into its CapturedFindings
+and PreparedDocument shapes and rejoins physical occurrence locations with the
+unchanged raw arena. Entry physical decoding/source limits, lifecycle dispatch,
+class/structural preparation and inheritance remain unchanged. This service has
+no host port and introduces no opaque-error classification or callback effect.
+
+Standalone lifecycle ownership does not close the broader #1754 acceptance gates.
+Class preparation, dispatch, authored-origin helpers, native alias/cache/entry-base
+policy and component probe retirement remain separate work. YAML scanning,
+producer/source-origin facades, report/log projection, Define and Windows behavior
+are outside this slice.
+
+`structural_preparation::prepare` owns the live environment root and external
+function/codelist class normalization route used by project_preparation's codec.
+A named request admits class text, looks up only a closed class and rejects any
+class declaring schema_version before physical decoding. Structural root retains
+its separate decode-first version/default gate and has no named-selection check.
+The physical codec calls the unchanged entry decoder once, preserving captured
+byte-before-identity limits, YAML parsing limits and original occurrence locations.
+After decoding, one fresh per-document NormalizationBudget spans named type-query
+binding and normalization. Existing project preparation's cumulative source, node
+and semantic budgets remain separate; no limit or counter is reset within a pass.
+
+The immutable engine result moves the original source bytes/identity, raw arena
+and location payload with its normalized tree. Complete semantic findings move
+the exact raw failed-pass arena and source into the existing adapter representation.
+Query validation and normalization policy/default failures keep their distinct
+categories; generic original codec errors move without Clone, Debug, Send or Sync
+requirements. Input origins address that retained raw arena, and Default origins
+require the caller to retain the exact admitted schema module/descriptor authority.
+This lifetime/retention contract does not authenticate an equal replacement arena.
+
+The adapter preserves CapturedDocument/CapturedFindings/Error shapes, the existing
+prepare_class convenience delegate and all standalone/inherited dispatch. It no
+longer calls core query/normalization in these live entry points. The former private
+two-caller cloning failure helper is removed when its callers move to the engine.
+No source capture, activation, study or publication capability is added here.
+The decoded schema/1 transports and host _Schema.analyze/interpret_schema
+component probes remain for planned #1751 retirement. Python inheritance JSON
+callbacks are removed; R registration/export and shared transport removal remain
+owner-coordinated work. Dispatch, authored/producer-origin helpers, native alias/cache/entry-base
+policy and other owners' scanner/report/log/Define/Save/Windows work remain separate
+#1754 debt; this move does not claim whole-issue closure.
+
+The live document preparation gate delegates to `document_preparation::prepare`.
+Its entry codec addresses the exact retained raw arena, decodes the entry once,
+and keeps its physical source/location admission separate from parent capture.
+The engine selects inheritance by raw `parents` presence, including null, scalar
+and empty values. It composes the existing standalone and inheritance services
+without moving version/default gates ahead of that selection. Standalone passes
+share one existing normalization budget; inherited capture, traversal and
+normalization keep their existing separate cumulative policies. Source, raw
+arenas, opaque locations and original port errors move without new clone, debug
+or thread-safety bounds. Equal strings or a lifetime do not establish arena
+provenance; the codec must expose the exact held document.
+
+`file_preparation::prepare` owns entry capture ordering and the private parent
+alias ledger. Native `Resources` remains the physical authority for resolution,
+snapshots, path spelling, byte equality, descriptor witnesses and resource policy.
+Entry resolve/capture/admitted preparation copy precede schema selection. Every
+parent canonicalization charges identity/display metadata; a distinct alias pair
+is admitted before its ledger key/pair copies. Duplicate pairs are compared by
+borrowed strings. No new count ceiling or budget reset is introduced, and failed
+native charges keep their original spent counters. The document connector only
+selects held/package schema authority and delegates to the document application.
+
+After semantic success the application borrows the immutable first-capture
+parent catalog and verifies every distinct authored alias in encounter order,
+including each first capture, without another preparation byte copy. Only after
+all aliases succeed does it select the original entry base. A missing ledger key
+is an explicit native representation refusal; early/late opaque errors move and
+stop subsequent effects. This service does not add a root-byte reread: the
+existing native entry-base verification remains the policy. Physical codecs,
+authored producer origins, reporting/publication and compatibility component
+entry points remain their separate boundaries.

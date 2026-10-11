@@ -2,6 +2,8 @@
 
 import copy
 import json
+import os
+import platform
 import tempfile
 import unittest
 from contextlib import ExitStack
@@ -24,7 +26,6 @@ from yamaa.adapters._native_schema_wire import (
 from yamaa.adapters._native_yaml import NativeYamlReader
 from yamaa.adapters.native_datasets import execute_with_source_provider
 from yamaa.io import ProjectResources, load_source_tables, render_artifact
-from yamaa.schema import resolve_specification
 from yamaa.specification import SpecificationError
 from yamaa.specification import schema as reference
 from yamaa.specification._yaml import read_yaml_document
@@ -34,15 +35,84 @@ SCHEMA = ROOT / "specification-yaml"
 
 
 class InstalledSchemaLoading(unittest.TestCase):
+    def native_prepare(self, path, calls=None, unavailable=None):
+        """Only typed raw capture/path ports; no reference or schema JSON graph."""
+        calls = [] if calls is None else calls
+        path = path.resolve()
+        calls.append(("entry", (str(path),)))
+        source = path.read_bytes()
+
+        def canonicalize(declaring, written):
+            calls.append(("canonicalize", (declaring, written)))
+            candidate = Path(declaring).parent / written
+            if not candidate.is_file():
+                return None
+            return str(candidate.resolve()), str(candidate)
+
+        def capture(identity, display_path, maximum):
+            calls.append(("capture", (identity, display_path, maximum)))
+            if unavailable is not None and Path(identity) == unavailable:
+                return None
+            with Path(identity).open("rb") as stream:
+                content = stream.read(maximum + 1)
+            self.assertLessEqual(len(content), maximum)
+            return content
+
+        def rebase(layer, entry, written, maximum):
+            calls.append(("rebase", (layer, entry, written, maximum)))
+            if Path(written).is_absolute() or Path(layer).parent == Path(entry).parent:
+                return written
+            target = os.path.normpath(os.path.join(Path(layer).parent, written))
+            return Path(os.path.relpath(target, Path(entry).parent)).as_posix()
+
+        return yamaa_native._prepare_document(str(path), source, canonicalize, capture, rebase)
+
+    def native_failure(self, path, calls=None, unavailable=None):
+        with self.assertRaises(ValueError) as caught:
+            self.native_prepare(path, calls, unavailable)
+        result = json.loads(str(caught.exception))
+        self.assertEqual(result["protocol"], "specification/prototype")
+        return result["outcome"]
+
+    def assert_no_study_preflight(self, path, expected, study_names):
+        original_open = Path.open
+        calls, study = [], []
+        def deny_study(candidate, *arguments, **keywords):
+            if candidate.name in study_names:
+                study.append(str(candidate))
+                raise AssertionError("study authority before compiler gate")
+            return original_open(candidate, *arguments, **keywords)
+        with patch.object(Path, "open", new=deny_study):
+            self.assertEqual(self.native_failure(path, calls), expected)
+        self.assertEqual(study, [])
+        self.assertTrue(all(p.suffix == ".yaml" for p in self.captured_paths(calls)))
+
+    @staticmethod
+    def captured_paths(calls):
+        return [Path(args[0]) for op, args in calls if op in ("entry", "capture")]
+
+    def native_csv(self, prepared, directory, content=None, reads=None):
+        reads = [] if reads is None else reads
+        def capture(dataset, path, maximum):
+            reads.append((dataset, path))
+            value = (directory / path).read_bytes() if content is None else content[path]
+            self.assertLessEqual(len(value), maximum)
+            return value, True
+        publications = []
+        def publish(path, value):
+            publications.append((path, value))
+        report = json.loads(prepared.report(capture, publish, (platform.python_version(), yamaa_native.engine_info()["core_version"], "typed-loading", "spec.yaml", ".")))
+        self.assertEqual(report["outcome"], "success")
+        self.assertEqual(len(publications), 1)
+        self.assertEqual(publications[0][1], report["artifacts"][0]["content"].encode("utf-8"))
+        return publications[0][1]
+
     def test_shared_traversal_preserves_implicated_file_context(self):
-        """REQ-0653/0654/0656 source identities survive the installed Python boundary."""
-        bundle = native_specification.load_schema_bundle(SCHEMA)
+        """REQ-0653/0654/0656 full failures cross the typed native boundary."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             entry, parent = root / "entry.yaml", root / "parent.yaml"
-            entry.write_text(
-                'schema_version: "1.0"\nparents: parent.yaml\n', encoding="ascii"
-            )
+            entry.write_text('schema_version: "1.0"\nparents: parent.yaml\n', encoding="ascii")
             for document, condition, path, requirement, context in (
                 (
                     {"schema_version": "0.0"},
@@ -104,173 +174,80 @@ class InstalledSchemaLoading(unittest.TestCase):
             ):
                 with self.subTest(document=document):
                     parent.write_text(json.dumps(document), encoding="ascii")
-                    with self.assertRaises(SpecificationError) as caught:
-                        resolve_specification(entry, bundle)
-                    self.assertEqual(
-                        [
-                            d.model_dump(mode="json")
-                            for d in caught.exception.diagnostics
-                        ],
-                        [
-                            {
-                                "phase": "validation",
-                                "condition": condition,
-                                "spec_paths": [path],
-                                "requirement": requirement,
-                                "context": context,
-                            }
-                        ],
-                    )
-
-            from yamaa.schema import inheritance
-
-            original = inheritance.read_bundle_document
-            reads = []
-
-            def read(path, captured):
-                reads.append(path)
-                if path == parent:
-                    raise OSError("unreadable parent")
-                return original(path, captured)
-
-            with (
-                patch(
-                    "yamaa.schema.inheritance.read_bundle_document", side_effect=read
-                ),
-                self.assertRaises(SpecificationError) as caught,
-            ):
-                resolve_specification(entry, bundle)
-            self.assertEqual(
-                caught.exception.diagnostics[0].context,
-                {"path": str(parent), "source": str(entry)},
-            )
-            self.assertEqual(reads, [entry, parent])
+                    self.assertEqual(self.native_failure(entry), {
+                        "status": "invalid", "diagnostics": [{
+                            "phase": "validation", "condition": condition,
+                            "spec_paths": [path], "requirement": requirement,
+                            "context": context,
+                        }],
+                    })
+            calls = []
+            self.assertEqual(self.native_failure(entry, calls, unavailable=parent), {
+                "status": "invalid", "diagnostics": [{
+                    "phase": "validation", "condition": "parent_not_found",
+                    "spec_paths": ["parents"], "requirement": "REQ-0654",
+                    "context": {"path": str(parent), "source": str(entry)},
+                }],
+            })
+            self.assertEqual(self.captured_paths(calls), [entry, parent])
 
     def test_shared_traversal_deduplicates_filesystem_symlink_identity(self):
-        from yamaa.schema import inheritance
-
-        bundle = native_specification.load_schema_bundle(SCHEMA)
-        original = inheritance.read_bundle_document
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             parent = root / "base.yaml"
-            parent.write_text(
-                json.dumps(
-                    {
-                        "schema_version": "1.0",
-                        "domain": "OUT",
-                        "keys": ["ID"],
-                        "input": {"DM": "data.csv"},
-                        "base": "DM",
-                        "output": {"path": "out.csv", "columns": ["ID"]},
-                        "columns": [
-                            {"name": "ID", "type": "str", "derivation": "DM.ID"}
-                        ],
-                    }
-                ),
-                encoding="ascii",
-            )
+            parent.write_text(json.dumps({
+                "schema_version": "1.0", "domain": "OUT", "keys": ["ID"],
+                "input": {"DM": "data.csv"}, "base": "DM",
+                "output": {"path": "out.csv", "columns": ["ID"]},
+                "columns": [{"name": "ID", "type": "str", "derivation": "DM.ID"}],
+            }), encoding="ascii")
             (root / "alias.yaml").symlink_to(parent)
             entry = root / "entry.yaml"
-            entry.write_text(
-                'schema_version: "1.0"\nparents: [base.yaml, alias.yaml]\n',
-                encoding="ascii",
-            )
-            reads = []
-
-            def read(path, captured):
-                reads.append(Path(path))
-                return original(path, captured)
-
-            with patch(
-                "yamaa.schema.inheritance.read_bundle_document", side_effect=read
-            ):
-                result = resolve_specification(entry, bundle)
-            self.assertEqual(reads, [entry, parent])
-            self.assertEqual(result.layers, (parent, entry))
-            self.assertEqual(result.provenance["input.DM.path"].file, parent)
-            self.assertEqual(result.layer_paths["input.DM.path"].written, "data.csv")
+            entry.write_text('schema_version: "1.0"\nparents: [base.yaml, alias.yaml]\n', encoding="ascii")
+            calls = []
+            prepared = self.native_prepare(entry, calls)
+            self.assertEqual(self.captured_paths(calls), [entry, parent])
+            self.assertEqual([args[1] for op, args in calls if op == "canonicalize"], ["base.yaml", "alias.yaml"])
+            self.assertEqual(prepared.source(), ("DM", "data.csv"))
+            self.assertEqual(self.native_csv(prepared, root, {"data.csv": b"ID\n01\n"}), b"ID\n01\n")
+            # Layer order and authored path provenance are pinned on retained
+            # native arenas in inheritance_capture.rs, without a host probe.
 
     def test_shared_traversal_reports_complete_canonical_cycles_without_rereads(self):
-        """REQ-0655 keeps non-entry cycles and source access order in installed Rust."""
-        from yamaa.schema import inheritance
-
-        bundle = native_specification.load_schema_bundle(SCHEMA)
-        original = inheritance.read_bundle_document
+        """REQ-0655 full cycles and actual source effects remain ordered."""
         for repeated in ("entry.yaml", "a.yaml"):
-            with (
-                self.subTest(repeated=repeated),
-                tempfile.TemporaryDirectory() as directory,
-            ):
+            with self.subTest(repeated=repeated), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory).resolve()
                 (root / "nested").mkdir()
-                for name, parent in (
-                    ("entry.yaml", "a.yaml"),
-                    ("a.yaml", "b.yaml"),
-                    ("b.yaml", f"nested/../{repeated}"),
-                ):
-                    (root / name).write_text(
-                        f'schema_version: "1.0"\nparents: {parent}\n', encoding="ascii"
-                    )
-                reads = []
-
-                def read(path, captured, recorded=reads):
-                    self.assertIs(captured, bundle)
-                    recorded.append(Path(path))
-                    return original(path, captured)
-
-                with (
-                    patch(
-                        "yamaa.schema.inheritance.read_bundle_document",
-                        side_effect=read,
-                    ),
-                    self.assertRaises(SpecificationError) as caught,
-                ):
-                    resolve_specification(root / "entry.yaml", bundle)
-                diagnostic = caught.exception.diagnostics[0]
-                self.assertEqual(diagnostic.condition, "inheritance_cycle")
-                names = (
-                    ["entry.yaml", "a.yaml", "b.yaml", "entry.yaml"]
-                    if repeated == "entry.yaml"
-                    else ["a.yaml", "b.yaml", "a.yaml"]
-                )
-                self.assertEqual(
-                    diagnostic.context["cycle"], [str(root / n) for n in names]
-                )
-                self.assertEqual(
-                    reads, [root / n for n in ("entry.yaml", "a.yaml", "b.yaml")]
-                )
+                for name, parent in (("entry.yaml", "a.yaml"), ("a.yaml", "b.yaml"), ("b.yaml", f"nested/../{repeated}")):
+                    (root / name).write_text(f'schema_version: "1.0"\nparents: {parent}\n', encoding="ascii")
+                names = ["entry.yaml", "a.yaml", "b.yaml", "entry.yaml"] if repeated == "entry.yaml" else ["a.yaml", "b.yaml", "a.yaml"]
+                calls = []
+                self.assertEqual(self.native_failure(root / "entry.yaml", calls), {
+                    "status": "invalid", "diagnostics": [{
+                        "phase": "validation", "condition": "inheritance_cycle",
+                        "spec_paths": ["parents"], "requirement": "REQ-0655",
+                        "context": {"cycle": [str(root / n) for n in names], "reason": "parent_chain_returns_to_entry" if repeated == "entry.yaml" else "parent_chain_returns_to_active_layer", "source": str(root / "b.yaml")},
+                    }],
+                })
+                self.assertEqual(self.captured_paths(calls), [root / n for n in ("entry.yaml", "a.yaml", "b.yaml")])
 
     def test_shared_traversal_validates_entry_before_missing_parent_access(self):
-        """All layer defects precede version checks and further source effects."""
-        from yamaa.schema import inheritance
-
-        bundle = native_specification.load_schema_bundle(SCHEMA)
-        original = inheritance.read_bundle_document
         with tempfile.TemporaryDirectory() as directory:
             entry = Path(directory).resolve() / "entry.yaml"
-            entry.write_text(
-                'schema_version: "0.0"\nparents: missing.yaml\nunknown: value\n',
-                encoding="ascii",
-            )
-            reads = []
+            entry.write_text('schema_version: "0.0"\nparents: missing.yaml\nunknown: value\n', encoding="ascii")
+            calls = []
+            self.assertEqual(self.native_failure(entry, calls), {
+                "status": "invalid", "diagnostics": [{
+                    "phase": "validation", "condition": "unknown_field",
+                    "spec_paths": ["unknown"], "requirement": "REQ-0658",
+                    "context": {"field": "unknown", "class": "root_class", "source": str(entry), "entry": str(entry)},
+                }],
+            })
+            self.assertEqual(calls, [("entry", (str(entry),))])
 
-            def read(path, captured):
-                reads.append(Path(path))
-                return original(path, captured)
-
-            with (
-                patch(
-                    "yamaa.schema.inheritance.read_bundle_document", side_effect=read
-                ),
-                self.assertRaises(SpecificationError) as caught,
-            ):
-                resolve_specification(entry, bundle)
-            self.assertEqual(caught.exception.diagnostics[0].condition, "unknown_field")
-            self.assertEqual(reads, [entry])
-
-    def test_count_relation_survives_pruning_with_explicit_execution_refusal(self):
-        """Pruning keeps COUNT(D.*); unqualified runtime scope refuses before IO."""
+    def test_count_relation_keeps_native_preparation_and_current_compiler_gate(self):
+        """Typed preparation pins DM/EX pruning; compilation refuses before data IO."""
         document = {
             "schema_version": "1.0",
             "parents": [],
@@ -295,26 +272,14 @@ class InstalledSchemaLoading(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            (root / "spec.yaml").write_text(json.dumps(document), encoding="ascii")
-            (root / "dm.csv").write_text("ID\na\nb\n", encoding="ascii")
-            (root / "ex.csv").write_text("ID\na\na\nb\n", encoding="ascii")
-            loaded = native_specification.load_specification(root / "spec.yaml", SCHEMA)
-            self.assertEqual(list(loaded.specification.input), ["DM", "EX"])
-            calls = []
-
-            def provider(declarations):
-                calls.append("read")
-                return load_source_tables(declarations, ProjectResources(root))
-
-            actual = execute_with_source_provider(loaded.specification, provider)
-            # Qualified key-matched aggregates remain an explicit executor limitation.
-            # The reference test independently verifies the expected a=2, b=1 counts.
-            self.assertEqual(calls, [])
-            self.assertEqual(actual.result.status, "unsupported")
-            self.assertEqual(
-                [(f.operation, f.spec_path) for f in actual.result.features],
-                [("aggregate_scope_or_expression", "columns.N.derivation.aggregate")],
-            )
+            path = root / "spec.yaml"
+            path.write_text(json.dumps(document), encoding="ascii")
+            # Full pruned native model is independently pinned in the adapter
+            # suite. The common compiler's current aggregate gate has no study
+            # authority; the historical optional executor refusal is retired.
+            self.assert_no_study_preflight(path, {
+                "status": "unsupported", "features": [{"operation": "aggregate", "spec_path": "columns.N.derivation.aggregate"}],
+            }, ("dm.csv", "ex.csv", "never-read.csv"))
 
     def test_custom_input_key_coercion_keeps_order_and_validates_replaced_members(self):
         """Custom scalar identifiers may converge to one normalized text name."""
@@ -393,66 +358,33 @@ class InstalledSchemaLoading(unittest.TestCase):
         )
 
     def test_layer_admission_collects_ordered_field_errors_before_normalization(self):
-        """Both authored errors retain field paths in schema order, not write order."""
-        document = {
-            "schema_version": "1.0",
-            "parents": [],
-            "columns": [{"label": 2, "name": "X", "type": 1}],
-        }
-        bundle = native_specification.load_schema_bundle(SCHEMA)
+        document = {"schema_version": "1.0", "parents": [], "columns": [{"label": 2, "name": "X", "type": 1}]}
         with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "spec.yaml"
+            path = (Path(temporary) / "spec.yaml").resolve()
             path.write_text(json.dumps(document), encoding="ascii")
-            with self.assertRaises(SpecificationError) as caught:
-                resolve_specification(path, bundle)
-            self.assertEqual(
-                [
-                    (d.condition, d.spec_paths, d.context)
-                    for d in caught.exception.diagnostics
-                ],
-                [
-                    (
-                        "invalid_field_type",
-                        ("columns.X.type",),
-                        {
-                            "expected": "column_type",
-                            "actual": "int",
-                            "source": str(path.resolve()),
-                            "entry": str(path.resolve()),
-                        },
-                    ),
-                    (
-                        "invalid_field_type",
-                        ("columns.X.label",),
-                        {
-                            "expected": "str",
-                            "actual": "int",
-                            "source": str(path.resolve()),
-                            "entry": str(path.resolve()),
-                        },
-                    ),
-                ],
-            )
+            calls = []
+            self.assertEqual(self.native_failure(path, calls), {
+                "status": "invalid", "diagnostics": [{
+                    "phase": "validation", "condition": "invalid_field_type",
+                    "spec_paths": [f"columns.X.{field}"], "requirement": "REQ-0287",
+                    "context": {"expected": expected, "actual": "int", "source": str(path), "entry": str(path)},
+                } for field, expected in (("type", "column_type"), ("label", "str"))],
+            })
+            self.assertEqual(calls, [("entry", (str(path),))])
 
     def test_standalone_null_handler_survives_workflow_resolution(self):
         document = self.window_document()
-        document["intermediates"] = [
-            {"id": "LOOK", "dataset": "SRC", "key": ["ID"], "no_match": None}
-        ]
-        bundle = native_specification.load_schema_bundle(SCHEMA)
+        document["intermediates"] = [{"id": "LOOK", "dataset": "SRC", "key": ["ID"], "no_match": None}]
         with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "spec.yaml"
-            path.write_text(json.dumps(document), encoding="ascii")
-            resolved = resolve_specification(path, bundle)
-            member = resolved.document["intermediates"][0]
-            self.assertIn("no_match", member)
-            self.assertIsNone(member["no_match"])
-            self.assertEqual(
-                resolved.provenance["intermediates.LOOK.no_match"].file, path.resolve()
-            )
+            root = Path(temporary)
+            path = self.write_window_document(root, document)
+            self.assert_no_study_preflight(path, {
+                "status": "unsupported", "features": [{"operation": "intermediate_scope", "spec_path": "intermediates[0]"}],
+            }, ("input.csv",))
+            # The explicit null occurrence and its raw authored origin are
+            # independently checked through held native arenas, not JSON probing.
 
     def test_new_keyed_members_cannot_clear_values_they_never_inherited(self):
-        bundle = native_specification.load_schema_bundle(SCHEMA)
         cases = [
             (
                 "columns",
@@ -466,26 +398,15 @@ class InstalledSchemaLoading(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             for collection, members, logical in cases:
                 with self.subTest(collection=collection):
-                    path = Path(temporary) / "spec.yaml"
-                    path.write_text(
-                        json.dumps(
-                            {
-                                "schema_version": "1.0",
-                                "parents": [],
-                                collection: members,
-                            }
-                        ),
-                        encoding="ascii",
-                    )
-                    with self.assertRaises(SpecificationError) as caught:
-                        resolve_specification(path, bundle)
-                    self.assertEqual(
-                        [
-                            (d.condition, d.spec_paths, d.requirement)
-                            for d in caught.exception.diagnostics
-                        ],
-                        [("invalid_clear", (logical,), "REQ-0660")],
-                    )
+                    path = (Path(temporary) / "spec.yaml").resolve()
+                    path.write_text(json.dumps({"schema_version": "1.0", "parents": [], collection: members}), encoding="ascii")
+                    self.assertEqual(self.native_failure(path), {
+                        "status": "invalid", "diagnostics": [{
+                            "phase": "validation", "condition": "invalid_clear",
+                            "spec_paths": [logical], "requirement": "REQ-0660",
+                            "context": {"field": logical.rsplit(".", 1)[1]},
+                        }],
+                    })
 
     def setUp(self):
         self.assertIn("site-packages", str(Path(yamaa.__file__).resolve()))
@@ -587,7 +508,6 @@ class InstalledSchemaLoading(unittest.TestCase):
         return path
 
     def test_shared_window_composition_preserves_definition_provenance_and_csv(self):
-        bundle = native_specification.load_schema_bundle(SCHEMA)
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             parent = self.window_document()
@@ -601,45 +521,12 @@ class InstalledSchemaLoading(unittest.TestCase):
                 },
             }
             path = self.write_window_document(directory, child)
-            resolved = resolve_specification(path, bundle)
-            self.assertNotIn("windows", resolved.document)
-            self.assertNotIn(
-                "G", [column["name"] for column in resolved.document["columns"]]
-            )
-            column = next(
-                c for c in resolved.document["columns"] if c["name"] == "PREV"
-            )
-            self.assertEqual(
-                column["derivation"]["value"]["row_value"]["window"],
-                {
-                    "order_by": [
-                        {"variable": "SEQ", "direction": "desc", "nulls": "last"}
-                    ]
-                },
-            )
-            prefix = "columns.PREV.derivation.value.row_value.window"
-            self.assertEqual(resolved.provenance[prefix].file, parent_path.resolve())
-            self.assertEqual(
-                resolved.provenance[prefix + ".order_by"].file, path.resolve()
-            )
-            self.assertEqual(
-                resolved.provenance[prefix + ".order_by"].spec_path,
-                "windows.VISITS.order_by",
-            )
-            actual = execute_with_source_provider(
-                resolved.specification,
-                lambda declarations: load_source_tables(
-                    declarations, ProjectResources(directory)
-                ),
-            )
-            self.assertEqual(actual.result.status, "success")
-            self.assertEqual(
-                render_artifact(actual.result.artifact),
-                b"ID,PREV\n01,40\n02,\n03,10\n04,20\n",
-            )
+            prepared = self.native_prepare(path)
+            self.assertEqual(self.native_csv(prepared, directory), b"ID,PREV\n01,40\n02,\n03,10\n04,20\n")
+            # Exact pruning, expanded window, parent definition and child
+            # order_by provenance are retained-arena adapter oracles.
 
     def test_shared_window_unknowns_follow_pruning_and_keep_use_site(self):
-        bundle = native_specification.load_schema_bundle(SCHEMA)
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             parent = self.window_document()
@@ -651,27 +538,17 @@ class InstalledSchemaLoading(unittest.TestCase):
                 "output": {"path": "out.csv", "columns": ["ID"]},
             }
             path = self.write_window_document(directory, child)
-            resolved = resolve_specification(path, bundle)
-            self.assertEqual([c.name for c in resolved.specification.columns], ["ID"])
+            prepared = self.native_prepare(path)
+            self.assertEqual(self.native_csv(prepared, directory), b"ID\n01\n02\n03\n04\n")
             child.pop("output")
             self.write_window_document(directory, child)
-            with self.assertRaises(SpecificationError) as caught:
-                resolve_specification(path, bundle)
-            finding = caught.exception.diagnostics[0]
-            self.assertEqual(
-                (
-                    finding.condition,
-                    finding.requirement,
-                    finding.spec_paths,
-                    finding.context,
-                ),
-                (
-                    "unknown_window",
-                    "REQ-1253",
-                    ("columns.PREV.derivation.row_value.window",),
-                    {"window": "UNKNOWN"},
-                ),
-            )
+            self.assertEqual(self.native_failure(path), {
+                "status": "invalid", "diagnostics": [{
+                    "phase": "validation", "condition": "unknown_window",
+                    "spec_paths": ["columns.PREV.derivation.row_value.window"],
+                    "requirement": "REQ-1253", "context": {"window": "UNKNOWN"},
+                }],
+            })
 
     def test_shared_window_loading_keeps_template_scope_and_explicit_runtime_refusal(
         self,
@@ -724,26 +601,24 @@ class InstalledSchemaLoading(unittest.TestCase):
             )
             self.assertEqual(calls, [])
 
-    def test_inheritance_and_column_composition_match_committed_resolved_artifacts(
-        self,
-    ):
-        bundle = native_specification.load_schema_bundle(SCHEMA)
-        for directory in (
-            "specification-inheritance",
-            "specification-column-composition",
-            "specification-inherited-output",
+    def test_inheritance_and_column_composition_match_committed_resolved_artifacts(self):
+        for directory, artifact in (
+            ("specification-inheritance", "adlb.csv"),
+            ("specification-column-composition", "adlb.csv"),
+            ("specification-inherited-output", "adsl.csv"),
         ):
             with self.subTest(directory=directory):
                 case = ROOT / directory
-                resolved = resolve_specification(case / "spec_study.yaml", bundle)
-                expected = read_yaml_document(case / "expected/spec_resolved.yaml")
-                self.assertEqual(resolved.document, expected)
-                loaded = native_specification.load_specification(
-                    case / "spec_study.yaml", SCHEMA
-                )
-                self.assertEqual(loaded.specification, resolved.specification)
-                self.assertIsNone(loaded.specification.parents)
-        self.assertFalse(yamaa_native.engine_info()["execution_supported"])
+                path = case / "spec_study.yaml"
+                if directory == "specification-column-composition":
+                    self.assert_no_study_preflight(path, {
+                        "status": "unsupported", "features": [{"operation": "mapping", "spec_path": "columns.ANRIND.derivation.mapping"}],
+                    }, ("lb.csv", "dm.csv"))
+                else:
+                    prepared = self.native_prepare(path)
+                    self.assertEqual(self.native_csv(prepared, case), (case / "expected" / artifact).read_bytes())
+                # Full committed resolved documents, parent removal, defaults
+                # and provenance are checked by the typed adapter suite.
 
     def test_loaded_specifications_execute_to_unchanged_artifact_bytes(self):
         for directory, artifact in (
@@ -772,33 +647,15 @@ class InstalledSchemaLoading(unittest.TestCase):
 
     def test_schema_entry_and_all_inherited_sources_use_shared_yaml(self):
         case = ROOT / "specification-inheritance"
-        expected = read_yaml_document(case / "expected/spec_resolved.yaml")
-        paths = []
-        original_read = NativeYamlReader.read_document
-
-        def read(reader, path):
-            paths.append(path.name)
-            return original_read(reader, path)
-
+        calls = []
         with (
-            patch(
-                "yamaa.specification._yaml.read_yaml_bytes",
-                side_effect=AssertionError("host YAML decoder invoked"),
-            ),
-            patch.object(NativeYamlReader, "read_document", new=read),
+            patch("yamaa.specification._yaml.read_yaml_bytes", side_effect=AssertionError("host YAML decoder invoked")),
+            patch.object(NativeYamlReader, "read_document", side_effect=AssertionError("host decoded graph")),
+            patch.object(yamaa_native, "decode_yaml", side_effect=AssertionError("component recapture")),
         ):
-            bundle = native_specification.load_schema_bundle(SCHEMA)
-            # Replacing the module entry point after capture must not affect
-            # any later entry/parent read through this bundle.
-            with patch.object(
-                yamaa_native, "decode_yaml", side_effect=AssertionError("recapture")
-            ):
-                resolved = resolve_specification(case / "spec_study.yaml", bundle)
-        self.assertEqual(resolved.document, expected)
-        self.assertEqual(
-            paths,
-            ["spec_study.yaml", "spec_organization.yaml", "spec_compound.yaml"],
-        )
+            prepared = self.native_prepare(case / "spec_study.yaml", calls)
+        self.assertEqual([p.name for p in self.captured_paths(calls)], ["spec_study.yaml", "spec_organization.yaml", "spec_compound.yaml"])
+        self.assertEqual(self.native_csv(prepared, case), (case / "expected/adlb.csv").read_bytes())
 
     def test_native_yaml_errors_and_host_policy_preserve_paths_and_fail_closed(self):
         import sys

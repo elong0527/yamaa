@@ -8,12 +8,18 @@ pub mod dataset;
 mod dataset_budget;
 pub mod dataset_predicate;
 mod dataset_verification;
+pub mod document_preparation;
 pub mod domain;
 pub mod domain_entry;
+pub mod file_preparation;
 pub mod function_invocation;
 pub mod inheritance;
+pub mod inheritance_capture;
 pub mod inheritance_preparation;
 pub mod numeric_lifecycle;
+pub mod schema_capture;
+pub mod standalone_preparation;
+pub mod structural_preparation;
 pub mod table_grouping;
 
 #[cfg(any(test, feature = "test-support"))]

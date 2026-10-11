@@ -4,9 +4,10 @@ use crate::yaml_decode::{decode_yaml, DecodeFailure, DecodeLimits, DecodedYaml, 
 use std::sync::Arc;
 use yamaa_core::schema::{
     BundleError, BundleLimits, NormalizationBudget, NormalizationError, NormalizationLimits,
-    NormalizedDocument, SchemaDiagnostic, SchemaModule, SchemaOrigin, SchemaStructure,
-    SpecificationDocument, ValidationError, WindowReference,
+    NormalizedDocument, SchemaDiagnostic, SchemaOrigin, SchemaStructure, SpecificationDocument,
+    ValidationError, WindowReference,
 };
+use yamaa_engine::schema_capture::{self as capture, RootSelection};
 #[path = "specification_inheritance.rs"]
 mod inheritance;
 pub use inheritance::{CapturedParent, InheritanceError, InheritancePort, SourceFailure};
@@ -110,11 +111,50 @@ impl CapturedDocument {
         &self.normalized
     }
 }
+/// Physical schema YAML representation; closure ordering and admission belong
+/// to the engine. DecodeLimits and original occurrence locations stay here.
+struct SchemaDecoder(DecodeLimits);
+impl capture::DecodePort for SchemaDecoder {
+    type Error = DecodeFailure;
+    type Locations = Vec<SourcePosition>;
+    fn decode(
+        &mut self,
+        _: &str,
+        bytes: &[u8],
+    ) -> Result<capture::DecodedModule<Self::Locations>, DecodeFailure> {
+        let decoded = decode_yaml(bytes, self.0)?;
+        Ok(capture::DecodedModule {
+            document: decoded.document,
+            locations: decoded.locations,
+        })
+    }
+}
+
+/// Physical entry decoding retains its source-limit order and YAML locations.
+struct StructuralDecoder<'a>(&'a CapturedSchema);
+impl yamaa_engine::structural_preparation::DecodePort for StructuralDecoder<'_> {
+    type Error = Error;
+    type Locations = Vec<SourcePosition>;
+    fn decode(
+        &mut self,
+        source: &Source,
+    ) -> Result<yamaa_engine::structural_preparation::Decoded<Self::Locations>, Error> {
+        let DecodedYaml {
+            document,
+            locations,
+        } = self.0.decode_entry(source)?;
+        Ok(yamaa_engine::structural_preparation::Decoded {
+            document,
+            locations,
+        })
+    }
+}
+
 impl CapturedSchema {
     /// Decode the complete host-captured closure using the shared YAML semantics.
     /// Cumulative byte/count admission happens before any source is decoded.
     pub fn admit(sources: Vec<Source>, entry: usize, limits: Limits) -> Result<Arc<Self>, Error> {
-        Self::admit_with_root(sources, entry, "root_class", limits)
+        Self::admit_with_root(sources, entry, RootSelection::Default, limits)
     }
     /// Capture a closed schema root without interpreting it as a specification.
     pub fn admit_root(
@@ -123,50 +163,36 @@ impl CapturedSchema {
         root_class: &str,
         limits: Limits,
     ) -> Result<Arc<Self>, Error> {
-        if root_class.len() > limits.identity_bytes {
-            return Err(Error::Limit("root_class"));
-        }
-        Self::admit_with_root(sources, entry, root_class, limits)
+        Self::admit_with_root(sources, entry, RootSelection::Named(root_class), limits)
     }
     fn admit_with_root(
         sources: Vec<Source>,
         entry: usize,
-        root_class: &str,
+        root: RootSelection<'_>,
         limits: Limits,
     ) -> Result<Arc<Self>, Error> {
-        if sources.len() > limits.bundle.modules {
-            return Err(Error::Limit("schema_modules"));
-        }
-        let mut bytes = 0usize;
-        let mut identities = 0usize;
-        for source in &sources {
-            bytes = bytes
-                .checked_add(source.bytes.len())
-                .filter(|&n| n <= limits.captured_bytes)
-                .ok_or(Error::Limit("captured_bytes"))?;
-            identities = identities
-                .checked_add(source.identity.len())
-                .filter(|&n| n <= limits.identity_bytes)
-                .ok_or(Error::Limit("identity_bytes"))?;
-        }
-        let mut locations = Vec::with_capacity(sources.len());
-        let modules = sources
-            .iter()
-            .map(|source| {
-                let decoded =
-                    decode_yaml(&source.bytes, limits.decode).map_err(|error| Error::Decode {
-                        identity: source.identity.clone(),
-                        error,
-                    })?;
-                locations.push(decoded.locations);
-                Ok(SchemaModule {
-                    name: source.identity.clone(),
-                    document: decoded.document,
-                })
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
-        let structure = SchemaStructure::admit(modules, entry, root_class, limits.bundle)
-            .map_err(Error::Bundle)?;
+        let closure = capture::admit(
+            sources,
+            entry,
+            root,
+            capture::Limits {
+                captured_bytes: limits.captured_bytes,
+                identity_bytes: limits.identity_bytes,
+                bundle: limits.bundle,
+            },
+            &mut SchemaDecoder(limits.decode),
+        )
+        .map_err(|error| match error {
+            capture::Error::Limit(resource) => Error::Limit(match resource {
+                capture::Resource::RootClass => "root_class",
+                capture::Resource::SchemaModules => "schema_modules",
+                capture::Resource::CapturedBytes => "captured_bytes",
+                capture::Resource::IdentityBytes => "identity_bytes",
+            }),
+            capture::Error::Decode { identity, error } => Error::Decode { identity, error },
+            capture::Error::Bundle(error) => Error::Bundle(error),
+        })?;
+        let (sources, locations, structure) = closure.into_parts();
         Ok(Arc::new(Self {
             sources,
             locations,
@@ -188,19 +214,10 @@ impl CapturedSchema {
     /// Validate and normalize a versioned root without windows, inheritance or IO.
     /// Environment-specific admission follows this captured structural gate.
     pub fn prepare_structural(self: &Arc<Self>, source: Source) -> Result<CapturedDocument, Error> {
-        let raw = self.decode_entry(&source)?;
-        let mut budget = NormalizationBudget::new(self.limits.normalization);
-        let normalized = self
-            .structure
-            .normalize_document(&raw.document, &mut budget)
-            .map_err(|error| self.normalization_failure(&source, &raw.document, error))?;
-        Ok(CapturedDocument {
-            schema: Arc::clone(self),
-            class_name: self.structure.root_class().name.clone(),
+        self.prepare_structural_selected(
             source,
-            raw,
-            normalized,
-        })
+            yamaa_engine::structural_preparation::Selection::StructuralRoot,
+        )
     }
 
     /// Normalize a versionless class using the version of its captured schema.
@@ -216,41 +233,54 @@ impl CapturedSchema {
         source: Source,
         class_name: &str,
     ) -> Result<CapturedDocument, Error> {
-        if class_name.len() > self.limits.identity_bytes {
-            return Err(Error::Limit("class_name"));
-        }
-        let class = self
-            .structure
-            .class_named(class_name)
-            .ok_or_else(|| Error::UnknownClass(class_name.into()))?;
-        if class
-            .fields
-            .iter()
-            .any(|field| field.name == "schema_version")
-        {
-            return Err(Error::VersionedRootRequired);
-        }
-        let raw = self.decode_entry(&source)?;
-        let mut budget = NormalizationBudget::new(self.limits.normalization);
-        let types = self
-            .structure
-            .parse_query_types(&[class_name.into()], budget.validation_scope())
-            .map_err(Error::Validation)?;
-        let normalized = self
-            .structure
-            .normalize_types(
-                &types,
-                &raw.document,
-                raw.document.root(),
-                false,
-                &mut budget,
-            )
-            .map_err(|error| self.normalization_failure(&source, &raw.document, error))?;
+        self.prepare_structural_selected(
+            source,
+            yamaa_engine::structural_preparation::Selection::NamedClass(class_name),
+        )
+    }
+
+    fn prepare_structural_selected(
+        self: &Arc<Self>,
+        source: Source,
+        selection: yamaa_engine::structural_preparation::Selection<'_>,
+    ) -> Result<CapturedDocument, Error> {
+        use yamaa_engine::structural_preparation::{self, Error as StructuralError};
+        let prepared = structural_preparation::prepare(
+            &self.structure,
+            source,
+            selection,
+            structural_preparation::Limits {
+                class_name_bytes: self.limits.identity_bytes,
+                normalization: self.limits.normalization,
+            },
+            &mut StructuralDecoder(self),
+        )
+        .map_err(|error| match error {
+            StructuralError::ClassNameLimit => Error::Limit("class_name"),
+            StructuralError::UnknownClass(name) => Error::UnknownClass(name),
+            StructuralError::VersionedRootRequired => Error::VersionedRootRequired,
+            StructuralError::Decode(error) => error,
+            StructuralError::Validation(error) => Error::Validation(error),
+            StructuralError::Normalize(error) => Error::Normalize(error),
+            StructuralError::Findings(failure) => {
+                let (source, document, findings) = failure.into_parts();
+                Error::Findings(Box::new(CapturedFindings {
+                    schema: Arc::clone(self),
+                    source,
+                    document: Some(document),
+                    findings,
+                }))
+            }
+        })?;
+        let (source, document, locations, class_name, normalized) = prepared.into_parts();
         Ok(CapturedDocument {
             schema: Arc::clone(self),
-            class_name: class_name.into(),
+            class_name,
             source,
-            raw,
+            raw: DecodedYaml {
+                document,
+                locations,
+            },
             normalized,
         })
     }
@@ -278,61 +308,55 @@ impl CapturedSchema {
         source: Source,
         raw: DecodedYaml,
     ) -> Result<PreparedDocument, Error> {
-        if raw.document.field(raw.document.root(), "parents").is_some() {
-            return Err(Error::InheritanceRequired);
-        }
+        use yamaa_engine::standalone_preparation::{self, Error as StandaloneError};
+        let DecodedYaml {
+            document,
+            locations,
+        } = raw;
         let mut budget = NormalizationBudget::new(self.limits.normalization);
-        let normalized = self
-            .structure
-            .normalize_document(&raw.document, &mut budget)
-            .map_err(|error| self.normalization_failure(&source, &raw.document, error))?;
-        let expanded = self
-            .structure
-            .expand_named_windows(&normalized.document, true, &mut budget)
-            .map_err(|error| self.normalization_failure(&source, &normalized.document, error))?;
-        let origins = expanded
-            .origins
-            .iter()
-            .map(|&id| normalized.origins[id])
-            .collect();
-        let model = SpecificationDocument::admit(expanded.document, budget.validation_scope())
-            .map_err(Error::Validation)?
-            .map_err(|findings| {
-                Error::Findings(Box::new(CapturedFindings {
+        let prepared = match standalone_preparation::prepare(&self.structure, document, &mut budget)
+        {
+            Ok(prepared) => prepared,
+            Err(StandaloneError::InheritanceRequired) => return Err(Error::InheritanceRequired),
+            Err(StandaloneError::Normalize(failure)) => {
+                let standalone_preparation::FailureContext { error, input } = *failure;
+                return Err(match error {
+                    NormalizationError::Invalid(findings) => {
+                        Error::Findings(Box::new(CapturedFindings {
+                            schema: Arc::clone(self),
+                            source,
+                            document: input,
+                            findings,
+                        }))
+                    }
+                    error => Error::Normalize(error),
+                });
+            }
+            Err(StandaloneError::Validation(error)) => return Err(Error::Validation(error)),
+            Err(StandaloneError::Model(findings)) => {
+                return Err(Error::Findings(Box::new(CapturedFindings {
                     schema: Arc::clone(self),
-                    source: source.clone(),
+                    source,
                     document: None,
                     findings,
-                }))
-            })?;
+                })));
+            }
+        };
+        let (document, model, origins, windows) = prepared.into_parts();
         Ok(PreparedDocument {
             schema: Arc::clone(self),
             source,
-            raw,
+            raw: DecodedYaml {
+                document,
+                locations,
+            },
             content: PreparedContent::Standalone {
                 model,
                 origins,
-                windows: expanded.references,
+                windows,
             },
             parents: Vec::new(),
         })
-    }
-
-    fn normalization_failure(
-        self: &Arc<Self>,
-        source: &Source,
-        document: &yamaa_core::schema::Document,
-        error: NormalizationError,
-    ) -> Error {
-        match error {
-            NormalizationError::Invalid(findings) => Error::Findings(Box::new(CapturedFindings {
-                schema: Arc::clone(self),
-                source: source.clone(),
-                document: Some(document.clone()),
-                findings,
-            })),
-            error => Error::Normalize(error),
-        }
     }
 
     /// Select the shared preparation lifecycle from one decoded raw entry.
@@ -343,15 +367,114 @@ impl CapturedSchema {
         display_path: String,
         port: &mut P,
     ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
-        let raw = self
-            .decode_entry(&source)
-            .map_err(InheritanceError::Entry)?;
-        if raw.document.field(raw.document.root(), "parents").is_some() {
-            self.prepare_inherited_decoded(source, display_path, raw, port)
-        } else {
-            self.prepare_standalone_decoded(source, raw)
-                .map_err(InheritanceError::Entry)
-        }
+        use yamaa_engine::document_preparation::{self as application, Content, Error as Failure};
+        let prepared = application::prepare(
+            &self.structure,
+            source,
+            display_path,
+            &mut DocumentEntry(self),
+            &mut inheritance::Decoder::new(self.limits.decode),
+            port,
+            yamaa_engine::inheritance_capture::Limits {
+                captured_bytes: self.limits.captured_bytes,
+                identity_bytes: self.limits.identity_bytes,
+                normalization: self.limits.normalization,
+                ..Default::default()
+            },
+        )
+        .map_err(|error| match error {
+            Failure::Entry(error) => InheritanceError::Entry(error),
+            Failure::Standalone { source, error } => {
+                InheritanceError::Entry(standalone_dispatch_error(self, source, error))
+            }
+            Failure::Inherited(yamaa_engine::inheritance_capture::Error::Entry(error)) => {
+                InheritanceError::Entry(error)
+            }
+            Failure::Inherited(yamaa_engine::inheritance_capture::Error::Preparation {
+                error,
+                captured_parents,
+            }) => InheritanceError::Preparation {
+                schema: Arc::clone(self),
+                error,
+                captured_parents,
+            },
+        })?;
+        let (source, content) = prepared.into_parts();
+        let (raw, content, parents) = match content {
+            Content::Standalone {
+                prepared,
+                locations,
+            } => {
+                let (document, model, origins, windows) = prepared.into_parts();
+                (
+                    DecodedYaml {
+                        document,
+                        locations,
+                    },
+                    PreparedContent::Standalone {
+                        model,
+                        origins,
+                        windows,
+                    },
+                    Vec::new(),
+                )
+            }
+            Content::Inherited { raw, prepared } => (
+                raw,
+                PreparedContent::Inherited(Box::new(prepared.inheritance)),
+                prepared.parents,
+            ),
+        };
+        Ok(PreparedDocument {
+            schema: Arc::clone(self),
+            source,
+            raw,
+            content,
+            parents,
+        })
+    }
+}
+
+// Physical entry admission remains exactly decode_entry's byte/identity/codec policy.
+struct DocumentEntry<'a>(&'a CapturedSchema);
+impl yamaa_engine::document_preparation::EntryCodec for DocumentEntry<'_> {
+    type Raw = DecodedYaml;
+    type Locations = Vec<SourcePosition>;
+    type Error = Error;
+    fn decode(&mut self, source: &Source) -> Result<DecodedYaml, Error> {
+        self.0.decode_entry(source)
+    }
+    fn document(raw: &DecodedYaml) -> &yamaa_core::schema::Document {
+        &raw.document
+    }
+    fn into_parts(raw: DecodedYaml) -> (yamaa_core::schema::Document, Vec<SourcePosition>) {
+        (raw.document, raw.locations)
+    }
+}
+fn standalone_dispatch_error(
+    schema: &Arc<CapturedSchema>,
+    source: Source,
+    error: yamaa_engine::standalone_preparation::Error,
+) -> Error {
+    use yamaa_engine::standalone_preparation::Error as Failure;
+    match error {
+        Failure::InheritanceRequired => Error::InheritanceRequired,
+        Failure::Normalize(failure) => match failure.error {
+            NormalizationError::Invalid(findings) => Error::Findings(Box::new(CapturedFindings {
+                schema: Arc::clone(schema),
+                source,
+                document: failure.input,
+                findings,
+            })),
+            error => Error::Normalize(error),
+        },
+        Failure::Validation(error) => Error::Validation(error),
+        Failure::Model(findings) => Error::Findings(Box::new(CapturedFindings {
+            schema: Arc::clone(schema),
+            source,
+            document: None,
+            findings,
+        })),
     }
 }
 
@@ -373,6 +496,15 @@ enum PreparedContent {
         windows: Vec<WindowReference>,
     },
     Inherited(Box<yamaa_engine::inheritance_preparation::PreparedInheritance>),
+}
+impl yamaa_engine::file_preparation::PreparedView for PreparedDocument {
+    type Parent = CapturedParent;
+    fn parents(&self) -> &[CapturedParent] {
+        &self.parents
+    }
+    fn parent_source(parent: &CapturedParent) -> &Source {
+        parent.source()
+    }
 }
 impl PreparedDocument {
     pub fn schema(&self) -> &CapturedSchema {
