@@ -76,8 +76,9 @@ def preserve_workspace(archive: Path, workspace: Path) -> None:
                     entry.size = len(payload)
                     entry.mode = 0o644
                     target.addfile(entry, io.BytesIO(payload))
-            os.replace(temporary, archive)
-            temporary = None
+        # Windows refuses replacement while the source archive is still open.
+        os.replace(temporary, archive)
+        temporary = None
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)

@@ -7,6 +7,7 @@ import tarfile
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location(
     "yamaa_build_backend", Path(__file__).parents[2] / "python/yamaa_build_backend.py"
@@ -97,6 +98,54 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
                 capture_output=True,
             )
             self.assertEqual((restored / "Cargo.lock").read_bytes(), lock)
+
+    def test_atomic_replacement_closes_archive_handles_first(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = b"[workspace]\nmembers = []\n"
+            (root / "Cargo.toml").write_bytes(manifest)
+            (root / "Cargo.lock").write_bytes(b"canonical")
+            archive = root / "yamaa.tar.gz"
+            write_archive(
+                archive,
+                [
+                    ("yamaa/rust/Cargo.toml", b"pruned"),
+                    ("yamaa/rust/Cargo.lock", b"canonical"),
+                    ("yamaa/held.txt", b"unchanged payload"),
+                ],
+            )
+            handles = []
+            original_open = tarfile.open
+            original_replace = backend.os.replace
+            replacements = []
+
+            def tracked_open(*args, **kwargs):
+                handle = original_open(*args, **kwargs)
+                handles.append(handle)
+                return handle
+
+            def replace_closed(source, destination):
+                self.assertEqual(len(handles), 2)
+                self.assertTrue(
+                    all(handle.closed and handle.fileobj.closed for handle in handles)
+                )
+                replacements.append(destination)
+                original_replace(source, destination)
+
+            with (
+                patch.object(backend.tarfile, "open", side_effect=tracked_open),
+                patch.object(backend.os, "replace", side_effect=replace_closed),
+            ):
+                backend.preserve_workspace(archive, root)
+            self.assertEqual(replacements, [archive])
+            with tarfile.open(archive) as result:
+                self.assertEqual(
+                    result.extractfile("yamaa/rust/Cargo.toml").read(), manifest
+                )
+                self.assertEqual(
+                    result.extractfile("yamaa/held.txt").read(), b"unchanged payload"
+                )
+            self.assertEqual(list(root.glob("*.tar.gz")), [archive])
 
     def test_contradictory_archive_refuses_without_replacing_original(self):
         with tempfile.TemporaryDirectory() as directory:
