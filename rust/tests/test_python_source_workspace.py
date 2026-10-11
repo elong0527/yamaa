@@ -32,6 +32,65 @@ def write_archive(path, values):
 
 
 class PythonSourceWorkspaceTests(unittest.TestCase):
+    def test_absolute_and_drive_compile_paths_cannot_read_the_original_checkout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "rust"
+            manifest = workspace / "qualification/native-source-fixtures.json"
+            manifest.parent.mkdir(parents=True)
+            name = "benchmarks/original/expected/out.csv"
+            original = root / name
+            original.parent.mkdir(parents=True)
+            original.write_bytes(b"ID\n1\n")
+            manifest.write_text(
+                json.dumps(
+                    {"format": "yamaa-native-source-fixtures/1", "files": [name]}
+                )
+            )
+            source = workspace / "crates/engine/tests/original.rs"
+            source.parent.mkdir(parents=True)
+            for path in (
+                str(original.resolve()),
+                "C:/original/out.csv",
+                r"C:\original\out.csv",
+            ):
+                with self.subTest(path=path):
+                    source.write_text(
+                        f"const INPUT: &str = include_str!({json.dumps(path)});\n"
+                    )
+                    with self.assertRaisesRegex(ValueError, "unescaped relative paths"):
+                        backend.native_test_fixtures(workspace)
+
+    def test_compile_symlink_alias_is_not_replaced_by_its_declared_regular_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "rust"
+            manifest = workspace / "qualification/native-source-fixtures.json"
+            manifest.parent.mkdir(parents=True)
+            name = "benchmarks/original/expected/out.csv"
+            original = root / name
+            original.parent.mkdir(parents=True)
+            original.write_bytes(b"ID\n1\n")
+            manifest.write_text(
+                json.dumps(
+                    {"format": "yamaa-native-source-fixtures/1", "files": [name]}
+                )
+            )
+            alias = root / "benchmarks/alias"
+            try:
+                alias.symlink_to(original.parent, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"compile-input symlink witness is unavailable: {error}")
+            source = workspace / "crates/engine/tests/original.rs"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                'const INPUT: &str = include_str!("../../../../benchmarks/alias/out.csv");\n'
+            )
+            with self.assertRaisesRegex(
+                ValueError, "compile fixtures must not be symlinks"
+            ):
+                backend.native_test_fixtures(workspace)
+
     def test_external_compile_fixture_must_be_declared_before_building_archive(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

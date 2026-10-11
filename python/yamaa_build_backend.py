@@ -53,12 +53,27 @@ def native_test_fixtures(workspace: Path):
     # Literal compile-time inputs outside Cargo's workspace need the same
     # explicit declaration as runtime fixture reads. Check before creating an
     # archive so a library-only build cannot hide missing native test inputs.
-    include = re.compile(r'\binclude_(?:str|bytes)!\s*\(\s*"([^"\\]+)"\s*,?\s*\)')
+    include = re.compile(
+        r'\binclude_(?:str|bytes)!\s*\(\s*"((?:[^"\\]|\\.)*)"\s*,?\s*\)'
+    )
     for source in sorted((workspace / "crates").rglob("*.rs")):
         if any(part in {"target", ".git", "__pycache__"} for part in source.parts):
             continue
         for written in include.findall(source.read_text(encoding="utf-8")):
-            path = (source.parent / written).resolve()
+            if (
+                "\\" in written
+                or ":" in written
+                or PurePosixPath(written).is_absolute()
+            ):
+                raise ValueError(
+                    "native compile fixture paths must be unescaped relative paths"
+                )
+            path = source.parent.resolve()
+            for part in PurePosixPath(written).parts:
+                path = path / part
+                if path.is_symlink():
+                    raise ValueError("native compile fixtures must not be symlinks")
+            path = path.resolve()
             if path.is_relative_to(workspace.resolve()):
                 continue
             if not path.is_relative_to(repository.resolve()):
