@@ -10,6 +10,8 @@ use yamaa_core::{
 
 #[path = "diagnostic/dataset.rs"]
 mod dataset;
+#[path = "diagnostic/predicate_evaluation.rs"]
+mod predicate_evaluation;
 
 #[path = "diagnostic/temporal_imputation.rs"]
 mod temporal_imputation;
@@ -236,6 +238,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(grammar::reached());
     reached.extend(inheritance::reached());
     reached.extend(grammar::predicate_reached());
+    reached.extend(predicate_evaluation::reached());
     reached.extend(binding::reached());
     reached.extend(binding::window_reached());
     reached.extend(binding::lookup_reached());

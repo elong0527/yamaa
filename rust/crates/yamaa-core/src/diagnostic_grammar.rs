@@ -97,9 +97,83 @@ impl P {
     }
     /// Original predicate syntax owns character positions and temporal/regex detail.
     pub fn diagnostic(&self, path: &str, predicate: &str, position: usize) -> Diagnostic {
-        let mut context = Context::new();
+        let mut context = self.syntax_diagnostic().context;
         context.insert("predicate".into(), text(predicate));
         context.insert("position".into(), V::Integer(position.to_string()));
+        Diagnostic {
+            code: self.diagnostic_code(),
+            spec_paths: vec![path.into()],
+            context,
+            source_span: None,
+            operand_route: None,
+        }
+    }
+    /// Original document findings retain the reference predicate/position
+    /// context. Parser-only detail stays on the immutable grammar failure and
+    /// remains available through `syntax_diagnostic`.
+    pub fn original_diagnostic(
+        &self,
+        path: &str,
+        predicate: &str,
+        position: usize,
+    ) -> Result<Diagnostic, super::PredicateGrammarDiagnosticError> {
+        self.original_diagnostic_with_limit(
+            path,
+            predicate,
+            position,
+            super::MAX_PREDICATE_DIAGNOSTIC_BYTES,
+        )
+    }
+    /// Whole-envelope admission precedes every authored string copy. Character
+    /// positions preserve their complete unsigned width; no byte span is added.
+    pub fn original_diagnostic_with_limit(
+        &self,
+        path: &str,
+        predicate: &str,
+        position: usize,
+        maximum: usize,
+    ) -> Result<Diagnostic, super::PredicateGrammarDiagnosticError> {
+        use super::PredicateGrammarDiagnosticError::OutputLimit;
+        let mut remaining = maximum.min(super::MAX_PREDICATE_DIAGNOSTIC_BYTES);
+        let definition = self.diagnostic_code().definition();
+        for value in [
+            "phase",
+            definition.phase,
+            "condition",
+            definition.condition,
+            "requirement",
+            definition.requirement.unwrap_or(""),
+            "spec_paths",
+            path,
+            "context",
+            "predicate",
+            predicate,
+            "position",
+            "01234567890123456789",
+        ] {
+            let required = value
+                .len()
+                .checked_mul(12)
+                .and_then(|n| n.checked_add(128))
+                .ok_or(OutputLimit)?;
+            remaining = remaining.checked_sub(required).ok_or(OutputLimit)?;
+        }
+        Ok(Diagnostic {
+            code: self.diagnostic_code(),
+            spec_paths: vec![path.into()],
+            context: [
+                ("predicate".into(), text(predicate)),
+                ("position".into(), V::Integer(position.to_string())),
+            ]
+            .into(),
+            source_span: None,
+            operand_route: None,
+        })
+    }
+    /// Standalone syntax retains parser-only details without a fabricated
+    /// specification path, operand route or expression field.
+    pub fn syntax_diagnostic(&self) -> Diagnostic {
+        let mut context = Context::new();
         match self {
             Self::InvalidExpression | Self::InvalidEscape => {}
             Self::InvalidRegex { byte, reason } => {
@@ -127,7 +201,7 @@ impl P {
         }
         Diagnostic {
             code: self.diagnostic_code(),
-            spec_paths: vec![path.into()],
+            spec_paths: vec![],
             context,
             source_span: None,
             operand_route: None,

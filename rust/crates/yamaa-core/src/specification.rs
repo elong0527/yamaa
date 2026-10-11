@@ -33,10 +33,13 @@ mod source_expressions;
 pub use source_expressions::SourceFinding;
 #[path = "specification_column_checks.rs"]
 mod column_checks;
+#[path = "specification_logs.rs"]
+mod logs;
 #[path = "specification_rows.rs"]
 mod rows;
 #[path = "specification_verifications.rs"]
 mod verifications;
+pub use logs::{LogFinding, OutputLogs};
 #[path = "specification_windows.rs"]
 mod windows;
 pub use windows::WindowFinding;
@@ -100,6 +103,7 @@ impl Default for CompilationLimits {
 #[derive(Clone, Debug, PartialEq)]
 pub enum PreflightFinding {
     TextCase(crate::diagnostic::Diagnostic),
+    Log(LogFinding),
     Imputation(crate::diagnostic::Diagnostic),
     RoundingInput {
         path: String,
@@ -173,6 +177,7 @@ pub enum PreflightFinding {
 #[derive(Debug)]
 pub enum BindError {
     Internal,
+    PredicateDiagnosticLimit,
     SourceCount,
     PredicatePolicy(crate::predicate_compiler::Error),
     InvalidPredicateBinding(crate::bound_expression::BindingError),
@@ -184,6 +189,7 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    Temporal(crate::diagnostic::Diagnostic),
     Predicate(crate::diagnostic::Diagnostic),
     ProjectFunction(FunctionFinding),
     Source(SourceFinding),
@@ -308,6 +314,7 @@ pub struct PreparedSpecification {
     output: TableSchema,
     projection: Vec<String>,
     output_path: String,
+    output_logs: OutputLogs,
     output_decimals: Option<String>,
     keys: Vec<usize>,
     declarations: Vec<Declaration>,
@@ -1093,13 +1100,7 @@ impl PreparedSpecification {
             }
         }
         let output_id = field(d, root, "output")?;
-        optional_features(
-            d,
-            output_id,
-            &["order_by", "warning_log", "verification_log"],
-            "output",
-            &mut extra,
-        );
+        optional_features(d, output_id, &["order_by"], "output", &mut extra);
         let output_path = String::from(text(d, field(d, output_id, "path")?)?);
         // Keep arbitrary-width schema integers. Output declaration validation
         // retains its existing post-verification phase; width is a codec quota.
@@ -1131,6 +1132,22 @@ impl PreparedSpecification {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let verifications = verifications::Verifications::prepare(d, &output)?;
+        let warnings = column_verifications
+            .iter()
+            .flat_map(|group| &group.declared_warning_paths)
+            .chain(&verifications.declared_warning_paths)
+            .cloned()
+            .collect::<Vec<_>>();
+        let (output_logs, log_findings) =
+            OutputLogs::prepare(d, output_id, &output_path, warnings)?;
+        if !log_findings.is_empty() {
+            return Err(PrepareError::Invalid(
+                log_findings
+                    .into_iter()
+                    .map(PreflightFinding::Log)
+                    .collect(),
+            ));
+        }
         let intermediates =
             intermediates::Declarations::prepare(d, &sources, driver_index, limits, &mut extra)?;
         if has_rows && !intermediates.is_empty() {
@@ -1167,6 +1184,7 @@ impl PreparedSpecification {
                 output,
                 projection,
                 output_path,
+                output_logs,
                 output_decimals,
                 keys,
                 declarations: Vec::new(),
@@ -1367,6 +1385,7 @@ impl PreparedSpecification {
             output,
             projection,
             output_path,
+            output_logs,
             output_decimals,
             keys,
             declarations,
@@ -1397,6 +1416,35 @@ impl PreparedSpecification {
     }
     pub fn verifications(&self) -> &[crate::dataset::Verification] {
         &self.verifications.checks
+    }
+    pub fn verification_severity(&self, path: &str) -> crate::dataset::VerificationSeverity {
+        if self
+            .verifications
+            .warning_paths
+            .iter()
+            .chain(
+                self.column_verifications
+                    .iter()
+                    .flat_map(|group| &group.warning_paths),
+            )
+            .any(|warning| warning == path)
+        {
+            crate::dataset::VerificationSeverity::Warning
+        } else {
+            crate::dataset::VerificationSeverity::Error
+        }
+    }
+    fn warning_verification_paths(&self) -> Vec<String> {
+        self.verifications
+            .warning_paths
+            .iter()
+            .chain(
+                self.column_verifications
+                    .iter()
+                    .flat_map(|group| &group.warning_paths),
+            )
+            .cloned()
+            .collect()
     }
     /// Inspect known declaration findings without reading sources or evaluating checks.
     /// Column findings retain declaration order, followed by dataset findings.
@@ -1469,6 +1517,9 @@ impl PreparedSpecification {
     }
     pub fn output_path(&self) -> &str {
         &self.output_path
+    }
+    pub fn output_logs(&self) -> &OutputLogs {
+        &self.output_logs
     }
     pub fn output_profile(&self) -> Option<&'static str> {
         output_profile(&self.output_path)
@@ -1558,6 +1609,9 @@ impl PreparedSpecification {
                 )
                 .and_then(|plan| {
                     plan.with_column_verifications(self.column_verification_groups())
+                        .and_then(|plan| {
+                            plan.with_warning_verifications(self.warning_verification_paths())
+                        })
                         .map_err(BindError::InvalidPlan)
                 });
         }
@@ -1984,6 +2038,7 @@ impl PreparedSpecification {
             self.verifications.checks.clone(),
         )
         .and_then(|plan| plan.with_column_verifications(self.column_verification_groups()))
+        .and_then(|plan| plan.with_warning_verifications(self.warning_verification_paths()))
         .and_then(|plan| {
             plan.with_conversion_handlers(
                 self.declarations

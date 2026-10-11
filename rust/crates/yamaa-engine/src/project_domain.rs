@@ -113,6 +113,14 @@ pub fn check_owned(
     }
 }
 impl CheckedOwnedProject {
+    /// Static native-location admission can reject a checked document while
+    /// retaining its original environment; no runtime port has been entered.
+    pub fn reject(self, error: PrepareError) -> Box<RejectedOwnedProject> {
+        Box::new(RejectedOwnedProject {
+            environment: self.environment,
+            error,
+        })
+    }
     pub fn compiled(&self) -> &PreparedSpecification {
         self.checked.compiled()
     }

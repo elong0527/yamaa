@@ -87,8 +87,21 @@ pub struct PreparedOutput<R> {
     artifact: Option<Artifact>,
 }
 impl<R> PreparedOutput<R> {
+    /// A diagnostic-only result has no primary artifact capability. This does
+    /// not admit primary publication, including after an encoding refusal.
+    pub fn failed(report: R) -> Self {
+        Self {
+            report,
+            artifact: None,
+        }
+    }
     pub fn prepared_report(&self) -> &R {
         &self.report
+    }
+    /// Formatting may enrich prospective observations without replacing the
+    /// immutable artifact or granting publication authority.
+    pub fn replace_report(&mut self, report: R) {
+        self.report = report;
     }
     pub fn artifact(&self) -> Option<&Artifact> {
         self.artifact.as_ref()

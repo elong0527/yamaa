@@ -2,11 +2,11 @@
 use crate::{
     conversion::convert,
     csv_source::CsvSource,
-    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
+    diagnostic::{Diagnostic, SourceFinding},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
-use alloc::{collections::BTreeSet, format, string::String, vec, vec::Vec};
+use alloc::{collections::BTreeSet, string::String, vec::Vec};
 use core::convert::Infallible;
 
 #[derive(Debug)]
@@ -23,41 +23,28 @@ pub enum Error {
     },
 }
 impl Error {
-    /// Structural defects have no fabricated language diagnostic.
-    pub fn diagnostic(&self, dataset: &str) -> Option<Diagnostic> {
-        let (code, field, extra) = match self {
-            Self::UnknownField { field } => (C::SourceTypeUnknownField, field, vec![]),
+    /// Borrow the existing cause and complete source value; no conversion is retried.
+    pub fn finding<'a>(&'a self, dataset: &'a str) -> Option<SourceFinding<'a>> {
+        match self {
+            Self::UnknownField { field } => Some(SourceFinding::UnknownField { dataset, field }),
             Self::FieldParse {
                 field,
                 target,
                 value,
-            } => {
-                let kind = match target {
-                    ColumnType::Str => "str",
-                    ColumnType::Int => "int",
-                    ColumnType::Float => "float",
-                    ColumnType::Date => "date",
-                    ColumnType::DateTime => "datetime",
-                };
-                (
-                    C::SourceTypeFieldParse,
-                    field,
-                    vec![("type", kind), ("value", value.as_str())],
-                )
-            }
-            Self::InvalidDeclarations | Self::InvalidSource => return None,
-        };
-        Some(Diagnostic {
-            code,
-            spec_paths: vec![format!("input.{dataset}.types.{field}")],
-            context: [("dataset", dataset), ("field", field.as_str())]
-                .into_iter()
-                .chain(extra)
-                .map(|(key, value)| (key.into(), V::Scalar(Value::Str(value.into()))))
-                .collect(),
-            source_span: None,
-            operand_route: None,
-        })
+            } => Some(SourceFinding::FieldParse {
+                dataset,
+                field,
+                target: *target,
+                value,
+            }),
+            Self::InvalidDeclarations | Self::InvalidSource => None,
+        }
+    }
+    /// Unbounded owned compatibility; structural defects retain the existing None.
+    /// New callers should use complete borrowed report admission before removal.
+    pub fn diagnostic(&self, dataset: &str) -> Option<Diagnostic> {
+        self.finding(dataset)
+            .map(SourceFinding::owned_compatibility)
     }
 }
 

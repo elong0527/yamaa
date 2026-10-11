@@ -308,7 +308,12 @@ def validate_submission_metadata(
                 )
             )
 
-        max_values = _max_length_values(column.verifications)
+        # REQ-0875 derives length from a max_length verification on str columns
+        # only; a max_length on any other column type cannot excuse a missing
+        # length or bless a declared one.
+        max_values = (
+            _max_length_values(column.verifications) if column.type == "str" else []
+        )
 
         # REQ-0875 / REQ-0913: declared length agrees with max_length.
         if submission.length is not None and max_values:

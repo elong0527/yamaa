@@ -14,8 +14,8 @@ import json
 from pathlib import Path
 
 import yamaa
-from yamaa import _native as yamaa_native
 from pydantic import TypeAdapter
+from yamaa import _native as yamaa_native
 from yamaa.adapters.conformance import execute_example, write_report
 from yamaa.adapters.qualification import (
     Backend,
@@ -48,6 +48,7 @@ def main(argv=None):
     parser.add_argument("--fixtures", type=Path, required=True)
     parser.add_argument("--schema", type=Path, required=True)
     parser.add_argument("--gates", type=Path, required=True)
+    parser.add_argument("--producer-fixtures", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--reference-artifacts", type=Path, required=True)
@@ -134,6 +135,21 @@ def main(argv=None):
     for batch in batches:
         (args.output / f"{batch.backend}-batch.json").write_text(
             batch.model_dump_json(indent=2) + "\n", encoding="utf-8"
+        )
+    if args.producer_fixtures is not None:
+        producer_manifest = load_inventory(args.producer_fixtures)
+        for name in sorted(producer_manifest.examples):
+            report = execute_example(
+                args.producer_fixtures / name,
+                schema_root=args.schema,
+                output_dir=args.output / "producer-reference-artifacts" / name,
+                backend="python",
+            )
+            write_report(report, args.output / "producer-reference")
+        (args.output / "producer-reference-provenance.json").write_text(
+            batches[0].model_copy(update={
+                "reports_dir": str((args.output / "producer-reference").resolve()),
+            }).model_dump_json(indent=2) + "\n", encoding="utf-8"
         )
     print(json.dumps(inventory.summary, indent=2))
     for error in inventory.errors:

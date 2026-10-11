@@ -52,31 +52,40 @@ pub enum Error {
 }
 
 impl Error {
-    /// Translate physical errors to the common core-owned source finding.
-    pub fn diagnostic(
-        &self,
-        dataset: &str,
-        path: &str,
-    ) -> Option<yamaa_core::diagnostic::Diagnostic> {
-        use yamaa_core::parquet_source::Error as P;
+    /// Borrow codec facts into the core-owned source finding without cloning errors.
+    pub fn finding<'a>(
+        &'a self,
+        dataset: &'a str,
+        path: &'a str,
+    ) -> Option<yamaa_core::diagnostic::SourceFinding<'a>> {
+        use yamaa_core::diagnostic::{ParquetFinding as P, SourceFinding};
         let finding = match self {
             Self::Malformed => P::Invalid,
             Self::EmptyName { field } => P::EmptyName { field: *field },
-            Self::DuplicateName { field } => P::DuplicateName {
-                field: field.clone(),
-            },
-            Self::Unsupported { field, stored_type } => P::Unsupported {
-                field: field.clone(),
-                stored_type: stored_type.clone(),
-            },
+            Self::DuplicateName { field } => P::DuplicateName { field },
+            Self::Unsupported { field, stored_type } => P::Unsupported { field, stored_type },
             Self::Value { field, row, value } => P::Value {
-                field: field.clone(),
+                field,
                 row: *row,
                 value: *value,
             },
             Self::Limit | Self::Unavailable { .. } | Self::Table(_) => return None,
         };
-        Some(finding.diagnostic(dataset, path))
+        Some(SourceFinding::Parquet {
+            finding,
+            dataset,
+            path,
+        })
+    }
+    /// Unbounded owned compatibility. New callers use whole borrowed report admission;
+    /// this existing Option signature and codec-boundary refusals stay unchanged.
+    pub fn diagnostic(
+        &self,
+        dataset: &str,
+        path: &str,
+    ) -> Option<yamaa_core::diagnostic::Diagnostic> {
+        self.finding(dataset, path)
+            .map(yamaa_core::diagnostic::SourceFinding::owned_compatibility)
     }
 }
 
