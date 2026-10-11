@@ -1,5 +1,62 @@
 # yamaa Rust engine migration
 
+Assessed 2026-10-11 against main
+`976c38b27c6fd7dbb33e6f03bbb219a9596ed21c`. This is a progress record for
+[#1585](https://github.com/elong0527/yamaa/issues/1585), with qualified merged
+changes separated from candidates still awaiting their final gates. It does not
+authorize release cutover.
+
+## Current qualified frontier
+
+| Merged change | Qualified behavior and remaining boundary |
+| --- | --- |
+| [#1911](https://github.com/elong0527/yamaa/pull/1911) | Canonical Cargo locking, unchanged Python/R source workspaces and locked dependency builds. Required Windows R and final combined release qualification remain open. |
+| [#1917](https://github.com/elong0527/yamaa/pull/1917) | Approved first-release scope: CPython 3.12–3.14 and R 4.6.1 on Linux x86_64, macOS arm64 and Windows x64; Python wheel/source and R source packages, with other combinations explicitly excluded. Eighteen Python installed lanes qualify; Windows R remains a required separate gate. |
+| [#1918](https://github.com/elong0527/yamaa/pull/1918), [#1922](https://github.com/elong0527/yamaa/pull/1922) | Full-range signed 64-bit R values, separate missingness, exact-or-error conversions, subsetting and comparisons. Complete installed Unix R evidence is retained; final Windows R and wider API qualification remain required. |
+| [#1916](https://github.com/elong0527/yamaa/pull/1916) | Optional submission source-system version with the actual installed-version default. Migrated declarations explicitly preserve `"1.0"`; actual generator versions are recorded separately. Shared generators and old-format retirement remain #1758. |
+| [#1919](https://github.com/elong0527/yamaa/pull/1919) | Original declaring-file resource/output paths, including absolute and parent-relative local paths, without root-configuration search or fallback. Kind, link and held-byte checks remain. Final combined Windows R evidence remains required. |
+| [#1920](https://github.com/elong0527/yamaa/pull/1920) | The public gate requires all eleven original cases, including the five historical timing fixtures. Its complete eighteen-lane audit passes 528 comparisons and explicitly retains 66 unexercised Windows R comparisons. |
+
+These changes passed their applicable final-head reviews, hosted checks and
+fresh immutable source/installed-artifact audits before merging. The retained
+benchmark inventory and its older assisted-route gaps remain visible. Counts of
+cases, comparisons or component tests are evidence scopes, not migration
+percentages. See the [finite release blocker register](release-readiness.md) and
+[approved maintainer decisions](maintainer-decisions.md).
+
+## Candidates awaiting final qualification
+
+| Candidate | Concrete progress and outstanding gate |
+| --- | --- |
+| [#1927](https://github.com/elong0527/yamaa/pull/1927) | Retained producer-first Save, whole-set physical target admission, exact entered/completed publication prefixes and retries after input deletion pass local package and failure controls. Full hosted matrix audit remains pending. |
+| [#1936](https://github.com/elong0527/yamaa/pull/1936) | Typed resource origins separate actual study reads from generated producer snapshots. Independent original producer Build plus two complete Save comparisons pass in both local Python forms and R against preserved pre-fix report/artifact truth. The checked R deletion follow-up is recorded separately from the original package revision; fresh hosted qualification remains pending. #1741 stays open. |
+| [#1925](https://github.com/elong0527/yamaa/pull/1925) | Shared Define-XML/Dataset-JSON generation passes fresh local wheel/source/R qualification, strict R checks, immutable source-fixture closure, fixed-time DM truth and independently authored AE/VS structure/XSD checks. The final hosted matrix remains pending. Value metadata and old-format retirement remain #1758. |
+| [#1933](https://github.com/elong0527/yamaa/pull/1933) | Governed verification/warning logs retain native records and held bytes through ordered Save. Review corrections preserve the original no-log output-projection failure and pair platform access with result state. The actual before/after failure control and full corrected-head native tests pass; final corrected-head package and hosted gates remain pending. Producer-graph sidecars remain a separate integration. |
+| [#1912](https://github.com/elong0527/yamaa/pull/1912) | Actual Windows R 4.6.1 source install, native file ports, strict package checks and complete baseline reports have retained evidence. The final combined Save/producer/log/Define source is being integrated and must pass all eighteen Python lanes, three R source lanes, complete public/producer reports and DLL/source-byte audits before #1903 closes. |
+
+Parallel remaining compiler, function-port and diagnostic slices are under
+review. Candidate code and local prototypes do not update the qualified main
+frontier or turn missing release tuples into passes.
+
+## Remaining acceptance gates
+
+Complete producer graph sidecars, value metadata and the original-document
+language families still need independent complete truth and installed
+qualification. The public API still needs retained-helper decisions and deliberate
+removal checks, including custom schema/provenance, IO/style helpers, ODM and R
+NUL-string handling. Preserve the reference baseline until its replacement
+consumers qualify; retain old submission formats until #1758's full exit gate.
+
+The first-release matrix decision is settled. Final combined packages must still
+qualify every approved tuple with exact source/runtime/form provenance and strict
+R checks. Representative cold/warm phase and memory measurements, agreed numeric
+regression budgets, native lifetime/failure contracts and explicit transition
+approval remain release gates. Keep #1585, #1742 and unfinished implementation
+issues open until their exact acceptance criteria have evidence or an explicit
+approved disposition.
+
+## Historical assessment through 2026-10-09
+
 Assessed 2026-10-09 against main
 `0c52fc6caf761308cd6428822909d7a079a01cad` and the acceptance criteria in
 [#1585](https://github.com/elong0527/yamaa/issues/1585).
@@ -15,7 +72,7 @@ lifecycle, submission version override, Windows R requirement, public result
 representations, declaring-file paths and Cargo packaging exception. Their
 implementation and installed release gates remain open.
 
-## Delivered and qualified
+### Delivered and qualified
 
 - Shared schema capture, original-YAML preparation, inheritance, compilation,
   source inspection/capture, CSV/Parquet codecs, execution, diagnostics, owned
@@ -58,7 +115,7 @@ all 16 native CI jobs and all 37 downloaded artifact/source audits. Their
 merged source trees equal the qualified heads directly. These results establish
 the stated slices; component counts are not a migration percentage.
 
-## Current implementation frontier
+### Current implementation frontier
 
 The installed Python/R connection is qualified through private native project
 handles with explicit candidate schemas. These call the shared whole
@@ -358,7 +415,7 @@ Continue with the following acceptance gates in the
    paths (#1905) and locked Cargo builds (#1906). Remove duplicate evaluators and
    superseded APIs only after the approved complete supported matrix passes.
 
-## Approved decisions and remaining qualification
+### Approved decisions and remaining qualification
 
 The [maintainer decision record](maintainer-decisions.md) records eight choices
 approved on 2026-10-10. #1866, #1887 and #1857 are closed as decisions; their
