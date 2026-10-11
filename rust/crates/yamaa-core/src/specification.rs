@@ -47,6 +47,8 @@ pub use functions::{Cause as FunctionCause, FunctionFinding};
 mod cases;
 #[path = "specification_rounding.rs"]
 mod rounding;
+#[path = "specification_temporal.rs"]
+mod temporal;
 #[path = "specification_terminology.rs"]
 mod terminology;
 
@@ -97,6 +99,15 @@ pub enum PreflightFinding {
         path: String,
         source: String,
         actual: &'static str,
+    },
+    TemporalInput {
+        path: String,
+        source: String,
+        actual: &'static str,
+    },
+    TemporalBounds {
+        path: String,
+        value: String,
     },
     ProjectFunction(FunctionFinding),
     ProjectCodelist(alloc::boxed::Box<crate::project_codelist_binding::Finding>),
@@ -266,6 +277,7 @@ enum Operation {
     FirstAvailable(alloc::boxed::Box<source_expressions::FirstAvailable>),
     Compute(CompiledNumeric),
     Round(crate::dataset::Rounding),
+    Temporal(crate::dataset::Temporal),
     /// Reference planning emits formula diagnostics after source ingestion.
     InvalidNumeric {
         expression: String,
@@ -929,6 +941,7 @@ impl PreparedSpecification {
             }
         }
         rounding::declaration_findings(d, columns, &output, &mut findings)?;
+        temporal::declaration_findings(d, columns, &output, &mut findings)?;
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
@@ -1250,6 +1263,17 @@ impl PreparedSpecification {
                 | "baseline_flag" => Some(Operation::Window(alloc::boxed::Box::new(
                     windows::Declaration::prepare(d, payload, op, &path, limits, &mut extra)?,
                 ))),
+                "date_diff" | "study_day" | "to_epoch_day" => {
+                    Some(Operation::Temporal(temporal::prepare(
+                        d,
+                        payload,
+                        op,
+                        &path,
+                        Some(driver),
+                        Some(&intermediates),
+                        &mut extra,
+                    )?))
+                }
                 "round_half_away_from_zero" => Some(Operation::Round(rounding::prepare(
                     d,
                     payload,
@@ -1635,6 +1659,17 @@ impl PreparedSpecification {
                 Operation::Literal(value) => Some(Expression::Literal(value.clone())),
                 Operation::Round(rounding) => rounding::bind(
                     rounding,
+                    column,
+                    &self.keys,
+                    &catalog,
+                    &self.intermediates,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
+                Operation::Temporal(operation) => temporal::bind(
+                    operation,
                     column,
                     &self.keys,
                     &catalog,

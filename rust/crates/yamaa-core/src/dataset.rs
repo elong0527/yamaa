@@ -29,6 +29,9 @@ mod lookup;
 #[path = "dataset_rounding.rs"]
 mod rounding;
 pub use rounding::{InvalidDigits, Rounding};
+#[path = "dataset_temporal.rs"]
+mod temporal;
+pub use temporal::{CalendarUnit, DateBounds, InvalidTemporal, Temporal, TemporalKind};
 #[path = "dataset_selection.rs"]
 mod selection;
 pub use selection::{FirstAvailable, SelectionRead, SelectionSource};
@@ -48,6 +51,10 @@ pub enum Expression {
     Round {
         source: alloc::boxed::Box<Assignment>,
         rounding: Rounding,
+    },
+    Temporal {
+        operands: Vec<Assignment>,
+        operation: Temporal,
     },
     /// Explicit prebound host invocation; never discovered or activated during execution.
     Function(BoundFunction),
@@ -425,6 +432,31 @@ fn validate_assignment_at(
                 remaining,
             )?;
             available[assignment.column] = false;
+        }
+        Expression::Temporal {
+            operands,
+            operation,
+        } => {
+            if operands.len() != operation.sources().len() {
+                return Err(PlanError::InvalidColumns);
+            }
+            for operand in operands {
+                if operand.column != assignment.column {
+                    return Err(PlanError::InvalidColumns);
+                }
+                validate_assignment_at(
+                    operand,
+                    available,
+                    source,
+                    secondary,
+                    intermediates,
+                    output,
+                    mode,
+                    depth + 1,
+                    remaining,
+                )?;
+                available[assignment.column] = false;
+            }
         }
         Expression::Function(function) => function.validate(source, available, mode)?,
         Expression::ProjectFunction(function) => function.validate(source, available, mode)?,

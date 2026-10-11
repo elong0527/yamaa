@@ -98,6 +98,22 @@ pub(super) fn prepare(
                 record,
                 depth + 1,
             )?),
+            "date_diff" | "study_day" | "to_epoch_day" => {
+                let mut features = Vec::new();
+                let operation = temporal::prepare(
+                    d,
+                    payload,
+                    op,
+                    &result_path,
+                    None,
+                    Some(intermediates),
+                    &mut features,
+                )?;
+                if !features.is_empty() {
+                    return Err(PrepareError::Unsupported(features));
+                }
+                Operation::Temporal(operation)
+            }
             "round_half_away_from_zero" => {
                 let mut features = Vec::new();
                 let rounding = rounding::prepare(
@@ -281,6 +297,17 @@ pub(super) fn bind(
                     Err(_) => return Err(BindError::Internal),
                 }
             }
+            Operation::Temporal(operation) => temporal::bind(
+                operation,
+                column,
+                &spec.keys,
+                catalog,
+                &spec.intermediates,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
             Operation::Round(rounding) => rounding::bind(
                 rounding,
                 column,
