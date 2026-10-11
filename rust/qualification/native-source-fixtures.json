@@ -13,6 +13,10 @@
     "benchmarks/sdtm-lb-metadata/spec.yaml",
     "benchmarks/sdtm-lb-metadata/submission-spec.yaml",
     "benchmarks/sdtm-lb-metadata/submission-environment.yaml",
-    "benchmarks/sdtm-lb-metadata/expected/lb.csv"
+    "benchmarks/sdtm-lb-metadata/expected/lb.csv",
+    "benchmarks/schema-round-half-away-from-zero-ties/spec.yaml",
+    "benchmarks/schema-round-half-away-from-zero-ties/input/adsl.csv",
+    "benchmarks/schema-round-half-away-from-zero-ties/expected/adsl.csv",
+    "benchmarks/negative-round-half-away-from-zero-non-numeric-source/spec.yaml"
   ]
 }
