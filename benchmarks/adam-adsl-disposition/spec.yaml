@@ -8,7 +8,20 @@ base: DM
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, EOSDT, EOSDECOD, EOSREAS, EOSSTT, DCSREAS]
+  columns: [STUDYID, USUBJID, EOSDT, EOSDECOD, EOSREAS, EOSSTT, DCSREAS,
+            EOTDT, EOTSTT, DCTREAS, DCSREASP]
+
+# The subject's last dated treatment disposition record: latest DSSTDTC,
+# then higher DSSEQ on the same day. Treatment records carry
+# EPOCH = 'TREATMENT'; study disposition lives on the other epochs.
+intermediates:
+  - id: LASTTRT
+    dataset: DS
+    key: [STUDYID, USUBJID]
+    filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT' AND DS.DSSTDTC IS NOT NULL"
+    order_by: [DS.DSSTDTC, DS.DSSEQ]
+    keep: last
+    no_match: null
 
 columns:
   - name: STUDYID
@@ -21,15 +34,17 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # All three read the subject's last dated DISPOSITION EVENT record: latest
-  # DSSTDTC, then higher DSSEQ on the same day. The date guard matters for
-  # the term and reason: an undated record would sort last and be kept.
+  # All three read the subject's last dated study disposition record:
+  # latest DSSTDTC, then higher DSSEQ on the same day. Treatment records
+  # (EPOCH = 'TREATMENT') belong to the end-of-treatment track below and
+  # never count here. The date guard matters for the term and reason: an
+  # undated record would sort last and be kept.
   - name: EOSDT
     type: date
     label: End of Study Date
     derivation:
       aggregate:
-        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT' AND DS.DSSTDTC IS NOT NULL"
         expr: "MAX(DS.DSSTDTC)"
 
   - name: EOSDECOD
@@ -38,7 +53,7 @@ columns:
     derivation:
       source:
         variable: DS.DSDECOD
-        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT' AND DS.DSSTDTC IS NOT NULL"
         order_by: [DS.DSSTDTC, DS.DSSEQ]
         keep: last
 
@@ -48,7 +63,7 @@ columns:
     derivation:
       source:
         variable: DS.DSTERM
-        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH <> 'TREATMENT' AND DS.DSSTDTC IS NOT NULL"
         order_by: [DS.DSSTDTC, DS.DSSEQ]
         keep: last
 
@@ -76,13 +91,64 @@ columns:
         - when: "EOSSTT = 'DISCONTINUED'"
           then: EOSREAS
 
+  # End-of-treatment track, mirroring the study track above. A subject who
+  # stops treatment but completes the study (YAMAA-01-107) is DISCONTINUED
+  # here and COMPLETED above: the two tracks are independent.
+  - name: EOTDT
+    type: date
+    label: End of Treatment Date
+    derivation:
+      aggregate:
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT' AND DS.DSSTDTC IS NOT NULL"
+        expr: "MAX(DS.DSSTDTC)"
+
+  - name: EOTSTT
+    type: str
+    label: End of Treatment Status
+    derivation:
+      case:
+        - when: "LASTTRT.DSDECOD = 'COMPLETED'"
+          then: {literal: COMPLETED}
+        - when: "LASTTRT.DSDECOD IS NOT NULL"
+          then: {literal: DISCONTINUED}
+        - otherwise: {literal: ONGOING}
+    verifications:
+      allowed_values:
+        values: [COMPLETED, DISCONTINUED, ONGOING]
+
+  - name: DCTREAS
+    type: str
+    label: Reason for Discontinuation of Treatment
+    derivation:
+      case:
+        - when: "EOTSTT = 'DISCONTINUED'"
+          then: LASTTRT.DSTERM
+
+  # Specify text: only when the coded treatment term is OTHER does the
+  # reported term carry extra meaning beyond the code.
+  - name: DCSREASP
+    type: str
+    label: Specify Text for Discontinuation of Treatment
+    derivation:
+      case:
+        - when: "EOTSTT = 'DISCONTINUED' AND LASTTRT.DSDECOD = 'OTHER'"
+          then: LASTTRT.DSTERM
+
 verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 6
-      max: 6
+      min: 7
+      max: 7
   - assert:
       id: discontinuation-has-reason
       when: "EOSSTT = 'DISCONTINUED'"
       require: "DCSREAS IS NOT NULL"
+  - assert:
+      id: treatment-discontinuation-has-reason
+      when: "EOTSTT = 'DISCONTINUED'"
+      require: "DCTREAS IS NOT NULL"
+  - assert:
+      id: specify-only-for-other
+      when: "DCSREASP IS NOT NULL"
+      require: "EOTSTT = 'DISCONTINUED'"
