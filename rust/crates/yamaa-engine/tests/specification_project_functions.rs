@@ -240,6 +240,62 @@ fn unmatched_activation_signatures_fail_before_every_study_port_and_keep_static_
     assert_eq!(cells.get(), 0);
     assert_eq!(port.reads, 0);
 }
+
+#[test]
+fn concat_function_signature_is_admitted_before_any_table_access() {
+    use yamaa_engine::dataset::DatasetExecution;
+    struct Untouched;
+    impl TableAccess for Untouched {
+        type Error = Payload;
+        fn schema(&self) -> &TableSchema {
+            panic!("signature admission must precede schema access")
+        }
+        fn row_count(&self) -> usize {
+            panic!("signature admission must precede row access")
+        }
+        fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<Payload>> {
+            panic!("signature admission must precede cell access")
+        }
+    }
+    let spec = specification(vec![(
+        "VALUE",
+        "str",
+        Tree::map(vec![(
+            "str_concat",
+            Tree::map(vec![(
+                "sources",
+                Tree::List(vec![call(
+                    "id",
+                    vec![(
+                        "x",
+                        Tree::Scalar(yamaa_core::schema::DocumentNode::Integer("7".into())),
+                    )],
+                )]),
+            )]),
+        )]),
+    )]);
+    let checked = domain::check_with_project(&spec, &[function("id")]).unwrap();
+    let source = TableSchema::new(vec![Column {
+        name: "ID".into(),
+        kind: ColumnType::Int,
+    }])
+    .unwrap();
+    let plan = checked.compiled().bind(&source).unwrap();
+    let trace = Rc::new(RefCell::new(vec![]));
+    let mut bindings = Bindings {
+        plan: None,
+        trace: Rc::clone(&trace),
+        raised: None,
+    };
+    let attempt =
+        plan.execute_observed_functions(&Untouched, &[], &mut bindings, limits().execution);
+    assert!(matches!(
+        *attempt.result.unwrap_err(),
+        ExecutionError::FunctionBinding { slot: 0 }
+    ));
+    assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
+    assert!(trace.borrow().is_empty());
+}
 #[test]
 fn callback_failures_preserve_original_payload_and_source_observations_without_retry() {
     let trace = Rc::new(RefCell::new(vec![]));
