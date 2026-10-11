@@ -16,6 +16,8 @@ and codec interfaces are native traits; adapters translate values and errors.
 | `TableAccess` | core | Immutable Arrow snapshots, core normalized CSV tables and engine output tables; test fakes | Bounds or original opaque cell-access error |
 | `inheritance::SourcePort` | engine | Existing inheritance bridge; Unix native captured-file port | Source failure or traversal resource limit |
 | `project_activation::ActivationPort` | engine | Python/R locked-package adapters; native fakes | Original lock, binding, conformance or interrupt failure |
+| `project_preparation::CapturePort` | engine | Adapter native file metadata capture; shared scripted native fake | Original capture/interrupt payload, bounded source/byte/identity refusal or malformed native reply kind |
+| `project_preparation::DecodePort` | engine | Adapter captured YAML/schema codec; shared scripted native fake | Original structural failure with retained source/context; closed environment/function/codelist target |
 | `function_invocation::FunctionPort` | engine | Python/R scalar callbacks and activated registries; `project_activation::Bindings`; native fakes | Original host exception, rejected representation or typed invocation failure |
 
 The one function invocation port borrows immutable legacy or versionless
@@ -42,6 +44,32 @@ host adapters retain the checked capability and call its `build_into` operation
 inside their existing panic boundary, so partial source observations survive.
 Native fake-port tests pin unsupported-before-capture behavior, cached repeated
 builds, opaque error identity and incomplete attempts after a host panic.
+
+`project_preparation::prepare` owns environment declaration lowering, dependency
+capture order, cumulative source/byte/identity/node accounting, function/codelist
+lowering and final environment admission. Root structural and scalar gates precede
+every dependency request. Declared capture-count admission precedes the first
+port, including attempts that fail. Lock capture is first, followed by external
+functions and codelists in written order; inline definitions retain the same
+authored coordinates. The engine supplies remaining byte and identity allowances
+before capture and rejects oversized replies before decoding. It charges decoded
+nodes before lowering or retaining a definition. Ordinary independent source
+failures collect; original interrupts abort immediately without later authority.
+
+Success and rejection move the original captured bytes, normalized documents,
+origins and opaque errors. A failed authored lock capture does not invent an
+absent-lock finding. The service has no activation, study, invocation, publication
+or retry port. The adapter implements structural decoding and preserves its
+existing result/error shapes; it no longer assembles environment drafts or owns
+this preparation loop. Shared scripted metadata ports pin effect order and exact
+remaining allowances and consume non-Clone outcomes once. Engine tests use
+independent normalized documents; adapter tests keep original YAML truth.
+
+Captured schema closure/standalone preparation internals and the adapter-defined
+raw inheritance capture/rebase catalog remain separate migration work. Existing
+engine inheritance trait implementations remain codec/resource adapters. The
+experimental inheritance JSON callback and other component probes remain pending
+retirement after their complete public qualification consumers are preserved.
 
 This internal check is vocabulary admission, not the complete public `check`
 contract in #1751. Binding findings that depend on source schemas, and existing
