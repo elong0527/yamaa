@@ -261,7 +261,7 @@ columns:
             self.assertTrue(result.save())
             self.assertTrue(result.issues.is_empty())
             # The ASCII canonical details remain stable independently of host JSON.
-            with (root / "warnings.csv").open(newline="") as stream:
+            with (root / "warnings.csv").open(newline="", encoding="utf-8") as stream:
                 row = next(csv.DictReader(stream))
             self.assertEqual(row["OFFENDING_KEYS"], warning["OFFENDING_KEYS"][0])
             entry.write_text(raw.split("    verifications:")[0])
