@@ -83,7 +83,7 @@ The manifests declare Python >=3.12 and R >=4.6.1. The native wheel uses
 or future interpreters. Python 3.12 numerical-probe CI is not an installed-wheel
 API test. Windows R is required for the first shared Rust release by the
 2026-10-10 maintainer decision (#1857); implementation and installed qualification
-are tracked in #1903. Its twelve missing public cohort tuples remain unqualified.
+are tracked in #1903. Its public cohort reports remain unqualified.
 The maintainer has now approved CPython 3.12, 3.13 and 3.14 plus R 4.6.1
 on Linux x86_64, macOS arm64 and Windows x64, with Python wheel/source and R
 source packages. Every runtime/platform/form combination is required. Other
@@ -137,7 +137,7 @@ linked decision. Issue numbers identify the implementation/test or decision owne
 
 | ID | Blocker and current evidence | Owner | Evidence required to close |
 | --- | --- | --- | --- |
-| B01 | The bounded public M1 cohort qualifies 96 installed tuples across six Python forms and exercised R hosts; twelve Windows R tuples remain unqualified. | #1739, #1751, #1903 | Preserve complete original-file observations and saved bytes, block reference semantics, and qualify all required Windows R tuples. Promote only evidenced `shared_run` tuples. |
+| B01 | The earlier six-case M1 gate qualified 96 tuple comparisons in its audited Python 3.14 matrix. The gate now requires eleven cases, including all five historical timing fixtures. Windows R remains unqualified. | #1739, #1751, #1903 | Preserve complete original-file observations and saved bytes, block reference semantics, and qualify all required Windows R tuples. Promote only evidenced `shared_run` tuples. |
 | B02 | Public domain/check/result/log/save API and benchmark runner migration. | #1751 | Installed signatures, wrong-argument exceptions, issue rows for specification/data/environment/function failures, logs retained on failure, explicit save, and every supported Python/R runner pair migrated. |
 | B03 | Issues-only checks, JSON-text context and full-range `yamaa_int64_vector` are approved; retained helpers and full surface review remain. | #1751, #1742 | Qualify the approved representations, separate missingness and exact-or-error integer conversions. Settle custom schema/provenance and IO/ODM/style helper dispositions; test retained surfaces and deliberate removals, including class members and undocumented imports. |
 | B04 | Declaring-file path replacement is approved; existing implementation still enforces approved roots/fallback. | #1905, #1751, #1755 | Implement the coordinated requirements: original declaring-file provenance, no fallback/configuration search, absolute and parent-relative local paths without yamaa root containment, preserved file-kind/link/snapshot checks, resource preflight and both-host file/error/publication tests. |
@@ -147,7 +147,7 @@ linked decision. Issue numbers identify the implementation/test or decision owne
 | B08 | Environment codelist admission is qualified under #1757; shared submission generators remain open. The source-system-version override is approved in #1887. | #1758, #1742 | Qualify final terminology scopes and the define API. Implement the optional section override with the installed-version default; all three migrated fixtures use explicit `"1.0"` and preserve fixed-time XML/JSON truth before retiring old formats. Record actual generator versions separately. |
 | B09 | Remaining language/compiler families. Component support is not full-language compilation. | #1585, #1752, #1754 | Qualify handlers, row-output dependencies, predicates/flags/first-available, correlated/keyed aggregates and lookups, full verification scopes, strings/regex/temporal/ODM and submission/value metadata from the executable inventory. |
 | B10 | Source/output codecs and filesystem publication. The private original-document route reads CSV/Parquet and writes bounded CSV/Parquet through callbacks; #1785's installed codec audit passed. Actual filesystem publication and producer workflows remain unqualified. | #1755, #1585 | Exact CSV, logical Parquet/ordinal/type contracts, producer re-ingestion, non-regular/missing/changed resources, atomic publication and publication-failure behavior through actual file ports. |
-| B11 | Complete diagnostics and failure timing. Core owns preflight, output-declaration, numeric/aggregate grammar, binding/dependency, CSV profile/declared typing, closed Parquet metadata, window/lookup and predicate grammar findings; #1790 qualifies original scalar literals and conversion wrappers; schema kinds are portable after #1789; #1772/#1773 merged captured schema and classified source observations. Remaining diagnostic families, production file-port integration and five assisted-route mismatches remain open. | #1753, #1739 | Preserve normative phase, order, requirement, authored path/context and full source/check/handler ledgers; resolve all five known gaps against independent truth without masking them. |
+| B11 | Complete diagnostics and failure timing. Core owns preflight, output-declaration, numeric/aggregate grammar, binding/dependency, CSV profile/declared typing, closed Parquet metadata, window/lookup and predicate grammar findings; #1790 qualifies original scalar literals and conversion wrappers; schema kinds are portable after #1789; #1772/#1773 merged captured schema and classified source observations. Remaining diagnostic families and final file-port qualification remain open. The eleven-case public gate now includes the five historical timing fixtures; their older assisted-route mismatches remain visible. | #1753, #1739 | Preserve normative phase, order, requirement, authored path/context and full source/check/handler ledgers; require the five timing fixtures through complete installed public reports against independent truth on the final matrix, without masking the historical assisted gaps. |
 | B12 | Pinned `PortableLibmV1` and one behavior per locked release are approved, including documented historical Python differences. | #1740 | Qualify every affected final scope and retain reviewed disposition for observable numerical/artifact differences. Public APIs and YAML do not select policy/backend. |
 | B13 | Canonical Cargo locking and its packaging exception are approved. The lock, unchanged source-package workspaces and locked builds are implemented; complete platform qualification remains open. | #1906, #1742 | Retain clean full-transitive-graph build evidence with exact versions/features/toolchains on all required platforms, including Windows R. |
 | B14 | Packaging checksum policy resolved: AGENTS.md permits python/uv.lock and the canonical rust/Cargo.lock with unchanged staged copies. | #1742, #1906 | No further policy decision is needed for those files. B13 tracks implementation/build evidence. Preserve held-byte comparison; runtime identity, contract, activation-cache and resource-snapshot digests remain prohibited. Additional exceptions need a separate decision. |
@@ -162,9 +162,11 @@ The five timing gaps are named in
 `negative-row-aggregate`, `negative-row-no-prior`, `negative-source-missing-field`
 and `negative-source-trivial-filter`. The inspected inventory has 315 reference
 passes, 76 assisted native passes, 234 Unsupported results, those five mismatches,
-and 315 unexercised R tuples. Three of those original negative documents also pass the private route after
-#1791, with independent complete reports and actual ingestion timing; that does
-not promote inventory tuples or remove the baseline mismatches. Three additional
+and 315 unexercised R tuples. The private route subsequently passed these documents with independent
+complete reports and actual ingestion timing. Both public installed suites
+also compare all five; they are now required by the eleven-case M1 gate.
+Shared reports retain their actual route and do not promote or remove
+the older assisted inventory rows or baseline mismatches. Three additional
 predicate requirement/context gaps are documented in `predicate_diagnostics.md`
 and remain unqualified. These are baseline route counts, not migration
 percentages or evidence that 234 independent compiler features are missing.
