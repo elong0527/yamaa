@@ -379,12 +379,12 @@ fn domain_save(handle: Robj) -> List {
             .into_robj());
         }
         #[cfg(unix)]
-        if state
-            .producer
-            .as_ref()
-            .is_some_and(|result| result.output_table().is_some())
-        {
-            return Ok(list!(saved = false, failed = false, unsupported = true).into_robj());
+        if let Some(result) = &mut state.producer {
+            return Ok(match result.save() {
+                Ok(saved) => list!(saved = saved, failed = false),
+                Err(_) => list!(saved = false, failed = true),
+            }
+            .into_robj());
         }
         let _ = &mut state;
         Ok(list!(saved = false, failed = true).into_robj())

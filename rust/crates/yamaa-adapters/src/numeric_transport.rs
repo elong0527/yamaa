@@ -327,98 +327,6 @@ pub(crate) fn predicate<E>(
         position: None,
     }))
 }
-/// Preserve exact raw-value counts and identifier provenance for a key-grain source read.
-pub(crate) fn multiple_values(
-    path: String,
-    identifier: String,
-    count: usize,
-) -> Result<Box<Diagnostic>, crate::dataset_transport::DatasetTransportError> {
-    let count = i64::try_from(count)
-        .map_err(|_| crate::dataset_transport::DatasetTransportError::Internal)?;
-    let mut context = Context::new();
-    context.insert("identifier".into(), text(identifier));
-    context.insert("value_count".into(), scalar(Value::Int(count)));
-    Ok(Box::new(Diagnostic {
-        phase: "derivation",
-        condition: "multiple_values_per_key",
-        requirement: Some("REQ-0075"),
-        spec_paths: vec![path],
-        context,
-        source_span: None,
-        operand_route: None,
-        position: None,
-    }))
-}
-
-/// Preserve an implicit lookup's complete duplicate-record count and source identity.
-pub(crate) fn join_condition(
-    path: String,
-    dataset: String,
-    intermediate: String,
-    count: Option<usize>,
-) -> Result<Box<Diagnostic>, crate::dataset_transport::DatasetTransportError> {
-    let count = count
-        .map(i64::try_from)
-        .transpose()
-        .map_err(|_| crate::dataset_transport::DatasetTransportError::Internal)?;
-    let mut context = Context::new();
-    context.insert("intermediate".into(), text(intermediate));
-    context.insert("dataset".into(), text(dataset));
-    if let Some(count) = count {
-        context.insert("match_count".into(), scalar(Value::Int(count)));
-    }
-    Ok(Box::new(Diagnostic {
-        phase: "join",
-        condition: if count.is_some() {
-            "multiple_matches"
-        } else {
-            "unmatched_key"
-        },
-        requirement: Some(if count.is_some() {
-            "REQ-0127"
-        } else {
-            "REQ-0124"
-        }),
-        spec_paths: vec![path],
-        context,
-        source_span: None,
-        operand_route: None,
-        position: None,
-    }))
-}
-
-/// Preserve baseline ambiguity and its canonical temporal date without choosing a tied row.
-pub(crate) fn baseline_ambiguity(
-    path: String,
-    column: String,
-    date: Value,
-    count: usize,
-) -> Result<Box<Diagnostic>, crate::dataset_transport::DatasetTransportError> {
-    use crate::dataset_transport::DatasetTransportError;
-    let count = i64::try_from(count).map_err(|_| DatasetTransportError::Internal)?;
-    let date = match date {
-        Value::Date(value) => value.to_string(),
-        Value::DateTime(value) => value.to_string(),
-        _ => return Err(DatasetTransportError::Internal),
-    };
-    let context = Context::from([
-        ("column".into(), text(column)),
-        ("operation".into(), text("baseline_flag")),
-        ("date".into(), text(date)),
-        ("match_count".into(), scalar(Value::Int(count))),
-    ]);
-    Ok(Box::new(Diagnostic {
-        phase: "derivation",
-        condition: "ambiguous_baseline",
-        requirement: Some("REQ-0322"),
-        spec_paths: vec![path],
-        context,
-        source_span: None,
-        operand_route: None,
-        position: None,
-    }))
-}
-
 /// Serialize core-owned completed-result diagnostics, including wide integers.
 pub(crate) fn conversion(error: ConversionError, path: String) -> Box<Diagnostic> {
     Box::new(error.into_diagnostic(path).into())
@@ -662,34 +570,6 @@ pub(crate) fn declaration(
         requirement: Some(requirement),
         spec_paths: vec![path],
         context: [("reason".into(), text(reason))].into_iter().collect(),
-        source_span: None,
-        operand_route: None,
-        position: None,
-    })
-}
-
-/// A present nonnumeric reduction argument, after ordered source collection.
-pub(crate) fn reduction_type(
-    path: String,
-    expression: String,
-    reducer: &'static str,
-    source: String,
-    actual: ValueType,
-) -> Box<Diagnostic> {
-    Box::new(Diagnostic {
-        phase: "validation",
-        condition: "incompatible_input_type",
-        requirement: Some("REQ-0510"),
-        spec_paths: vec![path],
-        context: [
-            ("expr".into(), text(expression)),
-            ("reducer".into(), text(reducer)),
-            ("source".into(), text(source)),
-            ("expected".into(), text("numeric")),
-            ("actual".into(), text(type_name(actual))),
-        ]
-        .into_iter()
-        .collect(),
         source_span: None,
         operand_route: None,
         position: None,

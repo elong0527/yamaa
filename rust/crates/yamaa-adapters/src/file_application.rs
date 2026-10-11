@@ -43,7 +43,7 @@ pub(crate) fn resource_failure(stage: &str, error: &crate::file_resources::Error
     };
     rejected(stage, code)
 }
-fn publication_failure(error: &crate::file_publication::Error) -> Failure {
+pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Failure {
     use crate::file_publication::Error as E;
     use yamaa_core::{diagnostic::ContextValue, value::Value};
     let code = match error {

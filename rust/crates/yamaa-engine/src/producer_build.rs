@@ -95,6 +95,7 @@ pub struct Limits {
     pub routing_work: usize,
     pub execution: dataset::Limits,
     pub activation: project_activation::Limits,
+    pub publication: crate::producer_publication::Limits,
 }
 impl Default for Limits {
     fn default() -> Self {
@@ -119,6 +120,7 @@ impl Default for Limits {
                 identity_text_bytes: 16_777_216,
             },
             activation: Default::default(),
+            publication: Default::default(),
         }
     }
 }
@@ -218,18 +220,36 @@ impl PreparedBuild {
         R: ReportPort,
         C: CodecPort,
     {
+        let _ = self.build_publication_into(ports, limits, attempt);
+    }
+    /// Seal publication authority only inside this actual build. Supplied
+    /// evidence is reset before activation; a caller-authored success is ignored.
+    pub fn build_publication_into<A, P, D, R, C>(
+        &self,
+        ports: Ports<'_, A, P, D, R, C>,
+        limits: Limits,
+        attempt: &mut BuildAttempt<A, P, D, R, C>,
+    ) -> Result<crate::producer_publication::PreparedPublication, &'static str>
+    where
+        A: ActivationPort,
+        P: StudyPort,
+        D: DecodePort,
+        D::Table: TableAccess<Error = A::Error>,
+        R: ReportPort,
+        C: CodecPort,
+    {
         *attempt = Attempt::default();
         let graph = self.metadata();
         let count = graph.nodes().len();
         if count == 0 || count > limits.nodes {
             attempt.outcome = Err(Failure::Limit("producer_build_nodes"));
-            return;
+            return Err("producer_build_failed");
         }
         if graph.called_functions().len() > limits.activation.functions {
             attempt.outcome = Err(Failure::Activation(project_activation::Failure::Limit(
                 project_activation::Resource::Functions,
             )));
-            return;
+            return Err("producer_build_failed");
         }
         let plans = self.graph.plans().collect::<Vec<_>>();
         let source_count = match plans
@@ -239,7 +259,7 @@ impl PreparedBuild {
             Some(count) if count > 0 => count,
             _ => {
                 attempt.outcome = Err(Failure::Limit("producer_build_sources"));
-                return;
+                return Err("producer_build_failed");
             }
         };
         // Every declared source, including aliases, reserves a codec share. This
@@ -267,7 +287,7 @@ impl PreparedBuild {
                 Ok(functions) => functions,
                 Err(error) => {
                     attempt.outcome = Err(Failure::Activation(error));
-                    return;
+                    return Err("producer_build_failed");
                 }
             }
         };
@@ -282,7 +302,7 @@ impl PreparedBuild {
                 ports.activation,
             ) {
                 attempt.outcome = Err(Failure::Binding { node, slot });
-                return;
+                return Err("producer_build_failed");
             }
         }
         let mut bytes_left = limits.source_bytes;
@@ -350,7 +370,7 @@ impl PreparedBuild {
                 .and_then(|execution| execution.result.as_ref().ok());
             let Some(execution) = execution else {
                 attempt.outcome = Err(Failure::Node { node: index });
-                return;
+                return Err("producer_build_failed");
             };
             let prepared = prepare_output(
                 node,
@@ -370,11 +390,16 @@ impl PreparedBuild {
                 .and_then(PreparedOutput::artifact);
             let Some(artifact) = artifact else {
                 attempt.outcome = Err(Failure::Node { node: index });
-                return;
+                return Err("producer_build_failed");
             };
             output_left -= artifact.bytes().len(); // output::prepare enforced remaining quota.
         }
         attempt.outcome = Ok(());
+        crate::producer_publication::PreparedPublication::from_actual(
+            graph,
+            attempt,
+            limits.publication,
+        )
     }
 }
 

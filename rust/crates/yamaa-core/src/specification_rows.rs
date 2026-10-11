@@ -17,6 +17,7 @@ enum RowOperation {
     Output(String),
     Source(String),
     Compute(CompiledNumeric),
+    Round(crate::dataset::Rounding),
     InvalidNumeric {
         expression: String,
         error: CompileError,
@@ -114,6 +115,14 @@ fn declaration(
             }
         }
         "literal" => RowOperation::Literal(literal(d, payload, &path)?),
+        "round_half_away_from_zero" => {
+            let mut features = Vec::new();
+            let rounding = rounding::prepare(d, payload, &path, None, None, &mut features)?;
+            if !features.is_empty() {
+                return Err(PrepareError::Unsupported(features));
+            }
+            RowOperation::Round(rounding)
+        }
         "compute" => {
             closed_fields(d, payload, &["expr"], &path)?;
             let expression = text(d, field(d, payload, "expr")?)?;
@@ -219,6 +228,7 @@ fn default_reads(
     match operation {
         "literal" => {}
         "source" => reference(text(d, field(d, payload, "variable")?)?),
+        "round_half_away_from_zero" => reference(text(d, field(d, payload, "source")?)?),
         "function" => {
             if let Some(project) = project {
                 let call = project
@@ -887,6 +897,17 @@ impl Rows {
                     }
                 }
                 RowOperation::Literal(value) => Some(Expression::Literal(value.clone())),
+                RowOperation::Round(rounding) => rounding::bind_row(
+                    rounding,
+                    declaration.column,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                )?,
                 RowOperation::InvalidNumeric { expression, error } => {
                     findings.push(BindFinding::Numeric {
                         path: format!("{}.expr", declaration.path),

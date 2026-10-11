@@ -147,6 +147,38 @@ fn first_cycle(graph: &[Vec<usize>]) -> Option<Vec<usize>> {
 
 /// Select one earliest ready node at a time, including newly ready earlier declarations.
 fn stable_order(graph: &[Vec<usize>]) -> Vec<usize> {
+    let mut order = Vec::with_capacity(graph.len());
+    match visit_stable_order(graph, |next| {
+        if let Some(node) = next {
+            order.push(node);
+        }
+        Ok::<_, core::convert::Infallible>(())
+    }) {
+        Ok(()) => order,
+        Err(never) => match never {},
+    }
+}
+
+/// Bound all scheduler vector/tree slots before allocating its admitted state.
+/// Counts cover remaining dependencies, reader lists and the maximal ready set;
+/// the caller owns and separately accounts for its emitted-order representation.
+pub(crate) fn stable_order_slots(graph: &[Vec<usize>]) -> usize {
+    graph
+        .iter()
+        .fold(graph.len().saturating_mul(3), |slots, edges| {
+            slots.saturating_add(edges.len())
+        })
+}
+
+/// Visit the same earliest-ready schedule for every already-admitted graph.
+/// Indices and graph storage must be admitted under the caller's own policies;
+/// this service applies no generic graph limits. Before emitting a node, or
+/// completing a stalled/exhausted schedule, it gives the caller an admission
+/// point. An error stops visitation immediately; no later node is emitted.
+pub(crate) fn visit_stable_order<E>(
+    graph: &[Vec<usize>],
+    mut admit: impl FnMut(Option<usize>) -> Result<(), E>,
+) -> Result<(), E> {
     let mut remaining: Vec<_> = graph.iter().map(Vec::len).collect();
     let mut readers = vec![Vec::new(); graph.len()];
     for (node, dependencies) in graph.iter().enumerate() {
@@ -159,9 +191,10 @@ fn stable_order(graph: &[Vec<usize>]) -> Vec<usize> {
         .enumerate()
         .filter_map(|(node, &count)| (count == 0).then_some(node))
         .collect();
-    let mut order = Vec::with_capacity(graph.len());
-    while let Some(node) = ready.pop_first() {
-        order.push(node);
+    loop {
+        let next = ready.pop_first();
+        admit(next)?;
+        let Some(node) = next else { break };
         for &reader in &readers[node] {
             remaining[reader] -= 1;
             if remaining[reader] == 0 {
@@ -169,5 +202,53 @@ fn stable_order(graph: &[Vec<usize>]) -> Vec<usize> {
             }
         }
     }
-    order
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn admitted_scheduler_preserves_admission_points_and_stops_on_refusal() {
+        let graph = vec![vec![2], vec![2], vec![], vec![]];
+        let mut attempts = Vec::new();
+        assert_eq!(
+            visit_stable_order(&graph, |next| {
+                attempts.push(next);
+                if next == Some(0) {
+                    Err("work exhausted")
+                } else {
+                    Ok(())
+                }
+            }),
+            Err("work exhausted")
+        );
+        assert_eq!(attempts, vec![Some(2), Some(0)]);
+        let mut attempts = Vec::new();
+        visit_stable_order(&graph, |next| {
+            attempts.push(next);
+            Ok::<_, core::convert::Infallible>(())
+        })
+        .unwrap();
+        assert_eq!(attempts, vec![Some(2), Some(0), Some(1), Some(3), None]);
+    }
+
+    #[test]
+    fn admitted_scheduler_uses_caller_limits_instead_of_the_probe_node_cap() {
+        let graph = vec![vec![]; Limits::default().nodes + 1];
+        let mut order = Vec::new();
+        visit_stable_order(&graph, |next| {
+            if let Some(node) = next {
+                order.push(node);
+            }
+            Ok::<_, core::convert::Infallible>(())
+        })
+        .unwrap();
+        assert_eq!(order, (0..4097).collect::<Vec<_>>());
+        assert!(matches!(
+            analyze(&graph, Limits::default()),
+            Err(Error::NodeLimit { .. })
+        ));
+    }
 }

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import re
 import subprocess
@@ -186,6 +187,12 @@ def run_suites(root, catalog, *, runtime, staged_root, output, evidence):
                 f"staged suite differs from tested revision: {suite['id']}"
             )
     output.mkdir(parents=True, exist_ok=True)
+    environment = os.environ | {
+        "YAMAA_SUPPLEMENTAL_EVIDENCE": json.dumps(
+            {"scope": "supplemental_suites", "evidence": evidence, "installation": metadata},
+            ensure_ascii=True,
+        )
+    }
     rows, failed = [], False
     for suite in selected:
         row = {
@@ -209,6 +216,7 @@ def run_suites(root, catalog, *, runtime, staged_root, output, evidence):
                     stdout=stream,
                     stderr=subprocess.STDOUT,
                     check=False,
+                    env=environment,
                 )
                 row["exit_code"] = completed.returncode
                 row["result"] = "pass" if completed.returncode == 0 else "failure"

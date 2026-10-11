@@ -1,6 +1,5 @@
-//! Read-only public root results from the sealed complete native attempt.
+//! Public root results and explicit ordered publication from a sealed native owner.
 //! Successful node reports still gate artifact consumption inside the build.
-//! This boundary has no publication port and cannot produce a Save capability.
 use crate::{
     issue_rows::Issue,
     producer_report::{self, NativeAttempt, ProjectionError},
@@ -11,16 +10,22 @@ use crate::{
     table_transport::{self, TableTransportError},
 };
 use serde_json::Value;
+use std::sync::Arc;
 use yamaa_core::table::TableAccess;
 
 pub struct RootResult {
     observations: Value,
     issues: Vec<Issue>,
     output: Option<(PublicTable, Vec<u8>)>,
+    publication: Option<Arc<crate::producer_publication::Publication>>,
+    publication_refusal: Option<&'static str>,
+    base_issues: usize,
+    latest: Option<Value>,
+    save_attempt: Option<crate::producer_publication::Attempt>,
 }
 impl RootResult {
     pub fn observations(&self) -> &Value {
-        &self.observations
+        self.latest.as_ref().unwrap_or(&self.observations)
     }
     pub fn issues(&self) -> &[Issue] {
         &self.issues
@@ -30,6 +35,109 @@ impl RootResult {
     }
     pub fn output_table(&self) -> Option<&PublicTable> {
         self.output.as_ref().map(|(table, _)| table)
+    }
+    /// Retain the original operational failure and actual entered prefix beside
+    /// the unchanged build owner. Reading evidence grants no publication port.
+    pub fn publication_attempt(&self) -> Option<&crate::producer_publication::Attempt> {
+        self.save_attempt.as_ref()
+    }
+    pub fn save(&mut self) -> Result<bool, crate::file_application::FailedBuild> {
+        self.save_with_limits(Default::default(), 16_777_216)
+    }
+    pub fn save_with_limits(
+        &mut self,
+        limits: yamaa_engine::producer_publication::Limits,
+        maximum: usize,
+    ) -> Result<bool, crate::file_application::FailedBuild> {
+        if self.output.is_none()
+            || (self.publication.is_none() && self.publication_refusal.is_none())
+        {
+            return Err(crate::file_application::FailedBuild);
+        }
+        self.issues.truncate(self.base_issues);
+        self.latest = None;
+        self.save_attempt = None;
+        let Some(publication) = self.publication.as_ref() else {
+            self.issues.extend(crate::file_application::rejected(
+                "output",
+                self.publication_refusal.unwrap(),
+            ));
+            return Ok(false);
+        };
+        // Complete report ownership and prefix projection admission precedes
+        // every publisher. Save never classifies a host error or rerenders Build.
+        let mut budget = Budget::new(maximum);
+        let admitted = (|| {
+            budget.json(&self.observations)?;
+            budget.entries(publication.artifacts().len().saturating_mul(64))?;
+            for artifact in publication.artifacts() {
+                for _ in 0..4 {
+                    budget.text(artifact.path())?;
+                }
+            }
+            Ok::<_, ReportError>(())
+        })();
+        if admitted.is_err() {
+            self.issues.extend(crate::file_application::rejected(
+                "output",
+                "publication_report_limit",
+            ));
+            return Ok(false);
+        }
+        let mut value = self.observations.clone();
+        let mut attempt = crate::producer_publication::Attempt::default();
+        publication.save_into(limits, &mut attempt);
+        use yamaa_engine::producer_publication::Failure;
+        let (saved, code, node) = if let Some(failure) = publication.admission_failure() {
+            use crate::producer_publication::AdmissionFailure;
+            match failure {
+                AdmissionFailure::Incomplete => (false, "publication_incomplete", None),
+                AdmissionFailure::Limit(code) => (false, *code, None),
+                AdmissionFailure::Resource { node, error } => {
+                    self.issues
+                        .extend(crate::file_application::resource_failure("output", error));
+                    (false, "target_admission", Some(*node))
+                }
+            }
+        } else if attempt.unwind.is_some() {
+            (false, "publication_unwind", None)
+        } else {
+            match &attempt.entered.outcome {
+                Ok(()) => (true, "", None),
+                Err(Failure::Incomplete) => (false, "publication_incomplete", None),
+                Err(Failure::Limit(code)) => (false, *code, None),
+                Err(Failure::Preflight(error)) => {
+                    self.issues
+                        .extend(crate::file_application::publication_failure(&error.error));
+                    (false, "target_preflight", Some(error.node))
+                }
+                Err(Failure::Publish { node, error }) => {
+                    self.issues
+                        .extend(crate::file_application::publication_failure(&error.error));
+                    if let Some(artifact) =
+                        publication.artifacts().iter().find(|a| a.node() == *node)
+                    {
+                        self.issues.push(
+                            Issue::from_core(yamaa_core::application_issue::publication_failed(
+                                artifact.path(),
+                            ))
+                            .expect("publication issue"),
+                        );
+                    }
+                    (false, "publication_failed", Some(*node))
+                }
+            }
+        };
+        if !saved && self.issues.len() == self.base_issues {
+            self.issues
+                .extend(crate::file_application::rejected("output", code));
+        }
+        value["publication"] = serde_json::json!({"status":if saved {"success"} else {"failure"},
+            "entered":attempt.entered.entered.iter().map(|item|serde_json::json!({"node":item.node,"published":item.published})).collect::<Vec<_>>(),
+            "error":if saved {Value::Null} else {serde_json::json!({"stage":"publication","code":code,"node":node})}});
+        self.latest = Some(value);
+        self.save_attempt = Some(attempt);
+        Ok(saved)
     }
 }
 
@@ -114,9 +222,30 @@ pub fn prepare_classified<'a, E>(
     };
     Ok(RootResult {
         observations,
+        base_issues: issues.len(),
         issues,
         output,
+        publication: None,
+        publication_refusal: None,
+        latest: None,
+        save_attempt: None,
     })
+}
+
+/// Only a privately constructed actual build owner can grant Save. Report and
+/// public root projection must both finish before that authority is attached.
+pub fn prepare_owned_classified<'a, E>(
+    attempt: &'a crate::file_producer_build::OwnedAttempt<E>,
+    id: Identity<'_>,
+    maximum: usize,
+    facts: &[Classified<'a, E>],
+) -> Result<RootResult, Error<'a, E>> {
+    let mut result = prepare_classified(attempt, id, maximum, facts)?;
+    if result.output.is_some() {
+        result.publication = attempt.publication().cloned();
+        result.publication_refusal = attempt.publication_refusal();
+    }
+    Ok(result)
 }
 
 fn root_output<E>(
