@@ -93,8 +93,9 @@ installed public suites already compare complete shared-run reports for these
 five cases, including the original read timing and source tables. The public
 M1 comparator now requires all five on every installed interpreter/package
 lane and both hosts where qualified. A missing read, source table, diagnostic
-or failed-build save refusal cannot satisfy that shared gate. Windows R
-remains an explicit missing route until its installed evidence passes.
+or failed-build save refusal cannot satisfy that shared gate. Every platform,
+including Windows, requires the installed R evidence; a missing R report fails
+the comparator instead of becoming a recorded missing route.
 Retiring an assisted gap requires reviewed evidence for that same route;
 shared evidence does not rewrite its historical result.
 

@@ -2,7 +2,7 @@
 use crate::specification_service::boundary;
 use extendr_api::prelude::*;
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 mod platform {
     use super::*;
     use crate::specification_service::address;
@@ -118,11 +118,11 @@ mod platform {
 #[extendr]
 fn prepare_file_specification(root: Raw, base: Raw, entry: Raw, data_roots: List) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::prepare(root, base, entry, data_roots)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (root, base, entry, data_roots);
             Err("native file preparation unavailable on this platform".into())
@@ -132,11 +132,11 @@ fn prepare_file_specification(root: Raw, base: Raw, entry: Raw, data_roots: List
 #[extendr]
 fn file_specification_source(handle: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::source(handle)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = handle;
             Err("native file preparation unavailable on this platform".into())
@@ -146,11 +146,11 @@ fn file_specification_source(handle: Robj) -> List {
 #[extendr]
 fn file_specification_reads(handle: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::reads(handle)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = handle;
             Err("native file preparation unavailable on this platform".into())
@@ -160,11 +160,11 @@ fn file_specification_reads(handle: Robj) -> List {
 #[extendr]
 fn file_specification_check(handle: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::check(handle)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = handle;
             Err("native file preparation unavailable on this platform".into())
@@ -174,11 +174,11 @@ fn file_specification_check(handle: Robj) -> List {
 #[extendr]
 fn file_specification_build(handle: Robj, metadata: List) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::build(handle, metadata)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (handle, metadata);
             Err("native file preparation unavailable on this platform".into())

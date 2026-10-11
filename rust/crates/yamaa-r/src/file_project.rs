@@ -2,7 +2,7 @@
 //! calling thread; incoming pointers are looked up without casting a pointee.
 use crate::specification_service::boundary;
 use extendr_api::prelude::*;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(super) mod platform {
     use super::*;
     use crate::specification_service::{address, capture_inputs_with_root};
@@ -235,7 +235,7 @@ fn prepare_file_project(
     env_modules: List,
 ) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::prepare(
                 paths,
@@ -246,7 +246,7 @@ fn prepare_file_project(
                 env_modules,
             )
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (
                 paths,
@@ -263,11 +263,11 @@ fn prepare_file_project(
 #[extendr]
 fn file_project_status(handle: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::status(handle)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = handle;
             Err("native project preparation unavailable on this platform".into())
@@ -277,11 +277,11 @@ fn file_project_status(handle: Robj) -> List {
 #[extendr]
 fn file_project_reads(handle: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::reads(handle)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = handle;
             Err("native project preparation unavailable on this platform".into())
@@ -291,11 +291,11 @@ fn file_project_reads(handle: Robj) -> List {
 #[extendr]
 fn file_project_build(handle: Robj, verify: Function, resolve: Function) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::build(handle, verify, resolve)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (handle, verify, resolve);
             Err("native project preparation unavailable on this platform".into())
@@ -305,11 +305,11 @@ fn file_project_build(handle: Robj, verify: Function, resolve: Function) -> List
 #[extendr]
 fn file_project_observations(handle: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::observations(handle)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = handle;
             Err("native project preparation unavailable on this platform".into())

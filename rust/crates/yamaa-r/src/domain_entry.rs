@@ -9,13 +9,13 @@ use std::{
 use yamaa_adapters::issue_rows::Issue;
 
 struct State {
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     result: Option<yamaa_adapters::file_application::Domain>,
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     project: Option<Rc<crate::file_project::platform::HeldAttempt>>,
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     _preparation: Option<yamaa_adapters::file_workflow::SelectionError>,
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     producer: Option<crate::file_producer::platform::PublicResult>,
     issues: Vec<Issue>,
 }
@@ -67,7 +67,7 @@ fn environment(value: &Robj) -> std::result::Result<Option<Raw>, String> {
             .ok_or_else(|| "environment must be raw UTF-8 or NULL".into())
     }
 }
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 fn unavailable() -> Vec<Issue> {
     vec![Issue::from_core(yamaa_core::application_issue::unsupported(
         "native_file_transport",
@@ -87,7 +87,7 @@ fn domain_file(
         let environment = environment(&environment_path)?;
         let environment = environment.as_ref().map(text).transpose()?;
         let version = text(&version)?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             if let Some(environment) = environment {
                 if capabilities.len() != 3 {
@@ -228,7 +228,7 @@ fn domain_file(
                 },
             })
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (specification, environment, version, capabilities);
             store(State {
@@ -244,7 +244,7 @@ fn check_file(specification: Raw, environment_path: Robj, version: Raw) -> List 
         let environment = environment(&environment_path)?;
         let environment = environment.as_ref().map(text).transpose()?;
         let version = text(&version)?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             if let Some(environment) = environment {
                 return crate::issue_frame::frame(&yamaa_adapters::project_application::check(
@@ -269,7 +269,7 @@ fn check_file(specification: Raw, environment_path: Robj, version: Raw) -> List 
             );
             crate::issue_frame::frame(&issues)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (specification, environment, version);
             crate::issue_frame::frame(&unavailable())
@@ -283,11 +283,11 @@ fn domain_issues(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(result) = &state.result {
             return crate::issue_frame::frame(&result.issues());
         }
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(producer) = &state.producer {
             return crate::issue_frame::frame(&producer.issues());
         }
@@ -301,7 +301,7 @@ fn domain_output(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(table) = state
             .result
             .as_ref()
@@ -309,7 +309,7 @@ fn domain_output(handle: Robj) -> List {
         {
             return crate::public_table::frame(table);
         }
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(table) = state
             .producer
             .as_ref()
@@ -328,11 +328,11 @@ fn domain_observations(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(result) = &state.result {
             return Ok(Raw::from_bytes(result.observations().to_string().as_bytes()).into_robj());
         }
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(value) = state
             .producer
             .as_ref()
@@ -351,7 +351,7 @@ fn domain_log(handle: Robj, warning: bool) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(table) = state
             .result
             .as_ref()
@@ -370,7 +370,7 @@ fn domain_save(handle: Robj) -> List {
         let mut state = state
             .try_borrow_mut()
             .map_err(|_| "domain result already borrowed")?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(result) = &mut state.result {
             return Ok(match result.save() {
                 Ok(saved) => list!(saved = saved, failed = false),
@@ -378,7 +378,7 @@ fn domain_save(handle: Robj) -> List {
             }
             .into_robj());
         }
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(result) = &mut state.producer {
             return Ok(match result.save() {
                 Ok(saved) => list!(saved = saved, failed = false),
@@ -397,7 +397,7 @@ fn domain_interrupt(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(attempt) = &state.project {
             let mut interrupted = None;
             yamaa_adapters::project_attempt::visit_host_failures(&attempt.inner, |_, error| {
@@ -409,7 +409,7 @@ fn domain_interrupt(handle: Robj) -> List {
             });
             return Ok(interrupted.unwrap_or_else(|| r!(NULL)));
         }
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(producer) = &state.producer {
             return producer.interrupt();
         }
@@ -425,7 +425,7 @@ fn domain_producer_evidence(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(producer) = &state.producer {
             return producer.evidence();
         }
@@ -440,7 +440,7 @@ fn domain_preparation_sources(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(error) = &state._preparation {
             let sources = error
                 .retained_sources(65_536, 16_777_216)
@@ -471,7 +471,7 @@ fn domain_projection_failure(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         if let Some(value) = state
             .producer
             .as_ref()

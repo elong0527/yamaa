@@ -2,7 +2,7 @@
 use crate::specification_service::boundary;
 use extendr_api::prelude::*;
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(crate) mod platform {
     use super::*;
     use crate::{file_project::platform::HeldAttempt, project_activation::Error as HostError};
@@ -261,8 +261,8 @@ macro_rules! operation {
         #[extendr]
         fn $name($( $argument: $kind ),+) -> List {
             boundary(|| {
-                #[cfg(unix)] { platform::$operation($( $argument ),+) }
-                #[cfg(not(unix))] {
+                #[cfg(any(unix, windows))] { platform::$operation($( $argument ),+) }
+                #[cfg(not(any(unix, windows)))] {
                     let _ = ($( $argument ),+);
                     Err("native project results unavailable on this platform".into())
                 }

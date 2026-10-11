@@ -2,7 +2,7 @@
 use crate::specification_service::boundary;
 use extendr_api::prelude::*;
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 mod platform {
     use super::*;
     use crate::specification_service::address;
@@ -114,11 +114,11 @@ mod platform {
 #[extendr]
 fn create_file_resources(root: Raw, base: Raw, data_roots: List) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::initialize(root, base, data_roots)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (root, base, data_roots);
             Err("native file resources unavailable on this platform".into())
@@ -128,11 +128,11 @@ fn create_file_resources(root: Raw, base: Raw, data_roots: List) -> List {
 #[extendr]
 fn inspect_file_resource(handle: Robj, path: Raw) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::inspect(handle, path)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (handle, path);
             Err("native file resources unavailable on this platform".into())
@@ -142,11 +142,11 @@ fn inspect_file_resource(handle: Robj, path: Raw) -> List {
 #[extendr]
 fn capture_file_resource(handle: Robj, path: Raw, maximum: i32) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::capture(handle, path, maximum)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = (handle, path, maximum);
             Err("native file resources unavailable on this platform".into())
@@ -156,11 +156,11 @@ fn capture_file_resource(handle: Robj, path: Raw, maximum: i32) -> List {
 #[extendr]
 fn file_resource_reads(handle: Robj) -> List {
     boundary(|| {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             platform::reads(handle)
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = handle;
             Err("native file resources unavailable on this platform".into())

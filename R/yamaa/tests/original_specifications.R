@@ -1020,6 +1020,18 @@ cat("native file publication explicit authority, raw transport and registered ha
 
 source(file.path(root,"public-output-truth.R"),local=TRUE)
 domain_observations <- get(".domain_observations",envir=asNamespace("yamaa"))
+json_text <- function(value) {
+  # Quote only run-identity labels; original semantic truth remains unchanged.
+  characters <- strsplit(enc2utf8(value),"",fixed=TRUE)[[1L]]
+  escaped <- vapply(characters,function(character) {
+    code <- utf8ToInt(character)
+    switch(as.character(code),
+      "8"="\\b","9"="\\t","10"="\\n","12"="\\f","13"="\\r",
+      "34"="\\\"","92"="\\\\",
+      if(code<32L) sprintf("\\u%04x",code) else character)
+  },character(1L),USE.NAMES=FALSE)
+  paste0('"',paste0(escaped,collapse=""),'"')
+}
 for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"static/")]) {
   directory <- tempfile("public-domain-");dir.create(directory)
   stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
@@ -1031,10 +1043,16 @@ for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"
   report <- sub('fixture-runtime',as.character(getRversion()),report,fixed=TRUE)
   report <- sub('fixture-engine',engine_info()$core_version,report,fixed=TRUE)
   report <- sub(paste0('"example":"',case_name,'"'),'"example":"domain"',report,fixed=TRUE)
-  report <- gsub(paste0('"specification":"',basename(entry),'"'),
-                 paste0('"specification":"',entry,'"'),report,fixed=TRUE)
+  entry_field <- paste0('"specification":',json_text(entry))
+  report <- gsub(paste0('"specification":',json_text(basename(entry))),
+                 entry_field,report,fixed=TRUE)
   unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',report)
-  stopifnot(identical(rawToChar(domain_observations(built)),unsaved))
+  observed <- rawToChar(domain_observations(built))
+  if(!identical(observed,unsaved)) {
+    cat(case_name,"public unsaved report mismatch\nexpected:\n",unsaved,
+        "\nactual:\n",observed,"\n",sep="")
+  }
+  stopifnot(identical(observed,unsaved))
   check_issue_frame(built$issues,issue_frame_truth[[case_name]])
   stopifnot(is.null(built$verification_log),is.null(built$warning_log))
   expected <- public_output_truth[[case_name]]
@@ -1055,8 +1073,8 @@ for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"
     # Relabel only the observed run identity; semantic findings and reads stay exact.
     observed <- rawToChar(domain_observations(built))
     observed <- sub('"example":"domain"',paste0('"example":"',case_name,'"'),observed,fixed=TRUE)
-    observed <- gsub(paste0('"specification":"',entry,'"'),
-                     paste0('"specification":"',basename(entry),'"'),observed,fixed=TRUE)
+    observed <- gsub(entry_field,
+                     paste0('"specification":',json_text(basename(entry))),observed,fixed=TRUE)
     dir.create(report_directory,recursive=TRUE,showWarnings=FALSE)
     writeBin(charToRaw(observed),file.path(report_directory,paste0(case_name,".r.rust.json")))
   }
@@ -1093,9 +1111,21 @@ for(path in c(strrep("x",65537L),strrep("\u00e9",32769L))) {
 unlink(directory,recursive=TRUE)
 cat("public check without study data, full-range integers, retained save retry and environment refusal passed\n")
 
+remove_directory_link <- function(path) {
+  if(.Platform$OS.type=="windows") {
+    # R's unlink treats directory symbolic links as mount-point reparse tags.
+    # rmdir without /s removes only this link, preserving its external target.
+    command <- Sys.getenv("COMSPEC")
+    stopifnot(nzchar(command),file.exists(command))
+    system2(command,c("/d","/c","rmdir",shQuote(chartr("/","\\",path),type="cmd")))
+  } else unlink(path,recursive=TRUE)
+}
 for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
   directory <- tempfile("public-linked-output-");dir.create(directory)
   outside <- tempfile("public-output-outside-");dir.create(outside)
+  sentinel <- file.path(outside,"sentinel")
+  sentinel_bytes <- charToRaw("outside sentinel")
+  writeBin(sentinel_bytes,sentinel)
   entry <- file.path(directory,"spec.yaml")
   writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
                "output: {path: link/output.csv, columns: [ID]}","columns:",
@@ -1107,12 +1137,19 @@ for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
   if(late) dir.create(link) else stopifnot(file.symlink(outside,link))
   built <- yamaa_domain(entry)
   stopifnot(identical(as.character(built$output$ID),"1"))
-  if(late) { unlink(link,recursive=TRUE);stopifnot(file.symlink(outside,link)) }
+  if(late) {
+    stopifnot(identical(unlink(link,recursive=TRUE),0L),!file.exists(link),file.symlink(outside,link))
+  }
   stopifnot(identical(built$save(),FALSE),identical(built$issues$context,'{"code":"invalid_target","stage":"output"}'),
-            identical(list.files(outside,all.files=TRUE,no..=TRUE),if(existing) "output.csv" else character()))
+            identical(list.files(outside,all.files=TRUE,no..=TRUE),if(existing) c("output.csv","sentinel") else "sentinel"))
+  stopifnot(identical(rawfile(sentinel),sentinel_bytes))
   if(existing) stopifnot(identical(rawfile(target),charToRaw("retained")))
-  unlink(link);dir.create(link)
+  stopifnot(identical(remove_directory_link(link),0L),!file.exists(link),
+            identical(rawfile(sentinel),sentinel_bytes))
+  if(existing) stopifnot(identical(rawfile(target),charToRaw("retained")))
+  stopifnot(dir.create(link))
   stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(file.path(link,"output.csv")),charToRaw("ID\n1\n")))
+  stopifnot(identical(rawfile(sentinel),sentinel_bytes))
   unlink(directory,recursive=TRUE);unlink(outside,recursive=TRUE)
 }
 cat("public save rejects linked parents before or after build, retains external targets and permits safe retry passed\n")

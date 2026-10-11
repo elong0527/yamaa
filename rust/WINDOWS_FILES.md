@@ -4,8 +4,9 @@ This candidate ports the same approved-root resource policy and owned domain
 lifecycle to Windows Python. Root/configuration/fallback selection remains the
 current contract. The separate declaring-file policy approval is still pending.
 Local drive roots are admitted; remote and device namespaces require additional
-identity and filesystem qualification. R on Windows remains outside the current
-installed matrix and is recorded as unqualified under #1742.
+identity and filesystem qualification. The R binding uses the same adapter on
+Windows; its source build and installed evidence are described in
+[R_WINDOWS.md](R_WINDOWS.md).
 
 The private Windows adapter uses user-mode
 [NtCreateFile](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile)
@@ -46,9 +47,9 @@ Cross-target checks exercise Windows Rust types and strict Clippy, using host
 zstd metadata only for this non-linking check. They cannot establish Windows
 execution. Installed Windows wheel and source tests must compare all seventeen
 original public reports and successful saves, with all five former file-test
-skips removed. The M1 job requires all twelve Windows Python reference/shared-run
-tuples for the unchanged six-case cohort and retains six R rows as explicitly
-unqualified. Both Unix hosts continue to require all eighteen tuples. The full
+skips removed. The M1 job requires the Python reference/shared-run and R
+shared-run tuples on all three hosts, including Windows; missing R evidence
+fails the job. The full
 945-row reference-assisted inventory remains separate. Complete migration,
 broader filesystem support and release acceptance stay open until their gates
 are met.

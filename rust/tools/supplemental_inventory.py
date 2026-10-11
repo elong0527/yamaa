@@ -13,6 +13,7 @@ import platform
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -151,9 +152,16 @@ suppressPackageStartupMessages(library(yamaa))
 writeLines(c(as.character(getRversion()), as.character(packageVersion("yamaa")),
              engine_info()$core_version, normalizePath(find.package("yamaa"))))
 """
-    lines = subprocess.check_output(
-        ["Rscript", "--vanilla", "-e", code], cwd=staged_root, text=True
-    ).splitlines()
+    # Windows Rscript can fail while forwarding multiline -e expressions.
+    # A real script uses the same public calls as the installed R suites.
+    with tempfile.TemporaryDirectory(
+        prefix="yamaa-r-metadata-", dir=staged_root
+    ) as work:
+        script = Path(work) / "metadata.R"
+        script.write_text(code, encoding="utf-8")
+        lines = subprocess.check_output(
+            ["Rscript", "--vanilla", str(script)], cwd=staged_root, text=True
+        ).splitlines()
     if len(lines) != 4 or not all(lines):
         raise ValueError("R installation metadata was malformed")
     return dict(
