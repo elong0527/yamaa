@@ -345,6 +345,25 @@ fn domain_observations(handle: Robj) -> List {
     })
 }
 #[extendr]
+fn domain_log(handle: Robj, warning: bool) -> List {
+    boundary(|| {
+        let state = resolve(&handle)?;
+        let state = state
+            .try_borrow()
+            .map_err(|_| "domain result already borrowed")?;
+        #[cfg(unix)]
+        if let Some(table) = state
+            .result
+            .as_ref()
+            .and_then(|result| result.log_table(warning))
+        {
+            return crate::public_table::frame(table);
+        }
+        let _ = (state, warning);
+        Ok(NULL.into_robj())
+    })
+}
+#[extendr]
 fn domain_save(handle: Robj) -> List {
     boundary(|| {
         let state = resolve(&handle)?;
@@ -470,6 +489,7 @@ extendr_module! {
     fn check_file;
     fn domain_issues;
     fn domain_output;
+    fn domain_log;
     fn domain_observations;
     fn domain_save;
     fn domain_interrupt;

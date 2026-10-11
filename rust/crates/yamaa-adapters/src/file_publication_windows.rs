@@ -133,6 +133,12 @@ impl AnchoredTarget {
     }
 }
 impl Publisher {
+    /// Compare entries through retained physical parents, including selected-root
+    /// aliases and absent ordinal case aliases. No target is opened or written.
+    pub fn same_target(&self, other: &Self) -> Result<bool, Error> {
+        Ok(self.parent.identity()? == other.parent.identity()?
+            && windows_file::equal_name(&self.name, &other.name))
+    }
     /// Explicit caller-selected target; authored declarations grant no write authority.
     pub fn new(declared: &str, target: &str) -> Result<Self, Error> {
         if declared.len() > MAX_PATH_BYTES || target.len() > MAX_PATH_BYTES {

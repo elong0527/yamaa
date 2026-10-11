@@ -21,6 +21,7 @@ COHORT = (
     "schema-inheritance",
     "negative-zero-division",
     "negative-integer-overflow",
+    "schema-verification-log",
 )
 
 
@@ -35,14 +36,16 @@ def installed_evidence(directory, runtime, source_revision):
     if evidence["source_revision"] != source_revision:
         raise ValueError("stale installed public-run evidence")
     suites = {s["id"]: s for s in record["suites"]}
-    suite = suites[runtime + "/original-specifications"]
-    if suite["result"] != "pass" or suite["exit_code"] != 0:
-        raise ValueError("public original-document suite did not pass")
-    log = (supplemental / suite["log"]).read_text()
-    if runtime == "python" and "skipped=" in log:
-        raise ValueError("skipped public file runs cannot qualify the cohort")
-    if runtime == "r":
-        for name in COHORT:
+    for suffix in ("original-specifications", "verification-logs"):
+        suite = suites[runtime + "/" + suffix]
+        if suite["result"] != "pass" or suite["exit_code"] != 0:
+            raise ValueError("public original-document suite did not pass: " + suffix)
+        log = (supplemental / suite["log"]).read_text()
+        if runtime == "python" and "skipped=" in log:
+            raise ValueError("skipped public file runs cannot qualify the cohort")
+        for name in COHORT if runtime == "r" else ():
+            if (name == "schema-verification-log") != (suffix == "verification-logs"):
+                continue
             witness = (
                 name
                 + " public domain complete Rust run report and successful save observations passed"

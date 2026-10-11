@@ -139,6 +139,26 @@ impl Domain {
         }
         Ok(crate::specification_result::issue_rows(&self.failures))
     }
+    fn log<'py>(&self, py: Python<'py>, warning: bool) -> PyResult<Option<Bound<'py, PyBytes>>> {
+        #[cfg(any(unix, windows))]
+        if let Some(inner) = &self.inner {
+            return inner
+                .try_lock()
+                .map(|inner| {
+                    (if warning {
+                        inner.warning_log()
+                    } else {
+                        inner.verification_log()
+                    })
+                    .map(|bytes| PyBytes::new(py, bytes))
+                })
+                .map_err(|_| {
+                    pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
+                });
+        }
+        let _ = (py, warning);
+        Ok(None)
+    }
     fn save(&self) -> PyResult<bool> {
         #[cfg(any(unix, windows))]
         if let Some(inner) = &self.inner {

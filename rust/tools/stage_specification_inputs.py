@@ -233,7 +233,7 @@ def stage(destination: Path):
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.tsv", destination / "original-row-conversion-handlers.tsv")
     for name in SCHEMA_MODULES:
         shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
-    for name in CASES:
+    for name in (*CASES, "schema-verification-log"):
         shutil.copytree(REPOSITORY / "benchmarks" / name, destination / "cases" / name)
     shutil.copytree(
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specs",
