@@ -324,12 +324,14 @@ def stage_row_intermediate_truth(destination: Path):
                          "spec_paths":["rows[1].dataset"], "context":{"operation":"row_driver"}}]
             success = False
         elif name == "adam-adlb-end-of-treatment":
-            # The unmodified row-only capture retains the old flag gate. Flags
-            # now admits this exact declaration; all four EOT scope gates stay held.
+            # Keep the historical capture; flags and implicit secondary sources
+            # are admitted while the three intermediate scope gates stay held.
             findings = list(reference["eot_native_gates"])
             assert len(findings) == 5
             assert findings.pop() == {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
                                       "spec_paths":["columns.EOTFL.derivation.flag"], "context":{"operation":"flag"}}
+            assert findings.pop() == {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                                      "spec_paths":["columns.ENDPOINT.derivation.source"], "context":{"operation":"secondary_source_expression"}}
             success = False
         if success:
             (directory / "expected.csv").write_text(case["csv"], encoding="utf-8", newline="\n")
@@ -537,6 +539,16 @@ def stage(destination: Path):
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_typing.tsv", destination / "source-typing.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_capture.tsv", destination / "source-capture.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_inspection.tsv", destination / "source-inspection.tsv")
+    source_truth = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.tsv"
+    shutil.copy2(source_truth, destination / "original-source-bindings.tsv")
+    source_cases = destination / "source-binding-cases"
+    source_cases.mkdir()
+    with source_truth.open(encoding="ascii") as stream:
+        for row in csv.DictReader(stream, delimiter="\t"):
+            case = source_cases / row["case"]
+            case.mkdir()
+            for name, content in json.loads(row["inputs_json"]).items():
+                (case / (name.lower() + ".csv")).write_bytes(bytes.fromhex(content))
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_filters.tsv", destination / "source-filters.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/first_available.tsv", destination / "first-available.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_assertions.tsv", destination / "original-assertions.tsv")

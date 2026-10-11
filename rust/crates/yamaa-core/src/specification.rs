@@ -1270,17 +1270,8 @@ impl PreparedSpecification {
                         &mut extra,
                         &intermediates,
                     )?;
-                    if source
-                        .variable
-                        .split_once('.')
-                        .is_some_and(|(relation, _)| {
-                            relation != driver && !intermediates.contains(relation)
-                        })
-                    {
-                        reject(&mut extra, "secondary_source_expression", path.clone());
-                    }
                     if keys.contains(&column)
-                        && source.has_filter()
+                        && (source.has_filter() || source.has_selection() || source.has_absent())
                         && source
                             .variable
                             .split_once('.')
@@ -1300,23 +1291,6 @@ impl PreparedSpecification {
                     )?;
                     if keys.contains(&column) {
                         reject(&mut extra, "selection_key_source", path.clone());
-                    }
-                    for (index, source) in selection.sources.iter().enumerate() {
-                        if let Some((relation, _)) = source.variable.split_once('.') {
-                            if intermediates.contains(relation) {
-                                reject(
-                                    &mut extra,
-                                    "selection_intermediate_source",
-                                    format!("{path}.sources[{index}]"),
-                                );
-                            } else if relation != driver {
-                                reject(
-                                    &mut extra,
-                                    "secondary_source_expression",
-                                    format!("{path}.sources[{index}]"),
-                                );
-                            }
-                        }
                     }
                     Some(Operation::FirstAvailable(alloc::boxed::Box::new(selection)))
                 }
@@ -1943,110 +1917,45 @@ impl PreparedSpecification {
                     });
                     None
                 }
-                Operation::Source(declaration) => {
-                    let name = &declaration.variable;
-                    let filter = declaration.bind_filter(
-                        path,
-                        self.source(),
-                        source,
-                        &self.intermediates,
-                        &mut findings,
-                    )?;
-                    if let Some((index, field)) = self.intermediates.reference(name) {
-                        if let Some(item) = &intermediates[index] {
-                            edges.extend(item.output_dependencies());
-                            let column = secondary[item.source]
-                                .schema
-                                .columns()
-                                .iter()
-                                .position(|c| c.name == field);
-                            if column.is_none() {
-                                findings.push(BindFinding::Lookup(LookupFinding::reference(
-                                    path,
-                                    name,
-                                    None,
-                                    ReferenceCause::Value,
-                                    None,
-                                )));
-                            }
-                            column.map(|column| Expression::Intermediate { index, column })
-                        } else {
-                            findings.push(BindFinding::UnknownReference {
-                                path: path.clone(),
-                                name: name.clone(),
-                            });
-                            None
-                        }
-                    } else {
-                        bind(name, &mut findings)?.map(|binding| match binding {
-                            reference_binding::Binding::Dataset { field, .. } => {
-                                if self.keys.contains(&column) && !declaration.has_filter() {
-                                    Expression::Source(field)
-                                } else {
-                                    Expression::Collect {
-                                        column: field,
-                                        identifier: name.clone(),
-                                        filter,
-                                        selection: None,
-                                    }
-                                }
-                            }
-                            reference_binding::Binding::Output { column, .. } => {
-                                edges.push(column);
-                                Expression::Column(column)
-                            }
-                        })
-                    }
-                }
+                Operation::Source(declaration) => source_expressions::bind(
+                    self,
+                    declaration,
+                    column,
+                    path,
+                    &catalog,
+                    source,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
                 Operation::FirstAvailable(selection) => {
                     let mut operands = Vec::new();
                     for (index, operand) in selection.sources.iter().enumerate() {
                         let operand_path = format!("{path}.sources[{index}]");
-                        let filter = operand.bind_filter(
+                        if let Some(expression) = source_expressions::bind(
+                            self,
+                            operand,
+                            column,
                             &operand_path,
-                            self.source(),
+                            &catalog,
                             source,
-                            &self.intermediates,
+                            &secondary,
+                            &intermediates,
+                            &mut edges,
                             &mut findings,
-                        )?;
-                        let name = &operand.variable;
-                        if !name.contains('.') {
-                            if let Some(finding) = catalog
-                                .validate_output(name, None, None, &[0])
-                                .map_err(BindError::Catalog)?
-                            {
-                                findings.push(BindFinding::OutputReference {
-                                    path: operand_path,
-                                    name: name.clone(),
-                                    finding,
-                                });
-                                continue;
-                            }
-                        }
-                        let Some(binding) = catalog.bind(name).map_err(BindError::Catalog)? else {
-                            findings.push(BindFinding::UnknownReference {
-                                path: operand_path,
-                                name: name.clone(),
+                        )? {
+                            operands.push(crate::dataset::SelectionSource {
+                                path: operand_path.clone(),
+                                read: crate::dataset::SelectionRead::Expression(
+                                    alloc::boxed::Box::new(crate::dataset::Assignment {
+                                        column,
+                                        expression,
+                                        path: path.into(),
+                                    }),
+                                ),
                             });
-                            continue;
-                        };
-                        let read = match binding {
-                            reference_binding::Binding::Dataset { field, .. } => {
-                                crate::dataset::SelectionRead::Collect {
-                                    column: field,
-                                    identifier: name.clone(),
-                                    filter: filter.map(alloc::boxed::Box::new),
-                                }
-                            }
-                            reference_binding::Binding::Output { column, .. } => {
-                                edges.push(column);
-                                crate::dataset::SelectionRead::Column(column)
-                            }
-                        };
-                        operands.push(crate::dataset::SelectionSource {
-                            path: operand_path,
-                            read,
-                        });
+                        }
                     }
                     Some(Expression::FirstAvailable(alloc::boxed::Box::new(
                         crate::dataset::FirstAvailable::new(operands, selection.missing.clone()),

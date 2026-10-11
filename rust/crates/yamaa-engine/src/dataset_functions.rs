@@ -142,3 +142,36 @@ fn retain_result<E>(value: Value, budget: &mut Budget) -> Result<Value, Box<Exec
     }
     Ok(value)
 }
+
+/// New source containers cannot hide a callback signature until source access.
+pub(super) fn admit<E>(
+    assignment: &Assignment,
+    functions: &dyn FunctionPort<Error = E>,
+) -> Result<(), Box<ExecutionError<E>>> {
+    match &assignment.expression {
+        Expression::Function(function) => {
+            if functions.signature(function.slot()) != Some(function.signature()) {
+                return Err(Box::new(ExecutionError::FunctionBinding {
+                    slot: function.slot(),
+                }));
+            }
+        }
+        Expression::ProjectFunction(function) => {
+            if functions.project_signature(function.slot()) != Some(function.signature()) {
+                return Err(Box::new(ExecutionError::FunctionBinding {
+                    slot: function.slot(),
+                }));
+            }
+        }
+        Expression::SourceBinding { source, .. } => admit(source, functions)?,
+        Expression::FirstAvailable(selection) => {
+            for operand in selection.sources() {
+                if let yamaa_core::dataset::SelectionRead::Expression(source) = &operand.read {
+                    admit(source, functions)?;
+                }
+            }
+        }
+        _ => (),
+    }
+    Ok(())
+}

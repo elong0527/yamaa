@@ -73,13 +73,17 @@ fn complete_independent_record_contexts_and_unchanged_original() {
                 serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["rows[1].dataset"],"context":{"operation":"row_driver"}}),
             ]
         } else if name == "adam-adlb-end-of-treatment" {
-            // Keep the row-only capture intact: declarative flags closes only
-            // its final flag gate while all four EOT scope gates remain held.
+            // Keep the historical row-only capture intact. The flag and implicit
+            // secondary source declarations are admitted; three scope gates remain.
             let mut gates = reference["eot_native_gates"].as_array().unwrap().clone();
             assert_eq!(gates.len(), 5);
             assert_eq!(
                 gates.pop().unwrap(),
                 serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["columns.EOTFL.derivation.flag"],"context":{"operation":"flag"}})
+            );
+            assert_eq!(
+                gates.pop().unwrap(),
+                serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["columns.ENDPOINT.derivation.source"],"context":{"operation":"secondary_source_expression"}})
             );
             gates
         } else {
