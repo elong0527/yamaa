@@ -52,9 +52,10 @@ def native_test_fixtures(workspace: Path):
                 raise ValueError("native source fixtures must not be symlinks")
     # This conservative source-text scan admits direct include_str!/include_bytes!
     # calls only with ordinary quoted literals and matching (), [] or {}.
-    # Raw/dynamic arguments are refused. Inputs outside Cargo's workspace need
-    # an explicit declaration before creating an archive.
-    include = re.compile(r"\binclude_(?:str|bytes)\s*!\s*([\(\[\{])\s*")
+    # Raw/dynamic arguments and comment-separated tokens are refused. Inputs
+    # outside Cargo's workspace need an explicit declaration before an archive.
+    include = re.compile(r"\binclude_(?:str|bytes)\b")
+    invocation = re.compile(r"\s*!\s*([\(\[\{])\s*")
     argument = re.compile(r'"((?:[^"\\]|\\.)*)"\s*,?\s*([\)\]\}])')
     closing = {"(": ")", "[": "]", "{": "}"}
     for source in sorted((workspace / "crates").rglob("*.rs")):
@@ -62,8 +63,9 @@ def native_test_fixtures(workspace: Path):
             continue
         text = source.read_text(encoding="utf-8")
         for directive in include.finditer(text):
-            literal = argument.match(text, directive.end())
-            if literal is None or literal.group(2) != closing[directive.group(1)]:
+            call = invocation.match(text, directive.end())
+            literal = argument.match(text, call.end()) if call is not None else None
+            if literal is None or literal.group(2) != closing[call.group(1)]:
                 raise ValueError(
                     "native compile fixture arguments must be ordinary string literals"
                 )

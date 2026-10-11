@@ -149,6 +149,36 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
                             ):
                                 backend.native_test_fixtures(workspace)
 
+    def test_comment_separated_compile_tokens_refuse_before_staging(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, source, original, _ = self.compile_fixture(Path(directory))
+            for macro in ("include_str", "include_bytes"):
+                for gap in ("/* gap */", "/* outer /* inner */ gap */", "// gap\n"):
+                    for opening, closing in (("(", ")"), ("[", "]"), ("{", "}")):
+                        for before_bang in (True, False):
+                            with self.subTest(
+                                macro=macro,
+                                gap=gap,
+                                opening=opening,
+                                before_bang=before_bang,
+                            ):
+                                tokens = (
+                                    macro + gap + "!" + opening
+                                    if before_bang
+                                    else macro + "!" + gap + opening
+                                )
+                                source.write_text(
+                                    "fn main() { let _ = "
+                                    + tokens
+                                    + json.dumps(str(original.resolve()))
+                                    + closing
+                                    + "; }\n"
+                                )
+                                with self.assertRaisesRegex(
+                                    ValueError, "ordinary string literals"
+                                ):
+                                    backend.native_test_fixtures(workspace)
+
     def test_spaced_bang_arguments_follow_literal_admission(self):
         with tempfile.TemporaryDirectory() as directory:
             workspace, source, original, name = self.compile_fixture(Path(directory))
