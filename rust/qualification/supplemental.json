@@ -1395,6 +1395,20 @@
       "path": "R/yamaa/tests/public_define.R",
       "level": "shared_run",
       "staged_path": "public_define.R"
+    },
+    {
+      "id": "python/public-contract",
+      "runtime": "python",
+      "path": "rust/tests/installed_public_contract.py",
+      "staged_path": "installed_public_contract.py",
+      "level": "shared_run"
+    },
+    {
+      "id": "r/public-contract",
+      "runtime": "r",
+      "path": "R/yamaa/tests/public_contract.R",
+      "staged_path": "public_contract.R",
+      "level": "shared_run"
     }
   ],
   "support_files": [

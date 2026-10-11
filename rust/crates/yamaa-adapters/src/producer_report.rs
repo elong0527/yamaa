@@ -372,6 +372,8 @@ impl OutputReport for NativeReport<'_, '_> {
                 InvalidDecimals { value } => value,
                 DuplicateColumn { name, .. }
                 | UndeclaredColumn { name, .. }
+                | DuplicateOrderTerm { name, .. }
+                | UndeclaredOrderColumn { name, .. }
                 | InternalKey { name, .. } => name,
             };
             for _ in 0..4 {
@@ -589,6 +591,18 @@ fn decoded_finding(
     budget.entries(64)?;
     match error {
         crate::specification_run::Error::Source(crate::csv_source::TextTableError::Csv(_)) => {}
+        crate::specification_run::Error::Ordinal(error) => {
+            let Some(field) = source
+                .ordinal
+                .as_deref()
+                .filter(|field| error.finding(&source.name, field).is_some())
+            else {
+                return Ok(false);
+            };
+            for _ in 0..4 {
+                budget.text(field)?;
+            }
+        }
         crate::specification_run::Error::TypedSource(crate::typed_csv::Error::Typing(error)) => {
             use yamaa_core::typed_csv::Error::*;
             match error {
@@ -1043,6 +1057,7 @@ mod tests {
             ],
             profile: SourceProfile::Csv,
             empty_string_present: false,
+            ordinal: None,
         };
         let bytes = b"VALUE,ID\nnot-an-int,also-bad\n";
         let error = Decoder::<std::convert::Infallible>::default()

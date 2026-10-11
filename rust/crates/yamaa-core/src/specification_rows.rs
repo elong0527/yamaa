@@ -13,6 +13,8 @@ use crate::{
 
 #[derive(Debug)]
 enum RowOperation {
+    Scalar(alloc::boxed::Box<scalar::Declaration>),
+    StrContains(crate::text_extract::StringExtract),
     Flag(flags::Declaration),
     StrExtract(crate::text_extract::StringExtract),
     StrTemplate(crate::text_template::StringTemplate),
@@ -97,6 +99,7 @@ fn declaration(
     project: Option<&functions::Prepared>,
     extraction: &str_extract::Prepared,
     string_templates: &str_template::Prepared,
+    intermediates: &intermediates::Declarations,
 ) -> Result<RowDeclaration, PrepareError> {
     closed_fields(d, id, &["value", "unconvertible"], &prefix)?;
     let handler = literal_handler(d, id, &prefix)?;
@@ -128,6 +131,23 @@ fn declaration(
         "literal" => RowOperation::Literal(literal(d, payload, &path)?),
         "str_template" => RowOperation::StrTemplate(string_templates.get(payload)?),
         "str_extract" => RowOperation::StrExtract(extraction.get(payload)?),
+        "str_contains" => RowOperation::StrContains(extraction.get(payload)?),
+        "greatest" | "least" | "str_concat" => {
+            let operation = scalar::prepare(
+                d,
+                payload,
+                op,
+                &path,
+                project,
+                intermediates,
+                true,
+                0,
+                extraction,
+                string_templates,
+            )?;
+            scalar::validate_row_declaration(&operation)?;
+            RowOperation::Scalar(alloc::boxed::Box::new(operation))
+        }
         "str_case" => {
             let mut features = Vec::new();
             let operation = str_case::prepare(d, payload, &path, None, None, &mut features)?;
@@ -272,6 +292,13 @@ fn default_reads(
     };
     match operation {
         "literal" => {}
+        "greatest" | "least" | "str_concat" | "str_contains" => {
+            let mut names = Vec::new();
+            scalar::default_references(d, value, &mut names, 0)?;
+            for name in names {
+                reference(&name);
+            }
+        }
         "source" => {
             let name = text(d, field(d, payload, "variable")?)?;
             reference(name);
@@ -607,6 +634,7 @@ impl Rows {
         column_terminology: bool,
         extraction: &str_extract::Prepared,
         string_templates: &str_template::Prepared,
+        intermediates: &intermediates::Declarations,
     ) -> Result<Self, PrepareError> {
         let root = d.root();
         let raw_rows = sequence(d, field(d, root, "rows")?)?;
@@ -706,6 +734,7 @@ impl Rows {
                     project,
                     extraction,
                     string_templates,
+                    intermediates,
                 )?;
             }
         }
@@ -775,6 +804,7 @@ impl Rows {
                     project,
                     extraction,
                     string_templates,
+                    intermediates,
                 )?);
             }
             // Other datasets require lookup/join state outside this closed row language.
@@ -836,6 +866,7 @@ impl Rows {
                     project,
                     extraction,
                     string_templates,
+                    intermediates,
                 )?);
             }
         }
@@ -1054,6 +1085,28 @@ impl Rows {
                     declarations_reported,
                 )?,
                 RowOperation::StrTemplate(operation) => str_template::bind_row(
+                    operation,
+                    declaration.column,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                )?,
+                RowOperation::Scalar(operation) => scalar::bind_row(
+                    operation,
+                    declaration.column,
+                    &catalog,
+                    name,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                )?,
+                RowOperation::StrContains(operation) => scalar::bind_row_contains(
                     operation,
                     declaration.column,
                     &catalog,

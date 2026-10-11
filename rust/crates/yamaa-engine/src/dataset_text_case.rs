@@ -18,14 +18,17 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
                 register(&branch.assignment.expression, counter);
             }
         }
-        Expression::Imputation { operands, .. }
+        Expression::Extreme { operands, .. }
+        | Expression::StrConcat { operands, .. }
+        | Expression::Imputation { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. } => {
             for source in operands {
                 register(&source.expression, counter);
             }
         }
-        Expression::StrExtract { source, .. }
+        Expression::StrContains { source, .. }
+        | Expression::StrExtract { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::Round { source, .. } => register(&source.expression, counter),
         _ => (),

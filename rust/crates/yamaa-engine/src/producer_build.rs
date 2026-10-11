@@ -484,11 +484,12 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
             // Stored order and native logical schema only: no cardinality/cell
             // observation or value-based inference establishes this contract.
             let limits = yamaa_core::producer_contract::Limits::default();
-            if schema.columns().len() > limits.fields {
+            let stored = crate::source_ingestion::stored_fields(schema, source.ordinal.as_deref())
+                .map_err(|_| DecodeError::Limit("source_ordinal_schema"))?;
+            if stored.len() > limits.fields {
                 return Err(DecodeError::Limit("producer_source_fields"));
             }
-            let actual = schema
-                .columns()
+            let actual = stored
                 .iter()
                 .map(|c| (c.name.as_str(), c.kind))
                 .collect::<Vec<_>>();

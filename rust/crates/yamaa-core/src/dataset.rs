@@ -60,6 +60,19 @@ pub use windows::{OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    Extreme {
+        operands: Vec<Assignment>,
+        largest: bool,
+    },
+    StrConcat {
+        operands: Vec<Assignment>,
+        missing: Option<Value>,
+        path: String,
+    },
+    StrContains {
+        source: alloc::boxed::Box<Assignment>,
+        operation: StringExtract,
+    },
     StrTemplate {
         operands: Vec<Assignment>,
         operation: StringTemplate,
@@ -316,6 +329,7 @@ pub enum PlanError {
     InvalidKeyMode,
     InvalidWindow,
     InvalidSourceOrder,
+    InvalidOutputOrder,
     InvalidLookup,
     InvalidIntermediate,
     InvalidConversionHandler,
@@ -337,6 +351,7 @@ pub struct DatasetPlan {
     warning_verifications: alloc::collections::BTreeSet<String>,
     conversion_handlers: Vec<ConversionHandler>,
     conversion_sites: BTreeMap<String, usize>,
+    output_order: Vec<OrderTerm>,
 }
 
 /// Validate nonempty, unique, bound column lists without reading table cells.
@@ -524,6 +539,9 @@ fn validate_assignment_at(
         }
         | Expression::StrExtract {
             source: operand, ..
+        }
+        | Expression::StrContains {
+            source: operand, ..
         } => {
             if operand.column != assignment.column {
                 return Err(PlanError::InvalidColumns);
@@ -540,6 +558,25 @@ fn validate_assignment_at(
                 remaining,
             )?;
             available[assignment.column] = false;
+        }
+        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => {
+            for operand in operands {
+                if operand.column != assignment.column {
+                    return Err(PlanError::InvalidColumns);
+                }
+                validate_assignment_at(
+                    operand,
+                    available,
+                    source,
+                    secondary,
+                    intermediates,
+                    output,
+                    mode,
+                    depth + 1,
+                    remaining,
+                )?;
+                available[assignment.column] = false;
+            }
         }
         Expression::StrTemplate {
             operands,
@@ -694,6 +731,19 @@ fn validate_assignment_at(
 fn key_expression(expression: &Expression) -> bool {
     match expression {
         Expression::Literal(_) | Expression::Source(_) | Expression::Column(_) => true,
+        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
+            .iter()
+            .all(|source| key_expression(&source.expression)),
+        Expression::StrContains { source, .. }
+        | Expression::StrCase { source, .. }
+        | Expression::StrPad { source, .. }
+        | Expression::StrExtract { source, .. }
+        | Expression::Round { source, .. } => key_expression(&source.expression),
+        Expression::StrTemplate { operands, .. }
+        | Expression::Temporal { operands, .. }
+        | Expression::Imputation { operands, .. } => operands
+            .iter()
+            .all(|source| key_expression(&source.expression)),
         Expression::Flag(flag) => flag.key_expression(),
         Expression::Compute(expression) => expression
             .bindings()
@@ -708,6 +758,19 @@ fn key_expression(expression: &Expression) -> bool {
 fn key_grain_source_read(expression: &Expression) -> bool {
     match expression {
         Expression::Source(_) => true,
+        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
+            .iter()
+            .any(|source| key_grain_source_read(&source.expression)),
+        Expression::StrContains { source, .. }
+        | Expression::StrCase { source, .. }
+        | Expression::StrPad { source, .. }
+        | Expression::StrExtract { source, .. }
+        | Expression::Round { source, .. } => key_grain_source_read(&source.expression),
+        Expression::StrTemplate { operands, .. }
+        | Expression::Temporal { operands, .. }
+        | Expression::Imputation { operands, .. } => operands
+            .iter()
+            .any(|source| key_grain_source_read(&source.expression)),
         Expression::Compute(expression) => expression.reads_source(),
         Expression::Flag(flag) => flag.reads_source(),
         Expression::Function(function) => function.reads_source(),
@@ -927,11 +990,29 @@ impl DatasetPlan {
             warning_verifications: Default::default(),
             conversion_handlers: Vec::new(),
             conversion_sites: BTreeMap::new(),
+            output_order: Vec::new(),
         })
     }
 }
 
 impl DatasetPlan {
+    /// Admit bound presentation terms separately from derivation and window order.
+    pub fn with_output_order(mut self, terms: Vec<OrderTerm>) -> Result<Self, PlanError> {
+        if terms.iter().enumerate().any(|(position, term)| {
+            term.column >= self.output.columns().len()
+                || terms[..position]
+                    .iter()
+                    .any(|other| other.column == term.column)
+        }) {
+            return Err(PlanError::InvalidOutputOrder);
+        }
+        self.output_order = terms;
+        Ok(self)
+    }
+    /// Presentation occurs only after all keys and verifications succeed.
+    pub fn output_order(&self) -> &[OrderTerm] {
+        &self.output_order
+    }
     /// Severity belongs to admitted check declarations, never host issue rows.
     pub fn with_warning_verifications(mut self, paths: Vec<String>) -> Result<Self, PlanError> {
         let checks: alloc::collections::BTreeSet<_> = self

@@ -55,7 +55,7 @@ fn identity(specification: &str) -> Identity<'_> {
     }
 }
 #[test]
-fn environment_and_unsupported_admission_precede_entry_and_study_reads() {
+fn environment_and_invalid_source_profile_precede_entry_and_study_reads() {
     let study = Study::new();
     let path = study.text("absent.yaml");
     let issues = file_application::check(
@@ -74,7 +74,7 @@ fn environment_and_unsupported_admission_precede_entry_and_study_reads() {
         study.0.join("spec.yaml"),
         VALID.replace(
             "input: {SRC: input.csv}",
-            "input: {SRC: {path: input.csv, ordinal: RECNO}}",
+            "input: {SRC: {path: input.unknown}}",
         ),
     )
     .unwrap();
@@ -88,11 +88,17 @@ fn environment_and_unsupported_admission_precede_entry_and_study_reads() {
     )
     .err()
     .unwrap();
-    assert!(!issues.is_empty());
-    assert!(issues
-        .iter()
-        .all(|i| i.condition == "unsupported_operation"));
+    assert_eq!(issues.len(), 1);
+    assert_eq!(issues[0].condition, "source_profile_unknown");
+    assert_eq!(issues[0].phase, "validation");
+    assert_eq!(issues[0].requirement, Some("REQ-0852".into()));
+    assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
+    assert_eq!(
+        issues[0].context,
+        "{\"dataset\":\"SRC\",\"path\":\"input.unknown\"}"
+    );
     assert!(!study.0.join("input.csv").exists());
+    assert!(!study.0.join("input.unknown").exists());
 }
 #[test]
 fn static_check_does_not_need_study_data_and_failed_build_cannot_save() {

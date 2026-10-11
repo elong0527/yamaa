@@ -27,6 +27,10 @@ mod key_grain;
 mod lookup;
 #[path = "dataset_numeric.rs"]
 mod numeric;
+#[path = "dataset_ordering.rs"]
+mod ordering;
+#[path = "dataset_scalar.rs"]
+mod scalar;
 #[path = "dataset_text_case.rs"]
 mod str_case;
 #[path = "dataset_text_extract.rs"]
@@ -478,6 +482,12 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                     == yamaa_core::value::ColumnType::Str,
         );
     }
+    if matches!(
+        &assignment.expression,
+        Expression::Extreme { .. } | Expression::StrConcat { .. } | Expression::StrContains { .. }
+    ) {
+        return scalar::evaluate(assignment, table, candidate, plan, row, limits, state);
+    }
     if let Expression::StrExtract { source, operation } = &assignment.expression {
         return str_extract::evaluate(
             source, operation, table, candidate, plan, row, limits, state,
@@ -576,7 +586,10 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             }
             value.clone()
         }
-        Expression::Flag(_)
+        Expression::Extreme { .. }
+        | Expression::StrConcat { .. }
+        | Expression::StrContains { .. }
+        | Expression::Flag(_)
         | Expression::Compute(_)
         | Expression::Case(_)
         | Expression::Round { .. }
@@ -934,6 +947,7 @@ impl Executor<'_> {
             .flat_map(|template| &template.assignments)
             .chain(self.plan.columns())
         {
+            scalar::register(&assignment.expression, &mut observations.handlers);
             imputation::register(&assignment.expression, &mut observations.handlers);
             str_case::register(&assignment.expression, &mut observations.handlers);
             str_extract::register(&assignment.expression, &mut observations.handlers);
@@ -1174,7 +1188,7 @@ impl Executor<'_> {
             )?;
         }
         observer(ExecutionPhase::OutputKeys);
-        let dataset = Dataset {
+        let mut dataset = Dataset {
             schema: self.plan.output().clone(),
             rows: candidates.into_iter().map(|row| row.values).collect(),
         };
@@ -1377,6 +1391,7 @@ impl Executor<'_> {
                 core::mem::take(records),
             )));
         }
+        ordering::apply(self.plan.output_order(), &mut dataset, &mut budget)?;
         Ok(Execution {
             dataset,
             verifications: core::mem::take(records),

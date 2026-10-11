@@ -2,12 +2,11 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 
-# The path is read from this file's directory, so the resolved chain names
-# common/input/dm.csv. Nothing is stored there, so the run retries
-# input/dm.csv, as written here, against the project root.
+# The path is declared relative to this shared file. The parent traversal
+# reaches the study input beside the entry specification.
 input:
   DM:
-    path: input/dm.csv
+    path: ../input/dm.csv
     types:
       AGE: int
 base: DM
