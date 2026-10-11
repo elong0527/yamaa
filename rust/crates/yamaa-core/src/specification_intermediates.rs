@@ -93,6 +93,10 @@ impl Declarations {
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
+        let findings = intermediate_admission::declaration_findings(d, items)?;
+        if !findings.is_empty() {
+            return Err(PrepareError::Invalid(findings));
+        }
         for (index, &id) in items.iter().enumerate() {
             let path = format!("intermediates[{index}]");
             optional_features(
@@ -249,9 +253,6 @@ impl Declarations {
                     order.push((name.into(), descending, nulls_first));
                 }
             }
-            if order.is_empty() != keep.is_none() {
-                reject(extra, "intermediate_selection", path.clone());
-            }
             let no_match = d
                 .field(id, "no_match")
                 .map(|value| literal(d, value, &format!("{path}.no_match")))
@@ -355,16 +356,26 @@ impl Declarations {
                 Default::default(),
             )
             .map_err(BindError::Catalog)?;
-            let default_keys = keys
-                .iter()
-                .map(|&column| {
-                    let name = &output.columns()[column].name;
-                    (
-                        name.clone(),
-                        match_values::Declaration::Variable(name.clone()),
-                    )
-                })
-                .collect::<Vec<_>>();
+            let default_keys = if item.keys.is_none() {
+                match intermediate_admission::inferred_keys(
+                    &catalog,
+                    output,
+                    keys,
+                    schema,
+                    &admits,
+                    &item.path,
+                    source_name,
+                    findings,
+                )? {
+                    Some(keys) => keys,
+                    None => {
+                        result.push(None);
+                        continue;
+                    }
+                }
+            } else {
+                Vec::new()
+            };
             let pairs_declared = item.keys.as_ref().unwrap_or(&default_keys);
             // Result types and donor fields precede expression declarations and reads.
             for (field, declaration) in pairs_declared {
