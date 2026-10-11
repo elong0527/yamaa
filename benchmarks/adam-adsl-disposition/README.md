@@ -42,7 +42,7 @@ summary reads every other epoch.
 - `DCTREAS` is the reported term on the last treatment record for a
   subject whose treatment status is `DISCONTINUED`; empty otherwise.
 - `DCSREASP` carries that reported term again when the coded
-  treatment term is `OTHER` — the specify text; empty otherwise.
+  treatment term is `OTHER` - the specify text; empty otherwise.
 
 **Note:** date, term, and reason come from a single last event, so
 the three always describe the same event: when two events share the
