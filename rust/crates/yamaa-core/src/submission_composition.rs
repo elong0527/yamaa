@@ -6,7 +6,7 @@ use crate::{
     specification_submission_document as spec, submission_document as env,
 };
 use alloc::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     format,
     string::{String, ToString},
     vec::Vec,
@@ -68,6 +68,13 @@ pub struct Column {
     pub(crate) source: Option<spec::OriginSource>,
     pub(crate) documents: Vec<spec::DocumentReference>,
     pub(crate) key_sequence: Option<usize>,
+    pub(crate) values: Vec<ValueDefinition>,
+}
+#[derive(Clone, Debug)]
+pub struct ValueDefinition {
+    pub(crate) test_code: String,
+    pub(crate) path: String,
+    pub(crate) column: Column,
 }
 #[derive(Clone, Debug)]
 pub struct Dataset {
@@ -77,6 +84,7 @@ pub struct Dataset {
     pub(crate) columns: Vec<Column>,
     pub(crate) href: String,
     pub(crate) artifact: String,
+    pub(crate) discriminator: Option<usize>,
 }
 #[derive(Clone, Debug)]
 pub struct Codelist {
@@ -141,6 +149,17 @@ impl Column {
             spec::ColumnType::Date => T::Date,
             spec::ColumnType::Datetime => T::DateTime,
         }
+    }
+    pub fn values(&self) -> &[ValueDefinition] {
+        &self.values
+    }
+}
+impl ValueDefinition {
+    pub fn test_code(&self) -> &str {
+        &self.test_code
+    }
+    pub fn column(&self) -> &Column {
+        &self.column
     }
 }
 pub fn family_name(family: Submission) -> &'static str {
@@ -254,11 +273,25 @@ fn origin_admits(
 }
 fn derivation_admits(
     document: &Document,
-    mut node: usize,
+    node: usize,
     kind: spec::OriginType,
     intermediates: &BTreeSet<String>,
 ) -> bool {
     use spec::OriginType as T;
+    match derivation_kind(document, node, intermediates) {
+        "literal" => matches!(kind, T::Assigned | T::Protocol | T::Other),
+        "source" => matches!(
+            kind,
+            T::Collected | T::Assigned | T::Protocol | T::Predecessor | T::Other | T::NotAvailable
+        ),
+        _ => matches!(kind, T::Derived | T::Assigned | T::Other),
+    }
+}
+fn derivation_kind(
+    document: &Document,
+    mut node: usize,
+    intermediates: &BTreeSet<String>,
+) -> &'static str {
     if let Some(value) = document.field(node, "value") {
         node = value;
     }
@@ -278,14 +311,11 @@ fn derivation_admits(
         .is_some_and(|(qualifier, _)| intermediates.contains(qualifier));
     let source = !intermediate && (variable.is_some() || document.field(node, "odm").is_some());
     if literal {
-        matches!(kind, T::Assigned | T::Protocol | T::Other)
+        "literal"
     } else if source {
-        matches!(
-            kind,
-            T::Collected | T::Assigned | T::Protocol | T::Predecessor | T::Other | T::NotAvailable
-        )
+        "source"
     } else {
-        matches!(kind, T::Derived | T::Assigned | T::Other)
+        "computed"
     }
 }
 fn reserved_metadata(
@@ -315,6 +345,576 @@ fn reserved_metadata(
 }
 /// Compose the complete bounded column-metadata profile. Value-level metadata
 /// retains an explicit unsupported finding pending its own shared composition.
+struct ColumnAdmission<'a> {
+    doc: &'a Document,
+    section: &'a env::Section,
+    catalogue: &'a ct::Catalogue,
+    known: &'a BTreeSet<&'a str>,
+    acrfs: &'a [&'a env::DocumentReference],
+    keys: &'a [String],
+    intermediates: &'a BTreeSet<String>,
+}
+impl ColumnAdmission<'_> {
+    fn admit(
+        &self,
+        column: &spec::Column,
+        column_path: &str,
+        derivations: &[usize],
+        refutation: (&'static str, &'static str),
+        findings: &mut Vec<Finding>,
+        bound: &mut BTreeSet<String>,
+    ) -> Option<Column> {
+        let Self {
+            doc,
+            section,
+            catalogue,
+            known,
+            acrfs,
+            keys,
+            intermediates,
+        } = *self;
+        let name = &column.name.value;
+        let Some(metadata) = &column.submission else {
+            findings.push(Finding::new(
+                "submission_metadata_missing",
+                "REQ-1015",
+                column_path,
+                name,
+            ));
+            return None;
+        };
+        let Some(origin) = &metadata.origin_metadata else {
+            findings.push(Finding::new(
+                "origin_missing",
+                "REQ-0918",
+                column_path,
+                name,
+            ));
+            return None;
+        };
+        if column.label.is_none() {
+            findings.push(Finding::new(
+                "submission_metadata_missing",
+                "REQ-1015",
+                column_path,
+                "label",
+            ));
+        }
+        if section.context.value == env::Context::Submission && !sas_name(name) {
+            findings.push(Finding::new(
+                "sas_name_too_long",
+                "REQ-1023",
+                column_path,
+                name,
+            ));
+        }
+        let core = metadata.core.as_ref().map(|c| c.value);
+        let mandatory = metadata
+            .mandatory
+            .as_ref()
+            .map_or(core == Some(spec::Core::Required), |c| c.value);
+        if core.is_none()
+            || (section.family == Submission::Adam
+                && (core == Some(spec::Core::Expected) || metadata.mandatory.is_none()))
+            || (section.family != Submission::Adam
+                && (core == Some(spec::Core::Conditional)
+                    || (core == Some(spec::Core::Required) && !mandatory)))
+        {
+            findings.push(Finding::new(
+                "core_mandatory_conflict",
+                "REQ-0915",
+                column_path,
+                name,
+            ));
+        }
+        if mandatory
+            && !keys.contains(name)
+            && verification(doc, column.node, "not_missing").is_empty()
+        {
+            findings.push(Finding::new(
+                "mandatory_not_enforced",
+                "REQ-0916",
+                column_path,
+                name,
+            ));
+        }
+        if section.family == Submission::Adam && metadata.role.is_some() {
+            findings.push(Finding::new(
+                "value_not_permitted",
+                "REQ-0917",
+                &format!("{column_path}.role"),
+                name,
+            ));
+        }
+        let source = origin.source.as_ref().map(|s| s.value);
+        if !origin_admits(section.family, origin.kind.value, source) {
+            findings.push(Finding::new(
+                "origin_source_not_admitted",
+                "REQ-0919",
+                &format!("{column_path}.origin"),
+                name,
+            ));
+        }
+        if matches!(
+            origin.kind.value,
+            spec::OriginType::Other
+                | spec::OriginType::Predecessor
+                | spec::OriginType::NotAvailable
+        ) && origin.description.is_none()
+        {
+            findings.push(Finding::new(
+                "origin_description_missing",
+                "REQ-0920",
+                &format!("{column_path}.origin"),
+                name,
+            ));
+        }
+        if origin.kind.value == spec::OriginType::Derived && metadata.method.is_none() {
+            findings.push(Finding::new(
+                "method_missing",
+                "REQ-0923",
+                column_path,
+                name,
+            ));
+        }
+        if derivations
+            .iter()
+            .any(|&node| !derivation_admits(doc, node, origin.kind.value, intermediates))
+        {
+            findings.push(Finding::new(refutation.0, refutation.1, column_path, name));
+        }
+        let mut refs = origin.documents.value.clone();
+        if origin.kind.value == spec::OriginType::Collected
+            && matches!(
+                source,
+                Some(spec::OriginSource::Investigator | spec::OriginSource::Subject)
+            )
+        {
+            if acrfs.len() != 1 {
+                findings.push(Finding::new(
+                    "origin_document_missing",
+                    "REQ-0984",
+                    &format!("{column_path}.origin"),
+                    name,
+                ));
+            } else if origin.documents.origin.key.is_none() {
+                refs.push(spec::DocumentReference::Plain(spec::Field {
+                    value: acrfs[0].id.value.clone(),
+                    origin: origin.documents.origin,
+                }));
+            } else if refs.is_empty() || refs.iter().any(|r| reference_id(r) != acrfs[0].id.value) {
+                findings.push(Finding::new(
+                    "origin_document_missing",
+                    "REQ-0893",
+                    &format!("{column_path}.origin.documents"),
+                    name,
+                ));
+            }
+        }
+        references(
+            findings,
+            &refs,
+            known,
+            &format!("{column_path}.origin.documents"),
+        );
+        if let Some(spec::Method::Class(class)) = &metadata.method {
+            references(
+                findings,
+                &class.documents.value,
+                known,
+                &format!("{column_path}.method"),
+            );
+        }
+        comment_references(
+            findings,
+            metadata.comment.as_ref(),
+            known,
+            &format!("{column_path}.comment"),
+        );
+        let data_type = metadata
+            .data_type
+            .as_ref()
+            .map_or(default_type(column.column_type.value), |d| d.value);
+        if column.column_type.value == spec::ColumnType::String
+            && matches!(data_type, spec::DataType::Integer | spec::DataType::Float)
+            || column.column_type.value != spec::ColumnType::String
+                && data_type != default_type(column.column_type.value)
+        {
+            findings.push(Finding::new(
+                "submission_data_type_not_admitted",
+                "REQ-0914",
+                column_path,
+                name,
+            ));
+        }
+        let maxima: Vec<_> = verification(doc, column.node, "max_length")
+            .iter()
+            .filter_map(|&n| doc.field(n, "max"))
+            .filter_map(|n| match &doc.nodes()[n] {
+                N::Integer(value) => Some(value.clone()),
+                _ => None,
+            })
+            .collect();
+        let length = metadata
+            .length
+            .as_ref()
+            .map(|v| v.value.clone())
+            .or_else(|| {
+                if column.column_type.value == spec::ColumnType::String {
+                    maxima.first().cloned()
+                } else {
+                    None
+                }
+            });
+        let needs_length = matches!(
+            data_type,
+            spec::DataType::Text | spec::DataType::Integer | spec::DataType::Float
+        );
+        if needs_length && length.is_none() {
+            findings.push(Finding::new(
+                "submission_length_missing",
+                "REQ-0912",
+                column_path,
+                name,
+            ));
+        }
+        if !needs_length && metadata.length.is_some() {
+            findings.push(Finding::new(
+                "submission_length_not_applicable",
+                "REQ-0912",
+                column_path,
+                name,
+            ));
+        }
+        if length
+            .as_ref()
+            .is_some_and(|s| s.starts_with('-') || s == "0")
+            || metadata
+                .significant_digits
+                .as_ref()
+                .is_some_and(|v| v.value.starts_with('-'))
+        {
+            findings.push(Finding::new(
+                "submission_length_invalid",
+                "REQ-0911",
+                column_path,
+                name,
+            ));
+        }
+        if metadata
+            .length
+            .as_ref()
+            .is_some_and(|n| maxima.iter().any(|max| max != &n.value))
+        {
+            findings.push(Finding::new(
+                "declared_length_conflict",
+                "REQ-0913",
+                column_path,
+                name,
+            ));
+        }
+        if (data_type == spec::DataType::Float) != metadata.significant_digits.is_some() {
+            findings.push(Finding::new(
+                if data_type == spec::DataType::Float {
+                    "submission_length_missing"
+                } else {
+                    "submission_length_not_applicable"
+                },
+                "REQ-0912",
+                column_path,
+                "significant_digits",
+            ));
+        }
+        if let Some(list) = &metadata.codelist {
+            bound.insert(list.value.clone());
+            let kind = match column.column_type.value {
+                spec::ColumnType::String => crate::value::ColumnType::Str,
+                spec::ColumnType::Integer => crate::value::ColumnType::Int,
+                spec::ColumnType::Float => crate::value::ColumnType::Float,
+                spec::ColumnType::Date => crate::value::ColumnType::Date,
+                spec::ColumnType::Datetime => crate::value::ColumnType::DateTime,
+            };
+            let allowed = verification(doc, column.node, "allowed_values");
+            let mut reader = crate::project_function_document::Reader::new(doc);
+            let allowed: Vec<Vec<_>> = allowed
+                .iter()
+                .filter_map(|&n| doc.field(n, "values"))
+                .filter_map(|n| match &doc.nodes()[n] {
+                    N::Sequence(values) => Some(
+                        values
+                            .iter()
+                            .map(|&v| reader.scalar(v, column_path))
+                            .collect(),
+                    ),
+                    _ => None,
+                })
+                .collect();
+            if !reader.finish().is_empty() {
+                findings.push(Finding::new(
+                    "value_not_permitted",
+                    "REQ-0955",
+                    column_path,
+                    "allowed_values literal admission",
+                ));
+            }
+            let bindings = if allowed.is_empty() {
+                catalogue.bind(&list.value, kind, None)
+            } else {
+                allowed
+                    .iter()
+                    .flat_map(|values| catalogue.bind(&list.value, kind, Some(values)))
+                    .collect()
+            };
+            for binding in bindings {
+                let (condition, requirement) = match binding {
+                    ct::BindingFinding::UnknownCodelist => ("unknown_codelist", "REQ-0953"),
+                    ct::BindingFinding::TypeMismatch { .. } => {
+                        ("codelist_type_mismatch", "REQ-0954")
+                    }
+                    ct::BindingFinding::ValuesConflict => ("codelist_values_conflict", "REQ-0955"),
+                    ct::BindingFinding::Limit(_) => ("application_rejected", "REQ-0955"),
+                };
+                findings.push(Finding::new(
+                    condition,
+                    requirement,
+                    &format!("{column_path}.codelist"),
+                    &list.value,
+                ));
+            }
+        }
+        Some(Column {
+            declaration: column.clone(),
+            data_type,
+            length,
+            mandatory,
+            source: if section.family == Submission::Adam
+                && origin.kind.value != spec::OriginType::Predecessor
+            {
+                Some(spec::OriginSource::Sponsor)
+            } else {
+                source
+            },
+            documents: refs,
+            key_sequence: keys.iter().position(|key| key == name).map(|k| k + 1),
+            values: Vec::new(),
+        })
+    }
+}
+
+fn row_derivation(doc: &Document, row: usize, name: &str) -> Option<usize> {
+    doc.field(row, "derivations")
+        .and_then(|n| doc.field(n, name))
+}
+fn column_derivations(
+    doc: &Document,
+    column: &spec::Column,
+    overrides: &[spec::ValueRow],
+    row: Option<usize>,
+) -> Vec<usize> {
+    if let Some(row) = row {
+        return row_derivation(doc, row, &column.name.value)
+            .or_else(|| doc.field(column.node, "derivation"))
+            .into_iter()
+            .collect();
+    }
+    let covered: BTreeSet<_> = overrides
+        .iter()
+        .flat_map(|row| {
+            row.overrides
+                .iter()
+                .map(move |o| (row.node, o.name.value.as_str()))
+        })
+        .collect();
+    let mut nodes: Vec<_> = doc.field(column.node, "derivation").into_iter().collect();
+    if let Some(N::Sequence(rows)) = doc.field(doc.root(), "rows").map(|n| &doc.nodes()[n]) {
+        for &row in rows {
+            // Each covered row is checked against its merged metadata below.
+            if covered.contains(&(row, column.name.value.as_str())) {
+                continue;
+            }
+            if let Some(node) = row_derivation(doc, row, &column.name.value) {
+                nodes.push(node);
+            }
+        }
+    }
+    nodes
+}
+
+fn compose_values(
+    admission: &ColumnAdmission<'_>,
+    declarations: &spec::Declarations,
+    output_columns: &[String],
+    selected: &mut [Column],
+    path: &str,
+    findings: &mut Vec<Finding>,
+    bound: &mut BTreeSet<String>,
+) -> Option<usize> {
+    let doc = admission.doc;
+    let columns = &declarations
+        .columns()
+        .expect("admitted dataset columns")
+        .value;
+    let domain = text(doc, doc.root(), "domain").unwrap_or_default();
+    let name = format!("{domain}TESTCD");
+    let discriminator = selected
+        .iter()
+        .position(|c| c.declaration.name.value == name);
+    let mut seen = BTreeMap::<(&str, &str), &spec::ColumnSubmission>::new();
+    for row in declarations.value_rows() {
+        let row_path = format!("{path}.rows.{}.submission", row.id.value);
+        if !columns.iter().any(|c| c.name.value == name) {
+            findings.push(Finding::new(
+                "value_metadata_requires_testcd",
+                "REQ-1163",
+                &row_path,
+                &domain,
+            ));
+            continue;
+        }
+        let Some(N::Text(test_code)) = row_derivation(doc, row.node, &name)
+            .map(|n| doc.field(n, "value").unwrap_or(n))
+            .and_then(|n| doc.field(n, "literal"))
+            .map(|n| &doc.nodes()[n])
+        else {
+            findings.push(Finding::new(
+                "value_metadata_requires_literal_testcd",
+                "REQ-1164",
+                &row_path,
+                &name,
+            ));
+            continue;
+        };
+        if discriminator.is_none() {
+            findings.push(Finding::new(
+                "submission_metadata_missing",
+                "REQ-1015",
+                &row_path,
+                "discriminator omitted from submission output",
+            ));
+        }
+        for value in &row.overrides {
+            let column_path = format!("{row_path}.{}", value.name.value);
+            let Some(base) = columns.iter().find(|c| c.name.value == value.name.value) else {
+                findings.push(Finding::new(
+                    "value_metadata_unknown_column",
+                    "REQ-1165",
+                    &column_path,
+                    &value.name.value,
+                ));
+                continue;
+            };
+            let derivations =
+                column_derivations(doc, base, declarations.value_rows(), Some(row.node));
+            if derivations.is_empty() {
+                findings.push(Finding::new(
+                    "value_metadata_unknown_column",
+                    "REQ-1165",
+                    &column_path,
+                    &value.name.value,
+                ));
+                continue;
+            }
+            if !output_columns.contains(&value.name.value) {
+                findings.push(Finding::new(
+                    "value_metadata_not_output_column",
+                    "REQ-1166",
+                    &column_path,
+                    &value.name.value,
+                ));
+                continue;
+            }
+            let Some(column) = selected
+                .iter_mut()
+                .find(|c| c.declaration.name.value == value.name.value)
+            else {
+                continue;
+            };
+            let key = (value.name.value.as_str(), test_code.as_str());
+            let duplicate = if let Some(first) = seen.get(&key) {
+                if !first.same_values(&value.submission) {
+                    findings.push(Finding::new(
+                        "conflicting_value_metadata",
+                        "REQ-1167",
+                        &column_path,
+                        test_code,
+                    ));
+                    continue;
+                }
+                true
+            } else {
+                seen.insert(key, &value.submission);
+                false
+            };
+            let mut effective = base.clone();
+            effective.submission = Some(
+                value
+                    .submission
+                    .inherit(base.submission.as_ref().expect("selected column metadata")),
+            );
+            let first_finding = findings.len();
+            let column_value = admission.admit(
+                &effective,
+                &column_path,
+                &derivations,
+                ("refuted_value_origin", "REQ-1168"),
+                findings,
+                bound,
+            );
+            for finding in &mut findings[first_finding..] {
+                for (key, value) in [
+                    ("column", value.name.value.as_str()),
+                    ("testcd", test_code.as_str()),
+                    ("row", row.id.value.as_str()),
+                ] {
+                    finding.context.insert(
+                        key.into(),
+                        crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                            value.into(),
+                        )),
+                    );
+                }
+                if finding.definition.requirement == Some("REQ-1168") {
+                    let origin = effective
+                        .submission
+                        .as_ref()
+                        .and_then(|m| m.origin_metadata.as_ref())
+                        .expect("refuted admitted origin");
+                    let node = derivations
+                        .iter()
+                        .find(|&&n| {
+                            !derivation_admits(doc, n, origin.kind.value, admission.intermediates)
+                        })
+                        .expect("refuted effective derivation");
+                    for (key, value) in [
+                        (
+                            "derivation_kind",
+                            derivation_kind(doc, *node, admission.intermediates),
+                        ),
+                        ("origin_type", origin.kind.value.name()),
+                    ] {
+                        finding.context.insert(
+                            key.into(),
+                            crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
+                                value.into(),
+                            )),
+                        );
+                    }
+                }
+            }
+            if let Some(column_value) = column_value {
+                if !duplicate {
+                    column.values.push(ValueDefinition {
+                        test_code: test_code.clone(),
+                        path: column_path,
+                        column: column_value,
+                    });
+                }
+            }
+        }
+    }
+    discriminator
+}
+
 pub fn compose(
     study: &env::Study,
     section: &env::Section,
@@ -376,6 +976,21 @@ pub fn compose(
                 _ => None,
             })
             .unwrap_or(0);
+        let overrides = input
+            .document
+            .field(input.document.root(), "rows")
+            .and_then(|n| match &input.document.nodes()[n] {
+                N::Sequence(rows) => Some(rows),
+                _ => None,
+            })
+            .into_iter()
+            .flatten()
+            .filter_map(|&r| input.document.field(r, "submission"))
+            .filter_map(|n| match &input.document.nodes()[n] {
+                N::Mapping(fields) => Some(fields.len()),
+                _ => None,
+            })
+            .try_fold(0usize, |sum, count| sum.checked_add(count));
         work = match input
             .document
             .nodes()
@@ -387,8 +1002,9 @@ pub fn compose(
                     .and_then(|text| n.checked_add(text))
             })
             .and_then(|n| {
-                output_columns
-                    .checked_add(1)
+                overrides
+                    .and_then(|count| output_columns.checked_add(count))
+                    .and_then(|count| count.checked_add(1))
                     .and_then(|count| n.checked_mul(count))
             })
             .and_then(|n| work.checked_add(n))
@@ -674,6 +1290,15 @@ pub fn compose(
                 ));
             }
         }
+        let admission = ColumnAdmission {
+            doc,
+            section,
+            catalogue,
+            known: &known,
+            acrfs: &acrfs,
+            keys: &keys,
+            intermediates: &intermediates,
+        };
         for name in &output_columns {
             let column_path = format!("{path}.columns.{name}.submission");
             let Some(column) = columns.value.iter().find(|c| &c.name.value == name) else {
@@ -685,370 +1310,27 @@ pub fn compose(
                 ));
                 continue;
             };
-            let Some(metadata) = &column.submission else {
-                findings.push(Finding::new(
-                    "submission_metadata_missing",
-                    "REQ-1015",
-                    &column_path,
-                    name,
-                ));
-                continue;
-            };
-            let Some(origin) = &metadata.origin_metadata else {
-                findings.push(Finding::new(
-                    "origin_missing",
-                    "REQ-0918",
-                    &column_path,
-                    name,
-                ));
-                continue;
-            };
-            if column.label.is_none() {
-                findings.push(Finding::new(
-                    "submission_metadata_missing",
-                    "REQ-1015",
-                    &column_path,
-                    "label",
-                ));
-            }
-            if section.context.value == env::Context::Submission && !sas_name(name) {
-                findings.push(Finding::new(
-                    "sas_name_too_long",
-                    "REQ-1023",
-                    &column_path,
-                    name,
-                ));
-            }
-            let core = metadata.core.as_ref().map(|c| c.value);
-            let mandatory = metadata
-                .mandatory
-                .as_ref()
-                .map_or(core == Some(spec::Core::Required), |c| c.value);
-            if core.is_none()
-                || (section.family == Submission::Adam
-                    && (core == Some(spec::Core::Expected) || metadata.mandatory.is_none()))
-                || (section.family != Submission::Adam
-                    && (core == Some(spec::Core::Conditional)
-                        || (core == Some(spec::Core::Required) && !mandatory)))
-            {
-                findings.push(Finding::new(
-                    "core_mandatory_conflict",
-                    "REQ-0915",
-                    &column_path,
-                    name,
-                ));
-            }
-            if mandatory
-                && !keys.contains(name)
-                && verification(doc, column.node, "not_missing").is_empty()
-            {
-                findings.push(Finding::new(
-                    "mandatory_not_enforced",
-                    "REQ-0916",
-                    &column_path,
-                    name,
-                ));
-            }
-            if section.family == Submission::Adam && metadata.role.is_some() {
-                findings.push(Finding::new(
-                    "value_not_permitted",
-                    "REQ-0917",
-                    &format!("{column_path}.role"),
-                    name,
-                ));
-            }
-            let source = origin.source.as_ref().map(|s| s.value);
-            if !origin_admits(section.family, origin.kind.value, source) {
-                findings.push(Finding::new(
-                    "origin_source_not_admitted",
-                    "REQ-0919",
-                    &format!("{column_path}.origin"),
-                    name,
-                ));
-            }
-            if matches!(
-                origin.kind.value,
-                spec::OriginType::Other
-                    | spec::OriginType::Predecessor
-                    | spec::OriginType::NotAvailable
-            ) && origin.description.is_none()
-            {
-                findings.push(Finding::new(
-                    "origin_description_missing",
-                    "REQ-0920",
-                    &format!("{column_path}.origin"),
-                    name,
-                ));
-            }
-            if origin.kind.value == spec::OriginType::Derived && metadata.method.is_none() {
-                findings.push(Finding::new(
-                    "method_missing",
-                    "REQ-0923",
-                    &column_path,
-                    name,
-                ));
-            }
-            let mut derivations: Vec<_> =
-                doc.field(column.node, "derivation").into_iter().collect();
-            if let Some(N::Sequence(rows)) = doc
-                .field(doc.root(), "rows")
-                .and_then(|n| doc.nodes().get(n))
-            {
-                for &row in rows {
-                    if let Some(node) = doc
-                        .field(row, "derivations")
-                        .and_then(|n| doc.field(n, name))
-                    {
-                        derivations.push(node);
-                    }
-                }
-            }
-            if derivations
-                .iter()
-                .any(|&node| !derivation_admits(doc, node, origin.kind.value, &intermediates))
-            {
-                findings.push(Finding::new(
-                    "origin_contradicts_derivation",
-                    "REQ-0922",
-                    &column_path,
-                    name,
-                ));
-            }
-            let mut refs = origin.documents.value.clone();
-            if origin.kind.value == spec::OriginType::Collected
-                && matches!(
-                    source,
-                    Some(spec::OriginSource::Investigator | spec::OriginSource::Subject)
-                )
-            {
-                if acrfs.len() != 1 {
-                    findings.push(Finding::new(
-                        "origin_document_missing",
-                        "REQ-0984",
-                        &format!("{column_path}.origin"),
-                        name,
-                    ));
-                } else if origin.documents.origin.key.is_none() {
-                    refs.push(spec::DocumentReference::Plain(spec::Field {
-                        value: acrfs[0].id.value.clone(),
-                        origin: origin.documents.origin,
-                    }));
-                } else if refs.is_empty()
-                    || refs.iter().any(|r| reference_id(r) != acrfs[0].id.value)
-                {
-                    findings.push(Finding::new(
-                        "origin_document_missing",
-                        "REQ-0893",
-                        &format!("{column_path}.origin.documents"),
-                        name,
-                    ));
-                }
-            }
-            references(
+            let derivations = column_derivations(doc, column, declarations.value_rows(), None);
+            if let Some(column) = admission.admit(
+                column,
+                &column_path,
+                &derivations,
+                ("origin_contradicts_derivation", "REQ-0922"),
                 &mut findings,
-                &refs,
-                &known,
-                &format!("{column_path}.origin.documents"),
-            );
-            if let Some(spec::Method::Class(class)) = &metadata.method {
-                references(
-                    &mut findings,
-                    &class.documents.value,
-                    &known,
-                    &format!("{column_path}.method"),
-                );
-            }
-            comment_references(
-                &mut findings,
-                metadata.comment.as_ref(),
-                &known,
-                &format!("{column_path}.comment"),
-            );
-            let data_type = metadata
-                .data_type
-                .as_ref()
-                .map_or(default_type(column.column_type.value), |d| d.value);
-            if column.column_type.value == spec::ColumnType::String
-                && matches!(data_type, spec::DataType::Integer | spec::DataType::Float)
-                || column.column_type.value != spec::ColumnType::String
-                    && data_type != default_type(column.column_type.value)
-            {
-                findings.push(Finding::new(
-                    "submission_data_type_not_admitted",
-                    "REQ-0914",
-                    &column_path,
-                    name,
-                ));
-            }
-            let maxima: Vec<_> = verification(doc, column.node, "max_length")
-                .iter()
-                .filter_map(|&n| doc.field(n, "max"))
-                .filter_map(|n| match &doc.nodes()[n] {
-                    N::Integer(value) => Some(value.clone()),
-                    _ => None,
-                })
-                .collect();
-            let length = metadata
-                .length
-                .as_ref()
-                .map(|v| v.value.clone())
-                .or_else(|| {
-                    if column.column_type.value == spec::ColumnType::String {
-                        maxima.first().cloned()
-                    } else {
-                        None
-                    }
-                });
-            let needs_length = matches!(
-                data_type,
-                spec::DataType::Text | spec::DataType::Integer | spec::DataType::Float
-            );
-            if needs_length && length.is_none() {
-                findings.push(Finding::new(
-                    "submission_length_missing",
-                    "REQ-0912",
-                    &column_path,
-                    name,
-                ));
-            }
-            if !needs_length && metadata.length.is_some() {
-                findings.push(Finding::new(
-                    "submission_length_not_applicable",
-                    "REQ-0912",
-                    &column_path,
-                    name,
-                ));
-            }
-            if length
-                .as_ref()
-                .is_some_and(|s| s.starts_with('-') || s == "0")
-                || metadata
-                    .significant_digits
-                    .as_ref()
-                    .is_some_and(|v| v.value.starts_with('-'))
-            {
-                findings.push(Finding::new(
-                    "submission_length_invalid",
-                    "REQ-0911",
-                    &column_path,
-                    name,
-                ));
-            }
-            if metadata
-                .length
-                .as_ref()
-                .is_some_and(|n| maxima.iter().any(|max| max != &n.value))
-            {
-                findings.push(Finding::new(
-                    "declared_length_conflict",
-                    "REQ-0913",
-                    &column_path,
-                    name,
-                ));
-            }
-            if (data_type == spec::DataType::Float) != metadata.significant_digits.is_some() {
-                findings.push(Finding::new(
-                    if data_type == spec::DataType::Float {
-                        "submission_length_missing"
-                    } else {
-                        "submission_length_not_applicable"
-                    },
-                    "REQ-0912",
-                    &column_path,
-                    "significant_digits",
-                ));
-            }
-            if let Some(list) = &metadata.codelist {
-                bound.insert(list.value.clone());
-                let kind = match column.column_type.value {
-                    spec::ColumnType::String => crate::value::ColumnType::Str,
-                    spec::ColumnType::Integer => crate::value::ColumnType::Int,
-                    spec::ColumnType::Float => crate::value::ColumnType::Float,
-                    spec::ColumnType::Date => crate::value::ColumnType::Date,
-                    spec::ColumnType::Datetime => crate::value::ColumnType::DateTime,
-                };
-                let allowed = verification(doc, column.node, "allowed_values");
-                let mut reader = crate::project_function_document::Reader::new(doc);
-                let allowed: Vec<Vec<_>> = allowed
-                    .iter()
-                    .filter_map(|&n| doc.field(n, "values"))
-                    .filter_map(|n| match &doc.nodes()[n] {
-                        N::Sequence(values) => Some(
-                            values
-                                .iter()
-                                .map(|&v| reader.scalar(v, &column_path))
-                                .collect(),
-                        ),
-                        _ => None,
-                    })
-                    .collect();
-                if !reader.finish().is_empty() {
-                    findings.push(Finding::new(
-                        "value_not_permitted",
-                        "REQ-0955",
-                        &column_path,
-                        "allowed_values literal admission",
-                    ));
-                }
-                let bindings = if allowed.is_empty() {
-                    catalogue.bind(&list.value, kind, None)
-                } else {
-                    allowed
-                        .iter()
-                        .flat_map(|values| catalogue.bind(&list.value, kind, Some(values)))
-                        .collect()
-                };
-                for binding in bindings {
-                    let (condition, requirement) = match binding {
-                        ct::BindingFinding::UnknownCodelist => ("unknown_codelist", "REQ-0953"),
-                        ct::BindingFinding::TypeMismatch { .. } => {
-                            ("codelist_type_mismatch", "REQ-0954")
-                        }
-                        ct::BindingFinding::ValuesConflict => {
-                            ("codelist_values_conflict", "REQ-0955")
-                        }
-                        ct::BindingFinding::Limit(_) => ("application_rejected", "REQ-0955"),
-                    };
-                    findings.push(Finding::new(
-                        condition,
-                        requirement,
-                        &format!("{column_path}.codelist"),
-                        &list.value,
-                    ));
-                }
-            }
-            selected.push(Column {
-                declaration: column.clone(),
-                data_type,
-                length,
-                mandatory,
-                source: if section.family == Submission::Adam
-                    && origin.kind.value != spec::OriginType::Predecessor
-                {
-                    Some(spec::OriginSource::Sponsor)
-                } else {
-                    source
-                },
-                documents: refs,
-                key_sequence: keys.iter().position(|key| key == name).map(|k| k + 1),
-            });
-        }
-        if let Some(node) = doc.field(doc.root(), "rows") {
-            if let N::Sequence(rows) = &doc.nodes()[node] {
-                for &row in rows {
-                    if doc.field(row, "submission").is_some_and(|n| {
-                        !matches!(&doc.nodes()[n], N::Null)
-                            && !matches!(&doc.nodes()[n], N::Mapping(fields) if fields.is_empty())
-                    }) {
-                        findings.push(Finding::cause(
-                            crate::diagnostic::ConditionCode::ApplicationUnsupported,
-                            &format!("{path}.rows"),
-                            "value_level_submission",
-                        ));
-                    }
-                }
+                &mut bound,
+            ) {
+                selected.push(column);
             }
         }
+        let discriminator = compose_values(
+            &admission,
+            &declarations,
+            &output_columns,
+            &mut selected,
+            &path,
+            &mut findings,
+            &mut bound,
+        );
         datasets.push(Dataset {
             id: id.clone(),
             domain: dataset.domain.as_ref().map_or(id, |d| d.value.clone()),
@@ -1056,6 +1338,7 @@ pub fn compose(
             columns: selected,
             artifact: input.artifact.into(),
             href: input.href.into(),
+            discriminator,
         });
     }
     let mut standards = alloc::vec![Standard {

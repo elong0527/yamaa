@@ -574,22 +574,36 @@ metadata against statically enumerated `--TESTCD` literals. The mapping to
 Define-XML is therefore fixed:
 
 - for each column carrying value-level metadata, the document generates one
-  `def:ValueListDef` per distinct test code value, referenced from the
-  column's `ItemRef`;
+  `def:ValueListDef` containing one ordered `ItemRef` per distinct test code
+  value. The column's `ItemDef` carries its single `def:ValueListRef` after
+  its `def:Origin`;
 - each value's entry becomes a per-value `ItemDef` carrying the column-level
   declaration merged with the row-level overrides;
-- each value list entry carries a `def:WhereClauseDef` selecting rows whose
-  `<DOMAIN>TESTCD` equals the literal code; and
-- each per-value `ItemDef` carries the row-level entry's `def:Origin`.
+- each value list `ItemRef` carries a `def:WhereClauseRef` to a generated
+  `def:WhereClauseDef`. Its `RangeCheck` has `Comparator="EQ"`,
+  `SoftHard="Soft"`, `def:ItemOID` referring to the `<DOMAIN>TESTCD`
+  `ItemDef`, and a `CheckValue` containing the literal code; and
+- each per-value `ItemDef` carries its effective inherited or overridden
+  `def:Origin`, codelist and other submission metadata. Associated methods,
+  comments and document references remain resolvable.
+
+This linkage follows the bundled authoritative Define-XML 2.1 XSDs:
+`define-extension.xsd` places `ValueListRef` only in the `ItemDef` extension
+(at most one), places `WhereClauseRef` in the `ItemRef` extension, and orders
+all `ValueListDef` elements before all `WhereClauseDef` elements ahead of
+the ordinary metadata definitions. `define-ns.xsd` requires a nonempty value
+list with unique item references and order numbers. A value list for every
+code linked from the column's `ItemRef` would violate these constraints.
 
 <a id="req-1169"></a>
 
-**REQ-1169.** No generator consumes the row-level `submission` map yet. A
-study document that includes a specification carrying value-level metadata
-therefore fails loudly under the `Submission` context. It does not generate a
-document that quietly omits the per-value definitions. Declared
-and unconsumed is an error; the failure names the row and column whose
-metadata has no generated form.
+**REQ-1169.** Every admitted row-level `submission` map must have its complete
+generated form. A generator that cannot consume an entry fails loudly under
+the `Submission` context, naming its row and column; it never quietly omits
+per-value definitions. The shared generator consumes the bounded typed map
+and the semantics in [REQ-1013](#req-1013). The retained reference generator's
+unconsumed-entry failure remains a historical transition control until its
+replacement is fully qualified.
 
 ### Interface behavior
 

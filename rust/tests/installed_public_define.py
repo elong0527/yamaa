@@ -7,11 +7,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from lxml import etree
-from jsonschema import Draft202012Validator
-import yaml
 import yamaa
-from yamaa import define, DefineError
+from jsonschema import Draft202012Validator
+from lxml import etree
+from yamaa import DefineError, define
+
+import yaml
 
 ROOT = Path(__file__).with_name("define-fixtures")
 SCHEMAS = Path(yamaa.__file__).parent / "submission/schemas"
@@ -27,7 +28,8 @@ class PublicDefine(unittest.TestCase):
         directory = self.base / name
         shutil.copytree(ROOT / name, directory)
         if published:
-            shutil.copy2(directory / "expected/dm.csv", directory / "dm.csv")
+            dataset = "lb" if name == "sdtm-lb-metadata" else "dm"
+            shutil.copy2(directory / "expected" / f"{dataset}.csv", directory / f"{dataset}.csv")
         self.assertFalse((directory / "input").exists())
         return directory
 
@@ -48,6 +50,126 @@ class PublicDefine(unittest.TestCase):
         root = etree.fromstring(content, parser)
         schema.assertValid(root)
         return root
+
+    def test_lb_independent_completion_value_links_schema_json_and_held_save(self):
+        directory = self.fixture("sdtm-lb-metadata", published=True)
+        result = self.call(directory)
+        self.assertEqual(result.issues.height, 0, result.issues)
+        artifacts = result._native.artifacts()
+        self.assertEqual([(name, state) for name, _, state in artifacts], [("lb.json", "Ready"), ("define.xml", "Ready")])
+        xml = self.validate_xml(artifacts[1][1])
+        ns = {"o": "http://www.cdisc.org/ns/odm/v1.3", "d": "http://www.cdisc.org/ns/def/v2.1"}
+        self.assertEqual(xml.get("CreationDateTime"), "2026-09-11T00:00:00")
+        self.assertEqual(xml.get("SourceSystemVersion"), "1.0")
+        self.assertEqual(xml.xpath("//d:ValueListDef/@OID", namespaces=ns), ["VL.LB.LBORRESU"])
+        self.assertEqual(xml.xpath("//o:ItemDef[d:ValueListRef]/@OID", namespaces=ns), ["IT.LB.LBORRESU"])
+        refs = xml.xpath("//d:ValueListDef/o:ItemRef", namespaces=ns)
+        self.assertEqual([ref.get("OrderNumber") for ref in refs], ["1", "2"])
+        self.assertEqual([ref.get("Mandatory") for ref in refs], ["No", "No"])
+        self.assertEqual(len(xml.xpath("//o:ItemDef", namespaces=ns)), 13)
+        for ordinal, code, source, codelist in [(1, "GLUC", "Vendor", "CL_GLUCOSE"), (2, "CREAT", "Sponsor", "CL_CREATININE")]:
+            identity = f"LB.LBORRESU.V{ordinal}"
+            self.assertEqual(refs[ordinal - 1].get("ItemOID"), "IT." + identity)
+            self.assertEqual(refs[ordinal - 1].xpath("d:WhereClauseRef/@WhereClauseOID", namespaces=ns), ["WC." + identity])
+            item = xml.xpath("//o:ItemDef[@OID=$oid]", namespaces=ns, oid="IT." + identity)[0]
+            self.assertEqual((item.get("Name"), item.get("DataType"), item.get("Length")), ("LBORRESU", "text", "8"))
+            self.assertEqual(item.xpath("o:CodeListRef/@CodeListOID", namespaces=ns), ["CL." + codelist])
+            self.assertEqual(item.xpath("d:Origin/@Type", namespaces=ns), ["Assigned"])
+            self.assertEqual(item.xpath("d:Origin/@Source", namespaces=ns), [source])
+            check = xml.xpath("//d:WhereClauseDef[@OID=$oid]/o:RangeCheck", namespaces=ns, oid="WC." + identity)[0]
+            self.assertEqual((check.get("Comparator"), check.get("SoftHard"), check.get("{" + ns["d"] + "}ItemOID")), ("EQ", "Soft", "IT.LB.LBTESTCD"))
+            self.assertEqual(check.xpath("o:CheckValue/text()", namespaces=ns), [code])
+        data = json.loads(artifacts[0][1])
+        Draft202012Validator(json.loads((SCHEMAS / "dataset.schema.json").read_bytes())).validate(data)
+        self.assertEqual([column["name"] for column in data["columns"]], ["DOMAIN", "STUDYID", "USUBJID", "LBSEQ", "LBTESTCD", "LBTEST", "LBORRES", "LBORRESU", "LBSTRESN", "LBSTRESU", "LBDTC"])
+        self.assertEqual(data["rows"], [
+            ["LB", "STUDY01", "001", 2, "GLUC", "Glucose", "95", "mg/dL", 95.0, "mg/dL", "2025-01-01"],
+            ["LB", "STUDY01", "002", 1, "GLUC", "Glucose", "101", "mg/dL", 101.0, "mg/dL", "2025-01-02"],
+            ["LB", "STUDY01", "001", 1, "CREAT", "Creatinine", "0.9", "mg/dL", 0.9, "mg/dL", "2025-01-01"],
+        ])
+        reads = result._native.capture_reads()
+        for name in ["spec.yaml", "submission-spec.yaml", "environment.yaml"]:
+            (directory / name).unlink()
+        (directory / "lb.csv").write_text("changed after preparation\n")
+        self.assertTrue(result.save())
+        self.assertFalse(result.save())
+        self.assertEqual(result._native.capture_reads(), reads)
+        for name, content, _ in artifacts:
+            self.assertEqual((directory / name).read_bytes(), content)
+
+    def test_lb_original_source_and_selected_value_codelist_rejections_write_nothing(self):
+        for mode in ["original source", "value codelist"]:
+            with self.subTest(mode=mode):
+                directory = self.fixture("sdtm-lb-metadata", published=True)
+                if mode == "original source":
+                    # Original spec.yaml stays byte-identical. Only the independent
+                    # completion's explicit Sponsor override is removed.
+                    overlay = yaml.safe_load((directory / "submission-spec.yaml").read_text())
+                    del overlay["rows"]
+                    (directory / "submission-spec.yaml").write_text(yaml.safe_dump(overlay, sort_keys=False))
+                else:
+                    (directory / "lb.csv").write_text((directory / "lb.csv").read_text().replace("95,mg/dL,95", "95,mmol/L,95"))
+                result = self.call(directory)
+                issues = result.issues.to_dicts()
+                if mode == "original source":
+                    self.assertTrue(any(row["requirement"] == "REQ-0919" and row["condition"] == "origin_source_not_admitted" for row in issues), issues)
+                    self.assertEqual((directory / "spec.yaml").read_bytes(), (ROOT / "sdtm-lb-metadata/spec.yaml").read_bytes())
+                else:
+                    issue = next(row for row in issues if row["condition"] == "allowed_values_failed")
+                    context = json.loads(issue["context"])
+                    self.assertEqual((context["column"], context["codelist"], context["testcd"], context["row"]), ("LBORRESU", "CL_GLUCOSE", "GLUC", 0))
+                    self.assertTrue(issue["spec_paths"][0].endswith("rows.glucose.submission.LBORRESU.codelist"))
+                with self.assertRaises(DefineError):
+                    result.save()
+                self.assertFalse((directory / "define.xml").exists())
+                self.assertFalse((directory / "lb.json").exists())
+                shutil.rmtree(directory)
+
+    def test_lb_metadata_only_and_all_independent_value_admission_controls(self):
+        for case, requirement, condition in [
+            ("valid", None, None),
+            ("domain", "REQ-1163", "value_metadata_requires_testcd"),
+            ("dynamic", "REQ-1164", "value_metadata_requires_literal_testcd"),
+            ("unknown", "REQ-1165", "value_metadata_unknown_column"),
+            ("output", "REQ-1166", "value_metadata_not_output_column"),
+            ("conflict", "REQ-1167", "conflicting_value_metadata"),
+            ("origin", "REQ-1168", "refuted_value_origin"),
+        ]:
+            with self.subTest(case=case):
+                directory = self.fixture("sdtm-lb-metadata")
+                environment = yaml.safe_load((directory / "environment.yaml").read_text())
+                environment["sdtm"]["dataset_json"] = False
+                (directory / "environment.yaml").write_text(yaml.safe_dump(environment, sort_keys=False))
+                spec = yaml.safe_load((directory / "spec.yaml").read_text())
+                first = spec["rows"][0]
+                if case == "domain":
+                    spec["domain"] = "XX"
+                elif case == "dynamic":
+                    first["derivations"]["LBTESTCD"] = {"source": "ODM.TestCode"}
+                elif case == "unknown":
+                    first["submission"]["BOGUS"] = first["submission"].pop("LBORRESU")
+                elif case == "output":
+                    spec["output"]["columns"].remove("LBSTRESU")
+                    first["submission"]["LBSTRESU"] = {"origin": {"type": "Assigned", "source": "Vendor"}}
+                elif case == "conflict":
+                    spec["rows"][1]["derivations"]["LBTESTCD"] = {"literal": "GLUC"}
+                elif case == "origin":
+                    first["submission"]["LBORRESU"]["origin"]["type"] = "Collected"
+                if case != "valid":
+                    (directory / "spec.yaml").write_text(yaml.safe_dump(spec, sort_keys=False))
+                result = self.call(directory)
+                if case == "valid":
+                    self.assertEqual(result.issues.height, 0, result.issues)
+                    self.assertEqual([name for name, _, _ in result._native.artifacts()], ["define.xml"])
+                    self.validate_xml(result._native.artifacts()[0][1])
+                else:
+                    self.assertTrue(any(row["requirement"] == requirement and row["condition"] == condition for row in result.issues.to_dicts()), result.issues)
+                    with self.assertRaises(DefineError):
+                        result.save()
+                self.assertFalse((directory / "input").exists())
+                self.assertFalse((directory / "lb.csv").exists())
+                self.assertFalse((directory / "define.xml").exists())
+                shutil.rmtree(directory)
 
     def test_dm_goldens_public_issues_and_held_save(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
