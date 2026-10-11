@@ -3,6 +3,7 @@ import gc
 import json
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -79,7 +80,35 @@ class PublicProducers(unittest.TestCase):
         return result._native.producer_attempt()
 
     def observe(self, result):
-        return json.loads(result._native.observations())
+        text = result._native.observations()
+        output = os.environ.get("YAMAA_PUBLIC_REPORT_DIR")
+        if output:
+            # Preserve the complete actual report and separately snapshot disk
+            # targets; held artifact content alone cannot prove publication.
+            self._witness_count = getattr(self, "_witness_count", 0) + 1
+            directory = Path(output) / "producer-witnesses/python" / self._testMethodName / f"{self._witness_count:02d}"
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / "report.json").write_text(text, encoding="utf-8")
+            saved = []
+            for name in ("generated", "published"):
+                for path in sorted((self.root / name).glob("*.csv")):
+                    if path.is_file():
+                        relative = path.relative_to(self.root)
+                        target = directory / "targets" / relative
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_bytes(path.read_bytes())
+                        saved.append(relative.as_posix())
+            (directory / "witness.json").write_text(json.dumps({
+                "scope": "supplemental_producer_publication",
+                "truth": "rust/tests/installed_public_producers.py",
+                "test": self._testMethodName,
+                "report": "report.json",
+                "saved_targets": saved,
+            }, indent=2) + "\n", encoding="utf-8")
+            provenance = os.environ.get("YAMAA_SUPPLEMENTAL_EVIDENCE")
+            if provenance:
+                (directory / "provenance.json").write_text(provenance, encoding="utf-8")
+        return json.loads(text)
 
     def test_original_aliases_fresh_union_before_data_and_retained_public_views(self):
         self.write("raw/raw.csv", b"ID,VALUE\n1,99.99\n")
@@ -268,6 +297,28 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
         self.assertEqual(list((self.root / "generated").iterdir()), [])
         self.assertEqual(self.observe(result)["publication"]["entered"], [])
         self.assertTrue(self.entered(result).accepted())
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS native parent case policy")
+    def test_macos_absent_case_aliases_and_unproven_unicode_targets_preflight(self):
+        (self.root / "generated").mkdir()
+        self.write("generated/case-probe", b"native case witness")
+        sensitive = not (self.root / "generated/CASE-PROBE").exists()
+        (self.root / "generated/case-probe").unlink()
+        for name in ("PRODUCER.csv", r"\u00e9.csv"):
+            self.write("consumer/root.yaml", CONSUMER.replace("../generated/root.csv", '"../generated/' + name + '"'))
+            result = self.build()
+            self.assertIsNotNone(result.output)
+            self.assertTrue(self.entered(result).accepted())
+            if name == "PRODUCER.csv" and sensitive:
+                self.assertTrue(result.save())
+                self.assertEqual((self.root / "generated/producer.csv").read_bytes(), PRODUCED)
+                self.assertEqual((self.root / "generated/PRODUCER.csv").read_bytes(), CONSUMED)
+                for path in (self.root / "generated").iterdir():
+                    path.unlink()
+            else:
+                self.assertFalse(result.save())
+                self.assertEqual(self.observe(result)["publication"]["entered"], [])
+                self.assertEqual(list((self.root / "generated").iterdir()), [])
 
     def test_consumer_only_bad_binding_precedes_all_study_and_runtime_effects(self):
         bad = FUNCTION.replace("params: [{name: x", "params: [{name: z").replace("args: {x:", "args: {z:").replace("short-circuit-missing:x", "short-circuit-missing:z")

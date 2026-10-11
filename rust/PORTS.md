@@ -104,6 +104,16 @@ checked before the first write.
 Native target admission reserves both retained canonical path copies before
 resolving locations. Windows duplicate-target comparison uses the transport's
 ordinal case-insensitive equality, including targets that do not yet exist.
+Whole-set Save preflight also compares held physical parent identities, so distinct
+selected root spellings cannot bypass target collision admission. On macOS the
+held parent's native `fpathconf(_PC_CASE_SENSITIVE)` policy governs absent ASCII
+case aliases. Two targets sharing one macOS physical parent conservatively refuse
+if either basename is non-ASCII: their Unicode normalization distinction is not
+qualified. This limitation follows Apple's [APFS filename rules](https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/APFS_Guide/FAQ/FAQ.html),
+which include normalization-insensitive lookup on case-sensitive volumes.
+Installed supplemental witnesses retain complete native producer reports and
+separate actual saved-file bytes with their checked source/installed-artifact
+provenance. They do not satisfy the separate formal M1 producer-cohort criterion.
 
 Each Save retains its actual entered prefix, including the failing call, and the
 original publication error or unwind. A failure stops later dependent writes;

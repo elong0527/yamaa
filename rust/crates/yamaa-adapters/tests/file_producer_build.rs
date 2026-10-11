@@ -312,6 +312,47 @@ fn absent_windows_case_alias_targets_refuse_before_every_write() {
     assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
     assert!(result.output().is_some());
 }
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_absent_case_alias_and_unproven_unicode_targets_preflight_before_every_write() {
+    use yamaa_adapters::producer_result::prepare_owned_classified;
+    let study = Study::new();
+    study.rounded();
+    fs::create_dir(study.0.join("generated")).unwrap();
+    study.write("generated/case-probe", b"native case witness");
+    let sensitive = !study.0.join("generated/CASE-PROBE").exists();
+    fs::remove_file(study.0.join("generated/case-probe")).unwrap();
+    for name in ["PRODUCER.csv", r"\u00e9.csv"] {
+        study.write(
+            "consumer/root.yaml",
+            CONSUMER.replace("../generated/root.csv", &format!("\"../generated/{name}\"")),
+        );
+        let mut build = study.build(Language::Python);
+        let mut activation = Activation::new(&study, Mode::Pass);
+        let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+        assert!(owned.accepted());
+        let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+        if name == "PRODUCER.csv" && sensitive {
+            assert!(result.save().unwrap());
+            fs::remove_file(study.0.join("generated/producer.csv")).unwrap();
+            fs::remove_file(study.0.join("generated/PRODUCER.csv")).unwrap();
+        } else {
+            assert!(!result.save().unwrap());
+            assert!(result
+                .publication_attempt()
+                .unwrap()
+                .entered
+                .entered
+                .is_empty());
+            assert_eq!(
+                result.observations()["publication"]["error"]["code"],
+                "target_preflight"
+            );
+        }
+        assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+        assert!(result.output().is_some());
+    }
+}
 #[cfg(unix)]
 #[test]
 fn actual_late_consumer_publication_failure_keeps_producer_bytes_original_io_and_completed_build() {

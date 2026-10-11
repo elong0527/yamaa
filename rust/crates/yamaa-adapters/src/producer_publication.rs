@@ -210,16 +210,20 @@ impl PublicationPort for NativePort<'_> {
                     error: crate::file_publication::Error::PathMismatch,
                 });
             }
-            self.publishers
-                .push(
-                    target
-                        .target
-                        .publisher(artifact.path())
-                        .map_err(|error| TargetFailure {
-                            node: artifact.node(),
-                            error,
-                        })?,
-                );
+            let failure = |error| TargetFailure {
+                node: artifact.node(),
+                error,
+            };
+            let publisher = target.target.publisher(artifact.path()).map_err(failure)?;
+            // Lexical admission cannot identify distinct selected root names
+            // denoting the same held physical parent. Check those aliases only
+            // at Save, when every parent must exist, before the first write.
+            for previous in &self.publishers {
+                if publisher.same_target(previous).map_err(failure)? {
+                    return Err(failure(crate::file_publication::Error::InvalidTarget));
+                }
+            }
+            self.publishers.push(publisher);
         }
         Ok(())
     }

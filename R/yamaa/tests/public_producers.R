@@ -4,7 +4,43 @@ private <- function(name) get(name, namespace)
 root <- system.file("project-original", package="yamaa", mustWork=TRUE)
 reply <- private(".domain_reply")
 handle <- function(result) get("h", envir=environment(result$save), inherits=FALSE)
-observe <- function(result) rawToChar(private(".domain_observations")(result))
+.producer_witness <- new.env(parent=emptyenv())
+.producer_witness$index <- 0L
+observe <- function(result) {
+  bytes <- private(".domain_observations")(result)
+  output <- Sys.getenv("YAMAA_PUBLIC_REPORT_DIR")
+  if(nzchar(output)) {
+    # Reports remain complete actual native JSON. Disk targets are separate
+    # witnesses, preserving both earlier writes and failed-target prior bytes.
+    .producer_witness$index <- .producer_witness$index+1L
+    directory <- file.path(output,"producer-witnesses/r",sprintf("%03d",.producer_witness$index))
+    dir.create(directory,recursive=TRUE,showWarnings=FALSE)
+    writeBin(bytes,file.path(directory,"report.json"))
+    saved <- character()
+    if(exists("work",envir=parent.frame(),inherits=TRUE)) {
+      current <- get("work",envir=parent.frame(),inherits=TRUE)
+      for(name in c("generated","published")) {
+        paths <- list.files(file.path(current,name),pattern="[.]csv$",full.names=TRUE)
+        for(path in paths[!dir.exists(paths)]) {
+          relative <- paste0(name,"/",basename(path))
+          target <- file.path(directory,"targets",relative)
+          dir.create(dirname(target),recursive=TRUE,showWarnings=FALSE)
+          stopifnot(file.copy(path,target,overwrite=TRUE))
+          saved <- c(saved,relative)
+        }
+      }
+    }
+    # This fixture authors fixed filenames without JSON quoting characters.
+    targets <- paste0('"',saved,'"',collapse=",")
+    if(!length(saved)) targets <- ""
+    writeBin(charToRaw(paste0('{"scope":"supplemental_producer_publication",',
+      '"truth":"R/yamaa/tests/public_producers.R","report":"report.json",',
+      '"saved_targets":[',targets,']}\n')),file.path(directory,"witness.json"))
+    provenance <- Sys.getenv("YAMAA_SUPPLEMENTAL_EVIDENCE")
+    if(nzchar(provenance)) writeBin(charToRaw(provenance),file.path(directory,"provenance.json"))
+  }
+  rawToChar(bytes)
+}
 evidence <- function(result) reply(.Call(private("wrap__domain_producer_evidence"), handle(result)))
 preparation <- function(result) reply(.Call(private("wrap__domain_preparation_sources"), handle(result)))
 raw <- charToRaw("ID,VALUE\n1,1.234\n2,2.345\n")
@@ -338,4 +374,27 @@ if(.Platform$OS.type=="windows") {
     grepl('"entered":[]',observe(result),fixed=TRUE))
   unlink(work,recursive=TRUE)
   cat("R absent Windows case-alias targets refuse every write\n")
+}
+
+if(Sys.info()[["sysname"]]=="Darwin") {
+  work <- study();dir.create(file.path(work,"generated"))
+  write(work,"generated/case-probe","native case witness")
+  sensitive <- !file.exists(file.path(work,"generated/CASE-PROBE"))
+  unlink(file.path(work,"generated/case-probe"))
+  for(name in c("PRODUCER.csv","\\u00e9.csv")) {
+    parts <- strsplit(consumer,"../generated/root.csv",fixed=TRUE)[[1L]]
+    write(work,"consumer/root.yaml",paste(parts,collapse=paste0('"../generated/',name,'"')))
+    result <- build(work)
+    stopifnot(!is.null(result$output),isTRUE(evidence(result)$accepted))
+    if(name=="PRODUCER.csv" && sensitive) {
+      stopifnot(isTRUE(result$save()),
+        identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
+        identical(readBin(file.path(work,"generated/PRODUCER.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,2.46\n2,4.70\n")))
+      unlink(list.files(file.path(work,"generated"),full.names=TRUE))
+    } else stopifnot(identical(result$save(),FALSE),
+      grepl('"entered":[]',observe(result),fixed=TRUE),
+      length(list.files(file.path(work,"generated"),all.files=TRUE,no..=TRUE))==0L)
+  }
+  unlink(work,recursive=TRUE)
+  cat("R macOS parent case policy and unproven Unicode names refuse before publication\n")
 }

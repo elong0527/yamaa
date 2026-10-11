@@ -38,6 +38,49 @@ impl Drop for Directory {
     }
 }
 #[test]
+fn physical_target_comparison_survives_selected_parent_aliases_and_rename() {
+    let directory = Directory::new();
+    let selected = directory.0.join("selected");
+    let moved = directory.0.join("moved");
+    fs::create_dir(&selected).unwrap();
+    let first = Publisher::new("one", selected.join("output.csv").to_str().unwrap()).unwrap();
+    fs::rename(&selected, &moved).unwrap();
+    let alias = Publisher::new("two", moved.join("output.csv").to_str().unwrap()).unwrap();
+    assert!(first.same_target(&alias).unwrap());
+    let other_name = Publisher::new("three", moved.join("other.csv").to_str().unwrap()).unwrap();
+    assert!(!first.same_target(&other_name).unwrap());
+    fs::create_dir(&selected).unwrap();
+    let replacement =
+        Publisher::new("four", selected.join("output.csv").to_str().unwrap()).unwrap();
+    assert!(!first.same_target(&replacement).unwrap());
+    assert!(fs::read_dir(&selected).unwrap().next().is_none());
+    assert!(fs::read_dir(&moved).unwrap().next().is_none());
+    // Replacement names stay distinct even if current files share an inode.
+    fs::write(moved.join("output.csv"), b"prior").unwrap();
+    fs::hard_link(moved.join("output.csv"), moved.join("other.csv")).unwrap();
+    assert!(!first.same_target(&other_name).unwrap());
+}
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_absent_case_aliases_and_unproven_unicode_names_are_refused_without_writes() {
+    let directory = Directory::new();
+    let first = directory.publisher();
+    let alias = Publisher::new("alias", directory.0.join("OUTPUT.csv").to_str().unwrap()).unwrap();
+    // The release host's ordinary APFS volume is case-insensitive. A native
+    // witness establishes that fact independently of the comparer under test.
+    fs::write(directory.0.join("case-probe"), b"witness").unwrap();
+    let case_sensitive = !directory.0.join("CASE-PROBE").exists();
+    fs::remove_file(directory.0.join("case-probe")).unwrap();
+    assert_eq!(first.same_target(&alias).unwrap(), !case_sensitive);
+    let unicode =
+        Publisher::new("unicode", directory.0.join("\u{e9}.csv").to_str().unwrap()).unwrap();
+    assert!(matches!(
+        first.same_target(&unicode),
+        Err(Error::InvalidTarget)
+    ));
+    assert!(directory.names().is_empty());
+}
+#[test]
 fn explicit_saves_replace_complete_bytes_and_leave_no_temporary_files() {
     let directory = Directory::new();
     fs::write(directory.target(), b"old").unwrap();

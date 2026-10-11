@@ -149,6 +149,32 @@ impl AnchoredTarget {
     }
 }
 impl Publisher {
+    /// Compare entries through retained physical parents, including selected-root
+    /// aliases. No target is opened or written. Unproven macOS Unicode name
+    /// distinctions refuse the whole set before publication.
+    pub fn same_target(&self, other: &Self) -> Result<bool, Error> {
+        if identity(&fs::fstat(&self.parent)?) != identity(&fs::fstat(&other.parent)?) {
+            return Ok(false);
+        }
+        #[cfg(target_os = "macos")]
+        {
+            // APFS also ignores Unicode normalization on case-sensitive volumes.
+            // No bounded native Unicode comparer is present, so do not claim
+            // distinct absent non-ASCII names in a shared physical directory.
+            if !self.name.is_ascii() || !other.name.is_ascii() {
+                return Err(Error::InvalidTarget);
+            }
+            if parent_case_sensitive(&self.parent)? {
+                Ok(self.name == other.name)
+            } else {
+                Ok(self.name.eq_ignore_ascii_case(&other.name))
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Ok(self.name == other.name)
+        }
+    }
     /// The caller names the absolute target; declarations grant no write authority.
     pub fn new(declared: &str, target: &str) -> Result<Self, Error> {
         if declared.len() > MAX_PATH_BYTES || target.len() > MAX_PATH_BYTES {
@@ -332,6 +358,24 @@ impl Publisher {
             return Ok((temporary, file));
         }
         Err(Error::Limit)
+    }
+}
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn parent_case_sensitive(parent: &OwnedFd) -> Result<bool, Error> {
+    use std::{
+        ffi::{c_int, c_long},
+        os::fd::AsRawFd,
+    };
+    unsafe extern "C" {
+        fn fpathconf(fd: c_int, name: c_int) -> c_long;
+    }
+    // _PC_CASE_SENSITIVE is 11 in the public macOS sys/unistd.h SDK.
+    // SAFETY: fpathconf only queries this live owned directory descriptor.
+    match unsafe { fpathconf(parent.as_raw_fd(), 11) } {
+        0 => Ok(false),
+        1 => Ok(true),
+        _ => Err(Error::InvalidTarget),
     }
 }
 struct Pending<'a> {
