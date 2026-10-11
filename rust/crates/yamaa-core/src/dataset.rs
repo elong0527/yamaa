@@ -60,6 +60,19 @@ pub use windows::{OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    Extreme {
+        operands: Vec<Assignment>,
+        largest: bool,
+    },
+    StrConcat {
+        operands: Vec<Assignment>,
+        missing: Option<Value>,
+        path: String,
+    },
+    StrContains {
+        source: alloc::boxed::Box<Assignment>,
+        operation: StringExtract,
+    },
     StrTemplate {
         operands: Vec<Assignment>,
         operation: StringTemplate,
@@ -525,6 +538,9 @@ fn validate_assignment_at(
         }
         | Expression::StrExtract {
             source: operand, ..
+        }
+        | Expression::StrContains {
+            source: operand, ..
         } => {
             if operand.column != assignment.column {
                 return Err(PlanError::InvalidColumns);
@@ -541,6 +557,25 @@ fn validate_assignment_at(
                 remaining,
             )?;
             available[assignment.column] = false;
+        }
+        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => {
+            for operand in operands {
+                if operand.column != assignment.column {
+                    return Err(PlanError::InvalidColumns);
+                }
+                validate_assignment_at(
+                    operand,
+                    available,
+                    source,
+                    secondary,
+                    intermediates,
+                    output,
+                    mode,
+                    depth + 1,
+                    remaining,
+                )?;
+                available[assignment.column] = false;
+            }
         }
         Expression::StrTemplate {
             operands,
@@ -695,6 +730,19 @@ fn validate_assignment_at(
 fn key_expression(expression: &Expression) -> bool {
     match expression {
         Expression::Literal(_) | Expression::Source(_) | Expression::Column(_) => true,
+        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
+            .iter()
+            .all(|source| key_expression(&source.expression)),
+        Expression::StrContains { source, .. }
+        | Expression::StrCase { source, .. }
+        | Expression::StrPad { source, .. }
+        | Expression::StrExtract { source, .. }
+        | Expression::Round { source, .. } => key_expression(&source.expression),
+        Expression::StrTemplate { operands, .. }
+        | Expression::Temporal { operands, .. }
+        | Expression::Imputation { operands, .. } => operands
+            .iter()
+            .all(|source| key_expression(&source.expression)),
         Expression::Flag(flag) => flag.key_expression(),
         Expression::Compute(expression) => expression
             .bindings()
@@ -709,6 +757,19 @@ fn key_expression(expression: &Expression) -> bool {
 fn key_grain_source_read(expression: &Expression) -> bool {
     match expression {
         Expression::Source(_) => true,
+        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
+            .iter()
+            .any(|source| key_grain_source_read(&source.expression)),
+        Expression::StrContains { source, .. }
+        | Expression::StrCase { source, .. }
+        | Expression::StrPad { source, .. }
+        | Expression::StrExtract { source, .. }
+        | Expression::Round { source, .. } => key_grain_source_read(&source.expression),
+        Expression::StrTemplate { operands, .. }
+        | Expression::Temporal { operands, .. }
+        | Expression::Imputation { operands, .. } => operands
+            .iter()
+            .any(|source| key_grain_source_read(&source.expression)),
         Expression::Compute(expression) => expression.reads_source(),
         Expression::Flag(flag) => flag.reads_source(),
         Expression::Function(function) => function.reads_source(),

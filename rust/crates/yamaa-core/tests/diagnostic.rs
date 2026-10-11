@@ -490,6 +490,28 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         ContextValue::Scalar(Value::Str("SEX".into()))
     );
     reached.insert(finding.code);
+    let extreme = yamaa_core::scalar_language::incomparable_diagnostic(
+        &["DTHDT".into(), "DAY".into()],
+        &[ColumnType::Date, ColumnType::Int],
+        "columns.RESULT.derivation.greatest",
+    );
+    assert_eq!(
+        (
+            extreme.definition().phase,
+            extreme.definition().condition,
+            extreme.definition().requirement
+        ),
+        ("validation", "incomparable_sources", Some("REQ-0324"))
+    );
+    assert_eq!(extreme.spec_paths, ["columns.RESULT.derivation.greatest"]);
+    assert_eq!(
+        extreme.context["types"],
+        ContextValue::Sequence(vec![
+            ContextValue::Scalar(Value::Str("date".into())),
+            ContextValue::Scalar(Value::Str("int".into()))
+        ])
+    );
+    reached.insert(extreme.code);
     assert_eq!(reached, CONDITIONS.iter().copied().collect());
     assert_eq!(
         CONDITIONS.len(),
