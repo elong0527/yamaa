@@ -94,8 +94,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 9
-      max: 9
+      min: 10
+      max: 10
   - assert:
       id: treatment-emergent-onset-is-not-before-first-dose
       when: "TRTEMFL = 'Y' AND ASTDTM IS NOT NULL"
