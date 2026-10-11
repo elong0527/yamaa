@@ -3,6 +3,7 @@ use super::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SelectionRead {
+    Expression(alloc::boxed::Box<Assignment>),
     Column(usize),
     Source(usize),
     Collect {
@@ -54,6 +55,7 @@ impl FirstAvailable {
                         }
                     }
                 }
+                SelectionRead::Expression(_) => (),
                 SelectionRead::Column(column) => {
                     if !available.get(*column).copied().unwrap_or(false) {
                         return Err(PlanError::UnavailableColumn);

@@ -18,7 +18,10 @@ pub(super) fn validate(
             .get(key.source_column)
             .ok_or(PlanError::InvalidLookup)?;
         if !available.get(key.output_column).copied().unwrap_or(false)
-            || field.kind != output.columns()[key.output_column].kind
+            || !crate::key_relation::comparable(
+                field.kind.into(),
+                output.columns()[key.output_column].kind.into(),
+            )
             || lookup.keys[..index]
                 .iter()
                 .any(|previous| previous.source_column == key.source_column)
