@@ -180,9 +180,10 @@ class PublicEnvironment(unittest.TestCase):
         # path beside the declaring specification.
         Path("yamaa-project.yaml").write_text("version: '1.0'\ndata_roots: [shared]\n")
         Path("data.csv").write_text("ID\n999\n")
+        Path("shared/directory.csv").mkdir()
         for input_path, condition in (
             ("data.csv", "resource_path_missing"),
-            ("../shared", "resource_not_regular"),
+            ("../shared/directory.csv", "resource_path_not_regular_file"),
         ):
             Path("entry/spec.yaml").write_text(
                 document % (json.dumps(input_path), json.dumps(output))

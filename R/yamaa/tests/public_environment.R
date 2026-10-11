@@ -266,11 +266,12 @@ stopifnot(nrow(absolute$issues) == 0L, identical(as.character(absolute$output$ID
 unlink(output)
 writeLines(c("version: '1.0'", "data_roots: [shared]"), "yamaa-project.yaml")
 writeLines(c("ID", "999"), "data.csv")
-for (input in c("data.csv", "../shared")) {
+dir.create("shared/directory.csv")
+for (input in c("data.csv", "../shared/directory.csv")) {
   writeLines(local_document(input), "entry/spec.yaml")
   failed <- yamaa_domain("entry/spec.yaml", environment = "environment.yaml")
   stopifnot(is.null(failed$output), identical(failed$issues$condition,
-    if (input == "data.csv") "resource_path_missing" else "resource_not_regular"),
+    if (input == "data.csv") "resource_path_missing" else "resource_path_not_regular_file"),
     identical(failed$issues$spec_paths, list("input.SRC.path")),
     inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"), !file.exists(output))
 }
