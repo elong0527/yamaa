@@ -128,8 +128,7 @@ def generated(root):
         if entry.get("retired"):
             continue
         historical = (
-            ", ".join(dict.fromkeys(historical_sources[identifier]))
-            or "Schema prose"
+            ", ".join(dict.fromkeys(historical_sources[identifier])) or "Schema prose"
         )
         index.append(
             f"| [{identifier}](../{entry['file']}#{identifier.lower()}) | `{entry['file']}` | {historical} |"
