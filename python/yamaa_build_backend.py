@@ -165,8 +165,10 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
                 ):
                     raise ValueError(f"unsupported workspace member: {member}")
                 member_root = workspace / member
-                if f"{root}/rust/{member}/Cargo.toml" in names:
-                    continue
+                # A member manifest already in the archive does not imply its
+                # sources are intact: verify every member source (manifest
+                # included) against the local tree so a pruned or altered
+                # member cannot slip through the restore.
                 for path in member_sources(member_root):
                     relative = path.relative_to(member_root)
                     name = f"{root}/rust/{member}/{relative.as_posix()}"
