@@ -6,7 +6,8 @@ The historical evidence below retains each slice's original scope and provenance
 
 The 2026-10-11 frontier includes #1927's qualified ordered primary Save,
 #1926's completed numerical decision ledger, #1925's shared Define generators,
-and #1932/#1928's classified lock/rounding findings. Formal producer M1 reports,
+#1932/#1928's classified lock/rounding findings and #1934's borrowed schema
+diagnostic projection. Formal producer M1 reports,
 graph sidecars, value metadata/full submission retirement, public API disposition
 and the final combined Windows R/release matrix remain acceptance gates. The support matrix
 and exclusions are approved; they do not authorize release transition.

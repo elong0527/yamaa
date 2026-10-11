@@ -2,7 +2,7 @@
 
 This is the implementation plan for B17/B18 in the
 [release blocker register](release-readiness.md), assessed against main
-`0d691f6c631bc823563517cd641b1d7f02f71cee` on 2026-10-11. It proposes evidence
+`8e97023fe93a1d40a762be35c286bbbd5695137d` on 2026-10-11. It proposes evidence
 collection, not approved workload sizes, numeric budgets or release transition.
 The first-release support matrix and exclusions are already approved in the
 [maintainer decisions](maintainer-decisions.md#first-release-support-matrix).
