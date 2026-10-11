@@ -15,5 +15,5 @@ stopifnot(identical(actual$rows[[2L]],list("9223372036854775807","610062","80000
 stopifnot(identical(actual$rows[[3L]],list(NULL,NULL,NULL,NULL,NULL)))
 stopifnot(identical(json(list(issues=list(),paths=list("a"),context=raw_json('{"k":1}'))),'{"issues":[],"paths":["a"],"context":{"k":1}}'))
 stopifnot(identical(json_text("a\n\"\\"),'"a\\n\\\"\\\\"'))
-stopifnot(identical(hex(charToRaw(enc2utf8("é"))),"c3a9"))
+stopifnot(identical(hex(charToRaw(enc2utf8("\u00e9"))),"c3a9"))
 cat("lossless R public tables, NUL text, signed int64, float bits, temporal values and issue JSON passed\n")
