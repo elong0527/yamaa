@@ -1,121 +1,38 @@
-//! Resolve schema findings against held pass inputs, without reparsing source YAML.
+//! Represent core-admitted schema findings without reparsing source YAML.
 use crate::specification_source::CapturedFindings;
 use serde_json::{json, Map, Number, Value};
+pub(crate) use yamaa_core::schema::SchemaDiagnosticError as Error;
 use yamaa_core::schema::{
-    Document, DocumentNode as N, SchemaContext as C, SchemaDiagnostic, SchemaStructure,
+    admit_schema_diagnostics, Document, SchemaDiagnostic, SchemaDiagnosticBudget,
+    SchemaDiagnosticValue as V, SchemaStructure,
 };
 
-const MAX_BYTES: usize = 16_777_216;
-#[derive(Debug)]
-pub(crate) enum Error {
-    Limit,
-    InvalidContext,
-}
-pub(crate) struct Budget(usize);
+pub(crate) struct Budget(SchemaDiagnosticBudget);
 impl Budget {
     pub(crate) fn new() -> Self {
-        Self(128)
+        Self(SchemaDiagnosticBudget::new())
     }
     fn charge(&mut self, bytes: usize) -> Result<(), Error> {
-        self.0 = self
-            .0
-            .checked_add(bytes)
-            .filter(|&n| n <= MAX_BYTES)
-            .ok_or(Error::Limit)?;
-        Ok(())
+        self.0.charge(bytes)
     }
     fn text(&mut self, text: &str) -> Result<Value, Error> {
-        // Each source byte can expand to at most six JSON bytes; charge before copying.
-        self.charge(
-            text.len()
-                .checked_mul(6)
-                .and_then(|n| n.checked_add(2))
-                .ok_or(Error::Limit)?,
-        )?;
+        self.0.text(text)?;
         Ok(json!(text))
     }
-    fn integer(&mut self, text: &str) -> Result<Value, Error> {
-        self.charge(text.len())?;
-        // Schema integers have mathematical identity, including values outside i64.
-        Ok(Value::Number(
-            text.parse::<Number>().map_err(|_| Error::InvalidContext)?,
-        ))
-    }
 }
-fn context(
-    schema: &SchemaStructure,
-    document: Option<&Document>,
-    value: &C,
-    budget: &mut Budget,
-) -> Result<Value, Error> {
-    Ok(match value {
-        C::Text(text) => budget.text(text)?,
-        C::ValueKind(_) | C::LayerKind(_) => budget
-            .text(crate::schema_diagnostic_kinds::label(value).ok_or(Error::InvalidContext)?)?,
-        C::Count(value) => {
-            budget.charge(20)?;
-            json!(value)
-        }
-        C::Null => {
-            budget.charge(4)?;
-            Value::Null
-        }
-        C::InputValue(node) => {
-            let node = document
-                .and_then(|d| d.nodes().get(*node))
-                .ok_or(Error::InvalidContext)?;
-            match node {
-                N::Null => {
-                    budget.charge(4)?;
-                    Value::Null
-                }
-                N::Boolean(value) => {
-                    budget.charge(5)?;
-                    json!(value)
-                }
-                N::Integer(text) => budget.integer(text)?,
-                N::Float(value) => {
-                    budget.charge(32)?;
-                    json!(value)
-                }
-                N::Text(text) => budget.text(text)?,
-                // Core schema findings refer to scalar values; collections use actual_type.
-                N::Sequence(_) | N::Mapping(_) => return Err(Error::InvalidContext),
-            }
-        }
-        C::DescriptorValues(id)
-        | C::DescriptorPattern(id)
-        | C::DescriptorMinimum(id)
-        | C::DescriptorSize(id) => {
-            let descriptor = &schema
-                .descriptors()
-                .get(*id)
-                .ok_or(Error::InvalidContext)?
-                .descriptor;
-            match value {
-                C::DescriptorValues(_) => {
-                    let values = descriptor.permitted().ok_or(Error::InvalidContext)?;
-                    budget.charge(values.len().saturating_add(2))?;
-                    Value::Array(
-                        values
-                            .iter()
-                            .map(|text| budget.text(text))
-                            .collect::<Result<_, _>>()?,
-                    )
-                }
-                C::DescriptorPattern(_) => {
-                    budget.text(descriptor.pattern().ok_or(Error::InvalidContext)?.0)?
-                }
-                C::DescriptorMinimum(_) => {
-                    budget.integer(descriptor.minimum().ok_or(Error::InvalidContext)?)?
-                }
-                C::DescriptorSize(_) => {
-                    budget.integer(descriptor.size().ok_or(Error::InvalidContext)?)?
-                }
-                _ => unreachable!(),
-            }
-        }
-    })
+fn value(value: V<'_>) -> Value {
+    match value {
+        V::Text(text) => json!(text),
+        V::Count(count) => json!(count),
+        V::Null => Value::Null,
+        V::Boolean(value) => json!(value),
+        V::Float(value) => json!(value),
+        V::Integer(text) => Value::Number(
+            text.parse::<Number>()
+                .expect("admitted canonical schema integer"),
+        ),
+        V::TextList(values) => json!(values),
+    }
 }
 pub(super) fn findings(captured: &CapturedFindings) -> Result<Vec<Value>, Error> {
     schema_findings(
@@ -146,25 +63,13 @@ pub(super) fn schema_findings_with_budget(
     source_context: &[(&str, &str)],
     budget: &mut Budget,
 ) -> Result<Vec<Value>, Error> {
-    findings.iter().map(|finding| {
-        budget.charge(128)?;
-        let path = budget.text(&finding.path)?;
-        let condition = budget.text(finding.condition)?;
-        let requirement = finding.requirement.map(|text| budget.text(text)).transpose()?;
-        let mut resolved = Map::new();
-        for (name, value) in &finding.context {
-            budget.text(name)?;
-            budget.charge(2)?;
-            let value = context(schema, document, value, budget)?;
-            if resolved.insert((*name).into(), value).is_some() { return Err(Error::InvalidContext); }
-        }
-        for (name, value) in source_context {
-            budget.text(name)?;
-            let value = budget.text(value)?;
-            if resolved.insert((*name).into(), value).is_some() { return Err(Error::InvalidContext); }
-        }
-        Ok(json!({"phase":"validation", "condition":condition,"requirement":requirement,"spec_paths":[path],"context":resolved}))
-    }).collect()
+    let report =
+        admit_schema_diagnostics(schema, document, findings, source_context, &mut budget.0)?;
+    Ok(report.iter().map(|finding| {
+        let context = finding.context.map(|(name, field)| (name.into(), value(field))).collect::<Map<_, _>>();
+        json!({"phase":finding.phase, "condition":finding.condition, "requirement":finding.requirement,
+            "spec_paths":[finding.path], "context":context})
+    }).collect())
 }
 
 /// Convert already-rendered traversal/dependency findings with literal context.
@@ -173,7 +78,7 @@ pub(super) fn literal_outcome(mut outcome: Value) -> Result<Value, Error> {
     if outcome["status"] != "invalid" {
         return Ok(outcome);
     }
-    let mut budget = Budget(128);
+    let mut budget = Budget::new();
     let Value::Array(findings) = outcome["diagnostics"].take() else {
         return Err(Error::InvalidContext);
     };

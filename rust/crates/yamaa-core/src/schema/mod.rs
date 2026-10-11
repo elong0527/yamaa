@@ -4,6 +4,7 @@ mod bundle;
 mod composition;
 mod constraints;
 mod descriptor;
+mod diagnostic_projection;
 mod document;
 mod inheritance_dependencies;
 mod inheritance_references;
@@ -28,6 +29,11 @@ pub use constraints::{ConstraintBudget, ConstraintError, ConstraintUsage, Constr
 pub use descriptor::{
     Descriptor, DescriptorBudget, DescriptorError, DescriptorIssue, DescriptorLimits,
     DescriptorReport, DescriptorResource, DescriptorUsage,
+};
+pub use diagnostic_projection::{
+    admit_schema_diagnostics, schema_diagnostic_kind_label, ResolvedSchemaDiagnostic,
+    SchemaDiagnosticBudget, SchemaDiagnosticContext, SchemaDiagnosticError, SchemaDiagnosticReport,
+    SchemaDiagnosticValue, MAX_SCHEMA_DIAGNOSTIC_BYTES,
 };
 pub use document::{
     Document, DocumentError, DocumentKind, DocumentLimits, DocumentNode, DocumentResource,
