@@ -260,14 +260,16 @@ fn normalize_array(array: &ArrayRef, kind: ColumnType) -> Option<ArrayRef> {
         ColumnType::Int => Arc::new(array.as_any().downcast_ref::<Int64Array>()?.clone()),
         ColumnType::Float => {
             let values = array.as_any().downcast_ref::<Float64Array>()?;
-            if values.iter().flatten().all(f64::is_finite) {
+            if values
+                .iter()
+                .flatten()
+                .all(|value| FiniteFloat::new(value).is_some())
+            {
                 Arc::new(values.clone())
             } else {
-                Arc::new(Float64Array::from_iter(
-                    values
-                        .iter()
-                        .map(|value| value.filter(|value| value.is_finite())),
-                ))
+                Arc::new(Float64Array::from_iter(values.iter().map(|value| {
+                    value.and_then(FiniteFloat::new).map(FiniteFloat::get)
+                })))
             }
         }
         ColumnType::Date | ColumnType::DateTime => {
