@@ -11054,6 +11054,8 @@ def check_yaml_files(root: Path):
         )
     )
     errors.extend(validate_examples_layout(root))
+    if environment_schema is not None:
+        errors.extend(validate_examples_environment_documents(root, environment_schema))
     errors.extend(validate_examples_define_documents(root))
     errors.extend(validate_expected_error_contracts(root))
     errors.extend(validate_csv_shapes(root))
@@ -11208,6 +11210,36 @@ def validate_examples_csv(root: Path, env=None):
 
 
 QUALIFIED_REFERENCE = re.compile(r'\b([A-Za-z][A-Za-z0-9_]*)\.([A-Za-z][A-Za-z0-9_]*)\b')
+
+
+def validate_examples_environment_documents(root: Path, env=None):
+    """Admit benchmark environment roots without invoking domain planning.
+
+    Function calls retain their native static validator. Submission fixtures
+    also need schema admission when they declare no execution function calls;
+    this does not request Define rendering or a published dataset.
+    """
+    documents = sorted(
+        set((root / 'benchmarks').glob('*/environment.yaml'))
+        | set((root / 'benchmarks').glob('*/python/environment.yaml'))
+        | set((root / 'benchmarks').glob('*/r/environment.yaml'))
+    )
+    if not documents:
+        return []
+    errors = []
+    if env is None:
+        env, errors = build_schema_env(root, entrypoint='schema_environment.yaml')
+        if env is None or errors:
+            return errors
+    for path in documents:
+        label = str(path.relative_to(root))
+        try:
+            document = yaml.load(path.read_text(encoding='utf-8'), Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            errors.append(f"ERROR: {label}: {exc}")
+            continue
+        errors.extend(validate_type(document, ['environment_class'], env, label))
+    return errors
 
 
 def validate_examples_define_documents(root: Path):

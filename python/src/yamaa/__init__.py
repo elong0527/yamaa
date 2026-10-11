@@ -44,8 +44,8 @@ __all__ = [
     "DomainRunError",
     "__version__",
     "check",
-    "domain",
     "define",
+    "domain",
     "generate_study_document",
     "yamaa_domain",
 ]

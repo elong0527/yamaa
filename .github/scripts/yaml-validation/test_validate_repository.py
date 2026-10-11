@@ -2230,6 +2230,29 @@ class TestValidationManifest(unittest.TestCase):
 
 
 class TestProjectFunctionEnvironment(unittest.TestCase):
+    def test_submission_environment_schema_is_checked_without_domain_or_data_reads(self):
+        real_root = TOOL_PATH.parents[3]
+        schema, errors = VALIDATOR.build_schema_env(real_root, 'schema_environment.yaml')
+        self.assertEqual(errors, [])
+        original = yaml.safe_load((real_root / 'benchmarks/sdtm-dm-metadata/environment.yaml').read_text())
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            case = root / 'benchmarks' / 'submission'
+            case.mkdir(parents=True)
+            environment = case / 'environment.yaml'
+            environment.write_text(yaml.safe_dump(original))
+            with patch('yamaa._native._check_project_metadata') as native:
+                self.assertEqual(VALIDATOR.validate_examples_environment_documents(root, schema), [])
+                for value in ('', 1, [], None):
+                    original['sdtm']['source_system_version'] = value
+                    environment.write_text(yaml.safe_dump(original))
+                    errors = VALIDATOR.validate_examples_environment_documents(root, schema)
+                    self.assertTrue(errors, repr(value))
+                    self.assertTrue(any('source_system_version' in error for error in errors))
+            native.assert_not_called()
+            self.assertFalse((case / 'spec.yaml').exists())
+            self.assertFalse((case / 'dm.csv').exists())
+
     def test_metadata_only_specification_does_not_enter_domain_function_bridge(self):
         with tempfile.TemporaryDirectory() as temporary:
             case = Path(temporary) / 'benchmarks' / 'submission'
