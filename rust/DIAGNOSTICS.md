@@ -335,3 +335,13 @@ core findings in its compatibility context list until API retirement.
 Captured schema arenas, resource failures and opaque host errors retain their
 separate authority and precedence. This slice contributes to #1753/#1754; it
 does not complete global diagnostic or legacy protocol removal.
+
+Inherited-column dependency findings now use the same owned core diagnostic.
+Unknown dependencies retain REQ-0070; dependency cycles retain the resolver's
+entire unresolved authored column list and REQ-0072, distinct from a closed
+parent traversal loop. Whole report admission precedes copied paths/context and
+returns an explicit resource refusal without a fitting semantic prefix. The
+schema/1 compatibility representation translates these core facts without
+assigning conditions or requirements. The regex/1 syntax projection similarly
+uses the core registry's existing invalid-pattern cause. Legacy protocol shape
+retirement remains part of #1751/#1753.

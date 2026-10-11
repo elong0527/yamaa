@@ -260,16 +260,51 @@ pub(crate) fn inheritance_dependencies(
             return normalization(error)
         }
         E::Invalid(issues) => {
-            json!({"status":"invalid","diagnostics":issues.into_iter().map(|issue| match issue {
-            InheritanceDependencyIssue::Unknown {column,dependency} => json!({
-                "path":format!("columns.{column}.derivation"), "condition":"unknown_reference", "requirement":"REQ-0070",
-                "context":[{"name":"column","value":{"kind":"text","value":column}}, {"name":"dependency","value":{"kind":"text","value":dependency}}],
-            }),
-            InheritanceDependencyIssue::Cycle {columns} => json!({
-                "path":"columns", "condition":"dependency_cycle", "requirement":"REQ-0072",
-                "context":[{"name":"cycle","value":{"kind":"text_list","value":columns}}],
-            }),
-        }).collect::<Vec<_>>()})
+            use yamaa_core::diagnostic::{
+                inheritance_dependency_diagnostics, ContextValue, ProjectionError,
+            };
+            use yamaa_core::value::Value as Scalar;
+            let findings = inheritance_dependency_diagnostics(&issues, super::MAX_RESPONSE_BYTES)
+                .map_err(|error| match error {
+                ProjectionError::Limit => TransportError::ResponseLimit,
+                ProjectionError::InvalidContext => TransportError::Internal,
+            })?;
+            // The soon-retired schema/1 envelope retains its exact context-list
+            // representation. The semantic cause, paths and facts come from core.
+            let translated = findings
+                .into_iter()
+                .map(|finding| {
+                    let definition = finding.definition();
+                    let context = finding
+                        .context
+                        .into_iter()
+                        .map(|(name, value)| {
+                            let value = match value {
+                                ContextValue::Scalar(Scalar::Str(value)) => {
+                                    json!({"kind":"text","value":value})
+                                }
+                                ContextValue::Sequence(values) => {
+                                    let values = values
+                                        .into_iter()
+                                        .map(|value| match value {
+                                            ContextValue::Scalar(Scalar::Str(value)) => Ok(value),
+                                            _ => Err(TransportError::Internal),
+                                        })
+                                        .collect::<Result<Vec<_>, _>>()?;
+                                    json!({"kind":"text_list","value":values})
+                                }
+                                _ => return Err(TransportError::Internal),
+                            };
+                            Ok(json!({"name":name,"value":value}))
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Ok(
+                        json!({"path":finding.spec_paths[0],"condition":definition.condition,
+                    "requirement":definition.requirement,"context":context}),
+                    )
+                })
+                .collect::<Result<Vec<_>, TransportError>>()?;
+            json!({"status":"invalid","diagnostics":translated})
         }
         E::Reference(R::Numeric(n::ParseError::Limit {
             resource, limit, ..
