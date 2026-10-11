@@ -293,8 +293,7 @@ fn variants(dataset: &model::Dataset) -> impl Iterator<Item = (&model::Column, S
             column
                 .values
                 .iter()
-                .enumerate()
-                .map(move |(index, value)| (&value.column, format!("{identity}.V{}", index + 1))),
+                .map(move |value| (&value.column, format!("{identity}.{}", value.test_code))),
         )
     })
 }
@@ -381,7 +380,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             let mut list = Element::new("def:ValueListDef", &format!("datasets.{identity}.values"))
                 .attr("OID", format!("VL.{identity}"));
             for (index, value) in column.values.iter().enumerate() {
-                let identity = format!("{identity}.V{}", index + 1);
+                let identity = format!("{identity}.{}", value.test_code);
                 let meta = value
                     .column
                     .declaration
@@ -408,12 +407,10 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     }
     for dataset in &study.datasets {
         for column in &dataset.columns {
-            for (index, value) in column.values.iter().enumerate() {
+            for value in &column.values {
                 let identity = format!(
-                    "{}.{}.V{}",
-                    dataset.id,
-                    column.declaration.name.value,
-                    index + 1
+                    "{}.{}.{}",
+                    dataset.id, column.declaration.name.value, value.test_code
                 );
                 let discriminator = &dataset.columns
                     [dataset.discriminator.expect("admitted discriminator")]
