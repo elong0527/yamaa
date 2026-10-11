@@ -14,8 +14,13 @@ pub enum InheritanceError<E> {
         captured_parents: Vec<CapturedParent>,
     },
 }
-struct Decoder {
+pub(super) struct Decoder {
     limits: DecodeLimits,
+}
+impl Decoder {
+    pub(super) fn new(limits: DecodeLimits) -> Self {
+        Self { limits }
+    }
 }
 impl application::DecodePort for Decoder {
     type Raw = DecodedYaml;
