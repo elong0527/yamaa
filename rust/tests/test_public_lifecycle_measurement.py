@@ -52,7 +52,7 @@ class Pipeline(unittest.TestCase):
         # non-ASCII text and output projection order distinct from derived order.
         self.row = [
             {"type": "float", "value": "3fb999999999999a"},
-            {"type": "str", "value": 'é\\"path'},
+            {"type": "str", "value": '\u00e9\\"path'},
             {"type": "missing", "value": None},
         ]
         for case, filename in controller.OUTPUTS.items():
@@ -132,7 +132,7 @@ class Pipeline(unittest.TestCase):
         ).strip()
         self.installed = {}
         for host in ("python", "r"):
-            package = self.root / (host + " library é") / "yamaa"
+            package = self.root / (host + " library \u00e9") / "yamaa"
             package.mkdir(parents=True)
             native = package / "native.bin"
             native.write_bytes(b"native original installed bytes")
@@ -720,7 +720,7 @@ class Transports(unittest.TestCase):
             root = Path(directory).resolve()
             repository = root / "checkout"
             subprocess.run(["git", "init", "-q", str(repository)], check=True)
-            environment = root / "synthetic venv é"
+            environment = root / "synthetic venv \u00e9"
             venv.EnvBuilder(with_pip=False, symlinks=(sys.platform != "win32")).create(
                 environment
             )
@@ -1024,15 +1024,15 @@ cat("actual jsonlite authored binary64 transport PASS\\n")
         )
 
     def test_r_argv_and_json_preserve_windows_quotes_unicode_and_backslashes(self):
-        path = 'C:\\users\\é "quoted"\\worker.R'
+        path = 'C:\\users\\\u00e9 "quoted"\\worker.R'
         command = controller.worker_command(
-            "r", "Rscript.exe", path, 'C:\\request "é".json'
+            "r", "Rscript.exe", path, 'C:\\request "\u00e9".json'
         )
         self.assertEqual(
-            command, ["Rscript.exe", "--vanilla", path, 'C:\\request "é".json']
+            command, ["Rscript.exe", "--vanilla", path, 'C:\\request "\u00e9".json']
         )
         self.assertNotIn("-e", command)
-        original = {"entry": 'C:\\users\\é "quoted"\\spec.yaml'}
+        original = {"entry": 'C:\\users\\\u00e9 "quoted"\\spec.yaml'}
         self.assertEqual(json.loads(json.dumps(original, ensure_ascii=False)), original)
 
     def test_rss_null_and_units_and_raw_unadjusted_timer_controls(self):
