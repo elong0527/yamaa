@@ -162,14 +162,14 @@ requirement link for behavior. It is not an additional semantic contract.
 | --- | --- | --- | --- | --- | --- |
 | `environment_class.schema_version` | `"str"` | `true` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
 | `environment_class.language` | `"str"` | `false` | Absent | `{"values": ["python", "r"]}` | [REQ-1080](../operations/functions.md#req-1080) |
-| `environment_class.lock` | `"path"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
+| `environment_class.lock` | `"project_path"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
 | `environment_class.functions` | `"dict[identifier, function_definition]"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
 | `environment_class.codelists` | `"list[codelist_source]"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
 | `environment_class.study` | `"study_class"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
 | `environment_class.sdtm` | `"submission_section_class"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
 | `environment_class.adam` | `"submission_section_class"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
 | `environment_class.send` | `"submission_section_class"` | `false` | Absent | -- | [REQ-1080](../operations/functions.md#req-1080) |
-| `function_definition` | `["path", "function_definition_class"]` | `false` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_definition` | `["project_path", "function_definition_class"]` | `false` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
 | `function_definition_class.function` | `"qualified_callable"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
 | `function_definition_class.description` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1083](../operations/functions.md#req-1083) |
 | `function_definition_class.params` | `"list[function_parameter_class]"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
@@ -189,7 +189,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `function_test_class.covers` | `"list[function_coverage]"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
 | `function_test_class.args` | `"dict[identifier, function_value]"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
 | `function_test_class.result` | `"function_value"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
-| `codelist_source` | `["path", "codelist_source_class"]` | `false` | Absent | -- | [REQ-0928](../submission/terminology.md#req-0928) |
+| `codelist_source` | `["project_path", "codelist_source_class"]` | `false` | Absent | -- | [REQ-0928](../submission/terminology.md#req-0928) |
 | `codelist_source_class.standard` | `"terminology_standard_class"` | `false` | Absent | -- | [REQ-0928](../submission/terminology.md#req-0928) |
 | `codelist_source_class.codelists` | `"list[codelist_class]"` | `true` | Absent | -- | [REQ-0928](../submission/terminology.md#req-0928) |
 | `terminology_standard_class.name` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-0928](../submission/terminology.md#req-0928) |

@@ -47,8 +47,13 @@ impl FileSpecification {
     pub(crate) fn publication_target(
         &self,
     ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {
+        let origin = self
+            .run
+            .document()
+            .written_output_origin()
+            .ok_or(ResourceError::InvalidPath)?;
         self.resources
-            .publication_target(self.run.compiled().output_path())
+            .publication_target_from(origin.declaring_source, origin.written)
     }
     pub fn build(&mut self) -> CapturedAttempt<ResourceError> {
         self.run.execute_with_port(&mut self.resources)

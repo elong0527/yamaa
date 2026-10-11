@@ -1199,7 +1199,7 @@ fn selected_recursive_graph_quotas_continue_environment_and_entry_scope_before_g
 }
 
 #[test]
-fn selected_configured_paths_keep_absolute_environment_policy_and_early_owned_refusal() {
+fn selected_entry_paths_keep_absolute_environment_policy_and_early_owned_refusal() {
     use file_workflow::{Selected, SelectionError};
     let study = Study::new();
     study.write("yamaa-project.yaml", "version: '1.0'\ndata_roots: []\n");
@@ -1215,13 +1215,13 @@ fn selected_configured_paths_keep_absolute_environment_policy_and_early_owned_re
     .unwrap() else {
         panic!("configured ordinary capability");
     };
-    assert_eq!(project.capture_reads(), 3); // configuration + environment + root
+    assert_eq!(project.capture_reads(), 2); // environment + root; no configuration
     let Err(SelectionError::Preparation(Error::Environment(owner))) =
         file_workflow::select(&study.path("root.yaml"), "", Language::Python)
     else {
         panic!("original lexical environment refusal");
     };
-    assert_eq!(owner.capture_reads(), 1);
+    assert_eq!(owner.capture_reads(), 0);
     assert!(matches!(
         owner.error(),
         yamaa_adapters::file_project::Error::Resource(
@@ -1229,7 +1229,7 @@ fn selected_configured_paths_keep_absolute_environment_policy_and_early_owned_re
         )
     ));
     fs::remove_dir_all(&study.0).unwrap();
-    assert_eq!(owner.retained_sources(16, 65536).unwrap().len(), 1);
+    assert_eq!(owner.retained_sources(16, 65536).unwrap().len(), 0);
     assert_eq!(
         project.run().captured_environment().root().source().bytes,
         b"schema_version: '1.0'\n"

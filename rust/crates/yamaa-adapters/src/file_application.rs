@@ -237,12 +237,6 @@ impl Ports for Native<'_> {
     fn prepare(&mut self, path: &str) -> Result<FileSpecification, Failure> {
         let (resources, entry) =
             file_configuration::resources(path).map_err(|error| match error {
-                file_configuration::Error::Configuration => {
-                    rejected("prepare", "project_configuration")
-                }
-                file_configuration::Error::Decode(_) => {
-                    rejected("prepare", "project_configuration_yaml")
-                }
                 file_configuration::Error::Path(error) => resource_failure("prepare", &error),
             })?;
         FileSpecification::prepare(resources, &entry).map_err(|error| match error {

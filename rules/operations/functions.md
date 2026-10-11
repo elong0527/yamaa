@@ -221,6 +221,12 @@ differences.
 
 **REQ-1080.** The `environment_class` fields have these meanings: `schema_version` selects the schema; `language`, `lock`, and `functions` declare installed code; `codelists` supplies study terminology; `study` and `sdtm`, `adam`, `send` carry submission metadata for [Define-XML](../submission/define-xml.md). A submission section requires `study`. Domain builds do not open submission document links or generate a Define-XML artifact.
 
+The `lock` and external function/codelist declarations are local resource paths
+under [Resource resolution](../storage/resources.md). Relative spellings start
+at the environment file that declares them. Absolute local paths and parent
+segments have the same meaning as domain resource paths; an absent file fails
+at that location without configuration discovery or fallback search.
+
 
 
 <a id="req-1083"></a>

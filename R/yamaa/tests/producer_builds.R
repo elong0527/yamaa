@@ -210,7 +210,8 @@ work <- study(); write(work,"env/environment.yaml","schema_version: '1.0'\nlangu
 rejected <- prepare(file.path(work,"consumer/root.yaml"),file.path(work,"env/environment.yaml"))
 stopifnot(identical(status(rejected),"environment_failure"))
 sources <- private(".producer_rejected_sources")(rejected)
-stopifnot(length(sources)==2L)
+stopifnot(length(sources)==1L,
+  !any(vapply(sources,function(source) endsWith(rawToChar(source$name),"/yamaa-project.yaml"),logical(1))))
 source <- Filter(function(source) endsWith(rawToChar(source$name),"/env/environment.yaml"),sources)
 unlink(work,recursive=TRUE)
 stopifnot(length(source)==1L,identical(source[[1L]]$bytes,charToRaw("schema_version: '1.0'\nlanguage: [\n")))

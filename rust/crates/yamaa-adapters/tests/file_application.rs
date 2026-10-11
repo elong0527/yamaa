@@ -165,7 +165,7 @@ fn saved_bytes_use_retained_values_and_save_failure_can_be_retried() {
     assert_eq!(result.observations(), observations);
 }
 #[test]
-fn project_configuration_keeps_current_root_fallback_and_captured_config() {
+fn project_configuration_is_ignored_and_missing_input_has_no_fallback() {
     let study = Study::new();
     fs::create_dir(study.0.join("entry")).unwrap();
     fs::create_dir(study.0.join("extra")).unwrap();
@@ -175,26 +175,79 @@ fn project_configuration_keeps_current_root_fallback_and_captured_config() {
     )
     .unwrap();
     fs::write(study.0.join("entry/spec.yaml"), VALID).unwrap();
-    fs::write(study.0.join("extra/input.csv"), b"ID\n1\n").unwrap();
+    fs::write(study.0.join("extra/input.csv"), b"ID\n9\n").unwrap();
+    fs::write(study.0.join("input.csv"), b"ID\n8\n").unwrap();
     let (resources, entry) = file_configuration::resources(&study.text("entry/spec.yaml")).unwrap();
-    assert_eq!(resources.capture_reads(), 1);
+    assert_eq!(resources.capture_reads(), 0);
     let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
-    assert_eq!(prepared.capture_reads(), 2);
+    assert_eq!(prepared.capture_reads(), 1);
+    assert!(prepared.build().result.is_err());
+    assert_eq!(prepared.capture_reads(), 1);
+    fs::write(study.0.join("entry/input.csv"), b"ID\n1\n").unwrap();
     fs::write(study.0.join("yamaa-project.yaml"), b"[changed").unwrap();
     assert!(prepared.build().result.is_ok());
-    assert_eq!(prepared.capture_reads(), 3);
+    assert_eq!(prepared.capture_reads(), 2);
     assert!(prepared.build().result.is_ok());
-    assert_eq!(prepared.capture_reads(), 3);
+    assert_eq!(prepared.capture_reads(), 2);
+}
+#[test]
+fn parent_and_absolute_local_paths_build_and_save_held_bytes() {
+    for absolute in [false, true] {
+        let study = Study::new();
+        fs::create_dir(study.0.join("entry")).unwrap();
+        fs::write(study.0.join("outside.csv"), b"ID\n1\n").unwrap();
+        let input = if absolute {
+            study
+                .text("outside.csv")
+                .replace('\\', "/")
+                .trim_start_matches("//?/")
+                .to_owned()
+        } else {
+            "../outside.csv".to_owned()
+        };
+        let output = if absolute {
+            study
+                .text("output.csv")
+                .replace('\\', "/")
+                .trim_start_matches("//?/")
+                .to_owned()
+        } else {
+            "../output.csv".to_owned()
+        };
+        fs::write(
+            study.0.join("entry/spec.yaml"),
+            VALID
+                .replace("input.csv", &input)
+                .replace("output.csv", &output),
+        )
+        .unwrap();
+        let path = study.text("entry/spec.yaml");
+        let mut result = file_application::domain(
+            Request {
+                specification: &path,
+                environment: None,
+            },
+            identity(&path),
+        )
+        .unwrap();
+        assert!(result.issues().is_empty());
+        assert!(!study.0.join("output.csv").exists());
+        fs::write(study.0.join("outside.csv"), b"ID\n999\n").unwrap();
+        fs::remove_file(study.0.join("entry/spec.yaml")).unwrap();
+        assert!(result.save().unwrap());
+        assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
+    }
 }
 #[cfg(unix)]
 #[test]
-fn entry_link_and_outside_read_remain_refused() {
+fn entry_and_outside_resource_links_remain_refused() {
     let study = Study::new();
     fs::create_dir(study.0.join("entry")).unwrap();
     fs::write(study.0.join("outside.csv"), b"ID\n1\n").unwrap();
+    std::os::unix::fs::symlink("outside.csv", study.0.join("outside-link.csv")).unwrap();
     fs::write(
         study.0.join("entry/spec.yaml"),
-        VALID.replace("input.csv", "../outside.csv"),
+        VALID.replace("input.csv", "../outside-link.csv"),
     )
     .unwrap();
     let path = study.text("entry/spec.yaml");
@@ -209,7 +262,7 @@ fn entry_link_and_outside_read_remain_refused() {
     .unwrap();
     assert_eq!(
         issues[0].context,
-        "{\"code\":\"resource_outside_roots\",\"stage\":\"capture\"}"
+        "{\"code\":\"resource_link\",\"stage\":\"capture\"}"
     );
     std::os::unix::fs::symlink("spec.yaml", study.0.join("entry/link.yaml")).unwrap();
     let (resources, entry) = file_configuration::resources(&study.text("entry/link.yaml")).unwrap();
@@ -221,18 +274,19 @@ fn entry_link_and_outside_read_remain_refused() {
     ));
 }
 #[test]
-fn invalid_project_configuration_is_rejected_before_entry_capture() {
+fn malformed_project_configuration_is_not_discovered_or_captured() {
     let study = Study::new();
+    fs::write(study.0.join("spec.yaml"), VALID).unwrap();
     for config in [
         "version: '99.0'\n",
         "version: '1.0'\nunknown: true\n",
-        "version: '1.0'\ndata_roots: [null]\n",
+        "[not yaml",
     ] {
         fs::write(study.0.join("yamaa-project.yaml"), config).unwrap();
-        assert!(matches!(
-            file_configuration::resources(&study.text("absent.yaml")),
-            Err(file_configuration::Error::Configuration)
-        ));
+        let (resources, entry) = file_configuration::resources(&study.text("spec.yaml")).unwrap();
+        assert_eq!(resources.capture_reads(), 0);
+        let prepared = FileSpecification::prepare(resources, &entry).unwrap();
+        assert_eq!(prepared.capture_reads(), 1);
     }
 }
 

@@ -233,5 +233,73 @@ stopifnot(identical(checked$issues$condition, "redundant_field_type"),
   identical(checked$issues$spec_paths, list("input.P.types.ID")),
   !any(file.exists(c("never-read.csv", "leaf.csv", "left.csv", "right.csv", "consumer.csv", "wrong.csv"))))
 cat("public R original inherited diamond checks are complete with no study/publication effects\n")
+# Declaring-file input/output provenance survives inheritance and publication.
+local_paths <- file.path(work, "declaring-file-paths"); dir.create(local_paths)
+setwd(local_paths)
+for (name in c("entry", "shared", "outputs")) dir.create(name)
+writeLines("[invalid configuration", "yamaa-project.yaml")
+writeLines(c("schema_version: '1.0'", "language: r"), "shared/environment.yaml")
+writeLines(c("schema_version: '1.0'", "parents: ../shared/base.yaml", "domain: CHILD"), "entry/spec.yaml")
+writeLines(c("schema_version: '1.0'", "domain: BASE", "keys: [ID]", "input: {SRC: data.csv}",
+  "columns: [{name: ID, type: int, derivation: SRC.ID}]",
+  "output: {path: ../outputs/held.csv, columns: [ID]}"), "shared/base.yaml")
+writeLines(c("ID", "999"), "entry/data.csv"); writeLines(c("ID", "7"), "shared/data.csv")
+checked <- yamaa_check("entry/spec.yaml", environment = "shared/environment.yaml")
+held <- yamaa_domain("entry/spec.yaml", environment = "shared/environment.yaml")
+stopifnot(nrow(checked$issues) == 0L, nrow(held$issues) == 0L,
+  identical(as.character(held$output$ID), "7"), !file.exists("outputs/held.csv"),
+  !grepl("yamaa-project.yaml", observations(held), fixed = TRUE))
+unlink(c("entry/spec.yaml", "shared/base.yaml", "shared/environment.yaml"))
+writeLines(c("ID", "8"), "shared/data.csv")
+stopifnot(isTRUE(held$save()), identical(rawfile("outputs/held.csv"), charToRaw("ID\n7\n")))
+writeLines(c("schema_version: '1.0'", "language: r"), "environment.yaml")
+writeLines(c("ID", "7"), "shared/data.csv")
+source <- paste0(normalizePath("shared", winslash = "/"), "/../shared/./data.csv")
+output <- paste0(normalizePath("outputs", winslash = "/"), "/absolute.csv")
+local_document <- function(input) c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+  "columns: [{name: ID, type: int, derivation: SRC.ID}]",
+  paste0("input: {SRC: '", input, "'}"), paste0("output: {path: '", output, "', columns: [ID]}"))
+writeLines(local_document(source), "entry/spec.yaml")
+absolute <- yamaa_domain("entry/spec.yaml", environment = "environment.yaml")
+stopifnot(nrow(absolute$issues) == 0L, identical(as.character(absolute$output$ID), "7"),
+  !file.exists(output), isTRUE(absolute$save()), identical(rawfile(output), charToRaw("ID\n7\n")))
+unlink(output)
+writeLines(c("version: '1.0'", "data_roots: [shared]"), "yamaa-project.yaml")
+writeLines(c("ID", "999"), "data.csv")
+for (input in c("data.csv", "../shared")) {
+  writeLines(local_document(input), "entry/spec.yaml")
+  failed <- yamaa_domain("entry/spec.yaml", environment = "environment.yaml")
+  stopifnot(is.null(failed$output), identical(failed$issues$condition,
+    if (input == "data.csv") "resource_path_missing" else "resource_not_regular"),
+    identical(failed$issues$spec_paths, list("input.SRC.path")),
+    inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"), !file.exists(output))
+}
+cat("public R declaring-file inheritance, absolute paths, held bytes and no configuration fallback passed\n")
+# External codelists obey the environment's own declaring-file path.
+ct_paths <- file.path(work, "codelist-paths"); dir.create(ct_paths); setwd(ct_paths)
+for (name in c("entry", "environment", "terminology", "outputs")) dir.create(name)
+writeLines("[ignored configuration", "yamaa-project.yaml")
+writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+  "input: {SRC: {path: data.csv, types: {ID: str}}}",
+  "columns: [{name: ID, type: str, derivation: SRC.ID, submission: {codelist: IDENTIFIERS}}]",
+  "output: {path: ../outputs/ids.csv, columns: [ID]}"), "entry/spec.yaml")
+writeLines(c("ID", "01"), "entry/data.csv")
+terminology <- "codelists: [{id: IDENTIFIERS, name: Identifiers, items: [{value: '01'}]}]"
+writeLines(terminology, "terminology/ids.yaml"); writeLines("[unrelated document", "entry/ids.yaml")
+for (written in c("../terminology/ids.yaml", normalizePath("terminology/ids.yaml", winslash = "/"))) {
+  writeLines(c("schema_version: '1.0'", "language: r", paste0("codelists: ['", written, "']")), "environment/env.yaml")
+  checked <- yamaa_check("entry/spec.yaml", environment = "environment/env.yaml")
+  result <- yamaa_domain("entry/spec.yaml", environment = "environment/env.yaml")
+  stopifnot(nrow(checked$issues) == 0L, nrow(result$issues) == 0L,
+    identical(result$output$ID, "01"), grepl('"verifications":[{', observations(result), fixed = TRUE),
+    !file.exists("outputs/ids.csv"), isTRUE(result$save()), identical(rawfile("outputs/ids.csv"), charToRaw("ID\n01\n")))
+  unlink("outputs/ids.csv")
+}
+writeLines(c("schema_version: '1.0'", "language: r", "codelists: [ids.yaml]"), "environment/env.yaml")
+writeLines(terminology, "ids.yaml"); writeLines(terminology, "entry/ids.yaml")
+failed <- yamaa_domain("entry/spec.yaml", environment = "environment/env.yaml")
+stopifnot(is.null(failed$output), nrow(failed$issues) > 0L,
+  grepl('"source_reads":[]', observations(failed), fixed = TRUE), !file.exists("outputs/ids.csv"))
+cat("public R relative/absolute external codelists and missing-file ownership passed\n")
 setwd(previous)
 cat("public R environment static diagnostics, lock/test failure ordering and no data reads passed\n")
