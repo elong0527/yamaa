@@ -249,6 +249,48 @@ def stage_flag_truth(destination: Path):
         "# Held: generic case REQ-0103/0189 and recursive report context PR1933.\n"
         "flag_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
 
+def stage_intermediate_key_truth(destination: Path):
+    """Stage all unchanged scalar-key captures without evaluating the candidate."""
+    original = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json"
+    shutil.copy2(original, destination / "key-reference.json")
+    capture = json.loads(original.read_text(encoding="utf-8"))
+    assert len(capture) == 19
+    root = destination / "keys"
+    root.mkdir()
+
+    def text(value):
+        return json.dumps(value, ensure_ascii=True)
+
+    def strings(values):
+        return "c(" + ",".join("NA_character_" if value is None else text(value) for value in values) + ")" if values else "character()"
+
+    entries = []
+    for name, case in capture.items():
+        directory = root / name
+        directory.mkdir()
+        (directory / "spec.yaml").write_text(case["specification"], encoding="utf-8", newline="\n")
+        for filename, source in case["inputs"].items():
+            (directory / filename).write_text(source, encoding="utf-8", newline="\n")
+        if "csv" in case:
+            (directory / "expected.csv").write_text(case["csv"], encoding="utf-8", newline="\n")
+        columns = []
+        for field in ("phase", "condition", "requirement", "spec_paths", "context"):
+            values = [finding[field] for finding in case.get("findings", [])]
+            if field == "spec_paths":
+                literal = "list(" + ",".join(strings(paths) for paths in values) + ")"
+            else:
+                if field == "context":
+                    values = [json.dumps(value, sort_keys=True, separators=(",", ":")) for value in values]
+                literal = strings(values)
+            columns.append(field + "=" + literal)
+        entries.append(text(name) + "=list(issues=list(" + ",".join(columns) + "),success=" +
+            ("TRUE" if "csv" in case else "FALSE") + ",handlers=" +
+            text(json.dumps(case["handlers"], sort_keys=True, separators=(",", ":"))) + ")")
+    (destination / "key-truth.R").write_text(
+        "# All 19 unchanged independent scalar-key findings, CSV and handlers.\n"
+        "key_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
+
+
 def stage_row_intermediate_truth(destination: Path):
     """Materialize unchanged originals and complete independently captured row truth."""
     original = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json"
@@ -534,6 +576,7 @@ def stage(destination: Path):
     stage_temporal_imputation_truth(destination)
     stage_text_case_truth(destination)
     stage_text_pad_truth(destination)
+    stage_intermediate_key_truth(destination)
     stage_flag_truth(destination)
     stage_row_intermediate_truth(destination)
     stage_text_extract_truth(destination)

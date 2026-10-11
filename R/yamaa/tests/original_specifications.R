@@ -1667,6 +1667,41 @@ local({
   cat("public str_template matches unchanged site bytes and complete ordered independent findings/handlers without Python passed\n")
 })
 
+local({
+  source(file.path(root,"key-truth.R"),local=TRUE)
+  stopifnot(length(key_truth)==19L)
+  directory <- tempfile("public-intermediate-keys-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  for(name in names(key_truth)) {
+    truth <- key_truth[[name]]
+    stopifnot(file.copy(file.path(root,"keys",name),directory,recursive=TRUE))
+    case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
+    written <- rawfile(entry);output <- file.path(case,"out.csv")
+    for(attempt in seq_len(2L)) {
+      stopifnot(!file.exists(output))
+      result <- yamaa_domain(entry);check_issue_frame(result$issues,truth$issues)
+      observed <- get(".domain_observations",asNamespace("yamaa"))(result)
+      if(is.null(observed)) {
+        stopifnot(identical(truth$handlers,"[]"))
+      } else {
+        report <- rawToChar(observed)
+        ledger <- paste0('"handler_counts":',truth$handlers,',')
+        stopifnot(sum(gregexpr('"handler_counts":',report,fixed=TRUE)[[1L]]>0L)==2L,
+          sum(gregexpr(ledger,report,fixed=TRUE)[[1L]]>0L)==2L)
+      }
+      if(truth$success) {
+        stopifnot(!is.null(result$output),identical(result$save(),TRUE),
+          identical(rawfile(output),rawfile(file.path(case,"expected.csv"))))
+        unlink(output)
+      } else {
+        stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+      }
+      stopifnot(!file.exists(output),identical(rawfile(entry),written))
+    }
+  }
+  cat("all 19 unchanged scalar-key captures match complete ordered findings, CSV and handler ledgers twice without Python passed\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

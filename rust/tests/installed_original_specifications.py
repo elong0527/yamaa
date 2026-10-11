@@ -1816,6 +1816,49 @@ columns:
                                 self.assertEqual(path.read_bytes(), original)
 
 
+    def test_public_intermediate_keys_complete_unchanged_nineteen_captures(self):
+        import shutil
+        import yamaa
+        reference = json.loads((ROOT / "key-reference.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(reference), 19)
+        with tempfile.TemporaryDirectory() as directory:
+            for name, case in reference.items():
+                with self.subTest(case=name):
+                    work = Path(directory) / name
+                    shutil.copytree(ROOT / "keys" / name, work)
+                    entry = work / "spec.yaml"
+                    self.assertEqual(entry.read_bytes(), case["specification"].encode())
+                    retained = {path: path.read_bytes() for path in work.rglob("*") if path.is_file()}
+                    output = work / "out.csv"
+                    for attempt in range(2):
+                        with self.subTest(attempt=attempt):
+                            self.assertFalse(output.exists())
+                            result = yamaa.domain(entry)
+                            findings = result.issues.to_dicts()
+                            for finding in findings:
+                                finding["context"] = json.loads(finding["context"])
+                            self.assertEqual(findings, case.get("findings", []))
+                            wire = result._native.observations()
+                            if wire is None:
+                                self.assertEqual(case["handlers"], [])
+                            else:
+                                self.assertEqual(json.loads(wire)["handler_counts"], case["handlers"])
+                            if "csv" in case:
+                                expected = case["csv"].encode()
+                                self.assertEqual((work / "expected.csv").read_bytes(), expected)
+                                self.assertEqual(result.output.write_csv().encode(), expected)
+                                self.assertTrue(result.save())
+                                self.assertEqual(output.read_bytes(), expected)
+                                output.unlink()
+                            else:
+                                self.assertIsNone(result.output)
+                                with self.assertRaises(yamaa.DomainError):
+                                    result.save()
+                            self.assertFalse(output.exists())
+                            for path, original in retained.items():
+                                self.assertEqual(path.read_bytes(), original)
+
+
     def test_public_common_row_intermediates_complete_original_and_independent_truth(self):
         import shutil
         import yamaa
