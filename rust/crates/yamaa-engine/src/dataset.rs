@@ -487,7 +487,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                             selection: None,
                         },
                         key_grain::CollectionContext {
-                            path: &operand.path,
+                            path: &assignment.path,
                             candidate,
                             plan,
                             row,
