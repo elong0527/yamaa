@@ -54,6 +54,15 @@ edges. New dependencies require a deliberate update to its allowlist. There is
 a numeric completed-result application service. The numeric resolver port belongs
 to the typed scalar evaluator; table and publication ports remain future work.
 
+`yamaa-engine::define::Application` owns Define declaration selection, complete
+metadata admission, composition, fixed-time XML/Dataset-JSON rendering, held
+artifact state and one-shot Save ordering. Native `define::Ports` retain original
+snapshot owners, file geometry, bounded published-byte capture, Parquet codecs
+and descriptor-backed publication. Python and R borrow the same artifact bytes,
+issue rows and original native failure; Save never recaptures metadata or retries
+a refused application. The native publication checkpoint is available only in
+tests through the engine's existing `test-support` feature.
+
 The first core slice implements closed runtime values, validated civil temporal
 values, present-value comparison, and basic arithmetic primitives. See
 [`CAPABILITIES.md`](CAPABILITIES.md) for requirement-level coverage and remaining

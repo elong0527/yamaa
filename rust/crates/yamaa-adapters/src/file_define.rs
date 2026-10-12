@@ -1,4 +1,4 @@
-//! Owned shared Define lifecycle. Metadata capture never acquires execution ports.
+//! Native capture, file geometry, codecs and publication for the engine Define service.
 use crate::{
     file_configuration, file_preparation, file_project, file_publication,
     file_resources::{self, MetadataLimits, Resources},
@@ -11,16 +11,10 @@ use std::path::Path;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
     project_function::Language,
-    submission_composition::{self as composition, Finding},
-    submission_document,
+    submission_composition::Finding,
 };
 
-const METADATA_LIMITS: MetadataLimits = MetadataLimits {
-    bytes: 67_108_864,
-    snapshots: 1024,
-    text: 16_777_216,
-    work: 268_435_456,
-};
+use yamaa_engine::define::{self as service, Ports};
 #[derive(Debug)]
 pub enum Failure {
     Project(project_application::Error),
@@ -40,29 +34,13 @@ pub enum Failure {
         error: file_publication::Error,
     },
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PublicationState {
-    Ready,
-    Published,
-    Failed,
-    Stopped,
-}
-struct Artifact {
-    written: String,
-    target: file_publication::AnchoredTarget,
-    bytes: Vec<u8>,
-    state: PublicationState,
-}
-/// No host may replace captured documents, rendered bytes or targets. Both hosts
-/// view the same issue rows and borrow this original failure on Save refusal.
+pub use service::PublicationState;
+/// Representation and original opaque failure owner for both public hosts.
 pub struct Define {
-    resources: Option<Resources>,
-    environment: Option<OwnedEnvironment>,
-    specifications: Vec<PreparedDocument>,
-    artifacts: Vec<Artifact>,
+    ports: NativePorts,
+    application: service::Application<NativePorts>,
     failure: Option<Failure>,
     issues: Vec<Issue>,
-    saved: bool,
     host: Language,
 }
 #[derive(Debug)]
@@ -75,367 +53,30 @@ impl Define {
         installed: &str,
         host: Language,
     ) -> Self {
-        let mut result = Self {
+        let mut ports = NativePorts {
             resources: None,
-            environment: None,
-            specifications: Vec::new(),
-            artifacts: Vec::new(),
-            failure: None,
-            issues: Vec::new(),
-            saved: false,
             host,
         };
-        if let Err(failure) = result.prepare_inner(environment, standard, created, installed) {
-            result.refuse(failure);
+        let attempt = service::Application::prepare(
+            &mut ports,
+            service::Request {
+                environment,
+                standard,
+                created,
+                installed,
+            },
+        );
+        let mut result = Self {
+            ports,
+            application: attempt.application,
+            failure: None,
+            issues: Vec::new(),
+            host,
+        };
+        if let Err(failure) = attempt.outcome {
+            result.refuse(native_failure(failure));
         }
         result
-    }
-    fn prepare_inner(
-        &mut self,
-        environment: &str,
-        standard: &str,
-        created: Option<&str>,
-        installed: &str,
-    ) -> Result<(), Failure> {
-        let family = yamaa_core::define_diagnostics::standard_name(standard)
-            .map_err(|finding| Failure::Metadata(vec![finding]))?;
-        let created = created_time(created).map_err(|finding| Failure::Metadata(vec![finding]))?;
-        let (mut resources, entry) = file_configuration::resources(environment)
-            .map_err(|error| Failure::Project(project_application::Error::Configuration(error)))?;
-        resources
-            .admit_metadata_budget(METADATA_LIMITS)
-            .map_err(|error| resource(environment, environment, error))?;
-        self.resources = Some(resources);
-        let resources = self.resources.as_mut().expect("selected resource owner");
-        let schema = crate::shipped_schema::capture_environment()
-            .map_err(|e| Failure::Project(project_application::Error::Schema(e)))?;
-        self.environment = Some(
-            file_project::capture_environment(resources, &entry, self.host, schema)
-                .map_err(|error| Failure::Project(project_application::Error::Project(error)))?,
-        );
-        let environment = self.environment.as_ref().expect("captured environment");
-        let captured = environment.root();
-        let root = &captured.normalized().document;
-        let declarations = submission_document::decode(root, root.root(), Default::default())
-            .map_err(|_| {
-                Failure::Metadata(vec![Finding::cause(
-                    ConditionCode::SubmissionMetadataMissing,
-                    standard,
-                    "invalid closed environment submission declarations",
-                )])
-            })?;
-        let study =
-            yamaa_core::define_diagnostics::required(declarations.study(), "study", "study")
-                .map_err(|finding| Failure::Metadata(vec![finding]))?;
-        let section = yamaa_core::define_diagnostics::required(
-            declarations
-                .sections()
-                .iter()
-                .find(|section| section.family == family),
-            standard,
-            standard,
-        )
-        .map_err(|finding| Failure::Metadata(vec![finding]))?;
-        let identity = &captured.source().identity;
-        let define_location = resources
-            .location_from(identity, &section.define.value)
-            .map_err(|e| resource(&format!("{standard}.define"), &section.define.value, e))?;
-        let define_parent = Path::new(&define_location)
-            .parent()
-            .expect("admitted file location");
-        let mut locations = Vec::new();
-        let mut hrefs = Vec::new();
-        let mut outputs = Vec::new();
-        let mut targets = vec![define_location.clone()];
-        for (index, spec) in section.specs.value.iter().enumerate() {
-            let path = format!("{standard}.specs[{index}]");
-            let document = file_preparation::prepare_document_from(
-                resources,
-                Some(identity),
-                &spec.value,
-                None,
-            )
-            .map_err(|error| {
-                Failure::Project(project_application::Error::Project(
-                    file_project::Error::Document(error),
-                ))
-            })?;
-            let origin = document.written_output_origin().ok_or_else(|| {
-                Failure::Metadata(vec![Finding::cause(
-                    ConditionCode::SubmissionMetadataMissing,
-                    &path,
-                    "output.path origin",
-                )])
-            })?;
-            let artifact = resources
-                .location_from(origin.declaring_source, origin.written)
-                .map_err(|e| resource(&format!("{path}.output.path"), origin.written, e))?;
-            let written_json = Path::new(origin.written)
-                .with_extension("json")
-                .to_string_lossy()
-                .into_owned();
-            let reference = if section.dataset_json.value {
-                resources
-                    .location_from(origin.declaring_source, &written_json)
-                    .map_err(|e| resource(&format!("{path}.dataset_json"), &written_json, e))?
-            } else {
-                artifact.clone()
-            };
-            if section.dataset_json.value
-                && !Path::new(&reference)
-                    .parent()
-                    .is_some_and(|parent| same_location(parent, define_parent))
-            {
-                return Err(Failure::Metadata(vec![yamaa_core::define_diagnostics::admit_relation(
-                    yamaa_core::define_diagnostics::TargetRelation::DatasetJsonOutsidePackage,
-                    &path, &format!("Dataset-JSON {reference} and Define {define_location} require parent traversal in their mutual references"),
-                ).unwrap_err()]));
-            }
-            if same_location(Path::new(&artifact), Path::new(&define_location)) {
-                return Err(Failure::Metadata(vec![
-                    yamaa_core::define_diagnostics::admit_relation(
-                        yamaa_core::define_diagnostics::TargetRelation::ArtifactCollision,
-                        &path,
-                        "published dataset overlaps Define target",
-                    )
-                    .unwrap_err(),
-                ]));
-            }
-            if section.dataset_json.value {
-                if let Some(conflict) = targets
-                    .iter()
-                    .find(|target| same_location(Path::new(target), Path::new(&reference)))
-                    .or_else(|| {
-                        same_location(Path::new(&reference), Path::new(&artifact))
-                            .then_some(&artifact)
-                    })
-                {
-                    return Err(Failure::Metadata(vec![
-                        yamaa_core::define_diagnostics::admit_relation(
-                            yamaa_core::define_diagnostics::TargetRelation::DatasetJsonCollision,
-                            &path,
-                            &format!("{reference} and {conflict} name one publication target"),
-                        )
-                        .unwrap_err(),
-                    ]));
-                }
-            }
-            if section.dataset_json.value {
-                targets.push(reference.clone());
-            }
-            let href =
-                package_reference(Path::new(&reference), define_parent).ok_or_else(|| {
-                    Failure::Metadata(vec![yamaa_core::define_diagnostics::admit_relation(
-                        yamaa_core::define_diagnostics::TargetRelation::ArtifactOutsidePackage,
-                        &path,
-                        "artifact must be inside the Define package",
-                    )
-                    .unwrap_err()])
-                })?;
-            locations.push(artifact);
-            hrefs.push(href);
-            outputs.push((
-                origin.declaring_source.to_string(),
-                origin.written.to_string(),
-                written_json,
-            ));
-            self.specifications.push(document);
-        }
-        // The selected output set is admitted before any published artifact read.
-        for artifact in &locations {
-            if targets
-                .iter()
-                .any(|target| same_location(Path::new(target), Path::new(artifact)))
-            {
-                return Err(Failure::Metadata(vec![Finding::cause(
-                    ConditionCode::DefineArtifactCollision,
-                    standard,
-                    "published dataset overlaps Define targets",
-                )]));
-            }
-        }
-        let inputs: Vec<_> = self
-            .specifications
-            .iter()
-            .zip(&locations)
-            .zip(&hrefs)
-            .map(|((document, artifact), href)| composition::Input {
-                document: document.model().document(),
-                source: &document.source().identity,
-                artifact,
-                href,
-            })
-            .collect();
-        let composed = composition::compose(
-            study,
-            section,
-            environment.environment().catalogue(),
-            &inputs,
-            installed,
-            &created,
-        )
-        .map_err(Failure::Metadata)?;
-        let xml = yamaa_core::submission_xml::render(&composed)
-            .map_err(|f| Failure::Metadata(vec![f]))?;
-        resources.verify_captured().map_err(|(_, error)| {
-            resource(
-                standard,
-                environment.root().source().identity.as_str(),
-                error,
-            )
-        })?;
-        resources.finish_metadata_budget();
-        if section.dataset_json.value {
-            let mut rendered_bytes = xml.len();
-            for ((dataset, (declaring, written, json)), location) in
-                composed.datasets().iter().zip(&outputs).zip(&locations)
-            {
-                let (bytes, _) = resources
-                    .capture_from(declaring, written, 67_108_864)
-                    .map_err(|e| {
-                        resource(&format!("datasets.{}.artifact", dataset.id()), written, e)
-                    })?;
-                let kinds: Vec<_> = dataset
-                    .columns()
-                    .iter()
-                    .map(|column| {
-                        (
-                            column.declaration().name.value.clone(),
-                            column.runtime_type(),
-                        )
-                    })
-                    .collect();
-                let rendered = if location.to_ascii_lowercase().ends_with(".csv") {
-                    let source = yamaa_core::csv_source::parse(&bytes, Default::default())
-                        .map_err(|error| {
-                            error
-                                .diagnostic(dataset.id(), written)
-                                .map(|diagnostic| Failure::Diagnostic(vec![diagnostic]))
-                                .unwrap_or_else(|| {
-                                    Failure::Metadata(vec![Finding::cause(
-                                        ConditionCode::ApplicationRejected,
-                                        written,
-                                        "published CSV admission",
-                                    )])
-                                })
-                        })?;
-                    yamaa_core::submission_json::admit_fields(
-                        dataset,
-                        source.names.iter().map(String::as_str),
-                    )
-                    .map_err(|finding| Failure::Metadata(vec![finding]))?;
-                    let table = yamaa_core::typed_csv::PreparedTypes::new(&kinds, 16_384)
-                        .and_then(|types| types.convert(source))
-                        .map_err(|error| {
-                            error
-                                .diagnostic(dataset.id())
-                                .map(|diagnostic| Failure::Diagnostic(vec![diagnostic]))
-                                .unwrap_or_else(|| {
-                                    Failure::Metadata(vec![Finding::cause(
-                                        ConditionCode::ProducerContractMismatch,
-                                        written,
-                                        "published CSV contract",
-                                    )])
-                                })
-                        })?;
-                    yamaa_core::submission_json::render(
-                        &composed,
-                        dataset,
-                        &table,
-                        Path::new(&define_location)
-                            .file_name()
-                            .and_then(|s| s.to_str())
-                            .expect("admitted define name"),
-                    )
-                } else if location.to_ascii_lowercase().ends_with(".parquet") {
-                    let table = read_parquet(&bytes).map_err(|_| {
-                        Failure::Metadata(vec![Finding::cause(
-                            ConditionCode::ProducerContractMismatch,
-                            written,
-                            "published Parquet profile",
-                        )])
-                    })?;
-                    yamaa_core::submission_json::render(
-                        &composed,
-                        dataset,
-                        &table,
-                        Path::new(&define_location)
-                            .file_name()
-                            .and_then(|s| s.to_str())
-                            .expect("admitted define name"),
-                    )
-                } else {
-                    return Err(Failure::Metadata(vec![Finding::cause(
-                        ConditionCode::ApplicationUnsupported,
-                        written,
-                        "published_dataset_format",
-                    )]));
-                }
-                .map_err(|f| Failure::Metadata(vec![f]))?;
-                rendered_bytes = rendered_bytes
-                    .checked_add(rendered.len())
-                    .filter(|&n| n <= 67_108_864)
-                    .ok_or_else(|| {
-                        Failure::Metadata(vec![Finding::cause(
-                            ConditionCode::ApplicationRejected,
-                            standard,
-                            "complete_publication_byte_limit",
-                        )])
-                    })?;
-                let target = resources
-                    .publication_target_from(declaring, json)
-                    .map_err(|e| resource(json, json, e))?;
-                self.artifacts.push(Artifact {
-                    written: json.clone(),
-                    target,
-                    bytes: rendered,
-                    state: PublicationState::Ready,
-                });
-            }
-        }
-        let target = resources
-            .publication_target_from(identity, &section.define.value)
-            .map_err(|e| resource(&format!("{standard}.define"), &section.define.value, e))?;
-        self.artifacts.push(Artifact {
-            written: section.define.value.clone(),
-            target,
-            bytes: xml,
-            state: PublicationState::Ready,
-        });
-        // Preflight all outputs after complete admission/rendering. Recheck them
-        // together on Save; no retained metadata or artifact is reopened there.
-        self.preflight()?;
-        Ok(())
-    }
-    fn preflight(&self) -> Result<Vec<file_publication::Publisher>, Failure> {
-        let mut publishers: Vec<file_publication::Publisher> =
-            Vec::with_capacity(self.artifacts.len());
-        for (index, artifact) in self.artifacts.iter().enumerate() {
-            let publisher = artifact
-                .target
-                .publisher(&artifact.written)
-                .map_err(|error| Failure::TargetAdmission { index, error })?;
-            for (previous_index, previous) in publishers.iter().enumerate() {
-                if publisher
-                    .same_target(previous)
-                    .map_err(|error| Failure::TargetAdmission { index, error })?
-                {
-                    return Err(Failure::Metadata(vec![
-                        yamaa_core::define_diagnostics::admit_relation(
-                            yamaa_core::define_diagnostics::TargetRelation::DatasetJsonCollision,
-                            "define.targets",
-                            &format!(
-                                "{} and {} name one physical publication target",
-                                self.artifacts[previous_index].written, artifact.written
-                            ),
-                        )
-                        .unwrap_err(),
-                    ]));
-                }
-            }
-            publishers.push(publisher);
-        }
-        Ok(publishers)
     }
     fn refuse(&mut self, failure: Failure) {
         self.issues = issues(&failure, self.host);
@@ -444,21 +85,6 @@ impl Define {
             crate::specification_check::MAX_ISSUE_BYTES,
         ) {
             self.issues = crate::file_application::rejected("define", "issue_limit");
-        }
-        let failed = match &failure {
-            Failure::TargetAdmission { index, .. } | Failure::Publication { index, .. } => {
-                Some(*index)
-            }
-            _ => None,
-        };
-        for (i, artifact) in self.artifacts.iter_mut().enumerate() {
-            if artifact.state != PublicationState::Published {
-                artifact.state = if failed == Some(i) {
-                    PublicationState::Failed
-                } else {
-                    PublicationState::Stopped
-                };
-            }
         }
         self.failure = Some(failure);
     }
@@ -469,47 +95,213 @@ impl Define {
         self.failure.as_ref()
     }
     pub fn artifacts(&self) -> impl ExactSizeIterator<Item = (&str, &[u8], PublicationState)> {
-        self.artifacts
-            .iter()
-            .map(|a| (a.written.as_str(), a.bytes.as_slice(), a.state))
+        self.application.artifacts()
     }
     pub fn capture_reads(&self) -> usize {
-        self.resources.as_ref().map_or(0, Resources::capture_reads)
+        self.ports
+            .resources
+            .as_ref()
+            .map_or(0, Resources::capture_reads)
     }
     pub fn save(&mut self) -> Result<bool, SaveError> {
-        self.save_with_checkpoint(|_| {})
+        let result = self.application.save(&mut self.ports);
+        self.save_result(result)
     }
-    // A private checkpoint permits deterministic operational-failure witnesses;
-    // hosts receive no callback or replacement-publication capability.
-    fn save_with_checkpoint(
+    #[cfg(test)]
+    fn save_with_checkpoint(&mut self, checkpoint: impl FnMut(usize)) -> Result<bool, SaveError> {
+        let result = self
+            .application
+            .save_with_checkpoint(&mut self.ports, checkpoint);
+        self.save_result(result)
+    }
+    fn save_result(
         &mut self,
-        mut checkpoint: impl FnMut(usize),
+        result: Result<bool, service::SaveFailure<Failure, file_publication::Error>>,
     ) -> Result<bool, SaveError> {
-        if self.failure.is_some() {
-            return Err(SaveError);
-        }
-        if self.saved {
-            return Ok(false);
-        }
-        let mut publishers = match self.preflight() {
-            Ok(publishers) => publishers,
-            Err(failure) => {
-                self.refuse(failure);
-                return Err(SaveError);
+        match result {
+            Ok(saved) => Ok(saved),
+            Err(service::SaveFailure::Refused) => Err(SaveError),
+            Err(service::SaveFailure::Failure(failure)) => {
+                self.refuse(native_failure(failure));
+                Err(SaveError)
             }
-        };
-        for (index, (publisher, artifact)) in
-            publishers.iter_mut().zip(&mut self.artifacts).enumerate()
-        {
-            if let Err(error) = publisher.publish(&artifact.written, &artifact.bytes) {
-                self.refuse(Failure::Publication { index, error });
-                return Err(SaveError);
-            }
-            artifact.state = PublicationState::Published;
-            checkpoint(index);
         }
-        self.saved = true;
-        Ok(true)
+    }
+}
+fn native_failure(failure: service::Failure<Failure, file_publication::Error>) -> Failure {
+    match failure {
+        service::Failure::Port(failure) => failure,
+        service::Failure::Metadata(findings) => Failure::Metadata(findings),
+        service::Failure::Diagnostic(findings) => Failure::Diagnostic(findings),
+        service::Failure::TargetAdmission { index, error } => {
+            Failure::TargetAdmission { index, error }
+        }
+        service::Failure::Publication { index, error } => Failure::Publication { index, error },
+    }
+}
+struct NativePorts {
+    resources: Option<Resources>,
+    host: Language,
+}
+impl NativePorts {
+    fn resources(&self) -> &Resources {
+        self.resources.as_ref().expect("selected resource owner")
+    }
+    fn resources_mut(&mut self) -> &mut Resources {
+        self.resources.as_mut().expect("selected resource owner")
+    }
+}
+impl Ports for NativePorts {
+    type Environment = OwnedEnvironment;
+    type Specification = PreparedDocument;
+    type Error = Failure;
+    type PublicationError = file_publication::Error;
+    type Bytes = std::sync::Arc<[u8]>;
+    type Parquet = crate::arrow_table::ArrowTable;
+    type ParquetError = crate::parquet_source::Error;
+    type Target = file_publication::AnchoredTarget;
+    type Publisher = file_publication::Publisher;
+    fn utc_seconds(&mut self) -> Option<u64> {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .map(|duration| duration.as_secs())
+    }
+    fn capture_environment(
+        &mut self,
+        written: &str,
+        limits: service::MetadataLimits,
+    ) -> Result<Self::Environment, Failure> {
+        let (mut resources, entry) = file_configuration::resources(written)
+            .map_err(|error| Failure::Project(project_application::Error::Configuration(error)))?;
+        resources
+            .admit_metadata_budget(MetadataLimits {
+                bytes: limits.bytes,
+                snapshots: limits.snapshots,
+                text: limits.text,
+                work: limits.work,
+            })
+            .map_err(|error| resource(written, written, error))?;
+        self.resources = Some(resources);
+        let schema = crate::shipped_schema::capture_environment()
+            .map_err(|error| Failure::Project(project_application::Error::Schema(error)))?;
+        let host = self.host;
+        file_project::capture_environment(self.resources_mut(), &entry, host, schema)
+            .map_err(|error| Failure::Project(project_application::Error::Project(error)))
+    }
+    fn environment(environment: &Self::Environment) -> service::EnvironmentView<'_> {
+        service::EnvironmentView {
+            document: &environment.root().normalized().document,
+            catalogue: environment.environment().catalogue(),
+            source: &environment.root().source().identity,
+        }
+    }
+    fn capture_specification(
+        &mut self,
+        declaring: &str,
+        written: &str,
+    ) -> Result<Self::Specification, Failure> {
+        file_preparation::prepare_document_from(
+            self.resources_mut(),
+            Some(declaring),
+            written,
+            None,
+        )
+        .map_err(|error| {
+            Failure::Project(project_application::Error::Project(
+                file_project::Error::Document(error),
+            ))
+        })
+    }
+    fn specification(document: &Self::Specification) -> service::SpecificationView<'_> {
+        service::SpecificationView {
+            document: document.model().document(),
+            source: &document.source().identity,
+            output: document.written_output_origin(),
+        }
+    }
+    fn location(&self, path: &str, declaring: &str, written: &str) -> Result<String, Failure> {
+        self.resources()
+            .location_from(declaring, written)
+            .map_err(|error| resource(path, written, error))
+    }
+    fn json_written(&self, written: &str) -> String {
+        Path::new(written)
+            .with_extension("json")
+            .to_string_lossy()
+            .into_owned()
+    }
+    fn same_location(&self, left: &str, right: &str) -> bool {
+        same_location(Path::new(left), Path::new(right))
+    }
+    fn same_parent(&self, left: &str, right: &str) -> bool {
+        Path::new(left)
+            .parent()
+            .zip(Path::new(right).parent())
+            .is_some_and(|(left, right)| same_location(left, right))
+    }
+    fn package_reference(&self, target: &str, define: &str) -> Option<String> {
+        package_reference(
+            Path::new(target),
+            Path::new(define).parent().expect("admitted file location"),
+        )
+    }
+    fn define_name(&self, location: &str) -> String {
+        Path::new(location)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("admitted define name")
+            .into()
+    }
+    fn verify_metadata(&mut self, path: &str, source: &str) -> Result<(), Failure> {
+        self.resources()
+            .verify_captured()
+            .map_err(|(_, error)| resource(path, source, error))
+    }
+    fn finish_metadata(&mut self) {
+        self.resources_mut().finish_metadata_budget();
+    }
+    fn capture_published(
+        &mut self,
+        path: &str,
+        declaring: &str,
+        written: &str,
+        maximum: usize,
+    ) -> Result<Self::Bytes, Failure> {
+        self.resources_mut()
+            .capture_from(declaring, written, maximum)
+            .map(|(bytes, _)| bytes)
+            .map_err(|error| resource(path, written, error))
+    }
+    fn decode_parquet(&mut self, bytes: &[u8]) -> Result<Self::Parquet, Self::ParquetError> {
+        read_parquet(bytes)
+    }
+    fn target(&self, path: &str, declaring: &str, written: &str) -> Result<Self::Target, Failure> {
+        self.resources()
+            .publication_target_from(declaring, written)
+            .map_err(|error| resource(path, written, error))
+    }
+    fn publisher(
+        &mut self,
+        target: &Self::Target,
+        written: &str,
+    ) -> Result<Self::Publisher, Self::PublicationError> {
+        target.publisher(written)
+    }
+    fn same_target(
+        &mut self,
+        left: &Self::Publisher,
+        right: &Self::Publisher,
+    ) -> Result<bool, Self::PublicationError> {
+        left.same_target(right)
+    }
+    fn publish(
+        &mut self,
+        publisher: &mut Self::Publisher,
+        written: &str,
+        bytes: &[u8],
+    ) -> Result<(), Self::PublicationError> {
+        publisher.publish(written, bytes)
     }
 }
 fn same_location(left: &Path, right: &Path) -> bool {
@@ -628,45 +420,6 @@ fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
             )]
         }
     }
-}
-fn created_time(created: Option<&str>) -> Result<String, Finding> {
-    if let Some(created) = created {
-        return yamaa_core::define_diagnostics::created_text(created).map(str::to_owned);
-    }
-    let seconds = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|_| {
-            Finding::cause(
-                ConditionCode::DefineCreatedInvalid,
-                "created",
-                "UTC clock before epoch",
-            )
-        })?
-        .as_secs();
-    // Gregorian civil date from elapsed UTC days; clock admission is host-free.
-    let z = seconds / 86400 + 719468;
-    let era = z / 146097;
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let mut year = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    year += u64::from(month <= 2);
-    if year > 9999 {
-        return Err(Finding::cause(
-            ConditionCode::DefineCreatedInvalid,
-            "created",
-            "UTC clock outside supported calendar",
-        ));
-    }
-    Ok(format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}",
-        seconds % 86400 / 3600,
-        seconds % 3600 / 60,
-        seconds % 60
-    ))
 }
 fn read_parquet(
     bytes: &[u8],
