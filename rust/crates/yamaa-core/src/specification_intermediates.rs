@@ -124,11 +124,19 @@ impl Declarations {
                 .field(id, "key")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
-                if !matches!(d.nodes()[key], N::Mapping(_) | N::Sequence(_)) {
+                if !matches!(d.nodes()[key], N::Text(_) | N::Mapping(_) | N::Sequence(_)) {
                     reject(extra, "intermediate_key", format!("{path}.key"));
                     continue;
                 }
-                if matches!(d.nodes()[key], N::Sequence(_)) {
+                if let N::Text(name) = &d.nodes()[key] {
+                    if limits.keys == 0 {
+                        return Err(PrepareError::Limit("intermediate_keys"));
+                    }
+                    Some(vec![(
+                        name.clone(),
+                        match_values::Declaration::Variable(name.clone()),
+                    )])
+                } else if matches!(d.nodes()[key], N::Sequence(_)) {
                     let fields = sequence(d, key)?;
                     if fields.len() > limits.keys {
                         return Err(PrepareError::Limit("intermediate_keys"));

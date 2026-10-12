@@ -44,6 +44,16 @@ pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
 #[path = "dataset_relation_predicate.rs"]
 pub(crate) mod relation_predicates;
 pub use relation_predicates::{CurrentField, CurrentRead, RelationPredicate};
+#[path = "dataset_relation_shape.rs"]
+mod relation_shape;
+pub use relation_shape::{
+    RelationField, RelationFieldOrigin, RelationShape, RelationShapeError, RelationShapeLimits,
+};
+#[path = "dataset_relation_range.rs"]
+mod relation_range;
+pub use relation_range::{
+    RelationRange, RelationRangeBound, RelationRangeError, RelationRangeFailure, RelationRangeTypes,
+};
 #[path = "dataset_self.rs"]
 mod self_relations;
 pub use self_relations::IntermediateSource;
