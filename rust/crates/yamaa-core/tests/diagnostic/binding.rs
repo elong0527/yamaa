@@ -930,3 +930,103 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
     }
     reached
 }
+
+/// Inferred source keys use their own normative causes, rather than named-lookup causes.
+pub(super) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
+    let tree = Map(vec![
+        ("schema_version", Text("1.0")),
+        ("domain", Text("TEST")),
+        ("base", Text("SRC")),
+        (
+            "input",
+            Map(vec![
+                ("SRC", Map(vec![("path", Text("source.csv"))])),
+                ("DONOR", Map(vec![("path", Text("donor.csv"))])),
+            ]),
+        ),
+        ("keys", List(vec![Text("ID")])),
+        (
+            "columns",
+            List(vec![
+                column("ID", Some(op("source", "variable", "SRC.ID"))),
+                column("VALUE", Some(op("source", "variable", "DONOR.V"))),
+            ]),
+        ),
+        (
+            "output",
+            Map(vec![
+                ("path", Text("result.csv")),
+                ("columns", List(vec![Text("ID"), Text("VALUE")])),
+            ]),
+        ),
+    ]);
+    let mut nodes = vec![];
+    let root = tree.append(&mut nodes);
+    let model = SpecificationDocument::admit(
+        Document::new(nodes, root, Default::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap();
+    let prepared = PreparedSpecification::prepare(&model).unwrap();
+    let driver = TableSchema::new(vec![Column {
+        name: "ID".into(),
+        kind: ColumnType::Int,
+    }])
+    .unwrap();
+    let mut reached = BTreeSet::new();
+    for (name, kind, condition, requirement, context) in [
+        (
+            "OTHER",
+            ColumnType::Int,
+            "no_applicable_keys",
+            "REQ-0152",
+            vec![
+                ("dataset", text("DONOR")),
+                ("keys", V::Sequence(vec![text("ID")])),
+                (
+                    "hint",
+                    text("declare an explicit `intermediate:` with `source`/`key` pairs"),
+                ),
+            ],
+        ),
+        (
+            "ID",
+            ColumnType::Str,
+            "incompatible_input_type",
+            "REQ-0151",
+            vec![
+                ("source", text("ID")),
+                ("expected", text("int")),
+                ("actual", text("str")),
+            ],
+        ),
+    ] {
+        let donor = TableSchema::new(vec![
+            Column {
+                name: name.into(),
+                kind,
+            },
+            Column {
+                name: "V".into(),
+                kind: ColumnType::Int,
+            },
+        ])
+        .unwrap();
+        let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&driver, &donor]) else {
+            panic!("inferred key admission");
+        };
+        assert_eq!(findings.len(), 1);
+        reached.insert(check(
+            findings[0]
+                .diagnostics(prepared.source())
+                .unwrap()
+                .remove(0),
+            condition,
+            Some(requirement),
+            &["columns.VALUE.derivation.source"],
+            context,
+        ));
+    }
+    reached
+}

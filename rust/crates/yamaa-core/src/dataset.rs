@@ -65,6 +65,10 @@ pub use windows::{OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    MappingCut {
+        source: alloc::boxed::Box<Assignment>,
+        operation: crate::mapping_cut::MappingCut,
+    },
     Extreme {
         operands: Vec<Assignment>,
         largest: bool,
@@ -97,6 +101,20 @@ pub enum Expression {
     /// Only the first TRUE branch is evaluated; FALSE and UNKNOWN continue.
     Case(Vec<CaseBranch>),
     Literal(Value),
+    /// Binding handler ownership is retained even when the variable exists.
+    SourceBinding {
+        source: alloc::boxed::Box<Assignment>,
+        absent: Option<Value>,
+        variable_absent: bool,
+        variable: String,
+        path: String,
+    },
+    /// Source-only eligibility and stable choice on an implicit secondary join.
+    SourceLookup {
+        lookup: Lookup,
+        filter: Option<BoundPredicate>,
+        selection: Option<SourceSelection>,
+    },
     /// One condition selects a raw true/false/UNKNOWN literal.
     Flag(Flag),
     /// Compiled scalar arithmetic over statically bound source/completed output reads.
@@ -545,7 +563,10 @@ fn validate_assignment_at(
                 available[assignment.column] = false;
             }
         }
-        Expression::StrCase {
+        Expression::MappingCut {
+            source: operand, ..
+        }
+        | Expression::StrCase {
             source: operand, ..
         }
         | Expression::StrPad {
@@ -644,7 +665,76 @@ fn validate_assignment_at(
         }
         Expression::Function(function) => function.validate(source, available, mode)?,
         Expression::ProjectFunction(function) => function.validate(source, available, mode)?,
-        Expression::FirstAvailable(selection) => selection.validate(source, available, mode)?,
+        Expression::FirstAvailable(selection) => {
+            selection.validate(source, available, mode)?;
+            for operand in selection.sources() {
+                if let SelectionRead::Expression(operand) = &operand.read {
+                    if operand.column != assignment.column {
+                        return Err(PlanError::InvalidColumns);
+                    }
+                    validate_assignment_at(
+                        operand,
+                        available,
+                        source,
+                        secondary,
+                        intermediates,
+                        output,
+                        mode,
+                        depth + 1,
+                        remaining,
+                    )?;
+                    available[assignment.column] = false;
+                }
+            }
+        }
+        Expression::SourceBinding {
+            source: operand,
+            path,
+            variable,
+            absent,
+            variable_absent,
+        } => {
+            if operand.column != assignment.column
+                || path.is_empty()
+                || variable.is_empty()
+                || (*variable_absent && absent.is_none())
+            {
+                return Err(PlanError::InvalidColumns);
+            }
+            validate_assignment_at(
+                operand,
+                available,
+                source,
+                secondary,
+                intermediates,
+                output,
+                mode,
+                depth + 1,
+                remaining,
+            )?;
+            available[assignment.column] = false;
+        }
+        Expression::SourceLookup {
+            lookup: bound,
+            filter,
+            selection,
+        } => {
+            if !matches!(mode, RowMode::Keys) {
+                return Err(PlanError::InvalidLookup);
+            }
+            lookup::validate_source(bound, secondary, available, output)?;
+            let width = secondary[bound.source].schema.columns().len();
+            if let Some(filter) = filter {
+                filter
+                    .validate(width, &[], false)
+                    .map_err(PlanError::Filter)?;
+            }
+            if selection.as_ref().is_some_and(|s| {
+                s.order_by.is_empty() || s.order_by.iter().any(|term| term.column >= width)
+            }) {
+                return Err(PlanError::InvalidSourceOrder);
+            }
+        }
         Expression::Intermediate { index, column } => {
             let item = intermediates
                 .get(*index)
@@ -752,6 +842,7 @@ fn key_expression(expression: &Expression) -> bool {
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::MappingCut { source, .. }
         | Expression::Round { source, .. } => key_expression(&source.expression),
         Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. }
@@ -792,12 +883,17 @@ fn current_record_read(
                         .any(|read| matches!(read, MatchRead::Record { .. }))
                 })
         }
+        Expression::SourceBinding { source, .. } => {
+            current_record_read(&source.expression, intermediates, scope)
+        }
         Expression::FirstAvailable(selection) => {
-            include_raw
-                && selection
-                    .sources()
-                    .iter()
-                    .any(|source| matches!(source.read, SelectionRead::Source(_)))
+            selection.sources().iter().any(|source| match &source.read {
+                SelectionRead::Source(_) => include_raw,
+                SelectionRead::Expression(source) => {
+                    current_record_read(&source.expression, intermediates, scope)
+                }
+                SelectionRead::Column(_) | SelectionRead::Collect { .. } => false,
+            })
         }
         Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
             .iter()
@@ -806,6 +902,7 @@ fn current_record_read(
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::MappingCut { source, .. }
         | Expression::Round { source, .. } => {
             current_record_read(&source.expression, intermediates, scope)
         }

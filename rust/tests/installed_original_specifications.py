@@ -495,6 +495,93 @@ class OriginalSpecifications(unittest.TestCase):
             self.assertEqual(json.loads(result.observations()), expected)
             self.assertIsNotNone(result.output())
 
+    def test_original_source_bindings_complete_reports_and_exact_csv(self):
+        with (ROOT / "original-source-bindings.tsv").open(encoding="ascii") as stream:
+            cases = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(cases), 16)
+        def no_port(*_):
+            self.fail("standalone source binding reached an inheritance port")
+        for row in cases:
+            with self.subTest(case=row["case"]):
+                handle = yamaa_native._prepare_document("spec.yaml", bytes.fromhex(row["source_hex"]), no_port, no_port, no_port)
+                inputs = {name: bytes.fromhex(content) for name, content in json.loads(row["inputs_json"]).items()}
+                expected = json.loads(row["expected"])
+                artifact = bytes.fromhex(row["artifact_hex"])
+                for _ in range(2):
+                    calls = []
+                    def capture(name, path, maximum):
+                        self.assertEqual(path, name.lower() + ".csv")
+                        self.assertLessEqual(len(inputs[name]), maximum)
+                        calls.append(name)
+                        return inputs[name], True
+                    result = handle.build(capture, ("fixture-runtime", "fixture-engine", "source-binding-" + row["case"], "spec.yaml", "."))
+                    self.assertEqual(json.loads(result.observations()), dict(expected, artifacts=[]))
+                    self.assertEqual(calls, ["SRC", "DONOR"] if "DONOR" in inputs else ["SRC"])
+                    saves = []
+                    def publish(path, content):
+                        self.assertEqual(path, "result.csv")
+                        self.assertEqual(content, artifact)
+                        saves.append(content)
+                    if artifact:
+                        for _ in range(2):
+                            self.assertEqual(json.loads(result.save(publish)), expected)
+                        self.assertEqual(saves, [artifact, artifact])
+                    else:
+                        self.assertIsNone(result.output())
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save(publish)
+                        self.assertEqual(saves, [])
+
+    def test_original_mapping_cut_admission_precedes_all_ports(self):
+        def no_port(*_):
+            self.fail("mapping/cut admission reached a study or inheritance port")
+        with (ROOT / "mapping-cut-admission.tsv").open(encoding="ascii") as stream:
+            rows = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(rows), 5)
+        for row in rows:
+            with self.subTest(case=row["case"]):
+                with self.assertRaises(ValueError) as failure:
+                    yamaa_native._prepare_document("spec.yaml", bytes.fromhex(row["source_hex"]), no_port, no_port, no_port)
+                self.assertEqual(json.loads(str(failure.exception)), json.loads(row["expected"]))
+
+    def test_original_mapping_cut_complete_reports_and_exact_csv(self):
+        with (ROOT / "original-mapping-cut.tsv").open(encoding="ascii") as stream:
+            cases = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(cases), 21)
+        def no_port(*_):
+            self.fail("standalone mapping/cut reached an inheritance port")
+        for row in cases:
+            with self.subTest(case=row["case"]):
+                handle = yamaa_native._prepare_document("spec.yaml", bytes.fromhex(row["source_hex"]), no_port, no_port, no_port)
+                inputs = {name: bytes.fromhex(content) for name, content in json.loads(row["inputs_json"]).items()}
+                expected = json.loads(row["expected"])
+                artifact = bytes.fromhex(row["artifact_hex"])
+                for _ in range(2):
+                    calls = []
+                    def capture(name, path, maximum):
+                        self.assertEqual(path, name.lower() + ".csv")
+                        self.assertLessEqual(len(inputs[name]), maximum)
+                        calls.append(name)
+                        return inputs[name], True
+                    result = handle.build(capture, ("fixture-runtime", "fixture-engine", "mapping-cut-" + row["case"], "spec.yaml", "."))
+                    self.assertEqual(json.loads(result.observations()), dict(expected, artifacts=[]))
+                    self.assertEqual(calls, ["SRC", "DONOR"] if "DONOR" in inputs else ["SRC"])
+                    saves = []
+                    def publish(path, content):
+                        self.assertEqual(path, "result.csv")
+                        self.assertEqual(content, artifact)
+                        saves.append(content)
+                    if artifact:
+                        for _ in range(2):
+                            self.assertEqual(json.loads(result.save(publish)), expected)
+                        self.assertEqual(saves, [artifact, artifact])
+                    else:
+                        self.assertIsNone(result.output())
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save(publish)
+                        self.assertEqual(saves, [])
+
+
     def test_original_filtered_sources_complete_reports_and_exact_csv(self):
         self._source_selection_reports("source-filters.tsv", "source-filter", 13)
 
@@ -1925,11 +2012,17 @@ columns:
                     shutil.copytree(ROOT / "row-cases" / name, current)
                     entry = current / "spec.yaml"
                     expected = json.loads((current / "findings.json").read_text(encoding="ascii"))
+                    if name == "different-row-drivers":
+                        # Stored drivers now use the complete historical success witness.
+                        self.assertEqual(expected, case["findings"])
+                        self.assertEqual((current / "expected.csv").read_bytes(), case["csv"].encode())
                     if name == "adam-adlb-end-of-treatment":
                         gates = list(reference["eot_native_gates"])
                         self.assertEqual(len(gates), 5)
                         self.assertEqual(gates.pop(), {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
                             "spec_paths":["columns.EOTFL.derivation.flag"], "context":{"operation":"flag"}})
+                        self.assertEqual(gates.pop(), {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                            "spec_paths":["columns.ENDPOINT.derivation.source"], "context":{"operation":"secondary_source_expression"}})
                         self.assertEqual(expected, gates)
                     result = yamaa.domain(entry)
                     self.assertEqual(issues(result), expected)

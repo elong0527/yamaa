@@ -217,6 +217,8 @@ fn default_reads(
         | "str_contains"
         | "case"
         | "first_available"
+        | "mapping"
+        | "cut"
         | "row_number"
         | "rank"
         | "row_value"

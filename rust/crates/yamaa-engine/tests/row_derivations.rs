@@ -481,3 +481,192 @@ fn distinct_driver_failure_retains_its_source_coordinate_payload_and_entered_pre
     assert_eq!(*secondary.reads.borrow(), [(0, 1), (0, 2), (1, 1), (1, 2)]);
     assert!(attempt.retained_verifications.is_empty());
 }
+
+/// Container reads run after the template window without an extra source pass.
+#[test]
+fn wrapped_first_available_reads_the_completed_template_window() {
+    let source = schema(&[("ID", ColumnType::Int)]);
+    let table = Table {
+        schema: source.clone(),
+        rows: vec![
+            vec![Value::Int(3)],
+            vec![Value::Int(1)],
+            vec![Value::Int(2)],
+        ],
+        reads: RefCell::default(),
+        failure: None,
+    };
+    let plan = DatasetPlan::new(
+        source,
+        schema(&[
+            ("ID", ColumnType::Int),
+            ("SEQ", ColumnType::Int),
+            ("SELECTED", ColumnType::Int),
+        ]),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![
+                assign(0, Expression::Source(0), "row.ID"),
+                assign(
+                    1,
+                    Expression::Window(Window {
+                        kind: WindowKind::RowNumber,
+                        group_by: vec![],
+                        order_by: vec![OrderTerm {
+                            column: 0,
+                            descending: false,
+                            nulls_first: false,
+                        }],
+                        filter: None,
+                    }),
+                    "row.SEQ",
+                ),
+                assign(
+                    2,
+                    Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                        vec![SelectionSource {
+                            path: "row.SELECTED.sources[0]".into(),
+                            read: SelectionRead::Expression(Box::new(assign(
+                                2,
+                                Expression::SourceBinding {
+                                    source: Box::new(assign(
+                                        2,
+                                        Expression::Column(1),
+                                        "row.SELECTED.source",
+                                    )),
+                                    absent: None,
+                                    variable_absent: false,
+                                    variable: "SEQ".into(),
+                                    path: "row.SELECTED.source".into(),
+                                },
+                                "row.SELECTED.source",
+                            ))),
+                        }],
+                        Value::Int(99),
+                    ))),
+                    "row.SELECTED",
+                ),
+            ],
+            filter: None,
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    let result = plan.execute(&table, limits()).unwrap();
+    assert_eq!(
+        result.dataset.rows(),
+        [
+            vec![Value::Int(3), Value::Int(3), Value::Int(3)],
+            vec![Value::Int(1), Value::Int(1), Value::Int(1)],
+            vec![Value::Int(2), Value::Int(2), Value::Int(2)]
+        ]
+    );
+    assert_eq!(*table.reads.borrow(), [(0, 0), (1, 0), (2, 0)]);
+}
+
+/// An unselected source-selection callback is checked before every table method.
+#[test]
+fn wrapped_selection_cannot_hide_an_unactivated_function() {
+    use yamaa_core::{
+        dataset::BoundFunction,
+        function_signature::{FunctionIdentity, InvocationPlan},
+    };
+    struct Untouched;
+    impl TableAccess for Untouched {
+        type Error = Rc<str>;
+        fn schema(&self) -> &TableSchema {
+            panic!("schema entered before function admission")
+        }
+        fn row_count(&self) -> usize {
+            panic!("cardinality entered before function admission")
+        }
+        fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<Self::Error>> {
+            panic!("cell entered before function admission")
+        }
+    }
+    let signature = InvocationPlan::new(
+        FunctionIdentity {
+            name: "id".into(),
+            contract_version: "1".into(),
+            implementation_version: "1".into(),
+            call: "project.id".into(),
+        },
+        vec![],
+        ColumnType::Int,
+        false,
+    )
+    .unwrap();
+    let selection = Expression::FirstAvailable(Box::new(FirstAvailable::new(
+        vec![
+            SelectionSource {
+                path: "row.RESULT.sources[0]".into(),
+                read: SelectionRead::Expression(Box::new(assign(
+                    1,
+                    Expression::Literal(Value::Int(7)),
+                    "row.RESULT.literal",
+                ))),
+            },
+            SelectionSource {
+                path: "row.RESULT.sources[1]".into(),
+                read: SelectionRead::Expression(Box::new(assign(
+                    1,
+                    Expression::SourceBinding {
+                        source: Box::new(assign(
+                            1,
+                            Expression::Case(vec![CaseBranch {
+                                when: Some(
+                                    BoundPredicate::new(
+                                        yamaa_core::predicate_compiler::compile(
+                                            "1 = 1",
+                                            "row.RESULT.case.when",
+                                            Default::default(),
+                                        )
+                                        .unwrap(),
+                                        vec![],
+                                    )
+                                    .unwrap(),
+                                ),
+                                assignment: Box::new(assign(
+                                    1,
+                                    Expression::Function(
+                                        BoundFunction::new(0, signature, vec![]).unwrap(),
+                                    ),
+                                    "row.RESULT.function",
+                                )),
+                            }]),
+                            "row.RESULT.case",
+                        )),
+                        absent: None,
+                        variable_absent: false,
+                        variable: "FUNCTION".into(),
+                        path: "row.RESULT.source".into(),
+                    },
+                    "row.RESULT.source",
+                ))),
+            },
+        ],
+        Value::Missing,
+    )));
+    let plan = DatasetPlan::new(
+        schema(&[("ID", ColumnType::Int)]),
+        schema(&[("ID", ColumnType::Int), ("RESULT", ColumnType::Int)]),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![
+                assign(0, Expression::Source(0), "row.ID"),
+                assign(1, selection, "row.RESULT"),
+            ],
+            filter: None,
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    assert!(matches!(
+        *plan.execute(&Untouched, limits()).unwrap_err(),
+        ExecutionError::FunctionBinding { slot: 0 }
+    ));
+}

@@ -11,6 +11,7 @@ use yamaa_core::{
     value::ColumnType,
 };
 
+#[derive(Clone)]
 enum Tree<'a> {
     Scalar(N),
     Text(&'a str),
@@ -859,6 +860,114 @@ fn selection_metadata_and_filters_are_bounded_before_owned_compilation() {
             matches!(PreparedSpecification::prepare_with_limits(&document,limits),Err(PrepareError::Limit(resource)) if resource==name)
         );
     }
+}
+
+#[test]
+fn nested_source_options_are_rejected_before_binding_instead_of_dropped() {
+    use Tree::*;
+    for fields in [
+        vec![("absent", Scalar(N::Integer("7".into())))],
+        vec![
+            ("order_by", List(vec![Text("SRC.ID")])),
+            ("keep", Text("first")),
+        ],
+    ] {
+        for concat in [false, true] {
+            let mut fields = fields.clone();
+            fields.insert(0, ("variable", Text("SRC.ID")));
+            let value = Map(vec![("source", Map(fields))]);
+            let (operation, payload, path) = if concat {
+                (
+                    "str_concat",
+                    Map(vec![("sources", List(vec![value]))]),
+                    "columns.VALUE.derivation.str_concat.sources[0].source",
+                )
+            } else {
+                (
+                    "case",
+                    List(vec![
+                        Map(vec![("when", Text("ID = 1")), ("then", value)]),
+                        Map(vec![(
+                            "otherwise",
+                            Map(vec![("literal", Scalar(N::Integer("0".into())))]),
+                        )]),
+                    ]),
+                    "columns.VALUE.derivation.case[0].then.source",
+                )
+            };
+            let document = operation_document(operation, payload, "input.csv");
+            let Err(PrepareError::Unsupported(findings)) =
+                PreparedSpecification::prepare(&document)
+            else {
+                panic!("nested source options must not be silently ignored");
+            };
+            assert!(
+                findings.iter().any(|finding| {
+                    finding.operation == "case_source_options" && finding.path == path
+                }),
+                "{findings:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn unqualified_key_source_options_retain_the_planning_diagnostic() {
+    use Tree::*;
+    let document = operation_document(
+        "source",
+        Map(vec![
+            ("variable", Text("SOME_NAME")),
+            ("absent", Scalar(N::Integer("7".into()))),
+        ]),
+        "input.csv",
+    );
+    let source = document.document();
+    let mut nodes = source.nodes().to_vec();
+    let N::Sequence(keys) = &nodes[source.field(source.root(), "keys").unwrap()] else {
+        panic!("key sequence");
+    };
+    let key = keys[0];
+    nodes[key] = N::Text("VALUE".into());
+    let document = SpecificationDocument::admit(
+        Document::new(nodes, source.root(), DocumentLimits::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap();
+    let Err(PrepareError::Unsupported(findings)) = PreparedSpecification::prepare(&document) else {
+        panic!("key source options must fail at planning");
+    };
+    assert!(findings.iter().any(|finding| {
+        finding.operation == "filtered_key_source"
+            && finding.path == "columns.VALUE.derivation.source"
+    }));
+}
+
+#[test]
+fn first_available_nested_assignments_retain_each_operand_path() {
+    use Tree::*;
+    let document = operation_document(
+        "first_available",
+        Map(vec![(
+            "sources",
+            List(vec![Map(vec![("variable", Text("SRC.ID"))])]),
+        )]),
+        "input.csv",
+    );
+    let prepared = PreparedSpecification::prepare(&document).unwrap();
+    let plan = prepared.bind(&source()).unwrap();
+    let Expression::FirstAvailable(selection) = &plan.columns()[0].expression else {
+        panic!("compiled first_available");
+    };
+    let yamaa_core::dataset::SelectionRead::Expression(assignment) = &selection.sources()[0].read
+    else {
+        panic!("nested source expression");
+    };
+    assert_eq!(
+        assignment.path,
+        "columns.VALUE.derivation.first_available.sources[0]"
+    );
 }
 
 #[test]

@@ -181,7 +181,16 @@ pub(super) fn admit<E>(
         | Expression::StrExtract { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
+        | Expression::MappingCut { source, .. }
         | Expression::Round { source, .. } => admit(&source.expression, functions)?,
+        Expression::SourceBinding { source, .. } => admit(&source.expression, functions)?,
+        Expression::FirstAvailable(selection) => {
+            for operand in selection.sources() {
+                if let yamaa_core::dataset::SelectionRead::Expression(source) = &operand.read {
+                    admit(&source.expression, functions)?;
+                }
+            }
+        }
         _ => (),
     }
     Ok(())
