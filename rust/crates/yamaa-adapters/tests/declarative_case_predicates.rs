@@ -1,0 +1,237 @@
+//! Independently authored full case reports and unchanged original CSV truth.
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicUsize, Ordering},
+};
+use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_engine::domain_entry::Request;
+static NEXT: AtomicUsize = AtomicUsize::new(0);
+struct Fixture(PathBuf);
+impl Fixture {
+    fn new() -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "yamaa-case-predicates-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&path).unwrap();
+        Self(path)
+    }
+    fn run(
+        &self,
+        body: &str,
+    ) -> Result<file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>> {
+        let path = self.0.join("spec.yaml");
+        fs::write(&path, body).unwrap();
+        let specification = path.to_str().unwrap();
+        file_application::domain(
+            Request {
+                specification,
+                environment: None,
+            },
+            Identity {
+                runtime: "test",
+                runtime_version: "test",
+                engine_version: yamaa_core::VERSION,
+                example: "independent-case-predicates",
+                specification,
+                base_directory: ".",
+            },
+        )
+    }
+}
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        fs::remove_dir_all(&self.0).unwrap();
+    }
+}
+fn findings(result: &file_application::Domain) -> Vec<serde_json::Value> {
+    result
+        .issues()
+        .iter()
+        .map(|issue| {
+            let mut value = issue.as_value();
+            assert!(value["context"].is_string());
+            value["context"] = serde_json::from_str(&issue.context).unwrap();
+            value
+        })
+        .collect()
+}
+const SOURCE: &str = r#"schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: {path: input.csv, types: {V: int}}}
+output: {path: result.csv, columns: [ID, VALUE]}
+columns:
+  - {name: ID, type: str, derivation: SRC.ID}
+  - name: VALUE
+    type: int
+    derivation:
+      case:
+        - when: "SRC.V > 0"
+          then: {literal: 7}
+        - when: 'FALSE'
+          then: SRC.BAD
+        - otherwise: {literal: 8}
+"#;
+#[test]
+fn implicit_case_predicates_reduce_feeding_values_and_only_true_selects() {
+    let fixture = Fixture::new();
+    fs::write(
+        fixture.0.join("input.csv"),
+        "ID,V,BAD\na,1,hidden\na,,hidden\nb,,hidden\nc,-1,hidden\n",
+    )
+    .unwrap();
+    let mut result = fixture.run(SOURCE).unwrap();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert_eq!(
+        result.observations()["handler_counts"],
+        serde_json::json!([])
+    );
+    assert_eq!(
+        result.observations()["verifications"],
+        serde_json::json!([])
+    );
+    assert!(result.save().unwrap());
+    assert_eq!(
+        fs::read(fixture.0.join("result.csv")).unwrap(),
+        b"ID,VALUE\na,7\nb,8\nc,8\n"
+    );
+}
+#[test]
+fn case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication() {
+    let fixture = Fixture::new();
+    fs::write(
+        fixture.0.join("input.csv"),
+        "ID,V,BAD\na,1,hidden\na,2,hidden\nb,,hidden\n",
+    )
+    .unwrap();
+    fs::write(fixture.0.join("result.csv"), "sentinel").unwrap();
+    let mut result = fixture.run(SOURCE).unwrap();
+    let issues = findings(&result);
+    assert_eq!(
+        issues,
+        vec![
+            serde_json::json!({"phase":"derivation","condition":"multiple_values_per_key","requirement":"REQ-0075","spec_paths":["columns.VALUE.derivation.case[0].when"],"context":{"identifier":"SRC.V","value_count":2,"keys":[{"ID":"a"}]}})
+        ]
+    );
+    assert!(result.save().is_err());
+    assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), b"sentinel");
+}
+#[test]
+fn filtered_case_source_is_shared_by_columns_record_rows_and_grouped_keys() {
+    let body = SOURCE
+        .replace("        - when: 'FALSE'\n          then: SRC.BAD\n", "")
+        .replace("when: \"SRC.V > 0\"", "when: 'TRUE'")
+        .replace(
+            "then: {literal: 7}",
+            "then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}",
+        )
+        .replace("    type: int", "    type: str");
+    for (rows,expected) in [
+        ("",b"ID,VALUE\na,a\nb,\n".as_slice()),
+        ("rows:\n  - id: records\n    dataset: SRC\n    derivations: {}\n",b"ID,VALUE\na,a\nb,\n".as_slice()),
+        ("rows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations: {}\n",b"ID,VALUE\na,a\nb,\n".as_slice()),
+    ] {
+        let fixture=Fixture::new(); fs::write(fixture.0.join("input.csv"),"ID,V,BAD\na,1,hidden\nb,,hidden\n").unwrap();
+        let mut result=fixture.run(&format!("{body}{rows}")).unwrap(); assert!(result.issues().is_empty(),"{:?}",result.issues()); assert!(result.save().unwrap()); assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(),expected);
+    }
+}
+#[test]
+fn unchanged_original_case_and_filtered_source_truth_passes_in_full() {
+    let benchmarks = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
+    fn copy(source: &Path, target: &Path) {
+        for entry in fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let path = target.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                fs::create_dir(&path).unwrap();
+                copy(&entry.path(), &path);
+            } else {
+                fs::copy(entry.path(), path).unwrap();
+            }
+        }
+    }
+    let mut remaining = Vec::new();
+    for name in [
+        "adam-adae-protocol-review",
+        "schema-expressions",
+        "schema-predicates",
+        "sdtm-ae-seriousness",
+        "sdtm-mh-ongoing-conditions",
+        "sdtm-tr-tumor-measurements",
+        "sdtm-tu-tumor-identification",
+        "sdtm-ds-reasons",
+    ] {
+        let fixture = Fixture::new();
+        let source = benchmarks.join(name);
+        copy(&source, &fixture.0);
+        let authored = fs::read(source.join("spec.yaml")).unwrap();
+        let mut result = match fixture.run(std::str::from_utf8(&authored).unwrap()) {
+            Ok(result) => result,
+            Err(issues) => {
+                remaining.push(format!("{name}: {issues:?}"));
+                continue;
+            }
+        };
+        assert!(result.issues().is_empty(), "{name}: {:?}", result.issues());
+        assert!(result.save().unwrap(), "{name}");
+        for expected in fs::read_dir(source.join("expected")).unwrap() {
+            let expected = expected.unwrap();
+            if expected
+                .path()
+                .extension()
+                .is_some_and(|extension| extension == "csv")
+            {
+                assert_eq!(
+                    fs::read(fixture.0.join(expected.file_name())).unwrap(),
+                    fs::read(expected.path()).unwrap(),
+                    "{name}/{}",
+                    expected.file_name().to_string_lossy()
+                );
+            }
+        }
+        assert_eq!(fs::read(source.join("spec.yaml")).unwrap(), authored);
+    }
+    assert!(
+        remaining.is_empty(),
+        "remaining original blockers: {}",
+        remaining.join("\n")
+    );
+}
+
+#[test]
+fn independently_authored_installed_host_truth_has_the_same_complete_native_observations() {
+    let truth: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/case_predicates.json")).unwrap();
+    for (name, case) in truth["cases"].as_object().unwrap() {
+        let fixture = Fixture::new();
+        for (name, contents) in case["inputs"].as_object().unwrap() {
+            fs::write(fixture.0.join(name), contents.as_str().unwrap()).unwrap();
+        }
+        let mut result = fixture
+            .run(case["specification"].as_str().unwrap())
+            .unwrap();
+        let findings = findings(&result);
+        assert_eq!(
+            serde_json::json!(findings),
+            case.get("findings")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!([])),
+            "{name}"
+        );
+        if let Some(csv) = case.get("csv") {
+            assert!(result.save().unwrap(), "{name}");
+            assert_eq!(
+                fs::read(fixture.0.join("result.csv")).unwrap(),
+                csv.as_str().unwrap().as_bytes(),
+                "{name}"
+            );
+        } else {
+            assert!(result.output().is_none(), "{name}");
+            assert!(result.save().is_err(), "{name}");
+            assert!(!fixture.0.join("result.csv").exists(), "{name}");
+        }
+    }
+}

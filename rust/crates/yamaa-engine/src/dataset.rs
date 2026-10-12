@@ -13,6 +13,8 @@ mod intermediates;
 #[path = "dataset_relation_predicate.rs"]
 mod relation_predicates;
 pub use yamaa_core::dataset::*;
+#[path = "dataset_case_predicate.rs"]
+mod case_predicates;
 #[path = "dataset_flag.rs"]
 mod flags;
 #[path = "dataset_functions.rs"]
@@ -545,20 +547,9 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             let selected = match &branch.when {
                 None => true,
                 Some(when) => {
-                    let source_row = candidate.members[0];
-                    let truth = crate::dataset_predicate::evaluate(
-                        when,
-                        table,
-                        source_row,
-                        &candidate.values,
-                        state.budget.predicate(),
-                    )
-                    .map_err(|error| match error.kind {
-                        yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                            Box::new(predicate_limit(limit))
-                        }
-                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                    })?;
+                    let truth = case_predicates::evaluate(
+                        when, table, candidate, plan, row, assignment, state,
+                    )?;
                     truth == yamaa_core::predicate::Truth::True
                 }
             };

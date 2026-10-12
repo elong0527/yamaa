@@ -525,13 +525,26 @@ fn validate_assignment_at(
                     return Err(PlanError::InvalidColumns);
                 }
                 if let Some(when) = &branch.when {
+                    if !when.collected().is_empty() && !matches!(mode, RowMode::Keys) {
+                        return Err(PlanError::InvalidKeyMode);
+                    }
                     if let RowMode::Groups(keys) = mode {
                         if when.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !keys.contains(&column))) {
                             return Err(PlanError::NonGroupSource);
                         }
                     }
-                    when.validate(source.columns().len(), available, false)
+                    when.validate_contextual(source.columns().len(), available)
                         .map_err(PlanError::Filter)?;
+                    for binding in when.bindings() {
+                        if let Read::Intermediate { index, column } = binding.read {
+                            let item = intermediates
+                                .get(index)
+                                .ok_or(PlanError::InvalidIntermediate)?;
+                            intermediates::validate_context_read(
+                                item, column, source, secondary, available, output, mode,
+                            )?;
+                        }
+                    }
                 }
                 validate_assignment_at(
                     &branch.assignment,
@@ -849,7 +862,11 @@ fn validate_assignment_at(
             if *column >= source.columns().len() {
                 return Err(PlanError::InvalidSource);
             }
-            if !matches!(mode, RowMode::Keys) || identifier.is_empty() {
+            let scalar_records = filter.is_some()
+                && selection.is_none()
+                && (matches!(mode, RowMode::Records)
+                    || matches!(mode, RowMode::Groups(keys) if keys.contains(column)));
+            if (!matches!(mode, RowMode::Keys) && !scalar_records) || identifier.is_empty() {
                 return Err(PlanError::InvalidKeyMode);
             }
             if let Some(filter) = filter {
@@ -927,9 +944,15 @@ fn key_expression(expression: &Expression) -> bool {
             .bindings()
             .iter()
             .all(|binding| !matches!(binding.read, Read::Intermediate { .. })),
-        Expression::Case(branches) => branches
-            .iter()
-            .all(|branch| key_expression(&branch.assignment.expression)),
+        Expression::Case(branches) => branches.iter().all(|branch| {
+            branch.when.as_ref().is_none_or(|when| {
+                when.collected().is_empty()
+                    && when
+                        .bindings()
+                        .iter()
+                        .all(|binding| !matches!(binding.read, Read::Intermediate { .. }))
+            }) && key_expression(&branch.assignment.expression)
+        }),
         _ => false,
     }
 }
@@ -959,6 +982,9 @@ fn current_record_read(
             AggregateRelation::Output { .. } => false,
         },
         Expression::Source(_) | Expression::RowLookup(_) => include_raw,
+        // A key-grain collection is valid in the primary implicit form. A
+        // global column shared by foreign drivers cannot borrow its coordinates.
+        Expression::Collect { .. } => scope == RecordReadScope::All,
         Expression::Intermediate { index, .. } => {
             scope != RecordReadScope::Driver
                 && intermediates.get(*index).is_some_and(|item| {
@@ -1001,14 +1027,26 @@ fn current_record_read(
         Expression::Function(function) => include_raw && function.reads_source(),
         Expression::ProjectFunction(function) => include_raw && function.reads_source(),
         Expression::Case(branches) => branches.iter().any(|branch| {
-            include_raw
-                && branch.when.as_ref().is_some_and(|predicate| {
-                    predicate
-                        .bindings()
-                        .iter()
-                        .any(|binding| matches!(binding.read, Read::Source(_)))
-                })
-                || current_record_read(&branch.assignment.expression, intermediates, scope)
+            branch.when.as_ref().is_some_and(|predicate| {
+                predicate
+                    .bindings()
+                    .iter()
+                    .any(|binding| match binding.read {
+                        Read::Source(_) => {
+                            if predicate.collects(&binding.name) {
+                                scope == RecordReadScope::All
+                            } else {
+                                include_raw
+                            }
+                        }
+                        Read::Intermediate { index, column } => current_record_read(
+                            &Expression::Intermediate { index, column },
+                            intermediates,
+                            scope,
+                        ),
+                        Read::Column(_) => false,
+                    })
+            }) || current_record_read(&branch.assignment.expression, intermediates, scope)
         }),
         _ => false,
     }

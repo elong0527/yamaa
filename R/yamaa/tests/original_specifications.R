@@ -2072,6 +2072,37 @@ local({
   cat("nested case intermediate source shares lazy kept selection and complete handler accounting without Python\n")
 })
 
+
+local({
+  failures <- read.delim(file.path(root,"case-predicate-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
+  for (case in list.dirs(file.path(root,"case-predicate-cases"),full.names=TRUE,recursive=FALSE)) {
+    directory <- tempfile("yamaa-case-predicate-");dir.create(directory)
+    file.copy(list.files(case,full.names=TRUE),directory)
+    entry <- file.path(directory,"spec.yaml")
+    result <- yamaa_domain(entry)
+    expected <- file.path(directory,"expected.csv")
+    if (file.exists(expected)) {
+      stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),rawfile(expected)))
+    } else {
+      finding <- failures[failures$case==basename(case),,drop=FALSE]
+      stopifnot(nrow(finding)==1L)
+      check_issue_frame(result$issues,list(phase=finding$phase,condition=finding$condition,requirement=finding$requirement,spec_paths=list(finding$spec_path),context=finding$context))
+      stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"result.csv")))
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  for (name in c("adam-adae-protocol-review","schema-expressions","schema-predicates","sdtm-ae-seriousness","sdtm-mh-ongoing-conditions","sdtm-tr-tumor-measurements","sdtm-tu-tumor-identification","sdtm-ds-reasons")) {
+    case <- file.path(root,"cases",name)
+    directory <- tempfile("yamaa-original-case-");dir.create(directory)
+    file.copy(list.files(case,full.names=TRUE),directory,recursive=TRUE)
+    result <- yamaa_domain(file.path(directory,"spec.yaml"))
+    stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE))
+    for (expected in list.files(file.path(directory,"expected"),pattern="\\.csv$",full.names=TRUE)) stopifnot(identical(rawfile(file.path(directory,basename(expected))),rawfile(expected)))
+    unlink(directory,recursive=TRUE)
+  }
+  cat("case predicates, branch filters and unchanged original CSV truth passed without Python\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

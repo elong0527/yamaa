@@ -277,9 +277,6 @@ pub(super) fn prepare_value_with_driver(
             if !features.is_empty() {
                 return Err(PrepareError::Unsupported(features));
             }
-            if source.has_filter() {
-                return Err(unsupported(&result_path, "case_source_filter"));
-            }
             if source.has_selection() || source.has_absent() {
                 return Err(unsupported(&result_path, "case_source_options"));
             }
@@ -316,7 +313,9 @@ pub(super) fn bind_row(
         ),
         Operation::Literal(value) => Ok(Some(Expression::Literal(value.clone()))),
         Operation::Source(source) => {
-            if named.reference(&source.variable).is_some() {
+            let before = findings.len();
+            let filter = source.bind_row_filter(path, driver, catalog, named, findings)?;
+            let expression = if named.reference(&source.variable).is_some() {
                 row_intermediates::bind(
                     &source.variable,
                     path,
@@ -328,7 +327,7 @@ pub(super) fn bind_row(
                     available,
                     edges,
                     findings,
-                )
+                )?
             } else {
                 rounding::bind_row_operand(
                     &source.variable,
@@ -340,8 +339,25 @@ pub(super) fn bind_row(
                     available,
                     edges,
                     findings,
-                )
+                )?
+            };
+            if findings.len() != before {
+                return Ok(None);
             }
+            Ok(expression.map(|expression| match filter {
+                Some(filter) => {
+                    let Expression::Source(column) = expression else {
+                        unreachable!("admitted filtered source has current-driver records");
+                    };
+                    Expression::Collect {
+                        column,
+                        identifier: source.variable.clone(),
+                        filter: Some(filter),
+                        selection: None,
+                    }
+                }
+                None => expression,
+            }))
         }
         Operation::Scalar(operation) => scalar::bind_row(
             operation,
@@ -497,7 +513,7 @@ pub(super) fn bind_row(
                             if !seen.insert(identifier) {
                                 continue;
                             }
-                            if let Some(expression) = rounding::bind_row_operand(
+                            if let Some(expression) = self_relations::bind_operand(
                                 identifier,
                                 plan.spec_path(),
                                 catalog,
@@ -507,10 +523,17 @@ pub(super) fn bind_row(
                                 available,
                                 edges,
                                 findings,
+                                output,
+                                named,
+                                secondary,
+                                intermediates,
                             )? {
                                 let read = match expression {
                                     Expression::Source(column) => Read::Source(column),
                                     Expression::Column(column) => Read::Column(column),
+                                    Expression::Intermediate { index, column } => {
+                                        Read::Intermediate { index, column }
+                                    }
                                     _ => return Err(BindError::Internal),
                                 };
                                 bindings.push(Binding {
@@ -521,7 +544,7 @@ pub(super) fn bind_row(
                         }
                         if findings.len() == before {
                             Some(
-                                BoundPredicate::new(plan.clone(), bindings)
+                                BoundPredicate::new_contextual(plan.clone(), bindings, Vec::new())
                                     .map_err(BindError::InvalidPredicateBinding)?,
                             )
                         } else {

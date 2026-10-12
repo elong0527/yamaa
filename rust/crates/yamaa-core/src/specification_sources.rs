@@ -260,6 +260,90 @@ impl Declaration {
             .map(Some)
             .map_err(BindError::InvalidPredicateBinding)
     }
+    /// A filtered current-driver source selects feeding records before copying
+    /// its scalar value. Predicate identifiers remain donor-only, even in a case.
+    pub fn bind_row_filter(
+        &self,
+        path: &str,
+        driver: &str,
+        catalog: &Catalog,
+        intermediates: &intermediates::Declarations,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<Option<BoundPredicate>, BindError> {
+        let Some(Filter {
+            expression,
+            compiled,
+        }) = &self.filter
+        else {
+            return Ok(None);
+        };
+        let path = format!("{path}.filter");
+        let Some((dataset, _)) = self
+            .variable
+            .split_once('.')
+            .filter(|(name, _)| !intermediates.contains(name))
+        else {
+            findings.push(BindFinding::Source(SourceFinding::new(
+                C::SourceFilterSingleValue,
+                &path,
+                &[("identifier", &self.variable)],
+            )));
+            return Ok(None);
+        };
+        let plan = match compiled.as_ref().ok_or(BindError::Internal)? {
+            Ok(plan) => plan,
+            Err(predicate_compiler::Error::Parse(
+                crate::predicate_parser::ParseError::Grammar {
+                    position, failure, ..
+                },
+            )) => {
+                findings.push(BindFinding::Source(SourceFinding(
+                    failure
+                        .original_diagnostic(&path, expression, position.character)
+                        .map_err(|_| BindError::PredicateDiagnosticLimit)?,
+                )));
+                return Ok(None);
+            }
+            Err(error) => return Err(BindError::PredicatePolicy(error.clone())),
+        };
+        let start = findings.len();
+        let mut bindings = Vec::new();
+        let mut seen = alloc::collections::BTreeSet::new();
+        for name in plan.identifiers() {
+            if !seen.insert(name) {
+                continue;
+            }
+            if name.split_once('.').is_none_or(|(name, _)| name != dataset) {
+                findings.push(BindFinding::Source(SourceFinding::new(
+                    C::SourceFilterReference,
+                    &path,
+                    &[("identifier", name), ("dataset", dataset)],
+                )));
+                continue;
+            }
+            if dataset == driver {
+                if let Some(reference_binding::Binding::Dataset { field, .. }) =
+                    catalog.bind(name).map_err(BindError::Catalog)?
+                {
+                    bindings.push(Binding {
+                        name: name.into(),
+                        read: Read::Source(field),
+                    });
+                    continue;
+                }
+            }
+            findings.push(BindFinding::UnknownReference {
+                path: path.clone(),
+                name: name.into(),
+            });
+        }
+        if findings.len() != start {
+            return Ok(None);
+        }
+        BoundPredicate::new(plan.clone(), bindings)
+            .map(Some)
+            .map_err(BindError::InvalidPredicateBinding)
+    }
     pub fn has_selection(&self) -> bool {
         self.keep.is_some()
     }

@@ -2528,5 +2528,40 @@ columns:
             self.assertFalse((root / "src.csv").exists())
             self.assertFalse((root / "result.csv").exists())
 
+    def test_public_case_predicates_and_filtered_sources_preserve_complete_authored_truth(self):
+        import yamaa
+        truth = json.loads((ROOT / "case-predicate-truth.json").read_text())
+        for name, case in truth["cases"].items():
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                destination = Path(directory) / name
+                shutil.copytree(ROOT / "case-predicate-cases" / name, destination)
+                entry = destination / "spec.yaml"
+                result = yamaa.domain(entry)
+                findings = []
+                for row in result.issues.to_dicts():
+                    row["context"] = json.loads(row["context"])
+                    findings.append(row)
+                self.assertEqual(findings, case.get("findings", []))
+                if "csv" in case:
+                    self.assertTrue(result.save())
+                    self.assertEqual((destination / "result.csv").read_bytes(), case["csv"].encode())
+                else:
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.DomainError): result.save()
+                    self.assertFalse((destination / "result.csv").exists())
+
+    def test_public_original_case_predicate_and_branch_filter_csv_truth_is_unchanged(self):
+        import yamaa
+        names = ("adam-adae-protocol-review", "schema-expressions", "schema-predicates", "sdtm-ae-seriousness", "sdtm-mh-ongoing-conditions", "sdtm-tr-tumor-measurements", "sdtm-tu-tumor-identification", "sdtm-ds-reasons")
+        for name in names:
+            with self.subTest(example=name), tempfile.TemporaryDirectory() as directory:
+                destination = Path(directory) / name
+                shutil.copytree(ROOT / "cases" / name, destination)
+                result = yamaa.domain(destination / "spec.yaml")
+                self.assertEqual(result.issues.to_dicts(), [])
+                self.assertTrue(result.save())
+                for expected in (destination / "expected").glob("*.csv"):
+                    self.assertEqual((destination / expected.name).read_bytes(), expected.read_bytes())
+
 if __name__ == "__main__":
     unittest.main()

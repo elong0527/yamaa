@@ -64,6 +64,8 @@ mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
 #[path = "specification_aggregate.rs"]
 mod aggregates;
+#[path = "specification_case_predicates.rs"]
+mod case_predicates;
 #[path = "specification_cases.rs"]
 mod cases;
 #[path = "specification_derivations.rs"]
