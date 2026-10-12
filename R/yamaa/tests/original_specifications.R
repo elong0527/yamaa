@@ -1856,9 +1856,7 @@ local({
   stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
     identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,PARAM,A,B\n2,only,two,both\n1,only,first,\n3,only,,\n")))
   observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
-  ledger <- paste0('"handler_counts":','[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]',',')
-  stopifnot(sum(gregexpr('"handler_counts":',observed,fixed=TRUE)[[1L]]>0L)==2L,
-    sum(gregexpr(ledger,observed,fixed=TRUE)[[1L]]>0L)==2L)
+  check_handler_ledger(observed,'[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]')
   unlink(c(file.path(directory,"src.csv"),file.path(directory,"donor.csv"),file.path(directory,"result.csv")))
   cases <- list(
     list(remove="    order_by: [DONOR.SEQ]\n    keep: first\n",condition="rename_only_intermediate",requirement="REQ-1248",context='{"dataset":"DONOR","intermediate":"P"}'),
@@ -1888,9 +1886,7 @@ local({
   stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
     identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,SEQ,A,B\n1,1,last,\n1,2,last,\n2,1,,\n")))
   observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
-  ledger <- paste0('"handler_counts":','[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]',',')
-  stopifnot(sum(gregexpr('"handler_counts":',observed,fixed=TRUE)[[1L]]>0L)==2L,
-    sum(gregexpr(ledger,observed,fixed=TRUE)[[1L]]>0L)==2L)
+  check_handler_ledger(observed,'[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]')
   cat("same-input donor grain, shared missing field and complete handler accounting passed without Python\n")
 })
 
