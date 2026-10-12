@@ -320,14 +320,16 @@ def stage_row_intermediate_truth(destination: Path):
         findings = case["findings"]
         success = "csv" in case
         if name == "adam-adlb-end-of-treatment":
-            # Keep the historical capture; flags and implicit secondary sources
-            # are admitted while the three intermediate scope gates stay held.
+            # Keep the historical capture; only intermediate derivations and
+            # verifications remain unsupported after same-input admission.
             findings = list(reference["eot_native_gates"])
             assert len(findings) == 5
             assert findings.pop() == {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
                                       "spec_paths":["columns.EOTFL.derivation.flag"], "context":{"operation":"flag"}}
             assert findings.pop() == {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
                                       "spec_paths":["columns.ENDPOINT.derivation.source"], "context":{"operation":"secondary_source_expression"}}
+            assert findings.pop() == {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                                      "spec_paths":["intermediates[1]"], "context":{"operation":"intermediate_scope"}}
             success = False
         if success:
             (directory / "expected.csv").write_text(case["csv"], encoding="utf-8", newline="\n")
@@ -347,7 +349,7 @@ def stage_row_intermediate_truth(destination: Path):
         ledger = case.get("handler_counts", [])
         output = "adlb.csv" if name in reference["originals"] else "result.csv"
         entries.append(text(name) + "=list(issues=list(" + ",".join(fields) + "),success=" + ("TRUE" if success else "FALSE") + ",output=" + text(output) + ",ledger=" + text(json.dumps(ledger, sort_keys=True, separators=(",", ":"))) + ")")
-    (destination / "row-intermediate-truth.R").write_text("# Complete independent row-context truth; EOT intermediate scopes remain gated.\nrow_intermediate_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
+    (destination / "row-intermediate-truth.R").write_text("# Complete independent row-context truth; EOT derivations and verifications remain gated.\nrow_intermediate_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
 
 def stage_inheritance_replay(destination: Path):
     """Translate existing graph inputs to raw JSON/YAML, preserving independent outcomes."""

@@ -40,9 +40,9 @@ mod tests {
             kind: crate::value::ColumnType::Str,
         }])
         .unwrap();
-        assert!(admit(core::iter::repeat((&schema, "SRC")).take(2)).is_ok());
+        assert!(admit(core::iter::repeat_n((&schema, "SRC"), 2)).is_ok());
         assert!(
-            matches!(admit(core::iter::repeat((&schema, "SRC")).take(4097)),
+            matches!(admit(core::iter::repeat_n((&schema, "SRC"), 4097)),
             Err(BindError::Catalog(reference_binding::Error::Limit { resource: "intermediate_source_metadata", limit: METADATA_BYTES, required })) if required > METADATA_BYTES)
         );
     }
