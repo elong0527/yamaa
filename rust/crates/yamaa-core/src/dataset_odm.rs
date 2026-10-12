@@ -59,15 +59,15 @@ fn template_bytes(contexts: &[OdmTemplateScope]) -> Option<usize> {
         {
             return None;
         }
-        used.checked_add(context.row.len())
+        used.checked_add(context.row.capacity())
             .and_then(|used| used.checked_add(core::mem::size_of::<OdmTemplateScope>()))
             .and_then(|used| {
-                used.checked_add(
-                    context
-                        .groups
-                        .as_ref()
-                        .map_or(0, |fields| fields.len() * core::mem::size_of::<usize>()),
-                )
+                used.checked_add(match &context.groups {
+                    Some(fields) => fields
+                        .capacity()
+                        .checked_mul(core::mem::size_of::<usize>())?,
+                    None => 0,
+                })
             })
     })
 }
@@ -162,19 +162,18 @@ pub(super) fn validate_template(
     count: usize,
 ) -> Result<(), PlanError> {
     visit(expression, &mut |bound| {
+        let source = match bound.read().source {
+            None | Some(AggregateSource::Primary) => 0,
+            Some(AggregateSource::Secondary(index)) => {
+                index.checked_add(1).ok_or(PlanError::InvalidSource)?
+            }
+        };
+        if source != template.mode.source_index() {
+            return Err(PlanError::InvalidSource);
+        }
         if let OdmScope::Templates(contexts) = &bound.read().scope {
             let context = contexts.get(index).ok_or(PlanError::InvalidSource)?;
-            let source = match bound.read().source {
-                Some(AggregateSource::Primary) => 0,
-                Some(AggregateSource::Secondary(index)) => {
-                    index.checked_add(1).ok_or(PlanError::InvalidSource)?
-                }
-                None => return Err(PlanError::InvalidSource),
-            };
-            if contexts.len() != count
-                || context.driver != template.mode.source_index()
-                || source != context.driver
-            {
+            if contexts.len() != count || context.driver != template.mode.source_index() {
                 return Err(PlanError::InvalidSource);
             }
             match (&context.groups, template.mode.local_mode()) {
@@ -240,7 +239,8 @@ pub(crate) fn visit(
     expression: &Expression,
     visitor: &mut impl FnMut(&BoundOdm) -> Result<(), PlanError>,
 ) -> Result<(), PlanError> {
-    visit_at(expression, visitor, 0, &mut EXPRESSION_NODE_LIMIT)
+    let mut remaining = EXPRESSION_NODE_LIMIT;
+    visit_at(expression, visitor, 0, &mut remaining)
 }
 fn visit_at(
     expression: &Expression,
@@ -254,7 +254,8 @@ pub(crate) fn visit_mut(
     expression: &mut Expression,
     visitor: &mut impl FnMut(&mut BoundOdm) -> Result<(), PlanError>,
 ) -> Result<(), PlanError> {
-    visit_mut_at(expression, visitor, 0, &mut EXPRESSION_NODE_LIMIT)
+    let mut remaining = EXPRESSION_NODE_LIMIT;
+    visit_mut_at(expression, visitor, 0, &mut remaining)
 }
 fn visit_mut_at(
     expression: &mut Expression,

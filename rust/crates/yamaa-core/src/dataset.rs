@@ -479,6 +479,7 @@ fn validate_assignment(
     output: &TableSchema,
     mode: &RowMode,
 ) -> Result<(), PlanError> {
+    let mut remaining = EXPRESSION_NODE_LIMIT;
     validate_assignment_at(
         assignment,
         available,
@@ -488,7 +489,7 @@ fn validate_assignment(
         output,
         mode,
         0,
-        &mut EXPRESSION_NODE_LIMIT,
+        &mut remaining,
     )
 }
 #[allow(clippy::too_many_arguments)]
@@ -1145,6 +1146,13 @@ impl DatasetPlan {
             }
             let mut available = vec![false; width];
             for assignment in &template.assignments {
+                odm::visit(&assignment.expression, &mut |bound| {
+                    if bound.read().source.is_some() {
+                        Err(PlanError::InvalidSource)
+                    } else {
+                        Ok(())
+                    }
+                })?;
                 relation_predicates::validate_reads(
                     &assignment.expression,
                     &intermediates,

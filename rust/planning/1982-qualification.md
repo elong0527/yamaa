@@ -48,6 +48,9 @@ failures, retained snapshots, and whole source-cell admission before cell reads.
 Four more engine controls cover distinct occurrences after row numbers,
 secondary-driver ownership with an unread poison primary, unchanged opaque
 Value failures and leaf paths, and forged deferred-scope admission. Core
+and engine admission controls additionally refuse deferred scope in row
+assignments, retained metadata capacity beyond its budget, and foreign source
+owners in both row and column assignments before poisoned cell access. Core
 controls cover whole metadata/projection admission, fixed field order and
 ordinary literal/dictionary spellings that cannot select ODM interpretation.
 

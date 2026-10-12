@@ -557,3 +557,109 @@ fn forged_template_count_driver_and_incomplete_group_scope_fail_before_cells() {
     );
     assert!(source.reads.borrow().is_empty());
 }
+
+#[test]
+fn deferred_scope_is_rejected_in_row_assignments_before_any_cell() {
+    let source = table(vec![record("IT.ANCHOR", "anchor")]);
+    let admitted = deferred_plan(&source, 0, RowMode::Records, deferred_read(0, None)).unwrap();
+    let mut templates = admitted.templates().to_vec();
+    templates[0].assignments.push(admitted.columns()[1].clone());
+    let result = DatasetPlan::new(
+        source.schema.clone(),
+        admitted.output().clone(),
+        templates,
+        vec![admitted.columns()[0].clone()],
+        admitted.keys().to_vec(),
+        vec![],
+    );
+    assert_eq!(result.unwrap_err(), PlanError::InvalidSource);
+    assert!(source.reads.borrow().is_empty());
+}
+
+#[test]
+fn deferred_metadata_admission_counts_retained_string_capacity() {
+    let source = table(vec![record("IT.ANCHOR", "anchor")]);
+    let mut declaration = deferred_read(0, None).read().clone();
+    let mut row = String::with_capacity(16 * 1024 * 1024);
+    row.push_str("small label with excessive retained capacity");
+    declaration.scope = OdmScope::Templates(
+        vec![OdmTemplateScope {
+            row,
+            driver: 0,
+            groups: None,
+        }]
+        .into(),
+    );
+    assert_eq!(
+        BoundOdm::new(declaration).unwrap_err(),
+        PlanError::InvalidSource
+    );
+    assert!(source.reads.borrow().is_empty());
+}
+
+#[test]
+fn forged_nondeferred_foreign_row_owner_is_rejected_before_poison_cells() {
+    let source = table(vec![record("IT.ANCHOR", "anchor")]);
+    let mut donor = table(vec![record("IT.TEST.OID", "poison")]);
+    donor.fail = Some((0, 10));
+    let mut declaration = read(OdmScope::Records, None).read().clone();
+    declaration.source = Some(AggregateSource::Secondary(0));
+    declaration.phase = AggregatePhase::RowConstruction;
+    let bound = BoundOdm::new(declaration.clone()).unwrap();
+    let result = DatasetPlan::new_with_sources(
+        source.schema.clone(),
+        vec![SecondarySource {
+            name: "DONOR".into(),
+            schema: donor.schema.clone(),
+        }],
+        schema(&["ID", "VAL"]),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            filter: None,
+            assignments: vec![
+                Assignment {
+                    column: 0,
+                    expression: Expression::Literal(Value::Str("one".into())),
+                    path: "rows[0].derivations.ID".into(),
+                },
+                Assignment {
+                    column: 1,
+                    expression: Expression::Odm(Box::new(bound)),
+                    path: "rows[0].derivations.VAL".into(),
+                },
+            ],
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    );
+    assert_eq!(result.unwrap_err(), PlanError::InvalidSource);
+    declaration.phase = AggregatePhase::Derivation;
+    let result = DatasetPlan::new_with_sources(
+        source.schema.clone(),
+        vec![SecondarySource {
+            name: "DONOR".into(),
+            schema: donor.schema.clone(),
+        }],
+        schema(&["ID", "VAL"]),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            filter: None,
+            assignments: vec![Assignment {
+                column: 0,
+                expression: Expression::Literal(Value::Str("one".into())),
+                path: "rows[0].derivations.ID".into(),
+            }],
+        }],
+        vec![Assignment {
+            column: 1,
+            expression: Expression::Odm(Box::new(BoundOdm::new(declaration).unwrap())),
+            path: "columns.VAL.derivation".into(),
+        }],
+        vec![0],
+        vec![],
+    );
+    assert_eq!(result.unwrap_err(), PlanError::InvalidSource);
+    assert!(source.reads.borrow().is_empty());
+    assert!(donor.reads.borrow().is_empty());
+}
