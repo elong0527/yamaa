@@ -29,6 +29,69 @@ fn assign(column: usize, expression: Expression) -> Assignment {
 }
 
 #[test]
+fn every_row_mode_rejects_filters_that_read_deferred_windows() {
+    use yamaa_core::{
+        bound_expression::{Binding, BindingError, BoundPredicate, Read},
+        dataset::{OrderTerm, Window, WindowKind},
+    };
+    let source = schema(&[("ID", ColumnType::Int)]);
+    let output = schema(&[
+        ("ID", ColumnType::Int),
+        ("SEQ", ColumnType::Int),
+        ("COPY", ColumnType::Int),
+    ]);
+    for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
+        for column in [0, 1, 2] {
+            let filter = BoundPredicate::new(
+                yamaa_core::predicate_compiler::compile("F > 0", "row.filter", Default::default())
+                    .unwrap(),
+                vec![Binding {
+                    name: "F".into(),
+                    read: Read::Column(column),
+                }],
+            )
+            .unwrap();
+            let plan = DatasetPlan::new(
+                source.clone(),
+                output.clone(),
+                vec![RowTemplate {
+                    mode: mode.clone(),
+                    assignments: vec![
+                        assign(0, Expression::Source(0)),
+                        assign(
+                            1,
+                            Expression::Window(Window {
+                                kind: WindowKind::RowNumber,
+                                group_by: vec![],
+                                order_by: vec![OrderTerm {
+                                    column: 0,
+                                    descending: false,
+                                    nulls_first: false,
+                                }],
+                                filter: None,
+                            }),
+                        ),
+                        assign(2, Expression::Column(1)),
+                    ],
+                    filter: Some(filter),
+                }],
+                vec![],
+                vec![0],
+                vec![],
+            );
+            if column == 0 {
+                assert!(plan.is_ok(), "{plan:?}");
+            } else {
+                assert_eq!(
+                    plan,
+                    Err(PlanError::Filter(BindingError::UnavailableColumn))
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn whole_column_windows_cannot_be_hidden_inside_selected_case_branches() {
     use yamaa_core::{
         bound_expression::{Binding, BoundPredicate, Read},
@@ -500,19 +563,66 @@ fn first_available_admits_every_operand_before_any_source_access() {
         ),
         Err(PlanError::InvalidKeyMode)
     );
-    assert_eq!(
-        DatasetPlan::new(
-            source,
-            output,
-            vec![RowTemplate {
-                mode: RowMode::Records,
-                assignments: vec![assign(0, Expression::Source(0))],
-                filter: None
+    assert!(DatasetPlan::new(
+        source,
+        output,
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None
+        }],
+        vec![assign(1, selection)],
+        vec![0],
+        vec![]
+    )
+    .is_ok());
+}
+
+#[test]
+fn driver_wrappers_admit_only_selected_record_or_group_schema_coordinates() {
+    use yamaa_core::dataset::SecondarySource;
+    let primary = schema(&[("ID", ColumnType::Int)]);
+    let donor = schema(&[("PAD", ColumnType::Str), ("ID", ColumnType::Int)]);
+    let output = schema(&[("ID", ColumnType::Int)]);
+    let make = |mode, column| {
+        DatasetPlan::new_with_sources(
+            primary.clone(),
+            vec![SecondarySource {
+                name: "DONOR".into(),
+                schema: donor.clone(),
             }],
-            vec![assign(1, selection)],
+            output.clone(),
+            vec![RowTemplate {
+                mode,
+                assignments: vec![assign(0, Expression::Source(column))],
+                filter: None,
+            }],
+            vec![],
             vec![0],
-            vec![]
-        ),
-        Err(PlanError::InvalidKeyMode)
+            vec![],
+        )
+    };
+    let selected = |source, mode| RowMode::Driver {
+        source,
+        mode: Box::new(mode),
+    };
+    assert!(make(selected(1, RowMode::Records), 1).is_ok());
+    assert!(make(selected(1, RowMode::Groups(vec![1])), 1).is_ok());
+    assert_eq!(make(RowMode::Records, 1), Err(PlanError::InvalidSource));
+    assert_eq!(
+        make(selected(1, RowMode::Records), 2),
+        Err(PlanError::InvalidSource)
     );
+    assert_eq!(
+        make(selected(1, RowMode::Groups(vec![0])), 1),
+        Err(PlanError::NonGroupSource)
+    );
+    for mode in [
+        selected(0, RowMode::Records),
+        selected(2, RowMode::Records),
+        selected(1, RowMode::Keys),
+        selected(1, selected(1, RowMode::Records)),
+    ] {
+        assert_eq!(make(mode, 0), Err(PlanError::InvalidSource));
+    }
 }

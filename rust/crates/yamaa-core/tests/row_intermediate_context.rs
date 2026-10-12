@@ -226,7 +226,7 @@ fn unknown_and_omitted_drivers_keep_model_preflight_and_exact_typed_context() {
     }
 }
 #[test]
-fn distinct_and_grouped_named_reads_remain_explicitly_unqualified() {
+fn foreign_driver_defaults_and_grouped_named_reads_keep_explicit_pending_boundaries() {
     let Err(PrepareError::Unsupported(features)) =
         PreparedSpecification::prepare(&doc(false, [Some("SRC"), Some("DONOR")], false, "P.V"))
     else {
@@ -234,7 +234,7 @@ fn distinct_and_grouped_named_reads_remain_explicitly_unqualified() {
     };
     assert_eq!(
         (features[0].operation.as_str(), features[0].path.as_str()),
-        ("row_driver", "rows[1].dataset")
+        ("row_secondary_source", "columns.ID.derivation")
     );
     let Err(PrepareError::Unsupported(features)) =
         PreparedSpecification::prepare(&doc(false, [Some("SRC"), Some("SRC")], true, "P.V"))
@@ -385,4 +385,73 @@ fn typed_record_plan_rejects_uncompleted_matching_outputs_and_grouped_reads() {
         );
         assert_eq!(result.unwrap_err(), expected);
     }
+}
+
+#[test]
+fn secondary_row_drivers_share_output_matching_without_reusing_primary_record_coordinates() {
+    let src = schema(&[("ID", T::Str)]);
+    let donor = schema(&[("K", T::Str), ("V", T::Str)]);
+    let output = schema(&[("ID", T::Str), ("V", T::Str)]);
+    let make = |read| {
+        DatasetPlan::new_with_intermediates(
+            SourceSchemas {
+                primary: src.clone(),
+                secondary: vec![SecondarySource {
+                    name: "DONOR".into(),
+                    schema: donor.clone(),
+                }],
+            },
+            vec![Intermediate {
+                identifier: "P".into(),
+                path: "intermediates[0]".into(),
+                source: 0,
+                keys: vec![IntermediateKey {
+                    source_column: 0,
+                    path: "intermediates[0].key".into(),
+                    value: MatchValue::Variable(read),
+                }],
+                filter: None,
+                selection: None,
+                no_match: Some(Value::Missing),
+            }],
+            output.clone(),
+            vec![RowTemplate {
+                mode: RowMode::Driver {
+                    source: 1,
+                    mode: Box::new(RowMode::Records),
+                },
+                assignments: vec![
+                    Assignment {
+                        column: 0,
+                        path: "rows[0].derivations.ID.source".into(),
+                        expression: Expression::Source(0),
+                    },
+                    Assignment {
+                        column: 1,
+                        path: "rows[0].derivations.V.source".into(),
+                        expression: Expression::Intermediate {
+                            index: 0,
+                            column: 1,
+                        },
+                    },
+                ],
+                filter: None,
+            }],
+            vec![],
+            vec![0],
+            vec![],
+        )
+    };
+    assert!(make(MatchRead::Output {
+        column: 0,
+        identifier: "ID".into()
+    })
+    .is_ok());
+    assert_eq!(
+        make(MatchRead::Record {
+            column: 0,
+            identifier: "SRC.ID".into()
+        }),
+        Err(PlanError::InvalidIntermediate)
+    );
 }

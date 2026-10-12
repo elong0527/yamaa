@@ -27,6 +27,10 @@ mod key_grain;
 mod lookup;
 #[path = "dataset_numeric.rs"]
 mod numeric;
+#[path = "dataset_row_drivers.rs"]
+mod row_drivers;
+#[path = "dataset_row_windows.rs"]
+mod row_windows;
 #[path = "dataset_scalar.rs"]
 mod scalar;
 #[path = "dataset_text_case.rs"]
@@ -647,6 +651,20 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             for operand in selection.sources() {
                 budget.work(1, 1)?;
                 let value = match &operand.read {
+                    yamaa_core::dataset::SelectionRead::Source(column) => {
+                        let source_row = candidate.members[0];
+                        let value = table.cell(source_row, *column).map_err(|error| {
+                            Box::new(ExecutionError::Cell {
+                                path: operand.path.clone(),
+                                source_row,
+                                error,
+                            })
+                        })?;
+                        if let ValueRef::Str(text) = value {
+                            budget.scalar_text(text.len())?;
+                        }
+                        own(value)
+                    }
                     yamaa_core::dataset::SelectionRead::Column(column) => {
                         let value = &candidate.values[*column];
                         if let Value::Str(text) = value {
@@ -990,20 +1008,7 @@ impl Executor<'_> {
             .flat_map(|template| &template.assignments)
             .chain(self.plan.columns())
         {
-            if let Expression::Function(function) = &assignment.expression {
-                if functions.signature(function.slot()) != Some(function.signature()) {
-                    return Err(Box::new(ExecutionError::FunctionBinding {
-                        slot: function.slot(),
-                    }));
-                }
-            }
-            if let Expression::ProjectFunction(function) = &assignment.expression {
-                if functions.project_signature(function.slot()) != Some(function.signature()) {
-                    return Err(Box::new(ExecutionError::FunctionBinding {
-                        slot: function.slot(),
-                    }));
-                }
-            }
+            functions::admit(&assignment.expression, functions)?;
         }
         if table.schema() != self.plan.source()
             || secondary.len() != self.plan.secondary().len()
@@ -1031,7 +1036,17 @@ impl Executor<'_> {
             candidates = key_grain::construct(self, table, limits, &mut budget, handlers)?;
         } else {
             for template in self.plan.templates() {
-                let groups = match &template.mode {
+                let table =
+                    row_drivers::Driver::new(table, secondary, template.mode.source_index());
+                let table = &table;
+                let first = candidates.len();
+                let deferred = yamaa_core::dataset::window_stages(
+                    &template.assignments,
+                    self.plan.output().columns().len(),
+                    self.plan.intermediates(),
+                );
+                let groups = match template.mode.local_mode() {
+                    RowMode::Driver { .. } => unreachable!("plan admission rejects nested drivers"),
                     RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
                     RowMode::Records => {
                         // Admit the known cardinality before materializing record memberships.
@@ -1063,7 +1078,11 @@ impl Executor<'_> {
                         values: vec![Value::Missing; self.plan.output().columns().len()],
                         completed: vec![false; self.plan.output().columns().len()],
                     };
-                    for assignment in &template.assignments {
+                    for assignment in template
+                        .assignments
+                        .iter()
+                        .filter(|assignment| !deferred[assignment.column])
+                    {
                         candidate.values[assignment.column] = evaluate(
                             table,
                             assignment,
@@ -1081,7 +1100,7 @@ impl Executor<'_> {
                         )?;
                         candidate.completed[assignment.column] = true;
                     }
-                    if let Some(filter) = &template.filter {
+                    if let Some(filter) = template.filter.as_ref() {
                         let source_row = candidate.members[0];
                         let truth = crate::dataset_predicate::evaluate(
                             filter,
@@ -1103,6 +1122,22 @@ impl Executor<'_> {
                     }
                     candidates.push(candidate);
                 }
+                row_windows::complete(
+                    table,
+                    template,
+                    &deferred,
+                    &mut candidates[first..],
+                    self,
+                    first,
+                    limits,
+                    &mut EvaluationState {
+                        functions,
+                        secondary,
+                        budget: &mut budget,
+                        handlers,
+                        intermediates: &mut intermediate_run,
+                    },
+                )?;
             }
         }
         let mut completed = vec![false; self.plan.output().columns().len()];

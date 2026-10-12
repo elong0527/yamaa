@@ -37,6 +37,8 @@ pub use source_expressions::SourceFinding;
 mod column_checks;
 #[path = "specification_logs.rs"]
 mod logs;
+#[path = "specification_row_drivers.rs"]
+mod row_drivers;
 #[path = "specification_row_intermediates.rs"]
 mod row_intermediates;
 #[path = "specification_rows.rs"]
@@ -52,6 +54,8 @@ mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
 #[path = "specification_cases.rs"]
 mod cases;
+#[path = "specification_derivations.rs"]
+mod derivations;
 #[path = "specification_flag.rs"]
 mod flags;
 #[path = "specification_temporal_imputation.rs"]
@@ -1243,25 +1247,6 @@ impl PreparedSpecification {
             let op = text(d, op)?;
             let path = format!("{prefix}.derivation.{op}");
             let operation = match op {
-                "flag" => Some(Operation::Flag(flags::prepare(d, payload, &path)?)),
-                "case" => Some(Operation::Case(cases::prepare(
-                    d,
-                    payload,
-                    &path,
-                    project.as_ref(),
-                    &intermediates,
-                    keys.contains(&column),
-                    0,
-                    &extraction,
-                    &templates,
-                )?)),
-                "function" if project.is_some() => Some(Operation::ProjectFunction(
-                    *project
-                        .as_ref()
-                        .and_then(|p| p.nodes.get(&payload))
-                        .ok_or(PrepareError::Internal)?,
-                )),
-                "literal" => Some(Operation::Literal(literal(d, payload, &path)?)),
                 "source" => {
                     let source = source_expressions::Declaration::prepare(
                         d,
@@ -1328,105 +1313,30 @@ impl PreparedSpecification {
                 | "baseline_flag" => Some(Operation::Window(alloc::boxed::Box::new(
                     windows::Declaration::prepare(d, payload, op, &path, limits, &mut extra)?,
                 ))),
-                "str_template" => Some(Operation::StrTemplate(templates.get(payload)?)),
-                "str_extract" => Some(Operation::StrExtract(extraction.get(payload)?)),
-                "str_contains" => Some(Operation::StrContains(extraction.get(payload)?)),
-                "greatest" | "least" | "str_concat" => {
-                    Some(Operation::Scalar(alloc::boxed::Box::new(scalar::prepare(
-                        d,
-                        payload,
-                        op,
-                        &path,
-                        project.as_ref(),
-                        &intermediates,
-                        keys.contains(&column),
-                        0,
-                        &extraction,
-                        &templates,
-                    )?)))
-                }
-                "str_case" => Some(Operation::StrCase(str_case::prepare(
-                    d,
-                    payload,
-                    &path,
-                    Some(driver),
-                    Some(&intermediates),
-                    &mut extra,
-                )?)),
-                "str_pad" => Some(Operation::StrPad(str_pad::prepare(
-                    d,
-                    payload,
-                    &path,
-                    Some(driver),
-                    Some(&intermediates),
-                    &mut extra,
-                )?)),
-                "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision"
-                | "to_date" => Some(Operation::Imputation(imputation::prepare(
-                    d,
-                    payload,
-                    op,
-                    &path,
-                    Some(driver),
-                    Some(&intermediates),
-                    &mut extra,
-                )?)),
-                "date_diff" | "study_day" | "to_epoch_day" => {
-                    Some(Operation::Temporal(temporal::prepare(
-                        d,
-                        payload,
-                        op,
-                        &path,
-                        Some(driver),
-                        Some(&intermediates),
-                        &mut extra,
-                    )?))
-                }
-                "round_half_away_from_zero" => Some(Operation::Round(rounding::prepare(
-                    d,
-                    payload,
-                    &path,
-                    Some(driver),
-                    Some(&intermediates),
-                    &mut extra,
-                )?)),
-                "compute" => {
-                    for &(name, _) in mapping(d, payload)? {
-                        let name = text(d, name)?;
-                        if name != "expr" {
-                            reject(&mut extra, name, format!("{path}.{name}"));
-                        }
-                    }
-                    let expr = text(d, field(d, payload, "expr")?)?;
-                    match compile_numeric_with_policy(
-                        expr,
-                        &path,
-                        Default::default(),
-                        crate::numeric_compiler::MathPolicy::PortableLibmV1,
-                    ) {
-                        Ok(compiled) => Some(Operation::Compute(compiled)),
-                        Err(error @ CompileError::Parse(ParseError::Grammar { .. })) => {
-                            Some(Operation::InvalidNumeric {
-                                expression: expr.into(),
-                                error,
-                            })
-                        }
-                        Err(CompileError::Unsupported { .. }) => {
-                            reject(&mut extra, "numeric_function", path.clone());
-                            None
-                        }
-                        Err(error) => {
-                            return Err(PrepareError::Numeric {
-                                path: format!("{path}.expr"),
-                                error,
-                            })
-                        }
-                    }
-                }
-                _ => {
-                    reject(&mut extra, op, path.clone());
+                "function" if project.is_none() => {
+                    reject(&mut extra, "function", path.clone());
                     None
                 }
+                _ => match derivations::prepare_value_with_driver(
+                    d,
+                    field(d, derivation, "value")?,
+                    &format!("{prefix}.derivation"),
+                    project.as_ref(),
+                    &intermediates,
+                    keys.contains(&column),
+                    0,
+                    &extraction,
+                    &templates,
+                    Some(driver),
+                    limits,
+                ) {
+                    Ok(branch) => Some(*branch.operation),
+                    Err(PrepareError::Unsupported(features)) => {
+                        extra.extend(features);
+                        None
+                    }
+                    Err(error) => return Err(error),
+                },
             };
             if let Some(operation) = operation {
                 scalar::unsupported_relations(&operation, driver, &intermediates, &mut extra);
@@ -1661,9 +1571,7 @@ impl PreparedSpecification {
         }
         let source = schemas[self.driver];
         if let Some(rows) = &self.rows {
-            if !self.intermediates.is_empty() {
-                rows.admit_sources(schemas, &self.output)?;
-            }
+            rows.admit_sources(schemas, &self.output)?;
             let mut findings = Vec::new();
             let (secondary, intermediates) = self.intermediates.bind(
                 &self.sources,

@@ -22,9 +22,6 @@ struct Declaration {
 #[derive(Debug, Default)]
 pub(super) struct Declarations(Vec<Declaration>);
 impl Declarations {
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
     pub fn contains(&self, name: &str) -> bool {
         self.0.iter().any(|item| item.name == name)
     }
@@ -34,6 +31,15 @@ impl Declarations {
             .iter()
             .position(|item| item.name == relation)
             .map(|index| (index, field))
+    }
+    pub(super) fn match_references(&self, index: usize) -> impl Iterator<Item = &str> {
+        self.0.get(index).into_iter().flat_map(|item| {
+            item.keys
+                .as_ref()
+                .into_iter()
+                .flatten()
+                .filter_map(|(_, value)| value.reference())
+        })
     }
     pub fn prepare(
         d: &Document,
