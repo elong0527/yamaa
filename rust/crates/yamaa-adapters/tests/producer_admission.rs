@@ -391,5 +391,8 @@ fn undeclared_and_schema_less_supplied_metadata_retain_the_portable_cause() {
         panic!("original structural null refusal")
     };
     assert_eq!(findings.findings()[0].path, "input.SRC.schema");
-    assert_eq!(findings.findings()[0].requirement, Some("REQ-0287"));
+    assert_eq!(
+        findings.findings()[0].definition().requirement,
+        Some("REQ-0287")
+    );
 }

@@ -611,7 +611,7 @@ fn admitted_parent_raw_is_retained_when_later_normalization_fails_before_descend
     };
     assert_eq!((source.as_str(), entry.as_str()), ("a", "entry"));
     assert_eq!(findings.len(), 1);
-    assert_eq!(findings[0].condition, "unknown_field");
+    assert_eq!(findings[0].definition().condition, "unknown_field");
     assert_eq!(captured_parents.len(), 1);
     assert_eq!(captured_parents[0].raw().document.nodes().as_ptr(), nodes);
     assert_eq!(&*host.log.borrow(), &expected_effects()[..3]);

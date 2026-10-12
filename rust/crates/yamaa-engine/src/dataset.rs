@@ -157,14 +157,19 @@ pub struct RowIdentity {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CheckRecord {
     pub path: String,
-    pub condition: &'static str,
-    pub requirement: &'static str,
+    pub code: yamaa_core::diagnostic::ConditionCode,
     pub evaluated_count: usize,
     pub failed_count: usize,
     pub output_rows: usize,
     pub offending_rows: Vec<RowIdentity>,
     /// Full offending values survive discarded output, under identity quotas.
     pub codelist: Option<CodelistObservation>,
+}
+
+impl CheckRecord {
+    pub fn definition(&self) -> yamaa_core::diagnostic::Definition {
+        self.code.definition()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -266,8 +271,7 @@ pub enum ExecutionError<E> {
     },
     VerificationDeclaration {
         path: String,
-        condition: &'static str,
-        requirement: &'static str,
+        code: yamaa_core::diagnostic::ConditionCode,
         reason: String,
         records: Vec<CheckRecord>,
     },
@@ -1368,8 +1372,7 @@ impl Executor<'_> {
             if !missing.is_empty() {
                 failures.push(CheckRecord {
                     path: alloc::format!("keys[{position}]"),
-                    condition: "missing_key",
-                    requirement: "REQ-0240",
+                    code: yamaa_core::diagnostic::ConditionCode::OutputMissingKeyFailed,
                     evaluated_count: dataset.rows.len(),
                     failed_count: missing.len(),
                     output_rows: dataset.rows.len(),
@@ -1394,8 +1397,7 @@ impl Executor<'_> {
         if !duplicates.is_empty() {
             failures.push(CheckRecord {
                 path: "keys".into(),
-                condition: "duplicate_key",
-                requirement: "REQ-0240",
+                code: yamaa_core::diagnostic::ConditionCode::OutputDuplicateKeyFailed,
                 evaluated_count: groups.len(),
                 failed_count: duplicates.len(),
                 output_rows: dataset.rows.len(),
@@ -1421,15 +1423,10 @@ impl Executor<'_> {
                         records: core::mem::take(records),
                     }));
                 }
-                Check::InvalidDeclaration {
-                    condition,
-                    requirement,
-                    reason,
-                } => {
+                Check::InvalidDeclaration { code, reason } => {
                     return Err(Box::new(ExecutionError::VerificationDeclaration {
                         path: verification.path.clone(),
-                        condition,
-                        requirement,
+                        code: *code,
                         reason: reason.clone(),
                         records: core::mem::take(records),
                     }));
@@ -1464,8 +1461,7 @@ impl Executor<'_> {
                         groups.iter().filter(|members| members.len() > 1).collect();
                     CheckRecord {
                         path: verification.path.clone(),
-                        condition: "unique_failed",
-                        requirement: "REQ-0381",
+                        code: yamaa_core::diagnostic::ConditionCode::VerificationUniqueFailed,
                         evaluated_count: groups.len(),
                         failed_count: repeated.len(),
                         output_rows: dataset.rows.len(),
@@ -1493,8 +1489,7 @@ impl Executor<'_> {
                         identities(&dataset, self.plan.keys(), offending, &mut budget)?;
                     CheckRecord {
                         path: verification.path.clone(),
-                        condition: "all_or_none_failed",
-                        requirement: "REQ-0382",
+                        code: yamaa_core::diagnostic::ConditionCode::VerificationAllOrNoneFailed,
                         evaluated_count: dataset.rows.len(),
                         failed_count: offending_rows.len(),
                         output_rows: dataset.rows.len(),
@@ -1509,8 +1504,7 @@ impl Executor<'_> {
                         || max.is_some_and(|max| count > i128::from(max));
                     CheckRecord {
                         path: verification.path.clone(),
-                        condition: "row_count_failed",
-                        requirement: "REQ-0385",
+                        code: yamaa_core::diagnostic::ConditionCode::VerificationRowCountFailed,
                         evaluated_count: 1,
                         failed_count: usize::from(failed),
                         output_rows: dataset.rows.len(),
@@ -1565,15 +1559,10 @@ impl Executor<'_> {
                                 records: core::mem::take(records),
                             }));
                         }
-                        Check::InvalidDeclaration {
-                            condition,
-                            requirement,
-                            reason,
-                        } => {
+                        Check::InvalidDeclaration { code, reason } => {
                             return Err(Box::new(ExecutionError::VerificationDeclaration {
                                 path: verification.path.clone(),
-                                condition,
-                                requirement,
+                                code: *code,
                                 reason: reason.clone(),
                                 records: core::mem::take(records),
                             }));
@@ -1613,9 +1602,8 @@ impl Executor<'_> {
                                     values,
                                 )
                             };
-                            let definition =
-                                yamaa_core::dataset_checks::column_definition(&verification.check)
-                                    .expect("admitted column check");
+                            let code = yamaa_core::dataset_checks::column_code(&verification.check)
+                                .expect("admitted column check");
                             let codelist =
                                 if let Check::Codelist { id, .. } = &verification.check {
                                     budget.scalar_text(id.len())?;
@@ -1648,10 +1636,7 @@ impl Executor<'_> {
                             }
                             records.push(CheckRecord {
                                 path: verification.path.clone(),
-                                condition: definition.condition,
-                                requirement: definition
-                                    .requirement
-                                    .expect("column presence has a requirement"),
+                                code,
                                 evaluated_count: candidates.len(),
                                 failed_count: offending_rows.len(),
                                 output_rows: candidates.len(),

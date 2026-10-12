@@ -307,7 +307,7 @@ fn root_schema_issues_keep_actual_closed_fields_and_source_without_dependency_re
     for (issue, field) in issues.iter().zip(["parents", "runtime", "version"]) {
         assert_eq!(issue.spec_paths, [field]);
         assert_eq!(issue.condition, "unknown_field");
-        assert_eq!(issue.requirement, None);
+        assert_eq!(issue.requirement, Some("REQ-0285".into()));
         assert_eq!(context(issue)["field"], field);
         assert_eq!(context(issue)["class"], "environment_class");
         assert_eq!(context(issue)["source"], "held/environment.yaml");
@@ -367,7 +367,7 @@ fn failed_external_schema_issues_use_held_arenas_and_keep_original_other_failure
     ] {
         assert_eq!(issue.spec_paths, [format!("<normalization>.{field}")]);
         assert_eq!(issue.condition, "unknown_field");
-        assert_eq!(issue.requirement, None);
+        assert_eq!(issue.requirement, Some("REQ-0285".into()));
         assert_eq!(context(issue)["field"], field);
         assert_eq!(context(issue)["class"], class);
         assert_eq!(context(issue)["source"], source);

@@ -180,19 +180,29 @@ pub fn failure<E>(
             let value: Value =
                 serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
             if !response.retained_verifications.is_empty() {
-                let retained = crate::dataset_transport::retained_verification_outcome(response)
-                    .map_err(|_| Error::InvalidObservation)?;
-                verifications.extend(check_observations(run, &retained, &id)?.0);
+                verifications.extend(
+                    check_observations(
+                        run,
+                        &response.retained_verifications,
+                        yamaa_core::verification_diagnostics::Phase::Verification,
+                        &id,
+                    )?
+                    .0,
+                );
             }
             match value["outcome"]["status"].as_str() {
                 Some("condition") => {
-                    if value["outcome"]["verifications"].is_array() {
-                        verifications.extend(check_observations(run, &value["outcome"], &id)?.0);
+                    if let Some((phase, completed)) = &response.failed_verifications {
+                        verifications.extend(check_observations(run, completed, *phase, &id)?.0);
                     }
                     vec![condition(run, &value["outcome"])?]
                 }
                 Some("failure") => {
-                    let (records, diagnostics) = check_observations(run, &value["outcome"], &id)?;
+                    let (phase, completed) = response
+                        .failed_verifications
+                        .as_ref()
+                        .ok_or(Error::InvalidObservation)?;
+                    let (records, diagnostics) = check_observations(run, completed, *phase, &id)?;
                     verifications.extend(records);
                     diagnostics
                 }
@@ -734,150 +744,33 @@ fn count(record: &Value, name: &str) -> Result<usize, Error> {
 }
 pub(crate) fn check_observations(
     run: &dyn RunView,
-    outcome: &Value,
+    records: &[yamaa_engine::dataset::CheckRecord],
+    phase: yamaa_core::verification_diagnostics::Phase,
     id: &Identity<'_>,
 ) -> Result<(Vec<Value>, Vec<Value>), Error> {
-    let records = outcome["verifications"]
-        .as_array()
-        .ok_or(Error::InvalidObservation)?;
-    let mut observations = Vec::new();
-    let mut diagnostics = Vec::new();
-    let output_phase = outcome["phase"] == "output";
-    for record in records {
-        let condition = record["condition"]
-            .as_str()
-            .ok_or(Error::InvalidObservation)?;
-        let path = record["spec_path"]
-            .as_str()
-            .ok_or(Error::InvalidObservation)?;
-        let failed = count(record, "failed_count")?;
-        let severity = run.compiled().verification_severity(path).name();
-        let mut detail = Value::Null;
-        if failed > 0 {
-            let mut keys = Vec::new();
-            for identity in record["offending_rows"]
-                .as_array()
-                .ok_or(Error::InvalidObservation)?
-            {
-                let values = identity["keys"]
-                    .as_array()
-                    .ok_or(Error::InvalidObservation)?;
-                let names = run.compiled().key_names().collect::<Vec<_>>();
-                if names.len() != values.len() {
-                    return Err(Error::InvalidObservation);
-                }
-                keys.push(Value::Object(
-                    names
-                        .into_iter()
-                        .zip(values)
-                        .map(|(name, value)| Ok((name.into(), plain(value)?)))
-                        .collect::<Result<Map<_, _>, Error>>()?,
-                ));
-            }
-            if condition == "row_count_failed" {
-                keys = vec![json!({})];
-            }
-            let mut context = match condition {
-                "row_count_failed" => {
-                    json!({"count":count(record,"output_rows")?,"failure_count":failed})
-                }
-                "unique_failed" => {
-                    let check = run
-                        .compiled()
-                        .verifications()
-                        .iter()
-                        .find(|check| check.path == path)
-                        .ok_or(Error::InvalidObservation)?;
-                    let yamaa_engine::dataset::Check::Unique(columns) = &check.check else {
-                        return Err(Error::InvalidObservation);
-                    };
-                    json!({"columns":columns.iter().map(|&c|&run.compiled().output().columns()[c].name).collect::<Vec<_>>(),"failure_count":failed})
-                }
-                "missing_key" => {
-                    let position = path
-                        .strip_prefix("keys[")
-                        .and_then(|s| s.strip_suffix(']'))
-                        .and_then(|s| s.parse::<usize>().ok())
-                        .ok_or(Error::InvalidObservation)?;
-                    json!({"column":run.compiled().key_names().nth(position).ok_or(Error::InvalidObservation)?,"missing_count":failed})
-                }
-                "duplicate_key" => json!({"duplicate_count":failed}),
-                "assert_failed" | "all_or_none_failed" => json!({"failure_count":failed}),
-                "not_missing_failed"
-                | "allowed_values_failed"
-                | "range_failed"
-                | "length_failed"
-                | "matches_failed" => {
-                    let column = run
-                        .compiled()
-                        .verification_target(path)
-                        .ok_or(Error::InvalidObservation)?;
-                    let diagnostic = yamaa_core::dataset_checks::column_diagnostic(
-                        run.compiled()
-                            .column_check(path)
-                            .ok_or(Error::InvalidObservation)?,
-                        path.into(),
-                        column.into(),
-                        failed,
-                    )
-                    .ok_or(Error::InvalidObservation)?;
-                    specification_diagnostics::portable_diagnostic(diagnostic)
-                        .ok_or(Error::InvalidObservation)?["context"]
-                        .clone()
-                }
-                _ => return Err(Error::UnsupportedOutcome),
-            };
-            if !output_phase {
-                if let Some(identity) = run.compiled().verification_identity(path) {
-                    context["verification_id"] = json!(identity);
-                }
-            }
-            if let Some(codelist) = record.get("codelist") {
-                let Some(yamaa_engine::dataset::Check::Codelist { id, .. }) =
-                    run.compiled().column_check(path)
-                else {
-                    return Err(Error::InvalidObservation);
-                };
-                if codelist["id"].as_str() != Some(id.as_str()) {
-                    return Err(Error::InvalidObservation);
-                }
-                context["values"] = Value::Array(
-                    codelist["values"]
-                        .as_array()
-                        .ok_or(Error::InvalidObservation)?
-                        .iter()
-                        .map(plain)
-                        .collect::<Result<_, _>>()?,
-                );
-            }
-            let mut log_context = context.clone();
-            log_context["keys"] = json!(keys);
-            context["keys"] = if record.get("codelist").is_some() {
-                json!(keys)
-            } else {
-                json!(&keys[..keys.len().min(5)])
-            };
-            let diagnostic = json!({"phase":if output_phase {"output"} else {"verification"},"condition":condition,"spec_paths":[path],"requirement":record["requirement"],"context":context});
-            if severity == "error" {
-                diagnostics.push(diagnostic.clone());
-            }
-            detail = diagnostic;
-            detail["severity"] = json!(severity);
-            detail["offending_keys"] = json!(keys);
-            detail["log_context"] = log_context;
-        }
-        if !output_phase {
-            let check = if condition == "length_failed" {
-                "max_length"
-            } else {
-                condition
-                    .strip_suffix("_failed")
-                    .ok_or(Error::InvalidObservation)?
-            };
-            observations.push(json!({"specification":id.specification,"spec_path":path,"check":check,"target":run.compiled().verification_target(path),"requirement":record["requirement"],"verification_id":run.compiled().verification_identity(path),"severity":severity,"evaluated_count":count(record,"evaluated_count")?,"failure":detail}));
-        }
-    }
-    Ok((observations, diagnostics))
+    use yamaa_core::verification_diagnostics::Error as ProjectionError;
+    let projection = yamaa_engine::verification_diagnostics::project(
+        run.compiled(),
+        records,
+        phase,
+        id.specification,
+    )
+    .map_err(|error| match error {
+        ProjectionError::InvalidObservation => Error::InvalidObservation,
+        ProjectionError::UnsupportedOutcome => Error::UnsupportedOutcome,
+    })?;
+    Ok((
+        projection
+            .observations
+            .into_iter()
+            .map(crate::project_diagnostic_projection::fact)
+            .collect(),
+        projection
+            .diagnostics
+            .into_iter()
+            .map(crate::project_diagnostic_projection::value)
+            .collect(),
+    ))
 }
 pub(crate) fn output_diagnostics(
     findings: &[yamaa_core::specification::OutputFinding],
@@ -962,7 +855,17 @@ fn observations<E>(
     let value: Value =
         serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
     let mut report = envelope(run, attempt, id)?;
-    let (checks, unexpected) = check_observations(run, &value["outcome"], id)?;
+    let completed = &response
+        .execution
+        .as_ref()
+        .ok_or(Error::InvalidObservation)?
+        .verifications;
+    let (checks, unexpected) = check_observations(
+        run,
+        completed,
+        yamaa_core::verification_diagnostics::Phase::Verification,
+        id,
+    )?;
     if !unexpected.is_empty() {
         return Err(Error::InvalidObservation);
     }

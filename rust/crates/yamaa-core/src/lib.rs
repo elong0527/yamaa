@@ -16,6 +16,7 @@ pub mod csv_source;
 pub mod dataset;
 pub mod dataset_checks;
 mod decimal_rounding;
+pub mod define_diagnostics;
 pub mod dependency_analysis;
 pub mod diagnostic;
 pub mod evaluation;
@@ -85,3 +86,10 @@ pub mod project_terminology_document;
 pub mod project_environment_diagnostics;
 
 pub mod project_codelist_binding;
+
+pub mod project_diagnostics;
+
+pub mod project_codelist_diagnostics;
+pub mod verification_diagnostics;
+
+pub mod yaml_diagnostics;

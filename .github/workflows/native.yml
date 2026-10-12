@@ -359,6 +359,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_syntax.py" installed_predicate_syntax.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_predicate_execution.py" installed_predicate_execution.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_schema.py" installed_schema.py
+          cp "${GITHUB_WORKSPACE}/rust/tools/private_schema_requirements.py" private_schema_requirements.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_original_specifications.py" installed_original_specifications.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_verification_logs.py" installed_verification_logs.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_producer_logs.py" installed_producer_logs.py

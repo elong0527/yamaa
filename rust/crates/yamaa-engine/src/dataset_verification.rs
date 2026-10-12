@@ -42,9 +42,11 @@ pub(crate) fn predicate_check<E>(
     records: &mut Vec<CheckRecord>,
 ) -> Result<Option<CheckRecord>, Box<ExecutionError<E>>> {
     let (when, require, metadata) = match &verification.check {
-        Check::Assert { when, require } => {
-            (when.as_ref(), require, Some(("assert_failed", "REQ-0384")))
-        }
+        Check::Assert { when, require } => (
+            when.as_ref(),
+            require,
+            Some(yamaa_core::diagnostic::ConditionCode::VerificationAssertFailed),
+        ),
         Check::PredicateDeclaration(predicate) => (None, predicate, None),
         _ => unreachable!("only predicate checks use this service"),
     };
@@ -71,7 +73,7 @@ pub(crate) fn predicate_check<E>(
         evaluate(when, &samples)?;
     }
     evaluate(require, &samples)?;
-    let Some((condition, requirement)) = metadata else {
+    let Some(code) = metadata else {
         return Ok(None);
     };
     let mut offending = Vec::new();
@@ -87,8 +89,7 @@ pub(crate) fn predicate_check<E>(
     }
     Ok(Some(CheckRecord {
         path: verification.path.clone(),
-        condition,
-        requirement,
+        code,
         evaluated_count: dataset.rows().len(),
         failed_count: offending.len(),
         output_rows: dataset.rows().len(),

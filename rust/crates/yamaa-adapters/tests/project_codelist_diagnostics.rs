@@ -42,8 +42,7 @@ fn compiled() -> PreparedSpecification {
 fn record(value: Value) -> CheckRecord {
     CheckRecord {
         path: "columns.CODE.submission.codelist".into(),
-        condition: "allowed_values_failed",
-        requirement: "REQ-0957",
+        code: yamaa_core::diagnostic::ConditionCode::VerificationCodelistFailed,
         evaluated_count: 2,
         failed_count: 1,
         output_rows: 2,
@@ -118,7 +117,9 @@ fn contradictory_observation_geometry_never_returns_partial_or_invented_issues()
             2 => wrong.codelist.as_mut().unwrap().id = "OTHER".into(),
             3 => wrong.offending_rows[0].values.clear(),
             4 => wrong.codelist.as_mut().unwrap().values[0] = Value::Missing,
-            _ => wrong.requirement = "REQ-0376",
+            _ => {
+                wrong.code = yamaa_core::diagnostic::ConditionCode::VerificationAllowedValuesFailed
+            }
         }
         assert_eq!(
             codelist_issues(&compiled, &[wrong]),

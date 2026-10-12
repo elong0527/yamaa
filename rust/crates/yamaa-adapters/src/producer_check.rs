@@ -46,13 +46,16 @@ impl Budget {
         self.entries(16)?;
         match finding {
             Finding::Diagnostic(diagnostic) => self.diagnostic(diagnostic),
-            Finding::Declaration {
-                path,
-                condition,
-                requirement,
-                reason,
-            } => {
-                for text in [path, condition, requirement, reason] {
+            Finding::Declaration { path, code, reason } => {
+                let mapping = code.definition();
+                for text in [
+                    path,
+                    mapping.condition,
+                    mapping
+                        .requirement
+                        .expect("registered normative declaration"),
+                    reason,
+                ] {
                     self.text(text)?;
                 }
                 Ok(())

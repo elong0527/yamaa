@@ -1,4 +1,7 @@
 //! Independent reports/effects through the live environment metadata route.
+#[path = "support/schema_requirement_expectations.rs"]
+mod schema_requirement_expectations;
+
 use serde_json::{json, Value};
 use std::{rc::Rc, sync::Arc};
 use yamaa_adapters::{
@@ -124,12 +127,12 @@ fn document(name: &str, text: &str) -> Reply {
 fn live_root_full_reports_preserve_original_source_and_stop_before_every_dependency() {
     let schema = captured_schema(Limits::default());
     for (text,expected) in [
-        ("schema_version: '99.0'\nparents: [parent.yaml]\nfunctions: {bad: bad.yaml}\n",json!([{ "phase":"validation","condition":"schema_version_mismatch","requirement":null,"spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}}])),
-        ("schema_version: '1.0'\nparents: [base.yaml]\nruntime: {language: python}\nversion: old\n",json!([
+        ("schema_version: '99.0'\nparents: [parent.yaml]\nfunctions: {bad: bad.yaml}\n",schema_requirement_expectations::reconciled(&json!([{ "phase":"validation","condition":"schema_version_mismatch","requirement":null,"spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}}]).to_string(), false)),
+        ("schema_version: '1.0'\nparents: [base.yaml]\nruntime: {language: python}\nversion: old\n",schema_requirement_expectations::reconciled(&json!([
             {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["parents"],"context":{"field":"parents","class":"environment_class","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}},
             {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["runtime"],"context":{"field":"runtime","class":"environment_class","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}},
             {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["version"],"context":{"field":"version","class":"environment_class","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}}
-        ])),
+        ]).to_string(), false)),
     ] {
         let entry=source("study/environment.yaml",text);let bytes=entry.bytes.as_ptr();let identity=entry.identity.as_ptr();let mut port=Metadata::new(vec![]);
         let Err(Failure::Root(Error::Findings(captured)))=project_source::prepare(Arc::clone(&schema),entry,Language::Python,&mut port,ProjectLimits::default()) else{panic!("root structural gate")};
@@ -323,10 +326,10 @@ fn external_findings_keep_full_original_provenance_and_collect_later_live_source
     );
     assert_eq!(
         issues(diagnostics::schema_sources(&rejected).unwrap()),
-        json!([
+        schema_requirement_expectations::reconciled(&json!([
             {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.contract_version"],"context":{"field":"contract_version","class":"function_definition_class","source":"held/bad.yaml","entry":"study/environment.yaml","environment_path":"functions.bad"}},
             {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class","source":"held/bad.yaml","entry":"study/environment.yaml","environment_path":"functions.bad"}}
-        ])
+        ]).to_string(), false)
     );
 }
 
@@ -436,7 +439,7 @@ fn root_and_named_complete_reports_keep_unbounded_integer_context_and_compatibil
     let expected:Value=serde_json::from_str("{\"protocol\":\"specification/prototype\",\"outcome\":{\"status\":\"invalid\",\"diagnostics\":[{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":null,\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}]}}").unwrap();
     assert_eq!(
         serde_json::from_str::<Value>(&capture_failure(&error)).unwrap(),
-        expected
+        schema_requirement_expectations::reconciled(&expected.to_string(), false)
     );
     let error = schema
         .prepare_named_class(
@@ -450,11 +453,11 @@ fn root_and_named_complete_reports_keep_unbounded_integer_context_and_compatibil
         .unwrap_err();
     assert_eq!(
         serde_json::from_str::<Value>(&capture_failure(&error)).unwrap(),
-        json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[
+        schema_requirement_expectations::reconciled(&json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[
             {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.schema_version"],"context":{"field":"schema_version","class":"function_definition_class"}},
             {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.contract_version"],"context":{"field":"contract_version","class":"function_definition_class"}},
             {"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class"}}
-        ]}})
+        ]}}).to_string(), false)
     );
 }
 
@@ -514,6 +517,6 @@ fn live_codelist_class_failure_keeps_full_raw_source_report_and_later_capture() 
     );
     assert_eq!(
         issues(diagnostics::schema_sources(&rejected).unwrap()),
-        json!([{ "phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.retired"],"context":{"field":"retired","class":"codelist_source_class","source":"held/bad-ct.yaml","entry":"study/environment.yaml","environment_path":"codelists[0]"}}])
+        schema_requirement_expectations::reconciled(&json!([{ "phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["<normalization>.retired"],"context":{"field":"retired","class":"codelist_source_class","source":"held/bad-ct.yaml","entry":"study/environment.yaml","environment_path":"codelists[0]"}}]).to_string(), false)
     );
 }

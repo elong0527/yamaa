@@ -210,8 +210,7 @@ fn window_id(document: &Document, index: usize) -> usize {
 fn unknown(name: &str, window: &str) -> SchemaDiagnostic {
     SchemaDiagnostic {
         path: format!("columns.{name}.derivation.row_number.window"),
-        condition: "unknown_window",
-        requirement: Some("REQ-1253"),
+        code: yamaa_core::diagnostic::ConditionCode::SchemaUnknownWindow,
         context: vec![("window", C::Text(window.into()))],
     }
 }
@@ -454,8 +453,7 @@ fn normalization_findings_keep_original_raw_allocation_and_full_version_preceden
         failure.error,
         NormalizationError::Invalid(vec![SchemaDiagnostic {
             path: "schema_version".into(),
-            condition: "schema_version_mismatch",
-            requirement: None,
+            code: yamaa_core::diagnostic::ConditionCode::SchemaVersionMismatch,
             context: vec![
                 ("expected", C::Text("1.0".into())),
                 ("actual", C::InputValue(actual_node))
@@ -496,8 +494,11 @@ fn model_findings_remain_complete_and_have_no_document_value_references() {
     };
     let finding = |path: &str, reason: &str| SchemaDiagnostic {
         path: path.into(),
-        condition: "model_contract_mismatch",
-        requirement: None,
+        code: if reason == "Field required" {
+            yamaa_core::diagnostic::ConditionCode::SchemaModelMissingField
+        } else {
+            yamaa_core::diagnostic::ConditionCode::SchemaModelInvalidValue
+        },
         context: vec![("reason", C::Text(reason.into()))],
     };
     assert_eq!(

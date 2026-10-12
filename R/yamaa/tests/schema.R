@@ -6,6 +6,12 @@ truth <- do.call(rbind, lapply(c("schema_model.tsv", "schema_transport.tsv", "sc
     fileEncoding = "UTF-8", check.names = FALSE)
   expected_rows <- if (name %in% c("schema_model.tsv", "schema_layer_admission.tsv")) 8L else 6L
   stopifnot(nrow(cases) == expected_rows)
+  normative <- read.delim(system.file(paste0("normative-", name), package = "yamaa"),
+    sep = "\t", quote = "", comment.char = "", colClasses = "character",
+    fileEncoding = "UTF-8", check.names = FALSE)
+  stopifnot(identical(cases$id, normative$id), identical(cases$request, normative$request))
+  # The original capture remains installed unchanged; only approved citations are staged separately.
+  cases$expected <- normative$expected
   cases
 }))
 for (i in seq_len(nrow(truth))) {

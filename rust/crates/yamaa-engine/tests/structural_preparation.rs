@@ -173,8 +173,7 @@ fn unwrap<T>(value: Result<T, Error<Opaque>>) -> T {
 fn unknown(path: &str, name: &str, class: &str) -> SchemaDiagnostic {
     SchemaDiagnostic {
         path: path.into(),
-        condition: "unknown_field",
-        requirement: None,
+        code: yamaa_core::diagnostic::ConditionCode::SchemaUnknownField,
         context: vec![
             ("field", C::Text(name.into())),
             ("class", C::Text(class.into())),
@@ -385,8 +384,7 @@ fn semantic_failures_move_raw_arena_and_full_ordered_findings_without_partial_ou
             ])),
             vec![SchemaDiagnostic {
                 path: "schema_version".into(),
-                condition: "schema_version_mismatch",
-                requirement: None,
+                code: yamaa_core::diagnostic::ConditionCode::SchemaVersionMismatch,
                 context: vec![
                     ("expected", C::Text("1.0".into())),
                     ("actual", C::InputValue(1)),
@@ -576,8 +574,7 @@ fn defaults_keep_their_post_decode_post_query_checkpoint_and_original_typed_payl
             defaults[0].diagnostics,
             vec![SchemaDiagnostic {
                 path: "function_definition_class.flag.default".into(),
-                condition: "invalid_field_type",
-                requirement: Some("REQ-0287"),
+                code: yamaa_core::diagnostic::ConditionCode::SchemaInvalidFieldType,
                 context: vec![
                     ("expected", C::Text("bool".into())),
                     (

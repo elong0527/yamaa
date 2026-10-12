@@ -1,0 +1,637 @@
+{
+  "rust/crates/yamaa-core/src/producer_admission.rs:398": {
+    "path": "rust/crates/yamaa-core/src/producer_admission.rs",
+    "source": "findings.push(invalid(dataset, \"producer_workflow_cycle\"));",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/layer_admission.rs:136": {
+    "path": "rust/crates/yamaa-core/src/schema/layer_admission.rs",
+    "source": "\"invalid_field_type\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/layer_admission.rs:137": {
+    "path": "rust/crates/yamaa-core/src/schema/layer_admission.rs",
+    "source": "\"REQ-0658\",",
+    "occurrences": 3
+  },
+  "rust/crates/yamaa-core/src/schema/layer_admission.rs:167": {
+    "path": "rust/crates/yamaa-core/src/schema/layer_admission.rs",
+    "source": "\"unknown_field\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/layer_admission.rs:234": {
+    "path": "rust/crates/yamaa-core/src/schema/layer_admission.rs",
+    "source": "\"missing_required_field\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/layer_admission.rs:257": {
+    "path": "rust/crates/yamaa-core/src/schema/layer_admission.rs",
+    "source": "\"invalid_clear\",",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-core/src/schema/layer_admission.rs:258": {
+    "path": "rust/crates/yamaa-core/src/schema/layer_admission.rs",
+    "source": "\"REQ-0660\",",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-core/src/schema/layer_admission.rs:313": {
+    "path": "rust/crates/yamaa-core/src/schema/layer_admission.rs",
+    "source": "\"duplicate_identifier\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/layer_admission.rs:314": {
+    "path": "rust/crates/yamaa-core/src/schema/layer_admission.rs",
+    "source": "\"REQ-0659\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/layer_admission.rs:349": {
+    "path": "rust/crates/yamaa-core/src/schema/layer_admission.rs",
+    "source": "\"schema_version_mismatch\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/layer_admission.rs:350": {
+    "path": "rust/crates/yamaa-core/src/schema/layer_admission.rs",
+    "source": "\"REQ-0656\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/layers.rs:209": {
+    "path": "rust/crates/yamaa-core/src/schema/layers.rs",
+    "source": "\"invalid_clear\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/layers.rs:210": {
+    "path": "rust/crates/yamaa-core/src/schema/layers.rs",
+    "source": "Some(\"REQ-0660\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:271": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": "\"invalid_field_type\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:272": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": "Some(\"REQ-0287\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:324": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": "\"value_not_permitted\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:361": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": "self.constraints(id, site, \"REQ-0287\")",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:388": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": "\"missing_required_field\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:412": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": "\"unknown_field\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:585": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": "return Ok(vec![self.diagnostic(site,\"bare_derivation_scalar\",Some(\"REQ-0320\"),vec![(\"actual\",SchemaContext::ValueKind(self.input.nodes()[site.value].kind())),(\"hint\",Self::text(\"a bare derivation must be a string column reference such as ADSL.AGE; write a fixed value as {literal: ...}\"))])?]);",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:598": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": ".all(|d| d.condition == \"invalid_field_type\")",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:605": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": "\"column_type\" => \"REQ-0012\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:606": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": "\"day_rule\" => \"REQ-0609\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:607": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": "\"time_rule\" => \"REQ-1184\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:608": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": "_ => \"REQ-0287\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/validation.rs:849": {
+    "path": "rust/crates/yamaa-core/src/schema/validation.rs",
+    "source": "\"schema_version_mismatch\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/windows.rs:187": {
+    "path": "rust/crates/yamaa-core/src/schema/windows.rs",
+    "source": "\"unknown_window\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/schema/windows.rs:188": {
+    "path": "rust/crates/yamaa-core/src/schema/windows.rs",
+    "source": "Some(\"REQ-1253\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/specification.rs:520": {
+    "path": "rust/crates/yamaa-core/src/specification.rs",
+    "source": "\"reserved_metadata_key\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:419": {
+    "path": "rust/crates/yamaa-core/src/specification_submission_document/decode.rs",
+    "source": "Some((Kind::InvalidIdentifier, Some(\"REQ-1046\")))",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:529": {
+    "path": "rust/crates/yamaa-core/src/specification_submission_document/decode.rs",
+    "source": "Some(\"REQ-1146\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:537": {
+    "path": "rust/crates/yamaa-core/src/specification_submission_document/decode.rs",
+    "source": "Some(\"REQ-1147\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:694": {
+    "path": "rust/crates/yamaa-core/src/specification_submission_document/decode.rs",
+    "source": "Some(\"REQ-1141\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:709": {
+    "path": "rust/crates/yamaa-core/src/specification_submission_document/decode.rs",
+    "source": "Some(\"REQ-1145\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:757": {
+    "path": "rust/crates/yamaa-core/src/specification_submission_document/decode.rs",
+    "source": "Some(\"REQ-1142\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:765": {
+    "path": "rust/crates/yamaa-core/src/specification_submission_document/decode.rs",
+    "source": "Some(\"REQ-1143\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:797": {
+    "path": "rust/crates/yamaa-core/src/specification_submission_document/decode.rs",
+    "source": "Some(\"REQ-1144\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:239": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "findings.push(Finding::new(\"unknown_document\", \"REQ-1016\", path, id));",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:336": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"reserved_metadata_key\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:337": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0910\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:378": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"submission_metadata_missing\",",
+    "occurrences": 9
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:379": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1015\",",
+    "occurrences": 9
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:387": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"origin_missing\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:388": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0918\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:404": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"sas_name_too_long\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:405": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1023\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:423": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"core_mandatory_conflict\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:424": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0915\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:434": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"mandatory_not_enforced\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:435": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0916\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:442": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"value_not_permitted\",",
+    "occurrences": 6
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:443": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0917\",",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:451": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"origin_source_not_admitted\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:452": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0919\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:465": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"origin_description_missing\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:466": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0920\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:473": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"method_missing\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:474": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0923\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:494": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"origin_document_missing\",",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:495": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0984\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:507": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0893\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:543": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"submission_data_type_not_admitted\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:544": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0914\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:574": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"submission_length_missing\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:575": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0912\",",
+    "occurrences": 3
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:582": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"submission_length_not_applicable\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:597": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"submission_length_invalid\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:598": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0911\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:609": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"declared_length_conflict\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:610": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0913\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:618": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"submission_length_missing\"",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:620": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"submission_length_not_applicable\"",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:654": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0955\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:669": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "ct::BindingFinding::UnknownCodelist => (\"unknown_codelist\", \"REQ-0953\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:671": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "(\"codelist_type_mismatch\", \"REQ-0954\")",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:673": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "ct::BindingFinding::ValuesConflict => (\"codelist_values_conflict\", \"REQ-0955\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:674": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "ct::BindingFinding::Limit(_) => (\"application_rejected\", \"REQ-0955\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:780": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1163\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:791": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1164\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:810": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1165\",",
+    "occurrences": 2
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:830": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1166\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:847": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1167\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:869": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "(\"refuted_value_origin\", \"REQ-1168\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:886": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "if finding.definition.requirement == Some(\"REQ-1168\") {",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1063": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"unknown_standard_family\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1064": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0924\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1072": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1014\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1081": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"source_system_incomplete\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1082": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0979\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1093": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"duplicate_define_identifier\",",
+    "occurrences": 4
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1094": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1017\",",
+    "occurrences": 4
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1109": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1019\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1160": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"duplicate_dataset_entry\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1161": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1018\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1197": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "findings.push(Finding::new(\"sas_name_too_long\", \"REQ-1023\", &path, &id));",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1201": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"reference_data_repeating_conflict\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1202": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0925\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1218": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1022\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1225": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"dataset_json_without_data\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1226": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1227\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1296": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"submission_not_output_column\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1297": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-0909\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1328": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "(\"origin_contradicts_derivation\", \"REQ-0922\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1409": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"missing_required_field\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_composition.rs:1410": {
+    "path": "rust/crates/yamaa-core/src/submission_composition.rs",
+    "source": "\"REQ-1004\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_document/model.rs:126": {
+    "path": "rust/crates/yamaa-core/src/submission_document/model.rs",
+    "source": "Kind::InvalidIdentifier => Some(\"REQ-1046\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_document/model.rs:127": {
+    "path": "rust/crates/yamaa-core/src/submission_document/model.rs",
+    "source": "Kind::InvalidDefineId => Some(\"REQ-1068\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_document/model.rs:128": {
+    "path": "rust/crates/yamaa-core/src/submission_document/model.rs",
+    "source": "Kind::InvalidHref => Some(\"REQ-1070\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_document/model.rs:129": {
+    "path": "rust/crates/yamaa-core/src/submission_document/model.rs",
+    "source": "Kind::InvalidLanguage => Some(\"REQ-1073\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_document/model.rs:137": {
+    "path": "rust/crates/yamaa-core/src/submission_document/model.rs",
+    "source": "Some(\"REQ-1074\")",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_json.rs:53": {
+    "path": "rust/crates/yamaa-core/src/submission_json.rs",
+    "source": "\"value_not_permitted\",",
+    "occurrences": 3
+  },
+  "rust/crates/yamaa-core/src/submission_json.rs:54": {
+    "path": "rust/crates/yamaa-core/src/submission_json.rs",
+    "source": "\"REQ-1231\",",
+    "occurrences": 3
+  },
+  "rust/crates/yamaa-core/src/submission_json.rs:90": {
+    "path": "rust/crates/yamaa-core/src/submission_json.rs",
+    "source": "let invalid = |detail| Finding::new(\"value_not_permitted\", \"REQ-1231\", &path, detail);",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_json.rs:391": {
+    "path": "rust/crates/yamaa-core/src/submission_json.rs",
+    "source": "condition: \"allowed_values_failed\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_json.rs:392": {
+    "path": "rust/crates/yamaa-core/src/submission_json.rs",
+    "source": "requirement: Some(\"REQ-1156\"),",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_xml.rs:128": {
+    "path": "rust/crates/yamaa-core/src/submission_xml.rs",
+    "source": "let invalid = |detail| Finding::new(\"value_not_permitted\", \"REQ-1026\", &self.path, detail);",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_xml.rs:137": {
+    "path": "rust/crates/yamaa-core/src/submission_xml.rs",
+    "source": "\"duplicate_define_identifier\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_xml.rs:138": {
+    "path": "rust/crates/yamaa-core/src/submission_xml.rs",
+    "source": "\"REQ-1017\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_xml.rs:187": {
+    "path": "rust/crates/yamaa-core/src/submission_xml.rs",
+    "source": "\"untransportable_text\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_xml.rs:188": {
+    "path": "rust/crates/yamaa-core/src/submission_xml.rs",
+    "source": "\"REQ-1025\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_xml.rs:198": {
+    "path": "rust/crates/yamaa-core/src/submission_xml.rs",
+    "source": "\"value_not_permitted\",",
+    "occurrences": 3
+  },
+  "rust/crates/yamaa-core/src/submission_xml.rs:199": {
+    "path": "rust/crates/yamaa-core/src/submission_xml.rs",
+    "source": "\"REQ-1026\",",
+    "occurrences": 3
+  },
+  "rust/crates/yamaa-core/src/submission_xml.rs:675": {
+    "path": "rust/crates/yamaa-core/src/submission_xml.rs",
+    "source": "\"unknown_document\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-core/src/submission_xml.rs:676": {
+    "path": "rust/crates/yamaa-core/src/submission_xml.rs",
+    "source": "\"REQ-1016\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-engine/src/numeric_lifecycle.rs:33": {
+    "path": "rust/crates/yamaa-engine/src/numeric_lifecycle.rs",
+    "source": "Self::MultipleMatches => \"multiple_matches\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-engine/src/standalone_preparation.rs:227": {
+    "path": "rust/crates/yamaa-engine/src/standalone_preparation.rs",
+    "source": "condition: \"unknown_window\",",
+    "occurrences": 1
+  },
+  "rust/crates/yamaa-engine/src/standalone_preparation.rs:228": {
+    "path": "rust/crates/yamaa-engine/src/standalone_preparation.rs",
+    "source": "requirement: Some(\"REQ-1253\"),",
+    "occurrences": 1
+  }
+}

@@ -142,6 +142,56 @@ fn linked_producer_ordinal_is_local_to_consumers_and_keeps_the_stored_contract()
 }
 
 #[test]
+fn linked_producer_ordinal_is_local_to_consumers_and_keeps_the_stored_contract() {
+    use yamaa_adapters::producer_result::prepare_owned_classified;
+    let study = Study::new();
+    study.rounded();
+    study.write("consumer/root.yaml", CONSUMER.replace("schema: ../producer/p.yaml}", "schema: ../producer/p.yaml, ordinal: REC}").replace("output: {path:", "  - {name: POSITION, type: int, label: Position, derivation: FIRST.REC}\noutput: {path:").replace("columns: [ID, VALUE], decimals", "columns: [ID, VALUE, POSITION], decimals"));
+    let mut build = study.build(Language::Python);
+    let mut activation = Activation::new(&study, Mode::Pass);
+    let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+    let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    fs::create_dir(study.0.join("generated")).unwrap();
+    assert!(result.save().unwrap());
+    assert_eq!(
+        fs::read(study.0.join("generated/root.csv")).unwrap(),
+        b"ID,VALUE,POSITION\n1,2.46,1\n2,4.70,2\n"
+    );
+
+    for raw in [b"ID,VALUE\n1,1.234\n".as_slice(), b"ID,VALUE\n"] {
+        study.write("raw/raw.csv", raw);
+        study.write(
+            "consumer/root.yaml",
+            CONSUMER.replace(
+                "schema: ../producer/p.yaml}",
+                "schema: ../producer/p.yaml, ordinal: ID}",
+            ),
+        );
+        let mut build = study.build(Language::Python);
+        let mut activation = Activation::new(&study, Mode::Pass);
+        let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+        let result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+        assert!(result.output().is_none());
+        assert_eq!(result.issues().len(), 1);
+        let issue = &result.issues()[0];
+        assert_eq!(
+            (
+                issue.phase.as_str(),
+                issue.condition.as_str(),
+                issue.requirement.as_deref()
+            ),
+            ("validation", "ordinal_field_collision", Some("REQ-1294"))
+        );
+        assert_eq!(issue.spec_paths, ["input.FIRST.ordinal"]);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
+            serde_json::json!({"dataset":"FIRST", "field":"ID"})
+        );
+    }
+}
+
+#[test]
 fn sealed_native_save_keeps_original_held_bytes_after_sources_change_and_other_owners_drop() {
     use yamaa_adapters::producer_result::prepare_owned_classified;
     for language in [Language::Python, Language::R] {

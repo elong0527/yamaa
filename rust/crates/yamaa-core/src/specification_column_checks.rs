@@ -3,6 +3,7 @@ use super::*;
 use crate::{
     conversion::convert,
     dataset::Check,
+    diagnostic::ConditionCode,
     value::{compare_present, Value},
 };
 
@@ -14,11 +15,7 @@ pub(super) fn prepare(
     kind: ColumnType,
     regex_budget: &mut crate::regex::CompileBudget,
 ) -> Result<Check, PrepareError> {
-    let invalid = |requirement, reason: String| Check::InvalidDeclaration {
-        condition: "invalid_declaration",
-        requirement,
-        reason,
-    };
+    let invalid = |code, reason: String| Check::InvalidDeclaration { code, reason };
     let kind_name = match kind {
         ColumnType::Str => "str",
         ColumnType::Int => "int",
@@ -28,7 +25,7 @@ pub(super) fn prepare(
     };
     let wrong_type = || {
         invalid(
-            "REQ-0404",
+            ConditionCode::VerificationColumnType,
             format!("a {kind_name} column does not admit this verification"),
         )
     };
@@ -68,7 +65,10 @@ pub(super) fn prepare(
                 return Err(PrepareError::Limit("verification_values"));
             }
             if entries.is_empty() {
-                return Ok(invalid("REQ-0397", "allowed_values requires values".into()));
+                return Ok(invalid(
+                    ConditionCode::VerificationDeclarationRequired,
+                    "allowed_values requires values".into(),
+                ));
             }
             let mut accepted = Vec::new();
             let mut finding = None;
@@ -95,7 +95,7 @@ pub(super) fn prepare(
                         };
                         if finding.is_none() {
                             finding = Some(invalid(
-                                "REQ-0404",
+                                ConditionCode::VerificationColumnType,
                                 format!("listed value {label} is not a {kind_name} value"),
                             ));
                         }
@@ -128,12 +128,18 @@ pub(super) fn prepare(
                 return Ok(wrong_type());
             }
             if min.is_none() && max.is_none() {
-                return Ok(invalid("REQ-0399", "range requires one bound".into()));
+                return Ok(invalid(
+                    ConditionCode::VerificationBounds,
+                    "range requires one bound".into(),
+                ));
             }
             if min.as_ref().zip(max.as_ref()).is_some_and(|(min, max)| {
                 compare_present(min, max) == Ok(core::cmp::Ordering::Greater)
             }) {
-                return Ok(invalid("REQ-0399", "range min exceeds max".into()));
+                return Ok(invalid(
+                    ConditionCode::VerificationBounds,
+                    "range min exceeds max".into(),
+                ));
             }
             Ok(Check::Range { min, max })
         }
@@ -146,7 +152,10 @@ pub(super) fn prepare(
                 return Err(PrepareError::Internal);
             };
             if max < 1 {
-                return Ok(invalid("REQ-0400", "max_length max is at least one".into()));
+                return Ok(invalid(
+                    ConditionCode::VerificationLengthBounds,
+                    "max_length max is at least one".into(),
+                ));
             }
             Ok(Check::MaxLength(
                 usize::try_from(max).map_err(|_| PrepareError::Limit("verification_length"))?,

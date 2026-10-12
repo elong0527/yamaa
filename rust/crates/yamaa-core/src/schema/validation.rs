@@ -5,7 +5,10 @@ use super::{
     DocumentNode as N, SchemaAliasKind, SchemaField, SchemaShape, SchemaStructure, TypeError,
     TypeExpression, TypeLimits, TypeNode,
 };
-use crate::regex::MatchLimits;
+use crate::{
+    diagnostic::{ConditionCode, Definition},
+    regex::MatchLimits,
+};
 use alloc::{
     format,
     string::{String, ToString},
@@ -34,9 +37,14 @@ pub enum SchemaContext {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SchemaDiagnostic {
     pub path: String,
-    pub condition: &'static str,
-    pub requirement: Option<&'static str>,
+    pub code: ConditionCode,
     pub context: Vec<(&'static str, SchemaContext)>,
+}
+
+impl SchemaDiagnostic {
+    pub fn definition(&self) -> Definition {
+        self.code.definition()
+    }
 }
 
 /// Each default is interpreted against its descriptor after all references resolve.
@@ -133,8 +141,7 @@ impl ValidationBudget {
     pub(super) fn diagnostic(
         &mut self,
         path: &str,
-        condition: &'static str,
-        requirement: Option<&'static str>,
+        code: ConditionCode,
         context: Vec<(&'static str, SchemaContext)>,
     ) -> Result<SchemaDiagnostic, ValidationError> {
         self.reserve_diagnostic(0)?;
@@ -166,8 +173,7 @@ impl ValidationBudget {
             } else {
                 path.into()
             },
-            condition,
-            requirement,
+            code,
             context,
         })
     }
@@ -197,6 +203,7 @@ pub(super) fn matches_member(
         input,
         budget,
         active: active.to_vec(),
+        resolved_output: false,
     }
     .single(
         member.0,
@@ -235,11 +242,74 @@ impl<'a> Site<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
+enum ConstraintOwner {
+    Descriptor,
+    ColumnType,
+    DayRule,
+    TimeRule,
+}
+impl ConstraintOwner {
+    fn code(self, violation: ConstraintViolation) -> ConditionCode {
+        match (self, violation) {
+            (Self::Descriptor, ConstraintViolation::ValueNotPermitted) => {
+                ConditionCode::SchemaDescriptorValueNotPermitted
+            }
+            (Self::Descriptor, ConstraintViolation::PatternMismatch) => {
+                ConditionCode::SchemaDescriptorPatternMismatch
+            }
+            (Self::Descriptor, ConstraintViolation::MinimumLength) => {
+                ConditionCode::SchemaDescriptorMinimumLength
+            }
+            (Self::Descriptor, ConstraintViolation::InvalidSize) => {
+                ConditionCode::SchemaDescriptorInvalidSize
+            }
+            (Self::ColumnType, ConstraintViolation::ValueNotPermitted) => {
+                ConditionCode::SchemaColumnTypeValueNotPermitted
+            }
+            (Self::ColumnType, ConstraintViolation::PatternMismatch) => {
+                ConditionCode::SchemaColumnTypePatternMismatch
+            }
+            (Self::ColumnType, ConstraintViolation::MinimumLength) => {
+                ConditionCode::SchemaColumnTypeMinimumLength
+            }
+            (Self::ColumnType, ConstraintViolation::InvalidSize) => {
+                ConditionCode::SchemaColumnTypeInvalidSize
+            }
+            (Self::DayRule, ConstraintViolation::ValueNotPermitted) => {
+                ConditionCode::SchemaDayRuleValueNotPermitted
+            }
+            (Self::DayRule, ConstraintViolation::PatternMismatch) => {
+                ConditionCode::SchemaDayRulePatternMismatch
+            }
+            (Self::DayRule, ConstraintViolation::MinimumLength) => {
+                ConditionCode::SchemaDayRuleMinimumLength
+            }
+            (Self::DayRule, ConstraintViolation::InvalidSize) => {
+                ConditionCode::SchemaDayRuleInvalidSize
+            }
+            (Self::TimeRule, ConstraintViolation::ValueNotPermitted) => {
+                ConditionCode::SchemaTimeRuleValueNotPermitted
+            }
+            (Self::TimeRule, ConstraintViolation::PatternMismatch) => {
+                ConditionCode::SchemaTimeRulePatternMismatch
+            }
+            (Self::TimeRule, ConstraintViolation::MinimumLength) => {
+                ConditionCode::SchemaTimeRuleMinimumLength
+            }
+            (Self::TimeRule, ConstraintViolation::InvalidSize) => {
+                ConditionCode::SchemaTimeRuleInvalidSize
+            }
+        }
+    }
+}
+
 struct Run<'a, 'b> {
     schema: &'a SchemaStructure,
     input: &'a Document,
     budget: &'b mut ValidationBudget,
     active: Vec<(usize, usize)>,
+    resolved_output: bool,
 }
 
 impl Run<'_, '_> {
@@ -253,12 +323,10 @@ impl Run<'_, '_> {
     fn diagnostic(
         &mut self,
         site: Site<'_>,
-        condition: &'static str,
-        requirement: Option<&'static str>,
+        code: ConditionCode,
         context: Vec<(&'static str, SchemaContext)>,
     ) -> Result<SchemaDiagnostic, ValidationError> {
-        self.budget
-            .diagnostic(site.path, condition, requirement, context)
+        self.budget.diagnostic(site.path, code, context)
     }
 
     fn invalid(
@@ -268,8 +336,7 @@ impl Run<'_, '_> {
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         Ok(vec![self.diagnostic(
             site,
-            "invalid_field_type",
-            Some("REQ-0287"),
+            ConditionCode::SchemaInvalidFieldType,
             vec![
                 ("expected", Self::text(expected)),
                 (
@@ -307,7 +374,7 @@ impl Run<'_, '_> {
         &mut self,
         descriptor: usize,
         site: Site<'_>,
-        requirement: &'static str,
+        owner: ConstraintOwner,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         let descriptor_ref = &self.schema.descriptors()[descriptor].descriptor;
         let violations = descriptor_ref
@@ -319,31 +386,23 @@ impl Run<'_, '_> {
             .map_err(ValidationError::Constraint)?;
         let mut result = Vec::new();
         for violation in violations {
-            let (condition, context) = match violation {
-                ConstraintViolation::ValueNotPermitted => (
-                    "value_not_permitted",
-                    vec![
-                        ("value", SchemaContext::InputValue(site.value)),
-                        ("permitted", SchemaContext::DescriptorValues(descriptor)),
-                    ],
-                ),
-                ConstraintViolation::PatternMismatch => (
-                    "pattern_mismatch",
-                    vec![
-                        ("value", SchemaContext::InputValue(site.value)),
-                        ("pattern", SchemaContext::DescriptorPattern(descriptor)),
-                    ],
-                ),
-                ConstraintViolation::MinimumLength => (
-                    "minimum_length",
-                    vec![("minimum", SchemaContext::DescriptorMinimum(descriptor))],
-                ),
-                ConstraintViolation::InvalidSize => (
-                    "invalid_size",
-                    vec![("size", SchemaContext::DescriptorSize(descriptor))],
-                ),
+            let context = match violation {
+                ConstraintViolation::ValueNotPermitted => vec![
+                    ("value", SchemaContext::InputValue(site.value)),
+                    ("permitted", SchemaContext::DescriptorValues(descriptor)),
+                ],
+                ConstraintViolation::PatternMismatch => vec![
+                    ("value", SchemaContext::InputValue(site.value)),
+                    ("pattern", SchemaContext::DescriptorPattern(descriptor)),
+                ],
+                ConstraintViolation::MinimumLength => {
+                    vec![("minimum", SchemaContext::DescriptorMinimum(descriptor))]
+                }
+                ConstraintViolation::InvalidSize => {
+                    vec![("size", SchemaContext::DescriptorSize(descriptor))]
+                }
             };
-            result.push(self.diagnostic(site, condition, Some(requirement), context)?);
+            result.push(self.diagnostic(site, owner.code(violation), context)?);
         }
         Ok(result)
     }
@@ -358,7 +417,7 @@ impl Run<'_, '_> {
         if !result.is_empty() {
             return Ok(result);
         }
-        self.constraints(id, site, "REQ-0287")
+        self.constraints(id, site, ConstraintOwner::Descriptor)
     }
     fn class(
         &mut self,
@@ -385,8 +444,11 @@ impl Run<'_, '_> {
                 {
                     diagnostics.push(self.diagnostic(
                         site.child(site.value, &path),
-                        "missing_required_field",
-                        None,
+                        if self.resolved_output && site.path.is_empty() && field.name == "output" {
+                            ConditionCode::SchemaResolvedOutputRequired
+                        } else {
+                            ConditionCode::SchemaMissingRequiredField
+                        },
                         vec![
                             ("field", Self::text(&field.name)),
                             ("class", Self::text(name)),
@@ -409,8 +471,7 @@ impl Run<'_, '_> {
                 let path = self.joined(site.path, &key, index)?;
                 diagnostics.push(self.diagnostic(
                     site.child(site.value, &path),
-                    "unknown_field",
-                    None,
+                    ConditionCode::SchemaUnknownField,
                     vec![("field", Self::text(key)), ("class", Self::text(name))],
                 )?);
             }
@@ -533,8 +594,7 @@ impl Run<'_, '_> {
                     if items.len() != 1 {
                         return Ok(vec![self.diagnostic(
                             site,
-                            "invalid_operation_count",
-                            None,
+                            ConditionCode::SchemaInvalidOperationCount,
                             vec![
                                 ("registry", Self::text(&registry.name)),
                                 ("count", SchemaContext::Count(items.len())),
@@ -558,8 +618,7 @@ impl Run<'_, '_> {
                     let Some(entry) = entry else {
                         return Ok(vec![self.diagnostic(
                             site.child(site.value, &path),
-                            "unknown_operation",
-                            None,
+                            ConditionCode::SchemaUnknownOperation,
                             vec![
                                 ("registry", Self::text(&registry.name)),
                                 ("operation", Self::text(operation)),
@@ -582,7 +641,7 @@ impl Run<'_, '_> {
                         && !diagnostics.is_empty()
                         && !matches!(self.input.nodes()[site.value], N::Text(_) | N::Mapping(_))
                     {
-                        return Ok(vec![self.diagnostic(site,"bare_derivation_scalar",Some("REQ-0320"),vec![("actual",SchemaContext::ValueKind(self.input.nodes()[site.value].kind())),("hint",Self::text("a bare derivation must be a string column reference such as ADSL.AGE; write a fixed value as {literal: ...}"))])?]);
+                        return Ok(vec![self.diagnostic(site,ConditionCode::SchemaBareDerivationScalar,vec![("actual",SchemaContext::ValueKind(self.input.nodes()[site.value].kind())),("hint",Self::text("a bare derivation must be a string column reference such as ADSL.AGE; write a fixed value as {literal: ...}"))])?]);
                     }
                     if !diagnostics.is_empty() {
                         let mut matching = false;
@@ -595,19 +654,19 @@ impl Run<'_, '_> {
                         if !matching
                             && diagnostics
                                 .iter()
-                                .all(|d| d.condition == "invalid_field_type")
+                                .all(|d| d.code == ConditionCode::SchemaInvalidFieldType)
                         {
                             return self.invalid(site, name);
                         }
                         return Ok(diagnostics);
                     }
-                    let requirement = match name {
-                        "column_type" => "REQ-0012",
-                        "day_rule" => "REQ-0609",
-                        "time_rule" => "REQ-1184",
-                        _ => "REQ-0287",
+                    let owner = match name {
+                        "column_type" => ConstraintOwner::ColumnType,
+                        "day_rule" => ConstraintOwner::DayRule,
+                        "time_rule" => ConstraintOwner::TimeRule,
+                        _ => ConstraintOwner::Descriptor,
                     };
-                    self.constraints(descriptor, site, requirement)
+                    self.constraints(descriptor, site, owner)
                 }
             }
         })();
@@ -740,6 +799,7 @@ impl SchemaStructure {
             input,
             budget,
             active: Vec::new(),
+            resolved_output: false,
         }
         .union(
             types,
@@ -811,11 +871,29 @@ impl SchemaStructure {
         input: &Document,
         budget: &mut ValidationBudget,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        self.validate_document_mode(input, budget, false)
+    }
+    /// Final inheritance validation assigns the resolved-output rule to an output
+    /// to which no contribution survived. Other required fields retain schema ownership.
+    pub fn validate_resolved_document(
+        &self,
+        input: &Document,
+        budget: &mut ValidationBudget,
+    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        self.validate_document_mode(input, budget, true)
+    }
+    fn validate_document_mode(
+        &self,
+        input: &Document,
+        budget: &mut ValidationBudget,
+        resolved_output: bool,
+    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         let mut run = Run {
             schema: self,
             input,
             budget,
             active: Vec::new(),
+            resolved_output,
         };
         let site = Site {
             value: input.root(),
@@ -846,8 +924,7 @@ impl SchemaStructure {
                     path: "schema_version",
                     ..site
                 },
-                "schema_version_mismatch",
-                None,
+                ConditionCode::SchemaVersionMismatch,
                 context,
             )?]);
         }
@@ -875,6 +952,7 @@ impl SchemaStructure {
             input,
             budget,
             active: Vec::new(),
+            resolved_output: false,
         }
         .descriptor(
             descriptor,

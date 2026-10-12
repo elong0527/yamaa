@@ -1,3 +1,6 @@
+#[path = "support/schema_requirement_expectations.rs"]
+mod schema_requirement_expectations;
+
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, rc::Rc};
 use yamaa_adapters::{
@@ -115,7 +118,7 @@ fn unchanged_independent_complete_original_preparation_reports_and_effect_counts
         };
         assert_eq!(
             outcome(error),
-            serde_json::from_str::<Value>(fields[4]).unwrap(),
+            schema_requirement_expectations::reconciled(fields[4], true),
             "{}",
             fields[0]
         );

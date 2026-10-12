@@ -901,8 +901,8 @@ fn verification_failure_observations_survive_discarded_output() {
             .collect::<Vec<_>>(),
         vec![(0, vec![Value::Int(1)]), (2, vec![Value::Int(3)])]
     );
-    assert_eq!(records[1].condition, "row_count_failed");
-    assert_eq!(records[1].requirement, "REQ-0385");
+    assert_eq!(records[1].definition().condition, "row_count_failed");
+    assert_eq!(records[1].definition().requirement.unwrap(), "REQ-0385");
     assert_eq!(records[2].path, "verifications[2]");
 }
 
@@ -934,13 +934,13 @@ fn output_identity_checks_are_fatal_before_verification() {
     assert_eq!(
         (
             records[0].path.as_str(),
-            records[0].condition,
+            records[0].definition().condition,
             records[0].failed_count
         ),
         ("keys[0]", "missing_key", 2)
     );
     assert_eq!(
-        (records[1].condition, records[1].failed_count),
+        (records[1].definition().condition, records[1].failed_count),
         ("duplicate_key", 2)
     );
     assert_eq!(
@@ -2182,7 +2182,7 @@ fn predicate_checks_follow_truth_tables_and_keep_every_record() {
             let ExecutionError::VerificationFailures(records) = *result.unwrap_err() else {
                 panic!("assert data failure")
             };
-            assert_eq!(records[0].condition, "assert_failed");
+            assert_eq!(records[0].definition().condition, "assert_failed");
             assert_eq!(records[0].failed_count, 2);
             assert_eq!(
                 records[0]
@@ -2225,8 +2225,8 @@ fn predicate_checks_follow_truth_tables_and_keep_every_record() {
                     panic!("guarded assert data failure")
                 };
                 assert_eq!(records.len(), 2);
-                assert_eq!(records[0].condition, "assert_failed");
-                assert_eq!(records[0].requirement, "REQ-0384");
+                assert_eq!(records[0].definition().condition, "assert_failed");
+                assert_eq!(records[0].definition().requirement.unwrap(), "REQ-0384");
                 assert_eq!(records[0].failed_count, 2);
                 assert_eq!(records[1].failed_count, 0);
             } else {
@@ -2761,7 +2761,7 @@ fn key_grain_missing_records_reach_output_gate_without_collapsing() {
         vec![Value::Str("present".into()), Value::Missing]
     );
     assert_eq!(
-        (records[1].condition, records[1].failed_count),
+        (records[1].definition().condition, records[1].failed_count),
         ("duplicate_key", 1)
     );
 }
@@ -4316,6 +4316,7 @@ fn source_order_selects_present_donors_stably_and_counts_actual_choices() {
                 attempt.handler_counts[0].handler,
                 HandlerKind::MultipleMatches
             );
+            assert_eq!(attempt.handler_counts[0].handler.name(), "multiple_matches");
             assert_eq!(attempt.handler_counts[0].count, 1);
         }
     }

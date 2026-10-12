@@ -364,6 +364,7 @@ invalid YAML or a prohibited YAML feature;
 
 **REQ-0281.** an invalid include, an inconsistent bundle version, or a
   specification whose `schema_version` does not equal the bundle version;
+  the latter failure reports `schema_version_mismatch` with REQ-0281;
 
 <a id="req-0282"></a>
 
@@ -380,13 +381,20 @@ invalid YAML or a prohibited YAML feature;
 
 <a id="req-0285"></a>
 
-**REQ-0285.** an undeclared or missing class field;
+**REQ-0285.** an undeclared or missing class field; schema findings report
+  `unknown_field` or `missing_required_field` with REQ-0285. Final normalized
+  model admission reports `model_contract_mismatch` with REQ-0285 for the same
+  undeclared or missing-field causes;
 
 <a id="req-0286"></a>
 
 **REQ-0286.** a registry-backed value with zero, multiple, or unknown
-  keywords;
+  keywords; schema findings report `invalid_operation_count` or
+  `unknown_operation` with REQ-0286. Final normalized model admission reports
+  `model_contract_mismatch` with REQ-0286 for operation cardinality;
 
 <a id="req-0287"></a>
 
-**REQ-0287.** a value that fails its type or constraints.
+**REQ-0287.** a value that fails its type or constraints. Final normalized
+model admission reports `model_contract_mismatch` with REQ-0287 for these
+causes, retaining the rejected value's declaring path and complete reason.

@@ -64,7 +64,12 @@ fn records(
                 budget.check(check)?;
             }
         }
-        for text in [&record.path, record.condition, record.requirement] {
+        let definition = record.definition();
+        for text in [
+            &record.path,
+            definition.condition,
+            definition.requirement.ok_or(Error::UnsupportedOutcome)?,
+        ] {
             for _ in 0..8 {
                 budget.text(text)?;
             }
@@ -708,8 +713,7 @@ fn failed_observations<'a, E>(
                     }
                     ExecutionError::VerificationDeclaration {
                         path,
-                        condition,
-                        requirement,
+                        code,
                         reason,
                         records,
                     } => {
@@ -719,8 +723,7 @@ fn failed_observations<'a, E>(
                         }
                         let diagnostic = yamaa_core::dataset_checks::declaration_diagnostic(
                             path.clone(),
-                            condition,
-                            requirement,
+                            *code,
                             reason.clone(),
                         )
                         .ok_or(Error::InvalidObservation)?;

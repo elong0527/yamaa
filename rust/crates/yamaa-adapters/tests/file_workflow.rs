@@ -84,7 +84,7 @@ fn original_decode_diagnostics_remain_bounded_and_owned() {
     let expected = vec![Issue {
         phase: "validation".into(),
         condition: "non_ascii_source".into(),
-        requirement: None,
+        requirement: Some("REQ-0705".into()),
         spec_paths: vec!["$".into()],
         context: serde_json::json!({"line":1, "column":1, "path":study.path("root.yaml")})
             .to_string(),

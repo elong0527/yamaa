@@ -36,7 +36,7 @@ for(i in seq_len(nrow(preflight_truth))) {
 cat("core preflight complete independent findings before ports passed\n")
 for(literal in c("true","123456789012345678901234567890","null")) {
   failure <- tryCatch(prepare_entry("spec.yaml",charToRaw(paste0("schema_version: ",literal)),no_port,no_port,no_port),error=identity)
-  expected <- paste0('{"outcome":{"diagnostics":[{"condition":"schema_version_mismatch","context":{"actual":',literal,',"expected":"1.0"},"phase":"validation","requirement":null,"spec_paths":["schema_version"]}],"status":"invalid"},"protocol":"specification/prototype"}')
+  expected <- paste0('{"outcome":{"diagnostics":[{"condition":"schema_version_mismatch","context":{"actual":',literal,',"expected":"1.0"},"phase":"validation","requirement":"REQ-0281","spec_paths":["schema_version"]}],"status":"invalid"},"protocol":"specification/prototype"}')
   stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),expected))
 }
 decode_truth <- read.delim(file.path(root,"decode-replay.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
@@ -248,7 +248,7 @@ for(name in unique(replay$case)) {
   stopifnot(inherits(actual,"error"),identical(conditionMessage(actual),rows$expected[[1L]]),calls==nrow(expected_calls))
 }
 cat("seven raw inherited-loader failure contracts and complete traces passed\n")
-preparation_truth <- read.delim(file.path(root,"inheritance-preparation.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+preparation_truth <- read.delim(file.path(root,"normative-inheritance-preparation.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
 stopifnot(nrow(preparation_truth)==3L)
 for(i in seq_len(nrow(preparation_truth))) {
   counts <- c(0L,0L,0L)
