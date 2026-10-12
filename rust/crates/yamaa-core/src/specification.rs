@@ -538,7 +538,9 @@ fn metadata_features(
         if reserved.contains(&key) {
             reject(
                 extra,
-                "reserved_metadata_key",
+                crate::diagnostic::ConditionCode::SubmissionReservedMetadata
+                    .definition()
+                    .condition,
                 if prefix.is_empty() {
                     format!("metadata.{key}")
                 } else {

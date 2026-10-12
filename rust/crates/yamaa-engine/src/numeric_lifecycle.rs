@@ -30,7 +30,11 @@ impl HandlerKind {
             Self::Missing => "missing",
             Self::Invalid => "invalid",
             Self::Unconvertible => "unconvertible",
-            Self::MultipleMatches => "multiple_matches",
+            Self::MultipleMatches => {
+                yamaa_core::diagnostic::ConditionCode::DatasetMultipleMatches
+                    .definition()
+                    .condition
+            }
             Self::NoMatch => "no_match",
         }
     }

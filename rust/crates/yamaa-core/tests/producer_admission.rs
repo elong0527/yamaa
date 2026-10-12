@@ -208,7 +208,19 @@ fn contradictory_identities_and_self_dependency_fail_at_metadata_admission() {
                 "contradictory_metadata"
             })
         );
+        assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].spec_paths, ["input.SRC.schema"]);
+        let definition = findings[0].definition();
+        assert_eq!(
+            (
+                definition.phase,
+                definition.condition,
+                definition.requirement
+            ),
+            ("validation", "invalid_producer_contract", Some("REQ-0534")),
+        );
+        assert_eq!(findings[0].context.len(), 2);
+        assert_eq!(findings[0].context["dataset"], text("SRC"));
     }
 }
 #[test]

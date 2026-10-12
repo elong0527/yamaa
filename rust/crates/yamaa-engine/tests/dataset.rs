@@ -4301,6 +4301,7 @@ fn source_order_selects_present_donors_stably_and_counts_actual_choices() {
                 attempt.handler_counts[0].handler,
                 HandlerKind::MultipleMatches
             );
+            assert_eq!(attempt.handler_counts[0].handler.name(), "multiple_matches");
             assert_eq!(attempt.handler_counts[0].count, 1);
         }
     }
