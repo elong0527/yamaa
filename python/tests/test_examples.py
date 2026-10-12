@@ -106,7 +106,9 @@ def negative_contracts() -> tuple[Path, ...]:
 def _native_extension_available() -> bool:
     try:
         import_module("yamaa._native")
-    except ImportError:
+    except ModuleNotFoundError as error:
+        if error.name != "yamaa._native":
+            raise
         return False
     return True
 
