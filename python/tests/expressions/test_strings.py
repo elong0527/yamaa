@@ -210,6 +210,42 @@ def test_capture_groups_are_numbered_by_opening_parenthesis(
     assert capture_group_count(pattern) == expected
 
 
+@pytest.mark.parametrize(
+    "pattern", [r"\00", r"\01", r"\07", r"\012", r"[\02]", r"a\09"]
+)
+def test_a_nul_escape_followed_by_a_digit_is_malformed(pattern: str) -> None:
+    # `\0` followed by a digit is a malformed escape, not an octal escape:
+    # the host library would silently read `\01` as U+0001 and `\012` as
+    # U+000A, so the contract rejects the pattern before the host sees it.
+    with pytest.raises(RegexError) as compile_error:
+        compile_pattern(pattern)
+    assert compile_error.value.condition == "invalid_regex"
+    assert compile_error.value.requirement == "REQ-0827"
+    assert compile_error.value.pattern == pattern
+    with pytest.raises(RegexError) as match_error:
+        full_match(pattern, "")
+    assert match_error.value.condition == "invalid_regex"
+    assert match_error.value.requirement == "REQ-0827"
+    assert match_error.value.pattern == pattern
+
+
+@pytest.mark.parametrize(
+    ("pattern", "subject"),
+    [
+        (r"\0", "\x00"),
+        (r"a\0b", "a\x00b"),
+        (r"[\0]", "\x00"),
+        # Only ASCII digits make `\0` malformed (matching the Rust
+        # parser's `is_ascii_digit`); non-ASCII digit-like characters
+        # stay literal after the NUL escape.
+        ("\\0\u00b2", "\x00\u00b2"),
+        ("\\0\u0662", "\x00\u0662"),
+    ],
+)
+def test_a_bare_nul_escape_matches_nul(pattern: str, subject: str) -> None:
+    assert full_match(pattern, subject) is True
+
+
 def test_a_group_the_match_did_not_enter_is_missing_rather_than_no_match() -> None:
     # REQ-0817: the pattern matched, so `no_match` deliberately does not apply.
     result = evaluate_expression(
