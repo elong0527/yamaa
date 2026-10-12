@@ -44,6 +44,42 @@ impl<T> ResourceReader for T where
 {
 }
 
+/// Root capture and environment preparation keep separate original failure
+/// families. A projection refusal cannot replace either retained native payload.
+#[derive(Debug)]
+pub enum EnvironmentFailure<E, D, X> {
+    Resource(E),
+    Preparation(crate::project_preparation::Failure<E, D, X>),
+}
+
+pub type EnvironmentPreparation<R, D> = Result<
+    crate::project_preparation::PreparedEnvironment<
+        <D as crate::project_preparation::DecodePort>::Document,
+    >,
+    EnvironmentFailure<
+        <R as MetadataAdmissionPort>::Error,
+        <D as crate::project_preparation::DecodePort>::Document,
+        <D as crate::project_preparation::DecodePort>::Error,
+    >,
+>;
+
+/// Compose the shared native reader and structural metadata codec with the
+/// existing environment application. No activation, study, output or publisher
+/// port is accepted at this boundary.
+pub fn prepare_environment<R: ResourceReader, D: crate::project_preparation::DecodePort>(
+    reader: &mut R,
+    decoder: &mut D,
+    written: &str,
+    host: yamaa_core::project_function::Language,
+    limits: crate::project_preparation::Limits,
+) -> EnvironmentPreparation<R, D> {
+    let source = reader
+        .capture_root(written, limits.bytes)
+        .map_err(EnvironmentFailure::Resource)?;
+    crate::project_preparation::prepare(decoder, source, host, reader, limits)
+        .map_err(EnvironmentFailure::Preparation)
+}
+
 pub struct EntryView<'a> {
     /// The retained pre-default arena; defaults cannot invent producer inputs.
     pub original: &'a Document,

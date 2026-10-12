@@ -35,7 +35,9 @@ Clone, Send or Sync and never retry. Default engine unit tests exercise the same
 capture, decode, execution and held-publication lifecycle; the feature also makes
 the fakes available to integration tests without adding production dependencies.
 
-`build::Request` owns the shared request shape. Metadata root capture resolves,
+`build::Request` owns the shared request shape. `build::prepare_environment`
+composes the shared reader and structural codec with the environment application,
+retaining capture and preparation failures separately. Metadata root capture resolves,
 then captures and admits the original preparation copy through one reader;
 dependency captures keep their original declaring source. `build::select_entry`
 charges the complete retained original arena, admits normalized model capacity,

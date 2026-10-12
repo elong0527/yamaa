@@ -239,15 +239,6 @@ impl CapturePort for Reader<'_> {
     }
 }
 
-impl Reader<'_> {
-    pub(crate) fn root_source(
-        &mut self,
-        written: &str,
-        maximum: usize,
-    ) -> Result<Source, ResourceError> {
-        yamaa_engine::build::ResourceReader::capture_root(self, written, maximum)
-    }
-}
 impl yamaa_engine::build::MetadataAdmissionPort for Reader<'_> {
     type Error = ResourceError;
     fn charge_work(&mut self, work: usize) -> Result<(), Self::Error> {

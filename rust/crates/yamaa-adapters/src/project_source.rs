@@ -114,7 +114,7 @@ pub enum Failure<E> {
     Rejected(Box<RejectedEnvironment<E>>),
 }
 
-struct Decoder(Arc<CapturedSchema>);
+pub(crate) struct Decoder(pub(crate) Arc<CapturedSchema>);
 impl application::DecodePort for Decoder {
     type Error = Error;
     type Document = CapturedDocument;
@@ -143,7 +143,20 @@ pub fn prepare<P: CapturePort>(
     port: &mut P,
     limits: Limits,
 ) -> Result<PreparedEnvironment, Failure<P::Error>> {
-    match application::prepare(&mut Decoder(schema), source, host, port, limits) {
+    adapt_preparation(application::prepare(
+        &mut Decoder(schema),
+        source,
+        host,
+        port,
+        limits,
+    ))
+}
+
+/// Mechanical ownership transfer from the same engine environment preparation.
+pub(crate) fn adapt_preparation<E>(
+    result: application::PreparationResult<E, CapturedDocument, Error>,
+) -> Result<PreparedEnvironment, Failure<E>> {
+    match result {
         Ok(prepared) => Ok(PreparedEnvironment {
             origins: prepared.origins,
             root: prepared.root,

@@ -175,10 +175,20 @@ pub(crate) fn capture_environment(
     schema: Arc<CapturedSchema>,
 ) -> Result<project_source::OwnedEnvironment, Error> {
     let mut reader = crate::file_metadata::Reader { resources };
-    let source = reader
-        .root_source(written, project_source::Limits::default().bytes)
-        .map_err(Error::Resource)?;
-    project_source::prepare(schema, source, host, &mut reader, Default::default())
+    let prepared = match yamaa_engine::build::prepare_environment(
+        &mut reader,
+        &mut project_source::Decoder(schema),
+        written,
+        host,
+        Default::default(),
+    ) {
+        Ok(prepared) => Ok(prepared),
+        Err(yamaa_engine::build::EnvironmentFailure::Resource(error)) => {
+            return Err(Error::Resource(error));
+        }
+        Err(yamaa_engine::build::EnvironmentFailure::Preparation(error)) => Err(error),
+    };
+    project_source::adapt_preparation(prepared)
         .map_err(Error::Environment)
         .map(project_source::PreparedEnvironment::into_owned)
 }
