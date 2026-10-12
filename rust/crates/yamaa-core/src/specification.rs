@@ -45,6 +45,8 @@ mod row_drivers;
 mod row_intermediates;
 #[path = "specification_rows.rs"]
 mod rows;
+#[path = "specification_self.rs"]
+mod self_relations;
 #[path = "specification_verifications.rs"]
 mod verifications;
 pub use logs::{LogFinding, OutputLogs};
@@ -1049,26 +1051,50 @@ impl PreparedSpecification {
         }
         let inputs = mapping(d, field(d, root, "input")?)?;
         let mut source_findings = Vec::new();
-        let odm_datasets: alloc::collections::BTreeSet<_> = d
-            .nodes()
+        let mut derivation_values = columns
             .iter()
-            .filter_map(|node| {
-                let N::Mapping(fields) = node else {
-                    return None;
-                };
-                let &[(name, payload)] = fields.as_slice() else {
-                    return None;
-                };
-                if !matches!(&d.nodes()[name], N::Text(name) if name == "odm") {
-                    return None;
-                }
-                let item = match &d.nodes()[payload] {
-                    N::Text(item) => item.as_str(),
-                    _ => text(d, d.field(payload, "item")?).ok()?,
-                };
-                Some(item.split_once('.')?.0)
+            .filter_map(|&column| {
+                d.field(column, "derivation")
+                    .and_then(|derivation| d.field(derivation, "value"))
             })
-            .collect();
+            .collect::<Vec<_>>();
+        if let Some(rows) = d
+            .field(root, "rows")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            for &row in sequence(d, rows)? {
+                for &(_, derivation) in mapping(d, field(d, row, "derivations")?)? {
+                    derivation_values.extend(d.field(derivation, "value"));
+                }
+            }
+        }
+        let mut odm_datasets = alloc::collections::BTreeSet::new();
+        let mut visited_values = alloc::collections::BTreeSet::new();
+        while let Some(value) = derivation_values.pop() {
+            if !visited_values.insert(value) {
+                continue;
+            }
+            if let Some(payload) = d.field(value, "odm") {
+                let item = match &d.nodes()[payload] {
+                    N::Text(item) => Some(item.as_str()),
+                    _ => d.field(payload, "item").and_then(|id| text(d, id).ok()),
+                };
+                if let Some((dataset, _)) = item.and_then(|item| item.split_once('.')) {
+                    odm_datasets.insert(dataset);
+                }
+            }
+            if let Some(case) = d.field(value, "case") {
+                for &branch in sequence(d, case)? {
+                    for name in ["then", "otherwise"] {
+                        derivation_values.extend(d.field(branch, name));
+                    }
+                }
+            }
+            if let Some(concat) = d.field(value, "str_concat") {
+                derivation_values
+                    .extend(sequence(d, field(d, concat, "sources")?)?.iter().copied());
+            }
+        }
         let driver = if has_rows {
             row_intermediates::common_driver(d, inputs)?
         } else {
@@ -1683,6 +1709,7 @@ impl PreparedSpecification {
                 schemas,
                 &self.output,
                 &self.keys,
+                Some(&rows.self_columns()),
                 &mut findings,
             )?;
             return rows
@@ -1740,6 +1767,7 @@ impl PreparedSpecification {
             schemas,
             &self.output,
             &self.keys,
+            None,
             &mut findings,
         )?;
         let mut assignments = BTreeMap::new();
@@ -1997,15 +2025,30 @@ impl PreparedSpecification {
                             &mut edges,
                             &mut findings,
                         )? {
-                            operands.push(crate::dataset::SelectionSource {
-                                path: operand_path.clone(),
-                                read: crate::dataset::SelectionRead::Expression(
+                            // Distinct-value collection failures belong to first_available.
+                            // Recursive operands retain their own expression and handler paths.
+                            let read = match expression {
+                                Expression::Collect {
+                                    column,
+                                    identifier,
+                                    filter,
+                                    selection: None,
+                                } => crate::dataset::SelectionRead::Collect {
+                                    column,
+                                    identifier,
+                                    filter: filter.map(alloc::boxed::Box::new),
+                                },
+                                expression => crate::dataset::SelectionRead::Expression(
                                     alloc::boxed::Box::new(crate::dataset::Assignment {
                                         column,
                                         expression,
                                         path: operand_path.clone(),
                                     }),
                                 ),
+                            };
+                            operands.push(crate::dataset::SelectionSource {
+                                path: operand_path.clone(),
+                                read,
                             });
                         }
                     }
@@ -2036,12 +2079,7 @@ impl PreparedSpecification {
                             .ok_or(BindError::Internal)?;
                         if let Some(item) = &intermediates[index] {
                             edges.extend(item.output_dependencies());
-                            if let Some(column) = secondary[item.source]
-                                .schema
-                                .columns()
-                                .iter()
-                                .position(|c| c.name == field)
-                            {
+                            if let Some(column) = item.source_column(&secondary, field) {
                                 bindings.push(Binding {
                                     name: name.into(),
                                     read: Read::Intermediate { index, column },

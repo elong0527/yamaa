@@ -37,6 +37,8 @@ mod row_drivers;
 mod row_windows;
 #[path = "dataset_scalar.rs"]
 mod scalar;
+#[path = "dataset_self.rs"]
+mod self_relations;
 #[path = "dataset_text_case.rs"]
 mod str_case;
 #[path = "dataset_text_extract.rs"]
@@ -362,6 +364,7 @@ pub(crate) fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> Ex
 struct EvaluationState<'a, E> {
     functions: &'a mut dyn FunctionPort<Error = E>,
     secondary: &'a [&'a dyn TableAccess<Error = E>],
+    self_rows: &'a [Candidate],
     budget: &'a mut Budget,
     handlers: &'a mut HandlerCounter,
     intermediates: &'a mut intermediates::Run,
@@ -495,7 +498,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                             selection: None,
                         },
                         key_grain::CollectionContext {
-                            path: &operand.path,
+                            path: &assignment.path,
                             candidate,
                             plan,
                             row,
@@ -1146,6 +1149,7 @@ impl Executor<'_> {
                     self.plan.output().columns().len(),
                     self.plan.intermediates(),
                 );
+                let late_filter = matches!(template.mode.local_mode(), RowMode::Groups(_));
                 let groups = match template.mode.local_mode() {
                     RowMode::Driver { .. } => unreachable!("plan admission rejects nested drivers"),
                     RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
@@ -1194,6 +1198,7 @@ impl Executor<'_> {
                             &mut EvaluationState {
                                 functions,
                                 secondary,
+                                self_rows: &candidates[..first],
                                 budget: &mut budget,
                                 handlers,
                                 intermediates: &mut intermediate_run,
@@ -1201,44 +1206,42 @@ impl Executor<'_> {
                         )?;
                         candidate.completed[assignment.column] = true;
                     }
-                    if let Some(filter) = template.filter.as_ref() {
-                        let source_row = candidate.members[0];
-                        let truth = crate::dataset_predicate::evaluate(
-                            filter,
-                            table,
-                            source_row,
-                            &candidate.values,
-                            budget.predicate(),
-                        )
-                        .map_err(|error| match error.kind {
-                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                Box::new(predicate_limit(limit))
-                            }
-                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                        })?;
-                        if truth != yamaa_core::predicate::Truth::True {
+                    if let Some(filter) = template.filter.as_ref().filter(|_| !late_filter) {
+                        if !row_windows::retain(filter, table, &candidate, &mut budget)? {
                             budget.discard_candidate(&candidate.values);
                             continue;
                         }
                     }
                     candidates.push(candidate);
                 }
+                let (prior, current) = candidates.split_at_mut(first);
                 row_windows::complete(
                     table,
                     template,
                     &deferred,
-                    &mut candidates[first..],
+                    current,
                     self,
                     first,
                     limits,
                     &mut EvaluationState {
                         functions,
                         secondary,
+                        self_rows: prior,
                         budget: &mut budget,
                         handlers,
                         intermediates: &mut intermediate_run,
                     },
                 )?;
+                if let Some(filter) = template.filter.as_ref().filter(|_| late_filter) {
+                    for candidate in candidates.split_off(first) {
+                        if row_windows::retain(filter, table, &candidate, &mut budget)? {
+                            candidates.push(candidate);
+                        } else {
+                            budget.discard_candidate(&candidate.values);
+                        }
+                    }
+                }
+                intermediate_run.publish_self(self, &mut budget)?;
             }
         }
         let mut completed = vec![false; self.plan.output().columns().len()];
@@ -1283,8 +1286,8 @@ impl Executor<'_> {
                 } else {
                     None
                 };
-                let candidate = &mut candidates[row];
-                candidate.values[assignment.column] = if let Some(value) = number {
+                let candidate = &candidates[row];
+                let value = if let Some(value) = number {
                     finish(
                         value,
                         assignment,
@@ -1305,12 +1308,15 @@ impl Executor<'_> {
                         &mut EvaluationState {
                             functions,
                             secondary,
+                            self_rows: &candidates,
                             budget: &mut budget,
                             handlers,
                             intermediates: &mut intermediate_run,
                         },
                     )?
                 };
+                let candidate = &mut candidates[row];
+                candidate.values[assignment.column] = value;
                 candidate.completed[assignment.column] = true;
             }
             completed[assignment.column] = true;

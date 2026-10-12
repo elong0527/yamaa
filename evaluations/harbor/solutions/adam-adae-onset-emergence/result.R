@@ -32,23 +32,29 @@ ae <- ae |>
   select(STUDYID, USUBJID, AESEQ, AETERM, ASTDTM)
 
 adsl <- adsl |>
-  mutate(TRTSDTM = complete_seconds(TRTSDTM)) |>
-  select(USUBJID, TRTSDTM)
+  mutate(TRTSDTM = complete_seconds(TRTSDTM), TEENDDTM = complete_seconds(TEENDDTM)) |>
+  select(USUBJID, TRTSDTM, TEENDDTM)
 
+# The window rule: onset inside [first exposure, window end] is
+# treatment-emergent. A missing onset cannot be ruled pre-treatment,
+# so a treated subject's event with a missing onset is flagged Y; an
+# untreated subject (no first exposure) is never treatment-emergent.
 adae <- ae |>
   left_join(adsl, by = "USUBJID") |>
   mutate(
-    TRTEMFL = if_else(
-      !is.na(ASTDTM) & !is.na(TRTSDTM) & ASTDTM >= TRTSDTM,
-      "Y",
-      NA_character_
+    TRTEMFL = case_when(
+      is.na(TRTSDTM) ~ NA_character_,
+      is.na(ASTDTM) ~ "Y",
+      ASTDTM >= TRTSDTM & ASTDTM <= TEENDDTM ~ "Y",
+      .default = NA_character_
     )
   )
 
-# The subject's earliest treatment-emergent event, ordered by onset
-# moment with the lower AESEQ settling ties at the same second.
+# The subject's earliest treatment-emergent event with a known onset,
+# ordered by onset moment with the lower AESEQ settling ties at the
+# same second.
 first <- adae |>
-  filter(TRTEMFL %in% "Y") |>
+  filter(TRTEMFL %in% "Y", !is.na(ASTDTM)) |>
   arrange(USUBJID, ASTDTM, AESEQ) |>
   distinct(USUBJID, .keep_all = TRUE) |>
   select(USUBJID, FIRST_SEQ = AESEQ)
@@ -58,7 +64,10 @@ adae <- adae |>
   mutate(
     AOCCFL = if_else(!is.na(FIRST_SEQ) & AESEQ == FIRST_SEQ, "Y", NA_character_)
   ) |>
-  select(STUDYID, USUBJID, AESEQ, AETERM, ASTDTM, TRTSDTM, TRTEMFL, AOCCFL)
+  select(
+    STUDYID, USUBJID, AESEQ, AETERM, ASTDTM, TRTSDTM, TEENDDTM,
+    TRTEMFL, AOCCFL
+  )
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(adae, "/app/output/adae.csv", na = "")

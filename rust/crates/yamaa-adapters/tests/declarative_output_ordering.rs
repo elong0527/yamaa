@@ -374,6 +374,46 @@ columns: [{name: ID, type: str, derivation: {odm: {item: SRC.ITEM}}}]
 }
 
 #[test]
+fn metadata_odm_spelling_does_not_turn_an_ordinal_source_into_odm() {
+    let fixture = authored(
+        r#"schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: {path: source.csv, ordinal: REC}}
+output: {path: result.csv, columns: [ID, POSITION]}
+columns:
+  - {name: ID, type: int, metadata: {odm: SRC.ITEM}, derivation: SRC.ID}
+  - {name: POSITION, type: int, derivation: SRC.REC}
+"#,
+        b"ID\n3\n1\n",
+    );
+    let mut result = fixture.run().unwrap();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(result.save().unwrap());
+    assert_eq!(
+        fs::read(fixture.0.join("result.csv")).unwrap(),
+        b"ID,POSITION\n3,1\n1,2\n"
+    );
+}
+
+#[test]
+fn nested_column_and_row_odm_derivations_still_reject_ordinals_before_capture() {
+    for declarations in [
+        "columns:\n  - name: ID\n    type: str\n    derivation:\n      case:\n        - when: \"1 = 1\"\n          then: {odm: {item: SRC.ITEM}}\n        - otherwise: {literal: x}\n",
+        "columns: [{name: ID, type: str, derivation: SRC.ID}]\nrows:\n  - id: records\n    derivations:\n      ID: {value: {odm: {item: SRC.ITEM}}}\n",
+    ] {
+        let fixture = authored(
+            &format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: absent.parquet, ordinal: REC}}}}\noutput: {{path: result.csv, columns: [ID]}}\n{declarations}"),
+            b"unused\n",
+        );
+        let issues = fixture.run().err().expect("ODM ordinal admission before capture");
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        assert_eq!(issues[0].condition, "odm_schema_field_type");
+        assert_eq!(issues[0].spec_paths, ["input.SRC.ordinal"]);
+    }
+}
+
+#[test]
 fn parquet_records_expose_identical_ordinal_policy_without_changing_stored_fields() {
     use yamaa_adapters::{arrow_table::TableLimits, parquet_artifact, typed_csv};
     let fixture = authored(

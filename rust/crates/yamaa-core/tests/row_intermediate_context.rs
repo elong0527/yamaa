@@ -207,7 +207,7 @@ fn unknown_and_omitted_drivers_keep_model_preflight_and_exact_typed_context() {
                 diagnostic.definition().condition,
                 diagnostic.definition().requirement
             ),
-            ("validation", "driver_unavailable", None)
+            ("validation", "driver_unavailable", Some("REQ-0034"))
         );
         assert_eq!(diagnostic.spec_paths, ["rows[1].dataset"]);
         assert_eq!(diagnostic.context.len(), 2);
@@ -360,7 +360,7 @@ fn typed_record_plan_rejects_uncompleted_matching_outputs_and_grouped_reads() {
             vec![Intermediate {
                 identifier: "P".into(),
                 path: "intermediates[0]".into(),
-                source: 0,
+                source: yamaa_core::dataset::IntermediateSource::Input(0),
                 keys: vec![IntermediateKey {
                     source_column: 0,
                     path: "intermediates[0].key".into(),
@@ -404,7 +404,7 @@ fn secondary_row_drivers_share_output_matching_without_reusing_primary_record_co
             vec![Intermediate {
                 identifier: "P".into(),
                 path: "intermediates[0]".into(),
-                source: 0,
+                source: yamaa_core::dataset::IntermediateSource::Input(0),
                 keys: vec![IntermediateKey {
                     source_column: 0,
                     path: "intermediates[0].key".into(),

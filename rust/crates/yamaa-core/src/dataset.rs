@@ -29,6 +29,9 @@ pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, Funct
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
+#[path = "dataset_self.rs"]
+mod self_relations;
+pub use self_relations::IntermediateSource;
 #[path = "dataset_match_values.rs"]
 mod match_values;
 pub use match_values::{IntermediateKey, MatchRead, MatchValue};
@@ -492,11 +495,11 @@ fn validate_assignment_at(
                     let item = intermediates
                         .get(index)
                         .ok_or(PlanError::InvalidIntermediate)?;
-                    if !matches!(mode, RowMode::Keys) {
+                    if !matches!(mode, RowMode::Keys) && !item.source.is_self() {
                         return Err(PlanError::InvalidIntermediate);
                     }
-                    intermediates::validate_read(
-                        item, column, source, secondary, available, output,
+                    intermediates::validate_context_read(
+                        item, column, source, secondary, available, output, mode,
                     )?;
                 }
             }
@@ -1002,6 +1005,7 @@ impl DatasetPlan {
         if templates.is_empty() {
             return Err(PlanError::NoTemplates);
         }
+        self_relations::validate(&intermediates, &templates)?;
         let width = output.columns().len();
         validate_columns(&keys, width)?;
         let mut row_columns = None;
@@ -1048,9 +1052,10 @@ impl DatasetPlan {
             }
             if let Some(filter) = &template.filter {
                 let deferred = window_stages(&template.assignments, width, &intermediates);
-                if filter.bindings().iter().any(|binding| {
-                    matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
-                })
+                if !matches!(mode, RowMode::Groups(_))
+                    && filter.bindings().iter().any(|binding| {
+                        matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
+                    })
                 {
                     return Err(PlanError::Filter(BindingError::UnavailableColumn));
                 }

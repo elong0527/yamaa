@@ -30,6 +30,10 @@ HOST_CRATES = {"yamaa-adapters", "yamaa-python", "yamaa-r"}
 SEED = Path("rust/tools/diagnostic_literal_seed.json")
 ALLOWLIST = Path("rust/tools/diagnostic_literal_allowlist.json")
 CHECKER = Path("rust/tools/check_diagnostics.py")
+NULL_POLICY = Path("rules/execution/lifecycle.md")
+NULL_START = "<!-- normative-null-conditions:start -->"
+NULL_END = "<!-- normative-null-conditions:end -->"
+NULL_ENTRY = re.compile(r"- `([a-z][a-z0-9_]*)` \(`([a-z_]+)`\)")
 
 
 def decode_rust_string(source: str) -> str:
@@ -353,7 +357,43 @@ def vocabulary(root: Path) -> tuple[dict[str, set[str]], list[str]]:
     return registered, errors
 
 
-def registry_errors(root: Path, registered: dict[str, set[str]]) -> list[str]:
+def null_conditions(
+    root: Path, registered: dict[str, set[str]]
+) -> tuple[set[tuple[str, str]], list[str]]:
+    """Read the explicit normative exceptions, never infer absence from a cause."""
+    try:
+        source = (root / NULL_POLICY).read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as error:
+        return set(), [f"{NULL_POLICY}: unavailable normative null policy: {error}"]
+    if source.count(NULL_START) != 1 or source.count(NULL_END) != 1:
+        return set(), [f"{NULL_POLICY}: expected one normative null policy block"]
+    start = source.index(NULL_START) + len(NULL_START)
+    end = source.index(NULL_END)
+    if end < start:
+        return set(), [f"{NULL_POLICY}: reversed normative null policy block"]
+    exceptions = set()
+    errors = []
+    for line in source[start:end].splitlines():
+        if not line.strip():
+            continue
+        entry = NULL_ENTRY.fullmatch(line)
+        if entry is None:
+            errors.append(f"{NULL_POLICY}: invalid normative null entry: {line}")
+            continue
+        condition, phase = entry.groups()
+        if (condition, phase) in exceptions:
+            errors.append(f"{NULL_POLICY}: duplicate normative null entry: {line}")
+        exceptions.add((condition, phase))
+        if phase not in registered.get(condition, set()):
+            errors.append(f"{NULL_POLICY}: unregistered normative null entry: {line}")
+    if not exceptions:
+        errors.append(f"{NULL_POLICY}: no normative null conditions found")
+    return exceptions, errors
+
+
+def registry_errors(
+    root: Path, registered: dict[str, set[str]], nullable: set[tuple[str, str]]
+) -> list[str]:
     path = root / "rust/crates/yamaa-core/src/diagnostic.rs"
     try:
         source = path.read_text(encoding="utf-8")
@@ -364,6 +404,7 @@ def registry_errors(root: Path, registered: dict[str, set[str]]) -> list[str]:
         return ["core diagnostic registry: no conditions found"]
     errors = []
     count = 0
+    used_nulls = set()
     for line in block[1].splitlines():
         if not line.strip() or line.lstrip().startswith("//"):
             continue
@@ -374,7 +415,19 @@ def registry_errors(root: Path, registered: dict[str, set[str]]) -> list[str]:
             )
             continue
         count += 1
-        name, phase, condition, _ = cause.groups()
+        name, phase, condition, requirement = cause.groups()
+        if requirement == "None":
+            used_nulls.add((condition, phase))
+            if (condition, phase) not in nullable:
+                errors.append(
+                    f"core diagnostic registry:{name}: null requirement is not "
+                    f"normatively permitted for {condition} at {phase}"
+                )
+        elif (condition, phase) in nullable:
+            errors.append(
+                f"core diagnostic registry:{name}: implementation condition "
+                f"{condition} at {phase} must retain a null requirement"
+            )
         if condition not in registered:
             errors.append(
                 f"core diagnostic registry:{name}: unregistered condition {condition}"
@@ -385,6 +438,10 @@ def registry_errors(root: Path, registered: dict[str, set[str]]) -> list[str]:
             )
     if not count:
         errors.append("core diagnostic registry: no conditions found")
+    for condition, phase in sorted(nullable - used_nulls):
+        errors.append(
+            f"{NULL_POLICY}: unused normative null condition {condition} at {phase}"
+        )
     return errors
 
 
@@ -401,7 +458,9 @@ def violations(root: Path, baseline_ref: str | None = None) -> list[str]:
     if not sources:
         return ["no Rust crate sources found"]
     registered, errors = vocabulary(root)
-    errors.extend(registry_errors(root, registered))
+    nullable, null_errors = null_conditions(root, registered)
+    errors.extend(null_errors)
+    errors.extend(registry_errors(root, registered, nullable))
     sites, active, site_errors = load_sites(root)
     errors.extend(site_errors)
     if baseline_ref is not None:
