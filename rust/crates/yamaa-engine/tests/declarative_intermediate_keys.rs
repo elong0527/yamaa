@@ -100,7 +100,7 @@ fn item(keys: Vec<IntermediateKey>) -> Intermediate {
     Intermediate {
         identifier: "LOOK".into(),
         path: "intermediates[0]".into(),
-        source: 0,
+        source: yamaa_core::dataset::IntermediateSource::Input(0),
         keys,
         filter: None,
         selection: None,

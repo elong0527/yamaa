@@ -20,6 +20,27 @@ pub trait CapturePort {
         source: &graph::Source,
         maximum_bytes: usize,
     ) -> Result<Vec<u8>, graph::SourceError<Self::Error>>;
+    /// Planning resources retain their own path failures rather than parent-unavailability semantics.
+    fn canonicalize_resource(
+        &mut self,
+        declaring: &str,
+        written: &str,
+    ) -> Result<graph::Source, graph::SourceError<Self::Error>> {
+        self.canonicalize(declaring, written)
+    }
+    fn capture_resource(
+        &mut self,
+        source: &graph::Source,
+        maximum_bytes: usize,
+    ) -> Result<Vec<u8>, graph::SourceError<Self::Error>> {
+        self.capture(source, maximum_bytes)
+    }
+    fn resource_failure(
+        &self,
+        _error: &Self::Error,
+    ) -> Option<yamaa_core::resource::ResourceFailure> {
+        None
+    }
     fn rebase(
         &mut self,
         layer: &graph::Source,

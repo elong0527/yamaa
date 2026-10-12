@@ -39,10 +39,14 @@ pub use source_expressions::SourceFinding;
 mod column_checks;
 #[path = "specification_logs.rs"]
 mod logs;
+#[path = "specification_row_drivers.rs"]
+mod row_drivers;
 #[path = "specification_row_intermediates.rs"]
 mod row_intermediates;
 #[path = "specification_rows.rs"]
 mod rows;
+#[path = "specification_self.rs"]
+mod self_relations;
 #[path = "specification_verifications.rs"]
 mod verifications;
 pub use logs::{LogFinding, OutputLogs};
@@ -54,10 +58,14 @@ mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
 #[path = "specification_cases.rs"]
 mod cases;
+#[path = "specification_derivations.rs"]
+mod derivations;
 #[path = "specification_flag.rs"]
 mod flags;
 #[path = "specification_temporal_imputation.rs"]
 mod imputation;
+#[path = "specification_mapping.rs"]
+mod mapping_cut;
 #[path = "specification_rounding.rs"]
 mod rounding;
 #[path = "specification_scalar.rs"]
@@ -315,6 +323,7 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    MappingCut(alloc::boxed::Box<mapping_cut::Declaration>),
     Scalar(alloc::boxed::Box<scalar::Declaration>),
     StrContains(crate::text_extract::StringExtract),
     Flag(flags::Declaration),
@@ -1042,26 +1051,50 @@ impl PreparedSpecification {
         }
         let inputs = mapping(d, field(d, root, "input")?)?;
         let mut source_findings = Vec::new();
-        let odm_datasets: alloc::collections::BTreeSet<_> = d
-            .nodes()
+        let mut derivation_values = columns
             .iter()
-            .filter_map(|node| {
-                let N::Mapping(fields) = node else {
-                    return None;
-                };
-                let &[(name, payload)] = fields.as_slice() else {
-                    return None;
-                };
-                if !matches!(&d.nodes()[name], N::Text(name) if name == "odm") {
-                    return None;
-                }
-                let item = match &d.nodes()[payload] {
-                    N::Text(item) => item.as_str(),
-                    _ => text(d, d.field(payload, "item")?).ok()?,
-                };
-                Some(item.split_once('.')?.0)
+            .filter_map(|&column| {
+                d.field(column, "derivation")
+                    .and_then(|derivation| d.field(derivation, "value"))
             })
-            .collect();
+            .collect::<Vec<_>>();
+        if let Some(rows) = d
+            .field(root, "rows")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            for &row in sequence(d, rows)? {
+                for &(_, derivation) in mapping(d, field(d, row, "derivations")?)? {
+                    derivation_values.extend(d.field(derivation, "value"));
+                }
+            }
+        }
+        let mut odm_datasets = alloc::collections::BTreeSet::new();
+        let mut visited_values = alloc::collections::BTreeSet::new();
+        while let Some(value) = derivation_values.pop() {
+            if !visited_values.insert(value) {
+                continue;
+            }
+            if let Some(payload) = d.field(value, "odm") {
+                let item = match &d.nodes()[payload] {
+                    N::Text(item) => Some(item.as_str()),
+                    _ => d.field(payload, "item").and_then(|id| text(d, id).ok()),
+                };
+                if let Some((dataset, _)) = item.and_then(|item| item.split_once('.')) {
+                    odm_datasets.insert(dataset);
+                }
+            }
+            if let Some(case) = d.field(value, "case") {
+                for &branch in sequence(d, case)? {
+                    for name in ["then", "otherwise"] {
+                        derivation_values.extend(d.field(branch, name));
+                    }
+                }
+            }
+            if let Some(concat) = d.field(value, "str_concat") {
+                derivation_values
+                    .extend(sequence(d, field(d, concat, "sources")?)?.iter().copied());
+            }
+        }
         let driver = if has_rows {
             row_intermediates::common_driver(d, inputs)?
         } else {
@@ -1325,25 +1358,6 @@ impl PreparedSpecification {
             let op = text(d, op)?;
             let path = format!("{prefix}.derivation.{op}");
             let operation = match op {
-                "flag" => Some(Operation::Flag(flags::prepare(d, payload, &path)?)),
-                "case" => Some(Operation::Case(cases::prepare(
-                    d,
-                    payload,
-                    &path,
-                    project.as_ref(),
-                    &intermediates,
-                    keys.contains(&column),
-                    0,
-                    &extraction,
-                    &templates,
-                )?)),
-                "function" if project.is_some() => Some(Operation::ProjectFunction(
-                    *project
-                        .as_ref()
-                        .and_then(|p| p.nodes.get(&payload))
-                        .ok_or(PrepareError::Internal)?,
-                )),
-                "literal" => Some(Operation::Literal(literal(d, payload, &path)?)),
                 "source" => {
                     let source = source_expressions::Declaration::prepare(
                         d,
@@ -1352,26 +1366,16 @@ impl PreparedSpecification {
                         &mut extra,
                         &intermediates,
                     )?;
-                    if source
-                        .variable
-                        .split_once('.')
-                        .is_some_and(|(relation, _)| {
-                            relation != driver && !intermediates.contains(relation)
-                        })
-                    {
-                        reject(&mut extra, "secondary_source_expression", path.clone());
-                    }
                     if keys.contains(&column)
-                        && source.has_filter()
-                        && source
-                            .variable
-                            .split_once('.')
-                            .is_some_and(|(name, _)| name == driver)
+                        && (source.has_filter() || source.has_selection() || source.has_absent())
                     {
                         reject(&mut extra, "filtered_key_source", path.clone());
                     }
                     Some(Operation::Source(alloc::boxed::Box::new(source)))
                 }
+                "mapping" | "cut" => Some(Operation::MappingCut(alloc::boxed::Box::new(
+                    mapping_cut::prepare(d, payload, op, &path, &intermediates, &mut extra)?,
+                ))),
                 "first_available" => {
                     let selection = source_expressions::FirstAvailable::prepare(
                         d,
@@ -1383,23 +1387,6 @@ impl PreparedSpecification {
                     if keys.contains(&column) {
                         reject(&mut extra, "selection_key_source", path.clone());
                     }
-                    for (index, source) in selection.sources.iter().enumerate() {
-                        if let Some((relation, _)) = source.variable.split_once('.') {
-                            if intermediates.contains(relation) {
-                                reject(
-                                    &mut extra,
-                                    "selection_intermediate_source",
-                                    format!("{path}.sources[{index}]"),
-                                );
-                            } else if relation != driver {
-                                reject(
-                                    &mut extra,
-                                    "secondary_source_expression",
-                                    format!("{path}.sources[{index}]"),
-                                );
-                            }
-                        }
-                    }
                     Some(Operation::FirstAvailable(alloc::boxed::Box::new(selection)))
                 }
                 "row_number"
@@ -1410,105 +1397,30 @@ impl PreparedSpecification {
                 | "baseline_flag" => Some(Operation::Window(alloc::boxed::Box::new(
                     windows::Declaration::prepare(d, payload, op, &path, limits, &mut extra)?,
                 ))),
-                "str_template" => Some(Operation::StrTemplate(templates.get(payload)?)),
-                "str_extract" => Some(Operation::StrExtract(extraction.get(payload)?)),
-                "str_contains" => Some(Operation::StrContains(extraction.get(payload)?)),
-                "greatest" | "least" | "str_concat" => {
-                    Some(Operation::Scalar(alloc::boxed::Box::new(scalar::prepare(
-                        d,
-                        payload,
-                        op,
-                        &path,
-                        project.as_ref(),
-                        &intermediates,
-                        keys.contains(&column),
-                        0,
-                        &extraction,
-                        &templates,
-                    )?)))
-                }
-                "str_case" => Some(Operation::StrCase(str_case::prepare(
-                    d,
-                    payload,
-                    &path,
-                    Some(driver),
-                    Some(&intermediates),
-                    &mut extra,
-                )?)),
-                "str_pad" => Some(Operation::StrPad(str_pad::prepare(
-                    d,
-                    payload,
-                    &path,
-                    Some(driver),
-                    Some(&intermediates),
-                    &mut extra,
-                )?)),
-                "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision"
-                | "to_date" => Some(Operation::Imputation(imputation::prepare(
-                    d,
-                    payload,
-                    op,
-                    &path,
-                    Some(driver),
-                    Some(&intermediates),
-                    &mut extra,
-                )?)),
-                "date_diff" | "study_day" | "to_epoch_day" => {
-                    Some(Operation::Temporal(temporal::prepare(
-                        d,
-                        payload,
-                        op,
-                        &path,
-                        Some(driver),
-                        Some(&intermediates),
-                        &mut extra,
-                    )?))
-                }
-                "round_half_away_from_zero" => Some(Operation::Round(rounding::prepare(
-                    d,
-                    payload,
-                    &path,
-                    Some(driver),
-                    Some(&intermediates),
-                    &mut extra,
-                )?)),
-                "compute" => {
-                    for &(name, _) in mapping(d, payload)? {
-                        let name = text(d, name)?;
-                        if name != "expr" {
-                            reject(&mut extra, name, format!("{path}.{name}"));
-                        }
-                    }
-                    let expr = text(d, field(d, payload, "expr")?)?;
-                    match compile_numeric_with_policy(
-                        expr,
-                        &path,
-                        Default::default(),
-                        crate::numeric_compiler::MathPolicy::PortableLibmV1,
-                    ) {
-                        Ok(compiled) => Some(Operation::Compute(compiled)),
-                        Err(error @ CompileError::Parse(ParseError::Grammar { .. })) => {
-                            Some(Operation::InvalidNumeric {
-                                expression: expr.into(),
-                                error,
-                            })
-                        }
-                        Err(CompileError::Unsupported { .. }) => {
-                            reject(&mut extra, "numeric_function", path.clone());
-                            None
-                        }
-                        Err(error) => {
-                            return Err(PrepareError::Numeric {
-                                path: format!("{path}.expr"),
-                                error,
-                            })
-                        }
-                    }
-                }
-                _ => {
-                    reject(&mut extra, op, path.clone());
+                "function" if project.is_none() => {
+                    reject(&mut extra, "function", path.clone());
                     None
                 }
+                _ => match derivations::prepare_value_with_driver(
+                    d,
+                    field(d, derivation, "value")?,
+                    &format!("{prefix}.derivation"),
+                    project.as_ref(),
+                    &intermediates,
+                    keys.contains(&column),
+                    0,
+                    &extraction,
+                    &templates,
+                    Some(driver),
+                    limits,
+                ) {
+                    Ok(branch) => Some(*branch.operation),
+                    Err(PrepareError::Unsupported(features)) => {
+                        extra.extend(features);
+                        None
+                    }
+                    Err(error) => return Err(error),
+                },
             };
             if let Some(operation) = operation {
                 scalar::unsupported_relations(&operation, driver, &intermediates, &mut extra);
@@ -1789,9 +1701,7 @@ impl PreparedSpecification {
         }
         let source = schemas[self.driver];
         if let Some(rows) = &self.rows {
-            if !self.intermediates.is_empty() {
-                rows.admit_sources(schemas, &self.output)?;
-            }
+            rows.admit_sources(schemas, &self.output)?;
             let mut findings = Vec::new();
             let (secondary, intermediates) = self.intermediates.bind(
                 &self.sources,
@@ -1799,6 +1709,7 @@ impl PreparedSpecification {
                 schemas,
                 &self.output,
                 &self.keys,
+                Some(&rows.self_columns()),
                 &mut findings,
             )?;
             return rows
@@ -1856,6 +1767,7 @@ impl PreparedSpecification {
             schemas,
             &self.output,
             &self.keys,
+            None,
             &mut findings,
         )?;
         let mut assignments = BTreeMap::new();
@@ -1918,6 +1830,7 @@ impl PreparedSpecification {
                     branches,
                     column,
                     &catalog,
+                    source,
                     &secondary,
                     &intermediates,
                     &mut edges,
@@ -1963,6 +1876,17 @@ impl PreparedSpecification {
                     }
                 }
                 Operation::Literal(value) => Some(Expression::Literal(value.clone())),
+                Operation::MappingCut(operation) => mapping_cut::bind(
+                    self,
+                    operation,
+                    column,
+                    &catalog,
+                    source,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
                 Operation::Round(rounding) => rounding::bind(
                     rounding,
                     column,
@@ -1990,6 +1914,7 @@ impl PreparedSpecification {
                     operation,
                     column,
                     &catalog,
+                    source,
                     &secondary,
                     &intermediates,
                     &mut edges,
@@ -2072,110 +1997,60 @@ impl PreparedSpecification {
                     });
                     None
                 }
-                Operation::Source(declaration) => {
-                    let name = &declaration.variable;
-                    let filter = declaration.bind_filter(
-                        path,
-                        self.source(),
-                        source,
-                        &self.intermediates,
-                        &mut findings,
-                    )?;
-                    if let Some((index, field)) = self.intermediates.reference(name) {
-                        if let Some(item) = &intermediates[index] {
-                            edges.extend(item.output_dependencies());
-                            let column = secondary[item.source]
-                                .schema
-                                .columns()
-                                .iter()
-                                .position(|c| c.name == field);
-                            if column.is_none() {
-                                findings.push(BindFinding::Lookup(LookupFinding::reference(
-                                    path,
-                                    name,
-                                    None,
-                                    ReferenceCause::Value,
-                                    None,
-                                )));
-                            }
-                            column.map(|column| Expression::Intermediate { index, column })
-                        } else {
-                            findings.push(BindFinding::UnknownReference {
-                                path: path.clone(),
-                                name: name.clone(),
-                            });
-                            None
-                        }
-                    } else {
-                        bind(name, &mut findings)?.map(|binding| match binding {
-                            reference_binding::Binding::Dataset { field, .. } => {
-                                if self.keys.contains(&column) && !declaration.has_filter() {
-                                    Expression::Source(field)
-                                } else {
-                                    Expression::Collect {
-                                        column: field,
-                                        identifier: name.clone(),
-                                        filter,
-                                        selection: None,
-                                    }
-                                }
-                            }
-                            reference_binding::Binding::Output { column, .. } => {
-                                edges.push(column);
-                                Expression::Column(column)
-                            }
-                        })
-                    }
-                }
+                Operation::Source(declaration) => source_expressions::bind(
+                    self,
+                    declaration,
+                    column,
+                    path,
+                    &catalog,
+                    source,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
                 Operation::FirstAvailable(selection) => {
                     let mut operands = Vec::new();
                     for (index, operand) in selection.sources.iter().enumerate() {
                         let operand_path = format!("{path}.sources[{index}]");
-                        let filter = operand.bind_filter(
+                        if let Some(expression) = source_expressions::bind(
+                            self,
+                            operand,
+                            column,
                             &operand_path,
-                            self.source(),
+                            &catalog,
                             source,
-                            &self.intermediates,
+                            &secondary,
+                            &intermediates,
+                            &mut edges,
                             &mut findings,
-                        )?;
-                        let name = &operand.variable;
-                        if !name.contains('.') {
-                            if let Some(finding) = catalog
-                                .validate_output(name, None, None, &[0])
-                                .map_err(BindError::Catalog)?
-                            {
-                                findings.push(BindFinding::OutputReference {
-                                    path: operand_path,
-                                    name: name.clone(),
-                                    finding,
-                                });
-                                continue;
-                            }
-                        }
-                        let Some(binding) = catalog.bind(name).map_err(BindError::Catalog)? else {
-                            findings.push(BindFinding::UnknownReference {
-                                path: operand_path,
-                                name: name.clone(),
-                            });
-                            continue;
-                        };
-                        let read = match binding {
-                            reference_binding::Binding::Dataset { field, .. } => {
-                                crate::dataset::SelectionRead::Collect {
-                                    column: field,
-                                    identifier: name.clone(),
+                        )? {
+                            // Distinct-value collection failures belong to first_available.
+                            // Recursive operands retain their own expression and handler paths.
+                            let read = match expression {
+                                Expression::Collect {
+                                    column,
+                                    identifier,
+                                    filter,
+                                    selection: None,
+                                } => crate::dataset::SelectionRead::Collect {
+                                    column,
+                                    identifier,
                                     filter: filter.map(alloc::boxed::Box::new),
-                                }
-                            }
-                            reference_binding::Binding::Output { column, .. } => {
-                                edges.push(column);
-                                crate::dataset::SelectionRead::Column(column)
-                            }
-                        };
-                        operands.push(crate::dataset::SelectionSource {
-                            path: operand_path,
-                            read,
-                        });
+                                },
+                                expression => crate::dataset::SelectionRead::Expression(
+                                    alloc::boxed::Box::new(crate::dataset::Assignment {
+                                        column,
+                                        expression,
+                                        path: operand_path.clone(),
+                                    }),
+                                ),
+                            };
+                            operands.push(crate::dataset::SelectionSource {
+                                path: operand_path.clone(),
+                                read,
+                            });
+                        }
                     }
                     Some(Expression::FirstAvailable(alloc::boxed::Box::new(
                         crate::dataset::FirstAvailable::new(operands, selection.missing.clone()),
@@ -2204,12 +2079,7 @@ impl PreparedSpecification {
                             .ok_or(BindError::Internal)?;
                         if let Some(item) = &intermediates[index] {
                             edges.extend(item.output_dependencies());
-                            if let Some(column) = secondary[item.source]
-                                .schema
-                                .columns()
-                                .iter()
-                                .position(|c| c.name == field)
-                            {
+                            if let Some(column) = item.source_column(&secondary, field) {
                                 bindings.push(Binding {
                                     name: name.into(),
                                     read: Read::Intermediate { index, column },

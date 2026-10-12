@@ -162,14 +162,14 @@ impl Flag {
                     }
                 }
                 FlagRead::Read(Read::Intermediate { index, column }) => {
-                    if !matches!(mode, RowMode::Keys) {
-                        return Err(PlanError::InvalidIntermediate);
-                    }
                     let item = intermediates
                         .get(*index)
                         .ok_or(PlanError::InvalidIntermediate)?;
-                    super::intermediates::validate_read(
-                        item, *column, source, secondary, available, output,
+                    if !matches!(mode, RowMode::Keys) && !item.source.is_self() {
+                        return Err(PlanError::InvalidIntermediate);
+                    }
+                    super::intermediates::validate_context_read(
+                        item, *column, source, secondary, available, output, mode,
                     )?;
                 }
                 FlagRead::Collect { column, identifier } => {

@@ -7,7 +7,7 @@ input:
 output:
   path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL,
-            AESEVN, AWSEVFL]
+            ASEVN, AOCCPIFL]
 
 columns:
   - name: STUDYID
@@ -56,7 +56,7 @@ columns:
       allowed_values:
         values: [Y]
 
-  - name: AESEVN
+  - name: ASEVN
     type: int
     label: Severity/Intensity (N)
     derivation:
@@ -83,14 +83,14 @@ columns:
         window:
           group_by: [STUDYID, USUBJID, AEDECOD]
           order_by:
-            - {variable: AESEVN, direction: desc}
+            - {variable: ASEVN, direction: desc}
             - ASTDT
             - AESEQ
-          filter: "TRTEMFL = 'Y' AND AESEVN IS NOT NULL"
+          filter: "TRTEMFL = 'Y' AND ASEVN IS NOT NULL"
 
-  - name: AWSEVFL
+  - name: AOCCPIFL
     type: str
-    label: Worst Severity Flag
+    label: First Occurrence of Maximum Severity Flag
     derivation:
       flag: "AWSRNK = 1"
 
@@ -102,5 +102,5 @@ verifications:
       max: 12
   - assert:
       id: worst-severity-flag-requires-graded-treatment-emergent-event
-      when: "AWSEVFL = 'Y'"
-      require: "TRTEMFL = 'Y' AND AESEVN IS NOT NULL"
+      when: "AOCCPIFL = 'Y'"
+      require: "TRTEMFL = 'Y' AND ASEVN IS NOT NULL"

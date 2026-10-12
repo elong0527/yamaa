@@ -3,12 +3,15 @@ domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE: {path: input/ae.csv, types: {AESTDTC: datetime}}
-  ADSL: {path: input/adsl.csv, types: {TRTSDTM: datetime}}
+  ADSL:
+    path: input/adsl.csv
+    types: {TRTSDTM: datetime, TRTENDTM: datetime, TEENDDTM: datetime}
 base: AE
 
 output:
   path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AETERM, ASTDTM, TRTSDTM, TRTEMFL, AOCCFL]
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, ASTDTM, TRTSDTM, TEENDDTM,
+            TRTEMFL, AOCCFL]
 
 columns:
   - name: STUDYID
@@ -41,17 +44,36 @@ columns:
     label: Datetime of First Exposure to Treatment
     derivation: ADSL.TRTSDTM
 
-  # A comparison with a missing moment is unknown, never true, so the flag
-  # stays empty when either the onset or the first exposure is missing.
+  # The study's treatment-emergent window ends 30 days after last exposure.
+  # The spec language has no date arithmetic, so the window end is
+  # precomputed in the ADSL fixture (TEENDDTM = TRTENDTM + 30 days).
+  - name: TEENDDTM
+    type: datetime
+    label: End of Treatment-Emergent Window
+    derivation: ADSL.TEENDDTM
+
+  # The window rule: onset inside [first exposure, window end] is
+  # treatment-emergent. A missing onset cannot be ruled pre-treatment,
+  # so the conservative convention flags it Y; an untreated subject
+  # (no first exposure at all) can never be treatment-emergent.
   - name: TRTEMFL
     type: str
     label: Treatment Emergent Analysis Flag
     derivation:
-      flag: "ASTDTM >= TRTSDTM"
+      case:
+        - when: "TRTSDTM IS NULL"
+          then: {literal: null}
+        - when: "ASTDTM IS NULL"
+          then: {literal: "Y"}
+        - when: "ASTDTM >= TRTSDTM AND ASTDTM <= TEENDDTM"
+          then: {literal: "Y"}
+        - otherwise: {literal: null}
     verifications:
       allowed_values:
         values: [Y]
 
+  # Occurrence sequencing needs an orderable onset; a treatment-emergent
+  # event with a missing onset is flagged but cannot be sequenced.
   - name: AOCCSEQ
     type: int
     label: Subject Occurrence Sequence Number
@@ -60,7 +82,7 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by: [ASTDTM, AESEQ]
-          filter: "TRTEMFL = 'Y'"
+          filter: "TRTEMFL = 'Y' AND ASTDTM IS NOT NULL"
 
   - name: AOCCFL
     type: str
@@ -75,12 +97,24 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 7
-      max: 7
+      min: 10
+      max: 10
   - assert:
       id: treatment-emergent-onset-is-not-before-first-dose
-      when: "TRTEMFL = 'Y'"
+      when: "TRTEMFL = 'Y' AND ASTDTM IS NOT NULL"
       require: "ASTDTM >= TRTSDTM"
+  - assert:
+      id: treatment-emergent-onset-is-within-window
+      when: "TRTEMFL = 'Y' AND ASTDTM IS NOT NULL"
+      require: "ASTDTM <= TEENDDTM"
+  - assert:
+      id: missing-onset-is-treatment-emergent
+      when: "ASTDTM IS NULL AND TRTSDTM IS NOT NULL"
+      require: "TRTEMFL = 'Y'"
+  - assert:
+      id: untreated-subject-has-no-flag
+      when: "TRTSDTM IS NULL"
+      require: "TRTEMFL IS NULL"
   - assert:
       id: occurrence-flag-requires-treatment-emergence
       when: "AOCCFL = 'Y'"

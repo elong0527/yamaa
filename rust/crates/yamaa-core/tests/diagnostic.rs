@@ -16,6 +16,8 @@ mod dataset;
 #[path = "diagnostic/predicate_evaluation.rs"]
 mod predicate_evaluation;
 
+#[path = "diagnostic/mapping_cut.rs"]
+mod mapping_cut;
 #[path = "diagnostic/temporal_imputation.rs"]
 mod temporal_imputation;
 #[path = "diagnostic/text_case.rs"]
@@ -65,6 +67,7 @@ impl NumericResolver for Bindings {
 #[test]
 fn every_registered_cause_is_reached_with_its_normative_mapping() {
     let mut reached = BTreeSet::new();
+    reached.extend(mapping_cut::reached());
     let publication = yamaa_core::application_issue::publication_failed("generated/producer.csv");
     assert_eq!(
         (
@@ -255,6 +258,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.insert(lock.code);
     reached.extend(project_codelist_binding::reached());
     reached.extend(preflight::reached());
+    reached.extend(preflight::self_reached());
     reached.extend(producer::reached());
     reached.extend(preflight::output_reached());
     reached.extend(grammar::reached());
@@ -265,6 +269,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(binding::window_reached());
     reached.extend(binding::lookup_reached());
     reached.extend(binding::source_filter_reached());
+    reached.extend(binding::implicit_source_reached());
     reached.extend(binding::verification_reached());
     reached.extend(binding::verification_declarations_reached());
     let result = yamaa_core::dataset_checks::not_missing(&[

@@ -29,6 +29,156 @@ fn assign(column: usize, expression: Expression) -> Assignment {
 }
 
 #[test]
+fn malformed_row_filter_columns_retain_the_existing_scope_error() {
+    use yamaa_core::bound_expression::{Binding, BindingError, BoundPredicate, Read};
+    let source = schema(&[("ID", ColumnType::Int)]);
+    for mode in [RowMode::Records, RowMode::Groups(vec![0]), RowMode::Keys] {
+        for column in [1, usize::MAX] {
+            let filter = BoundPredicate::new(
+                yamaa_core::predicate_compiler::compile("F > 0", "row.filter", Default::default())
+                    .unwrap(),
+                vec![Binding {
+                    name: "F".into(),
+                    read: Read::Column(column),
+                }],
+            )
+            .unwrap();
+            assert_eq!(
+                DatasetPlan::new(
+                    source.clone(),
+                    source.clone(),
+                    vec![RowTemplate {
+                        mode: mode.clone(),
+                        assignments: vec![assign(0, Expression::Source(0))],
+                        filter: Some(filter),
+                    }],
+                    vec![],
+                    vec![0],
+                    vec![],
+                ),
+                Err(PlanError::Filter(BindingError::UnavailableColumn)),
+            );
+        }
+    }
+}
+
+#[test]
+fn window_filter_admission_distinguishes_record_and_grouped_rows() {
+    use yamaa_core::{
+        bound_expression::{Binding, BindingError, BoundPredicate, Read},
+        dataset::{OrderTerm, Window, WindowKind},
+    };
+    let source = schema(&[("ID", ColumnType::Int)]);
+    let output = schema(&[
+        ("ID", ColumnType::Int),
+        ("SEQ", ColumnType::Int),
+        ("COPY", ColumnType::Int),
+    ]);
+    for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
+        for column in [0, 1, 2] {
+            let filter = BoundPredicate::new(
+                yamaa_core::predicate_compiler::compile("F > 0", "row.filter", Default::default())
+                    .unwrap(),
+                vec![Binding {
+                    name: "F".into(),
+                    read: Read::Column(column),
+                }],
+            )
+            .unwrap();
+            let plan = DatasetPlan::new(
+                source.clone(),
+                output.clone(),
+                vec![RowTemplate {
+                    mode: mode.clone(),
+                    assignments: vec![
+                        assign(0, Expression::Source(0)),
+                        assign(
+                            1,
+                            Expression::Window(Window {
+                                kind: WindowKind::RowNumber,
+                                group_by: vec![],
+                                order_by: vec![OrderTerm {
+                                    column: 0,
+                                    descending: false,
+                                    nulls_first: false,
+                                }],
+                                filter: None,
+                            }),
+                        ),
+                        assign(2, Expression::Column(1)),
+                    ],
+                    filter: Some(filter),
+                }],
+                vec![],
+                vec![0],
+                vec![],
+            );
+            if column == 0 || matches!(mode, RowMode::Groups(_)) {
+                assert!(plan.is_ok(), "{plan:?}");
+            } else {
+                assert_eq!(
+                    plan,
+                    Err(PlanError::Filter(BindingError::UnavailableColumn))
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn key_grain_admission_sees_raw_reads_through_recursive_source_containers() {
+    use yamaa_core::dataset::{FirstAvailable, SelectionRead, SelectionSource};
+    let source = schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]);
+    let binding = |expression| Expression::SourceBinding {
+        source: Box::new(assign(1, expression)),
+        absent: None,
+        variable_absent: false,
+        variable: "SRC.V".into(),
+        path: "columns.V.derivation.source".into(),
+    };
+    let selection = |expression| {
+        Expression::FirstAvailable(Box::new(FirstAvailable::new(
+            vec![SelectionSource {
+                path: "columns.V.derivation.first_available.sources[0]".into(),
+                read: SelectionRead::Expression(Box::new(assign(1, expression))),
+            }],
+            Value::Int(0),
+        )))
+    };
+    for raw in [false, true] {
+        let value = if raw {
+            Expression::Source(1)
+        } else {
+            Expression::Literal(Value::Int(7))
+        };
+        for expression in [
+            binding(value.clone()),
+            selection(value.clone()),
+            binding(selection(value.clone())),
+            selection(binding(value.clone())),
+        ] {
+            let plan = DatasetPlan::new(
+                source.clone(),
+                source.clone(),
+                vec![RowTemplate {
+                    mode: RowMode::Keys,
+                    assignments: vec![assign(0, Expression::Source(0))],
+                    filter: None,
+                }],
+                vec![assign(1, expression)],
+                vec![0],
+                vec![],
+            );
+            if raw {
+                assert_eq!(plan, Err(PlanError::InvalidKeyMode));
+            } else {
+                assert!(plan.is_ok(), "{plan:?}");
+            }
+        }
+    }
+}
+
+#[test]
 fn whole_column_windows_cannot_be_hidden_inside_selected_case_branches() {
     use yamaa_core::{
         bound_expression::{Binding, BoundPredicate, Read},
@@ -508,19 +658,66 @@ fn first_available_admits_every_operand_before_any_source_access() {
         ),
         Err(PlanError::InvalidKeyMode)
     );
-    assert_eq!(
-        DatasetPlan::new(
-            source,
-            output,
-            vec![RowTemplate {
-                mode: RowMode::Records,
-                assignments: vec![assign(0, Expression::Source(0))],
-                filter: None
+    assert!(DatasetPlan::new(
+        source,
+        output,
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None
+        }],
+        vec![assign(1, selection)],
+        vec![0],
+        vec![]
+    )
+    .is_ok());
+}
+
+#[test]
+fn driver_wrappers_admit_only_selected_record_or_group_schema_coordinates() {
+    use yamaa_core::dataset::SecondarySource;
+    let primary = schema(&[("ID", ColumnType::Int)]);
+    let donor = schema(&[("PAD", ColumnType::Str), ("ID", ColumnType::Int)]);
+    let output = schema(&[("ID", ColumnType::Int)]);
+    let make = |mode, column| {
+        DatasetPlan::new_with_sources(
+            primary.clone(),
+            vec![SecondarySource {
+                name: "DONOR".into(),
+                schema: donor.clone(),
             }],
-            vec![assign(1, selection)],
+            output.clone(),
+            vec![RowTemplate {
+                mode,
+                assignments: vec![assign(0, Expression::Source(column))],
+                filter: None,
+            }],
+            vec![],
             vec![0],
-            vec![]
-        ),
-        Err(PlanError::InvalidKeyMode)
+            vec![],
+        )
+    };
+    let selected = |source, mode| RowMode::Driver {
+        source,
+        mode: Box::new(mode),
+    };
+    assert!(make(selected(1, RowMode::Records), 1).is_ok());
+    assert!(make(selected(1, RowMode::Groups(vec![1])), 1).is_ok());
+    assert_eq!(make(RowMode::Records, 1), Err(PlanError::InvalidSource));
+    assert_eq!(
+        make(selected(1, RowMode::Records), 2),
+        Err(PlanError::InvalidSource)
     );
+    assert_eq!(
+        make(selected(1, RowMode::Groups(vec![0])), 1),
+        Err(PlanError::NonGroupSource)
+    );
+    for mode in [
+        selected(0, RowMode::Records),
+        selected(2, RowMode::Records),
+        selected(1, RowMode::Keys),
+        selected(1, selected(1, RowMode::Records)),
+    ] {
+        assert_eq!(make(mode, 0), Err(PlanError::InvalidSource));
+    }
 }

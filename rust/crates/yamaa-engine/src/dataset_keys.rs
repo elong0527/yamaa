@@ -82,6 +82,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
                     budget,
                     handlers,
                     secondary: &[],
+                    self_rows: &[],
                     intermediates: &mut intermediates::Run::default(),
                 },
             )?;

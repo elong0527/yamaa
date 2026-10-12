@@ -240,6 +240,145 @@ fn unmatched_activation_signatures_fail_before_every_study_port_and_keep_static_
     assert_eq!(cells.get(), 0);
     assert_eq!(port.reads, 0);
 }
+
+#[test]
+fn concat_function_signature_is_admitted_before_any_table_access() {
+    use yamaa_engine::dataset::DatasetExecution;
+    struct Untouched;
+    impl TableAccess for Untouched {
+        type Error = Payload;
+        fn schema(&self) -> &TableSchema {
+            panic!("signature admission must precede schema access")
+        }
+        fn row_count(&self) -> usize {
+            panic!("signature admission must precede row access")
+        }
+        fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<Payload>> {
+            panic!("signature admission must precede cell access")
+        }
+    }
+    let spec = specification(vec![(
+        "VALUE",
+        "str",
+        Tree::map(vec![(
+            "str_concat",
+            Tree::map(vec![(
+                "sources",
+                Tree::List(vec![call(
+                    "id",
+                    vec![(
+                        "x",
+                        Tree::Scalar(yamaa_core::schema::DocumentNode::Integer("7".into())),
+                    )],
+                )]),
+            )]),
+        )]),
+    )]);
+    let checked = domain::check_with_project(&spec, &[function("id")]).unwrap();
+    let source = TableSchema::new(vec![Column {
+        name: "ID".into(),
+        kind: ColumnType::Int,
+    }])
+    .unwrap();
+    let plan = checked.compiled().bind(&source).unwrap();
+    let trace = Rc::new(RefCell::new(vec![]));
+    let mut bindings = Bindings {
+        plan: None,
+        trace: Rc::clone(&trace),
+        raised: None,
+    };
+    let attempt =
+        plan.execute_observed_functions(&Untouched, &[], &mut bindings, limits().execution);
+    assert!(matches!(
+        *attempt.result.unwrap_err(),
+        ExecutionError::FunctionBinding { slot: 0 }
+    ));
+    assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
+    assert!(trace.borrow().is_empty());
+}
+#[test]
+fn compiled_first_available_preserves_operand_cell_failure_without_fallback() {
+    use yamaa_engine::dataset::DatasetExecution;
+    struct FailingTable {
+        schema: TableSchema,
+        payload: Rc<()>,
+        reads: RefCell<Vec<usize>>,
+    }
+    impl TableAccess for FailingTable {
+        type Error = Payload;
+        fn schema(&self) -> &TableSchema {
+            &self.schema
+        }
+        fn row_count(&self) -> usize {
+            1
+        }
+        fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Payload>> {
+            assert_eq!(row, 0);
+            self.reads.borrow_mut().push(column);
+            match column {
+                0 => Ok(ValueRef::Int(1)),
+                1 => Err(CellError::Access(Payload(Rc::clone(&self.payload)))),
+                2 => panic!("a failing operand must not read the fallback"),
+                _ => panic!("unexpected column"),
+            }
+        }
+    }
+    let spec = specification(vec![(
+        "VALUE",
+        "int",
+        Tree::map(vec![(
+            "first_available",
+            Tree::map(vec![(
+                "sources",
+                Tree::List(vec![
+                    Tree::map(vec![("variable", Tree::text("SRC.A"))]),
+                    Tree::map(vec![("variable", Tree::text("SRC.B"))]),
+                ]),
+            )]),
+        )]),
+    )]);
+    let payload = Rc::new(());
+    let source = FailingTable {
+        schema: TableSchema::new(
+            ["ID", "A", "B"]
+                .into_iter()
+                .map(|name| Column {
+                    name: name.into(),
+                    kind: ColumnType::Int,
+                })
+                .collect(),
+        )
+        .unwrap(),
+        payload: Rc::clone(&payload),
+        reads: RefCell::new(vec![]),
+    };
+    let checked = domain::check(&spec).unwrap();
+    let plan = checked.compiled().bind(&source.schema).unwrap();
+    let attempt = plan.execute_observed(&source, limits().execution);
+    assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
+    let ExecutionError::Cell {
+        path,
+        source_row,
+        error: CellError::Access(Payload(original)),
+    } = *attempt.result.unwrap_err()
+    else {
+        panic!("original failing cell access")
+    };
+    assert_eq!(path, "columns.VALUE.derivation.first_available.sources[0]");
+    assert_eq!(source_row, 0);
+    assert!(Rc::ptr_eq(&original, &payload));
+    assert_eq!(
+        source
+            .reads
+            .borrow()
+            .iter()
+            .filter(|&&column| column == 1)
+            .count(),
+        1
+    );
+    assert!(!source.reads.borrow().contains(&2));
+}
+
 #[test]
 fn callback_failures_preserve_original_payload_and_source_observations_without_retry() {
     let trace = Rc::new(RefCell::new(vec![]));

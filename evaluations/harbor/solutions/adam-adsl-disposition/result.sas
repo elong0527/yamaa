@@ -9,28 +9,44 @@ data dm;
 run;
 
 data ds;
-  length STUDYID USUBJID DSCAT DSDECOD DSTERM DSSTDTC $1024;
+  length STUDYID USUBJID DSCAT EPOCH DSDECOD DSTERM DSSTDTC $1024;
   infile "/app/input/ds.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input STUDYID : $char1024. USUBJID : $char1024. DSSEQ DSCAT : $char1024. DSDECOD : $char1024. DSTERM : $char1024. DSSTDTC : $char1024.;
+  input STUDYID : $char1024. USUBJID : $char1024. DSSEQ DSCAT : $char1024. EPOCH : $char1024. DSDECOD : $char1024. DSTERM : $char1024. DSSTDTC : $char1024.;
 run;
 
-proc sort data=ds(where=(DSCAT='DISPOSITION EVENT' and DSSTDTC ne '')) out=ordered;
+proc sort data=ds(where=(DSCAT='DISPOSITION EVENT' and EPOCH ne 'TREATMENT' and DSSTDTC ne '')) out=ordered_study;
   by STUDYID USUBJID descending DSSTDTC descending DSSEQ;
 run;
-data lastds; set ordered; by STUDYID USUBJID; if first.USUBJID; run;
+data lastds; set ordered_study; by STUDYID USUBJID; if first.USUBJID; run;
+
+proc sort data=ds(where=(DSCAT='DISPOSITION EVENT' and EPOCH='TREATMENT' and DSSTDTC ne '')) out=ordered_trt;
+  by STUDYID USUBJID descending DSSTDTC descending DSSEQ;
+run;
+data lasttrt; set ordered_trt; by STUDYID USUBJID; if first.USUBJID; keep STUDYID USUBJID DSSTDTC DSDECOD DSTERM; run;
+
 proc sql;
-  create table joined as select a.*, b.DSSTDTC as EOSDT,b.DSDECOD as EOSDECOD,b.DSTERM as EOSREAS from dm as a left join lastds as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID;
+  create table joined as
+    select a.*, b.DSSTDTC as EOSDT, b.DSDECOD as EOSDECOD, b.DSTERM as EOSREAS,
+           c.DSSTDTC as EOTDT, c.DSDECOD as EOTDECOD, c.DSTERM as EOTREAS
+    from dm as a
+    left join lastds as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID
+    left join lasttrt as c on a.STUDYID=c.STUDYID and a.USUBJID=c.USUBJID;
 quit;
 data result;
-  length EOSSTT $12 DCSREAS $1024;
+  length EOSSTT $12 DCSREAS $1024 EOTSTT $12 DCTREAS $1024 DCSREASP $1024;
   set joined;
   if missing(EOSDT) then EOSSTT='ONGOING';
   else if EOSDECOD='COMPLETED' then EOSSTT='COMPLETED';
   else EOSSTT='DISCONTINUED';
   if EOSSTT='DISCONTINUED' then DCSREAS=EOSREAS;
+  if missing(EOTDT) then EOTSTT='ONGOING';
+  else if EOTDECOD='COMPLETED' then EOTSTT='COMPLETED';
+  else EOTSTT='DISCONTINUED';
+  if EOTSTT='DISCONTINUED' then DCTREAS=EOTREAS;
+  if EOTDECOD='OTHER' then DCSREASP=EOTREAS;
 run;
 
 proc sql;
-  create table final as select STUDYID, USUBJID, EOSDT, EOSDECOD, EOSREAS, EOSSTT, DCSREAS from result;
+  create table final as select STUDYID, USUBJID, EOSDT, EOSDECOD, EOSREAS, EOSSTT, DCSREAS, EOTDT, EOTSTT, DCTREAS, DCSREASP from result;
 quit;
 proc export data=final outfile="/app/output/adsl.csv" dbms=csv replace; run;

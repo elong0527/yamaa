@@ -3134,7 +3134,7 @@ fn numbering_ignores_temporal_precision_for_ties_and_handles_empty_scope() {
 }
 
 #[test]
-fn numbering_admits_complete_dependencies_only_in_key_grain_column_phase() {
+fn numbering_admits_complete_dependencies_in_completed_column_phase() {
     use yamaa_engine::dataset::{OrderTerm, Window, WindowKind};
     let source = table(&[("ID", ColumnType::Int)], vec![]);
     let window = Window {
@@ -3168,10 +3168,7 @@ fn numbering_admits_complete_dependencies_only_in_key_grain_column_phase() {
         )
     };
     assert!(build(window.clone(), RowMode::Keys, false).is_ok());
-    assert_eq!(
-        build(window.clone(), RowMode::Records, false),
-        Err(PlanError::InvalidWindow)
-    );
+    let record_plan = build(window.clone(), RowMode::Records, false).unwrap();
     assert_eq!(
         build(window.clone(), RowMode::Keys, true),
         Err(PlanError::InvalidKeyMode)
@@ -3197,6 +3194,24 @@ fn numbering_admits_complete_dependencies_only_in_key_grain_column_phase() {
         Err(PlanError::InvalidWindow)
     );
     assert!(source.reads.borrow().is_empty());
+    let records = table(
+        &[("ID", ColumnType::Int)],
+        vec![
+            vec![Value::Int(9)],
+            vec![Value::Int(2)],
+            vec![Value::Int(7)],
+        ],
+    );
+    let result = record_plan.execute(&records, limits()).unwrap();
+    assert_eq!(
+        result.dataset.rows(),
+        &[
+            vec![Value::Int(9), Value::Int(3)],
+            vec![Value::Int(2), Value::Int(1)],
+            vec![Value::Int(7), Value::Int(2)],
+        ]
+    );
+    assert_eq!(*records.reads.borrow(), vec![(0, 0), (1, 0), (2, 0)]);
 }
 
 #[test]
@@ -4648,7 +4663,7 @@ fn named_item() -> yamaa_engine::dataset::Intermediate {
     Intermediate {
         identifier: "SELECTED".into(),
         path: "intermediates[0]".into(),
-        source: 0,
+        source: yamaa_core::dataset::IntermediateSource::Input(0),
         keys: vec![IntermediateKey {
             source_column: 0,
             path: "intermediates[0].key".into(),
@@ -6689,6 +6704,146 @@ fn first_available_skips_unselected_reads_and_does_not_fallback_after_conversion
         matches!(*chosen.execute(&source, limits()).unwrap_err(),ExecutionError::Conversion { ref path, output_row:0, .. } if path=="columns.V")
     );
     assert!(source.reads.borrow().iter().all(|&(_, column)| column != 2));
+}
+
+/// Collection ambiguity keeps the selection owner through an absence wrapper;
+/// reached host failures and handlers retain their separate operand provenance.
+#[test]
+fn first_available_expression_owns_collection_failure_without_fallback() {
+    use yamaa_core::dataset::{FirstAvailable, SelectionRead, SelectionSource};
+    let mut source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("A", ColumnType::Int),
+            ("B", ColumnType::Int),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Int(10), Value::Int(20)],
+            vec![Value::Int(1), Value::Int(11), Value::Int(20)],
+        ],
+    );
+    let owner = "columns.V.derivation.first_available";
+    let operand = "columns.V.derivation.first_available.sources[0]";
+    let raw = "columns.V.derivation.first_available.sources[0].value";
+    let make = |absent_variable| {
+        let first = Assignment {
+            column: 1,
+            path: operand.into(),
+            expression: Expression::SourceBinding {
+                source: Box::new(Assignment {
+                    column: 1,
+                    path: raw.into(),
+                    expression: if absent_variable {
+                        Expression::Literal(Value::Missing)
+                    } else {
+                        Expression::Collect {
+                            column: 1,
+                            identifier: "SRC.A".into(),
+                            filter: None,
+                            selection: None,
+                        }
+                    },
+                }),
+                absent: Some(Value::Int(9)),
+                variable_absent: absent_variable,
+                variable: if absent_variable {
+                    "UNDECLARED"
+                } else {
+                    "SRC.A"
+                }
+                .into(),
+                path: operand.into(),
+            },
+        };
+        key_plan(
+            &source,
+            schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]),
+            vec![0],
+            vec![assign(0, Expression::Source(0))],
+            vec![Assignment {
+                column: 1,
+                path: owner.into(),
+                expression: Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                    vec![
+                        SelectionSource {
+                            path: operand.into(),
+                            read: SelectionRead::Expression(Box::new(first)),
+                        },
+                        SelectionSource {
+                            path: "columns.V.derivation.first_available.sources[1]".into(),
+                            read: SelectionRead::Collect {
+                                column: 2,
+                                identifier: "SRC.B".into(),
+                                filter: None,
+                            },
+                        },
+                    ],
+                    Value::Int(99),
+                ))),
+            }],
+        )
+    };
+    let plan = make(false);
+    let absent = make(true);
+    let attempt = plan.execute_observed(&source, limits());
+    let ExecutionError::MultipleValues {
+        path,
+        identifier,
+        value_count,
+        identity,
+    } = *attempt.result.unwrap_err()
+    else {
+        panic!("distinct reached readings must fail the selection");
+    };
+    assert_eq!(path, owner);
+    assert_eq!(identifier, "SRC.A");
+    assert_eq!(value_count, 2);
+    assert_eq!(
+        identity,
+        Some(yamaa_engine::dataset::RowIdentity {
+            position: 0,
+            values: vec![Value::Int(1)],
+        })
+    );
+    assert_eq!(
+        attempt.handler_counts,
+        vec![yamaa_engine::numeric_lifecycle::HandlerCount {
+            spec_path: format!("{operand}.absent"),
+            handler: yamaa_engine::numeric_lifecycle::HandlerKind::Absent,
+            count: 0,
+        }],
+    );
+    assert!(source.reads.borrow().iter().all(|&(_, column)| column != 2));
+
+    source.reads.borrow_mut().clear();
+    source.fail = Some((1, 1));
+    assert!(matches!(
+        *plan.execute(&source, limits()).unwrap_err(),
+        ExecutionError::Cell {
+            path,
+            source_row: 1,
+            error: CellError::Access("source failure"),
+        } if path == raw
+    ));
+    assert!(source.reads.borrow().iter().all(|&(_, column)| column != 2));
+
+    source.reads.borrow_mut().clear();
+    let attempt = absent.execute_observed(&source, limits());
+    assert_eq!(
+        attempt.result.unwrap().dataset.rows(),
+        &[vec![Value::Int(1), Value::Int(9)]]
+    );
+    assert_eq!(attempt.handler_counts.len(), 1);
+    assert_eq!(
+        attempt.handler_counts[0].spec_path,
+        format!("{operand}.absent")
+    );
+    assert_eq!(
+        attempt.handler_counts[0].handler,
+        yamaa_engine::numeric_lifecycle::HandlerKind::Absent
+    );
+    assert_eq!(attempt.handler_counts[0].count, 1);
+    assert!(source.reads.borrow().iter().all(|&(_, column)| column == 0));
 }
 
 /// UNKNOWN continues; inactive branches cannot read a failing donor. Selected

@@ -68,18 +68,18 @@ fn complete_independent_record_contexts_and_unchanged_original() {
             },
             identity,
         );
-        let expected = if name == "different-row-drivers" {
-            vec![
-                serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["rows[1].dataset"],"context":{"operation":"row_driver"}}),
-            ]
-        } else if name == "adam-adlb-end-of-treatment" {
-            // Keep the row-only capture intact: declarative flags closes only
-            // its final flag gate while all four EOT scope gates remain held.
+        let expected = if name == "adam-adlb-end-of-treatment" {
+            // Keep the historical capture intact. Flag and implicit secondary
+            // source expressions are admitted; the remaining scope gates stay held.
             let mut gates = reference["eot_native_gates"].as_array().unwrap().clone();
             assert_eq!(gates.len(), 5);
             assert_eq!(
                 gates.pop().unwrap(),
                 serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["columns.EOTFL.derivation.flag"],"context":{"operation":"flag"}})
+            );
+            assert_eq!(
+                gates.pop().unwrap(),
+                serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["columns.ENDPOINT.derivation.source"],"context":{"operation":"secondary_source_expression"}})
             );
             gates
         } else {
@@ -103,14 +103,7 @@ fn complete_independent_record_contexts_and_unchanged_original() {
                 .unwrap_or_else(|| serde_json::json!([])),
             "{name} complete handler ledger"
         );
-        if name == "different-row-drivers" {
-            assert_eq!(
-                result.issues().iter().map(issue_json).collect::<Vec<_>>(),
-                vec![
-                    serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["rows[1].dataset"],"context":{"operation":"row_driver"}})
-                ]
-            );
-        } else if name == "adam-adlb-end-of-treatment" {
+        if name == "adam-adlb-end-of-treatment" {
             assert_eq!(
                 result.issues().iter().map(issue_json).collect::<Vec<_>>(),
                 expected.as_slice()

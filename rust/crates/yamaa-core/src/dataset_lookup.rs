@@ -7,6 +7,26 @@ pub(super) fn validate(
     available: &[bool],
     output: &TableSchema,
 ) -> Result<(), PlanError> {
+    validate_at(lookup, sources, available, output, false)
+}
+
+/// Implicit source joins also admit exact equality between numeric key types.
+pub(super) fn validate_source(
+    lookup: &Lookup,
+    sources: &[SecondarySource],
+    available: &[bool],
+    output: &TableSchema,
+) -> Result<(), PlanError> {
+    validate_at(lookup, sources, available, output, true)
+}
+
+fn validate_at(
+    lookup: &Lookup,
+    sources: &[SecondarySource],
+    available: &[bool],
+    output: &TableSchema,
+    numeric_keys: bool,
+) -> Result<(), PlanError> {
     let source = sources.get(lookup.source).ok_or(PlanError::InvalidLookup)?;
     if lookup.column >= source.schema.columns().len() || lookup.keys.is_empty() {
         return Err(PlanError::InvalidLookup);
@@ -18,7 +38,14 @@ pub(super) fn validate(
             .get(key.source_column)
             .ok_or(PlanError::InvalidLookup)?;
         if !available.get(key.output_column).copied().unwrap_or(false)
-            || field.kind != output.columns()[key.output_column].kind
+            || if numeric_keys {
+                !crate::key_relation::comparable(
+                    field.kind.into(),
+                    output.columns()[key.output_column].kind.into(),
+                )
+            } else {
+                field.kind != output.columns()[key.output_column].kind
+            }
             || lookup.keys[..index]
                 .iter()
                 .any(|previous| previous.source_column == key.source_column)

@@ -33,6 +33,27 @@ pub trait NativePort {
         written: &str,
         maximum: usize,
     ) -> Result<Vec<u8>, SourceError<Self::Error>>;
+    fn canonicalize_resource(
+        &mut self,
+        declaring: &str,
+        written: &str,
+    ) -> Result<Identity, SourceError<Self::Error>> {
+        self.canonicalize(declaring, written)
+    }
+    fn capture_resource(
+        &mut self,
+        declaring: &str,
+        written: &str,
+        maximum: usize,
+    ) -> Result<Vec<u8>, SourceError<Self::Error>> {
+        self.capture_parent(declaring, written, maximum)
+    }
+    fn resource_failure(
+        &self,
+        _error: &Self::Error,
+    ) -> Option<yamaa_core::resource::ResourceFailure> {
+        None
+    }
     fn rebase(
         &mut self,
         layer: &Identity,
@@ -55,6 +76,9 @@ pub trait PreparedView {
     type Parent;
     fn parents(&self) -> &[Self::Parent];
     fn parent_source(parent: &Self::Parent) -> &Source;
+    fn resources(&self) -> impl Iterator<Item = &Source> {
+        core::iter::empty()
+    }
 }
 /// A schema authority connector delegates to the document application. It must
 /// not decode, traverse, normalize or retry a semantic failure in this method.
@@ -77,14 +101,13 @@ struct AliasCache<'a, P> {
     port: &'a mut P,
     paths: BTreeMap<String, Vec<(String, String)>>,
 }
-impl<P: NativePort> CapturePort for AliasCache<'_, P> {
-    type Error = P::Error;
-    fn canonicalize(
+impl<P: NativePort> AliasCache<'_, P> {
+    fn remember(
         &mut self,
+        source: &Identity,
         declaring: &str,
         written: &str,
-    ) -> Result<Identity, SourceError<Self::Error>> {
-        let source = self.port.canonicalize(declaring, written)?;
+    ) -> Result<(), SourceError<P::Error>> {
         self.port.admit_alias_text(
             source
                 .identity
@@ -108,6 +131,18 @@ impl<P: NativePort> CapturePort for AliasCache<'_, P> {
                 .or_default()
                 .push((declaring.into(), written.into()));
         }
+        Ok(())
+    }
+}
+impl<P: NativePort> CapturePort for AliasCache<'_, P> {
+    type Error = P::Error;
+    fn canonicalize(
+        &mut self,
+        declaring: &str,
+        written: &str,
+    ) -> Result<Identity, SourceError<Self::Error>> {
+        let source = self.port.canonicalize(declaring, written)?;
+        self.remember(&source, declaring, written)?;
         Ok(source)
     }
     fn capture(
@@ -121,6 +156,30 @@ impl<P: NativePort> CapturePort for AliasCache<'_, P> {
             .and_then(|paths| paths.first())
             .ok_or_else(|| SourceError::Raised(P::missing_alias()))?;
         self.port.capture_parent(declaring, written, maximum)
+    }
+    fn canonicalize_resource(
+        &mut self,
+        declaring: &str,
+        written: &str,
+    ) -> Result<Identity, SourceError<P::Error>> {
+        let source = self.port.canonicalize_resource(declaring, written)?;
+        self.remember(&source, declaring, written)?;
+        Ok(source)
+    }
+    fn capture_resource(
+        &mut self,
+        source: &Identity,
+        maximum: usize,
+    ) -> Result<Vec<u8>, SourceError<P::Error>> {
+        let (declaring, written) = self
+            .paths
+            .get(&source.identity)
+            .and_then(|paths| paths.first())
+            .ok_or_else(|| SourceError::Raised(P::missing_alias()))?;
+        self.port.capture_resource(declaring, written, maximum)
+    }
+    fn resource_failure(&self, error: &P::Error) -> Option<yamaa_core::resource::ResourceFailure> {
+        self.port.resource_failure(error)
     }
     fn rebase(
         &mut self,
@@ -164,8 +223,12 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
     let document = documents
         .prepare(source, identity.clone(), &mut aliases)
         .map_err(Error::Preparation)?;
-    for parent in document.parents() {
-        let source = D::Prepared::parent_source(parent);
+    for source in document
+        .parents()
+        .iter()
+        .map(D::Prepared::parent_source)
+        .chain(document.resources())
+    {
         let paths = aliases
             .paths
             .get(&source.identity)

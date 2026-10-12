@@ -142,3 +142,56 @@ fn retain_result<E>(value: Value, budget: &mut Budget) -> Result<Value, Box<Exec
     }
     Ok(value)
 }
+
+/// Check every nested invocation before table methods, including unselected branches.
+pub(super) fn admit<E>(
+    expression: &Expression,
+    functions: &dyn FunctionPort<Error = E>,
+) -> Result<(), Box<ExecutionError<E>>> {
+    match expression {
+        Expression::Function(function)
+            if functions.signature(function.slot()) != Some(function.signature()) =>
+        {
+            return Err(Box::new(ExecutionError::FunctionBinding {
+                slot: function.slot(),
+            }))
+        }
+        Expression::ProjectFunction(function)
+            if functions.project_signature(function.slot()) != Some(function.signature()) =>
+        {
+            return Err(Box::new(ExecutionError::FunctionBinding {
+                slot: function.slot(),
+            }))
+        }
+        Expression::Case(branches) => {
+            for branch in branches {
+                admit(&branch.assignment.expression, functions)?;
+            }
+        }
+        Expression::Extreme { operands, .. }
+        | Expression::StrConcat { operands, .. }
+        | Expression::StrTemplate { operands, .. }
+        | Expression::Temporal { operands, .. }
+        | Expression::Imputation { operands, .. } => {
+            for operand in operands {
+                admit(&operand.expression, functions)?;
+            }
+        }
+        Expression::StrContains { source, .. }
+        | Expression::StrExtract { source, .. }
+        | Expression::StrCase { source, .. }
+        | Expression::StrPad { source, .. }
+        | Expression::MappingCut { source, .. }
+        | Expression::Round { source, .. } => admit(&source.expression, functions)?,
+        Expression::SourceBinding { source, .. } => admit(&source.expression, functions)?,
+        Expression::FirstAvailable(selection) => {
+            for operand in selection.sources() {
+                if let yamaa_core::dataset::SelectionRead::Expression(source) = &operand.read {
+                    admit(&source.expression, functions)?;
+                }
+            }
+        }
+        _ => (),
+    }
+    Ok(())
+}

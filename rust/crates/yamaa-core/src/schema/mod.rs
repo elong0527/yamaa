@@ -5,6 +5,7 @@ mod composition;
 mod constraints;
 mod descriptor;
 mod diagnostic_projection;
+mod dictionary_resources;
 mod document;
 mod inheritance_dependencies;
 mod inheritance_references;
@@ -36,6 +37,7 @@ pub use diagnostic_projection::{
     SchemaDiagnosticValue, MAX_SCHEMA_DIAGNOSTIC_BYTES,
 };
 pub(crate) use document::canonical_integer;
+pub use dictionary_resources::{AdmittedMappingDictionary, MappingDictionaryReference};
 pub use document::{
     Document, DocumentError, DocumentKind, DocumentLimits, DocumentNode, DocumentResource,
     ScalarKey,
