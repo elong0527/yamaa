@@ -69,8 +69,8 @@ fn complete_independent_record_contexts_and_unchanged_original() {
             identity,
         );
         let expected = if name == "adam-adlb-end-of-treatment" {
-            // Keep the historical capture intact. Flag and implicit secondary
-            // source expressions are admitted; the remaining scope gates stay held.
+            // Keep the historical capture intact. The remaining native gates are
+            // intermediate verifications and derivations; same-input scope is admitted.
             let mut gates = reference["eot_native_gates"].as_array().unwrap().clone();
             assert_eq!(gates.len(), 5);
             assert_eq!(
@@ -80,6 +80,10 @@ fn complete_independent_record_contexts_and_unchanged_original() {
             assert_eq!(
                 gates.pop().unwrap(),
                 serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["columns.ENDPOINT.derivation.source"],"context":{"operation":"secondary_source_expression"}})
+            );
+            assert_eq!(
+                gates.pop().unwrap(),
+                serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["intermediates[1]"],"context":{"operation":"intermediate_scope"}})
             );
             gates
         } else {
