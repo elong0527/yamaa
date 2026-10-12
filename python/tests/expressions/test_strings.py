@@ -677,3 +677,122 @@ def test_str_contains_propagates_missing_for_the_missing_handler() -> None:
     result = _contains("a", None)
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "missing_input"
+
+
+# --- mutation-driven regression tests (deep sweep 2026-10-12) ----------------
+# Cosmic-ray on expressions/strings.py: 318 mutants, 236 killed, 82 survived.
+# The survivors below are genuine behavior gaps (each kill-verified against
+# its hand-applied mutant); the rest are equivalent (PEP 563 annotations,
+# CPython interning of single-char strings, MISSING/NO_MATCH singleton
+# identity, lru_cache sizes, in-context arithmetic identities).
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ("{A", "unmatched_brace"),
+        ("A}", "unmatched_brace"),
+        ("{}", "invalid_placeholder"),
+    ],
+)
+def test_template_rejection_names_its_reason(text: str, reason: str) -> None:
+    # REQ-0461: the reason distinguishes the two brace failures; the
+    # grammar-conformance test only pins the shared condition.
+    with pytest.raises(TemplateError) as caught:
+        parse_template(text)
+    assert caught.value.reason == reason
+
+
+def test_template_accepts_characters_beside_the_brace_pair() -> None:
+    # R012 text is any R019 scalar value other than "{" and "}"; "|" and "~"
+    # sit above both braces in the scalar ordering and stay literal.
+    assert parse_template("a|b~c") == ({"kind": "text", "value": "a|b~c"},)
+
+
+def test_str_pad_accepts_a_width_of_one() -> None:
+    result = evaluate_expression(
+        {"str_pad": {"source": "VALUE", "width": 1}},
+        MappingResolver({"VALUE": "ABC"}),
+    )
+    assert result == ValueResult(value="ABC")
+
+
+@pytest.mark.parametrize(
+    ("source", "width", "reason"),
+    [
+        ("VALUE", 0, "non-positive width"),
+        ("VALUE", -3, "negative width"),
+        ("VALUE", True, "boolean width is not an exact int"),
+        (123, 4, "non-string source declaration"),
+        ("VALUE", "4", "non-integer width"),
+    ],
+)
+def test_str_pad_rejects_an_invalid_source_or_width(
+    source: object, width: object, reason: str
+) -> None:
+    # REQ-0321 (via _invalid_payload): a single guard pins both the source
+    # and the width contract (type(width) is not int rejects True), so the
+    # condition context must name the operation — a bare condition check
+    # could pass on a guard that fired elsewhere.
+    result = evaluate_expression(
+        {"str_pad": {"source": source, "width": width}},
+        MappingResolver({"VALUE": "ABC"}),
+    )
+    assert isinstance(result, ConditionResult), reason
+    assert result.condition.condition == "invalid_field_type", reason
+    assert result.condition.context["operation"] == "str_pad", reason
+    assert result.condition.context["expected"] == "a source and a positive width", (
+        reason
+    )
+
+
+def test_str_extract_defaults_to_the_whole_match() -> None:
+    result = evaluate_expression(
+        {"str_extract": {"source": "VALUE", "pattern": r"(\d+)-(\d+)"}},
+        MappingResolver({"VALUE": "AB12-34"}),
+    )
+    assert result == ValueResult(value="12-34")
+
+
+def test_str_extract_rejects_a_non_string_pattern() -> None:
+    result = evaluate_expression(
+        {"str_extract": {"source": "VALUE", "pattern": 123, "group": 0}},
+        MappingResolver({"VALUE": "AB12"}),
+    )
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+
+
+def test_str_concat_missing_source_keeps_nested_observations() -> None:
+    # REQ-0361: the missing handler's answer carries the observations the
+    # earlier nested sources recorded.
+    result = evaluate_expression(
+        {
+            "str_concat": {
+                "sources": [
+                    {"source": {"variable": "ABSENT", "absent": "NA"}},
+                    {"source": "B"},
+                ],
+                "missing": "?",
+            }
+        },
+        MappingResolver({"B": MISSING}),
+    )
+    assert isinstance(result, ValueResult)
+    assert result.value == "?"
+    assert result.handled_by == "missing"
+    assert [(item.path, item.handler) for item in result.observations] == [
+        ("sources[0].source", "absent")
+    ]
+
+
+def test_str_concat_rejects_a_bare_string_of_sources() -> None:
+    result = evaluate_expression(
+        {"str_concat": {"sources": "AB"}},
+        MappingResolver({"A": "x"}),
+    )
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+    # The guard rejects the mapping shape itself; it must not fall through
+    # to per-source validation of the string's characters.
+    assert result.condition.context["operation"] == "str_concat"
