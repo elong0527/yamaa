@@ -349,26 +349,18 @@ fn unsupported_operations_handlers_and_metadata_are_refused_before_binding() {
     let schema = schema(&root.join("yaml"));
     let raw =
         std::fs::read_to_string(root.join("benchmarks/negative-zero-division/spec.yaml")).unwrap();
-    for (written, feature) in [
-        (
-            raw.replace("input/lb.csv", "{path: input/lb.csv, ordinal: RECNO}"),
-            "ordinal",
-        ),
-        (
-            format!("{raw}\nmetadata:\n  label: reserved\n"),
-            "reserved_metadata_key",
-        ),
-    ] {
-        let captured = prepare(&schema, written.as_bytes());
-        let error = PreparedSpecification::prepare(captured.model()).unwrap_err();
-        let PrepareError::Unsupported(features) = error else {
-            panic!("{error:?}")
-        };
-        assert!(
-            features.iter().any(|f| f.operation == feature),
-            "{features:?}"
-        );
-    }
+    let written = format!("{raw}\nmetadata:\n  label: reserved\n");
+    let captured = prepare(&schema, written.as_bytes());
+    let error = PreparedSpecification::prepare(captured.model()).unwrap_err();
+    let PrepareError::Unsupported(features) = error else {
+        panic!("{error:?}")
+    };
+    assert!(
+        features
+            .iter()
+            .any(|f| f.operation == "reserved_metadata_key"),
+        "{features:?}"
+    );
     let written = raw.replace("100 * (AVAL - BASE) / BASE", "LB.LBSTRESN + 1");
     let captured = prepare(&schema, written.as_bytes());
     let prepared = PreparedSpecification::prepare(captured.model()).unwrap();
@@ -551,13 +543,13 @@ fn compiler_diagnostics_match_independent_reference_paths_context_and_phase() {
         (
             "BOGUS + 1",
             "unknown_field",
-            None,
+            Some("REQ-0106"),
             json!({"identifier":"BOGUS"}),
         ),
         (
             "LBSTRESN + 1",
             "unresolvable_name",
-            None,
+            Some("REQ-0106"),
             json!({"identifier":"LBSTRESN","suggestion":"LB.LBSTRESN"}),
         ),
     ] {
@@ -627,7 +619,7 @@ fn preflight_reports_all_findings_in_reference_order_before_source_access() {
             json!({"phase":"validation","condition":"missing_derivation","spec_paths":["columns.PCHG.derivation"],"requirement":"REQ-0198","context":{"column":"PCHG"}}),
             json!({"phase":"validation","condition":"duplicate_identifier","spec_paths":["input.LB","domain"],"requirement":"REQ-0080","context":{"identifier":"LB"}}),
             json!({"phase":"validation","condition":"undeclared_column","spec_paths":["keys[3]"],"requirement":"REQ-0220","context":{"column":"BOGUS"}}),
-            json!({"phase":"validation","condition":"driver_unavailable","spec_paths":["base"],"requirement":null,"context":{"dataset":"BAD"}}),
+            json!({"phase":"validation","condition":"driver_unavailable","spec_paths":["base"],"requirement":"REQ-0064","context":{"dataset":"BAD"}}),
         ]
     );
 }
@@ -813,7 +805,7 @@ fn binding_collects_ordered_findings_before_dependency_diagnostics() {
     let case = root.join("benchmarks/negative-zero-division");
     let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
     let data = std::fs::read(case.join("input/lb.csv")).unwrap();
-    let unknown = json!({"phase":"validation","condition":"unknown_field","requirement":null,"spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"identifier":"BOGUS"}});
+    let unknown = json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0106","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"identifier":"BOGUS"}});
     let cycle = json!({"phase":"validation","condition":"dependency_cycle","requirement":"REQ-0072","spec_paths":["columns.PCHG.derivation.compute"],"context":{"cycle":["PCHG","PCHG"]}});
     let written = raw
         .replace("derivation: LB.LBSTRESN", "derivation: LB.BOGUS")
@@ -1709,7 +1701,7 @@ fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
     let error = PreparedRun::prepare(prepare(&schema, written.as_bytes()))
         .err()
         .unwrap();
-    assert_eq!(specification_diagnostics::findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","requirement":null,"spec_paths":["rows[1].dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
+    assert_eq!(specification_diagnostics::findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","requirement":"REQ-0034","spec_paths":["rows[1].dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
     let written = raw.replace(
         "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]",
         "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT, LB.ABSENT]",
@@ -1972,7 +1964,7 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
     assert_eq!(
         specification_diagnostics::findings(&error, None).unwrap(),
         vec![
-            json!({"phase":"validation","condition":"undeclared_column","requirement":null,"spec_paths":["rows[0].derivations.ABSENT"],"context":{"column":"ABSENT"}}),
+            json!({"phase":"validation","condition":"undeclared_column","requirement":"REQ-0202","spec_paths":["rows[0].derivations.ABSENT"],"context":{"column":"ABSENT"}}),
             json!({"phase":"validation","condition":"missing_derivation","requirement":"REQ-0200","spec_paths":["columns.PARAM.derivation"],"context":{"column":"PARAM","rows":["collected"]}}),
             json!({"phase":"validation","condition":"conflicting_row_construction","requirement":"REQ-1171","spec_paths":["filter","rows"],"context":{}}),
         ]
@@ -3627,7 +3619,36 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
                     .map(|response| &response.outcome)
             )
         });
-        let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
+        let mut expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
+        // Keep the historical capture unchanged; REQ-0068 now owns these
+        // independently specified row-filter phase failures.
+        if prefix == "row-filter"
+            && matches!(
+                fields[0],
+                "grouped_source_phase"
+                    | "grouped_unknown_phase"
+                    | "record_unknown_phase"
+                    | "group_and_filter_order"
+            )
+        {
+            for diagnostics in ["diagnostics", "nodes"] {
+                let values = if diagnostics == "nodes" {
+                    &mut expected["nodes"][0]["diagnostics"]
+                } else {
+                    &mut expected["diagnostics"]
+                };
+                let mut corrected = 0;
+                for finding in values.as_array_mut().unwrap() {
+                    if finding["condition"] == "phase_boundary" {
+                        assert_eq!(finding["requirement"], serde_json::Value::Null);
+                        assert_eq!(finding["spec_paths"], serde_json::json!(["rows[0].filter"]));
+                        finding["requirement"] = serde_json::json!("REQ-0068");
+                        corrected += 1;
+                    }
+                }
+                assert_eq!(corrected, 1);
+            }
+        }
         let mut unsaved = expected.clone();
         unsaved["artifacts"] = serde_json::json!([]);
         assert_eq!(result.observations(), unsaved, "{}", fields[0]);
@@ -3760,6 +3781,119 @@ fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
 }
 
 #[test]
+fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
+    use std::collections::BTreeMap;
+    use yamaa_adapters::{
+        specification_report::{self, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_engine::specification::SourceDeclaration;
+    fn bytes(hex: &str) -> Vec<u8> {
+        (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+            .collect()
+    }
+    struct Port {
+        inputs: BTreeMap<String, Arc<[u8]>>,
+        calls: Vec<String>,
+        expected: Vec<u8>,
+        saves: usize,
+    }
+    impl SourcePort for Port {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.calls.len()
+        }
+        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+            assert_eq!(source.path, format!("{}.csv", source.name.to_lowercase()));
+            self.calls.push(source.name.clone());
+            let input = &self.inputs[&source.name];
+            assert!(input.len() <= maximum);
+            Ok(Arc::clone(input))
+        }
+    }
+    impl specification_report::ArtifactPort for Port {
+        type Error = ();
+        fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), ()> {
+            assert!(!self.expected.is_empty(), "failed mapping/cut published");
+            assert_eq!(path, "result.csv");
+            assert_eq!(content, self.expected);
+            self.saves += 1;
+            Ok(())
+        }
+    }
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let mut count = 0;
+    for line in include_str!("fixtures/original_mapping_cut.tsv")
+        .lines()
+        .skip(1)
+    {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        assert_eq!(fields.len(), 6);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&bytes(fields[5])).unwrap(),
+            serde_json::from_str::<serde_json::Value>(fields[3]).unwrap()
+        );
+        let run = PreparedRun::prepare(prepare(&schema, &bytes(fields[1]))).unwrap();
+        let inputs: BTreeMap<String, String> = serde_json::from_str(fields[2]).unwrap();
+        let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
+        // A second attempt must neither inherit choices nor accumulate handler counts.
+        for _ in 0..2 {
+            let mut port = Port {
+                inputs: inputs
+                    .iter()
+                    .map(|(n, h)| (n.clone(), bytes(h).into()))
+                    .collect(),
+                calls: vec![],
+                expected: bytes(fields[4]),
+                saves: 0,
+            };
+            let attempt = run.execute_with_port(&mut port);
+            let example = format!("mapping-cut-{}", fields[0]);
+            let result = specification_report::build_result(
+                &run,
+                &attempt,
+                Identity {
+                    runtime: "python",
+                    runtime_version: "fixture-runtime",
+                    engine_version: "fixture-engine",
+                    example: &example,
+                    specification: "spec.yaml",
+                    base_directory: ".",
+                },
+            )
+            .unwrap();
+            let mut unsaved = expected.clone();
+            unsaved["artifacts"] = serde_json::json!([]);
+            assert_eq!(result.observations(), unsaved, "{}", fields[0]);
+            if port.expected.is_empty() {
+                assert!(result.output().is_none());
+                assert!(matches!(
+                    result.save(&mut port),
+                    Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                ));
+            } else {
+                for _ in 0..2 {
+                    assert_eq!(*result.save(&mut port).unwrap(), expected, "{}", fields[0]);
+                }
+                assert_eq!(port.saves, 2);
+            }
+            assert_eq!(
+                port.calls,
+                if inputs.contains_key("DONOR") {
+                    vec!["SRC", "DONOR"]
+                } else {
+                    vec!["SRC"]
+                }
+            );
+        }
+        count += 1;
+    }
+    assert_eq!(count, 21);
+}
+
+#[test]
 fn source_condition_stays_unknown_under_the_normative_grammar() {
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let raw=b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: src.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation:\n      source: {variable: SRC.ID, condition: TRUE}\n";
@@ -3781,4 +3915,32 @@ fn source_condition_stays_unknown_under_the_normative_grammar() {
         .any(|issue| issue["condition"] == "unknown_field"
             && issue["spec_paths"]
                 == serde_json::json!(["columns.ID.derivation.source.condition"])));
+}
+
+#[test]
+fn original_mapping_cut_admission_has_complete_findings_before_study_ports() {
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    for line in include_str!("fixtures/mapping_cut_admission.tsv")
+        .lines()
+        .skip(1)
+    {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        let bytes = (0..fields[1].len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&fields[1][i..i + 2], 16).unwrap())
+            .collect::<Vec<_>>();
+        let error =
+            yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &bytes))
+                .unwrap_err();
+        let expected: serde_json::Value = serde_json::from_str(fields[2]).unwrap();
+        assert_eq!(
+            yamaa_adapters::specification_diagnostics::findings(&error, None).unwrap(),
+            expected["outcome"]["diagnostics"]
+                .as_array()
+                .unwrap()
+                .clone(),
+            "{}",
+            fields[0]
+        );
+    }
 }

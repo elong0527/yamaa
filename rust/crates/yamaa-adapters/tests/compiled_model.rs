@@ -490,19 +490,43 @@ fn all_six_original_yaml_documents_compile_against_independent_model_expectation
 }
 
 #[test]
-fn inherited_unsupported_operations_retain_written_layer_and_location_before_study_effects() {
+fn inherited_unknown_profile_retains_written_layer_and_location_before_study_effects() {
     let (document, parents) = prepare("schema-inheritance", true);
-    let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(document.model())
+    let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(document.model())
     else {
-        panic!("unsupported source profile")
+        panic!("unknown source profile")
     };
-    assert_eq!(features.len(), 1);
+    assert_eq!(findings.len(), 1);
+    let diagnostic = findings[0].diagnostic();
     assert_eq!(
-        (features[0].operation.as_str(), features[0].path.as_str()),
-        ("source_format", "input.LB.path")
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().requirement
+        ),
+        ("validation", "source_profile_unknown", Some("REQ-0852"))
+    );
+    assert_eq!(diagnostic.spec_paths, ["input.LB.path"]);
+    assert_eq!(
+        diagnostic.context,
+        [
+            (
+                "dataset".into(),
+                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                    "LB".into()
+                ))
+            ),
+            (
+                "path".into(),
+                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                    "input/lb.xlsx".into()
+                ))
+            )
+        ]
+        .into()
     );
     assert_eq!(
-        document.declaring_source(&features[0].path),
+        document.declaring_source(&diagnostic.spec_paths[0]),
         Some("spec_organization.yaml")
     );
     let parent = document

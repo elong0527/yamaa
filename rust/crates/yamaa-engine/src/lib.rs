@@ -8,6 +8,7 @@ pub mod dataset;
 mod dataset_budget;
 pub mod dataset_predicate;
 mod dataset_verification;
+pub mod dictionary_preparation;
 pub mod document_preparation;
 pub mod domain;
 pub mod domain_entry;
@@ -44,6 +45,7 @@ pub fn engine_info() -> EngineInfo {
 
 pub mod table_reduction;
 
+pub mod source_ingestion;
 pub mod specification;
 pub mod specification_output;
 pub mod specification_run;

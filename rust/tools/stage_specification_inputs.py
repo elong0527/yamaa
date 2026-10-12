@@ -545,6 +545,18 @@ def stage(destination: Path):
             case.mkdir()
             for name, content in json.loads(row["inputs_json"]).items():
                 (case / (name.lower() + ".csv")).write_bytes(bytes.fromhex(content))
+    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/mapping_cut_admission.tsv", destination / "mapping-cut-admission.tsv")
+    source_truth = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.tsv"
+    shutil.copy2(source_truth, destination / "original-mapping-cut.tsv")
+    source_cases = destination / "mapping-cut-cases"
+    source_cases.mkdir()
+    with source_truth.open(encoding="ascii") as stream:
+        for row in csv.DictReader(stream, delimiter="\t"):
+            # R CMD build removes directories ending in old, including ascii_fold.
+            case = source_cases / (row["case"] + "-fixture")
+            case.mkdir()
+            for name, content in json.loads(row["inputs_json"]).items():
+                (case / (name.lower() + ".csv")).write_bytes(bytes.fromhex(content))
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_filters.tsv", destination / "source-filters.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/first_available.tsv", destination / "first-available.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_assertions.tsv", destination / "original-assertions.tsv")

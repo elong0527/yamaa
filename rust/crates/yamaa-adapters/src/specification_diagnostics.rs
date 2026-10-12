@@ -103,6 +103,15 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
         }
         Error::Prepare(PrepareError::Invalid(errors)) => errors.iter().map(preparing).collect(),
         Error::Bind(error) => binding(error, source?),
+        Error::Ordinal(error) => {
+            let source = source?;
+            Some(vec![portable_diagnostic(
+                error
+                    .finding(&source.name, source.ordinal.as_deref()?)?
+                    .diagnostic()
+                    .ok()?,
+            )?])
+        }
         Error::ParquetSource(error) => {
             let source = source?;
             Some(vec![portable_diagnostic(
@@ -129,18 +138,19 @@ pub fn findings_with_limit(
     maximum: usize,
 ) -> Result<Option<Vec<Value>>, crate::source_diagnostics::SourceProjectionError> {
     match error {
-        Error::Sources(_) | Error::ParquetSource(_) | Error::TypedSource(_) | Error::Source(_) => {
-            Ok(
-                crate::source_diagnostics::findings_with_limit(error, source, maximum)?.and_then(
-                    |findings| {
-                        findings
-                            .into_iter()
-                            .map(portable_diagnostic)
-                            .collect::<Option<Vec<_>>>()
-                    },
-                ),
-            )
-        }
+        Error::Sources(_)
+        | Error::ParquetSource(_)
+        | Error::TypedSource(_)
+        | Error::Source(_)
+        | Error::Ordinal(_) => Ok(crate::source_diagnostics::findings_with_limit(
+            error, source, maximum,
+        )?
+        .and_then(|findings| {
+            findings
+                .into_iter()
+                .map(portable_diagnostic)
+                .collect::<Option<Vec<_>>>()
+        })),
         Error::Prepare(PrepareError::Invalid(errors)) => Ok(errors.iter().map(preparing).collect()),
         Error::Bind(error) => Ok(source.and_then(|source| binding(error, source))),
         _ => Ok(None),
@@ -191,6 +201,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
                 ("ingest", "parquet_codec_unavailable")
             }
             Error::ParquetSource(_) => ("ingest", "parquet_boundary"),
+            Error::Ordinal(_) => ("ingest", "source_ordinal_boundary"),
             Error::Bind(BindError::Catalog(_)) => ("bind", "reference_catalog"),
             Error::Bind(BindError::DependencyPolicy(_)) => ("bind", "dependency_policy"),
             Error::Bind(BindError::SourceCount) => ("bind", "source_count"),

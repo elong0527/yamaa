@@ -44,6 +44,10 @@ pub enum SourceFinding<'a> {
         dataset: &'a str,
         field: &'a str,
     },
+    OrdinalCollision {
+        dataset: &'a str,
+        field: &'a str,
+    },
     FieldParse {
         dataset: &'a str,
         field: &'a str,
@@ -73,6 +77,7 @@ impl SourceFinding<'_> {
         match self {
             Self::Csv { cause, .. } => cause.code(),
             Self::UnknownField { .. } => C::SourceTypeUnknownField,
+            Self::OrdinalCollision { .. } => C::SourceOrdinalCollision,
             Self::FieldParse { .. } => C::SourceTypeFieldParse,
             Self::Parquet { finding, .. } => match finding {
                 ParquetFinding::Invalid => C::ParquetInvalid,
@@ -96,12 +101,17 @@ impl SourceFinding<'_> {
             | Self::UnknownField { dataset, .. }
             | Self::FieldParse { dataset, .. }
             | Self::Parquet { dataset, .. } => dataset,
+            Self::OrdinalCollision { dataset, .. } => dataset,
         };
         // Charge each component of the constructed specification path before formatting.
         budget.text("input.")?;
         budget.text(dataset)?;
         budget.field("dataset", dataset)?;
         match self {
+            Self::OrdinalCollision { field, .. } => {
+                budget.text(".ordinal")?;
+                budget.field("field", field)?;
+            }
             Self::Csv { field, path, .. } => {
                 budget.text(".path")?;
                 budget.field("path", path)?;
@@ -173,9 +183,14 @@ impl SourceFinding<'_> {
             | Self::UnknownField { dataset, .. }
             | Self::FieldParse { dataset, .. }
             | Self::Parquet { dataset, .. } => dataset,
+            Self::OrdinalCollision { dataset, .. } => dataset,
         };
         let mut context = Context::from([("dataset".into(), text(dataset))]);
         let spec_path = match self {
+            Self::OrdinalCollision { field, .. } => {
+                context.insert("field".into(), text(field));
+                format!("input.{dataset}.ordinal")
+            }
             Self::Csv {
                 record,
                 field,

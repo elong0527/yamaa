@@ -532,6 +532,103 @@ class OriginalSpecifications(unittest.TestCase):
                             result.save(publish)
                         self.assertEqual(saves, [])
 
+    def test_native_file_dictionary_resources_match_independent_inline_truth(self):
+        # These authored dictionaries share the established independent inline truth.
+        dictionaries = {
+            "exact_typed": "{Y: 1, y: 2.0, Z: null}",
+            "ascii_fold": "{'yes': 'matched', \"\\u00e9a\": 'foreign', \"\\u00c9a\": 'capital', \"\\u00df\": 'sharp', 'ss': 'double'}",
+            "lazy_case": "{Y: 1}",
+            "nested_concat": "{Y: 'yes'}",
+            "record_mapping": "{Y: 1}",
+            "multiple_distinct_input": "{Y: yes}",
+        }
+        with (ROOT / "original-mapping-cut.tsv").open(encoding="ascii") as stream:
+            cases = {row["case"]: row for row in csv.DictReader(stream, delimiter="\t")}
+        for name, dictionary in dictionaries.items():
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                row = cases[name]
+                authored = bytes.fromhex(row["source_hex"]).decode("ascii")
+                inline = "dict: " + dictionary
+                self.assertEqual(authored.count(inline), 1)
+                (root / "spec.yaml").write_text(authored.replace(inline, "dict: ./dictionary.yaml"), encoding="ascii")
+                (root / "dictionary.yaml").write_text(dictionary + "\n", encoding="ascii")
+                inputs = {n: bytes.fromhex(value) for n, value in json.loads(row["inputs_json"]).items()}
+                for source, value in inputs.items():
+                    (root / (source.lower() + ".csv")).write_bytes(value)
+                prepared = yamaa_native._prepare_file_specification(str(root), str(root), "spec.yaml", [])
+                self.assertEqual(prepared.capture_reads(), 2)
+                self.assertEqual(json.loads(prepared.check_issues()), [])
+                expected = json.loads(row["expected"])
+                artifact = bytes.fromhex(row["artifact_hex"])
+                metadata = ("fixture-runtime", "fixture-engine", "mapping-cut-" + name, "spec.yaml", ".")
+                for created in (1, 0):
+                    for read in expected["source_reads"]:
+                        if read["snapshots_created"] is not None:
+                            read["snapshots_created"] = created
+                    result = prepared.build(metadata)
+                    self.assertEqual(json.loads(result.observations()), dict(expected, artifacts=[]))
+                    self.assertEqual(prepared.capture_reads(), 2 + len(inputs))
+                    target = root / "result.csv"
+                    if artifact:
+                        self.assertEqual(json.loads(result.save_file("result.csv", str(target))), expected)
+                        self.assertEqual(target.read_bytes(), artifact)
+                    else:
+                        self.assertIsNone(result.output())
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save_file("result.csv", str(target))
+                        self.assertFalse(target.exists())
+
+    def test_original_mapping_cut_admission_precedes_all_ports(self):
+        def no_port(*_):
+            self.fail("mapping/cut admission reached a study or inheritance port")
+        with (ROOT / "mapping-cut-admission.tsv").open(encoding="ascii") as stream:
+            rows = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(rows), 5)
+        for row in rows:
+            with self.subTest(case=row["case"]):
+                with self.assertRaises(ValueError) as failure:
+                    yamaa_native._prepare_document("spec.yaml", bytes.fromhex(row["source_hex"]), no_port, no_port, no_port)
+                self.assertEqual(json.loads(str(failure.exception)), json.loads(row["expected"]))
+
+    def test_original_mapping_cut_complete_reports_and_exact_csv(self):
+        with (ROOT / "original-mapping-cut.tsv").open(encoding="ascii") as stream:
+            cases = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(cases), 21)
+        def no_port(*_):
+            self.fail("standalone mapping/cut reached an inheritance port")
+        for row in cases:
+            with self.subTest(case=row["case"]):
+                handle = yamaa_native._prepare_document("spec.yaml", bytes.fromhex(row["source_hex"]), no_port, no_port, no_port)
+                inputs = {name: bytes.fromhex(content) for name, content in json.loads(row["inputs_json"]).items()}
+                expected = json.loads(row["expected"])
+                artifact = bytes.fromhex(row["artifact_hex"])
+                for _ in range(2):
+                    calls = []
+                    def capture(name, path, maximum):
+                        self.assertEqual(path, name.lower() + ".csv")
+                        self.assertLessEqual(len(inputs[name]), maximum)
+                        calls.append(name)
+                        return inputs[name], True
+                    result = handle.build(capture, ("fixture-runtime", "fixture-engine", "mapping-cut-" + row["case"], "spec.yaml", "."))
+                    self.assertEqual(json.loads(result.observations()), dict(expected, artifacts=[]))
+                    self.assertEqual(calls, ["SRC", "DONOR"] if "DONOR" in inputs else ["SRC"])
+                    saves = []
+                    def publish(path, content):
+                        self.assertEqual(path, "result.csv")
+                        self.assertEqual(content, artifact)
+                        saves.append(content)
+                    if artifact:
+                        for _ in range(2):
+                            self.assertEqual(json.loads(result.save(publish)), expected)
+                        self.assertEqual(saves, [artifact, artifact])
+                    else:
+                        self.assertIsNone(result.output())
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save(publish)
+                        self.assertEqual(saves, [])
+
+
     def test_original_filtered_sources_complete_reports_and_exact_csv(self):
         self._source_selection_reports("source-filters.tsv", "source-filter", 13)
 
@@ -634,6 +731,17 @@ class OriginalSpecifications(unittest.TestCase):
                 spec = yamaa_native._prepare_document("spec.yaml", raw, no_parent, no_parent, no_parent)
                 content = bytes.fromhex(record["input_hex"])
                 expected = json.loads(record["expected"])
+                # Preserve captured truth; REQ-0068 owns these phase failures.
+                if prefix == "row-filter" and record["case"] in (
+                    "grouped_source_phase", "grouped_unknown_phase",
+                    "record_unknown_phase", "group_and_filter_order",
+                ):
+                    for diagnostics in (expected["diagnostics"], expected["nodes"][0]["diagnostics"]):
+                        findings = [d for d in diagnostics if d["condition"] == "phase_boundary"]
+                        self.assertEqual(len(findings), 1)
+                        self.assertIsNone(findings[0]["requirement"])
+                        self.assertEqual(findings[0]["spec_paths"], ["rows[0].filter"])
+                        findings[0]["requirement"] = "REQ-0068"
                 metadata = ("fixture-runtime", "fixture-engine", prefix + "-" + record["case"], "spec.yaml", ".")
                 calls = []
                 def capture(name, path, maximum):
@@ -1089,18 +1197,20 @@ class OriginalSpecifications(unittest.TestCase):
             self.assertIs(raised.exception, failure)
             self.assertEqual(requests, ["DM", "AE"])
 
-    def test_unsupported_preparation_has_no_source_effect(self):
+    def test_unknown_source_profile_is_normative_before_source_effect(self):
         source = (ROOT / "cases" / CASES[0] / "spec.yaml").read_bytes()
-        for candidate in (
-            source.replace(b"input/lb.csv", b"input/lb.unknown"),
-        ):
-            with self.subTest(source=candidate):
-                self.assertNotEqual(candidate, source)
-                with self.assertRaises(ValueError) as raised:
-                    yamaa_native._prepare_specification(modules(), 0, "spec.yaml", candidate)
-                self.assertEqual(
-                    json.loads(str(raised.exception))["outcome"]["status"], "unsupported"
-                )
+        candidate = source.replace(b"input/lb.csv", b"input/lb.unknown")
+        self.assertNotEqual(candidate, source)
+        with self.assertRaises(ValueError) as raised:
+            yamaa_native._prepare_specification(modules(), 0, "spec.yaml", candidate)
+        self.assertEqual(json.loads(str(raised.exception)), {
+            "protocol": "specification/prototype",
+            "outcome": {"status": "invalid", "diagnostics": [{
+                "phase": "validation", "condition": "source_profile_unknown",
+                "requirement": "REQ-0852", "spec_paths": ["input.LB.path"],
+                "context": {"dataset": "LB", "path": "input/lb.unknown"},
+            }]},
+        })
 
     def test_approved_math_preparation_has_no_source_effect(self):
         source = (ROOT / "cases" / CASES[0] / "spec.yaml").read_bytes()
@@ -1663,7 +1773,7 @@ class PublicDomains(unittest.TestCase):
                     result.save()
                 self.assertEqual(sorted(p.name for p in case.glob("*.csv")), [])
 
-    def test_public_string_case_modes_original_negatives_and_ordering_blocker(self):
+    def test_public_string_case_modes_original_negatives_and_ordered_original(self):
         import shutil
 
         import yamaa
@@ -1729,14 +1839,60 @@ columns:
                 self.assertFalse((case / "input").exists())
             case = root / "schema-sentence-case"
             shutil.copytree(ROOT / "cases" / case.name, case)
-            expected = [{"phase":"planning", "condition":"unsupported_operation", "requirement":None,
-                "spec_paths":["output.order_by"], "context":{"operation":"order_by"}}]
-            self.assertEqual(issues(yamaa.check(case / "spec.yaml")), expected)
-            rejected = yamaa.domain(case / "spec.yaml")
-            self.assertEqual(issues(rejected), expected)
-            self.assertIsNone(rejected.output)
-            self.assertIsNone(rejected._native.observations())
+            self.assertEqual(issues(yamaa.check(case / "spec.yaml")), [])
+            result = yamaa.domain(case / "spec.yaml")
+            self.assertEqual(issues(result), [])
+            self.assertIsNotNone(result.output)
             self.assertFalse((case / "adlb.csv").exists())
+            self.assertTrue(result.save())
+            self.assertEqual((case / "adlb.csv").read_bytes(), (case / "expected/adlb.csv").read_bytes())
+
+    def test_public_source_positions_raw_filter_and_internal_presentation_order(self):
+        import yamaa
+
+        def issues(result):
+            records = result.issues.to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
+            return records
+
+        source = """schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: {path: input.csv, ordinal: REC}}
+filter: "SRC.KEEP = 'Y'"
+output: {path: output.csv, columns: [ID, POSITION], order_by: [SORT]}
+columns:
+  - {name: ID, type: str, derivation: SRC.ID}
+  - {name: POSITION, type: int, derivation: SRC.REC}
+  - {name: SORT, type: int, derivation: SRC.SORT}
+"""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry, data, output = root / "spec.yaml", root / "input.csv", root / "output.csv"
+            entry.write_text(source, encoding="ascii")
+            for content, rows, expected in [
+                (b'ID,SORT,KEEP,NOTE\na,5,N,first\nb,2,Y,"two\nlines"\nc,1,Y,last\n', [("c", 3), ("b", 2)], b"ID,POSITION\nc,3\nb,2\n"),
+                (b"ID,SORT,KEEP,NOTE\n", [], b"ID,POSITION\n"),
+            ]:
+                data.write_bytes(content)
+                self.assertEqual(issues(yamaa.check(entry)), [])
+                result = yamaa.domain(entry)
+                self.assertEqual(issues(result), [])
+                self.assertEqual(result.output.rows(), rows)
+                self.assertFalse(output.exists())
+                data.unlink()
+                for _ in range(2):
+                    self.assertTrue(result.save())
+                    self.assertEqual(output.read_bytes(), expected)
+                output.unlink()
+            data.write_bytes(b"ID,REC,SORT,KEEP\n")
+            result = yamaa.domain(entry)
+            self.assertEqual(issues(result), [{"phase":"validation", "condition":"ordinal_field_collision", "requirement":"REQ-1294", "spec_paths":["input.SRC.ordinal"], "context":{"dataset":"SRC", "field":"REC"}}])
+            self.assertIsNone(result.output)
+            with self.assertRaises(yamaa.DomainError):
+                result.save()
+            self.assertFalse(output.exists())
 
     def test_public_string_padding_complete_independent_outputs_findings_and_effects(self):
         import shutil

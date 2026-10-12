@@ -277,7 +277,7 @@ rows:
         vec![yamaa_adapters::issue_rows::Issue {
             phase: "validation".into(),
             condition: "phase_boundary".into(),
-            requirement: None,
+            requirement: Some("REQ-0068".into()),
             spec_paths: vec!["rows[0].filter".into()],
             context: serde_json::json!({
                 "available_phase": "window_derivation",

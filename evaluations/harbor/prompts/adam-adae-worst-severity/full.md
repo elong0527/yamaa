@@ -3,11 +3,11 @@ create an ADAE dataset with one record per adverse event.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL,
-AESEVN, AWSEVFL
+ASEVN, AOCCPIFL
 
-AESEVN is the numeric rank of AESEV: 1 for MILD through 3 for SEVERE,
-and has no value when no severity was collected. AWSEVFL is Y on the
-eligible event with the greatest AESEVN for the subject and preferred
+ASEVN is the numeric rank of AESEV: 1 for MILD through 3 for SEVERE,
+and has no value when no severity was collected. AOCCPIFL is Y on the
+eligible event with the greatest ASEVN for the subject and preferred
 term. Only a treatment-emergent event with a graded severity is
 eligible, so a preferred term whose events are all ineligible has no
 flagged event. Ties break by earliest ASTDT, then lowest AESEQ, so

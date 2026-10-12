@@ -72,10 +72,13 @@ changing public condition names. The existing `phase`, `condition` and
 `requirement` methods delegate to the same registry as the diagnostic projection.
 Registry identity has no serialization or content-hash role.
 
-Original preflight findings for undeclared row columns and unavailable drivers
-retain their existing null requirement. Assigning a requirement merely to make
-the registry non-null would change independent truth. The core projection also
-preserves authored row indexes, column names, ordered multi-path conflicts,
+The approved #1973 item 7 decision and #2004 assign the language findings
+their governing rules: undeclared row columns use REQ-0202; row and default
+drivers use REQ-0034 and REQ-0064; row-filter phase boundaries use REQ-0068;
+unqualified output references use REQ-0106. Rule extensions and migration
+provenance explicitly record the driver and filter failure behavior. Only the
+implementation conditions listed in REQ-1297 retain a null requirement.
+The core projection preserves authored row indexes, column names, ordered multi-path conflicts,
 missing driver values and empty/repeated row or group lists. The report adapter
 represents these typed findings as the existing JSON shape. Resource failures
 use that same projection without a tagged-scalar encode/decode round trip.
@@ -97,8 +100,11 @@ compares independently stated public vocabulary and preflight context. It also c
 nested source location, literal/arithmetic integer overflow, a 5,000-digit failed
 conversion and an opaque non-Clone host error whose identity and first-failure
 order survive diagnostic inspection. Adding a registry entry without a reached
-test fails that coverage assertion. The unchanged shared transport/lifecycle and
-original-document fixtures continue to pin exact complete outcomes.
+test fails that coverage assertion. Shared transport/lifecycle and
+original-document fixtures pin exact complete outcomes. The #2004 private
+preflight, binding and row-filter fixtures change only their approved
+requirement fields; all other captured reference facts remain unchanged.
+Rust and both installed hosts consume those same rule-owned expectations.
 
 Five authored preflight documents carry sixteen complete ordered findings from
 the independent reference implementation in `tests/fixtures/preflight.tsv`. Rust
@@ -130,6 +136,9 @@ produce no semantic projection; parser policy limits remain separate failures.
 `tools/check_diagnostics.py` checks literal requirement IDs across every Rust
 crate's source against current normative rule definitions. It also requires each
 core registry condition and phase to be registered in `yaml/conditions.yaml`.
+The explicit null list in `rules/execution/lifecycle.md` is the normative source
+for requirement absence: a new null language cause, incorrect phase, unused
+exception or malformed policy block fails the guard.
 Adapter and binding source literals are bounded by exact existing source lines
 and occurrence counts. Generated `shipped_schema_data.rs` is exempt from the
 ownership ratchet; its requirements are still checked against normative rules.

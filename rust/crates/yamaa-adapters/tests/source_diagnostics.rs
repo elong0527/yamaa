@@ -21,6 +21,7 @@ fn source(name: &str, path: &str) -> SourceDeclaration {
         types: vec![],
         profile: SourceProfile::from_path(path).unwrap(),
         empty_string_present: false,
+        ordinal: None,
     }
 }
 fn table_limits() -> TableLimits {

@@ -72,6 +72,10 @@ pub use windows::{OrderTerm, Window, WindowKind};
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Aggregate(alloc::boxed::Box<BoundAggregate>),
+    MappingCut {
+        source: alloc::boxed::Box<Assignment>,
+        operation: crate::mapping_cut::MappingCut,
+    },
     Extreme {
         operands: Vec<Assignment>,
         largest: bool,
@@ -361,6 +365,7 @@ pub enum PlanError {
     InvalidKeyMode,
     InvalidWindow,
     InvalidSourceOrder,
+    InvalidOutputOrder,
     InvalidLookup,
     InvalidIntermediate,
     InvalidConversionHandler,
@@ -383,6 +388,7 @@ pub struct DatasetPlan {
     warning_verifications: alloc::collections::BTreeSet<String>,
     conversion_handlers: Vec<ConversionHandler>,
     conversion_sites: BTreeMap<String, usize>,
+    output_order: Vec<OrderTerm>,
 }
 
 /// Validate nonempty, unique, bound column lists without reading table cells.
@@ -565,7 +571,10 @@ fn validate_assignment_at(
                 available[assignment.column] = false;
             }
         }
-        Expression::StrCase {
+        Expression::MappingCut {
+            source: operand, ..
+        }
+        | Expression::StrCase {
             source: operand, ..
         }
         | Expression::StrPad {
@@ -844,6 +853,7 @@ fn key_expression(expression: &Expression) -> bool {
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::MappingCut { source, .. }
         | Expression::Round { source, .. } => key_expression(&source.expression),
         Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. }
@@ -914,6 +924,7 @@ fn current_record_read(
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::MappingCut { source, .. }
         | Expression::Round { source, .. } => {
             current_record_read(&source.expression, intermediates, scope)
         }
@@ -1173,11 +1184,29 @@ impl DatasetPlan {
             warning_verifications: Default::default(),
             conversion_handlers: Vec::new(),
             conversion_sites: BTreeMap::new(),
+            output_order: Vec::new(),
         })
     }
 }
 
 impl DatasetPlan {
+    /// Admit bound presentation terms separately from derivation and window order.
+    pub fn with_output_order(mut self, terms: Vec<OrderTerm>) -> Result<Self, PlanError> {
+        if terms.iter().enumerate().any(|(position, term)| {
+            term.column >= self.output.columns().len()
+                || terms[..position]
+                    .iter()
+                    .any(|other| other.column == term.column)
+        }) {
+            return Err(PlanError::InvalidOutputOrder);
+        }
+        self.output_order = terms;
+        Ok(self)
+    }
+    /// Presentation occurs only after all keys and verifications succeed.
+    pub fn output_order(&self) -> &[OrderTerm] {
+        &self.output_order
+    }
     /// Severity belongs to admitted check declarations, never host issue rows.
     pub fn with_warning_verifications(mut self, paths: Vec<String>) -> Result<Self, PlanError> {
         let checks: alloc::collections::BTreeSet<_> = self

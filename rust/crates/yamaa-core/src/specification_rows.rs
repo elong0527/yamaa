@@ -156,6 +156,8 @@ fn default_reads(
         | "str_contains"
         | "case"
         | "first_available"
+        | "mapping"
+        | "cut"
         | "row_number"
         | "rank"
         | "row_value"
@@ -1222,7 +1224,7 @@ impl Rows {
                     .transpose()
                     .map_err(BindError::InvalidPredicateBinding)?
             };
-            if let Some(filter) = filter.as_ref() {
+            if let Some(filter) = filter.as_ref().filter(|_| !grouped) {
                 let bound = intermediates
                     .iter()
                     .filter_map(Option::as_ref)

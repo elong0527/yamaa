@@ -18,6 +18,8 @@ mod dataset;
 #[path = "diagnostic/predicate_evaluation.rs"]
 mod predicate_evaluation;
 
+#[path = "diagnostic/mapping_cut.rs"]
+mod mapping_cut;
 #[path = "diagnostic/temporal_imputation.rs"]
 mod temporal_imputation;
 #[path = "diagnostic/text_case.rs"]
@@ -67,6 +69,7 @@ impl NumericResolver for Bindings {
 #[test]
 fn every_registered_cause_is_reached_with_its_normative_mapping() {
     let mut reached = BTreeSet::new();
+    reached.extend(mapping_cut::reached());
     let publication = yamaa_core::application_issue::publication_failed("generated/producer.csv");
     assert_eq!(
         (

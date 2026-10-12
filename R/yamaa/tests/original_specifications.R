@@ -21,6 +21,12 @@ modules <- setNames(lapply(file.path(root,"schema",module_names),rawfile),module
 # Both hosts receive already-resolved context from the captured Rust schema.
 prepare_entry <- get(".prepare_document",envir=asNamespace("yamaa"))
 no_port <- function(...) stop("invalid entry reached source authority")
+unknown_profile <- paste0("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n",
+  "input: {SRC: input.unknown}\noutput: {path: out.csv, columns: [ID]}\n",
+  "columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n")
+unknown_failure <- tryCatch(prepare_entry("spec.yaml",charToRaw(unknown_profile),no_port,no_port,no_port),error=identity)
+stopifnot(inherits(unknown_failure,"error"),identical(conditionMessage(unknown_failure),
+  '{"outcome":{"diagnostics":[{"condition":"source_profile_unknown","context":{"dataset":"SRC","path":"input.unknown"},"phase":"validation","requirement":"REQ-0852","spec_paths":["input.SRC.path"]}],"status":"invalid"},"protocol":"specification/prototype"}'))
 preflight_truth <- read.delim(file.path(root,"preflight.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
 stopifnot(nrow(preflight_truth)==5L)
 for(i in seq_len(nrow(preflight_truth))) {
@@ -810,7 +816,13 @@ for(i in seq_len(nrow(filter_truth))) {
   handle <- prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port)
   content <- hex_raw(row$input_hex[[1L]])
   artifact <- hex_raw(row$artifact_hex[[1L]])
-  expected <- sub('"runtime":"python"','"runtime":"r"',row$expected[[1L]],fixed=TRUE)
+  # Preserve historical captures; REQ-0068 owns these row-filter failures.
+  captured <- row$expected[[1L]]
+  if(prefix=="row-filter" && row$case[[1L]] %in% c("grouped_source_phase","grouped_unknown_phase","record_unknown_phase","group_and_filter_order")) {
+    stopifnot(length(gregexpr('"requirement":null',captured,fixed=TRUE)[[1L]])==2L)
+    captured <- gsub('"requirement":null','"requirement":"REQ-0068"',captured,fixed=TRUE)
+  }
+  expected <- sub('"runtime":"python"','"runtime":"r"',captured,fixed=TRUE)
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
   expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
   unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
@@ -879,6 +891,98 @@ for(i in seq_len(nrow(source_binding_truth))) {
   }
 }
 cat("original source bindings complete reports and exact repeated CSV passed\n")
+
+mapping_cut_admission <- read.delim(file.path(root,"mapping-cut-admission.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(mapping_cut_admission)==5L)
+for(i in seq_len(nrow(mapping_cut_admission))) {
+  row <- mapping_cut_admission[i,,drop=FALSE]
+  failure <- tryCatch(prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port),error=identity)
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),row$expected[[1L]]))
+}
+cat("original mapping/cut admission complete findings before ports passed\n")
+
+# Original mapping and cut operations have independently authored complete truth.
+mapping_cut_truth <- read.delim(file.path(root,"original-mapping-cut.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(mapping_cut_truth)==21L)
+for(i in seq_len(nrow(mapping_cut_truth))) {
+  row <- mapping_cut_truth[i,,drop=FALSE]
+  handle <- prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port)
+  artifact <- hex_raw(row$artifact_hex[[1L]])
+  expected <- sub('"runtime":"python"','"runtime":"r"',rawToChar(hex_raw(row$expected_wire_hex[[1L]])),fixed=TRUE)
+  expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
+  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
+  case <- file.path(root,"mapping-cut-cases",paste0(row$case[[1L]],"-fixture"))
+  for(j in seq_len(2L)) {
+    calls <- character();saves <- 0L
+    capture <- function(name,path,maximum) {
+      stopifnot(path==paste0(tolower(name),".csv"))
+      content <- rawfile(file.path(case,path));stopifnot(length(content)<=maximum)
+      calls <<- c(calls,name);list(content,TRUE)
+    }
+    publish <- function(path,content) {
+      stopifnot(length(artifact)>0L,path=="result.csv",identical(content,artifact))
+      saves <<- saves+1L;TRUE
+    }
+    result <- build(handle,capture,paste0("mapping-cut-",row$case[[1L]]))
+    stopifnot(identical(build_observations(result),unsaved),identical(calls,if(file.exists(file.path(case,"donor.csv"))) c("SRC","DONOR") else "SRC"))
+    if(length(artifact)) {
+      for(k in seq_len(2L)) stopifnot(identical(build_save(result,publish),expected))
+      stopifnot(saves==2L)
+    } else {
+      stopifnot(is.null(build_output(result)))
+      failure <- tryCatch(build_save(result,publish),error=identity)
+      stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"),saves==0L)
+    }
+  }
+}
+cat("original mapping/cut complete reports and exact repeated CSV passed\n")
+
+# File-backed dictionaries reuse authored inline complete report and CSV truth.
+dictionaries <- c(exact_typed="{Y: 1, y: 2.0, Z: null}",
+  ascii_fold=r"({'yes': 'matched', "\u00e9a": 'foreign', "\u00c9a": 'capital', "\u00df": 'sharp', 'ss': 'double'})",
+  lazy_case="{Y: 1}",nested_concat="{Y: 'yes'}",record_mapping="{Y: 1}",multiple_distinct_input="{Y: yes}")
+dictionary_prepare <- get(".prepare_file_specification",envir=asNamespace("yamaa"))
+dictionary_build <- get(".file_specification_build",envir=asNamespace("yamaa"))
+dictionary_reads <- get(".file_specification_reads",envir=asNamespace("yamaa"))
+for(name in names(dictionaries)) {
+  row <- mapping_cut_truth[mapping_cut_truth$case==name,,drop=FALSE]
+  stopifnot(nrow(row)==1L)
+  directory <- tempfile("dictionary-resource-");dir.create(directory)
+  directory <- normalizePath(directory,winslash="/",mustWork=TRUE)
+  inline <- paste0("dict: ",dictionaries[[name]])
+  authored <- rawToChar(hex_raw(row$source_hex[[1L]]))
+  stopifnot(grepl(inline,authored,fixed=TRUE))
+  writeBin(charToRaw(sub(inline,"dict: ./dictionary.yaml",authored,fixed=TRUE)),file.path(directory,"spec.yaml"))
+  writeBin(charToRaw(paste0(dictionaries[[name]],"\n")),file.path(directory,"dictionary.yaml"))
+  case <- file.path(root,"mapping-cut-cases",paste0(name,"-fixture"))
+  stopifnot(file.copy(file.path(case,"src.csv"),file.path(directory,"src.csv")))
+  handle <- dictionary_prepare(directory,directory,"spec.yaml")
+  stopifnot(dictionary_reads(handle)==2L)
+  expected <- sub('"runtime":"python"','"runtime":"r"',rawToChar(hex_raw(row$expected_wire_hex[[1L]])),fixed=TRUE)
+  expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
+  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  artifact <- hex_raw(row$artifact_hex[[1L]])
+  for(created in c(1L,0L)) {
+    if(created==0L) expected <- sub('"snapshots_created":1','"snapshots_created":0',expected,fixed=TRUE)
+    unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
+    result <- dictionary_build(handle,paste0("mapping-cut-",name))
+    stopifnot(identical(build_observations(result),unsaved),dictionary_reads(handle)==3L)
+    saves <- 0L
+    publish <- function(path,content) {
+      stopifnot(path=="result.csv",identical(content,artifact))
+      writeBin(content,file.path(directory,path));saves <<- saves+1L;TRUE
+    }
+    if(length(artifact)) {
+      stopifnot(identical(build_save(result,publish),expected),saves==1L,identical(rawfile(file.path(directory,"result.csv")),artifact))
+    } else {
+      failure <- tryCatch(build_save(result,publish),error=identity)
+      stopifnot(is.null(build_output(result)),inherits(failure,"error"),saves==0L,!file.exists(file.path(directory,"result.csv")))
+    }
+  }
+  unlink(directory,recursive=TRUE)
+}
+cat("original dictionary resources complete reports and exact repeated CSV passed\n")
 
 source_selection_truth("source-filters.tsv","source-filter",13L)
 cat("original source filters complete reports, cached reads and exact saved CSV passed\n")
@@ -1502,12 +1606,43 @@ local({
   case_name <- "schema-sentence-case"
   stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
   case <- file.path(directory,case_name);entry <- file.path(case,"spec.yaml")
-  checked <- yamaa_check(entry)$issues;rejected <- yamaa_domain(entry)
-  stopifnot(nrow(checked)==1L,identical(checked$phase,"planning"),identical(checked$condition,"unsupported_operation"),
-    is.na(checked$requirement),identical(checked$spec_paths,list("output.order_by")),
-    identical(checked$context,'{"operation":"order_by"}'),identical(rejected$issues,checked),is.null(rejected$output),
-    is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),!file.exists(file.path(case,"adlb.csv")))
-  cat("public ASCII string case matches independent exact outputs and original negatives; original sentence fixture retains output.order_by blocker without Python passed\n")
+  checked <- yamaa_check(entry)$issues;result <- yamaa_domain(entry)
+  stopifnot(nrow(checked)==0L,nrow(result$issues)==0L,!is.null(result$output),
+    !file.exists(file.path(case,"adlb.csv")),identical(result$save(),TRUE),
+    identical(rawfile(file.path(case,"adlb.csv")),rawfile(file.path(case,"expected","adlb.csv"))))
+  cat("public ASCII string case matches independent exact outputs, original negatives and original ordered sentence artifact without Python passed\n")
+})
+
+local({
+  directory <- tempfile("public-source-positions-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  entry <- file.path(directory,"spec.yaml");data <- file.path(directory,"input.csv");output <- file.path(directory,"output.csv")
+  writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]",
+    "input: {SRC: {path: input.csv, ordinal: REC}}", "filter: \"SRC.KEEP = 'Y'\"",
+    "output: {path: output.csv, columns: [ID, POSITION], order_by: [SORT]}", "columns:",
+    "  - {name: ID, type: str, derivation: SRC.ID}",
+    "  - {name: POSITION, type: int, derivation: SRC.REC}",
+    "  - {name: SORT, type: int, derivation: SRC.SORT}"),entry,useBytes=TRUE)
+  inputs <- c('ID,SORT,KEEP,NOTE\na,5,N,first\nb,2,Y,"two\nlines"\nc,1,Y,last\n',"ID,SORT,KEEP,NOTE\n")
+  expected <- c("ID,POSITION\nc,3\nb,2\n","ID,POSITION\n")
+  for(i in seq_along(inputs)) {
+    writeBin(charToRaw(inputs[[i]]),data)
+    stopifnot(nrow(yamaa_check(entry)$issues)==0L)
+    result <- yamaa_domain(entry)
+    stopifnot(nrow(result$issues)==0L,!is.null(result$output),!file.exists(output))
+    if(i==1L) stopifnot(identical(result$output$ID,c("c","b")),identical(as.character(result$output$POSITION),c("3","2")))
+    else stopifnot(nrow(result$output)==0L)
+    unlink(data)
+    for(attempt in seq_len(2L)) stopifnot(identical(result$save(),TRUE),identical(rawfile(output),charToRaw(expected[[i]])))
+    unlink(output)
+  }
+  writeBin(charToRaw("ID,REC,SORT,KEEP\n"),data)
+  result <- yamaa_domain(entry);actual <- result$issues
+  stopifnot(nrow(actual)==1L,identical(actual$phase,"validation"),identical(actual$condition,"ordinal_field_collision"),
+    identical(actual$requirement,"REQ-1294"),identical(actual$spec_paths,list("input.SRC.ordinal")),
+    identical(actual$context,'{"dataset":"SRC","field":"REC"}'),is.null(result$output),
+    inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(output))
+  cat("public raw source filter retains multiline record positions and internal presentation order with independent exact cached CSV twice without Python passed\n")
 })
 
 local({
