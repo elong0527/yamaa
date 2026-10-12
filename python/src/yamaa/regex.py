@@ -341,7 +341,11 @@ def _normalize(pattern: str) -> str:
                 raise RegexError(pattern, "a property escape is not allowed")
             if escaped.isdigit() and escaped.isascii():
                 if escaped == "0":
-                    if index + 2 < length and pattern[index + 2].isdigit():
+                    if (
+                        index + 2 < length
+                        and pattern[index + 2].isdigit()
+                        and pattern[index + 2].isascii()
+                    ):
                         raise RegexError(pattern, "a malformed escape")
                     output.append("\\x00")
                     last_atom = True
