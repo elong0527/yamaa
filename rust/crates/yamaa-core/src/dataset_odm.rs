@@ -192,7 +192,7 @@ pub(super) fn validate_template(
 
 macro_rules! walk {
     ($expression:ident, $visitor:ident, $recurse:ident, $sources:ident, $depth:ident, $remaining:ident $(, $mutable:tt)?) => {{
-        if $depth > 64 || *$remaining == 0 {
+        if $depth > EXPRESSION_DEPTH_LIMIT || *$remaining == 0 {
             return Err(PlanError::InvalidColumns);
         }
         *$remaining -= 1;
@@ -240,7 +240,7 @@ pub(crate) fn visit(
     expression: &Expression,
     visitor: &mut impl FnMut(&BoundOdm) -> Result<(), PlanError>,
 ) -> Result<(), PlanError> {
-    visit_at(expression, visitor, 0, &mut 16_384)
+    visit_at(expression, visitor, 0, &mut EXPRESSION_NODE_LIMIT)
 }
 fn visit_at(
     expression: &Expression,
@@ -254,7 +254,7 @@ pub(crate) fn visit_mut(
     expression: &mut Expression,
     visitor: &mut impl FnMut(&mut BoundOdm) -> Result<(), PlanError>,
 ) -> Result<(), PlanError> {
-    visit_mut_at(expression, visitor, 0, &mut 16_384)
+    visit_mut_at(expression, visitor, 0, &mut EXPRESSION_NODE_LIMIT)
 }
 fn visit_mut_at(
     expression: &mut Expression,

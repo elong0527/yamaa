@@ -467,6 +467,9 @@ fn validate_columns(columns: &[usize], width: usize) -> Result<(), PlanError> {
 
 /// Enforce grouped source scope and already-completed output dependencies.
 #[allow(clippy::too_many_arguments)]
+const EXPRESSION_DEPTH_LIMIT: usize = 64;
+const EXPRESSION_NODE_LIMIT: usize = 65_536;
+
 fn validate_assignment(
     assignment: &Assignment,
     available: &mut [bool],
@@ -485,7 +488,7 @@ fn validate_assignment(
         output,
         mode,
         0,
-        &mut 65_536,
+        &mut EXPRESSION_NODE_LIMIT,
     )
 }
 #[allow(clippy::too_many_arguments)]
@@ -500,7 +503,7 @@ fn validate_assignment_at(
     depth: usize,
     remaining: &mut usize,
 ) -> Result<(), PlanError> {
-    if depth > 64 || *remaining == 0 {
+    if depth > EXPRESSION_DEPTH_LIMIT || *remaining == 0 {
         return Err(PlanError::InvalidColumns);
     }
     *remaining -= 1;
