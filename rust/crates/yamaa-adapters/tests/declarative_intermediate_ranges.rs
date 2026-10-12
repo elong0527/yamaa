@@ -242,3 +242,33 @@ fn boolean_absence_replacement_reaches_predicate_normalization_without_conversio
         serde_json::json!([])
     );
 }
+
+#[test]
+fn integer_current_values_do_not_round_into_a_float_donor_endpoint() {
+    let f = Fixture::new();
+    fs::write(
+        f.0.join("src.csv"),
+        "ID,SEQ,X\n1,1,9007199254740993\n1,2,9007199254740992\n",
+    )
+    .unwrap();
+    fs::write(
+        f.0.join("donor.csv"),
+        "ID,LOW,HIGH,ORD,ELIG,V,W\n1,9007199254740992,9007199254740992,1,Y,edge,paired\n",
+    )
+    .unwrap();
+    let body = BODY.replace("LOW: int, HIGH: int", "LOW: float, HIGH: float");
+    let mut result = f.run(&body);
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(result.save().unwrap());
+    assert_eq!(
+        fs::read(f.0.join("result.csv")).unwrap(),
+        b"ID,SEQ,X,A,B\n1,1,9007199254740993,absent,absent\n1,2,9007199254740992,edge,paired\n"
+    );
+    assert_eq!(
+        result.observations()["handler_counts"],
+        serde_json::json!([
+            {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
+            {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
+        ])
+    );
+}
