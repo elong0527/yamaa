@@ -1925,6 +1925,8 @@ columns:
                             "spec_paths":["columns.EOTFL.derivation.flag"], "context":{"operation":"flag"}})
                         self.assertEqual(gates.pop(), {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
                             "spec_paths":["columns.ENDPOINT.derivation.source"], "context":{"operation":"secondary_source_expression"}})
+                        self.assertEqual(gates.pop(), {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                            "spec_paths":["intermediates[1]"], "context":{"operation":"intermediate_scope"}})
                         self.assertEqual(expected, gates)
                     result = yamaa.domain(entry)
                     self.assertEqual(issues(result), expected)
