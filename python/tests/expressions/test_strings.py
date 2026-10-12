@@ -246,6 +246,48 @@ def test_a_bare_nul_escape_matches_nul(pattern: str, subject: str) -> None:
     assert full_match(pattern, subject) is True
 
 
+@pytest.mark.parametrize(
+    ("pattern", "subject", "expected"),
+    [
+        (r"(?<=a|b)c", "ac", "c"),
+        (r"(?<=ab|cd)e", "cde", "e"),
+        (r"(?<=(a|b)c)d", "bcd", "d"),
+        (r"(?<!a|b)c", "xc", "c"),
+        (r"(?<=(?:(a)|(b)){2})c", "abc", "c"),
+    ],
+)
+def test_a_fixed_length_lookbehind_may_use_alternation(
+    pattern: str, subject: str, expected: str
+) -> None:
+    # REQ-0826 keeps fixed-length lookbehind allowed: an alternation whose
+    # branches all have the same width is fixed, as the Rust consumer's
+    # width analysis (and the host library) already admit.
+    assert regex_extract(pattern, subject) == expected
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        r"(?<=a|bc)d",
+        r"(?<=ab|c)e",
+        r"(?<=(a|bb)c)d",
+        r"(?<=a+|b)c",
+        r"(?<=a|b?)c",
+    ],
+)
+def test_a_variable_length_lookbehind_alternation_is_malformed(
+    pattern: str,
+) -> None:
+    # Branches of differing width can match strings of different lengths,
+    # and a variable element inside a branch varies on its own: both stay
+    # rejected under REQ-0826 / REQ-0827.
+    with pytest.raises(RegexError) as compile_error:
+        compile_pattern(pattern)
+    assert compile_error.value.condition == "invalid_regex"
+    assert compile_error.value.requirement == "REQ-0827"
+    assert compile_error.value.pattern == pattern
+
+
 def test_a_group_the_match_did_not_enter_is_missing_rather_than_no_match() -> None:
     # REQ-0817: the pattern matched, so `no_match` deliberately does not apply.
     result = evaluate_expression(

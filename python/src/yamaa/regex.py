@@ -189,9 +189,17 @@ def _check_fixed_length_lookbehind(pattern: str, start: int, end: int) -> None:
             cursor += 1
             continue
         if character == "|":
-            raise RegexError(
-                pattern, "a lookbehind whose length can vary is not allowed"
-            )
+            # An alternation is not by itself variable-length: branches of
+            # equal width are fixed (REQ-0826 keeps fixed-length lookbehind
+            # allowed, and the Rust consumer's width analysis admits them).
+            # The scans in this loop still reject a variable element inside
+            # any branch (`*`, `+`, a bare `?`, an open-ended `{n,m}`), and
+            # branches of differing width are refused by the host library's
+            # fixed-width lookbehind check when the translated pattern is
+            # compiled, which `compile_pattern` wraps as `RegexError`. So
+            # only the per-branch width comparison is left to the host.
+            cursor += 1
+            continue
         if character in "*+":
             raise RegexError(
                 pattern, "a lookbehind whose length can vary is not allowed"
