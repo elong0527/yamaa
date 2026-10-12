@@ -175,7 +175,7 @@ pub(super) fn scalar_keys_equal(a: &DocumentNode, b: &DocumentNode) -> bool {
 }
 
 /// Admit decimal spelling directly, avoiding expensive arbitrary-precision parsing.
-fn canonical_integer(text: &str) -> bool {
+pub(crate) fn canonical_integer(text: &str) -> bool {
     let digits = text.strip_prefix('-').unwrap_or(text);
     if digits == "0" {
         return text == "0";

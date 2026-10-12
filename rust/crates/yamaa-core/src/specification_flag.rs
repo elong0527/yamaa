@@ -82,12 +82,6 @@ pub(super) fn prepare(
             }
             Err(diagnostic)
         }
-        Err(predicate_compiler::Error::UnsupportedLiteral { .. }) => {
-            return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                operation: "predicate_literal".into(),
-                path: format!("{path}.condition"),
-            }]))
-        }
         Err(predicate_compiler::Error::Parse(
             crate::predicate_parser::ParseError::UnsupportedRegex { .. },
         )) => {

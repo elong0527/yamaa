@@ -1581,6 +1581,13 @@ fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
             "row_count min exceeds max",
         ),
         (
+            "row_count: {min: 999999999999999999999, max: 999999999999999999998}",
+            "invalid_declaration",
+            "REQ-0399",
+            "row_count",
+            "row_count min exceeds max",
+        ),
+        (
             "row_count: {id: \"a'b\", min: 0}",
             "duplicate_identifier",
             "REQ-0398",
@@ -3400,25 +3407,87 @@ fn original_column_not_missing_matches_complete_reports_and_exact_csv() {
     );
 }
 #[test]
-fn row_filter_unsupported_admission_matches_complete_envelopes_before_ports() {
-    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
-    let truth = include_str!("fixtures/row_filter_admission.tsv");
-    let mut count = 0;
-    for line in truth.lines().skip(1) {
-        let fields = line.split('\t').collect::<Vec<_>>();
-        assert_eq!(fields.len(), 3);
-        let bytes = (0..fields[1].len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&fields[1][i..i + 2], 16).unwrap())
-            .collect::<Vec<_>>();
-        let error =
-            yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &bytes))
-                .unwrap_err();
-        let actual = yamaa_adapters::specification_diagnostics::failure(&error, None);
-        assert_eq!(actual, fields[2], "{}", fields[0]);
-        count += 1;
+fn row_filter_carrier_failures_match_complete_normative_reports() {
+    replay_source_selection_truth(
+        include_str!("fixtures/row_filter_admission.tsv"),
+        "predicate-carrier",
+        2,
+    );
+}
+
+#[test]
+fn exact_wide_count_bounds_preserve_empty_counts_and_completed_check_prefix() {
+    use serde_json::json;
+    use yamaa_adapters::{
+        specification_report::{self, ArtifactPort, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_engine::specification::SourceDeclaration;
+    struct Host {
+        bytes: Arc<[u8]>,
+        reads: usize,
     }
-    assert_eq!(count, 2);
+    impl SourcePort for Host {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(&mut self, _: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+            self.reads += 1;
+            Ok(Arc::clone(&self.bytes))
+        }
+    }
+    impl ArtifactPort for Host {
+        type Error = ();
+        fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
+            panic!("failed checks published")
+        }
+    }
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let prefix = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+    for input in [b"ID\n".as_slice(), b"ID\n1\n2\n".as_slice()] {
+        for bound in [
+            "min: 999999999999999999999999999999",
+            "max: -999999999999999999999999999999",
+        ] {
+            let source = format!("{prefix}verifications:\n  - row_count: {{id: first, min: -999999999999999999999999999999, max: 999999999999999999999999999999}}\n  - row_count: {{{bound}}}\n");
+            let run = PreparedRun::prepare(prepare(&schema, source.as_bytes())).unwrap();
+            let mut host = Host {
+                bytes: input.into(),
+                reads: 0,
+            };
+            let attempt = run.execute_with_port(&mut host);
+            let result = specification_report::build_result(
+                &run,
+                &attempt,
+                Identity {
+                    runtime: "python",
+                    runtime_version: "fixture-runtime",
+                    engine_version: "fixture-engine",
+                    example: "wide-count",
+                    specification: "spec.yaml",
+                    base_directory: ".",
+                },
+            )
+            .unwrap();
+            let report = result.observations();
+            assert_eq!(host.reads, 1);
+            assert_eq!(report["outcome"], "failure");
+            assert_eq!(report["artifacts"], json!([]));
+            assert_eq!(report["verifications"].as_array().unwrap().len(), 2);
+            assert_eq!(report["verifications"][0]["verification_id"], "first");
+            assert_eq!(report["verifications"][0]["failure"], json!(null));
+            let count = if input.len() == 3 { 0 } else { 2 };
+            assert_eq!(
+                report["diagnostics"],
+                json!([{"phase":"verification", "condition":"row_count_failed", "requirement":"REQ-0385", "spec_paths":["verifications[1].row_count"], "context":{"count":count,"failure_count":1,"keys":[{}]}}])
+            );
+            assert_eq!(
+                report["verifications"][1]["failure"]["log_context"]["count"],
+                count
+            );
+        }
+    }
 }
 
 #[test]

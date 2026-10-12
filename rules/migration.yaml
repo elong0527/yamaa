@@ -1087,7 +1087,7 @@ requirements:
   REQ-0011: {"file": "values/types.md", "sources": ["R011-22"]}
   REQ-0012: {"file": "values/types.md", "sources": ["R011-29"]}
   REQ-0013: {"file": "values/types.md", "sources": ["R011-30", "R011-33", "R005-28"]}
-  REQ-0014: {"file": "values/numbers.md", "sources": ["R010-14"]}
+  REQ-0014: {"file": "values/numbers.md", "sources": ["R010-14", "yamaa:issue-1983:predicate-integer-carrier"]}
   REQ-0015: {"file": "values/numbers.md", "sources": ["R011-21"]}
   REQ-0016: {"file": "values/numbers.md", "sources": ["R011-23"]}
   REQ-0017: {"file": "values/numbers.md", "sources": ["R011-24"]}
@@ -1265,7 +1265,7 @@ requirements:
   REQ-0189: {"file": "operations/predicates.md", "sources": ["R004-32"]}
   REQ-0190: {"file": "operations/predicates.md", "sources": ["R004-33"]}
   REQ-0191: {"file": "operations/predicates.md", "sources": ["R004-34"]}
-  REQ-0192: {"file": "operations/predicates.md", "sources": ["R004-35"]}
+  REQ-0192: {"file": "operations/predicates.md", "sources": ["R004-35", "yamaa:issue-1983:predicate-temporal-parse"]}
   REQ-0193: {"file": "storage/publication.md", "sources": ["R005-1"]}
   REQ-0195: {"file": "storage/publication.md", "sources": ["R005-3"]}
   REQ-0196: {"file": "specification/structure.md", "sources": ["R005-4"]}
@@ -1456,7 +1456,7 @@ requirements:
   REQ-0382: {"file": "execution/verification.md", "sources": ["R009-16"]}
   REQ-0383: {"file": "execution/verification.md", "sources": ["R009-17", "schema_verification.yaml:dataset_verifications.assert.when.description"]}
   REQ-0384: {"file": "execution/verification.md", "sources": ["R009-18"]}
-  REQ-0385: {"file": "execution/verification.md", "sources": ["R009-19"]}
+  REQ-0385: {"file": "execution/verification.md", "sources": ["R009-19", "yamaa:issue-1983:exact-count-bounds"]}
   REQ-0386: {"file": "execution/verification.md", "sources": ["R009-20"]}
   REQ-0387: {"file": "execution/verification.md", "sources": ["R009-21"]}
   REQ-0388: {"file": "execution/verification.md", "sources": ["R009-22"]}
@@ -2695,6 +2695,9 @@ schema_prose:
   - {"source": "schema_verification.yaml:comment:43", "text": "Bounds how many rows a group holds, or the whole output. group_by partitions the artifact's rows and applies both bounds to every group; a group's count is how many of its rows filter admits, and a row is admitted only when the predicate is TRUE. A grouped count requires id, which an ungrouped count does not.", "owner": "execution/verification", "group": "dataset_verifications.row_count", "target": "REQ-1152"}
 provenance_addenda:
   - {"source": "yamaa:issue-1981:req-0058", "text": "Authorized self-approved migration reconciliation #1981, 2026-10-11: align the older predicate-site summary with REQ-0068 and REQ-0218. Ungrouped row filters read completed non-window candidate derivations and lookup state before the window pass; grouped filters read completed grouped derivations. Preserve the historical R001-26 source record and independent benchmark truth.", "owner": "execution/lifecycle", "group": "row filter lifecycle reconciliation", "target": "REQ-0058"}
+  - {"source": "yamaa:issue-1983:exact-count-bounds", "text": "Issue #1983: count bounds are mathematical specification integers. Compare exact canonical decimal bounds with the full output count without narrowing either to the runtime int carrier; explicit resource admission remains a separate policy.", "owner": "execution/verification", "group": "exact count comparison", "target": "REQ-0385"}
+  - {"source": "yamaa:issue-1983:predicate-integer-carrier", "text": "Approved #1973 item 18: predicate integer literals outside signed 64-bit fail with integer_overflow during parsing. Preserve full grammar admission and original predicate/position facts; no widening or silent narrowing.", "owner": "values/numbers", "group": "predicate carrier admission", "target": "REQ-0014"}
+  - {"source": "yamaa:issue-1983:predicate-temporal-parse", "text": "Approved #1973 item 6: rejected temporal literals are predicate grammar failures under REQ-0188; retain typed temporal causes and standalone context while preserving complete original-document predicate/position observations and the temporal operations' separate causes.", "owner": "operations/predicates", "group": "predicate temporal reconciliation", "target": "REQ-0192"}
   - {"source": "schema.yaml:dataset_class.ordinal.description", "text": "Issue #1566: Input datasets may expose a generated source record ordinal.", "owner": "storage/ingestion", "group": "source-ordinal", "target": "REQ-1291"}
   - {"source": "yamaa:issue-1566:ordinal-declaration", "text": "Issue #1566: ordinal optionally names an appended int field on CSV and Parquet inputs.", "owner": "storage/ingestion", "group": "source-ordinal", "target": "REQ-1291"}
   - {"source": "yamaa:issue-1566:ordinal-assignment", "text": "Issue #1566: One-based data record positions are assigned before filtering and retained across row templates.", "owner": "storage/ingestion", "group": "source-ordinal", "target": "REQ-1292"}

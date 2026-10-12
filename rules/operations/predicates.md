@@ -290,5 +290,10 @@ evaluate the grammar itself.
 
 <a id="req-0192"></a>
 
-**REQ-0192.** A temporal literal that [Temporal values](../values/temporal.md) rejects: fail with [Temporal values](../values/temporal.md)'s
-  applicable temporal condition.
+**REQ-0192.** A temporal literal that [Temporal values](../values/temporal.md)
+rejects while parsing a predicate fails with `invalid_predicate` under
+[REQ-0188](#req-0188). Retain the literal kind and applicable temporal cause
+on the parser finding; standalone syntax diagnostic context reports those
+details. Original-document findings retain the predicate and its character
+position. Temporal operations outside the predicate grammar retain their
+own applicable temporal conditions.
