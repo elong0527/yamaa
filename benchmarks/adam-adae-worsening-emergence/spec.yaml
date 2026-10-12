@@ -9,77 +9,96 @@ input:
     path: input/fa.csv
     types: {FASEQ: int, FADTC: datetime}
   ADSL: {path: input/adsl.csv, types: {TRTSDTM: datetime}}
+
 output:
   path: adae.csv
   columns: [STUDYID, USUBJID, ASEQ, AESEQ, AEDECOD, AESTDTC, AEENDTC,
             ASTDTM, AENDTM, TRTSDTM, AESEV, AETOXGR, ASEV, ATOXGRN, TRTEMFL]
   order_by: [STUDYID, USUBJID, ASEQ]
+
+windows:
+  EVENT_ORDER:
+    group_by: [STUDYID, USUBJID, AESEQ]
+    order_by: [ASTDTM]
+
 intermediates:
   # The collected link identifies an occurrence, even if terms repeat.
   - id: EVENT
     dataset: AE
     key: [STUDYID, USUBJID, AELNKID]
-windows:
-  EVENT_ORDER:
-    group_by: [STUDYID, USUBJID, AESEQ]
-    order_by: [ASTDTM]
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+
   - name: AELNKID
     type: str
     label: Event Link Identifier
+
   - name: AESEQ
     type: int
     label: Source Adverse Event Sequence Number
     derivation: EVENT.AESEQ
+
   - name: AEDECOD
     type: str
     label: Dictionary-Derived Term
     derivation: EVENT.AEDECOD
+
   - name: AESTDTC
     type: datetime
     label: Source Event Start Date/Time
     derivation: EVENT.AESTDTC
+
   - name: AEENDTC
     type: datetime
     label: Source Event End Date/Time
     derivation: EVENT.AEENDTC
+
   - name: ASTDTM
     type: datetime
     label: Analysis Segment Start Date/Time
+
   - name: NEXTSTART
     type: datetime
     label: Next Segment Start Date/Time
     derivation:
       row_value: {source: ASTDTM, offset: 1, window: EVENT_ORDER}
+
   - name: AENDTM
     type: datetime
     label: Analysis Segment End Date/Time
     derivation:
       first_available: {sources: [NEXTSTART, AEENDTC]}
+
   - name: TRTSDTM
     type: datetime
     label: Datetime of First Exposure to Treatment
     derivation: ADSL.TRTSDTM
+
   - name: AESEV
     type: str
     label: Source Event Severity/Intensity
     derivation: EVENT.AESEV
+
   - name: AETOXGR
     type: str
     label: Source Event Standard Toxicity Grade
     derivation: EVENT.AETOXGR
+
   - name: SEVCOL
     type: str
     label: Collected Severity at Change Time
+
   - name: GRDCOL
     type: int
     label: Collected Toxicity Grade at Change Time
+
   - name: ASEV
     type: str
     label: Analysis Severity/Intensity
@@ -87,6 +106,7 @@ columns:
       locf: {source: SEVCOL, window: EVENT_ORDER}
     verifications:
       allowed_values: {values: [MILD, MODERATE, SEVERE]}
+
   - name: ATOXGRN
     type: int
     label: Analysis Toxicity Grade (N)
@@ -94,6 +114,7 @@ columns:
       locf: {source: GRDCOL, window: EVENT_ORDER}
     verifications:
       allowed_values: {values: [1, 2, 3, 4, 5]}
+
   - name: ASEVN
     type: int
     label: Analysis Severity/Intensity (N)
@@ -102,6 +123,7 @@ columns:
         source: ASEV
         dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
         missing: null
+
   - name: PRETRTFL
     type: str
     label: Last Pretreatment Segment Flag
@@ -114,6 +136,7 @@ columns:
         window:
           group_by: [STUDYID, USUBJID, AESEQ]
           filter: "ASTDTM < TRTSDTM"
+
   - name: PRESEV
     type: int
     label: Severity Immediately Before First Exposure
@@ -122,6 +145,7 @@ columns:
         filter: "PRETRTFL = 'Y'"
         group_by: [STUDYID, USUBJID, AESEQ]
         expr: "MAX(ASEVN)"
+
   - name: PREGRD
     type: int
     label: Toxicity Grade Immediately Before First Exposure
@@ -130,6 +154,7 @@ columns:
         filter: "PRETRTFL = 'Y'"
         group_by: [STUDYID, USUBJID, AESEQ]
         expr: "MAX(ATOXGRN)"
+
   - name: WORSDTM
     type: datetime
     label: Post-Treatment Worsening Date/Time
@@ -138,6 +163,7 @@ columns:
         - when: "ASTDTM >= TRTSDTM AND
             (ASEVN > PRESEV OR ATOXGRN > PREGRD)"
           then: ASTDTM
+
   - name: FIRSTWRS
     type: datetime
     label: First Post-Treatment Worsening Date/Time
@@ -146,6 +172,7 @@ columns:
       aggregate:
         group_by: [STUDYID, USUBJID, AESEQ]
         expr: "MIN(WORSDTM)"
+
   - name: TRTEMFL
     type: str
     label: Treatment Emergent Analysis Flag
@@ -154,6 +181,7 @@ columns:
         (AESTDTC >= TRTSDTM OR ASTDTM >= FIRSTWRS)"
     verifications:
       allowed_values: {values: [Y]}
+
   - name: ASEQ
     type: int
     label: Analysis Sequence Number
@@ -162,6 +190,7 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by: [AESEQ, ASTDTM]
+
 rows:
   # Dated findings are upstream source data, not pre-built ADAE periods.
   # Pivot the two dimensions at each event/time into one analysis period.
@@ -181,6 +210,7 @@ rows:
         aggregate:
           filter: "FA.FATESTCD = 'TOXGR'"
           expr: "ONLY(FA.FASTRESC)"
+
 verifications:
   - unique: {columns: [STUDYID, USUBJID, ASEQ]}
   - unique: {columns: [STUDYID, USUBJID, AESEQ, ASTDTM]}
