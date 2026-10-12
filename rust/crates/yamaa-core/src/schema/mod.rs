@@ -37,6 +37,7 @@ pub use diagnostic_projection::{
     SchemaDiagnosticValue, MAX_SCHEMA_DIAGNOSTIC_BYTES,
 };
 pub use dictionary_resources::{AdmittedMappingDictionary, MappingDictionaryReference};
+pub(crate) use document::canonical_integer;
 pub use document::{
     Document, DocumentError, DocumentKind, DocumentLimits, DocumentNode, DocumentResource,
     ScalarKey,

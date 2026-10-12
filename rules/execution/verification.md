@@ -170,6 +170,10 @@ not by regular-expression matching.
   as the next section defines. `when` selects groups to check but does not
   change the denominator.
 
+Count bounds are mathematical integers in the specification rather than runtime
+column values. Compare the complete output count and authored bounds exactly;
+neither may be narrowed to the signed 64-bit runtime carrier.
+
 For example, this warns when more than 5% of constructed output rows have a
 missing `VAL`:
 

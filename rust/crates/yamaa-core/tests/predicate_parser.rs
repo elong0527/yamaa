@@ -5,6 +5,86 @@ use yamaa_core::predicate_parser::{
 };
 use yamaa_core::{regex, temporal::TemporalError};
 
+#[test]
+fn integer_carrier_admission_preserves_exact_boundaries_and_whole_grammar_order() {
+    for expression in [
+        "X = -9223372036854775808",
+        "X = +9223372036854775807",
+        "X = 0009223372036854775807",
+        "X IN (-9223372036854775808, 9223372036854775807)",
+        "X = 9223372036854775808.0",
+        "X = 1e309",
+    ] {
+        parse_predicate(expression, Default::default()).unwrap();
+    }
+    for expression in [
+        "X = 9223372036854775808",
+        "X = -9223372036854775809",
+        "FALSE AND X IN (1, +9223372036854775808)",
+        "'\u{1f600}' = -9223372036854775809",
+        "X BETWEEN 0 AND 9999999999999999999999999999999",
+    ] {
+        let Err(ParseError::Grammar {
+            failure, position, ..
+        }) = parse_predicate(expression, Default::default())
+        else {
+            panic!("overflowing literal admitted: {expression}")
+        };
+        assert_eq!(failure, GrammarFailure::IntegerOverflow);
+        let suffix = &expression[position.byte..];
+        assert!(
+            suffix.starts_with("9223372036854775808")
+                || suffix.starts_with("+9223372036854775808")
+                || suffix.starts_with("-9223372036854775809")
+                || suffix.starts_with("9999999999999999999999999999999")
+        );
+        assert_eq!(
+            position.character,
+            expression[..position.byte].chars().count()
+        );
+        let finding = failure
+            .original_diagnostic("filter", expression, position.character)
+            .unwrap();
+        assert_eq!(finding.definition().phase, "parse");
+        assert_eq!(finding.definition().condition, "integer_overflow");
+        assert_eq!(finding.definition().requirement, Some("REQ-0014"));
+        assert_eq!(finding.spec_paths, ["filter"]);
+        assert_eq!(
+            finding.context["predicate"],
+            yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                expression.into()
+            ))
+        );
+        assert_eq!(
+            finding.context["position"],
+            yamaa_core::diagnostic::ContextValue::Integer(position.character.to_string())
+        );
+        assert!(failure
+            .original_diagnostic_with_limit("filter", expression, position.character, 0)
+            .is_err());
+    }
+    assert!(matches!(
+        parse_predicate("X = 9223372036854775808 AND", Default::default()),
+        Err(ParseError::Grammar {
+            failure: GrammarFailure::InvalidExpression,
+            ..
+        })
+    ));
+    assert!(matches!(
+        parse_predicate(
+            "X = 9223372036854775808",
+            ParseLimits {
+                bytes: 4,
+                ..Default::default()
+            }
+        ),
+        Err(ParseError::Limit {
+            resource: ParseResource::Bytes,
+            ..
+        })
+    ));
+}
+
 /// Syntax association is independent of evaluator truth and preserves written names.
 #[test]
 fn precedence_spelling_and_names() {
@@ -128,7 +208,6 @@ fn text_temporal_and_unbounded_number_syntax() {
         "A = DATE '2024-02-29'",
         "A = DATETIME '2024-02-29T12:34'",
         "A = DATETIME '2024-02-29T12:34:56'",
-        "A = 9999999999999999999999999999999",
         "A = 1e9999",
     ] {
         parse_predicate(text, ParseLimits::default()).unwrap();
@@ -169,6 +248,8 @@ fn portable_regex_literals_are_checked_before_closing_token() {
         r"(a)(?<=\1)",
         r"(?<\u0061>a)\k<a>",
         r"[\S]",
+        r"(?<=a|b)c",
+        r"(?<name>a)\k<name>",
     ] {
         let text = format!("str_contains(A, '{pattern}')");
         let p = parse_predicate(&text, ParseLimits::default()).unwrap();
@@ -176,6 +257,16 @@ fn portable_regex_literals_are_checked_before_closing_token() {
             p.nodes()[p.root()].kind,
             ParsedKind::Contains { .. }
         ));
+    }
+    for pattern in [r"(?P<name>a)", r"(?i)a", r"\p{Letter}", r"\a", r"(?<=a+)b"] {
+        let expression = format!("str_contains(A, '{pattern}')");
+        let Err(ParseError::Grammar {
+            failure: GrammarFailure::InvalidRegex { .. },
+            ..
+        }) = parse_predicate(&expression, ParseLimits::default())
+        else {
+            panic!("REQ-0826 syntax must be a registered finding: {pattern}")
+        };
     }
     let text = "str_contains('\u{1f600}', '('";
     let Err(ParseError::Grammar {

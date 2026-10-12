@@ -13,6 +13,8 @@ status: normative
 **REQ-0014.** `int` is a signed 64-bit integer, from `-2^63` through
 `2^63 - 1`. `float` is IEEE 754 binary64. Non-finite values follow [REQ-0006](types.md#req-0006)
 before any consumer can use them.
+An integer literal in a predicate outside this range fails during parsing with
+`integer_overflow`; it does not introduce an arbitrary-width integer value.
 
 <a id="req-0015"></a>
 

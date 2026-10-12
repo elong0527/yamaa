@@ -52,7 +52,7 @@ conditions:
   incomparable_sources: {phases: [validation]}
   incompatible_input_type: {phases: [validation]}
   inheritance_cycle: {phases: [validation]}
-  integer_overflow: {phases: [derivation]}
+  integer_overflow: {phases: [derivation, parse]}
   internal_column_in_keys: {phases: [validation]}
   invalid_aggregate_context: {phases: [validation]}
   invalid_aggregate_expression: {phases: [validation]}

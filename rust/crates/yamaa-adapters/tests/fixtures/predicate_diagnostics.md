@@ -24,14 +24,16 @@ The three previously documented forms now have these statuses:
 
 | Filter | Unchanged reference observation | Native status |
 | --- | --- | --- |
-| `ID LIKE '%' ESCAPE 'xx'` | REQ-0188, position 19; predicate/position context | Unresolved: REQ-0191, position 19; predicate/position context |
+| `ID LIKE '%' ESCAPE 'xx'` | REQ-0188, position 19; predicate/position context | Approved REQ-0191 under #1973 item 6; position 19 and predicate/position context are preserved. The historical reference citation remains recorded. |
 | `STR_CONTAINS(ID, '(')` | REQ-1244, position 17; predicate/position context | Matches the new complete original report; standalone syntax retains regex byte/reason |
 | `ID = DATE '2026-02-30'` | REQ-0188, position 10; predicate/position context | Matches the new complete original report; standalone syntax retains temporal kind/error |
 
 REQ-0191 owns invalid ESCAPE literals in `rules/operations/predicates.md`, and the
 locked predicate syntax fixture already preserves that native mapping. The
 unchanged Python reference was rerun on 2026-10-11 and still reports REQ-0188.
-The conflict requires normative/reference reconciliation before the ESCAPE form
-can be qualified. Neither locked observation is rewritten to make it agree.
-REQ-0192's temporal wording remains a separate grammar contract gap even though
-the original rejected date now preserves its observed REQ-0188 report.
+The delegated decision in #1973 item 6 selects REQ-0191 for new shared execution.
+This disposes of the citation difference without rewriting either locked
+observation. REQ-0192 now explicitly describes parse-time `invalid_predicate`
+under REQ-0188 and retained temporal cause/standalone context, preserving the
+original rejected date's complete report. Installed qualification remains a
+separate gate; this record does not turn a pending tuple into a pass.

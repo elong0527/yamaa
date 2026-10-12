@@ -167,5 +167,31 @@ pub(super) fn predicate_reached(
         assert_eq!(d.operand_route, None);
         reached.insert(d.code);
     }
+    let expression = "A = 9223372036854775808";
+    let Err(ParseError::Grammar {
+        position, failure, ..
+    }) = parse_predicate(expression, Default::default())
+    else {
+        panic!("overflowing integer literal must fail parsing")
+    };
+    let d = failure
+        .original_diagnostic("filter", expression, position.character)
+        .unwrap();
+    assert_eq!(d.code, C::PredicateIntegerOverflow);
+    assert_eq!(d.definition().phase, "parse");
+    assert_eq!(d.definition().condition, "integer_overflow");
+    assert_eq!(d.definition().requirement, Some("REQ-0014"));
+    assert_eq!(d.spec_paths, ["filter"]);
+    assert_eq!(
+        d.context,
+        [
+            ("predicate".into(), V::Scalar(Value::Str(expression.into()))),
+            ("position".into(), V::Integer("4".into())),
+        ]
+        .into()
+    );
+    assert_eq!(d.source_span, None);
+    assert_eq!(d.operand_route, None);
+    reached.insert(d.code);
     reached
 }
