@@ -1,10 +1,7 @@
 //! Host-neutral file entry points. Preparation and activation precede study authority.
 //! Checks may inspect declarations and locks but never execute project code.
 
-pub struct Request<'a> {
-    pub specification: &'a str,
-    pub environment: Option<&'a str>,
-}
+pub use crate::build::Request;
 
 /// Native adapters own file/codec access and result conversion. Bindings supply
 /// only the request; neither Python nor R orchestrates these checkpoints.
