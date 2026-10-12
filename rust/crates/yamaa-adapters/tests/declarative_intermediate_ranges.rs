@@ -123,7 +123,11 @@ fn a_hidden_read_has_the_complete_original_reference_finding_and_no_output() {
         result
             .issues()
             .iter()
-            .map(|issue| issue.as_value())
+            .map(|issue| {
+                let mut value = issue.as_value();
+                value["context"] = serde_json::from_str(&issue.context).unwrap();
+                value
+            })
             .collect::<Vec<_>>(),
         [
             serde_json::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0125","spec_paths":["columns.B.derivation.source"],"context":{"identifier":"P.LOW"}})
@@ -133,7 +137,7 @@ fn a_hidden_read_has_the_complete_original_reference_finding_and_no_output() {
         result.observations()["handler_counts"],
         serde_json::json!([])
     );
-    assert!(!result.save().unwrap());
+    assert!(matches!(result.save(), Err(file_application::FailedBuild)));
     assert!(!f.0.join("result.csv").exists());
 }
 #[test]
@@ -181,8 +185,8 @@ fn range_current_outputs_and_scalar_keys_promote_their_defaults_before_row_reads
         result.observations()["handler_counts"],
         serde_json::json!([
             {"spec_path":"rows[0].derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
-            {"spec_path":"rows[0].derivations.A.source.no_match","handler":"no_match","count":3},
             {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
+            {"spec_path":"rows[0].derivations.A.source.no_match","handler":"no_match","count":3},
             {"spec_path":"rows[0].derivations.B.source.no_match","handler":"no_match","count":3}
         ])
     );
@@ -218,7 +222,7 @@ fn float_absence_replacement_is_a_value_with_complete_per_read_observations() {
 }
 
 #[test]
-fn boolean_absence_replacement_reaches_predicate_normalization_without_conversion() {
+fn boolean_absence_replacement_reaches_a_null_test_without_conversion() {
     let f = Fixture::new();
     fs::write(f.0.join("src.csv"), "ID,SEQ,X\n2,1,3\n").unwrap();
     fs::write(
@@ -227,8 +231,8 @@ fn boolean_absence_replacement_reaches_predicate_normalization_without_conversio
     )
     .unwrap();
     let body = BODY.replace("no_match: absent", "no_match: true")
-        .replace("derivation: P.V", "derivation: {flag: {condition: 'P.V = TRUE', true_value: Y, false_value: N, missing: null}}")
-        .replace("derivation: P.W", "derivation: {flag: {condition: 'P.W = TRUE', true_value: Y, false_value: N, missing: null}}");
+        .replace("derivation: P.V", "derivation: {flag: {condition: 'P.V IS NOT NULL', true_value: Y, false_value: N, missing: null}}")
+        .replace("derivation: P.W", "derivation: {flag: {condition: 'P.W IS NOT NULL', true_value: Y, false_value: N, missing: null}}");
     let mut result = f.run(&body);
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     assert!(result.save().unwrap());
@@ -271,4 +275,41 @@ fn integer_current_values_do_not_round_into_a_float_donor_endpoint() {
             {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
         ])
     );
+}
+
+#[test]
+fn unchanged_bad_range_document_preserves_its_single_complete_historical_finding() {
+    let f = Fixture::new();
+    let original = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../benchmarks/negative-lookup-bad-range");
+    fs::create_dir(f.0.join("input")).unwrap();
+    for name in ["vs.csv", "epoch.csv"] {
+        fs::copy(
+            original.join("input").join(name),
+            f.0.join("input").join(name),
+        )
+        .unwrap();
+    }
+    let mut result = f.run(&fs::read_to_string(original.join("spec.yaml")).unwrap());
+    let findings = result
+        .issues()
+        .iter()
+        .map(|issue| {
+            let mut value = issue.as_value();
+            value["context"] = serde_json::from_str(&issue.context).unwrap();
+            value
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        findings,
+        [
+            serde_json::json!({"phase":"validation","condition":"incomparable_range_types","requirement":"REQ-0121","spec_paths":["intermediates[0].between"],"context":{"intermediate":"EPOCHDEF","value_type":"date","lower_type":"int","upper_type":"int"}})
+        ]
+    );
+    assert_eq!(
+        result.observations()["handler_counts"],
+        serde_json::json!([])
+    );
+    assert!(matches!(result.save(), Err(file_application::FailedBuild)));
+    assert!(!f.0.join("vs.csv").exists());
 }

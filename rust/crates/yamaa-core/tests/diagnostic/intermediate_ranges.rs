@@ -34,7 +34,7 @@ fn model(between: Option<Tree<'_>>, columns: Option<Tree<'_>>) -> SpecificationD
     let mut item = vec![
         ("id", Text("P")),
         ("dataset", Text("D")),
-        ("key", Text("ID")),
+        ("key", List(vec![Text("ID")])),
     ];
     if let Some(between) = between {
         item.push(("between", between));

@@ -508,6 +508,9 @@ impl Declarations {
                 &item.name,
                 findings,
             );
+            // A rejected projection retains donor names for subsequent checkpoints.
+            // Its owned finding still prevents final plan admission.
+            let columns = (findings.len() == before).then_some(columns).flatten();
             let range = item
                 .range
                 .as_ref()
@@ -528,9 +531,8 @@ impl Declarations {
                 })
                 .transpose()?
                 .flatten();
-            if findings.len() != before || (item.range.is_some() && range.is_none()) {
-                failed = true;
-            }
+            // Range rejection owns its original cause without turning an existing
+            // donor field into a second unknown-reference diagnostic.
             result.push((!failed).then(|| Intermediate {
                 identifier: item.name.clone(),
                 path: item.path.clone(),
