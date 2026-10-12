@@ -123,6 +123,43 @@ def test_row_override_replaces_shared_codelist_and_reports_only_its_rows():
     assert sum(record.evaluated_count for record in records) == 3
 
 
+def test_missing_target_column_fails_governed():
+    # The target column is read before any other guard runs; a table
+    # missing it must fail with the governed DeclarationError, not an
+    # unhandled polars ColumnNotFoundError.
+    spec = load_specification(
+        ROOT / "benchmarks/sdtm-dm-metadata/spec.yaml", ROOT / "yaml"
+    ).specification
+    column = next(column for column in spec.columns if column.name == "SEX")
+    table = frame_from_values(
+        tuple(TypedColumn(name=name, type="str") for name in ["STUDYID", "USUBJID"]),
+        [["S", "1"]],
+    )
+    document = {"codelists": [{"id": "SEX", "items": [{"value": "F"}]}]}
+    with pytest.raises(DeclarationError) as caught:
+        check_terminology(table, column, spec.keys, document, spec)
+    assert "unknown column 'SEX'" in str(caught.value)
+
+
+def test_missing_key_column_fails_governed():
+    # Key maps are built from the declared keys; a table missing one must
+    # fail governed the same way.
+    spec = load_specification(
+        ROOT / "benchmarks/sdtm-dm-metadata/spec.yaml", ROOT / "yaml"
+    ).specification
+    column = next(column for column in spec.columns if column.name == "SEX")
+    table = frame_from_values(
+        tuple(
+            TypedColumn(name=name, type="str") for name in ["STUDYID", "USUBJID", "SEX"]
+        ),
+        [["S", "1", "F"]],
+    )
+    document = {"codelists": [{"id": "SEX", "items": [{"value": "F"}]}]}
+    with pytest.raises(DeclarationError) as caught:
+        check_terminology(table, column, ["STUDYID", "NOPE"], document, spec)
+    assert "unknown column 'NOPE'" in str(caught.value)
+
+
 def test_missing_discriminator_column_fails_governed():
     # Row-level codelist overrides hang on the <DOMAIN>TESTCD discriminator
     # (REQ-1163); a table missing it must fail with the governed
