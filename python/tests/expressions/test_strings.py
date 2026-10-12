@@ -717,32 +717,33 @@ def test_str_pad_accepts_a_width_of_one() -> None:
     assert result == ValueResult(value="ABC")
 
 
-@pytest.mark.parametrize("width", [0, -3])
-def test_str_pad_rejects_a_non_positive_width(width: int) -> None:
+@pytest.mark.parametrize(
+    ("source", "width", "reason"),
+    [
+        ("VALUE", 0, "non-positive width"),
+        ("VALUE", -3, "negative width"),
+        ("VALUE", True, "boolean width is not an exact int"),
+        (123, 4, "non-string source declaration"),
+        ("VALUE", "4", "non-integer width"),
+    ],
+)
+def test_str_pad_rejects_an_invalid_source_or_width(
+    source: object, width: object, reason: str
+) -> None:
+    # REQ-0321 (via _invalid_payload): a single guard pins both the source
+    # and the width contract (type(width) is not int rejects True), so the
+    # condition context must name the operation — a bare condition check
+    # could pass on a guard that fired elsewhere.
     result = evaluate_expression(
-        {"str_pad": {"source": "VALUE", "width": width}},
+        {"str_pad": {"source": source, "width": width}},
         MappingResolver({"VALUE": "ABC"}),
     )
-    assert isinstance(result, ConditionResult)
-    assert result.condition.condition == "invalid_field_type"
-
-
-def test_str_pad_rejects_a_non_string_variable() -> None:
-    result = evaluate_expression(
-        {"str_pad": {"source": 123, "width": 4}},
-        MappingResolver({"VALUE": "ABC"}),
+    assert isinstance(result, ConditionResult), reason
+    assert result.condition.condition == "invalid_field_type", reason
+    assert result.condition.context["operation"] == "str_pad", reason
+    assert result.condition.context["expected"] == "a source and a positive width", (
+        reason
     )
-    assert isinstance(result, ConditionResult)
-    assert result.condition.condition == "invalid_field_type"
-
-
-def test_str_pad_rejects_a_non_integer_width() -> None:
-    result = evaluate_expression(
-        {"str_pad": {"source": "VALUE", "width": "4"}},
-        MappingResolver({"VALUE": "ABC"}),
-    )
-    assert isinstance(result, ConditionResult)
-    assert result.condition.condition == "invalid_field_type"
 
 
 def test_str_extract_defaults_to_the_whole_match() -> None:
