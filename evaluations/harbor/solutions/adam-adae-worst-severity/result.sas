@@ -15,9 +15,9 @@ data graded;
 run;
 proc sort data=graded(where=(TRTEMFL='Y' and not missing(ASEVN))) out=eligible; by STUDYID USUBJID AEDECOD descending ASEVN NODATE ASTDT AESEQ; run;
 data worst; set eligible; by STUDYID USUBJID AEDECOD; if first.AEDECOD; keep STUDYID USUBJID AESEQ; run;
-proc sql; create table result as select a.*,a.ASEVN as AESEVN,case when not missing(b.AESEQ) then 'Y' else '' end as AWSEVFL from graded as a left join worst as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.AESEQ=b.AESEQ; quit;
+proc sql; create table result as select a.*,case when not missing(b.AESEQ) then 'Y' else '' end as AOCCPIFL from graded as a left join worst as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.AESEQ=b.AESEQ; quit;
 
 proc sql;
-  create table final as select STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL, AESEVN, AWSEVFL from result;
+  create table final as select STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL, ASEVN, AOCCPIFL from result;
 quit;
 proc export data=final outfile="/app/output/adae.csv" dbms=csv replace; run;

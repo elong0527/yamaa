@@ -54,7 +54,8 @@ column level. [REQ-0200](structure.md#req-0200) is vacuous when there are no ent
 <a id="req-0202"></a>
 
 **REQ-0202.** A `rows` derivation must target a declared column. A key in
-`derivations` that names no declared column fails validation.
+`derivations` that names no declared column fails validation with
+`undeclared_column` at that row derivation, naming the column.
 
 <a id="req-0204"></a>
 

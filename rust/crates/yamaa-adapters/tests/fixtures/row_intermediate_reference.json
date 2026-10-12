@@ -1154,7 +1154,7 @@
           "spec_paths": [
             "rows[1].dataset"
           ],
-          "requirement": null,
+          "requirement": "REQ-0034",
           "context": {
             "row": "high",
             "dataset": "ABSENT"
@@ -1174,7 +1174,7 @@
           "spec_paths": [
             "rows[1].dataset"
           ],
-          "requirement": null,
+          "requirement": "REQ-0034",
           "context": {
             "row": "high",
             "dataset": null

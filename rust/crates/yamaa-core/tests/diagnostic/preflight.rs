@@ -583,7 +583,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             ),
             (
                 "driver_unavailable",
-                None,
+                Some("REQ-0064"),
                 vec!["base"],
                 vec![("dataset", text("ABSENT"))],
             ),
@@ -599,7 +599,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         ),
         vec![(
             "driver_unavailable",
-            None,
+            Some("REQ-0064"),
             vec!["base"],
             vec![("row", V::Scalar(Value::Missing))],
         )],
@@ -647,7 +647,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         vec![
             (
                 "undeclared_column",
-                None,
+                Some("REQ-0202"),
                 vec!["rows[0].derivations.BOGUS"],
                 vec![("column", text("BOGUS"))],
             ),
@@ -674,7 +674,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             ),
             (
                 "driver_unavailable",
-                None,
+                Some("REQ-0034"),
                 vec!["rows[0].dataset"],
                 vec![("row", text("first")), ("dataset", text("ABSENT"))],
             ),
@@ -696,7 +696,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             ),
             (
                 "driver_unavailable",
-                None,
+                Some("REQ-0034"),
                 vec!["rows[2].dataset"],
                 vec![
                     ("row", text("third")),
