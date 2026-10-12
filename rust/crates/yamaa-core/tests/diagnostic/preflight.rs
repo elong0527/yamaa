@@ -10,6 +10,7 @@ use yamaa_core::{
 enum Tree<'a> {
     Text(&'a str),
     Integer(&'a str),
+    Null,
     Map(Vec<(&'a str, Tree<'a>)>),
     List(Vec<Tree<'a>>),
 }
@@ -17,6 +18,7 @@ use Tree::*;
 impl Tree<'_> {
     fn append(self, nodes: &mut Vec<N>) -> usize {
         let node = match self {
+            Null => N::Null,
             Text(value) => N::Text(value.into()),
             Integer(value) => N::Integer(value.into()),
             Map(fields) => N::Mapping(
@@ -832,6 +834,129 @@ pub(super) fn temporal_reached() -> BTreeSet<ConditionCode> {
             .into()
         );
         reached.insert(diagnostic.code);
+    }
+    reached
+}
+
+/// Reach SELF admission from normalized original documents, with independent truth.
+pub(super) fn self_reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    for collision in [false, true] {
+        let mut declared_inputs = vec![("SRC", Map(vec![("path", Text("src.csv"))]))];
+        if collision {
+            declared_inputs.push(("SELF", Map(vec![("path", Text("self.csv"))])));
+        }
+        let mut fields = base(
+            "TEST",
+            Map(declared_inputs),
+            vec![column("ID", None)],
+            vec![Text("ID")],
+        );
+        fields.push((
+            "intermediates",
+            List(vec![Map(vec![
+                ("id", Text("P")),
+                ("dataset", Text("SELF")),
+                ("key", List(vec![Text("ID")])),
+            ])]),
+        ));
+        fields.push((
+            "rows",
+            List(vec![Map(vec![
+                ("id", Text("first")),
+                ("dataset", Text("SRC")),
+                (
+                    "derivations",
+                    Map(vec![(
+                        "ID",
+                        Map(vec![(
+                            "value",
+                            Map(vec![(
+                                "source",
+                                Map(vec![(
+                                    "variable",
+                                    Text(if collision { "SRC.ID" } else { "P.ID" }),
+                                )]),
+                            )]),
+                        )]),
+                    )]),
+                ),
+            ])]),
+        ));
+        let expected = if collision {
+            vec![(
+                "duplicate_identifier",
+                Some("REQ-0113"),
+                vec!["intermediates[0].dataset", "input.SELF"],
+                vec![("identifier", text("SELF"))],
+            )]
+        } else {
+            vec![(
+                "phase_boundary",
+                Some("REQ-0120"),
+                vec!["rows[0].derivations.ID.source"],
+                vec![
+                    ("identifier", text("P.ID")),
+                    ("available_phase", text("completed_prior_row_template")),
+                    ("required_phase", text("row_construction")),
+                ],
+            )]
+        };
+        reached.extend(check(fields, expected));
+    }
+    reached
+}
+
+/// Named lookup declaration causes are reached without opening any declared input.
+pub(super) fn intermediate_reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    for variant in 0..3 {
+        let mut fields = base(
+            "TEST",
+            inputs(),
+            vec![column("ID", Some(source()))],
+            vec![Text("ID")],
+        );
+        fields.push(("base", Text("SRC")));
+        let mut declaration = vec![("id", Text("P")), ("dataset", Text("SECOND"))];
+        match variant {
+            0 => declaration.push(("no_match", Null)),
+            1 => declaration.push((
+                "order_by",
+                List(vec![Map(vec![
+                    ("variable", Text("SECOND.ID")),
+                    ("direction", Text("asc")),
+                    ("nulls", Text("last")),
+                ])]),
+            )),
+            _ => declaration.push(("keep", Text("last"))),
+        }
+        fields.push(("intermediates", List(vec![Map(declaration)])));
+        let expected = if variant == 0 {
+            vec![(
+                "rename_only_intermediate",
+                Some("REQ-1248"),
+                vec!["intermediates[0]"],
+                vec![("intermediate", text("P")), ("dataset", text("SECOND"))],
+            )]
+        } else {
+            let (declared, missing) = if variant == 1 {
+                ("order_by", "keep")
+            } else {
+                ("keep", "order_by")
+            };
+            vec![(
+                "unpaired_fields",
+                Some("REQ-0119"),
+                vec!["intermediates[0]"],
+                vec![
+                    ("intermediate", text("P")),
+                    ("declared", texts(&[declared])),
+                    ("missing", texts(&[missing])),
+                ],
+            )]
+        };
+        reached.extend(check(fields, expected));
     }
     reached
 }

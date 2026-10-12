@@ -35,6 +35,12 @@ pub use aggregate::{
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
+#[path = "dataset_relation_predicate.rs"]
+pub(crate) mod relation_predicates;
+pub use relation_predicates::{CurrentField, CurrentRead, RelationPredicate};
+#[path = "dataset_self.rs"]
+mod self_relations;
+pub use self_relations::IntermediateSource;
 #[path = "dataset_match_values.rs"]
 mod match_values;
 pub use match_values::{IntermediateKey, MatchRead, MatchValue};
@@ -500,11 +506,11 @@ fn validate_assignment_at(
                     let item = intermediates
                         .get(index)
                         .ok_or(PlanError::InvalidIntermediate)?;
-                    if !matches!(mode, RowMode::Keys) {
+                    if !matches!(mode, RowMode::Keys) && !item.source.is_self() {
                         return Err(PlanError::InvalidIntermediate);
                     }
-                    intermediates::validate_read(
-                        item, column, source, secondary, available, output,
+                    intermediates::validate_context_read(
+                        item, column, source, secondary, available, output, mode,
                     )?;
                 }
             }
@@ -1024,6 +1030,7 @@ impl DatasetPlan {
         if templates.is_empty() {
             return Err(PlanError::NoTemplates);
         }
+        self_relations::validate(&intermediates, &templates)?;
         let width = output.columns().len();
         validate_columns(&keys, width)?;
         let mut row_columns = None;
@@ -1038,6 +1045,13 @@ impl DatasetPlan {
             }
             let mut available = vec![false; width];
             for assignment in &template.assignments {
+                relation_predicates::validate_reads(
+                    &assignment.expression,
+                    &intermediates,
+                    template.mode.source_index(),
+                    &template.mode,
+                    &available,
+                )?;
                 // A selector compiled against the primary record cannot borrow a
                 // different driver's record coordinates. Output match values are shared.
                 if template.mode.source_index() != 0
@@ -1092,6 +1106,13 @@ impl DatasetPlan {
             }
             row_columns = Some(available.clone());
             for assignment in &columns {
+                relation_predicates::validate_reads(
+                    &assignment.expression,
+                    &intermediates,
+                    template.mode.source_index(),
+                    &template.mode,
+                    &available,
+                )?;
                 if (keyed || template.mode.source_index() != 0)
                     && current_record_read(
                         &assignment.expression,

@@ -41,7 +41,7 @@ make <- function(label,diamond=FALSE,fatal=NULL,blocked=FALSE) {
     else if(name %in% c("left","right")) { source <- "{P: {path: generated/producer.csv, schema: producer.yaml}}";input <- "P" }
     else if(diamond) { source <- "{A: {path: generated/left.csv, schema: left.yaml}, B: {path: generated/right.csv, schema: right.yaml}}";input <- "A" }
     else { source <- "{A: {path: generated/producer.csv, schema: producer.yaml}, B: {path: generated/producer.csv, schema: ./producer.yaml}}";input <- "A" }
-    intermediate <- if(name=="root")"intermediates: [{id: SHARED, dataset: B, no_match: null}]\n" else ""
+    intermediate <- if(name=="root")"intermediates: [{id: SHARED, dataset: B, key: [ID], no_match: null}]\n" else ""
     severity <- if(identical(name,fatal))"error" else "warning"
     warning <- if(blocked && name=="root")"blocked/root-warnings.csv" else paste0("generated/",name,"-warnings.csv")
     identifier <- if(name=="root")'"\\u00e9\\U0001d11e"' else paste0(name,"-range")

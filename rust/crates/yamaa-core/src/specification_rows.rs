@@ -134,6 +134,7 @@ fn default_reads(
     declaration: usize,
     output: &TableSchema,
     project: Option<&functions::Prepared>,
+    string_templates: &str_template::Prepared,
 ) -> Result<(bool, Vec<usize>), PrepareError> {
     let value = field(d, declaration, "value")?;
     let &[(operation, payload)] = mapping(d, value)? else {
@@ -141,6 +142,14 @@ fn default_reads(
     };
     let operation = text(d, operation)?;
     let mut reads = Vec::new();
+    let mut names = Vec::new();
+    derivations::references(d, value, project, &mut names, 0)?;
+    self_relations::template_references(d, value, string_templates, &mut names, 0)?;
+    for name in names {
+        if self_relations::is_reference(d, &name)? {
+            return Ok((false, reads));
+        }
+    }
     let mut reference = |name: &str| {
         if !name.contains('.') {
             if let Some(column) = output.columns().iter().position(|c| c.name == name) {
@@ -242,13 +251,14 @@ fn select_defaults(
     rows: &[usize],
     filter_defaults: alloc::collections::BTreeSet<usize>,
     project: Option<&functions::Prepared>,
+    string_templates: &str_template::Prepared,
 ) -> Result<Vec<usize>, PrepareError> {
     let defaults = columns
         .iter()
         .map(|&column| {
             d.field(column, "derivation")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                .map(|id| default_reads(d, id, output, project))
+                .map(|id| default_reads(d, id, output, project, string_templates))
                 .transpose()
                 .map(|default| default.unwrap_or((true, Vec::new())))
         })
@@ -298,7 +308,7 @@ fn select_defaults(
                     .or_default()
                     .push(text(d, field(d, row, "id")?)?);
             }
-            let (_, reads) = default_reads(d, declaration, output, project)?;
+            let (_, reads) = default_reads(d, declaration, output, project, string_templates)?;
             for read in reads {
                 if local[read] {
                     selected[read] = true;
@@ -495,6 +505,21 @@ fn validate_row_phases(
     ))
 }
 impl Rows {
+    pub(super) fn self_columns(&self) -> Vec<usize> {
+        self.templates[0]
+            .declarations
+            .iter()
+            .map(|declaration| declaration.column)
+            .filter(|&column| {
+                self.templates.iter().all(|template| {
+                    template
+                        .declarations
+                        .iter()
+                        .any(|declaration| declaration.column == column)
+                })
+            })
+            .collect()
+    }
     #[allow(clippy::too_many_arguments)]
     pub(super) fn prepare(
         d: &Document,
@@ -546,7 +571,8 @@ impl Rows {
                     .transpose()
             })
             .collect::<Result<Vec<_>, PrepareError>>()?;
-        let mut filter_defaults = alloc::collections::BTreeSet::new();
+        let mut filter_defaults =
+            self_relations::donor_defaults(d, output, project, intermediates, string_templates)?;
         for filter in &filters {
             if let Some((_, Ok(plan))) = filter {
                 for name in plan
@@ -578,7 +604,15 @@ impl Rows {
             }
         }
         let mut templates = Vec::new();
-        let selected = select_defaults(d, columns, output, raw_rows, filter_defaults, project)?;
+        let selected = select_defaults(
+            d,
+            columns,
+            output,
+            raw_rows,
+            filter_defaults,
+            project,
+            string_templates,
+        )?;
         for &column in &selected {
             let metadata = &output.columns()[column];
             if let Some(id) = d
@@ -702,7 +736,11 @@ impl Rows {
             if template.groups.is_some() {
                 for declaration in &template.declarations {
                     if let RowOperation::Source(reference) = &declaration.operation {
-                        if row_intermediates::named_reference(d, reference)? {
+                        if row_intermediates::named_reference(d, reference)?
+                            && !intermediates
+                                .reference(reference)
+                                .is_some_and(|(index, _)| intermediates.is_self(index))
+                        {
                             return Err(unsupported(
                                 "grouped_intermediate_source",
                                 &declaration.path,
@@ -711,6 +749,28 @@ impl Rows {
                     }
                 }
             }
+        }
+        let mut self_admission =
+            self_relations::FirstTemplate::new(d, project, intermediates, string_templates);
+        for declaration in &templates[0].declarations {
+            // The expanded occurrence retains its authored row or default path.
+            let column = &output.columns()[declaration.column].name;
+            let raw = mapping(d, field(d, raw_rows[0], "derivations")?)?
+                .iter()
+                .find(|&&(name, _)| text(d, name).is_ok_and(|name| name == column))
+                .map(|&(_, id)| id)
+                .or_else(|| d.field(columns[declaration.column], "derivation"));
+            if let Some(raw) = raw {
+                let prefix = declaration
+                    .path
+                    .rsplit_once('.')
+                    .map_or(declaration.path.as_str(), |(prefix, _)| prefix);
+                self_admission.visit(field(d, raw, "value")?, prefix, 0)?;
+            }
+        }
+        let self_findings = self_admission.finish();
+        if !self_findings.is_empty() {
+            return Err(PrepareError::Invalid(self_findings));
         }
         validate_row_phases(&templates, project, output)?;
         let mut lowered_columns = Vec::new();
@@ -756,7 +816,11 @@ impl Rows {
         if templates.iter().any(|template| template.groups.is_some()) {
             for declaration in &lowered_columns {
                 if let RowOperation::Source(reference) = &declaration.operation {
-                    if row_intermediates::named_reference(d, reference)? {
+                    if row_intermediates::named_reference(d, reference)?
+                        && !intermediates
+                            .reference(reference)
+                            .is_some_and(|(index, _)| intermediates.is_self(index))
+                    {
                         return Err(unsupported(
                             "grouped_intermediate_source",
                             &declaration.path,
@@ -958,8 +1022,11 @@ impl Rows {
                 )?,
                 RowOperation::Source(reference) => {
                     if named.reference(reference).is_some() {
-                        if matches!(phase, Phase::Row { group_by: Some(_) })
-                            || matches!(phase, Phase::Column { .. }) && !groups.is_empty()
+                        if !named
+                            .reference(reference)
+                            .is_some_and(|(index, _)| named.is_self(index))
+                            && (matches!(phase, Phase::Row { group_by: Some(_) })
+                                || matches!(phase, Phase::Column { .. }) && !groups.is_empty())
                         {
                             return Err(BindError::InvalidPlan(
                                 crate::dataset::PlanError::InvalidIntermediate,
@@ -1322,6 +1389,19 @@ impl Rows {
                 paths,
                 diagnostics: analyzed.diagnostics,
             });
+        }
+        for template in &templates {
+            relation_predicates::admit_reads(
+                template
+                    .assignments
+                    .iter()
+                    .chain(&columns)
+                    .map(|assignment| &assignment.expression),
+                &intermediates,
+                template.mode.source_index(),
+                &template.mode,
+                &mut findings,
+            );
         }
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));

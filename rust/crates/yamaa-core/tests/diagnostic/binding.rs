@@ -1030,3 +1030,76 @@ pub(super) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
     }
     reached
 }
+
+/// Omitted named keys share the inference service, while retaining their REQ-0153 cause.
+pub(super) fn intermediate_key_reached() -> BTreeSet<ConditionCode> {
+    let tree = Map(vec![
+        ("schema_version", Text("1.0")),
+        ("domain", Text("TEST")),
+        ("base", Text("SRC")),
+        (
+            "input",
+            Map(vec![
+                ("SRC", Map(vec![("path", Text("source.csv"))])),
+                ("DONOR", Map(vec![("path", Text("donor.csv"))])),
+            ]),
+        ),
+        ("keys", List(vec![Text("ID")])),
+        (
+            "intermediates",
+            List(vec![Map(vec![
+                ("id", Text("P")),
+                ("dataset", Text("DONOR")),
+            ])]),
+        ),
+        (
+            "columns",
+            List(vec![column("ID", Some(op("source", "variable", "SRC.ID")))]),
+        ),
+        (
+            "output",
+            Map(vec![
+                ("path", Text("result.csv")),
+                ("columns", List(vec![Text("ID")])),
+            ]),
+        ),
+    ]);
+    let mut nodes = vec![];
+    let root = tree.append(&mut nodes);
+    let model = SpecificationDocument::admit(
+        Document::new(nodes, root, Default::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap();
+    let prepared = PreparedSpecification::prepare(&model).unwrap();
+    let driver = TableSchema::new(vec![Column {
+        name: "ID".into(),
+        kind: ColumnType::Int,
+    }])
+    .unwrap();
+    let donor = TableSchema::new(vec![Column {
+        name: "OTHER".into(),
+        kind: ColumnType::Int,
+    }])
+    .unwrap();
+    let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&driver, &donor]) else {
+        panic!("named inference failure");
+    };
+    assert_eq!(findings.len(), 1);
+    [check(
+        findings[0]
+            .diagnostics(prepared.source())
+            .unwrap()
+            .remove(0),
+        "no_applicable_keys",
+        Some("REQ-0153"),
+        &["intermediates[0]"],
+        vec![
+            ("dataset", text("DONOR")),
+            ("keys", V::Sequence(vec![text("ID")])),
+            ("hint", text("declare the `key` explicitly")),
+        ],
+    )]
+    .into()
+}

@@ -10,6 +10,8 @@ mod diagnostics;
 mod conversion;
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
+#[path = "dataset_relation_predicate.rs"]
+mod relation_predicates;
 pub use yamaa_core::dataset::*;
 #[path = "dataset_flag.rs"]
 mod flags;
@@ -39,6 +41,8 @@ mod row_drivers;
 mod row_windows;
 #[path = "dataset_scalar.rs"]
 mod scalar;
+#[path = "dataset_self.rs"]
+mod self_relations;
 #[path = "dataset_text_case.rs"]
 mod str_case;
 #[path = "dataset_text_extract.rs"]
@@ -363,8 +367,10 @@ pub(crate) fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> Ex
 
 /// Resources and semantic observations belong to the same attempted run.
 struct EvaluationState<'a, E> {
+    primary: &'a dyn TableAccess<Error = E>,
     functions: &'a mut dyn FunctionPort<Error = E>,
     secondary: &'a [&'a dyn TableAccess<Error = E>],
+    self_rows: &'a [Candidate],
     budget: &'a mut Budget,
     handlers: &'a mut HandlerCounter,
     intermediates: &'a mut intermediates::Run,
@@ -1137,6 +1143,7 @@ impl Executor<'_> {
             return Err(Box::new(ExecutionError::Capacity));
         }
         observer(ExecutionPhase::Derivation);
+        let primary = row_drivers::Driver::Primary(table);
         let mut budget = Budget::new(limits);
         let mut intermediate_run = intermediates::Run::default();
         let mut candidates: Vec<Candidate> = Vec::new();
@@ -1201,8 +1208,10 @@ impl Executor<'_> {
                             candidates.len(),
                             limits,
                             &mut EvaluationState {
+                                primary: &primary,
                                 functions,
                                 secondary,
+                                self_rows: &candidates[..first],
                                 budget: &mut budget,
                                 handlers,
                                 intermediates: &mut intermediate_run,
@@ -1233,23 +1242,27 @@ impl Executor<'_> {
                     }
                     candidates.push(candidate);
                 }
+                let (prior, current) = candidates.split_at_mut(first);
                 row_windows::complete(
                     table,
                     template,
                     &deferred,
-                    &mut candidates[first..],
+                    current,
                     self,
                     first,
                     limits,
                     &mut EvaluationState {
+                        primary: &primary,
                         functions,
                         secondary,
+                        self_rows: prior,
                         budget: &mut budget,
                         handlers,
                         intermediates: &mut intermediate_run,
                         output_rows: &[],
                     },
                 )?;
+                intermediate_run.publish_self(self, &mut budget)?;
             }
         }
         let mut completed = vec![false; self.plan.output().columns().len()];
@@ -1314,8 +1327,10 @@ impl Executor<'_> {
                         row,
                         limits,
                         &mut EvaluationState {
+                            primary: &primary,
                             functions,
                             secondary,
+                            self_rows: &candidates,
                             budget: &mut budget,
                             handlers,
                             intermediates: &mut intermediate_run,
@@ -1323,8 +1338,9 @@ impl Executor<'_> {
                         },
                     )?
                 };
-                candidates[row].values[assignment.column] = value;
-                candidates[row].completed[assignment.column] = true;
+                let candidate = &mut candidates[row];
+                candidate.values[assignment.column] = value;
+                candidate.completed[assignment.column] = true;
             }
             completed[assignment.column] = true;
             self.check_columns(

@@ -83,6 +83,8 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
                     budget,
                     handlers,
                     secondary: &[],
+                    primary: &row_drivers::Driver::Primary(table),
+                    self_rows: &[],
                     intermediates: &mut intermediates::Run::default(),
                     output_rows: &[],
                 },

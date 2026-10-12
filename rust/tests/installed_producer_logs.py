@@ -108,7 +108,7 @@ class ProducerLogs(unittest.TestCase):
                     "A",
                 )
             intermediate = (
-                "intermediates: [{id: SHARED, dataset: B, no_match: null}]\n"
+                "intermediates: [{id: SHARED, dataset: B, key: [ID], no_match: null}]\n"
                 if name == "root"
                 else ""
             )

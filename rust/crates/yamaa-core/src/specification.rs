@@ -18,12 +18,18 @@ use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
 #[path = "specification_binding_diagnostics.rs"]
 mod binding_diagnostics;
+#[path = "specification_intermediate_admission.rs"]
+mod intermediate_admission;
+#[path = "specification_intermediate_sources.rs"]
+mod intermediate_sources;
 #[path = "specification_intermediates.rs"]
 mod intermediates;
 #[path = "specification_lookup_diagnostics.rs"]
 mod lookup_diagnostics;
 #[path = "specification_match_values.rs"]
 mod match_values;
+#[path = "specification_relation_predicate.rs"]
+mod relation_predicates;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
 #[path = "specification_output_diagnostics.rs"]
@@ -45,6 +51,8 @@ mod row_drivers;
 mod row_intermediates;
 #[path = "specification_rows.rs"]
 mod rows;
+#[path = "specification_self.rs"]
+mod self_relations;
 #[path = "specification_verifications.rs"]
 mod verifications;
 pub use logs::{LogFinding, OutputLogs};
@@ -1717,6 +1725,7 @@ impl PreparedSpecification {
                 schemas,
                 &self.output,
                 &self.keys,
+                Some(&rows.self_columns()),
                 &mut findings,
             )?;
             return rows
@@ -1774,6 +1783,7 @@ impl PreparedSpecification {
             schemas,
             &self.output,
             &self.keys,
+            None,
             &mut findings,
         )?;
         let mut assignments = BTreeMap::new();
@@ -2081,12 +2091,7 @@ impl PreparedSpecification {
                             .ok_or(BindError::Internal)?;
                         if let Some(item) = &intermediates[index] {
                             edges.extend(item.output_dependencies());
-                            if let Some(column) = secondary[item.source]
-                                .schema
-                                .columns()
-                                .iter()
-                                .position(|c| c.name == field)
-                            {
+                            if let Some(column) = item.source_column(&secondary, field) {
                                 bindings.push(Binding {
                                     name: name.into(),
                                     read: Read::Intermediate { index, column },
@@ -2166,6 +2171,15 @@ impl PreparedSpecification {
             .map(|filter| filter.bind(&self.source().name, source, &mut findings))
             .transpose()?
             .flatten();
+        relation_predicates::admit_reads(
+            assignments
+                .values()
+                .map(|assignment| &assignment.expression),
+            &intermediates,
+            0,
+            &RowMode::Keys,
+            &mut findings,
+        );
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }

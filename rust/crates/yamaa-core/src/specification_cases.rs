@@ -450,36 +450,18 @@ pub(super) fn bind(
                 edges,
                 findings,
             )?,
-            Operation::Source(source) => {
-                if source.has_filter() {
-                    return Err(BindError::Internal);
-                }
-                match catalog.bind(&source.variable).map_err(BindError::Catalog)? {
-                    Some(reference_binding::Binding::Output { column, .. }) => {
-                        edges.push(column);
-                        Some(Expression::Column(column))
-                    }
-                    Some(reference_binding::Binding::Dataset { field, .. }) => {
-                        Some(if spec.keys.contains(&column) {
-                            Expression::Source(field)
-                        } else {
-                            Expression::Collect {
-                                column: field,
-                                identifier: source.variable.clone(),
-                                filter: None,
-                                selection: None,
-                            }
-                        })
-                    }
-                    None => {
-                        findings.push(BindFinding::UnknownReference {
-                            path: branch.path.clone(),
-                            name: source.variable.clone(),
-                        });
-                        None
-                    }
-                }
-            }
+            Operation::Source(source) => source_expressions::bind(
+                spec,
+                source,
+                column,
+                &branch.path,
+                catalog,
+                driver,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
             Operation::Aggregate(operation) => aggregates::bind(
                 operation,
                 catalog,
@@ -497,12 +479,7 @@ pub(super) fn bind(
                     if let Some((index, field)) = spec.intermediates.reference(name) {
                         if let Some(item) = &intermediates[index] {
                             edges.extend(item.output_dependencies());
-                            if let Some(column) = secondary[item.source]
-                                .schema
-                                .columns()
-                                .iter()
-                                .position(|candidate| candidate.name == field)
-                            {
+                            if let Some(column) = item.source_column(secondary, field) {
                                 bindings.push(Binding {
                                     name: name.into(),
                                     read: Read::Intermediate { index, column },
@@ -544,6 +521,11 @@ pub(super) fn bind(
                 &branch.path,
                 catalog,
                 None,
+                column,
+                &spec.output,
+                &spec.intermediates,
+                secondary,
+                intermediates,
                 edges,
                 findings,
             )?,

@@ -18,9 +18,9 @@ pub struct SourceSchemas {
 pub struct Intermediate {
     pub identifier: String,
     pub path: String,
-    pub source: usize,
+    pub source: IntermediateSource,
     pub keys: Vec<IntermediateKey>,
-    pub filter: Option<BoundPredicate>,
+    pub filter: Option<RelationPredicate>,
     pub selection: Option<SourceSelection>,
     /// `Some(Missing)` handles absence; `None` leaves it as a join condition.
     pub no_match: Option<Value>,
@@ -31,6 +31,15 @@ impl Intermediate {
         self.keys
             .iter()
             .filter_map(|key| key.value.read().and_then(MatchRead::output_column))
+            .chain(
+                self.filter
+                    .iter()
+                    .flat_map(|filter| filter.current())
+                    .filter_map(|field| match field.read {
+                        CurrentRead::Output(column) => Some(column),
+                        _ => None,
+                    }),
+            )
     }
     pub fn has_expression_keys(&self) -> bool {
         self.keys.iter().any(|key| key.value.is_expression())
@@ -55,17 +64,45 @@ pub(super) fn validate(
         }
         validate_read(
             item,
-            0,
+            match &item.source {
+                IntermediateSource::Input(_) | IntermediateSource::Primary { .. } => 0,
+                IntermediateSource::SelfRows { columns, .. } => columns
+                    .first()
+                    .copied()
+                    .ok_or(PlanError::InvalidIntermediate)?,
+            },
             primary,
             sources,
             &vec![true; output.columns().len()],
             output,
         )?;
-        let width = sources[item.source].schema.columns().len();
+        let width = item
+            .source_schema(sources)
+            .ok_or(PlanError::InvalidIntermediate)?
+            .columns()
+            .len();
+        if let IntermediateSource::Primary { schema, name } = &item.source {
+            if schema != primary || name.is_empty() {
+                return Err(PlanError::InvalidIntermediate);
+            }
+        }
+        if let IntermediateSource::SelfRows { schema, columns } = &item.source {
+            if schema != output
+                || columns
+                    .iter()
+                    .enumerate()
+                    .any(|(index, &column)| column >= width || columns[..index].contains(&column))
+            {
+                return Err(PlanError::InvalidIntermediate);
+            }
+            if item.keys.iter().any(|key| !item.source.admits_column(key.source_column))
+                || item.filter.as_ref().is_some_and(|filter| filter.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !item.source.admits_column(column))))
+                || item.selection.as_ref().is_some_and(|selection| selection.order_by.iter().any(|term| !item.source.admits_column(term.column))) {
+                return Err(PlanError::InvalidIntermediate);
+            }
+        }
         if let Some(filter) = &item.filter {
-            filter
-                .validate(width, &[], false)
-                .map_err(PlanError::Filter)?;
+            filter.validate(width, primary, sources, output, items, index)?;
         }
         if item.selection.as_ref().is_some_and(|selection| {
             selection.order_by.is_empty()
@@ -85,13 +122,13 @@ pub(super) fn validate_read(
     available: &[bool],
     output: &TableSchema,
 ) -> Result<(), PlanError> {
-    let source = sources
-        .get(item.source)
+    let source = item
+        .source_schema(sources)
         .ok_or(PlanError::InvalidIntermediate)?;
-    if column >= source.schema.columns().len() {
+    if column >= source.columns().len() || !item.source.admits_column(column) {
         return Err(PlanError::InvalidIntermediate);
     }
-    match_values::validate(&item.keys, primary, &source.schema, output, available)
+    match_values::validate(&item.keys, primary, source, output, available)
 }
 
 /// Direct scalar selections use only admitted complete records or completed keys.
@@ -105,8 +142,18 @@ pub(super) fn validate_context_read(
     output: &TableSchema,
     mode: &RowMode,
 ) -> Result<(), PlanError> {
-    if !matches!(mode, RowMode::Records | RowMode::Keys) {
+    if !matches!(mode, RowMode::Records | RowMode::Keys) && !item.source.is_self() {
         return Err(PlanError::InvalidIntermediate);
+    }
+    if let RowMode::Groups(keys) = mode {
+        if item
+            .keys
+            .iter()
+            .filter_map(|key| key.value.read())
+            .any(|read| matches!(read, MatchRead::Record { column, .. } if !keys.contains(column)))
+        {
+            return Err(PlanError::NonGroupSource);
+        }
     }
     validate_read(item, column, primary, sources, available, output)
 }

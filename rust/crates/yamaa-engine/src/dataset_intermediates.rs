@@ -18,6 +18,35 @@ pub(super) struct Run {
     choices: BTreeMap<(SelectionIdentity, usize), Choice>,
 }
 
+impl Run {
+    /// Every completed template changes only SELF eligibility and match choices.
+    pub(super) fn publish_self<E>(
+        &mut self,
+        plan: &DatasetPlan,
+        budget: &mut Budget,
+    ) -> Result<(), Box<ExecutionError<E>>> {
+        if !plan
+            .intermediates()
+            .iter()
+            .any(|item| item.source.is_self())
+        {
+            return Ok(());
+        }
+        budget.work(
+            self.eligible
+                .len()
+                .checked_add(self.choices.len())
+                .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
+            1,
+        )?;
+        self.eligible
+            .retain(|index, _| !plan.intermediates()[*index].source.is_self());
+        self.choices
+            .retain(|(_, index), _| !plan.intermediates()[*index].source.is_self());
+        Ok(())
+    }
+}
+
 /// Reuse a selected record while recording each reading's own inherited handler site.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn read<T: TableAccess + ?Sized>(
@@ -80,7 +109,17 @@ fn read_with_observations<T: TableAccess + ?Sized>(
     )?;
     let cache_key = (candidate.selection_identity, index);
     let item = &plan.intermediates()[index];
-    let table = state.secondary[item.source];
+    let donors = self_relations::Donors::<T::Error>::new(state.self_rows, plan.output());
+    let table: &dyn TableAccess<Error = T::Error> = match &item.source {
+        IntermediateSource::Input(index) => state.secondary[*index],
+        IntermediateSource::Primary { .. } => state.primary,
+        IntermediateSource::SelfRows { .. } => &donors,
+    };
+    let source_name = match &item.source {
+        IntermediateSource::Input(index) => plan.secondary()[*index].name.as_str(),
+        IntermediateSource::Primary { name, .. } => name.as_str(),
+        IntermediateSource::SelfRows { .. } => "SELF",
+    };
     let choice = if let Some(choice) = state.intermediates.choices.get(&cache_key) {
         *choice
     } else {
@@ -110,9 +149,9 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                 .try_reserve_exact(table.row_count())
                 .map_err(|_| Box::new(ExecutionError::Allocation))?;
             for source_row in 0..table.row_count() {
-                if let Some(filter) = &item.filter {
+                if let Some(filter) = item.filter.as_ref().filter(|filter| !filter.correlated()) {
                     let truth = crate::dataset_predicate::evaluate(
-                        filter,
+                        filter.predicate(),
                         table,
                         source_row,
                         &[],
@@ -156,18 +195,19 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                 .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
             1,
         )?;
-        let eligible = &state.intermediates.eligible[&index];
+        let eligible_len = state.intermediates.eligible[&index].len();
         if !keys
             .iter()
             .any(|(_, value)| matches!(value, Value::Missing))
         {
             // First count every matching record without reading order or donor fields.
             let mut matching = Vec::new();
-            state.budget.work(eligible.len(), 1)?;
+            state.budget.work(eligible_len, 1)?;
             matching
-                .try_reserve_exact(eligible.len())
+                .try_reserve_exact(eligible_len)
                 .map_err(|_| Box::new(ExecutionError::Allocation))?;
-            for &source_row in eligible {
+            for position in 0..eligible_len {
+                let source_row = state.intermediates.eligible[&index][position];
                 let mut matches = true;
                 for (column, expected) in &keys {
                     let value = cell(table, item, source_row, *column, state.budget)?;
@@ -179,6 +219,37 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                     }
                 }
                 if matches {
+                    if let Some(filter) = item.filter.as_ref().filter(|filter| filter.correlated())
+                    {
+                        let owner = match &item.source {
+                            IntermediateSource::Input(index) => {
+                                relation_predicates::DonorOwner::Secondary(*index)
+                            }
+                            IntermediateSource::Primary { .. } => {
+                                relation_predicates::DonorOwner::Primary
+                            }
+                            IntermediateSource::SelfRows { .. } => {
+                                relation_predicates::DonorOwner::Completed
+                            }
+                        };
+                        if relation_predicates::evaluate(
+                            filter,
+                            relation_predicates::Donor {
+                                table,
+                                row: source_row,
+                                owner,
+                            },
+                            primary,
+                            candidate,
+                            plan,
+                            row,
+                            assignment,
+                            state,
+                        )? != yamaa_core::predicate::Truth::True
+                        {
+                            continue;
+                        }
+                    }
                     matching.push(source_row);
                 }
             }
@@ -190,7 +261,7 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                 } else {
                     return Err(Box::new(ExecutionError::MultipleMatches {
                         path: item.path.clone(),
-                        dataset: plan.secondary()[item.source].name.clone(),
+                        dataset: source_name.into(),
                         intermediate: item.identifier.clone(),
                         match_count: count,
                         matched_key: matched_key(table, &keys, state.budget)?,
@@ -209,7 +280,7 @@ fn read_with_observations<T: TableAccess + ?Sized>(
         } else {
             return Err(Box::new(ExecutionError::UnmatchedKey {
                 path: item.path.clone(),
-                dataset: plan.secondary()[item.source].name.clone(),
+                dataset: source_name.into(),
                 intermediate: item.identifier.clone(),
                 matched_key: matched_key(table, &keys, state.budget)?,
                 identity: failure_identity(candidate, plan.keys(), row, state.budget)?,
@@ -284,11 +355,21 @@ fn cell<'a, E>(
 ) -> Result<ValueRef<'a>, Box<ExecutionError<E>>> {
     budget.work(1, 1)?;
     let value = table.cell(row, column).map_err(|error| {
-        Box::new(ExecutionError::SecondaryCell {
-            path: item.path.clone(),
-            source: item.source,
-            source_row: row,
-            error,
+        Box::new(match item.source.input_index() {
+            Some(source) => ExecutionError::SecondaryCell {
+                path: item.path.clone(),
+                source,
+                source_row: row,
+                error,
+            },
+            None if matches!(item.source, IntermediateSource::Primary { .. }) => {
+                ExecutionError::Cell {
+                    path: item.path.clone(),
+                    source_row: row,
+                    error,
+                }
+            }
+            None => ExecutionError::SchemaMismatch,
         })
     })?;
     if let ValueRef::Str(text) = value {
