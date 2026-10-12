@@ -62,6 +62,74 @@ fn traversal_finding<E>(error: &graph::Error<E>) -> Result<Option<Value>, captur
         json!({"status":"invalid", "diagnostics":[super::portable_diagnostic(finding).ok_or(captured_schema::Error::InvalidContext)?]}),
     ))
 }
+fn dictionary_failure_ref<'a, T>(
+    document: &crate::specification_source::PreparedDocument,
+    error: &'a yamaa_engine::dictionary_preparation::Error<
+        T,
+        crate::specification_source::Error,
+        crate::yaml_decode::DecodedYaml,
+    >,
+) -> Result<String, &'a T> {
+    use yamaa_engine::dictionary_preparation::Cause;
+    let outcome = match &error.cause {
+        Cause::Capture {
+            reference,
+            error,
+            failure,
+        } => {
+            if let Some(failure) = failure {
+                let finding = failure.field_diagnostic(reference.path(), reference.written());
+                json!({"status":"invalid","diagnostics":[super::portable_diagnostic(finding).expect("portable resource facts")]})
+            } else {
+                match error {
+                    graph::SourceError::Raised(error) => return Err(error),
+                    graph::SourceError::Unavailable => {
+                        json!({"status":"rejected","stage":"dictionary","code":"resource_unavailable"})
+                    }
+                }
+            }
+        }
+        Cause::Decode {
+            reference, error, ..
+        } => {
+            let crate::specification_source::Error::Decode { error, .. } = error else {
+                return Ok(capture_failure(error));
+            };
+            if let Some(mut rows) = crate::yaml_transport::semantic_diagnostics(error) {
+                for row in &mut rows {
+                    row["phase"] = json!("validation");
+                    row["requirement"] = Value::Null;
+                    if matches!(error, crate::yaml_decode::DecodeFailure::NonAscii(_)) {
+                        row["context"]["path"] = json!(reference.written());
+                    }
+                }
+                json!({"status":"invalid","diagnostics":rows})
+            } else {
+                json!({"status":"rejected","stage":"dictionary","code":"yaml_decode"})
+            }
+        }
+        Cause::Admission {
+            arena,
+            error: normalization,
+            ..
+        } => normalized(
+            document.schema().structure(),
+            document.dictionary_input(error, *arena),
+            normalization.clone(),
+            &[],
+        ),
+        Cause::Materialize(error) => {
+            normalized(document.schema().structure(), None, error.clone(), &[])
+        }
+        Cause::Limit(error) => return Ok(capture_failure(error)),
+        Cause::MissingOrigin(_) => {
+            json!({"status":"rejected","stage":"dictionary","code":"declaring_origin"})
+        }
+    };
+    Ok(crate::yaml_transport::encode_outcome("specification/prototype",outcome,16_777_216)
+        .unwrap_or_else(|_|json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"dictionary","code":"response_limit"}}).to_string()))
+}
+
 /// Borrow rejected preparation so a public carrier can retain its exact sources
 /// and opaque resource payload beside the complete projected findings.
 pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
@@ -71,6 +139,9 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
     };
     let (schema, error) = match error {
         InheritanceError::Entry(error) => return Ok(capture_failure(error)),
+        InheritanceError::Dictionary { document, error } => {
+            return dictionary_failure_ref(document, error)
+        }
         InheritanceError::Preparation { schema, error, .. } => (schema.structure(), error.as_ref()),
     };
     let outcome = match error {
@@ -160,6 +231,18 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
 pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
     let (schema, error) = match error {
         InheritanceError::Entry(error) => return Ok(capture_failure(&error)),
+        InheritanceError::Dictionary { document, error } => {
+            match dictionary_failure_ref(&document, &error) {
+                Ok(value) => return Ok(value),
+                Err(_) => match error.cause {
+                    yamaa_engine::dictionary_preparation::Cause::Capture {
+                        error: graph::SourceError::Raised(error),
+                        ..
+                    } => return Err(error),
+                    _ => unreachable!("only original raised capture failures are opaque"),
+                },
+            }
+        }
         InheritanceError::Preparation { schema, error, .. } => (schema, *error),
     };
     let schema = schema.structure();

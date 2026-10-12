@@ -60,7 +60,7 @@ impl PreparedRun {
         environment: OwnedEnvironment,
     ) -> Result<Self, Box<RejectedRun>> {
         let (environment, captured) = environment.into_parts();
-        match project_domain::check_owned(document.model(), environment) {
+        match project_domain::check_owned(document.compilation_model(), environment) {
             Ok(checked) => Ok(Self {
                 document,
                 captured,

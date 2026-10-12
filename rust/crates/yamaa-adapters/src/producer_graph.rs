@@ -126,6 +126,7 @@ pub fn prepare(
         }
         for source in std::iter::once(node.document.source())
             .chain(node.document.parents().iter().map(|p| p.source()))
+            .chain(node.document.dictionary_sources())
         {
             charge(
                 &mut snapshots,
@@ -194,6 +195,7 @@ pub fn prepare(
         }
         for source in std::iter::once(node.document.source())
             .chain(node.document.parents().iter().map(|p| p.source()))
+            .chain(node.document.dictionary_sources())
         {
             if held
                 .insert(source.identity.as_str(), source.bytes.as_slice())

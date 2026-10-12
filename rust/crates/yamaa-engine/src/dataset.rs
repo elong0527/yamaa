@@ -498,14 +498,20 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                             selection: None,
                         },
                         key_grain::CollectionContext {
-                            path: &assignment.path,
+                            path: &operand.path,
                             candidate,
                             plan,
                             row,
                         },
                         state.budget,
                         state.handlers,
-                    )?
+                    )
+                    .map_err(|mut error| {
+                        if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
+                            *path = assignment.path.clone();
+                        }
+                        error
+                    })?
                 }
             };
             if value != Value::Missing {

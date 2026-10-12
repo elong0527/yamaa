@@ -48,7 +48,7 @@ pub struct PreparedRun {
 impl PreparedRun {
     /// Entire vocabulary admission precedes obtaining a study-data snapshot.
     pub fn prepare(document: PreparedDocument) -> Result<Self, Error> {
-        let checked = domain::check(document.model()).map_err(Error::Prepare)?;
+        let checked = domain::check(document.compilation_model()).map_err(Error::Prepare)?;
         Ok(Self { document, checked })
     }
     pub fn document(&self) -> &PreparedDocument {

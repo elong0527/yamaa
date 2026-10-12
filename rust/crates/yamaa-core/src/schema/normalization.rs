@@ -100,8 +100,13 @@ impl NormalizationBudget {
     pub fn validation_scope(&mut self) -> &mut ValidationBudget {
         &mut self.validation
     }
-    pub(super) fn work(&mut self, amount: usize) -> Result<(), NormalizationError> {
+    /// Admit application-service overhead into this same request work scope.
+    pub fn work(&mut self, amount: usize) -> Result<(), NormalizationError> {
         self.validation.work(amount).map_err(Into::into)
+    }
+    /// Admit retained planning metadata before copying it outside the arena.
+    pub fn text(&mut self, amount: usize) -> Result<(), NormalizationError> {
+        self.validation.text(amount).map_err(Into::into)
     }
     fn charge(
         used: &mut usize,

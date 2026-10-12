@@ -932,6 +932,52 @@ for(i in seq_len(nrow(mapping_cut_truth))) {
 }
 cat("original mapping/cut complete reports and exact repeated CSV passed\n")
 
+# File-backed dictionaries reuse authored inline complete report and CSV truth.
+dictionaries <- c(exact_typed="{Y: 1, y: 2.0, Z: null}",
+  ascii_fold=r"({'yes': 'matched', "\u00e9a": 'foreign', "\u00c9a": 'capital', "\u00df": 'sharp', 'ss': 'double'})",
+  lazy_case="{Y: 1}",nested_concat="{Y: 'yes'}",record_mapping="{Y: 1}",multiple_distinct_input="{Y: yes}")
+dictionary_prepare <- get(".prepare_file_specification",envir=asNamespace("yamaa"))
+dictionary_build <- get(".file_specification_build",envir=asNamespace("yamaa"))
+dictionary_reads <- get(".file_specification_reads",envir=asNamespace("yamaa"))
+for(name in names(dictionaries)) {
+  row <- mapping_cut_truth[mapping_cut_truth$case==name,,drop=FALSE]
+  stopifnot(nrow(row)==1L)
+  directory <- tempfile("dictionary-resource-");dir.create(directory)
+  directory <- normalizePath(directory,winslash="/",mustWork=TRUE)
+  inline <- paste0("dict: ",dictionaries[[name]])
+  authored <- rawToChar(hex_raw(row$source_hex[[1L]]))
+  stopifnot(grepl(inline,authored,fixed=TRUE))
+  writeBin(charToRaw(sub(inline,"dict: ./dictionary.yaml",authored,fixed=TRUE)),file.path(directory,"spec.yaml"))
+  writeBin(charToRaw(paste0(dictionaries[[name]],"\n")),file.path(directory,"dictionary.yaml"))
+  case <- file.path(root,"mapping-cut-cases",paste0(name,"-fixture"))
+  stopifnot(file.copy(file.path(case,"src.csv"),file.path(directory,"src.csv")))
+  handle <- dictionary_prepare(directory,directory,"spec.yaml")
+  stopifnot(dictionary_reads(handle)==2L)
+  expected <- sub('"runtime":"python"','"runtime":"r"',rawToChar(hex_raw(row$expected_wire_hex[[1L]])),fixed=TRUE)
+  expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
+  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  artifact <- hex_raw(row$artifact_hex[[1L]])
+  for(created in c(1L,0L)) {
+    if(created==0L) expected <- sub('"snapshots_created":1','"snapshots_created":0',expected,fixed=TRUE)
+    unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
+    result <- dictionary_build(handle,paste0("mapping-cut-",name))
+    stopifnot(identical(build_observations(result),unsaved),dictionary_reads(handle)==3L)
+    saves <- 0L
+    publish <- function(path,content) {
+      stopifnot(path=="result.csv",identical(content,artifact))
+      writeBin(content,file.path(directory,path));saves <<- saves+1L;TRUE
+    }
+    if(length(artifact)) {
+      stopifnot(identical(build_save(result,publish),expected),saves==1L,identical(rawfile(file.path(directory,"result.csv")),artifact))
+    } else {
+      failure <- tryCatch(build_save(result,publish),error=identity)
+      stopifnot(is.null(build_output(result)),inherits(failure,"error"),saves==0L,!file.exists(file.path(directory,"result.csv")))
+    }
+  }
+  unlink(directory,recursive=TRUE)
+}
+cat("original dictionary resources complete reports and exact repeated CSV passed\n")
+
 source_selection_truth("source-filters.tsv","source-filter",13L)
 cat("original source filters complete reports, cached reads and exact saved CSV passed\n")
 source_selection_truth("first-available.tsv","first-available",11L)
