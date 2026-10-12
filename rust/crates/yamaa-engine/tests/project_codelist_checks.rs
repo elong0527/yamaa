@@ -123,8 +123,8 @@ fn failing_checkpoint_keeps_full_original_values_and_keys_before_later_source_re
     let record = &records[0];
     assert_eq!(
         (
-            record.condition,
-            record.requirement,
+            record.definition().condition,
+            record.definition().requirement.unwrap(),
             record.evaluated_count,
             record.failed_count
         ),

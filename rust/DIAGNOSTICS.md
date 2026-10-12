@@ -537,3 +537,20 @@ This schema ownership slice reduces the frozen core/engine active allowance
 from 127 sites/171 occurrences to 98/138. Both immutable seeds and the host
 active allowance remain unchanged; deferred submission metadata stays visible
 under the guarded ceiling.
+
+## Typed verification observation ownership
+
+Verification records retain `ConditionCode` at detection and through the engine's
+borrowed `CheckObservation` view. The private record carrier no longer stores
+condition/requirement string pairs, and core projection admits the typed check
+family and phase directly. The legacy dataset/1 serializer and producer budget
+read mechanical registry definitions, preserving every wire field and byte cost.
+Ordered checks, complete retained row identities, full-width counts, codelist
+values, warning/error behavior and retained failure prefixes remain unchanged.
+
+Independent controls reject a later cause from the wrong family or phase and a
+codelist record with the fixed-list cause despite its identical public condition
+spelling. The host active allowance falls from 32 sites/48 occurrences to 29/45;
+both immutable seeds and the core/engine active allowance remain unchanged.
+Deferred submission detection metadata and complete installed/inventory
+qualification remain #1985 gates; no helper or probe is retired here.

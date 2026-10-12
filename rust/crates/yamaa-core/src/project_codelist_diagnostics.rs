@@ -26,8 +26,7 @@ pub struct CodelistObservation<'a> {
 }
 pub struct CheckObservation<'a, R> {
     pub path: &'a str,
-    pub condition: &'a str,
-    pub requirement: &'a str,
+    pub code: ConditionCode,
     pub evaluated_count: usize,
     pub failed_count: usize,
     pub output_rows: usize,
@@ -74,14 +73,13 @@ pub fn diagnostics<'a, R: RowObservation>(
             return Err(Error::InvalidObservation);
         }
     }
-    let mapping = ConditionCode::VerificationCodelistFailed.definition();
     let mut paths = BTreeSet::new();
     for record in records {
         budget.text(record.path)?;
         let check = compiled.column_check(record.path);
         let Some(observation) = record.codelist else {
             if matches!(check, Some(Check::Codelist { .. }))
-                || Some(record.requirement) == mapping.requirement
+                || record.code == ConditionCode::VerificationCodelistFailed
             {
                 return Err(Error::InvalidObservation);
             }
@@ -95,8 +93,7 @@ pub fn diagnostics<'a, R: RowObservation>(
             return Err(Error::Limit);
         }
         if id != observation.id
-            || record.condition != mapping.condition
-            || Some(record.requirement) != mapping.requirement
+            || record.code != ConditionCode::VerificationCodelistFailed
             || record.failed_count != observation.values.len()
             || record.failed_count != record.offending_rows.len()
             || record.failed_count > record.evaluated_count

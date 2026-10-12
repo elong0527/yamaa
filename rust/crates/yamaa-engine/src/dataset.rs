@@ -145,14 +145,19 @@ pub struct RowIdentity {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CheckRecord {
     pub path: String,
-    pub condition: &'static str,
-    pub requirement: &'static str,
+    pub code: yamaa_core::diagnostic::ConditionCode,
     pub evaluated_count: usize,
     pub failed_count: usize,
     pub output_rows: usize,
     pub offending_rows: Vec<RowIdentity>,
     /// Full offending values survive discarded output, under identity quotas.
     pub codelist: Option<CodelistObservation>,
+}
+
+impl CheckRecord {
+    pub fn definition(&self) -> yamaa_core::diagnostic::Definition {
+        self.code.definition()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1204,13 +1209,7 @@ impl Executor<'_> {
             if !missing.is_empty() {
                 failures.push(CheckRecord {
                     path: alloc::format!("keys[{position}]"),
-                    condition: yamaa_core::diagnostic::ConditionCode::OutputMissingKeyFailed
-                        .definition()
-                        .condition,
-                    requirement: yamaa_core::diagnostic::ConditionCode::OutputMissingKeyFailed
-                        .definition()
-                        .requirement
-                        .expect("registered normative check"),
+                    code: yamaa_core::diagnostic::ConditionCode::OutputMissingKeyFailed,
                     evaluated_count: dataset.rows.len(),
                     failed_count: missing.len(),
                     output_rows: dataset.rows.len(),
@@ -1235,13 +1234,7 @@ impl Executor<'_> {
         if !duplicates.is_empty() {
             failures.push(CheckRecord {
                 path: "keys".into(),
-                condition: yamaa_core::diagnostic::ConditionCode::OutputDuplicateKeyFailed
-                    .definition()
-                    .condition,
-                requirement: yamaa_core::diagnostic::ConditionCode::OutputDuplicateKeyFailed
-                    .definition()
-                    .requirement
-                    .expect("registered normative check"),
+                code: yamaa_core::diagnostic::ConditionCode::OutputDuplicateKeyFailed,
                 evaluated_count: groups.len(),
                 failed_count: duplicates.len(),
                 output_rows: dataset.rows.len(),
@@ -1305,14 +1298,7 @@ impl Executor<'_> {
                         groups.iter().filter(|members| members.len() > 1).collect();
                     CheckRecord {
                         path: verification.path.clone(),
-                        condition: yamaa_core::diagnostic::ConditionCode::VerificationUniqueFailed
-                            .definition()
-                            .condition,
-                        requirement:
-                            yamaa_core::diagnostic::ConditionCode::VerificationUniqueFailed
-                                .definition()
-                                .requirement
-                                .expect("registered normative check"),
+                        code: yamaa_core::diagnostic::ConditionCode::VerificationUniqueFailed,
                         evaluated_count: groups.len(),
                         failed_count: repeated.len(),
                         output_rows: dataset.rows.len(),
@@ -1340,15 +1326,7 @@ impl Executor<'_> {
                         identities(&dataset, self.plan.keys(), offending, &mut budget)?;
                     CheckRecord {
                         path: verification.path.clone(),
-                        condition:
-                            yamaa_core::diagnostic::ConditionCode::VerificationAllOrNoneFailed
-                                .definition()
-                                .condition,
-                        requirement:
-                            yamaa_core::diagnostic::ConditionCode::VerificationAllOrNoneFailed
-                                .definition()
-                                .requirement
-                                .expect("registered normative check"),
+                        code: yamaa_core::diagnostic::ConditionCode::VerificationAllOrNoneFailed,
                         evaluated_count: dataset.rows.len(),
                         failed_count: offending_rows.len(),
                         output_rows: dataset.rows.len(),
@@ -1363,15 +1341,7 @@ impl Executor<'_> {
                         || max.is_some_and(|max| count > i128::from(max));
                     CheckRecord {
                         path: verification.path.clone(),
-                        condition:
-                            yamaa_core::diagnostic::ConditionCode::VerificationRowCountFailed
-                                .definition()
-                                .condition,
-                        requirement:
-                            yamaa_core::diagnostic::ConditionCode::VerificationRowCountFailed
-                                .definition()
-                                .requirement
-                                .expect("registered normative check"),
+                        code: yamaa_core::diagnostic::ConditionCode::VerificationRowCountFailed,
                         evaluated_count: 1,
                         failed_count: usize::from(failed),
                         output_rows: dataset.rows.len(),
@@ -1469,9 +1439,8 @@ impl Executor<'_> {
                                     values,
                                 )
                             };
-                            let definition =
-                                yamaa_core::dataset_checks::column_definition(&verification.check)
-                                    .expect("admitted column check");
+                            let code = yamaa_core::dataset_checks::column_code(&verification.check)
+                                .expect("admitted column check");
                             let codelist =
                                 if let Check::Codelist { id, .. } = &verification.check {
                                     budget.scalar_text(id.len())?;
@@ -1504,10 +1473,7 @@ impl Executor<'_> {
                             }
                             records.push(CheckRecord {
                                 path: verification.path.clone(),
-                                condition: definition.condition,
-                                requirement: definition
-                                    .requirement
-                                    .expect("column presence has a requirement"),
+                                code,
                                 evaluated_count: candidates.len(),
                                 failed_count: offending_rows.len(),
                                 output_rows: candidates.len(),

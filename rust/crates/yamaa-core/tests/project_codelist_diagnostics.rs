@@ -30,11 +30,9 @@ fn compiled() -> PreparedSpecification {
     .unwrap()
 }
 fn record<'a>(rows: &'a [Row], values: &'a [Value]) -> CheckObservation<'a, Row> {
-    let mapping = ConditionCode::VerificationCodelistFailed.definition();
     CheckObservation {
         path: "columns.CODE.submission.codelist",
-        condition: mapping.condition,
-        requirement: mapping.requirement.unwrap(),
+        code: ConditionCode::VerificationCodelistFailed,
         evaluated_count: 2,
         failed_count: 1,
         output_rows: 2,
@@ -109,6 +107,28 @@ fn late_invalid_observations_and_quotas_refuse_the_complete_report() {
     let missing = [Value::Missing];
     assert!(matches!(
         diagnostics(&compiled, &[record(&rows, &missing)], MAX_DIAGNOSTIC_BYTES),
+        Err(Error::InvalidObservation)
+    ));
+}
+
+#[test]
+fn same_condition_with_a_different_typed_owner_refuses_codelist_projection() {
+    let compiled = compiled();
+    let rows = [Row {
+        position: 1,
+        values: vec![Value::Int(i64::MAX)],
+    }];
+    let values = [Value::Str("bad".into())];
+    let mut wrong = record(&rows, &values);
+    wrong.code = ConditionCode::VerificationAllowedValuesFailed;
+    assert_eq!(wrong.code.definition().condition, "allowed_values_failed");
+    assert_eq!(wrong.code.definition().requirement, Some("REQ-0376"));
+    assert!(matches!(
+        diagnostics(
+            &compiled,
+            &[record(&rows, &values), wrong],
+            MAX_DIAGNOSTIC_BYTES
+        ),
         Err(Error::InvalidObservation)
     ));
 }

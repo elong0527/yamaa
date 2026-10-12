@@ -93,7 +93,8 @@ pub(crate) fn validate(check: &Check, kind: ColumnType) -> Result<(), PlanError>
     Ok(())
 }
 
-fn column_code(check: &Check) -> Option<ConditionCode> {
+/// The admitted check retains its semantic cause through every engine record.
+pub fn column_code(check: &Check) -> Option<ConditionCode> {
     Some(match check {
         Check::NotMissing => ConditionCode::VerificationNotMissingFailed,
         Check::AllowedValues(_) => ConditionCode::VerificationAllowedValuesFailed,

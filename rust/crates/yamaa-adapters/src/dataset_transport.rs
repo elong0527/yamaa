@@ -1036,10 +1036,11 @@ fn records(records: Vec<CheckRecord>) -> Result<Vec<Record>, Error> {
     records
         .into_iter()
         .map(|record| {
+            let definition = record.definition();
             Ok(Record {
                 spec_path: record.path,
-                condition: record.condition,
-                requirement: record.requirement,
+                condition: definition.condition,
+                requirement: definition.requirement.ok_or(Error::Internal)?,
                 evaluated_count: record.evaluated_count.to_string(),
                 failed_count: record.failed_count.to_string(),
                 output_rows: record.output_rows.to_string(),
@@ -1385,8 +1386,7 @@ mod codelist_protocol_tests {
     fn legacy_response_refuses_codelist_values_in_failed_or_retained_checks() {
         let record = CheckRecord {
             path: "columns.SEX.submission.codelist".into(),
-            condition: "allowed_values_failed",
-            requirement: "REQ-0957",
+            code: yamaa_core::diagnostic::ConditionCode::VerificationCodelistFailed,
             evaluated_count: 2,
             failed_count: 1,
             output_rows: 2,
@@ -1415,7 +1415,7 @@ mod codelist_protocol_tests {
         assert!(matches!(retained, Err(Error::UnsupportedProtocol)));
         let legacy = CheckRecord {
             codelist: None,
-            requirement: "REQ-0376",
+            code: yamaa_core::diagnostic::ConditionCode::VerificationAllowedValuesFailed,
             ..record
         };
         let response = response(dataset::ExecutionAttempt {

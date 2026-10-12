@@ -1,9 +1,6 @@
 {
   "rust/crates/yamaa-adapters/src/dataset_failure_diagnostic.rs:58": 1,
   "rust/crates/yamaa-adapters/src/dataset_failure_diagnostic.rs:59": 1,
-  "rust/crates/yamaa-adapters/src/dataset_transport.rs:1371": 1,
-  "rust/crates/yamaa-adapters/src/dataset_transport.rs:1372": 1,
-  "rust/crates/yamaa-adapters/src/dataset_transport.rs:1401": 1,
   "rust/crates/yamaa-adapters/src/dataset_transport.rs:1414": 1,
   "rust/crates/yamaa-adapters/src/file_application.rs:699": 1,
   "rust/crates/yamaa-adapters/src/file_define.rs:107": 4,

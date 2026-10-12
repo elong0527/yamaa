@@ -64,7 +64,12 @@ fn records(
                 budget.check(check)?;
             }
         }
-        for text in [&record.path, record.condition, record.requirement] {
+        let definition = record.definition();
+        for text in [
+            &record.path,
+            definition.condition,
+            definition.requirement.ok_or(Error::UnsupportedOutcome)?,
+        ] {
             for _ in 0..8 {
                 budget.text(text)?;
             }

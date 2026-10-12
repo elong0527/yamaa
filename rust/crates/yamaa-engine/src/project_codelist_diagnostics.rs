@@ -34,8 +34,7 @@ pub(crate) fn observations(
         .iter()
         .map(|record| core::CheckObservation {
             path: &record.path,
-            condition: record.condition,
-            requirement: record.requirement,
+            code: record.code,
             evaluated_count: record.evaluated_count,
             failed_count: record.failed_count,
             output_rows: record.output_rows,

@@ -34,28 +34,26 @@ pub struct Projection<'a> {
 
 fn code<R>(record: &CheckObservation<'_, R>, phase: Phase) -> Result<ConditionCode, Error> {
     use ConditionCode::*;
-    [
-        OutputMissingKeyFailed,
-        OutputDuplicateKeyFailed,
-        VerificationUniqueFailed,
-        VerificationAllOrNoneFailed,
-        VerificationAssertFailed,
-        VerificationRowCountFailed,
-        VerificationNotMissingFailed,
-        VerificationAllowedValuesFailed,
-        VerificationCodelistFailed,
-        VerificationRangeFailed,
-        VerificationMaxLengthFailed,
-        VerificationMatchesFailed,
-    ]
-    .into_iter()
-    .find(|code| {
-        let mapping = code.definition();
-        mapping.phase == phase.name()
-            && mapping.condition == record.condition
-            && mapping.requirement == Some(record.requirement)
-    })
-    .ok_or(Error::UnsupportedOutcome)
+    if matches!(
+        record.code,
+        OutputMissingKeyFailed
+            | OutputDuplicateKeyFailed
+            | VerificationUniqueFailed
+            | VerificationAllOrNoneFailed
+            | VerificationAssertFailed
+            | VerificationRowCountFailed
+            | VerificationNotMissingFailed
+            | VerificationAllowedValuesFailed
+            | VerificationCodelistFailed
+            | VerificationRangeFailed
+            | VerificationMaxLengthFailed
+            | VerificationMatchesFailed
+    ) && record.code.definition().phase == phase.name()
+    {
+        Ok(record.code)
+    } else {
+        Err(Error::UnsupportedOutcome)
+    }
 }
 
 fn keys<'a, R: RowObservation>(names: &[&'a str], rows: &'a [R]) -> Result<Vec<Fact<'a>>, Error> {

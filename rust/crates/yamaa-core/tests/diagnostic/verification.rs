@@ -61,11 +61,9 @@ fn compiled() -> PreparedSpecification {
     PreparedSpecification::prepare(&spec).unwrap()
 }
 fn record<'a>(code: ConditionCode, path: &'a str, rows: &'a [Row]) -> CheckObservation<'a, Row> {
-    let mapping = code.definition();
     CheckObservation {
         path,
-        condition: mapping.condition,
-        requirement: mapping.requirement.unwrap(),
+        code,
         evaluated_count: 9,
         failed_count: 1,
         output_rows: 9,
@@ -269,4 +267,27 @@ fn later_invalid_geometry_refuses_the_entire_projection() {
         project(&compiled, &records, Phase::Verification, "s.yaml"),
         Err(Error::InvalidObservation)
     ));
+}
+
+#[test]
+fn typed_wrong_family_or_phase_refuses_the_entire_projection() {
+    let compiled = compiled();
+    let rows = [Row(vec![Value::Int(1)])];
+    for (code, path) in [
+        (ConditionCode::ConversionInput, "verifications[2].assert"),
+        (ConditionCode::OutputMissingKeyFailed, "keys[0]"),
+    ] {
+        let records = [
+            record(
+                ConditionCode::VerificationAssertFailed,
+                "verifications[2].assert",
+                &rows,
+            ),
+            record(code, path, &rows),
+        ];
+        assert!(matches!(
+            project(&compiled, &records, Phase::Verification, "s.yaml"),
+            Err(Error::UnsupportedOutcome)
+        ));
+    }
 }
