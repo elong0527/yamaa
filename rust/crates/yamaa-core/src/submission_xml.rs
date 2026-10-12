@@ -1,5 +1,6 @@
 //! Deterministic UTF-8 Define-XML for the shared admitted column metadata profile.
 use crate::{
+    diagnostic::ConditionCode,
     project_terminology as ct, specification_submission_document as s,
     submission_composition::{self as model, Finding, Study},
     submission_document as e,
@@ -125,7 +126,8 @@ impl Element {
         references: &mut Vec<String>,
         oid_references: &mut Vec<String>,
     ) -> Result<(), Finding> {
-        let invalid = |detail| Finding::new("value_not_permitted", "REQ-1026", &self.path, detail);
+        let invalid =
+            |detail| Finding::cause(ConditionCode::SubmissionXmlInvalid, &self.path, detail);
         for (name, value) in &self.attributes {
             match *name {
                 "Name" | "Role" if value.is_empty() => {
@@ -133,9 +135,8 @@ impl Element {
                 }
                 "OID" | "ID" => {
                     if !identities.insert(value.clone()) {
-                        return Err(Finding::new(
-                            "duplicate_define_identifier",
-                            "REQ-1017",
+                        return Err(Finding::cause(
+                            ConditionCode::SubmissionDuplicateIdentifier,
                             &self.path,
                             value,
                         ));
@@ -183,9 +184,8 @@ fn escape(value: &str, path: &str, attribute: bool) -> Result<String, Finding> {
         .chars()
         .any(|c| c == '\r' || c == '\t' || attribute && c == '\n')
     {
-        return Err(Finding::new(
-            "untransportable_text",
-            "REQ-1025",
+        return Err(Finding::cause(
+            ConditionCode::SubmissionXmlWhitespace,
             path,
             "forbidden XML whitespace",
         ));
@@ -194,9 +194,8 @@ fn escape(value: &str, path: &str, attribute: bool) -> Result<String, Finding> {
         .chars()
         .any(|c| c < '\u{20}' && c != '\n' || c == '\u{fffe}' || c == '\u{ffff}')
     {
-        return Err(Finding::new(
-            "value_not_permitted",
-            "REQ-1026",
+        return Err(Finding::cause(
+            ConditionCode::SubmissionXmlInvalid,
             path,
             "schema_violation: forbidden XML character",
         ));
@@ -660,9 +659,8 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         .iter()
         .any(|reference| !identities.contains(reference))
     {
-        return Err(Finding::new(
-            "value_not_permitted",
-            "REQ-1026",
+        return Err(Finding::cause(
+            ConditionCode::SubmissionXmlInvalid,
             "metadata_version",
             "schema_violation: unresolved generated metadata reference",
         ));
@@ -671,9 +669,8 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         .iter()
         .any(|reference| !leaves.contains(reference))
     {
-        return Err(Finding::new(
-            "unknown_document",
-            "REQ-1016",
+        return Err(Finding::cause(
+            ConditionCode::SubmissionUnknownDocument,
             "documents",
             "unresolved generated leaf reference",
         ));
@@ -690,9 +687,8 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
 }
 fn validate_profile(study: &Study) -> Result<(), Finding> {
     let invalid = |path: &str, detail: &str| {
-        Finding::new(
-            "value_not_permitted",
-            "REQ-1026",
+        Finding::cause(
+            ConditionCode::SubmissionXmlInvalid,
             path,
             &format!("schema_violation: {detail}"),
         )

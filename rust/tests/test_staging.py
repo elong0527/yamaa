@@ -1,6 +1,8 @@
 """Ensure the R archive has real shared sources and cannot overwrite prior work."""
 
+import collections
 import contextlib
+import csv
 import importlib.util
 import io
 import json
@@ -74,6 +76,7 @@ class StagingTests(unittest.TestCase):
                 "numeric_syntax.tsv",
                 "predicate_syntax.tsv",
                 "schema_transport.tsv",
+                "schema_model.tsv",
                 "schema_windows.tsv",
                 "schema_composition.tsv",
                 "schema_layer_admission.tsv",
@@ -97,6 +100,61 @@ class StagingTests(unittest.TestCase):
                         / fixture
                     ).read_bytes(),
                 )
+
+            # Sidecars may correct approved citations only, keeping captured facts intact.
+            def changes(before, after):
+                if isinstance(before, dict):
+                    self.assertEqual(before.keys(), after.keys())
+                    for key in before:
+                        if key == "requirement" and before[key] != after[key]:
+                            self.assertIsNone(before[key])
+                            yield after[key]
+                        else:
+                            yield from changes(before[key], after[key])
+                elif isinstance(before, list):
+                    self.assertEqual(len(before), len(after))
+                    for old, new in zip(before, after, strict=True):
+                        yield from changes(old, new)
+                else:
+                    self.assertEqual(before, after)
+
+            inventory = {
+                "schema_model.tsv": {"REQ-0287": 33, "REQ-0285": 4, "REQ-0286": 4},
+                "schema_transport.tsv": {"REQ-0281": 1},
+                "schema_layer_admission.tsv": {"REQ-0285": 1},
+                "schema_composition.tsv": {}, "schema_windows.tsv": {},
+                "schema_inheritance_dependencies.tsv": {},
+            }
+            for fixture, expected_changes in inventory.items():
+                def rows(name):
+                    with (destination / "inst" / name).open(encoding="utf-8", newline="") as stream:
+                        return list(csv.DictReader(stream, delimiter="\t"))
+                historical = rows(fixture)
+                normative = rows("normative-" + fixture)
+                self.assertEqual(len(historical), len(normative))
+                actual_changes = collections.Counter()
+                for old, new in zip(historical, normative, strict=True):
+                    before = json.loads(old.pop("expected"))
+                    after = json.loads(new.pop("expected"))
+                    self.assertEqual(old, new)
+                    actual_changes.update(changes(before, after))
+                self.assertEqual(dict(actual_changes), expected_changes, fixture)
+
+            source_preparation = staging.WORKSPACE / "crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv"
+            retained_preparation = destination / "inst/specification-original/inheritance-preparation.tsv"
+            self.assertEqual(retained_preparation.read_bytes(), source_preparation.read_bytes())
+            def preparation_rows(path):
+                with path.open(encoding="ascii", newline="") as stream:
+                    return list(csv.DictReader(stream, delimiter="\t"))
+            historical = preparation_rows(retained_preparation)
+            normative = preparation_rows(retained_preparation.with_name("normative-inheritance-preparation.tsv"))
+            self.assertEqual(len(historical), len(normative))
+            actual_changes = collections.Counter()
+            for old, new in zip(historical, normative, strict=True):
+                before, after = json.loads(old.pop("expected")), json.loads(new.pop("expected"))
+                self.assertEqual(old, new)
+                actual_changes.update(changes(before, after))
+            self.assertEqual(dict(actual_changes), {"REQ-0285": 1})
 
             for family in ("tables", "datasets"):
                 fixtures = (

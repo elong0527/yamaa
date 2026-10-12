@@ -294,7 +294,7 @@ fn arbitrary_row_labels_and_normalized_literal_handlers_retain_their_meaning() {
         }
     }
     let findings = compose(&specification("arbitrary invalid source")).unwrap_err();
-    assert!(findings.iter().any(|finding| finding.definition.condition
+    assert!(findings.iter().any(|finding| finding.definition().condition
         == "origin_source_not_admitted"
         && finding
             .path
@@ -388,8 +388,8 @@ fn each_independent_value_admission_control_has_the_required_condition_and_row_p
         assert!(
             findings
                 .iter()
-                .any(|finding| finding.definition.condition == condition
-                    && finding.definition.requirement == Some(requirement)
+                .any(|finding| finding.definition().condition == condition
+                    && finding.definition().requirement == Some(requirement)
                     && finding.path.ends_with(suffix)),
             "{case}: {findings:?}"
         );

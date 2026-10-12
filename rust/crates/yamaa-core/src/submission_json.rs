@@ -49,9 +49,8 @@ fn cell(value: ValueRef<'_>) -> Result<String, Finding> {
         ValueRef::Date(d) => match crate::conversion::convert(&Value::Date(d), ColumnType::Str) {
             Ok(Value::Str(s)) => string(&s),
             _ => {
-                return Err(Finding::new(
-                    "value_not_permitted",
-                    "REQ-1231",
+                return Err(Finding::cause(
+                    ConditionCode::SubmissionJsonInvalid,
                     "dataset_json",
                     "date conversion",
                 ))
@@ -61,9 +60,8 @@ fn cell(value: ValueRef<'_>) -> Result<String, Finding> {
             match crate::conversion::convert(&Value::DateTime(d), ColumnType::Str) {
                 Ok(Value::Str(s)) => string(&s),
                 _ => {
-                    return Err(Finding::new(
-                        "value_not_permitted",
-                        "REQ-1231",
+                    return Err(Finding::cause(
+                        ConditionCode::SubmissionJsonInvalid,
                         "dataset_json",
                         "datetime conversion",
                     ))
@@ -71,9 +69,8 @@ fn cell(value: ValueRef<'_>) -> Result<String, Finding> {
             }
         }
         ValueRef::Bool(_) => {
-            return Err(Finding::new(
-                "value_not_permitted",
-                "REQ-1231",
+            return Err(Finding::cause(
+                ConditionCode::SubmissionJsonInvalid,
                 "dataset_json",
                 "schema_violation: boolean cell",
             ))
@@ -87,7 +84,7 @@ pub fn render<T: TableAccess>(
     define_name: &str,
 ) -> Result<Vec<u8>, Finding> {
     let path = format!("datasets.{}.dataset_json", dataset.id);
-    let invalid = |detail| Finding::new("value_not_permitted", "REQ-1231", &path, detail);
+    let invalid = |detail| Finding::cause(ConditionCode::SubmissionJsonInvalid, &path, detail);
     if table
         .row_count()
         .checked_mul(dataset.columns.len())
@@ -386,11 +383,7 @@ fn validate_artifact<T: TableAccess>(
                     "published artifact vocabulary value",
                 );
                 if outside_inventory && !outside_list {
-                    finding.definition = crate::diagnostic::Definition {
-                        phase: "verification",
-                        condition: "allowed_values_failed",
-                        requirement: Some("REQ-1156"),
-                    };
+                    finding.code = ConditionCode::SubmissionInventoryFailed;
                 }
                 finding.context.insert(
                     "dataset".into(),

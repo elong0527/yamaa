@@ -395,7 +395,10 @@ pub(crate) fn prepare_declarations(
             continue;
         }
         if !recursive_graph && c.producer_identity == consumer_identity {
-            findings.push(invalid(dataset, "producer_workflow_cycle"));
+            findings.push(invalid(
+                dataset,
+                C::ProducerWorkflowCycle.definition().condition,
+            ));
             continue;
         }
         let contract = match producer_contract::prepare(c.document, limits.contract) {

@@ -220,7 +220,7 @@ fn layer_findings_precede_version_mismatch_and_all_parent_effects() {
     };
     assert_eq!(source, "entry");
     assert_eq!(entry, "entry");
-    assert_eq!(findings[0].condition, "unknown_field");
+    assert_eq!(findings[0].definition().condition, "unknown_field");
     assert!(port.calls.is_empty());
 }
 
@@ -262,7 +262,10 @@ fn missing_version_retains_layer_diagnostics_and_never_reads_parents() {
     else {
         panic!("expected missing version")
     };
-    assert_eq!(findings[0].condition, "schema_version_mismatch");
+    assert_eq!(
+        findings[0].definition().condition,
+        "schema_version_mismatch"
+    );
     assert!(port.calls.is_empty());
 }
 

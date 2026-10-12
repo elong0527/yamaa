@@ -1,3 +1,6 @@
+#[path = "support/schema_requirement_expectations.rs"]
+mod schema_requirement_expectations;
+
 #[test]
 fn normalized_model_contracts_match_independent_truth() {
     let fixture = include_str!("fixtures/schema_model.tsv");
@@ -7,7 +10,7 @@ fn normalized_model_contracts_match_independent_truth() {
         assert_eq!(fields.len(), 3);
         assert_eq!(
             interpret_schema(fields[1]).unwrap(),
-            fields[2],
+            schema_requirement_expectations::reconciled(fields[2], false).to_string(),
             "{}",
             fields[0]
         );
@@ -39,7 +42,7 @@ fn installed_hosts_share_independent_inheritance_dependency_truth() {
         assert_eq!(fields.len(), 3);
         assert_eq!(
             interpret_schema(fields[1]).unwrap(),
-            fields[2],
+            schema_requirement_expectations::reconciled(fields[2], false).to_string(),
             "{}",
             fields[0]
         );
@@ -55,7 +58,7 @@ fn installed_hosts_share_independent_layer_admission_truth() {
         assert_eq!(fields.len(), 3);
         assert_eq!(
             interpret_schema(fields[1]).unwrap(),
-            fields[2],
+            schema_requirement_expectations::reconciled(fields[2], false).to_string(),
             "{}",
             fields[0]
         );
@@ -71,7 +74,7 @@ fn installed_hosts_share_independent_layer_composition_truth() {
         assert_eq!(fields.len(), 3);
         assert_eq!(
             interpret_schema(fields[1]).unwrap(),
-            fields[2],
+            schema_requirement_expectations::reconciled(fields[2], false).to_string(),
             "{}",
             fields[0]
         );
@@ -88,7 +91,7 @@ fn installed_hosts_share_independently_authored_complete_wire_truth() {
         assert_eq!(fields.len(), 3);
         assert_eq!(
             interpret_schema(fields[1]).unwrap(),
-            fields[2],
+            schema_requirement_expectations::reconciled(fields[2], false).to_string(),
             "{}",
             fields[0]
         );
@@ -106,7 +109,7 @@ fn installed_hosts_share_independent_named_window_truth() {
         assert_eq!(fields.len(), 3);
         assert_eq!(
             interpret_schema(fields[1]).unwrap(),
-            fields[2],
+            schema_requirement_expectations::reconciled(fields[2], false).to_string(),
             "{}",
             fields[0]
         );
@@ -211,10 +214,10 @@ fn prepared_and_stateless_services_return_the_same_independent_normalization_tru
     );
     assert_eq!(
         result["results"][2]["diagnostics"],
-        json!([{
+        schema_requirement_expectations::reconciled(&json!([{
             "path":"schema_version","condition":"schema_version_mismatch","requirement":null,
             "context":[{"name":"expected","value":{"kind":"text","value":"1.0"}},{"name":"actual","value":{"kind":"input_value","node":1}}]
-        }])
+        }]).to_string(), false)
     );
     let stateless = interpret_schema(
         &json!({"protocol":"schema/1","schema":schema,"queries":queries}).to_string(),

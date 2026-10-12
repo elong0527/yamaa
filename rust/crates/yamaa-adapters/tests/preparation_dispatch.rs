@@ -125,7 +125,7 @@ fn both_semantic_passes_keep_source_identity_and_independent_complete_reports() 
     assert_eq!(captured.source().identity.as_ptr(), identity);
     let decoded = decode_yaml(text.as_bytes(), DecodeLimits::default()).unwrap();
     assert_eq!(captured.document(), Some(&decoded.document));
-    let expected:Value=serde_json::from_str("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":null,\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
+    let expected:Value=serde_json::from_str("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":\"REQ-0281\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
     assert_eq!(outcome(&error), invalid(json!([expected])));
     let text="schema_version: '1.0'\ninput: {}\nkeys: []\noutput: {}\ncolumns:\n  - {name: Z, type: int, derivation: {value: {row_number: {window: SECOND}}}}\n  - {name: A, type: int, derivation: {value: {row_number: {window: FIRST}}}}\n";
     let entry = source(text);
@@ -173,9 +173,9 @@ fn final_model_findings_retain_no_pass_document_and_move_original_source() {
     assert_eq!(
         outcome(&error),
         invalid(json!([
-            {"phase":"validation","condition":"model_contract_mismatch","requirement":null,"spec_paths":["domain"],"context":{"reason":"Input should be a valid string"}},
-            {"phase":"validation","condition":"model_contract_mismatch","requirement":null,"spec_paths":["output.path"],"context":{"reason":"Field required"}},
-            {"phase":"validation","condition":"model_contract_mismatch","requirement":null,"spec_paths":["output.columns"],"context":{"reason":"Field required"}}
+            {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"reason":"Input should be a valid string"}},
+            {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0285","spec_paths":["output.path"],"context":{"reason":"Field required"}},
+            {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0285","spec_paths":["output.columns"],"context":{"reason":"Field required"}}
         ]))
     );
 }
@@ -252,8 +252,7 @@ fn invalid_schema_default_precedes_authored_version_through_live_dispatch() {
         defaults[0].diagnostics,
         vec![yamaa_core::schema::SchemaDiagnostic {
             path: "root_class.domain.default".into(),
-            condition: "invalid_field_type",
-            requirement: Some("REQ-0287"),
+            code: yamaa_core::diagnostic::ConditionCode::SchemaInvalidFieldType,
             context: vec![
                 (
                     "expected",

@@ -16,6 +16,31 @@ spec.loader.exec_module(stage)
 
 
 class IssueFrameTruth(unittest.TestCase):
+    def test_decoder_replay_changes_only_normative_citations_and_source_identity(self):
+        fixture = stage.REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.tsv"
+        with fixture.open(encoding="utf-8", newline="") as stream:
+            original = {row["id"]: row for row in csv.DictReader(stream, delimiter="\t")}
+        requirements = {"non_ascii_source": "REQ-0705", "invalid_text": "REQ-0029", "invalid_yaml": "REQ-0280"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stage.stage_decode_replay(root)
+            with (root / "decode-replay.tsv").open(encoding="ascii", newline="") as stream:
+                replay = list(csv.DictReader(stream, delimiter="\t"))
+            self.assertEqual(len(replay), 8)
+            for row in replay:
+                retained = original[row["id"]]
+                self.assertEqual(row["source_hex"], retained["source_hex"])
+                expected = json.loads(retained["expected"])
+                actual = json.loads(row["expected"])
+                self.assertEqual(actual.pop("protocol"), "specification/prototype")
+                actual["protocol"] = expected["protocol"]
+                for finding in actual["outcome"]["diagnostics"]:
+                    self.assertEqual(finding.pop("phase"), "validation")
+                    self.assertEqual(finding.pop("requirement"), requirements[finding["condition"]])
+                    if finding["condition"] == "non_ascii_source":
+                        self.assertEqual(finding["context"].pop("path"), "source.yaml")
+                self.assertEqual(actual, expected)
+
     def test_public_output_projection_uses_literal_reference_types_and_exact_float_bytes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

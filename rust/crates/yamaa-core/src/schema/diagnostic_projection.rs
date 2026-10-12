@@ -220,10 +220,10 @@ impl<'a> SchemaDiagnosticReport<'a> {
         self.findings
             .iter()
             .map(move |finding| ResolvedSchemaDiagnostic {
-                phase: "validation",
+                phase: finding.definition().phase,
                 path: &finding.path,
-                condition: finding.condition,
-                requirement: finding.requirement,
+                condition: finding.definition().condition,
+                requirement: finding.definition().requirement,
                 context: SchemaDiagnosticContext {
                     schema,
                     document,
@@ -247,8 +247,8 @@ pub fn admit_schema_diagnostics<'a>(
     for finding in findings {
         budget.charge(128)?;
         budget.text(&finding.path)?;
-        budget.text(finding.condition)?;
-        if let Some(requirement) = finding.requirement {
+        budget.text(finding.definition().condition)?;
+        if let Some(requirement) = finding.definition().requirement {
             budget.text(requirement)?;
         }
         let mut names = BTreeSet::new();

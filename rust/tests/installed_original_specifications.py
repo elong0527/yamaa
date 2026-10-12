@@ -216,7 +216,7 @@ class OriginalSpecifications(unittest.TestCase):
                 self.assertEqual(json.loads(str(caught.exception))["outcome"], {
                     "status": "invalid", "diagnostics": [{
                         "phase": "validation", "condition": "schema_version_mismatch",
-                        "requirement": None, "spec_paths": ["schema_version"],
+                        "requirement": "REQ-0281", "spec_paths": ["schema_version"],
                         "context": {"expected": "1.0", "actual": "99.0"},
                     }],
                 })
@@ -224,7 +224,7 @@ class OriginalSpecifications(unittest.TestCase):
                 os.chdir(previous)
 
     def test_inherited_pass_failures_resolve_shared_context_and_provenance(self):
-        with (ROOT / "inheritance-preparation.tsv").open(encoding="ascii") as stream:
+        with (ROOT / "normative-inheritance-preparation.tsv").open(encoding="ascii") as stream:
             records = list(csv.DictReader(stream, delimiter="\t"))
         self.assertEqual(len(records), 3)
         for record in records:
@@ -268,7 +268,7 @@ class OriginalSpecifications(unittest.TestCase):
                 with self.assertRaises(ValueError) as caught:
                     yamaa_native._prepare_document("spec.yaml", ("schema_version: " + literal).encode(), no_port, no_port, no_port)
                 self.assertEqual(json.loads(str(caught.exception))["outcome"], {
-                    "status": "invalid", "diagnostics": [{"phase": "validation", "condition": "schema_version_mismatch", "requirement": None, "spec_paths": ["schema_version"], "context": {"expected": "1.0", "actual": expected}}],
+                    "status": "invalid", "diagnostics": [{"phase": "validation", "condition": "schema_version_mismatch", "requirement": "REQ-0281", "spec_paths": ["schema_version"], "context": {"expected": "1.0", "actual": expected}}],
                 })
         path = ROOT / "cases/adam-adlb-ordered-sum/spec.yaml"
         text = path.read_bytes().replace(b"domain: ADLB", b"domain: bad-name", 1)

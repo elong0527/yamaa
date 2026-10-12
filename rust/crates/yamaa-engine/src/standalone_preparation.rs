@@ -224,8 +224,7 @@ mod tests {
             failure.error,
             NormalizationError::Invalid(vec![SchemaDiagnostic {
                 path: String::from("columns.A.derivation.row_number.window"),
-                condition: "unknown_window",
-                requirement: Some("REQ-1253"),
+                code: yamaa_core::diagnostic::ConditionCode::SchemaUnknownWindow,
                 context: vec![("window", SchemaContext::Text("ABSENT".into()))],
             }])
         );

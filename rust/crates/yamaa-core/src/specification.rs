@@ -381,8 +381,7 @@ pub enum VerificationDeclarationFinding<'a> {
     Diagnostic(&'a crate::diagnostic::Diagnostic),
     Declaration {
         path: &'a str,
-        condition: &'static str,
-        requirement: &'static str,
+        code: crate::diagnostic::ConditionCode,
         reason: &'a str,
     },
 }
@@ -398,18 +397,10 @@ impl VerificationDeclarationFinding<'_> {
     pub fn diagnostic(self) -> crate::diagnostic::Diagnostic {
         match self {
             Self::Diagnostic(diagnostic) => diagnostic.clone(),
-            Self::Declaration {
-                path,
-                condition,
-                requirement,
-                reason,
-            } => crate::dataset_checks::declaration_diagnostic(
-                path.into(),
-                condition,
-                requirement,
-                reason.into(),
-            )
-            .expect("compiled verification finding has a registered cause"),
+            Self::Declaration { path, code, reason } => {
+                crate::dataset_checks::declaration_diagnostic(path.into(), code, reason.into())
+                    .expect("compiled verification finding has a registered cause")
+            }
         }
     }
 }
@@ -556,7 +547,9 @@ fn metadata_features(
         if reserved.contains(&key) {
             reject(
                 extra,
-                "reserved_metadata_key",
+                crate::diagnostic::ConditionCode::SubmissionReservedMetadata
+                    .definition()
+                    .condition,
                 if prefix.is_empty() {
                     format!("metadata.{key}")
                 } else {
@@ -1526,16 +1519,13 @@ impl PreparedSpecification {
                 Check::InvalidDiagnostic(diagnostic) => {
                     Some(VerificationDeclarationFinding::Diagnostic(diagnostic))
                 }
-                Check::InvalidDeclaration {
-                    condition,
-                    requirement,
-                    reason,
-                } => Some(VerificationDeclarationFinding::Declaration {
-                    path: &verification.path,
-                    condition,
-                    requirement,
-                    reason,
-                }),
+                Check::InvalidDeclaration { code, reason } => {
+                    Some(VerificationDeclarationFinding::Declaration {
+                        path: &verification.path,
+                        code: *code,
+                        reason,
+                    })
+                }
                 _ => None,
             })
     }

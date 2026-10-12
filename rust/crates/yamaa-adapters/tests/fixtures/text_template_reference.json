@@ -2040,7 +2040,7 @@
         "spec_paths": [
           "$.columns[1].derivation.literal"
         ],
-        "requirement": null,
+        "requirement": "REQ-0029",
         "context": {
           "code_point": "U+D83D",
           "offset": 2

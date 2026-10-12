@@ -72,7 +72,7 @@ fn owned_checked_environment_executes_fixed_codelists_before_later_cells_in_both
         let record = &records[0];
         assert_eq!(
             (
-                record.requirement,
+                record.definition().requirement.unwrap(),
                 record.path.as_str(),
                 record.evaluated_count,
                 record.failed_count

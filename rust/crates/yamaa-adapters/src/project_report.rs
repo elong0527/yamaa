@@ -5,7 +5,6 @@ use crate::{
     project_activation_diagnostics::{self as activation, DefinitionSource},
     project_function_diagnostics::{self as invocation, HostDetails},
     project_run::{Attempt, BoundaryFailure, PreparedRun},
-    scalar_transport::ScalarValue,
     specification_report::{self as report, BuildResult, Identity},
 };
 use serde_json::{json, Value};
@@ -86,16 +85,6 @@ fn project_error<'a, C, E>(error: invocation::Error<'a, E>) -> Error<'a, C, E> {
         invocation::Error::InvalidContext => invalid(),
     }
 }
-fn checks(records: &[CheckRecord], phase: &str) -> Value {
-    let scalar = |value: &yamaa_core::value::Value| json!(ScalarValue::from_core(value.clone()));
-    json!({"phase":phase,"verifications":records.iter().map(|record| {
-        let mut value = json!({"spec_path":record.path,"condition":record.condition,"requirement":record.requirement,
-            "evaluated_count":record.evaluated_count.to_string(),"failed_count":record.failed_count.to_string(),"output_rows":record.output_rows.to_string(),
-            "offending_rows":record.offending_rows.iter().map(|row| json!({"position":row.position.to_string(),"keys":row.values.iter().map(scalar).collect::<Vec<_>>()})).collect::<Vec<_>>()});
-        if let Some(codelist) = &record.codelist { value["codelist"] = json!({"id":codelist.id,"values":codelist.values.iter().map(scalar).collect::<Vec<_>>()}); }
-        value
-    }).collect::<Vec<_>>()})
-}
 pub(crate) fn checked_records(
     run: &dyn crate::specification_run_view::RunView,
     records: &[CheckRecord],
@@ -108,7 +97,12 @@ pub(crate) fn checked_records(
             _ => report::Error::InvalidObservation,
         },
     )?;
-    report::check_observations(run, &checks(records, phase), id)
+    let phase = match phase {
+        "output" => yamaa_core::verification_diagnostics::Phase::Output,
+        "verification" => yamaa_core::verification_diagnostics::Phase::Verification,
+        _ => return Err(report::Error::UnsupportedOutcome),
+    };
+    report::check_observations(run, records, phase, id)
 }
 
 fn same_value(left: &yamaa_core::value::Value, right: &yamaa_core::value::Value) -> bool {
@@ -579,12 +573,6 @@ pub fn build_result<'a, C, E>(
                                 .map_err(|_| Error::Execution(other))?;
                             if outcome["status"] != "condition" {
                                 return Err(Error::Execution(other));
-                            }
-                            if outcome["verifications"].is_array() {
-                                let (checks, findings) =
-                                    report::check_observations(run, &outcome, &id)?;
-                                verifications.extend(checks);
-                                diagnostics.extend(findings);
                             }
                             diagnostics.push(report::condition(run, &outcome)?);
                         }

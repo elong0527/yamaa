@@ -93,7 +93,8 @@ pub(crate) fn validate(check: &Check, kind: ColumnType) -> Result<(), PlanError>
     Ok(())
 }
 
-fn column_code(check: &Check) -> Option<ConditionCode> {
+/// The admitted check retains its semantic cause through every engine record.
+pub fn column_code(check: &Check) -> Option<ConditionCode> {
     Some(match check {
         Check::NotMissing => ConditionCode::VerificationNotMissingFailed,
         Check::AllowedValues(_) => ConditionCode::VerificationAllowedValuesFailed,
@@ -141,21 +142,22 @@ pub fn invalid_pattern_diagnostic(path: String, pattern: String) -> Diagnostic {
 /// Project only the compiler's closed verification declaration vocabulary.
 pub fn declaration_diagnostic(
     path: String,
-    condition: &str,
-    requirement: &str,
+    code: ConditionCode,
     reason: String,
 ) -> Option<Diagnostic> {
-    let code = match (condition, requirement) {
-        ("invalid_declaration", "REQ-0374") => ConditionCode::VerificationIdentifierType,
-        ("invalid_declaration", "REQ-0397") => ConditionCode::VerificationDeclarationRequired,
-        ("duplicate_identifier", "REQ-0398") => ConditionCode::VerificationIdentifierRepeated,
-        ("invalid_declaration", "REQ-0399") => ConditionCode::VerificationBounds,
-        ("invalid_declaration", "REQ-0400") => ConditionCode::VerificationLengthBounds,
-        ("invalid_declaration", "REQ-0401") => ConditionCode::VerificationCardinality,
-        ("invalid_declaration", "REQ-0404") => ConditionCode::VerificationColumnType,
-        ("unknown_field", "REQ-0405") => ConditionCode::VerificationDeclaredColumnUnknown,
-        _ => return None,
-    };
+    if !matches!(
+        code,
+        ConditionCode::VerificationIdentifierType
+            | ConditionCode::VerificationDeclarationRequired
+            | ConditionCode::VerificationIdentifierRepeated
+            | ConditionCode::VerificationBounds
+            | ConditionCode::VerificationLengthBounds
+            | ConditionCode::VerificationCardinality
+            | ConditionCode::VerificationColumnType
+            | ConditionCode::VerificationDeclaredColumnUnknown
+    ) {
+        return None;
+    }
     Some(Diagnostic {
         code,
         spec_paths: vec![path],

@@ -105,12 +105,12 @@ fn root_metadata_rejects_the_governed_has_no_data_key() {
     else {
         panic!("root metadata.has_no_data must be rejected");
     };
-    assert!(
+    assert_eq!(
         features
             .iter()
-            .any(|feature| feature.operation == "reserved_metadata_key"
-                && feature.path == "metadata.has_no_data"),
-        "unexpected unsupported features: {features:?}"
+            .map(|feature| (feature.operation.as_str(), feature.path.as_str()))
+            .collect::<Vec<_>>(),
+        [("reserved_metadata_key", "metadata.has_no_data")],
     );
 }
 #[test]

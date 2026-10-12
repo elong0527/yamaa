@@ -412,7 +412,7 @@ reports every implicated file and value.
 <a id="req-0657"></a>
 
 **REQ-0657.** A resolved specification to which no layer contributed `output`
-fails as `missing_required_field` at `output`, with no requirement attached.
+fails as `missing_required_field` at `output`, citing REQ-0657.
 An entry file that omits
 `output` is not itself an error: it inherits the field under
 [REQ-0623](composition.md#req-0623).

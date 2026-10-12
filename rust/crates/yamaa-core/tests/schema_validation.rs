@@ -105,7 +105,10 @@ fn invalid_or_interrupted_default_preparation_never_bypasses_normalization_admis
     ));
     let findings = schema.prepare_defaults(&mut budget()).unwrap();
     assert_eq!(findings.len(), 1);
-    assert_eq!(findings[0].diagnostics[0].condition, "invalid_field_type");
+    assert_eq!(
+        findings[0].diagnostics[0].definition().condition,
+        "invalid_field_type"
+    );
     assert!(matches!(
         schema.normalize_document(
             &input,
@@ -142,7 +145,7 @@ fn validate(
 fn findings(diagnostics: &[SchemaDiagnostic]) -> Vec<(&str, &str)> {
     diagnostics
         .iter()
-        .map(|d| (d.path.as_str(), d.condition))
+        .map(|d| (d.path.as_str(), d.definition().condition))
         .collect()
 }
 
@@ -373,10 +376,12 @@ fn constraints_keep_order_unicode_lengths_and_alias_requirements_after_type_succ
             ("kind", "minimum_length")
         ]
     );
-    assert!(result.iter().all(|d| d.requirement == Some("REQ-0012")));
+    assert!(result
+        .iter()
+        .all(|d| d.definition().requirement == Some("REQ-0012")));
     let result = validate(&schema, "kind", Bool(true), false);
     assert_eq!(findings(&result), [("kind", "invalid_field_type")]);
-    assert_eq!(result[0].requirement, Some("REQ-0287"));
+    assert_eq!(result[0].definition().requirement, Some("REQ-0287"));
     assert!(validate(
         &schema,
         "number",
@@ -459,7 +464,7 @@ fn registry_and_bare_derivation_diagnostics_preserve_paths_and_context() {
     );
     let result = validate(&schema, "derive", Int("4"), false);
     assert_eq!(findings(&result), [("derive", "bare_derivation_scalar")]);
-    assert_eq!(result[0].requirement, Some("REQ-0320"));
+    assert_eq!(result[0].definition().requirement, Some("REQ-0320"));
 }
 
 #[test]
@@ -1091,7 +1096,7 @@ fn shorthand_checks_the_written_member_without_reinterpreting_generated_fields()
         &mut NormalizationBudget::new(NormalizationLimits::default()),
     );
     assert!(
-        matches!(result, Err(NormalizationError::Invalid(ref findings)) if findings[0].condition == "value_not_permitted")
+        matches!(result, Err(NormalizationError::Invalid(ref findings)) if findings[0].definition().condition == "value_not_permitted")
     );
 }
 
@@ -1204,6 +1209,7 @@ fn compound_path_allocation_is_charged_before_large_invalid_labels_are_built() {
                 &mut budget()
             )
             .unwrap()[0]
+            .definition()
             .condition,
         "invalid_field_type"
     );

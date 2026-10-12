@@ -1,4 +1,4 @@
-"""Guard normative mappings and ratchet diagnostic literals out of host layers.
+"""Guard normative mappings and ratchet diagnostic literals into their registry.
 
 Core registry conditions and phases must be in the shared vocabulary. The frozen
 seed records the original literal sites; the active allowlist may only shrink.
@@ -27,8 +27,13 @@ CAUSE = re.compile(
     r'(Some\("REQ-[0-9]{4,}"\)|None)\),\s*'
 )
 HOST_CRATES = {"yamaa-adapters", "yamaa-python", "yamaa-r"}
+CORE_CRATES = {"yamaa-core", "yamaa-engine"}
 SEED = Path("rust/tools/diagnostic_literal_seed.json")
 ALLOWLIST = Path("rust/tools/diagnostic_literal_allowlist.json")
+CORE_SEED = Path("rust/tools/core_diagnostic_literal_seed.json")
+CORE_ALLOWLIST = Path("rust/tools/core_diagnostic_literal_allowlist.json")
+REGISTRY = Path("rust/crates/yamaa-core/src/diagnostic.rs")
+SHIPPED_SCHEMA = Path("rust/crates/yamaa-adapters/src/shipped_schema_data.rs")
 CHECKER = Path("rust/tools/check_diagnostics.py")
 NULL_POLICY = Path("rules/execution/lifecycle.md")
 NULL_START = "<!-- normative-null-conditions:start -->"
@@ -200,7 +205,9 @@ def diagnostic_literals(
     return found
 
 
-def baseline_errors(root: Path, reference: str) -> list[str]:
+def baseline_errors(
+    root: Path, reference: str, seed_path: Path = SEED, allowlist_path: Path = ALLOWLIST
+) -> list[str]:
     """Compare records directly with the prior revision, including retired sites."""
     command = subprocess.run(
         [
@@ -209,8 +216,8 @@ def baseline_errors(root: Path, reference: str) -> list[str]:
             "--name-only",
             reference,
             "--",
-            str(SEED),
-            str(ALLOWLIST),
+            str(seed_path),
+            str(allowlist_path),
             str(CHECKER),
         ],
         cwd=root,
@@ -235,30 +242,30 @@ def baseline_errors(root: Path, reference: str) -> list[str]:
         return result.stdout
 
     try:
-        if str(SEED) not in present and str(ALLOWLIST) not in present:
+        if str(seed_path) not in present and str(allowlist_path) not in present:
             # The first guard PR deliberately introduces both files. Once the
             # old checker refers to them, absence is corruption, not bootstrap.
             old_checker = previous(CHECKER) if str(CHECKER) in present else ""
-            if SEED.name in old_checker or ALLOWLIST.name in old_checker:
+            if seed_path.name in old_checker or allowlist_path.name in old_checker:
                 return [
                     f"diagnostic literal baseline {reference}: existing guard is missing its seed and allowlist"
                 ]
             return []
-        if str(SEED) not in present or str(ALLOWLIST) not in present:
+        if str(seed_path) not in present or str(allowlist_path) not in present:
             return [
                 f"diagnostic literal baseline {reference}: incomplete seed and allowlist"
             ]
-        frozen = json.loads(previous(SEED))
-        prior = json.loads(previous(ALLOWLIST))
-        current_seed = json.loads((root / SEED).read_text(encoding="utf-8"))
-        current = json.loads((root / ALLOWLIST).read_text(encoding="utf-8"))
+        frozen = json.loads(previous(seed_path))
+        prior = json.loads(previous(allowlist_path))
+        current_seed = json.loads((root / seed_path).read_text(encoding="utf-8"))
+        current = json.loads((root / allowlist_path).read_text(encoding="utf-8"))
         if not isinstance(prior, dict) or not isinstance(current, dict):
             raise TypeError("expected allowlist objects")
     except (OSError, UnicodeError, ValueError, TypeError) as error:
         return [f"diagnostic literal baseline {reference}: invalid records: {error}"]
     errors = []
     if frozen != current_seed:
-        errors.append(f"{SEED}: frozen literal seed changed from {reference}")
+        errors.append(f"{seed_path}: frozen literal seed changed from {reference}")
     for identifier, count in current.items():
         previous_count = prior.get(identifier, 0)
         if not (
@@ -267,16 +274,21 @@ def baseline_errors(root: Path, reference: str) -> list[str]:
             and count <= previous_count
         ):
             errors.append(
-                f"{ALLOWLIST}:{identifier}: literal allowlist grew from {reference}"
+                f"{allowlist_path}:{identifier}: literal allowlist grew from {reference}"
             )
     return errors
 
 
-def load_sites(root: Path) -> tuple[dict, dict, list[str]]:
+def load_sites(
+    root: Path,
+    seed_path: Path = SEED,
+    allowlist_path: Path = ALLOWLIST,
+    crates: set[str] = HOST_CRATES,
+) -> tuple[dict, dict, list[str]]:
     """Admit only active counts bounded by the frozen, location-aware seed."""
     errors = []
     documents = []
-    for relative in (SEED, ALLOWLIST):
+    for relative in (seed_path, allowlist_path):
         try:
             document = json.loads((root / relative).read_text(encoding="utf-8"))
             if not isinstance(document, dict):
@@ -297,17 +309,19 @@ def load_sites(root: Path) -> tuple[dict, dict, list[str]]:
             and type(site["occurrences"]) is int
             and site["occurrences"] > 0
             and re.fullmatch(
-                r"rust/crates/(?:yamaa-adapters|yamaa-python|yamaa-r)/src/.+\.rs",
+                r"rust/crates/(?:"
+                + "|".join(re.escape(crate) for crate in sorted(crates))
+                + r")/src/.+\.rs",
                 site["path"],
             )
             and identifier.startswith(site["path"] + ":")
             and identifier.removeprefix(site["path"] + ":").isdigit()
         ):
-            errors.append(f"{SEED}:{identifier}: invalid frozen literal site")
+            errors.append(f"{seed_path}:{identifier}: invalid frozen literal site")
             continue
         key = (site["path"], site["source"])
         if key in sites:
-            errors.append(f"{SEED}:{identifier}: duplicate frozen literal site")
+            errors.append(f"{seed_path}:{identifier}: duplicate frozen literal site")
         sites[key] = identifier
     admitted = {}
     for identifier, count in active.items():
@@ -320,7 +334,7 @@ def load_sites(root: Path) -> tuple[dict, dict, list[str]]:
             and count <= site["occurrences"]
         ):
             errors.append(
-                f"{ALLOWLIST}:{identifier}: literal allowlist may only shrink"
+                f"{allowlist_path}:{identifier}: literal allowlist may only shrink"
             )
         else:
             admitted[identifier] = count
@@ -446,7 +460,7 @@ def registry_errors(
 
 
 def violations(root: Path, baseline_ref: str | None = None) -> list[str]:
-    """Check mappings in every crate and exact existing literal sites outside core."""
+    """Check every mapping and exact existing literals outside the canonical registry."""
     defined = {
         identifier
         for path in (root / "rules").rglob("*.md")
@@ -461,14 +475,21 @@ def violations(root: Path, baseline_ref: str | None = None) -> list[str]:
     nullable, null_errors = null_conditions(root, registered)
     errors.extend(null_errors)
     errors.extend(registry_errors(root, registered, nullable))
-    sites, active, site_errors = load_sites(root)
-    errors.extend(site_errors)
-    if baseline_ref is not None:
-        errors.extend(baseline_errors(root, baseline_ref))
-    used = Counter()
+    namespaces = {}
+    for seed_path, allowlist_path, crates in (
+        (SEED, ALLOWLIST, HOST_CRATES),
+        (CORE_SEED, CORE_ALLOWLIST, CORE_CRATES),
+    ):
+        sites, active, site_errors = load_sites(root, seed_path, allowlist_path, crates)
+        errors.extend(site_errors)
+        if baseline_ref is not None:
+            errors.extend(baseline_errors(root, baseline_ref, seed_path, allowlist_path))
+        namespaces[seed_path] = (sites, active, Counter(), allowlist_path)
     for path in sources:
         relative = path.relative_to(root).as_posix()
-        guarded = path.relative_to(root / "rust/crates").parts[0] in HOST_CRATES
+        crate = path.relative_to(root / "rust/crates").parts[0]
+        namespace = CORE_SEED if crate in CORE_CRATES else SEED
+        sites, active, used, _ = namespaces[namespace]
         source = path.read_text(encoding="utf-8")
         lines = source.splitlines()
         for number, literals in diagnostic_literals(source, registered).items():
@@ -479,7 +500,7 @@ def violations(root: Path, baseline_ref: str | None = None) -> list[str]:
                         f"{relative}:{number}: undefined requirement {identifier}"
                     )
             owned = literals
-            if not guarded or path.name == "shipped_schema_data.rs" or not owned:
+            if Path(relative) in (REGISTRY, SHIPPED_SCHEMA) or not owned:
                 continue
             seed_identifier = sites.get((relative, line.strip()))
             used[seed_identifier] += 1
@@ -487,14 +508,20 @@ def violations(root: Path, baseline_ref: str | None = None) -> list[str]:
                 seed_identifier, 0
             ):
                 errors.append(
-                    f"{relative}:{number}: new diagnostic literal site outside core: "
+                    f"{relative}:{number}: new diagnostic literal site "
+                    + (
+                        "outside canonical registry: "
+                        if namespace == CORE_SEED
+                        else "outside core: "
+                    )
                     + ", ".join(owned)
                 )
-    for identifier, count in active.items():
-        if type(count) is int and count > used[identifier]:
-            errors.append(
-                f"{ALLOWLIST}:{identifier}: stale literal site; shrink the allowlist"
-            )
+    for _, active, used, allowlist_path in namespaces.values():
+        for identifier, count in active.items():
+            if type(count) is int and count > used[identifier]:
+                errors.append(
+                    f"{allowlist_path}:{identifier}: stale literal site; shrink the allowlist"
+                )
     return errors
 
 
@@ -514,7 +541,7 @@ def main() -> int:
     if errors:
         return 1
     print(
-        "PASS: diagnostic mappings are registered and host literal sites only shrink."
+        "PASS: diagnostic mappings are registered; host, core and engine literal sites only shrink."
     )
     return 0
 

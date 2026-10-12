@@ -147,8 +147,21 @@ fn finding(
 ) -> SchemaDiagnostic {
     SchemaDiagnostic {
         path: path.into(),
-        condition,
-        requirement: Some(requirement),
+        code: match (condition, requirement) {
+            ("schema_version_mismatch", "REQ-0656") => {
+                yamaa_core::diagnostic::ConditionCode::SchemaLayerVersionMismatch
+            }
+            ("duplicate_identifier", "REQ-0659") => {
+                yamaa_core::diagnostic::ConditionCode::SchemaLayerIdentifierRepeated
+            }
+            ("invalid_field_type", "REQ-0658") => {
+                yamaa_core::diagnostic::ConditionCode::SchemaLayerInvalidFieldType
+            }
+            ("invalid_clear", "REQ-0660") => {
+                yamaa_core::diagnostic::ConditionCode::SchemaLayerInvalidClear
+            }
+            _ => panic!("unexpected test cause"),
+        },
         context,
     }
 }
@@ -158,7 +171,7 @@ fn text(value: &str) -> C {
 fn paths(findings: &[SchemaDiagnostic]) -> Vec<(&str, &str)> {
     findings
         .iter()
-        .map(|d| (d.path.as_str(), d.condition))
+        .map(|d| (d.path.as_str(), d.definition().condition))
         .collect()
 }
 fn get(doc: &Document, node: usize, name: &str) -> usize {

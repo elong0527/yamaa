@@ -90,6 +90,15 @@ pub fn specification_with_rows(
     columns: Vec<(&str, &str, Tree)>,
     rows: Vec<Tree>,
 ) -> SpecificationDocument {
+    specification_with_verifications(columns, rows, Vec::new(), None)
+}
+#[allow(dead_code)]
+pub fn specification_with_verifications(
+    columns: Vec<(&str, &str, Tree)>,
+    rows: Vec<Tree>,
+    verifications: Vec<Tree>,
+    warning_log: Option<&str>,
+) -> SpecificationDocument {
     let mut projection = vec![Tree::text("ID")];
     let mut declarations = vec![Tree::map(vec![
         ("name", Tree::text("ID")),
@@ -113,6 +122,13 @@ pub fn specification_with_rows(
             ("derivation", Tree::map(vec![("value", value)])),
         ]));
     }
+    let mut output = vec![
+        ("path", Tree::text("output.csv")),
+        ("columns", Tree::List(projection)),
+    ];
+    if let Some(path) = warning_log {
+        output.push(("warning_log", Tree::text(path)));
+    }
     let mut fields = vec![
         ("schema_version", Tree::text("1.0")),
         ("domain", Tree::text("TEST")),
@@ -125,16 +141,13 @@ pub fn specification_with_rows(
         ),
         ("keys", Tree::List(vec![Tree::text("ID")])),
         ("columns", Tree::List(declarations)),
-        (
-            "output",
-            Tree::map(vec![
-                ("path", Tree::text("output.csv")),
-                ("columns", Tree::List(projection)),
-            ]),
-        ),
+        ("output", Tree::map(output)),
     ];
     if !rows.is_empty() {
         fields.push(("rows", Tree::List(rows)));
+    }
+    if !verifications.is_empty() {
+        fields.push(("verifications", Tree::List(verifications)));
     }
     let mut nodes = vec![];
     let root = Tree::map(fields).append(&mut nodes);

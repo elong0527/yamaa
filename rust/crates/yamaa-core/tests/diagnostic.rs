@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, convert::Infallible};
 use yamaa_core::{
     conversion::convert,
-    diagnostic::{ConditionCode, ContextValue, CONDITIONS},
+    diagnostic::{ContextValue, CONDITIONS},
     evaluation::{EvaluationErrorKind, NumericResolver},
     numeric_compiler::{compile_numeric, compile_numeric_with_policy, CompileLimits, MathPolicy},
     numeric_parser::SourceSpan,
@@ -18,6 +18,10 @@ mod predicate_evaluation;
 
 #[path = "diagnostic/mapping_cut.rs"]
 mod mapping_cut;
+#[path = "diagnostic/schema.rs"]
+mod schema;
+#[path = "diagnostic/submission.rs"]
+mod submission;
 #[path = "diagnostic/temporal_imputation.rs"]
 mod temporal_imputation;
 #[path = "diagnostic/text_case.rs"]
@@ -28,6 +32,10 @@ mod text_extract;
 mod text_pad;
 #[path = "diagnostic/text_template.rs"]
 mod text_template;
+#[path = "diagnostic/verification.rs"]
+mod verification;
+#[path = "diagnostic/yaml_source.rs"]
+mod yaml_source;
 struct Bindings;
 #[path = "diagnostic/binding.rs"]
 mod binding;
@@ -43,6 +51,8 @@ mod parquet;
 mod preflight;
 #[path = "diagnostic/producer.rs"]
 mod producer;
+#[path = "diagnostic/project_activation.rs"]
+mod project_activation;
 #[path = "diagnostic/project_codelist_binding.rs"]
 mod project_codelist_binding;
 #[path = "diagnostic/project_environment.rs"]
@@ -51,6 +61,8 @@ mod project_environment;
 mod project_functions;
 #[path = "diagnostic/project_lock.rs"]
 mod project_lock;
+#[path = "support/project_call_compiler.rs"]
+mod project_support;
 impl NumericResolver for Bindings {
     type Error = Infallible;
     fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
@@ -219,19 +231,10 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         assert_eq!(diagnostic.context.len(), 2);
         reached.insert(diagnostic.code);
     }
-    // Activation happens in the engine; its adapter reaches this core mapping.
-    // Complete actual activation failures are pinned by the adapter suite.
-    let conformance = ConditionCode::FunctionConformanceFailed;
-    let mapping = conformance.definition();
-    assert_eq!(
-        (mapping.phase, mapping.condition, mapping.requirement),
-        (
-            "validation",
-            "function_conformance_failed",
-            Some("REQ-0703")
-        )
-    );
-    reached.insert(conformance);
+    reached.extend(submission::reached());
+    reached.extend(schema::reached());
+    reached.extend(yaml_source::reached());
+    reached.extend(project_activation::reached());
     reached.extend(project_functions::reached());
     reached.extend(project_environment::reached());
     reached.extend(project_lock::reached());
@@ -443,6 +446,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     assert_eq!(diagnostic.source_span, None);
     reached.insert(diagnostic.code);
     reached.extend(dataset::reached());
+    reached.extend(verification::reached());
     let diagnostic = yamaa_core::dataset::Rounding::new(
         "SEX",
         "columns.RND.derivation.round_half_away_from_zero",

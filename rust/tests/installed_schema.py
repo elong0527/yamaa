@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from private_schema_requirements import reconciled_schema_requirements
+
 from yamaa import _native as yamaa_native
 
 
@@ -33,6 +35,9 @@ class SchemaService(unittest.TestCase):
                 if name == "schema_model.tsv"
                 else (8 if name == "schema_layer_admission.tsv" else 6),
             )
+            for row in cases:
+                row["expected"] = json.dumps(reconciled_schema_requirements(json.loads(row["expected"])),
+                    sort_keys=True, separators=(",", ":"), ensure_ascii=False)
             rows.extend(cases)
         return rows
 

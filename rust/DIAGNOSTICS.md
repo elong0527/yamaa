@@ -23,7 +23,8 @@ refusal keeps earlier completed records and stays distinct from semantic failure
 
 Column presence checks now reach `VerificationNotMissingFailed` through the pure
 completed-value service. Core owns REQ-0375 and its column/failure-count context;
-the report adapter adds observed keys and the authored verification ID. Completed
+the core retained-record projection adds observed keys and the authored
+verification ID. Completed
 column records remain attached to an attempted run when a later conversion or
 other error stops derivation. A later declaration error preserves earlier failed
 records while retaining its own primary diagnostic.
@@ -139,16 +140,23 @@ core registry condition and phase to be registered in `yaml/conditions.yaml`.
 The explicit null list in `rules/execution/lifecycle.md` is the normative source
 for requirement absence: a new null language cause, incorrect phase, unused
 exception or malformed policy block fails the guard.
-Adapter and binding source literals are bounded by exact existing source lines
-and occurrence counts. Generated `shipped_schema_data.rs` is exempt from the
-ownership ratchet; its requirements are still checked against normative rules.
+Adapter, binding, core and engine source literals are bounded by exact existing
+source lines and occurrence counts. Only the canonical core
+`crates/yamaa-core/src/diagnostic.rs` registry owns freely added mappings. Generated
+`crates/yamaa-adapters/src/shipped_schema_data.rs` is exempt from the ownership
+ratchet; its requirements are still checked against normative rules.
 The source scanner decodes ordinary Rust string escapes and raw strings, then
 inspects JSON payload values, including nested encoded JSON and format templates.
 Comments, character literals and quoted prose do not create diagnostic sites.
 
-`tools/diagnostic_literal_seed.json` freezes the original sites. Do not add or
-change seed sites. `tools/diagnostic_literal_allowlist.json` selects the remaining
-sites and counts from that ceiling. When a cause moves into core, remove its
+`tools/diagnostic_literal_seed.json` freezes the original adapter and binding
+sites. `tools/core_diagnostic_literal_seed.json` separately freezes the 127
+existing core and engine sites, with 171 source occurrences, captured from the
+#2035 declaration-ownership head. The corresponding
+`tools/diagnostic_literal_allowlist.json` and
+`tools/core_diagnostic_literal_allowlist.json` select the remaining sites and
+counts from each ceiling. Do not add or change either seed. When a cause moves
+into the canonical registry, remove its
 active entry or reduce its count; stale entries fail. Copying a seeded line,
 changing its text or moving it to another file fails. Inserting unrelated lines
 above a site does not consume a new allowance.
@@ -156,11 +164,17 @@ above a site does not consume a new allowance.
 CI runs `python tools/check_diagnostics.py --baseline-ref HEAD^` from `rust/`,
 with at least two Git revisions available. Baseline mode compares decoded records
 directly: the frozen seed must match the prior revision, and an active allowance
-may never grow or reactivate a retired site. The first introduction permits both
-files to be absent only when the prior checker did not already require them.
+may never grow or reactivate a retired site. Each namespace has an explicit first
+introduction: both files may be absent only when the prior checker did not already
+require those files. This permits the initial core/engine ceiling alongside the
+existing host guard, while preventing later missing files from bypassing checks.
 An unavailable revision or an incomplete baseline fails. Without `--baseline-ref`,
 local checks enforce the frozen ceiling and stale entries but cannot prove
 historical non-growth. Native CI also runs the guard's mutation tests.
+The initial core/engine ceiling retains deferred submission diagnostic metadata
+and existing inline test spellings. It does not claim that those causes are
+already typed or permit deleting retained public helpers or probes. Follow-on
+ownership changes must reduce the active ceiling while preserving report facts.
 The existing canonical rules validator separately checks definition uniqueness
 and historical IDs. The guard does not infer requirements from documentation
 citations or count component tests as complete-run qualification.
@@ -376,3 +390,212 @@ schema/1 compatibility representation translates these core facts without
 assigning conditions or requirements. The regex/1 syntax projection similarly
 uses the core registry's existing invalid-pattern cause. Legacy protocol shape
 retirement remains part of #1751/#1753.
+
+## Retained project activation and invocation failures
+
+`project_diagnostics` in core admits the complete binding or conformance report
+before allocating projected paths or context containers. Its context tree borrows
+authored strings, exact scalar values and classified host facts; core owns the
+context keys, closed reasons, condition selection and nested invocation facts.
+The engine maps retained failures to bounded borrowed views without another port
+call, retry, clone, error formatting or interruption classification. Unknown
+arguments, missing required parameters and argument types retain REQ-0700; raised
+calls retain REQ-0701; rejected, Boolean, missing and mistyped results retain
+REQ-0702. Binding and conformance retain REQ-0695 and REQ-0703.
+
+The adapter encodes this tree into the existing sorted JSON context and five-field
+issue envelope, then checks the exact serialized byte limit. Nested conformance
+failures use the same core projection directly, without decoding an intermediate
+JSON context. Borrowed admission retains existing invalid-context and opaque
+error precedence, selected function/case order, whole-report quotas, signed-zero
+comparisons and original host payload identity. Complete existing activation,
+invocation and project report expectations remain unchanged. The frozen literal
+seed is unchanged; the migrated binding site is removed from the active allowlist.
+
+## Retained codelist observation context
+
+Core admits every retained codelist record, full row identity and offending value
+before constructing the borrowed diagnostic tree. It validates the selected
+compiled check, exact registered metadata, record counts, row positions, key
+geometry, missing-value exclusions and the aggregate escaping budget. Column,
+codelist, count, complete keys and values context belong to core; engine supplies
+retained views without a table read, callback or check retry. The adapter encodes
+these admitted facts and retains the exact final envelope byte admission.
+Existing complete reports, repeated projection, retained-value pointers and failed
+output observations remain unchanged. This removes three additional active
+adapter literal sites while retaining the immutable bootstrap seed.
+
+## Retained YAML source findings
+
+Core owns source ASCII, decoded invalid Unicode and malformed YAML causes,
+context keys and code-point labels. Original capture diagnostics cite REQ-0705,
+REQ-0029 and REQ-0280 in validation: the ASCII rule names that phase, while the
+decoded-text entry boundary and invalid-YAML rejection precede document validation
+and execution. Data CSV invalid text retains its separate ingest/REQ-0853 cause.
+The decoder retains physical failure precedence, bounded ordered findings and
+original parser facts; capture still precedes all study source effects. Projection
+adds no quota or parser policy, and final envelope admission remains unchanged.
+
+The yaml/1 compatibility envelope retains its original three-field diagnostic
+shape. Private complete-report assertions, installed replay staging and the
+text-template surrogate capture change only normative requirement fields. All
+source, finding and context facts remain unchanged. Complete decoder facts keep
+their independent fixture truth, and benchmark expected files are unchanged.
+Source provenance records
+these existing owners in migration.yaml. Three adapter literal sites retire;
+the frozen seed remains unchanged. yaml/1 retirement remains part of #1990.
+
+## Complete retained verification ownership
+
+Core now projects general dataset checks and output-key findings together with
+column checks. Missing/duplicate output keys cite REQ-0240; unique, all_or_none,
+assert and row_count retain REQ-0381, REQ-0382, REQ-0384 and REQ-0385 respectively.
+The engine obtains these existing condition/requirement pairs from the registry
+and supplies shallow borrowed views of its unchanged CheckRecord layout.
+
+Core owns the complete report observation and failure context, including ordered
+unique columns, verification identity, severity, full-width retained counts,
+missing output keys, all offending keys and the complete log context. Unique
+failure counts remain repeated-group counts rather than member counts. Ordinary
+issue display keeps five keys while log/offending-key facts retain every key;
+codelist diagnostics keep the complete keys and values. Borrowed fact-tree clones
+copy tree geometry and computed labels, never authored scalar strings.
+
+The project adapter no longer encodes CheckRecord into JSON for interpretation.
+Standalone dataset responses keep the original wire while retaining the owned
+completed failure records for the same typed projection. Condition precedence,
+warning/error collection, existing codelist admission, final report byte limits,
+log success/failure gates and check/log order remain unchanged. No new projection
+quota or bound carrier is introduced; row_count uses its retained count facts.
+The active literal allowance shrinks from 47 sites/63 occurrences to 35/51; the
+frozen seed and all independent expected reports remain unchanged.
+
+## Publication spelling ownership
+
+The remaining three production publication status/classification aliases use the
+OutputPublicationFailed registry spelling. Adapter-owned I/O classification and
+actual entered publication remain distinct; normative publication diagnostics
+already use the same core cause. Status, issue and dataset wire bytes do not change.
+The active allowance shrinks from 35 sites/51 occurrences to 32/48. Remaining
+non-Define allowances are exact pre-existing independent tests.
+
+## Typed verification declaration ownership
+
+Declaration detection now selects the existing eight registered causes directly.
+The deferred core check, borrowed static finding and engine failure retain that
+typed cause with the unchanged reason, declaring path and completed record prefix.
+Core projects the closed declaration vocabulary without comparing condition or
+requirement strings. Both standalone dataset and complete producer reports encode
+that same core context. Admission order, missing/duplicate ID rules, quoted reason
+text, inheritance paths and all public phase/condition/requirement bytes remain
+unchanged. CheckRecord compatibility metadata is separate remaining work in #1985.
+
+
+## Schema citation ownership decision
+
+The approved #1973 item 7 policy applies to authored schema and final normalized
+model findings. They are language failures with governing rules, not implementation
+conditions. #1985 retains typed causes in `SchemaDiagnostic`; the borrowed report
+iterator resolves registry metadata while preserving the exact context arenas,
+paths, finding order, default provenance and complete-report refusal behavior.
+
+| Detection context | Condition | Governing requirement |
+| --- | --- | --- |
+| Specification version differs from admitted bundle | `schema_version_mismatch` | REQ-0281 |
+| Missing required class field | `missing_required_field` | REQ-0285 |
+| Undeclared class field | `unknown_field` | REQ-0285 |
+| Registry-backed value has zero or multiple operations | `invalid_operation_count` | REQ-0286 |
+| Registry-backed value names an unknown operation | `unknown_operation` | REQ-0286 |
+| No inherited layer contributed final output | `missing_required_field` | REQ-0657 |
+| Normalized model type, key-kind or value constraint | `model_contract_mismatch` | REQ-0287 |
+| Normalized model required or extra field | `model_contract_mismatch` | REQ-0285 |
+| Normalized model expression operation cardinality | `model_contract_mismatch` | REQ-0286 |
+
+REQ-0281, REQ-0285, REQ-0286 and REQ-0287 already require these failures. Their
+clarifications name their diagnostic citations rather than introduce new rejection
+behavior. REQ-0657 historically explicitly requested no requirement; that disposition
+is superseded by the approved item 7 rule. REQ-0657 itself governs the failure and
+now cites itself. A raw standalone document missing output remains governed by
+REQ-0285; only final inherited output admission selects REQ-0657.
+
+Committed historical fixture reports, including their null requirement fields,
+remain unchanged. Explicit private reconciliation changes only those approved
+requirement fields and is checked independently from candidate results. The private
+schema families reconcile 43 citations, and inherited preparation reconciles one
+missing-domain citation to REQ-0285 in a separate normative sidecar. No benchmark
+expected bytes change, and the normative null exception remains exactly the two
+implementation causes in REQ-1297. Existing constraint and layer rule owners keep
+their original citations; portable kind labels, complete reasons and borrowed
+arbitrary-width numeric context remain attached to the exact retained facts.
+
+The standalone installed original-specification controls independently assert
+REQ-0281 for malformed and mismatched schema versions, retaining the complete
+original context and path. These authored controls follow the approved owner;
+all historical captured reports and benchmark expected bytes remain unchanged.
+
+This schema ownership slice reduces the frozen core/engine active allowance
+from 127 sites/171 occurrences to 98/138. Both immutable seeds and the host
+active allowance remain unchanged; deferred submission metadata stays visible
+under the guarded ceiling.
+
+## Typed verification observation ownership
+
+Verification records retain `ConditionCode` at detection and through the engine's
+borrowed `CheckObservation` view. The private record carrier no longer stores
+condition/requirement string pairs, and core projection admits the typed check
+family and phase directly. The legacy dataset/1 serializer and producer budget
+read mechanical registry definitions, preserving every wire field and byte cost.
+Ordered checks, complete retained row identities, full-width counts, codelist
+values, warning/error behavior and retained failure prefixes remain unchanged.
+
+Independent controls reject a later cause from the wrong family or phase and a
+codelist record with the fixed-list cause despite its identical public condition
+spelling. The host active allowance falls from 32 sites/48 occurrences to 29/45;
+both immutable seeds and the core/engine active allowance remain unchanged.
+Deferred submission detection metadata and complete installed/inventory
+qualification remain #1985 gates; no helper or probe is retired here.
+
+
+## Submission and Define diagnostic ownership
+
+The inherited submission composer and XML/JSON renderers retain `ConditionCode`
+in each finding. Core owns its phase, condition and requirement projection;
+the native Define owner serializes that mechanical definition with the unchanged
+path and complete context. Standard selection, required declarations, explicit
+creation text and observed publication relations use portable core classification.
+Native resource acquisition, platform path equality, file decoding and publication
+remain at their existing lifecycle positions. Engine Define orchestration is a
+separate #1986 gate.
+
+Forty-nine causes retain the existing accurate requirement owners: submission
+metadata failure rules REQ-0909-0925, Define composition/rendering
+REQ-0979/0984/1004/1014-1026, scalar boundary owners REQ-1072/1074,
+value-level metadata REQ-1163-1168, inventory verification REQ-1156, and
+Dataset-JSON REQ-1195/1226/1227/1229/1231. Existing codelist binding causes
+REQ-0953-0955 remain shared. Distinct causes with the same public spelling retain
+their separate rule owners. Six value-level conditions already emitted by the
+composer are registered in `yaml/conditions.yaml` under their existing rules;
+this vocabulary admission does not introduce new failures.
+
+One historical quota classification is explicitly corrected under approved
+#1973 item 7 and REQ-1297. `BindingFinding::Limit` formerly constructed
+validation / `application_rejected` / REQ-0955. That finding is a checked quota
+refusal, while REQ-0955 governs unequal value sets. It now projects the existing
+engine / `engine_rejected` / null implementation cause, preserving the original
+column path and codelist detail. Independently owned inputs each fitting admission
+reach the actual combined binding text quota in the integration control; finite
+unequal sets independently retain validation / `codelist_values_conflict` /
+REQ-0955. The immutable literal seed preserves the original anomalous source
+spelling; historical captures and benchmark expected bytes are unchanged.
+
+Independent arena controls reach every added cause and preserve value-level row,
+column, test code and refuted derivation facts, plus inventory verification's full
+key/value context. Original fixed-time submission fixtures, installed
+`public_define` controls and retained helper probes remain in place.
+The active core/engine allowance shrinks from 98 sites/138 occurrences to
+16 sites/16 occurrences; the host allowance shrinks from
+29/45 to 14/15. Both frozen seeds remain byte-identical.
+Raw submission decoder occurrence/provenance carriers still retain their
+historical shape facts and optional scalar citation helpers; they are not wire
+null diagnostics. Their registry ownership, engine orchestration, domain metadata
+acceptance and combined installed/full-matrix qualification remain open gates.

@@ -297,8 +297,7 @@ pub enum Check {
     InvalidDiagnostic(crate::diagnostic::Diagnostic),
     /// A compiler finding evaluated in declaration order after output keys.
     InvalidDeclaration {
-        condition: &'static str,
-        requirement: &'static str,
+        code: crate::diagnostic::ConditionCode,
         reason: String,
     },
     /// `require` must hold on every row that `when`, if present, binds (REQ-0383).

@@ -16,6 +16,7 @@ conditions:
   artifact_outside_document: {phases: [validation]}
   artifact_path_collision: {phases: [validation]}
   assert_failed: {phases: [verification]}
+  bare_derivation_scalar: {phases: [validation]}
   codelist_duplicate_value: {phases: [validation]}
   codelist_extension_not_admitted: {phases: [validation]}
   codelist_partial_item_field: {phases: [validation]}
@@ -23,6 +24,8 @@ conditions:
   codelist_type_mismatch: {phases: [validation]}
   codelist_values_conflict: {phases: [validation]}
   conflicting_row_construction: {phases: [validation]}
+  # REQ-1167
+  conflicting_value_metadata: {phases: [validation]}
   conversion_failed: {phases: [convert]}
   core_mandatory_conflict: {phases: [validation]}
   correlated_derivation_with_unique_verification: {phases: [validation]}
@@ -68,19 +71,23 @@ conditions:
   invalid_mapping_dictionary: {phases: [validation]}
   invalid_numeric_expression: {phases: [validation]}
   invalid_odm_context: {phases: [validation]}
+  invalid_operation_count: {phases: [validation]}
   invalid_parent_path: {phases: [validation]}
   invalid_power: {phases: [derivation]}
   invalid_predicate: {phases: [validation]}
   invalid_producer_contract: {phases: [validation]}
   invalid_regex: {phases: [validation]}
+  invalid_size: {phases: [validation]}
   invalid_string_template: {phases: [validation]}
-  invalid_text: {phases: [ingest]}
+  invalid_text: {phases: [ingest, validation]}
+  invalid_yaml: {phases: [validation]}
   key_dependency: {phases: [validation]}
   length_failed: {phases: [verification]}
   ln_of_nonpositive: {phases: [derivation]}
   mandatory_not_enforced: {phases: [validation]}
   matches_failed: {phases: [verification]}
   method_missing: {phases: [validation]}
+  minimum_length: {phases: [validation]}
   missing_aggregate_keys: {phases: [validation]}
   missing_derivation: {phases: [validation]}
   missing_input: {phases: [cut, impute, mapping]}
@@ -88,6 +95,7 @@ conditions:
   missing_required_field: {phases: [validation]}
   missing_value_required: {phases: [validation]}
   missing_warning_log: {phases: [validation]}
+  model_contract_mismatch: {phases: [validation]}
   month_not_permitted: {phases: [validation]}
   month_out_of_range: {phases: [validation]}
   month_required: {phases: [validation]}
@@ -109,6 +117,7 @@ conditions:
   origin_missing: {phases: [validation]}
   origin_source_not_admitted: {phases: [validation]}
   parent_not_found: {phases: [validation]}
+  pattern_mismatch: {phases: [validation]}
   phase_boundary: {phases: [validation]}
   producer_contract_mismatch: {phases: [validation]}
   producer_output_path_mismatch: {phases: [validation]}
@@ -122,6 +131,8 @@ conditions:
   range_failed: {phases: [verification]}
   redundant_field_type: {phases: [validation]}
   reference_data_repeating_conflict: {phases: [validation]}
+  # REQ-1168
+  refuted_value_origin: {phases: [validation]}
   regex_group_out_of_range: {phases: [validation]}
   rename_only_intermediate: {phases: [validation]}
   reserved_metadata_key: {phases: [validation]}
@@ -165,6 +176,7 @@ conditions:
   unknown_document: {phases: [validation]}
   unknown_field: {phases: [validation]}
   unknown_intermediate_driver_type: {phases: [validation]}
+  unknown_operation: {phases: [validation]}
   unknown_project_function: {phases: [validation]}
   unknown_reference: {phases: [validation]}
   unknown_standard: {phases: [validation]}
@@ -182,6 +194,14 @@ conditions:
   unsupported_text_contract: {phases: [validation]}
   untransportable_text: {phases: [validation]}
   unwritable_value: {phases: [output]}
+  # REQ-1166
+  value_metadata_not_output_column: {phases: [validation]}
+  # REQ-1164
+  value_metadata_requires_literal_testcd: {phases: [validation]}
+  # REQ-1163
+  value_metadata_requires_testcd: {phases: [validation]}
+  # REQ-1165
+  value_metadata_unknown_column: {phases: [validation]}
   value_not_permitted: {phases: [validation]}
   window_order_by_forbidden: {phases: [validation]}
   window_order_by_required: {phases: [validation]}

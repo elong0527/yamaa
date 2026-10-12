@@ -6,6 +6,7 @@ use super::{
     SchemaDiagnostic, SchemaField, SchemaShape, SchemaStructure, TypeExpression, TypeNode,
     ValidationError,
 };
+use crate::diagnostic::ConditionCode;
 use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
 /// Logical use-site and final definition; hosts may attach their retained layer origins.
@@ -184,8 +185,7 @@ impl Run<'_, '_> {
             }
             self.diagnostics.push(self.budget.validation.diagnostic(
                 &path,
-                "unknown_window",
-                Some("REQ-1253"),
+                ConditionCode::SchemaUnknownWindow,
                 vec![("window", SchemaContext::Text(name.into()))],
             )?);
         }

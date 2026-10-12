@@ -1102,7 +1102,7 @@ requirements:
   REQ-0026: {"file": "values/text.md", "sources": ["R019-8", "R019-9", "R019-10"]}
   REQ-0027: {"file": "values/text.md", "sources": ["R019-18"]}
   REQ-0028: {"file": "values/text.md", "sources": ["R019-19"]}
-  REQ-0029: {"file": "values/text.md", "sources": ["R019-21"]}
+  REQ-0029: {"file": "values/text.md", "sources": ["R019-21", "yamaa:issue-1984:yaml-source-req-0029"]}
   REQ-0030: {"file": "values/text.md", "sources": ["R019-23"]}
   REQ-0031: {"file": "execution/lifecycle.md", "sources": ["R001-1"]}
   REQ-0032: {"file": "execution/lifecycle.md", "sources": ["R001-2"]}
@@ -1351,14 +1351,14 @@ requirements:
   REQ-0277: {"file": "reference/schema-language.md", "sources": ["R006-36"]}
   REQ-0278: {"file": "reference/schema-language.md", "sources": ["R006-37"]}
   REQ-0279: {"file": "reference/schema-language.md", "sources": ["R006-38"]}
-  REQ-0280: {"file": "reference/schema-language.md", "sources": ["R006-39"]}
-  REQ-0281: {"file": "reference/schema-language.md", "sources": ["R006-40"]}
+  REQ-0280: {"file": "reference/schema-language.md", "sources": ["R006-39", "yamaa:issue-1984:yaml-source-req-0280"]}
+  REQ-0281: {"file": "reference/schema-language.md", "sources": ["R006-40", "yamaa:issue-1973:item-7:schema-version-citation"]}
   REQ-0282: {"file": "reference/schema-language.md", "sources": ["R006-41"]}
   REQ-0283: {"file": "reference/schema-language.md", "sources": ["R006-42"]}
   REQ-0284: {"file": "reference/schema-language.md", "sources": ["R006-43"]}
-  REQ-0285: {"file": "reference/schema-language.md", "sources": ["R006-44"]}
-  REQ-0286: {"file": "reference/schema-language.md", "sources": ["R006-45"]}
-  REQ-0287: {"file": "reference/schema-language.md", "sources": ["R006-46"]}
+  REQ-0285: {"file": "reference/schema-language.md", "sources": ["R006-44", "yamaa:issue-1973:item-7:field-citations"]}
+  REQ-0286: {"file": "reference/schema-language.md", "sources": ["R006-45", "yamaa:issue-1973:item-7:registry-citations"]}
+  REQ-0287: {"file": "reference/schema-language.md", "sources": ["R006-46", "yamaa:issue-1973:item-7:model-value-citation"]}
   REQ-0288: {"file": "operations/expressions.md", "sources": ["R007-1"]}
   REQ-0289: {"file": "operations/expressions.md", "sources": ["R007-2"]}
   REQ-0290: {"file": "operations/expressions.md", "sources": ["R007-3"]}
@@ -1724,7 +1724,7 @@ requirements:
   REQ-0654: {"file": "specification/composition.md", "sources": ["R017-41"]}
   REQ-0655: {"file": "specification/composition.md", "sources": ["R017-42"]}
   REQ-0656: {"file": "specification/composition.md", "sources": ["R017-43"]}
-  REQ-0657: {"file": "specification/composition.md", "sources": ["R017-44", "yamaa:issue-845:resolved-output-required"]}
+  REQ-0657: {"file": "specification/composition.md", "sources": ["R017-44", "yamaa:issue-845:resolved-output-required", "yamaa:issue-1973:item-7:resolved-output-citation"]}
   REQ-0658: {"file": "specification/composition.md", "sources": ["R017-45"]}
   REQ-0659: {"file": "specification/composition.md", "sources": ["R017-46"]}
   REQ-0660: {"file": "specification/composition.md", "sources": ["R017-47"]}
@@ -1772,7 +1772,7 @@ requirements:
   REQ-0702: {"file": "operations/functions.md", "sources": ["R018-41"]}
   REQ-0703: {"file": "operations/functions.md", "sources": ["R018-42"]}
   REQ-0704: {"file": "operations/functions.md", "sources": ["R018-43"]}
-  REQ-0705: {"file": "specification/structure.md", "sources": ["R019-1"]}
+  REQ-0705: {"file": "specification/structure.md", "sources": ["R019-1", "yamaa:issue-1984:yaml-source-req-0705"]}
   REQ-0706: {"file": "operations/text.md", "sources": ["R019-11"]}
   REQ-0707: {"file": "operations/text.md", "sources": ["R019-12"]}
   REQ-0708: {"file": "operations/text.md", "sources": ["R019-13"]}
@@ -3045,3 +3045,12 @@ provenance_addenda:
   - {"source": "yamaa:issue-2004:req-0068", "text": "Approved #1973 item 7 and #2004: row-filter phase failures cite this rule and explicitly retain phase_boundary with the authored row, identifier and phase context.", "owner": "execution/rows", "group": "diagnostic requirement ownership", "target": "REQ-0068"}
   - {"source": "yamaa:issue-2004:req-0106", "text": "Approved #1973 item 7 and #2004: both unresolved unqualified output causes cite their existing unknown_field and unresolvable_name owning rule.", "owner": "specification/binding", "group": "diagnostic requirement ownership", "target": "REQ-0106"}
   - {"source": "yamaa:issue-2004:normative-null", "text": "Approved #1973 item 7 and #2004: only unsupported_operation at planning and engine_rejected at engine retain a null normative requirement; language diagnostics cite their governing rules.", "owner": "execution/lifecycle", "group": "diagnostic requirement ownership", "target": "REQ-1297"}
+  - {"source": "yamaa:issue-1984:yaml-source-req-0029", "text": "Issue #1984: retained YAML source capture diagnostics cite REQ-0029 under REQ-1297; decoder facts and yaml/1 compatibility shape remain unchanged.", "owner": "values/text", "group": "yaml-diagnostics", "target": "REQ-0029"}
+  - {"source": "yamaa:issue-1984:yaml-source-req-0280", "text": "Issue #1984: retained YAML source capture diagnostics cite REQ-0280 under REQ-1297; decoder facts and yaml/1 compatibility shape remain unchanged.", "owner": "reference/schema-language", "group": "yaml-diagnostics", "target": "REQ-0280"}
+  - {"source": "yamaa:issue-1984:yaml-source-req-0705", "text": "Issue #1984: retained YAML source capture diagnostics cite REQ-0705 under REQ-1297; decoder facts and yaml/1 compatibility shape remain unchanged.", "owner": "specification/structure", "group": "yaml-diagnostics", "target": "REQ-0705"}
+  - {"source": "yamaa:issue-1973:item-7:schema-version-citation", "text": "Approved issue #1973 item 7 and #1985 typed ownership assign existing language failures their governing REQ-0281 citation; historical missing citations remain captured reference evidence.", "owner": "reference/schema-language", "group": "schema-version-citation", "target": "REQ-0281"}
+  - {"source": "yamaa:issue-1973:item-7:field-citations", "text": "Approved issue #1973 item 7 and #1985 typed ownership assign existing language failures their governing REQ-0285 citation; historical missing citations remain captured reference evidence.", "owner": "reference/schema-language", "group": "field-citations", "target": "REQ-0285"}
+  - {"source": "yamaa:issue-1973:item-7:registry-citations", "text": "Approved issue #1973 item 7 and #1985 typed ownership assign existing language failures their governing REQ-0286 citation; historical missing citations remain captured reference evidence.", "owner": "reference/schema-language", "group": "registry-citations", "target": "REQ-0286"}
+  - {"source": "yamaa:issue-1973:item-7:model-value-citation", "text": "Approved issue #1973 item 7 and #1985 typed ownership assign existing language failures their governing REQ-0287 citation; historical missing citations remain captured reference evidence.", "owner": "reference/schema-language", "group": "model-value-citation", "target": "REQ-0287"}
+  - {"source": "yamaa:issue-1973:item-7:resolved-output-citation", "text": "Approved issue #1973 item 7 and #1985 typed ownership assign existing language failures their governing REQ-0657 citation; historical missing citations remain captured reference evidence.", "owner": "specification/composition", "group": "resolved-output-citation", "target": "REQ-0657"}
+  - {"source": "yamaa:issue-1986:binding-quota-classification", "text": "Approved #1973 item 7 and #1986: actual BindingFinding::Limit is engine/engine_rejected with no normative requirement under REQ-1297; preserve path and codelist detail. The historical validation/application_rejected/REQ-0955 spelling remains in the frozen diagnostic seed. Ordinary unequal codelist/allowed_values sets still cite REQ-0955. Benchmark expected and historical capture bytes remain unchanged.", "owner": "execution/lifecycle", "group": "submission diagnostic ownership", "target": "REQ-1297"}

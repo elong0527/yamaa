@@ -97,29 +97,58 @@ pub struct InvocationFailure<E, I = FunctionIdentity> {
     pub identity: I,
     pub kind: FailureKind<E>,
 }
+impl<E> FailureKind<E> {
+    /// Borrow the original retained facts, including uninspected host payloads.
+    pub fn diagnostic_facts(&self) -> yamaa_core::project_diagnostics::InvocationKind<'_, E> {
+        use yamaa_core::project_diagnostics::InvocationKind as K;
+        match self {
+            Self::UnknownArguments(names) => K::UnknownArguments(names),
+            Self::MissingRequired { parameter } => K::MissingRequired { parameter },
+            Self::ArgumentType {
+                parameter,
+                expected,
+                actual,
+            } => K::ArgumentType {
+                parameter,
+                expected: *expected,
+                actual: *actual,
+            },
+            Self::CallFailed(payload) => K::CallFailed(payload),
+            Self::InvalidHostResult(payload) => K::InvalidHostResult(payload),
+            Self::BooleanResult => K::BooleanResult,
+            Self::UndeclaredMissing => K::UndeclaredMissing,
+            Self::ResultType { expected, actual } => K::ResultType {
+                expected: *expected,
+                actual: *actual,
+            },
+        }
+    }
+}
 impl<E, I> InvocationFailure<E, I> {
+    pub fn code(&self) -> yamaa_core::diagnostic::ConditionCode {
+        self.kind.diagnostic_facts().code()
+    }
     /// Every runtime function failure belongs to derivation, before conversion.
     pub fn phase(&self) -> &'static str {
-        "derivation"
+        self.code().definition().phase
     }
     /// Return portable condition vocabulary without flattening diagnostic facts.
     pub fn condition(&self) -> &'static str {
-        match self.kind {
-            FailureKind::UnknownArguments(_)
-            | FailureKind::MissingRequired { .. }
-            | FailureKind::ArgumentType { .. } => "invalid_function_argument",
-            FailureKind::CallFailed(_) => "function_call_failed",
-            _ => "invalid_function_result",
-        }
+        self.code().definition().condition
     }
     /// Name the normative owner of this failure; no handler can repair it.
     pub fn requirement(&self) -> &'static str {
-        match self.kind {
-            FailureKind::UnknownArguments(_)
-            | FailureKind::MissingRequired { .. }
-            | FailureKind::ArgumentType { .. } => "REQ-0700",
-            FailureKind::CallFailed(_) => "REQ-0701",
-            _ => "REQ-0702",
+        self.code()
+            .definition()
+            .requirement
+            .expect("runtime function rule")
+    }
+}
+impl<E> InvocationFailure<E, ProjectFunctionIdentity> {
+    pub fn diagnostic_facts(&self) -> yamaa_core::project_diagnostics::Invocation<'_, E> {
+        yamaa_core::project_diagnostics::Invocation {
+            identity: &self.identity,
+            kind: self.kind.diagnostic_facts(),
         }
     }
 }
