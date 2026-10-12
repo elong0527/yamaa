@@ -20,7 +20,7 @@ pub struct Intermediate {
     pub path: String,
     pub source: IntermediateSource,
     pub keys: Vec<IntermediateKey>,
-    pub filter: Option<BoundPredicate>,
+    pub filter: Option<RelationPredicate>,
     pub selection: Option<SourceSelection>,
     /// `Some(Missing)` handles absence; `None` leaves it as a join condition.
     pub no_match: Option<Value>,
@@ -31,6 +31,15 @@ impl Intermediate {
         self.keys
             .iter()
             .filter_map(|key| key.value.read().and_then(MatchRead::output_column))
+            .chain(
+                self.filter
+                    .iter()
+                    .flat_map(|filter| filter.current())
+                    .filter_map(|field| match field.read {
+                        CurrentRead::Output(column) => Some(column),
+                        _ => None,
+                    }),
+            )
     }
     pub fn has_expression_keys(&self) -> bool {
         self.keys.iter().any(|key| key.value.is_expression())
@@ -87,15 +96,13 @@ pub(super) fn validate(
                 return Err(PlanError::InvalidIntermediate);
             }
             if item.keys.iter().any(|key| !item.source.admits_column(key.source_column))
-                || item.filter.as_ref().is_some_and(|filter| filter.bindings().iter().any(|binding| !matches!(binding.read, Read::Source(column) if item.source.admits_column(column))))
+                || item.filter.as_ref().is_some_and(|filter| filter.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !item.source.admits_column(column))))
                 || item.selection.as_ref().is_some_and(|selection| selection.order_by.iter().any(|term| !item.source.admits_column(term.column))) {
                 return Err(PlanError::InvalidIntermediate);
             }
         }
         if let Some(filter) = &item.filter {
-            filter
-                .validate(width, &[], false)
-                .map_err(PlanError::Filter)?;
+            filter.validate(width, primary, sources, output, items, index)?;
         }
         if item.selection.as_ref().is_some_and(|selection| {
             selection.order_by.is_empty()

@@ -1,7 +1,6 @@
 //! Named stored-input and SELF selections compiled from the admitted document.
 use super::*;
 use crate::{
-    bound_expression::BoundPredicate,
     dataset::{Intermediate, IntermediateKey, Keep, OrderTerm, SecondarySource, SourceSelection},
     predicate_compiler,
     value::Value,
@@ -48,6 +47,7 @@ impl Declarations {
                             .and_then(|filter| filter.as_ref().ok())
                             .into_iter()
                             .flat_map(|plan| plan.identifiers())
+                            .filter(|field| !field.contains('.') || field.starts_with("SELF."))
                             .map(|field| field.strip_prefix("SELF.").unwrap_or(field)),
                     )
             })
@@ -442,25 +442,22 @@ impl Declarations {
             }
             let filter = match &item.filter {
                 Some(Ok(plan)) => {
-                    let mut bindings = Vec::new();
-                    let before = findings.len();
-                    for name in plan.identifiers() {
-                        if let Some(column) = resolve(name, plan.spec_path(), findings) {
-                            bindings.push(Binding {
-                                name: name.into(),
-                                read: Read::Source(column),
-                            });
-                        }
-                    }
-                    if findings.len() == before {
-                        Some(
-                            BoundPredicate::new(plan.clone(), bindings)
-                                .map_err(BindError::InvalidPredicateBinding)?,
-                        )
-                    } else {
+                    let filter = relation_predicates::bind(
+                        plan,
+                        source_name,
+                        schema,
+                        matches!(item.source, self_relations::Relation::SelfRows),
+                        &admits,
+                        &item.name,
+                        sources,
+                        schemas,
+                        driver,
+                        findings,
+                    )?;
+                    if filter.is_none() {
                         failed = true;
-                        None
                     }
+                    filter
                 }
                 Some(Err(predicate_compiler::Error::Parse(
                     crate::predicate_parser::ParseError::Grammar {

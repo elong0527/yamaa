@@ -28,6 +28,8 @@ mod intermediates;
 mod lookup_diagnostics;
 #[path = "specification_match_values.rs"]
 mod match_values;
+#[path = "specification_relation_predicate.rs"]
+mod relation_predicates;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
 #[path = "specification_output_diagnostics.rs"]
@@ -1969,6 +1971,15 @@ impl PreparedSpecification {
                 paths: self.declarations.iter().map(|d| d.path.clone()).collect(),
                 diagnostics: analysis.diagnostics,
             });
+        }
+        for assignment in assignments.values() {
+            relation_predicates::admit_reads(
+                &assignment.expression,
+                &intermediates,
+                0,
+                &RowMode::Keys,
+                &mut findings,
+            );
         }
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));

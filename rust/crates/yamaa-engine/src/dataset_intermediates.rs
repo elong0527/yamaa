@@ -149,9 +149,9 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                 .try_reserve_exact(table.row_count())
                 .map_err(|_| Box::new(ExecutionError::Allocation))?;
             for source_row in 0..table.row_count() {
-                if let Some(filter) = &item.filter {
+                if let Some(filter) = item.filter.as_ref().filter(|filter| !filter.correlated()) {
                     let truth = crate::dataset_predicate::evaluate(
-                        filter,
+                        filter.predicate(),
                         table,
                         source_row,
                         &[],
@@ -195,18 +195,19 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                 .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
             1,
         )?;
-        let eligible = &state.intermediates.eligible[&index];
+        let eligible_len = state.intermediates.eligible[&index].len();
         if !keys
             .iter()
             .any(|(_, value)| matches!(value, Value::Missing))
         {
             // First count every matching record without reading order or donor fields.
             let mut matching = Vec::new();
-            state.budget.work(eligible.len(), 1)?;
+            state.budget.work(eligible_len, 1)?;
             matching
-                .try_reserve_exact(eligible.len())
+                .try_reserve_exact(eligible_len)
                 .map_err(|_| Box::new(ExecutionError::Allocation))?;
-            for &source_row in eligible {
+            for position in 0..eligible_len {
+                let source_row = state.intermediates.eligible[&index][position];
                 let mut matches = true;
                 for (column, expected) in &keys {
                     let value = cell(table, item, source_row, *column, state.budget)?;
@@ -218,6 +219,37 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                     }
                 }
                 if matches {
+                    if let Some(filter) = item.filter.as_ref().filter(|filter| filter.correlated())
+                    {
+                        let owner = match &item.source {
+                            IntermediateSource::Input(index) => {
+                                relation_predicates::DonorOwner::Secondary(*index)
+                            }
+                            IntermediateSource::Primary { .. } => {
+                                relation_predicates::DonorOwner::Primary
+                            }
+                            IntermediateSource::SelfRows { .. } => {
+                                relation_predicates::DonorOwner::Completed
+                            }
+                        };
+                        if relation_predicates::evaluate(
+                            filter,
+                            relation_predicates::Donor {
+                                table,
+                                row: source_row,
+                                owner,
+                            },
+                            primary,
+                            candidate,
+                            plan,
+                            row,
+                            assignment,
+                            state,
+                        )? != yamaa_core::predicate::Truth::True
+                        {
+                            continue;
+                        }
+                    }
                     matching.push(source_row);
                 }
             }

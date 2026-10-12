@@ -10,6 +10,8 @@ mod diagnostics;
 mod conversion;
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
+#[path = "dataset_relation_predicate.rs"]
+mod relation_predicates;
 pub use yamaa_core::dataset::*;
 #[path = "dataset_flag.rs"]
 mod flags;

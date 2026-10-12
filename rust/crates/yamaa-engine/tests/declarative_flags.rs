@@ -437,7 +437,7 @@ fn named_plan(table: &Table, donor: &Table, filtered: bool) -> DatasetPlan {
                     identifier: "ID".into(),
                 }),
             }],
-            filter,
+            filter: filter.map(Into::into),
             selection: None,
             no_match: Some(Value::Missing),
         }],
