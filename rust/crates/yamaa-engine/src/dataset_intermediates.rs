@@ -112,12 +112,14 @@ fn read_with_observations<T: TableAccess + ?Sized>(
     let donors = self_relations::Donors::<T::Error>::new(state.self_rows, plan.output());
     let table: &dyn TableAccess<Error = T::Error> = match &item.source {
         IntermediateSource::Input(index) => state.secondary[*index],
+        IntermediateSource::Primary { .. } => state.primary,
         IntermediateSource::SelfRows { .. } => &donors,
     };
-    let source_name = item
-        .source
-        .input_index()
-        .map_or("SELF", |index| plan.secondary()[index].name.as_str());
+    let source_name = match &item.source {
+        IntermediateSource::Input(index) => plan.secondary()[*index].name.as_str(),
+        IntermediateSource::Primary { name, .. } => name.as_str(),
+        IntermediateSource::SelfRows { .. } => "SELF",
+    };
     let choice = if let Some(choice) = state.intermediates.choices.get(&cache_key) {
         *choice
     } else {
@@ -328,6 +330,13 @@ fn cell<'a, E>(
                 source_row: row,
                 error,
             },
+            None if matches!(item.source, IntermediateSource::Primary { .. }) => {
+                ExecutionError::Cell {
+                    path: item.path.clone(),
+                    source_row: row,
+                    error,
+                }
+            }
             None => ExecutionError::SchemaMismatch,
         })
     })?;

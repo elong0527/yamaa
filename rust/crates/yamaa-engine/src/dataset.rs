@@ -358,6 +358,7 @@ pub(crate) fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> Ex
 
 /// Resources and semantic observations belong to the same attempted run.
 struct EvaluationState<'a, E> {
+    primary: &'a dyn TableAccess<Error = E>,
     functions: &'a mut dyn FunctionPort<Error = E>,
     secondary: &'a [&'a dyn TableAccess<Error = E>],
     self_rows: &'a [Candidate],
@@ -1122,6 +1123,7 @@ impl Executor<'_> {
             return Err(Box::new(ExecutionError::Capacity));
         }
         observer(ExecutionPhase::Derivation);
+        let primary = row_drivers::Driver::Primary(table);
         let mut budget = Budget::new(limits);
         let mut intermediate_run = intermediates::Run::default();
         let mut candidates: Vec<Candidate> = Vec::new();
@@ -1185,6 +1187,7 @@ impl Executor<'_> {
                             candidates.len(),
                             limits,
                             &mut EvaluationState {
+                                primary: &primary,
                                 functions,
                                 secondary,
                                 self_rows: &candidates[..first],
@@ -1227,6 +1230,7 @@ impl Executor<'_> {
                     first,
                     limits,
                     &mut EvaluationState {
+                        primary: &primary,
                         functions,
                         secondary,
                         self_rows: prior,
@@ -1300,6 +1304,7 @@ impl Executor<'_> {
                         row,
                         limits,
                         &mut EvaluationState {
+                            primary: &primary,
                             functions,
                             secondary,
                             self_rows: &candidates,

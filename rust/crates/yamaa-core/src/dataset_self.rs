@@ -5,6 +5,11 @@ use super::*;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IntermediateSource {
     Input(usize),
+    /// The original driver relation shares its already captured table.
+    Primary {
+        schema: TableSchema,
+        name: String,
+    },
     SelfRows {
         schema: TableSchema,
         columns: Vec<usize>,
@@ -17,12 +22,12 @@ impl IntermediateSource {
     pub fn input_index(&self) -> Option<usize> {
         match self {
             Self::Input(index) => Some(*index),
-            Self::SelfRows { .. } => None,
+            Self::Primary { .. } | Self::SelfRows { .. } => None,
         }
     }
     pub fn admits_column(&self, column: usize) -> bool {
         match self {
-            Self::Input(_) => true,
+            Self::Input(_) | Self::Primary { .. } => true,
             Self::SelfRows { columns, .. } => columns.contains(&column),
         }
     }
@@ -31,7 +36,8 @@ impl Intermediate {
     pub fn source_schema<'a>(&'a self, sources: &'a [SecondarySource]) -> Option<&'a TableSchema> {
         match &self.source {
             IntermediateSource::Input(index) => sources.get(*index).map(|source| &source.schema),
-            IntermediateSource::SelfRows { schema, .. } => Some(schema),
+            IntermediateSource::Primary { schema, .. }
+            | IntermediateSource::SelfRows { schema, .. } => Some(schema),
         }
     }
     pub fn source_column(&self, sources: &[SecondarySource], name: &str) -> Option<usize> {

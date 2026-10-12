@@ -116,10 +116,7 @@ impl Declarations {
                 reject(extra, "intermediate_dataset", format!("{path}.dataset"));
                 continue;
             };
-            if matches!(source, self_relations::Relation::Input(index) if index == driver)
-                || result.contains(name)
-                || sources.iter().any(|source| source.name == name)
-            {
+            if result.contains(name) || sources.iter().any(|source| source.name == name) {
                 reject(extra, "intermediate_scope", path.clone());
                 continue;
             }
@@ -282,6 +279,13 @@ impl Declarations {
         self_columns: Option<&[usize]>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(Vec<SecondarySource>, Vec<Option<Intermediate>>), BindError> {
+        intermediate_sources::admit(self.0.iter().filter_map(|item| match item.source {
+            self_relations::Relation::Input(index) if index == driver => {
+                Some((schemas[index], sources[index].name.as_str()))
+            }
+            self_relations::Relation::SelfRows => Some((output, "SELF")),
+            _ => None,
+        }))?;
         let secondary = sources
             .iter()
             .zip(schemas)
@@ -493,6 +497,12 @@ impl Declarations {
                 identifier: item.name.clone(),
                 path: item.path.clone(),
                 source: match item.source {
+                    self_relations::Relation::Input(index) if index == driver => {
+                        crate::dataset::IntermediateSource::Primary {
+                            schema: schemas[index].clone(),
+                            name: sources[index].name.clone(),
+                        }
+                    }
                     self_relations::Relation::Input(index) => {
                         crate::dataset::IntermediateSource::Input(if index > driver {
                             index - 1
