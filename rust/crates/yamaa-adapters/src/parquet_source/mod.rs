@@ -28,6 +28,7 @@ pub use reader::Limits;
 /// Typed adapter failures; the consuming frontend supplies diagnostic location.
 #[derive(Debug)]
 pub enum Error {
+    OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
     Malformed,
     Limit,
     Unavailable {
@@ -69,7 +70,9 @@ impl Error {
                 row: *row,
                 value: *value,
             },
-            Self::Limit | Self::Unavailable { .. } | Self::Table(_) => return None,
+            Self::OdmFields(_) | Self::Limit | Self::Unavailable { .. } | Self::Table(_) => {
+                return None
+            }
         };
         Some(SourceFinding::Parquet {
             finding,
@@ -92,6 +95,7 @@ impl Error {
 impl From<reader::Error> for Error {
     fn from(error: reader::Error) -> Self {
         match error {
+            reader::Error::OdmFields(fields) => Self::OdmFields(fields),
             reader::Error::Malformed | reader::Error::Profile(profile::Error::Invalid) => {
                 Self::Malformed
             }
@@ -123,6 +127,21 @@ pub fn parse(
     table_limits: TableLimits,
 ) -> Result<ArrowTable, Error> {
     let decoded = reader::read(content, limits)?;
+    table::convert(decoded, limits.retained_bytes, table_limits).map_err(|error| match error {
+        table::Error::Limit => Error::Limit,
+        table::Error::Invalid => Error::Malformed,
+        table::Error::Table(error) => Error::Table(error),
+    })
+}
+
+/// Admit the fixed ODM schema before decoding values, then expose its eleven
+/// canonical text fields. Physical vendor chunks are validated and discarded.
+pub fn parse_odm(
+    content: &[u8],
+    limits: Limits,
+    table_limits: TableLimits,
+) -> Result<ArrowTable, Error> {
+    let decoded = reader::read_odm(content, limits)?;
     table::convert(decoded, limits.retained_bytes, table_limits).map_err(|error| match error {
         table::Error::Limit => Error::Limit,
         table::Error::Invalid => Error::Malformed,

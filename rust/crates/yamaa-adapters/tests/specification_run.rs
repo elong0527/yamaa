@@ -3450,6 +3450,34 @@ fn aggregate_relations_match_complete_independent_reports_and_exact_csv() {
     );
 }
 #[test]
+fn odm_reads_match_complete_independent_reports_and_exact_csv() {
+    replay_source_selection_truth(include_str!("fixtures/odm_reads.tsv"), "odm", 14);
+}
+
+#[test]
+fn odm_preflight_matches_complete_independent_findings_before_source_authority() {
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let mut count = 0;
+    for row in include_str!("fixtures/odm_preflight.tsv").lines().skip(1) {
+        let fields = row.split('\t').collect::<Vec<_>>();
+        assert_eq!(fields.len(), 3);
+        let raw = (0..fields[1].len())
+            .step_by(2)
+            .map(|index| u8::from_str_radix(&fields[1][index..index + 2], 16).unwrap())
+            .collect::<Vec<_>>();
+        let error = yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &raw))
+            .unwrap_err();
+        let actual: serde_json::Value = serde_json::from_str(
+            &yamaa_adapters::specification_diagnostics::failure(&error, None),
+        )
+        .unwrap();
+        let expected: serde_json::Value = serde_json::from_str(fields[2]).unwrap();
+        assert_eq!(actual, expected, "{}", fields[0]);
+        count += 1;
+    }
+    assert_eq!(count, 8);
+}
+#[test]
 fn row_column_checks_match_complete_independent_reports_and_exact_csv() {
     replay_source_selection_truth(
         include_str!("fixtures/row_column_checks.tsv"),

@@ -59,6 +59,83 @@ fn content(name: &str) -> Vec<u8> {
 }
 
 #[test]
+fn odm_metadata_admission_ignores_vendor_types_but_checks_every_physical_chunk() {
+    use yamaa_adapters::parquet_source::parse_odm;
+    use yamaa_core::odm_source::{SchemaError, FIELDS};
+    let bytes = content("odm-vendor");
+    let table = parse_odm(&bytes, limits(), table_limits()).unwrap();
+    assert_eq!(
+        table
+            .schema()
+            .columns()
+            .iter()
+            .map(|column| (column.name.as_str(), column.kind))
+            .collect::<Vec<_>>(),
+        FIELDS.map(|name| (name, ColumnType::Str))
+    );
+    let expected = [
+        Some("S"),
+        Some("M"),
+        Some("P"),
+        Some("E"),
+        None,
+        Some("F"),
+        None,
+        Some("G"),
+        None,
+        Some("IT.TEST.OID"),
+        Some("Y"),
+    ];
+    for (column, expected) in expected.into_iter().enumerate() {
+        assert_eq!(
+            table.cell(0, column).unwrap(),
+            expected.map_or(ValueRef::Missing, ValueRef::Str)
+        );
+    }
+    // The ordinary closed profile retains its own independently qualified
+    // unsupported vendor behavior; only the authored ODM interpretation projects.
+    assert!(parse(&bytes, limits(), table_limits()).is_err());
+    assert!(matches!(
+        parse_odm(&content("odm-vendor-malformed"), limits(), table_limits()),
+        Err(Error::Malformed)
+    ));
+    let expected = [
+        (
+            "odm-wrong-type",
+            vec![SchemaError::Type {
+                field: "Value",
+                stored_field: "Value".into(),
+                kind: Some(ColumnType::Int),
+            }],
+        ),
+        (
+            "odm-ambiguous",
+            vec![SchemaError::Ambiguous {
+                field: "StudyOID",
+                stored: vec!["StudyOID".into(), "studyoid".into()],
+            }],
+        ),
+        (
+            "odm-missing",
+            vec![SchemaError::Missing {
+                fields: vec!["FormOID", "FormRepeatKey"],
+            }],
+        ),
+    ];
+    for (name, expected) in expected {
+        let Error::OdmFields(actual) =
+            parse_odm(&content(name), limits(), table_limits()).unwrap_err()
+        else {
+            panic!("typed ODM field finding: {name}")
+        };
+        assert_eq!(actual, expected, "{name}");
+    }
+    let empty = parse_odm(&content("odm-empty"), limits(), table_limits()).unwrap();
+    assert_eq!(empty.row_count(), 0);
+    assert_eq!(empty.schema(), table.schema());
+}
+
+#[test]
 fn independent_codecs_page_versions_and_encodings_preserve_exact_values() {
     let mut cases = vec!["delta".to_string()];
     for codec in ["none", "snappy", "gzip", "brotli", "lz4", "zstd"] {

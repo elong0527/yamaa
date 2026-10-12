@@ -667,6 +667,21 @@ pub fn build_result<'a, C, E>(
                                 }
                                 Some(findings)
                             }
+                            RunError::AdmittedSources(errors) => {
+                                crate::source_diagnostics::admitted_findings(
+                                    errors,
+                                    run.compiled().sources(),
+                                    yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
+                                )
+                                .ok()
+                                .flatten()
+                                .and_then(|findings| {
+                                    findings
+                                        .into_iter()
+                                        .map(crate::specification_diagnostics::portable_diagnostic)
+                                        .collect()
+                                })
+                            }
                             _ => None,
                         }
                         .ok_or(Error::Source(error))?;

@@ -20,7 +20,7 @@ pub use aggregate::{AggregateContextCause, AggregateEmptyKey, AggregateFinding};
 
 #[path = "diagnostic_odm.rs"]
 mod odm;
-pub use odm::{OdmDeclared, OdmFinding};
+pub use odm::{OdmDeclared, OdmFinding, OdmLocation};
 
 #[path = "diagnostic_inheritance.rs"]
 mod inheritance;

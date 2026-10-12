@@ -103,6 +103,11 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
         }
         Error::Prepare(PrepareError::Invalid(errors)) => errors.iter().map(preparing).collect(),
         Error::Bind(error) => binding(error, source?),
+        Error::OdmFields(_) | Error::OdmValues(_) => {
+            crate::source_diagnostics::findings(error, source)
+                .ok()?
+                .and_then(|findings| findings.into_iter().map(portable_diagnostic).collect())
+        }
         Error::ParquetSource(error) => {
             let source = source?;
             Some(vec![portable_diagnostic(
@@ -129,18 +134,20 @@ pub fn findings_with_limit(
     maximum: usize,
 ) -> Result<Option<Vec<Value>>, crate::source_diagnostics::SourceProjectionError> {
     match error {
-        Error::Sources(_) | Error::ParquetSource(_) | Error::TypedSource(_) | Error::Source(_) => {
-            Ok(
-                crate::source_diagnostics::findings_with_limit(error, source, maximum)?.and_then(
-                    |findings| {
-                        findings
-                            .into_iter()
-                            .map(portable_diagnostic)
-                            .collect::<Option<Vec<_>>>()
-                    },
-                ),
-            )
-        }
+        Error::Sources(_)
+        | Error::ParquetSource(_)
+        | Error::TypedSource(_)
+        | Error::Source(_)
+        | Error::OdmFields(_)
+        | Error::OdmValues(_) => Ok(crate::source_diagnostics::findings_with_limit(
+            error, source, maximum,
+        )?
+        .and_then(|findings| {
+            findings
+                .into_iter()
+                .map(portable_diagnostic)
+                .collect::<Option<Vec<_>>>()
+        })),
         Error::Prepare(PrepareError::Invalid(errors)) => Ok(errors.iter().map(preparing).collect()),
         Error::Bind(error) => Ok(source.and_then(|source| binding(error, source))),
         _ => Ok(None),
@@ -201,6 +208,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             Error::Execution(error) if error.is_internal() => ("execute", "internal"),
             Error::Execution(_) => ("execute", "execution_boundary"),
             Error::Sources(_) => ("ingest", "source_collection_boundary"),
+            Error::OdmFields(_) | Error::OdmValues(_) => ("ingest", "odm_projection_boundary"),
         };
         json!({"status":"rejected","stage":stage,"code":code})
     };

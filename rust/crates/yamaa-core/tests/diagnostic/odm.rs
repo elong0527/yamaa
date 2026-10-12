@@ -131,21 +131,23 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ],
         &mut reached,
     );
-    for (row, expected) in [
-        (Some("sample"), text("sample")),
-        (None, V::Scalar(Value::Missing)),
+    for location in [
+        yamaa_core::diagnostic::OdmLocation::Column,
+        yamaa_core::diagnostic::OdmLocation::Row,
+        yamaa_core::diagnostic::OdmLocation::Intermediate,
+        yamaa_core::diagnostic::OdmLocation::Derive,
     ] {
         check(
             F::InvalidContext {
                 path: "columns.V.derivation.odm",
                 dataset: "D",
-                row,
+                location,
             },
             "validation",
             "invalid_odm_context",
             "REQ-1277",
             "columns.V.derivation.odm",
-            vec![("dataset", text("D")), ("row", expected)],
+            vec![("dataset", text("D")), ("location", text(location.name()))],
             &mut reached,
         );
     }

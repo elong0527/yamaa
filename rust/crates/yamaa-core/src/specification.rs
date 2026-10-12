@@ -215,6 +215,7 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    Odm(crate::diagnostic::Diagnostic),
     AggregateDiagnostic(crate::diagnostic::Diagnostic),
     Padding(crate::diagnostic::Diagnostic),
     Scalar(crate::diagnostic::Diagnostic),
@@ -324,6 +325,7 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    Odm(alloc::boxed::Box<odm::Declaration>),
     Aggregate(alloc::boxed::Box<aggregates::Declaration>),
     Scalar(alloc::boxed::Box<scalar::Declaration>),
     StrContains(crate::text_extract::StringExtract),
@@ -955,6 +957,7 @@ impl PreparedSpecification {
         }
         match_values::declaration_admission(d, limits)?;
         let mut findings = preflight(spec)?;
+        findings.extend(odm::context_findings(spec)?);
         let columns = sequence(d, field(d, root, "columns")?)?;
         let output = TableSchema::new(
             columns
@@ -1701,6 +1704,14 @@ impl PreparedSpecification {
                 Ok(binding)
             };
             let expression = match &declaration.operation {
+                Operation::Odm(operation) => odm::bind(
+                    operation,
+                    &catalog,
+                    &self.source().name,
+                    None,
+                    crate::reference_scope::Phase::Column { groups: &[] },
+                    &mut findings,
+                )?,
                 Operation::Aggregate(operation) => aggregates::bind(
                     operation,
                     &catalog,

@@ -56,9 +56,40 @@ impl<E> SourceDecoder for Decoder<E> {
                 error: PhantomData,
             })
     }
+    fn decode_with_interpretation(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<Snapshot<E>, Error> {
+        crate::specification_run::decode_interpreted(source, bytes, None, interpretation).map(
+            |table| Snapshot {
+                table,
+                error: PhantomData,
+            },
+        )
+    }
 }
 
 impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
+    fn decode_bounded_interpreted(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        contract: Option<&yamaa_core::producer_contract::Contract>,
+        limits: yamaa_engine::producer_build::DecodeLimits,
+        interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<Snapshot<E>, yamaa_engine::producer_build::DecodeError<Error>> {
+        if interpretation == yamaa_core::specification::SourceInterpretation::Ordinary {
+            return self.decode_bounded(source, bytes, contract, limits);
+        }
+        crate::specification_run::decode_interpreted(source, bytes, Some(limits), interpretation)
+            .map(|table| Snapshot {
+                table,
+                error: PhantomData,
+            })
+            .map_err(yamaa_engine::producer_build::DecodeError::Codec)
+    }
     fn decode_bounded(
         &mut self,
         source: &SourceDeclaration,

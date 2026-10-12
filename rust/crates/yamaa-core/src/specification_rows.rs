@@ -276,6 +276,24 @@ fn select_defaults(
         }
     }
     let mut selected = alloc::vec![false; columns.len()];
+    // A column ODM default owns the enclosing template's item scope and row
+    // identity even when no row overrides or filter reference it.
+    for (column, &node) in columns.iter().enumerate() {
+        if let Some(derivation) = d
+            .field(node, "derivation")
+            .filter(|&node| !matches!(d.nodes()[node], N::Null))
+        {
+            if odm::contains(d, derivation, 0)? {
+                if !local[column] {
+                    return Err(unsupported(
+                        "odm_deferred_default",
+                        &format!("columns.{}.derivation", output.columns()[column].name),
+                    ));
+                }
+                selected[column] = true;
+            }
+        }
+    }
     for column in filter_defaults {
         selected[column] = local[column];
     }

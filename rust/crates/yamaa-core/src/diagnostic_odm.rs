@@ -29,6 +29,24 @@ impl OdmDeclared {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OdmLocation {
+    Column,
+    Row,
+    Intermediate,
+    Derive,
+}
+impl OdmLocation {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Column => "column",
+            Self::Row => "row",
+            Self::Intermediate => "intermediate",
+            Self::Derive => "derive",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum OdmFinding<'a> {
     Declared {
@@ -59,7 +77,7 @@ pub enum OdmFinding<'a> {
     InvalidContext {
         path: &'a str,
         dataset: &'a str,
-        row: Option<&'a str>,
+        location: OdmLocation,
     },
     NotUnique {
         path: &'a str,
@@ -170,13 +188,14 @@ impl OdmFinding<'_> {
                 budget.text("records")?;
                 budget.charge(40)?;
             }
-            Self::InvalidContext { path, dataset, row } => {
+            Self::InvalidContext {
+                path,
+                dataset,
+                location,
+            } => {
                 budget.text(path)?;
                 budget.field("dataset", dataset)?;
-                budget.text("row")?;
-                if let Some(row) = row {
-                    budget.text(row)?;
-                }
+                budget.field("location", location.name())?;
             }
             Self::NotUnique {
                 path,
@@ -289,11 +308,15 @@ impl OdmFinding<'_> {
                 ]
                 .into(),
             ),
-            Self::InvalidContext { path, dataset, row } => (
+            Self::InvalidContext {
+                path,
+                dataset,
+                location,
+            } => (
                 path.into(),
                 [
                     ("dataset".into(), text(dataset)),
-                    ("row".into(), row.map_or(V::Scalar(Value::Missing), text)),
+                    ("location".into(), text(location.name())),
                 ]
                 .into(),
             ),

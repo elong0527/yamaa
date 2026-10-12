@@ -32,6 +32,9 @@ pub use aggregate::{
     AggregateBinding, AggregateBindingError, AggregatePhase, AggregateRelation,
     AggregateRowContext, AggregateSource, BoundAggregate,
 };
+#[path = "dataset_odm.rs"]
+mod odm;
+pub use odm::{BoundOdm, OdmRead, OdmScope};
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
@@ -71,6 +74,7 @@ pub use windows::{OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    Odm(alloc::boxed::Box<BoundOdm>),
     Aggregate(alloc::boxed::Box<BoundAggregate>),
     Extreme {
         operands: Vec<Assignment>,
@@ -801,6 +805,7 @@ fn validate_assignment_at(
         Expression::Aggregate(aggregate) => {
             aggregate.validate(source, secondary, output, available, mode)?;
         }
+        Expression::Odm(odm) => odm.validate(source, mode)?,
         Expression::Count { column, text } => {
             if column.is_some_and(|column| column >= source.columns().len()) {
                 return Err(PlanError::InvalidSource);
@@ -874,6 +879,7 @@ fn current_record_read(
 ) -> bool {
     let include_raw = scope != RecordReadScope::PrimaryMatching;
     match expression {
+        Expression::Odm(odm) => include_raw && !matches!(odm.read().scope, OdmScope::Keys),
         Expression::Aggregate(aggregate) => match aggregate.relation() {
             AggregateRelation::CurrentGroup => include_raw,
             AggregateRelation::Matched { keys, .. } => {
