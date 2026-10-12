@@ -172,3 +172,64 @@ fn typed_aggregate_raw_field_labels_cannot_invent_a_self_relation_owner() {
     )
     .is_ok());
 }
+
+#[test]
+fn first_template_self_hidden_in_mapping_and_cut_is_rejected() {
+    use yamaa_core::mapping_cut::{Cut, Mapping, MappingCut};
+    let operations = [
+        MappingCut::Mapping(
+            Mapping::new(
+                "P.V".into(),
+                "mapping".into(),
+                vec![("5".into(), Value::Int(15))],
+                true,
+                None,
+                None,
+            )
+            .unwrap(),
+        ),
+        MappingCut::Cut(
+            Cut::new(
+                "P.V".into(),
+                "cut".into(),
+                vec![],
+                vec!["15".into()],
+                true,
+                None,
+            )
+            .unwrap(),
+        ),
+    ];
+    for operation in operations {
+        let hidden = Expression::MappingCut {
+            source: Box::new(assign(
+                1,
+                Expression::Intermediate {
+                    index: 0,
+                    column: 1,
+                },
+            )),
+            operation,
+        };
+        let template = RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![assign(0, Expression::Source(0)), assign(1, hidden)],
+            filter: None,
+        };
+        assert_eq!(
+            DatasetPlan::new_with_intermediates(
+                SourceSchemas {
+                    primary: schema(),
+                    secondary: vec![]
+                },
+                vec![selector(vec![0, 1])],
+                schema(),
+                vec![template],
+                vec![],
+                vec![0],
+                vec![],
+            ),
+            Err(PlanError::InvalidIntermediate),
+        );
+    }
+}

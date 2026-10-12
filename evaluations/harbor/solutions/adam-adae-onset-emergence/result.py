@@ -28,21 +28,36 @@ def complete_seconds(frame: pl.DataFrame, name: str, out: str) -> pl.DataFrame:
 ae = complete_seconds(ae, "AESTDTC", "ASTDTM").select(
     "STUDYID", "USUBJID", "AESEQ", "AETERM", "ASTDTM"
 )
-adsl = complete_seconds(adsl, "TRTSDTM", "TRTSDTM").select("USUBJID", "TRTSDTM")
-
-adae = ae.join(adsl, on="USUBJID", how="left", maintain_order="left").with_columns(
-    TRTEMFL=pl.when(
-        pl.col("ASTDTM").is_not_null()
-        & pl.col("TRTSDTM").is_not_null()
-        & (pl.col("ASTDTM") >= pl.col("TRTSDTM"))
-    ).then(pl.lit("Y"))
+adsl = (
+    complete_seconds(adsl, "TRTSDTM", "TRTSDTM")
+    .pipe(complete_seconds, "TEENDDTM", "TEENDDTM")
+    .select("USUBJID", "TRTSDTM", "TEENDDTM")
 )
 
-# The subject's earliest treatment-emergent event, ordered by onset
-# moment with the lower AESEQ settling ties at the same second. ISO
-# datetimes sort as text once seconds are completed.
+# The window rule: onset inside [first exposure, window end] is
+# treatment-emergent. A missing onset cannot be ruled pre-treatment,
+# so a treated subject's event with a missing onset is flagged Y; an
+# untreated subject (no first exposure) is never treatment-emergent.
+adae = ae.join(adsl, on="USUBJID", how="left", maintain_order="left").with_columns(
+    TRTEMFL=pl.when(pl.col("TRTSDTM").is_null())
+    .then(None)
+    .when(pl.col("ASTDTM").is_null())
+    .then(pl.lit("Y"))
+    .when(
+        (pl.col("ASTDTM") >= pl.col("TRTSDTM"))
+        & (pl.col("ASTDTM") <= pl.col("TEENDDTM"))
+    )
+    .then(pl.lit("Y"))
+    .otherwise(None)
+)
+
+# The subject's earliest treatment-emergent event with a known onset,
+# ordered by onset moment with the lower AESEQ settling ties at the
+# same second. ISO datetimes sort as text once seconds are completed.
 first = (
-    adae.filter(pl.col("TRTEMFL") == "Y")
+    adae.filter(
+        (pl.col("TRTEMFL") == "Y") & pl.col("ASTDTM").is_not_null()
+    )
     .sort(["USUBJID", "ASTDTM", "AESEQ"], nulls_last=True)
     .unique("USUBJID", keep="first", maintain_order=True)
     .select("USUBJID", FIRST_SEQ="AESEQ")
@@ -56,7 +71,15 @@ adae = (
         ).then(pl.lit("Y"))
     )
     .select(
-        "STUDYID", "USUBJID", "AESEQ", "AETERM", "ASTDTM", "TRTSDTM", "TRTEMFL", "AOCCFL"
+        "STUDYID",
+        "USUBJID",
+        "AESEQ",
+        "AETERM",
+        "ASTDTM",
+        "TRTSDTM",
+        "TEENDDTM",
+        "TRTEMFL",
+        "AOCCFL",
     )
 )
 
