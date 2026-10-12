@@ -85,8 +85,9 @@ Each sampled PR lane and every main or full-dispatch lane uploads its inventory,
 individual records and staged saved artifacts. The committed
 `public-conformance.json` gates both installed hosts. Its first 260 cases per
 host are the independently replayed intersection of all eighteen Python lanes
-and three R hosts in full dispatch 38249603102 at
-`1e0be46f38db9b23b0a830718de030e194b5ecbb`. The remaining 50 unsupported, three
+and three R hosts in combined-main run 38250972601 at
+`14147ecfde9511fda9bf41840ae6306959c01667`. The preceding exact-head full
+dispatch 38249603102 has the same passing set. The remaining 50 unsupported, three
 mismatch and three error cases stay visible; two historical cases retain their
 approved exclusion. This corpus evidence does not complete other migration or
 release gates. Run locally against an installed package outside the checkout:

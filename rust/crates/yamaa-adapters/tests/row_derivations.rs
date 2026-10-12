@@ -168,6 +168,19 @@ fn intermediate_identity_keeps_column_key_windows_over_all_constructed_templates
     assert_eq!(saved(&f), b"ID,SEQ,VALUE,PICK\nx,2,4,kept\nx,1,1,kept\n");
 }
 #[test]
+fn grouped_row_column_defaults_use_the_shared_secondary_source_key_binding() {
+    let body = "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {VALUE: int}}\n  D: {path: donor.csv, types: {REFERENCE: int}}\noutput: {path: output.csv, columns: [ID, TOTAL, REFERENCE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TOTAL, type: int}\n  - {name: REFERENCE, type: int, derivation: D.REFERENCE}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations: {TOTAL: {aggregate: {expr: 'SUM(SRC.VALUE)'}}}\n";
+    let f = bespoke(body, b"ID,VALUE\na,4\na,1\nb,2\n");
+    fs::write(f.0.join("donor.csv"), b"ID,REFERENCE\na,10\nb,20\n").unwrap();
+    assert_eq!(saved(&f), b"ID,TOTAL,REFERENCE\na,5,10\nb,2,20\n");
+    fs::write(f.0.join("donor.csv"), b"ID,REFERENCE\na,10\na,10\nb,20\n").unwrap();
+    let mut result = f.run();
+    assert!(result.output().is_none());
+    assert!(result.save().is_err());
+    assert_eq!(result.issues()[0].condition, "multiple_matches");
+    assert_eq!(result.issues()[0].requirement.as_deref(), Some("REQ-0127"));
+}
+#[test]
 fn unchanged_vs_units_benchmark_runs_row_cases_and_numeric_branches() {
     let f = Fixture::new("sdtm-vs-units");
     let mut result = f.run();

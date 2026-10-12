@@ -805,9 +805,9 @@ fn validate_assignment_at(
             filter,
             selection,
         } => {
-            if !matches!(mode, RowMode::Keys) {
-                return Err(PlanError::InvalidLookup);
-            }
+            // Implicit source joins use completed output keys in every row
+            // mode. Their ownership and availability are admitted below; they
+            // do not borrow a raw record from the enclosing driver.
             lookup::validate_source(bound, secondary, available, output)?;
             let width = secondary[bound.source].schema.columns().len();
             if let Some(filter) = filter {

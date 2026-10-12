@@ -48,6 +48,15 @@ impl SourceFinding {
     }
 }
 impl Declaration {
+    pub(super) fn variable(variable: &str) -> Self {
+        Self {
+            variable: variable.into(),
+            filter: None,
+            order: Vec::new(),
+            keep: None,
+            absent: None,
+        }
+    }
     pub fn prepare(
         d: &Document,
         payload: usize,

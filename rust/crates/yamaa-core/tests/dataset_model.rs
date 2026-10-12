@@ -29,6 +29,73 @@ fn assign(column: usize, expression: Expression) -> Assignment {
 }
 
 #[test]
+fn implicit_source_joins_admit_completed_output_keys_in_record_and_group_modes_only() {
+    use yamaa_core::dataset::{Lookup, MatchKey, SecondarySource};
+    let driver = schema(&[("ID", ColumnType::Int)]);
+    let output = schema(&[("ID", ColumnType::Int), ("VALUE", ColumnType::Int)]);
+    let donor = SecondarySource {
+        name: "D".into(),
+        schema: output.clone(),
+    };
+    let expression = || Expression::SourceLookup {
+        lookup: Lookup {
+            source: 0,
+            column: 1,
+            keys: vec![MatchKey {
+                source_column: 0,
+                output_column: 0,
+            }],
+        },
+        filter: None,
+        selection: None,
+    };
+    for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
+        for completed in [true, false] {
+            let result = DatasetPlan::new_with_sources(
+                driver.clone(),
+                vec![donor.clone()],
+                output.clone(),
+                vec![RowTemplate {
+                    mode: mode.clone(),
+                    assignments: if completed {
+                        vec![assign(0, Expression::Source(0))]
+                    } else {
+                        vec![]
+                    },
+                    filter: None,
+                }],
+                vec![assign(1, expression())],
+                vec![0],
+                vec![],
+            );
+            if completed {
+                assert!(result.is_ok(), "{result:?}");
+            } else {
+                assert_eq!(result, Err(PlanError::InvalidLookup));
+            }
+        }
+    }
+    let mut wrong = donor;
+    wrong.schema = schema(&[("ID", ColumnType::Str), ("VALUE", ColumnType::Int)]);
+    assert_eq!(
+        DatasetPlan::new_with_sources(
+            driver,
+            vec![wrong],
+            output,
+            vec![RowTemplate {
+                mode: RowMode::Groups(vec![0]),
+                assignments: vec![assign(0, Expression::Source(0))],
+                filter: None
+            }],
+            vec![assign(1, expression())],
+            vec![0],
+            vec![]
+        ),
+        Err(PlanError::InvalidLookup),
+    );
+}
+
+#[test]
 fn malformed_row_filter_columns_retain_the_existing_scope_error() {
     use yamaa_core::bound_expression::{Binding, BindingError, BoundPredicate, Read};
     let source = schema(&[("ID", ColumnType::Int)]);

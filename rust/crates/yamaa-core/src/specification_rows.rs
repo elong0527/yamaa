@@ -969,6 +969,7 @@ impl Rows {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind(
         &self,
+        prepared: &PreparedSpecification,
         source: &TableSchema,
         name: &str,
         output: &TableSchema,
@@ -1090,7 +1091,24 @@ impl Rows {
                     &intermediates,
                 )?,
                 RowOperation::Source(reference) => {
-                    if named.reference(reference).is_some() {
+                    if matches!(phase, Phase::Column { .. })
+                        && reference.split_once('.').is_some_and(|(dataset, _)| {
+                            secondary.iter().any(|source| source.name == dataset)
+                        })
+                    {
+                        source_expressions::bind(
+                            prepared,
+                            &source_expressions::Declaration::variable(reference),
+                            declaration.column,
+                            &declaration.path,
+                            catalog,
+                            source,
+                            &secondary,
+                            &intermediates,
+                            edges,
+                            findings,
+                        )?
+                    } else if named.reference(reference).is_some() {
                         if !named
                             .reference(reference)
                             .is_some_and(|(index, _)| named.is_self(index))

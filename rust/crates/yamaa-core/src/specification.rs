@@ -1727,6 +1727,7 @@ impl PreparedSpecification {
             )?;
             return rows
                 .bind(
+                    self,
                     source,
                     &self.source().name,
                     &self.output,
