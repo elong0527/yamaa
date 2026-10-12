@@ -177,7 +177,10 @@ fn donor_qualifier_takes_precedence_and_bare_stored_fields_suggest_it() {
     );
     let issues = refusal(
         &fixture,
-        &BODY.replace("D.TIME < SRC.CUT", "TIME < SRC.CUT").replace("derivation: P.A", "derivation: {literal: unused}").replace("derivation: P.B", "derivation: {literal: unused}"),
+        &BODY
+            .replace("D.TIME < SRC.CUT", "TIME < SRC.CUT")
+            .replace("derivation: P.A", "derivation: {literal: unused}")
+            .replace("derivation: P.B", "derivation: {literal: unused}"),
     );
     assert_eq!(
         issues,

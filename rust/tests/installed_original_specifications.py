@@ -2306,5 +2306,34 @@ columns:
             self.assertTrue(result.save())
             self.assertEqual((root / "result.csv").read_bytes(), b"ID,SEQ,A,B\n1,1,last,\n1,2,last,\n2,1,,\n")
 
+    def test_public_correlated_intermediate_filters_preserve_current_driver_and_complete_handlers(self):
+        import yamaa
+        inputs = {'src.csv': 'ID,SEQ,CUT\n1,1,2\n1,2,4\n3,1,2\n1,3,\n', 'donor.csv': 'ID,TIME,A,B\n1,1,one,x\n1,3,three,\n2,9,hidden,hidden\n', 'alt.csv': 'ID,SEQ,CUT\n1,1,4\n3,1,2\n'}
+        probes = [('schema_version: \'1.0\'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: "D.TIME < SRC.CUT"\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n', b'ID,SEQ,A,B\n1,1,one,x\n1,2,three,\n3,1,,\n1,3,,\n', [{'spec_path': 'columns.A.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.A.derivation.source.no_match', 'handler': 'no_match', 'count': 2}, {'spec_path': 'columns.B.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.B.derivation.source.no_match', 'handler': 'no_match', 'count': 2}]), ('schema_version: \'1.0\'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: "D.TIME < ALT.CUT"\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\nrows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}\n', b'ID,SEQ,A,B\n1,1,three,\n3,1,,\n', [{'spec_path': 'rows[0].derivations.A.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'rows[0].derivations.B.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'rows[0].derivations.A.source.no_match', 'handler': 'no_match', 'count': 1}, {'spec_path': 'rows[0].derivations.B.source.no_match', 'handler': 'no_match', 'count': 1}])]
+        for body, expected, ledger in probes:
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(body)
+                for name, content in inputs.items(): (root / name).write_text(content)
+                result = yamaa.domain(entry)
+                self.assertEqual(result.issues.rows(), [])
+                self.assertEqual(json.loads(result._native.observations())["handler_counts"], ledger)
+                self.assertTrue(result.save())
+                self.assertEqual((root / "result.csv").read_bytes(), expected)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = root / "spec.yaml"
+            entry.write_text(probes[1][0].replace("D.TIME < ALT.CUT", "D.TIME < SRC.CUT"))
+            for name, content in inputs.items(): (root / name).write_text(content)
+            result = yamaa.domain(entry)
+            findings = [dict(phase=phase, condition=condition, requirement=requirement,
+                             spec_paths=paths, context=json.loads(context))
+                        for phase, condition, requirement, paths, context in result.issues.rows()]
+            self.assertEqual(findings, [{"phase":"validation", "condition":"unknown_field", "requirement":"REQ-0120", "spec_paths":["intermediates[0].filter"], "context":{"identifier":"SRC.CUT", "intermediate":"P"}}])
+            self.assertIsNone(result.output)
+            with self.assertRaises(yamaa.DomainError): result.save()
+            self.assertFalse((root / "result.csv").exists())
+
 if __name__ == "__main__":
     unittest.main()

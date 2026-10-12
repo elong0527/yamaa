@@ -256,12 +256,6 @@ pub(super) fn validate_reads(
             return Err(PlanError::InvalidIntermediate);
         }
         let item = items.get(index).ok_or(PlanError::InvalidIntermediate)?;
-        if item
-            .output_dependencies()
-            .any(|column| !available.get(column).copied().unwrap_or(false))
-        {
-            return Err(PlanError::UnavailableColumn);
-        }
         for key in &item.keys {
             if let Some(MatchRead::Record { column, .. }) = key.value.read() {
                 if source != 0 {
@@ -282,6 +276,9 @@ pub(super) fn validate_reads(
                 {
                     if child >= index {
                         return Err(PlanError::InvalidIntermediate);
+                    }
+                    if items[child].keys.iter().filter_map(|key| key.value.read()).any(|read| matches!(read, MatchRead::Output { column, .. } if !available.get(*column).copied().unwrap_or(false))) {
+                        return Err(PlanError::InvalidLookup);
                     }
                     named(child, items, source, mode, available, depth + 1)?;
                 }
