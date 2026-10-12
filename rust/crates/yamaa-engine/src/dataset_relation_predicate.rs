@@ -18,6 +18,84 @@ pub(super) struct Donor<'a, E> {
     pub row: usize,
     pub owner: DonorOwner,
 }
+pub(super) enum CurrentObservation {
+    Predicate,
+    Operand,
+}
+/// Predicate and range operands share typed current reads and native failure owners.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn resolve_current<T: TableAccess + ?Sized>(
+    field: &CurrentField,
+    path: &str,
+    table: &T,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    assignment: &Assignment,
+    observation: CurrentObservation,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    match field.read {
+        CurrentRead::Record { source, column } => {
+            state.budget.work(candidate.members.len(), 1)?;
+            let table = if source == 0 {
+                state.primary
+            } else {
+                state.secondary[source - 1]
+            };
+            key_grain::collect_bound(
+                table,
+                key_grain::Collection {
+                    column,
+                    identifier: &field.identifier,
+                    filter: None,
+                    selection: None,
+                },
+                key_grain::CollectionContext {
+                    path,
+                    candidate,
+                    plan,
+                    row,
+                },
+                state.budget,
+                state.handlers,
+            )
+            .map_err(|mut error| {
+                if source > 0 && matches!(error.as_ref(), ExecutionError::Cell { .. }) {
+                    if let ExecutionError::Cell {
+                        path,
+                        source_row,
+                        error: original,
+                    } = core::mem::replace(error.as_mut(), ExecutionError::SchemaMismatch)
+                    {
+                        *error = ExecutionError::SecondaryCell {
+                            path,
+                            source: source - 1,
+                            source_row,
+                            error: original,
+                        };
+                    }
+                }
+                error
+            })
+        }
+        CurrentRead::Output(column) => {
+            let value = &candidate.values[column];
+            if let Value::Str(text) = value {
+                state.budget.scalar_text(text.len())?;
+            }
+            Ok(value.clone())
+        }
+        CurrentRead::Intermediate { index, column } => match observation {
+            CurrentObservation::Predicate => intermediates::read_predicate(
+                index, column, assignment, candidate, plan, row, table, state,
+            ),
+            CurrentObservation::Operand => intermediates::read(
+                index, column, assignment, candidate, plan, row, table, state,
+            ),
+        },
+    }
+}
 #[allow(clippy::too_many_arguments)]
 pub(super) fn evaluate<T: TableAccess + ?Sized>(
     filter: &RelationPredicate,
@@ -122,77 +200,18 @@ impl<T: TableAccess + ?Sized> EvaluationContext for Context<'_, '_, T> {
             }
             Read::Column(slot) => {
                 let field = &self.filter.current()[slot];
-                match field.read {
-                    CurrentRead::Record { source, column } => {
-                        self.state
-                            .budget
-                            .work(self.candidate.members.len(), 1)
-                            .map_err(ContextError::Resolution)?;
-                        let table = if source == 0 {
-                            self.state.primary
-                        } else {
-                            self.state.secondary[source - 1]
-                        };
-                        key_grain::collect_bound(
-                            table,
-                            key_grain::Collection {
-                                column,
-                                identifier: &field.identifier,
-                                filter: None,
-                                selection: None,
-                            },
-                            key_grain::CollectionContext {
-                                path: self.filter.plan().spec_path(),
-                                candidate: self.candidate,
-                                plan: self.plan,
-                                row: self.row,
-                            },
-                            self.state.budget,
-                            self.state.handlers,
-                        )
-                        .map_err(|mut error| {
-                            if source > 0 && matches!(error.as_ref(), ExecutionError::Cell { .. }) {
-                                if let ExecutionError::Cell {
-                                    path,
-                                    source_row,
-                                    error: original,
-                                } = core::mem::replace(
-                                    error.as_mut(),
-                                    ExecutionError::SchemaMismatch,
-                                ) {
-                                    *error = ExecutionError::SecondaryCell {
-                                        path,
-                                        source: source - 1,
-                                        source_row,
-                                        error: original,
-                                    };
-                                }
-                            }
-                            ContextError::Resolution(error)
-                        })?
-                    }
-                    CurrentRead::Output(column) => {
-                        let value = &self.candidate.values[column];
-                        if let Value::Str(text) = value {
-                            self.state
-                                .budget
-                                .scalar_text(text.len())
-                                .map_err(ContextError::Resolution)?;
-                        }
-                        value.clone()
-                    }
-                    CurrentRead::Intermediate { index, column } => intermediates::read_predicate(
-                        index,
-                        column,
-                        self.assignment,
-                        self.candidate,
-                        self.plan,
-                        self.row,
-                        self.table,
-                        self.state,
-                    )
-                    .map_err(ContextError::Resolution)?,
-                }
+                resolve_current(
+                    field,
+                    self.filter.plan().spec_path(),
+                    self.table,
+                    self.candidate,
+                    self.plan,
+                    self.row,
+                    self.assignment,
+                    CurrentObservation::Predicate,
+                    self.state,
+                )
+                .map_err(ContextError::Resolution)?
             }
             Read::Intermediate { .. } => {
                 unreachable!("relation predicate uses explicit current metadata")

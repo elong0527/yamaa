@@ -17,6 +17,8 @@ struct Declaration {
     order: Vec<(String, bool, bool)>,
     keep: Option<Keep>,
     no_match: Option<Value>,
+    range: Option<intermediate_range::Declaration>,
+    columns: Option<Vec<String>>,
 }
 #[derive(Debug, Default)]
 pub(super) struct Declarations(Vec<Declaration>);
@@ -50,6 +52,8 @@ impl Declarations {
                             .filter(|field| !field.contains('.') || field.starts_with("SELF."))
                             .map(|field| field.strip_prefix("SELF.").unwrap_or(field)),
                     )
+                    .chain(item.range.iter().flat_map(|range| range.donor_fields()))
+                    .chain(item.columns.iter().flatten().map(String::as_str))
             })
     }
     pub fn contains(&self, name: &str) -> bool {
@@ -69,6 +73,7 @@ impl Declarations {
                 .into_iter()
                 .flatten()
                 .filter_map(|(_, value)| value.reference())
+                .chain(item.range.iter().map(|range| range.value.as_str()))
         })
     }
     pub fn prepare(
@@ -99,14 +104,10 @@ impl Declarations {
         }
         for (index, &id) in items.iter().enumerate() {
             let path = format!("intermediates[{index}]");
-            optional_features(
-                d,
-                id,
-                &["between", "columns", "derivations", "verifications"],
-                &path,
-                extra,
-            );
+            optional_features(d, id, &["derivations", "verifications"], &path, extra);
             let name = text(d, field(d, id, "id")?)?;
+            let range = intermediate_range::prepare(d, id, &path, name)?;
+            let columns = intermediate_range::prepare_columns(d, id, limits)?;
             let dataset = text(d, field(d, id, "dataset")?)?;
             let source = if dataset == "SELF" && present(d, d.root(), "rows") {
                 self_relations::Relation::SelfRows
@@ -269,6 +270,8 @@ impl Declarations {
                 order,
                 keep,
                 no_match,
+                range,
+                columns,
             });
         }
         Ok(result)
@@ -495,6 +498,39 @@ impl Declarations {
                     failed = true;
                 }
             }
+            let before = findings.len();
+            let columns = intermediate_range::bind_columns(
+                &item.columns,
+                source_name,
+                schema,
+                &admits,
+                &item.path,
+                &item.name,
+                findings,
+            );
+            let range = item
+                .range
+                .as_ref()
+                .map(|declaration| {
+                    intermediate_range::bind(
+                        declaration,
+                        &item.name,
+                        schema,
+                        &admits,
+                        &catalog,
+                        sources,
+                        schemas,
+                        driver,
+                        &result,
+                        &secondary,
+                        findings,
+                    )
+                })
+                .transpose()?
+                .flatten();
+            if findings.len() != before || (item.range.is_some() && range.is_none()) {
+                failed = true;
+            }
             result.push((!failed).then(|| Intermediate {
                 identifier: item.name.clone(),
                 path: item.path.clone(),
@@ -523,6 +559,9 @@ impl Declarations {
                 filter,
                 selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
                 no_match: item.no_match.clone(),
+
+                range,
+                columns,
             }));
         }
         Ok((secondary, result))

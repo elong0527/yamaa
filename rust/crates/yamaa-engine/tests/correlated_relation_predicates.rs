@@ -144,6 +144,9 @@ fn fixture(text: &str, failure: Option<(usize, usize)>) -> (Table, Table, Datase
             keep: Keep::Last,
         }),
         no_match: Some(Value::Missing),
+
+        range: None,
+        columns: None,
     };
     let plan = DatasetPlan::new_with_intermediates(
         SourceSchemas {

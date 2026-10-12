@@ -112,6 +112,9 @@ fn completed_grouped_and_stored_driver_templates_add_no_study_reads() {
             keep: Keep::Last,
         }),
         no_match: None,
+
+        range: None,
+        columns: None,
     };
     let read = || Expression::Intermediate {
         index: 0,

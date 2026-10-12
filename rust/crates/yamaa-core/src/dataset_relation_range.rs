@@ -18,6 +18,44 @@ pub struct RelationRangeTypes {
     pub lower: Option<ValueType>,
     pub upper: Option<ValueType>,
 }
+impl RelationRangeTypes {
+    pub fn diagnostic(&self, path: &str, intermediate: &str) -> crate::diagnostic::Diagnostic {
+        self.diagnostic_for(path, Some(intermediate))
+    }
+    /// Aggregate ranges omit the intermediate owner while retaining endpoint types.
+    pub fn diagnostic_for(
+        &self,
+        path: &str,
+        intermediate: Option<&str>,
+    ) -> crate::diagnostic::Diagnostic {
+        use crate::diagnostic::{ConditionCode, ContextValue, Diagnostic};
+        let name = |kind| match kind {
+            ValueType::Str => "str",
+            ValueType::Int => "int",
+            ValueType::Float => "float",
+            ValueType::Bool => "bool",
+            ValueType::Date => "date",
+            ValueType::DateTime => "datetime",
+        };
+        let text = |value: &str| ContextValue::Scalar(Value::Str(value.into()));
+        let mut context = BTreeMap::from([("value_type".into(), text(name(self.value)))]);
+        if let Some(intermediate) = intermediate {
+            context.insert("intermediate".into(), text(intermediate));
+        }
+        for (field, kind) in [("lower_type", self.lower), ("upper_type", self.upper)] {
+            if let Some(kind) = kind {
+                context.insert(field.into(), text(name(kind)));
+            }
+        }
+        Diagnostic {
+            code: ConditionCode::IntermediateRangeTypes,
+            spec_paths: vec![path.into()],
+            context,
+            source_span: None,
+            operand_route: None,
+        }
+    }
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RelationRangeError {
     InvalidMetadata,
@@ -126,6 +164,20 @@ impl RelationRange {
         {
             if shape.fields().get(bound.column).is_none_or(|field| {
                 field.identifier != bound.identifier || field.kind != bound.kind
+            }) {
+                return Err(RelationRangeError::InvalidMetadata);
+            }
+        }
+        Ok(())
+    }
+    /// Stored-only plans retain their original schema rather than copying donor metadata.
+    pub(super) fn validate_source(&self, schema: &TableSchema) -> Result<(), RelationRangeError> {
+        for bound in [&self.lower, &self.upper]
+            .iter()
+            .filter_map(|bound| bound.as_ref())
+        {
+            if schema.columns().get(bound.column).is_none_or(|field| {
+                field.name != bound.identifier || Some(field.kind.into()) != bound.kind
             }) {
                 return Err(RelationRangeError::InvalidMetadata);
             }

@@ -15,16 +15,9 @@ pub struct RelationField {
 }
 impl RelationField {
     pub fn stored(column: usize, identifier: String, kind: ColumnType) -> Self {
-        let kind = match kind {
-            ColumnType::Str => ValueType::Str,
-            ColumnType::Int => ValueType::Int,
-            ColumnType::Float => ValueType::Float,
-            ColumnType::Date => ValueType::Date,
-            ColumnType::DateTime => ValueType::DateTime,
-        };
         Self {
             identifier,
-            kind: Some(kind),
+            kind: Some(kind.into()),
             origin: RelationFieldOrigin::Stored(column),
         }
     }

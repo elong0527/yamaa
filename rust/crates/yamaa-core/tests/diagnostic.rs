@@ -49,6 +49,8 @@ mod csv;
 mod grammar;
 #[path = "diagnostic/inheritance.rs"]
 mod inheritance;
+#[path = "diagnostic/intermediate_ranges.rs"]
+mod intermediate_ranges;
 #[path = "diagnostic/parquet.rs"]
 mod parquet;
 #[path = "diagnostic/preflight.rs"]
@@ -268,6 +270,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(preflight::self_reached());
     reached.extend(preflight::intermediate_reached());
     reached.extend(binding::intermediate_key_reached());
+    reached.extend(intermediate_ranges::reached());
     reached.extend(producer::reached());
     reached.extend(preflight::output_reached());
     reached.extend(grammar::reached());

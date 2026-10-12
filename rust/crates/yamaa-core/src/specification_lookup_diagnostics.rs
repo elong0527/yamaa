@@ -27,6 +27,9 @@ impl ReferenceCause {
 #[derive(Debug)]
 pub struct LookupFinding(Diagnostic);
 impl LookupFinding {
+    pub(super) fn from_diagnostic(diagnostic: Diagnostic) -> Self {
+        Self(diagnostic)
+    }
     pub(super) fn new(path: &str, code: C) -> Self {
         Self(Diagnostic {
             code,

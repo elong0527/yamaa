@@ -200,3 +200,46 @@ fn known_type_mismatch_is_refused_before_any_endpoint_context_exists() {
         }))
     );
 }
+
+#[test]
+fn aggregate_type_projection_omits_only_the_intermediate_owner() {
+    use yamaa_core::diagnostic::ContextValue;
+    use yamaa_core::value::Value;
+    let types = RelationRangeTypes {
+        value: ValueType::Date,
+        lower: None,
+        upper: Some(ValueType::Int),
+    };
+    let diagnostic = types.diagnostic_for("columns.V.aggregate.between", None);
+    assert_eq!(
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().requirement
+        ),
+        ("validation", "incomparable_range_types", Some("REQ-0121"))
+    );
+    assert_eq!(diagnostic.spec_paths, ["columns.V.aggregate.between"]);
+    assert_eq!(
+        diagnostic.context,
+        [
+            (
+                "value_type".into(),
+                ContextValue::Scalar(Value::Str("date".into()))
+            ),
+            (
+                "upper_type".into(),
+                ContextValue::Scalar(Value::Str("int".into()))
+            )
+        ]
+        .into()
+    );
+    assert_eq!(diagnostic.source_span, None);
+    assert_eq!(diagnostic.operand_route, None);
+    let intermediate = types.diagnostic("intermediates[0].between", "P");
+    assert_eq!(intermediate.context.len(), 3);
+    assert_eq!(
+        intermediate.context["intermediate"],
+        ContextValue::Scalar(Value::Str("P".into()))
+    );
+}

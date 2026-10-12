@@ -384,6 +384,9 @@ impl Intermediate {
                 .no_match
                 .map(|value| value.into_core().map_err(|_| Error::InvalidScalar))
                 .transpose()?,
+
+            range: None,
+            columns: None,
         })
     }
 }

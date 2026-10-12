@@ -451,7 +451,7 @@ pub(super) fn bind(
                 findings,
             )?;
             if let Some(column) = item.source_column(secondary, field) {
-                edges.extend(item.output_dependencies());
+                edges.extend(row_intermediates::dependencies(index, intermediates)?);
                 Some(Expression::Intermediate { index, column })
             } else if declaration.absent.is_some() && !item.source.is_self() {
                 variable_absent = true;

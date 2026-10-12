@@ -40,6 +40,17 @@ pub enum ColumnType {
     Date,
     DateTime,
 }
+impl From<ColumnType> for ValueType {
+    fn from(kind: ColumnType) -> Self {
+        match kind {
+            ColumnType::Str => Self::Str,
+            ColumnType::Int => Self::Int,
+            ColumnType::Float => Self::Float,
+            ColumnType::Date => Self::Date,
+            ColumnType::DateTime => Self::DateTime,
+        }
+    }
+}
 
 /// Missing is a value; an absent source/record is a separate selection outcome.
 /// Derived equality distinguishes int and float variants. Ordered table consumers

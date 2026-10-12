@@ -45,7 +45,7 @@ impl Intermediate {
             .columns()
             .iter()
             .position(|column| column.name == name)
-            .filter(|&column| self.source.admits_column(column))
+            .filter(|&column| self.admits_column(column))
     }
 }
 
@@ -53,7 +53,7 @@ fn named_selector(index: usize, items: &[Intermediate], depth: usize) -> bool {
     if depth > 64 {
         return true;
     }
-    items.get(index).is_some_and(|item| item.source.is_self() || item.filter.as_ref().is_some_and(|filter| filter.current().iter().any(|field| matches!(field.read, CurrentRead::Intermediate { index: child, .. } if named_selector(child, items, depth + 1)))))
+    items.get(index).is_some_and(|item| item.source.is_self() || item.current_fields().any(|field| matches!(field.read, CurrentRead::Intermediate { index: child, .. } if named_selector(child, items, depth + 1))))
 }
 fn named_read(read: &Read, items: &[Intermediate]) -> bool {
     matches!(read, Read::Intermediate { index, .. } if named_selector(*index, items, 0))

@@ -221,6 +221,9 @@ fn repeated_named_operands_share_choice_and_suppress_inherited_no_match_counts()
             filter: None,
             selection: None,
             no_match: Some(Value::Missing),
+
+            range: None,
+            columns: None,
         }],
         schema(&[("ID", T::Int), ("F", T::Int)]),
         vec![RowTemplate {
@@ -440,6 +443,9 @@ fn named_plan(table: &Table, donor: &Table, filtered: bool) -> DatasetPlan {
             filter: filter.map(Into::into),
             selection: None,
             no_match: Some(Value::Missing),
+
+            range: None,
+            columns: None,
         }],
         schema(&[("ID", T::Int), ("F", T::Int)]),
         vec![RowTemplate {

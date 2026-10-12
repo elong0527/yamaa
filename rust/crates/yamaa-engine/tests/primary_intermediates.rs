@@ -85,6 +85,9 @@ fn fixture(failure: Option<(usize, usize)>) -> (Table, Table, DatasetPlan) {
         filter: None,
         selection: None,
         no_match: None,
+
+        range: None,
+        columns: None,
     };
     let read = || Expression::Intermediate {
         index: 0,

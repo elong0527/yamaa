@@ -372,6 +372,9 @@ fn typed_record_plan_rejects_uncompleted_matching_outputs_and_grouped_reads() {
                 filter: None,
                 selection: None,
                 no_match: Some(Value::Missing),
+
+                range: None,
+                columns: None,
             }],
             output.clone(),
             vec![RowTemplate {
@@ -413,6 +416,9 @@ fn secondary_row_drivers_share_output_matching_without_reusing_primary_record_co
                 filter: None,
                 selection: None,
                 no_match: Some(Value::Missing),
+
+                range: None,
+                columns: None,
             }],
             output.clone(),
             vec![RowTemplate {

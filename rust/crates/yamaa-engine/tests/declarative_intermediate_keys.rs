@@ -105,6 +105,9 @@ fn item(keys: Vec<IntermediateKey>) -> Intermediate {
         filter: None,
         selection: None,
         no_match: Some(Value::Missing),
+
+        range: None,
+        columns: None,
     }
 }
 fn pad(width: &str) -> MatchValue {

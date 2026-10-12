@@ -1,12 +1,22 @@
 //! Derive template-local prewindow and window-dependent stages from admitted reads.
 use super::*;
 use crate::bound_expression::Read;
+fn intermediate_deferred(index: usize, deferred: &[bool], intermediates: &[Intermediate]) -> bool {
+    let mut found = false;
+    visit_output_dependencies(
+        index,
+        |index| intermediates.get(index),
+        |column| {
+            found |= deferred.get(column).copied().unwrap_or(false);
+        },
+    )
+    .is_err()
+        || found
+}
 fn read_deferred(read: Read, deferred: &[bool], intermediates: &[Intermediate]) -> bool {
     match read {
         Read::Column(column) => deferred[column],
-        Read::Intermediate { index, .. } => intermediates
-            .get(index)
-            .is_some_and(|item| item.output_dependencies().any(|column| deferred[column])),
+        Read::Intermediate { index, .. } => intermediate_deferred(index, deferred, intermediates),
         Read::Source(_) => false,
     }
 }
@@ -38,7 +48,7 @@ fn expression_deferred(
             SelectionRead::Source(_) | SelectionRead::Collect { .. } => false,
         }),
         Expression::SourceLookup { lookup, .. } => lookup.keys.iter().any(|key| deferred[key.output_column]),
-        Expression::Intermediate {index,..} => intermediates.get(*index).is_some_and(|item| item.output_dependencies().any(|column| deferred[column])),
+        Expression::Intermediate {index,..} => intermediate_deferred(*index, deferred, intermediates),
         Expression::Lookup(lookup) => lookup.keys.iter().any(|key| deferred[key.output_column]),
         Expression::Odm(_) | Expression::Literal(_) | Expression::Source(_) | Expression::Collect {..} | Expression::RowLookup(_) | Expression::Reduce {..} | Expression::Count {..} => false,
     }

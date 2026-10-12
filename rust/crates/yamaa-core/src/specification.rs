@@ -20,6 +20,8 @@ use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 mod binding_diagnostics;
 #[path = "specification_intermediate_admission.rs"]
 mod intermediate_admission;
+#[path = "specification_intermediate_range.rs"]
+mod intermediate_range;
 #[path = "specification_intermediate_sources.rs"]
 mod intermediate_sources;
 #[path = "specification_intermediates.rs"]
@@ -2101,7 +2103,7 @@ impl PreparedSpecification {
                             .reference(name)
                             .ok_or(BindError::Internal)?;
                         if let Some(item) = &intermediates[index] {
-                            edges.extend(item.output_dependencies());
+                            edges.extend(row_intermediates::dependencies(index, &intermediates)?);
                             if let Some(column) = item.source_column(&secondary, field) {
                                 bindings.push(Binding {
                                     name: name.into(),

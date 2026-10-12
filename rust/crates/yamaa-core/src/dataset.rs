@@ -40,7 +40,7 @@ pub(crate) mod odm;
 pub use odm::{BoundOdm, OdmRead, OdmScope, OdmTemplateScope};
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
-pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
+pub use intermediates::{visit_output_dependencies, Intermediate, RecordMatchKey, SourceSchemas};
 #[path = "dataset_relation_predicate.rs"]
 pub(crate) mod relation_predicates;
 pub use relation_predicates::{CurrentField, CurrentRead, RelationPredicate};
@@ -998,6 +998,9 @@ fn current_record_read(
                         .iter()
                         .filter_map(|key| key.value.read())
                         .any(|read| matches!(read, MatchRead::Record { .. }))
+                        || item
+                            .current_fields()
+                            .any(|field| matches!(field.read, CurrentRead::Record { .. }))
                 })
         }
         Expression::SourceBinding { source, .. } => {

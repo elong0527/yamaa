@@ -445,7 +445,7 @@ pub(super) fn bind(
                 for name in compiled.identifiers() {
                     if let Some((index, field)) = spec.intermediates.reference(name) {
                         if let Some(item) = &intermediates[index] {
-                            edges.extend(item.output_dependencies());
+                            edges.extend(row_intermediates::dependencies(index, intermediates)?);
                             if let Some(column) = item.source_column(secondary, field) {
                                 bindings.push(Binding {
                                     name: name.into(),

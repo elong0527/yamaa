@@ -186,6 +186,23 @@ fn read_with_observations<T: TableAccess + ?Sized>(
             Some(current) => match_values::evaluate(item, &current, candidate, plan, row, state)?,
             None => match_values::ordinary(item, candidate, plan, row, primary, state)?,
         };
+        let range_value = item
+            .range
+            .as_ref()
+            .map(|range| {
+                relation_predicates::resolve_current(
+                    range.current(),
+                    range.path(),
+                    primary,
+                    candidate,
+                    plan,
+                    row,
+                    assignment,
+                    relation_predicates::CurrentObservation::Operand,
+                    state,
+                )
+            })
+            .transpose()?;
         state.budget.work(
             state
                 .intermediates
@@ -196,9 +213,12 @@ fn read_with_observations<T: TableAccess + ?Sized>(
             1,
         )?;
         let eligible_len = state.intermediates.eligible[&index].len();
-        if !keys
-            .iter()
-            .any(|(_, value)| matches!(value, Value::Missing))
+        if range_value
+            .as_ref()
+            .is_none_or(|value| !matches!(value, Value::Missing))
+            && !keys
+                .iter()
+                .any(|(_, value)| matches!(value, Value::Missing))
         {
             // First count every matching record without reading order or donor fields.
             let mut matching = Vec::new();
@@ -247,6 +267,24 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                             state,
                         )? != yamaa_core::predicate::Truth::True
                         {
+                            continue;
+                        }
+                    }
+                    if let (Some(range), Some(value)) = (&item.range, &range_value) {
+                        state.budget.work(1, 2)?;
+                        let allowed = range
+                            .allows(ValueRef::from(value), |column| {
+                                cell(table, item, source_row, column, state.budget)
+                            })
+                            .map_err(|failure| match failure {
+                                RelationRangeFailure::Access(error) => error,
+                                RelationRangeFailure::Incomparable(types) => {
+                                    Box::new(ExecutionError::ScalarDiagnostic(
+                                        types.diagnostic(range.path(), &item.identifier),
+                                    ))
+                                }
+                            })?;
+                        if !allowed {
                             continue;
                         }
                     }

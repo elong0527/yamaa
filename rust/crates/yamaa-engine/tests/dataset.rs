@@ -4683,6 +4683,12 @@ fn named_item() -> yamaa_engine::dataset::Intermediate {
             keep: Keep::Last,
         }),
         no_match: Some(Value::Missing),
+
+        r,
+        range: None,
+        columns: None,
+        ange: None,
+        columns: None,
     }
 }
 

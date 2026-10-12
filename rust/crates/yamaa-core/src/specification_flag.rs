@@ -312,7 +312,7 @@ pub(super) fn bind(
         }
         let read = if let Some((index, field)) = declarations.reference(name) {
             if let Some(item) = &intermediates[index] {
-                edges.extend(item.output_dependencies());
+                edges.extend(row_intermediates::dependencies(index, intermediates)?);
                 match item.source_column(secondary, field) {
                     Some(column) => Some(FlagRead::Read(Read::Intermediate { index, column })),
                     None => {

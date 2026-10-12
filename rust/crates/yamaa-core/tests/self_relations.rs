@@ -46,6 +46,9 @@ fn selector(columns: Vec<usize>) -> Intermediate {
         filter: None,
         selection: None,
         no_match: Some(Value::Missing),
+
+        range: None,
+        columns: None,
     }
 }
 #[test]

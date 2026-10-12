@@ -73,6 +73,9 @@ fn item(filter: Option<RelationPredicate>) -> Intermediate {
         filter,
         selection: None,
         no_match: Some(Value::Missing),
+
+        range: None,
+        columns: None,
     }
 }
 fn make(
