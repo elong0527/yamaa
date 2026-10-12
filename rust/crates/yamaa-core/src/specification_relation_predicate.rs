@@ -102,42 +102,44 @@ pub(super) fn bind(
 }
 
 /// A globally declared filter is checked against each context that actually reads it.
-pub(super) fn admit_reads(
-    expression: &Expression,
+pub(super) fn admit_reads<'a>(
+    expressions: impl IntoIterator<Item = &'a Expression>,
     items: &[Option<Intermediate>],
     source: usize,
     mode: &RowMode,
     findings: &mut Vec<BindFinding>,
 ) {
     let mut seen = alloc::collections::BTreeSet::new();
-    crate::dataset::relation_predicates::visit(expression, &mut |index| {
-        if !seen.insert(index) {
-            return;
-        }
-        let Some(item) = items.get(index).and_then(Option::as_ref) else {
-            return;
-        };
-        let Some(filter) = &item.filter else {
-            return;
-        };
-        for field in filter.current() {
-            if let CurrentRead::Record {
-                source: driver,
-                column,
-            } = field.read
-            {
-                if driver != source
-                    || matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(&column))
+    for expression in expressions {
+        crate::dataset::relation_predicates::visit(expression, &mut |index| {
+            if !seen.insert(index) {
+                return;
+            }
+            let Some(item) = items.get(index).and_then(Option::as_ref) else {
+                return;
+            };
+            let Some(filter) = &item.filter else {
+                return;
+            };
+            for field in filter.current() {
+                if let CurrentRead::Record {
+                    source: driver,
+                    column,
+                } = field.read
                 {
-                    findings.push(BindFinding::Lookup(LookupFinding::reference(
-                        filter.plan().spec_path(),
-                        &field.identifier,
-                        Some(&item.identifier),
-                        ReferenceCause::Selection,
-                        None,
-                    )));
+                    if driver != source
+                        || matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(&column))
+                    {
+                        findings.push(BindFinding::Lookup(LookupFinding::reference(
+                            filter.plan().spec_path(),
+                            &field.identifier,
+                            Some(&item.identifier),
+                            ReferenceCause::Selection,
+                            None,
+                        )));
+                    }
                 }
             }
-        }
-    });
+        });
+    }
 }

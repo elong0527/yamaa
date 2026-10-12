@@ -216,7 +216,12 @@ fn equality_matches_are_filtered_per_row_and_all_fields_share_one_choice() {
                 Value::Str("x".into()),
                 Value::Int(1)
             ],
-            vec![Value::Int(1), Value::Str("three".into()), Value::Missing, Value::Int(2)],
+            vec![
+                Value::Int(1),
+                Value::Str("three".into()),
+                Value::Missing,
+                Value::Int(2)
+            ],
             vec![Value::Int(3), Value::Missing, Value::Missing, Value::Int(3)],
         ]
     );
@@ -380,4 +385,177 @@ fn a_current_access_failure_retains_its_owner_and_exact_successful_handler_prefi
         ]
     );
     assert!(result.handler_counts.is_empty());
+}
+
+fn rebuilt(
+    current: &Table,
+    donor: &Table,
+    old: &DatasetPlan,
+    items: Vec<Intermediate>,
+    assignments: Vec<Assignment>,
+) -> DatasetPlan {
+    DatasetPlan::new_with_intermediates(
+        SourceSchemas {
+            primary: current.schema.clone(),
+            secondary: vec![SecondarySource {
+                name: "D".into(),
+                schema: donor.schema.clone(),
+            }],
+        },
+        items,
+        old.output().clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments,
+            filter: None,
+        }],
+        vec![],
+        vec![0, 3],
+        vec![],
+    )
+    .unwrap()
+}
+#[test]
+fn completed_output_current_fields_keep_normal_missing_and_choice_semantics() {
+    let (current, donor, old) = fixture("D.TIME < SRC.CUT", None);
+    let mut items = old.intermediates().to_vec();
+    items[0].filter = Some(
+        RelationPredicate::new(
+            items[0].filter.as_ref().unwrap().predicate().clone(),
+            vec![CurrentField {
+                identifier: "SRC.CUT".into(),
+                read: CurrentRead::Output(3),
+            }],
+        )
+        .unwrap(),
+    );
+    let mut assignments = old.templates()[0].assignments.clone();
+    let seq = assignments.pop().unwrap();
+    assignments.insert(1, seq);
+    let plan = rebuilt(&current, &donor, &old, items, assignments);
+    let result = plan.execute_observed_sources(&current, &[&donor], limits());
+    assert_eq!(
+        result.result.unwrap().dataset.rows(),
+        [
+            vec![Value::Int(1), Value::Missing, Value::Missing, Value::Int(1)],
+            vec![
+                Value::Int(1),
+                Value::Str("one".into()),
+                Value::Str("x".into()),
+                Value::Int(2)
+            ],
+            vec![Value::Int(3), Value::Missing, Value::Missing, Value::Int(3)],
+        ]
+    );
+    assert_eq!(
+        *current.reads.borrow(),
+        [(0, 0), (0, 2), (1, 0), (1, 2), (2, 0), (2, 2)]
+    );
+    assert_eq!(
+        result
+            .handler_counts
+            .iter()
+            .map(|h| (h.spec_path.as_str(), h.handler, h.count))
+            .collect::<Vec<_>>(),
+        [
+            (
+                "read.C1.no_match",
+                yamaa_engine::numeric_lifecycle::HandlerKind::NoMatch,
+                2
+            ),
+            (
+                "read.C2.no_match",
+                yamaa_engine::numeric_lifecycle::HandlerKind::NoMatch,
+                2
+            ),
+        ]
+    );
+}
+#[test]
+fn current_kept_selections_share_the_attempt_cache_without_recovery_observations() {
+    let (current, donor, old) = fixture("D.TIME < SRC.CUT", None);
+    let mut first = old.intermediates()[0].clone();
+    first.filter = None;
+    let mut second = first.clone();
+    second.identifier = "Q".into();
+    second.path = "intermediates[1]".into();
+    second.filter = Some(
+        RelationPredicate::new(
+            old.intermediates()[0]
+                .filter
+                .as_ref()
+                .unwrap()
+                .predicate()
+                .clone(),
+            vec![CurrentField {
+                identifier: "SRC.CUT".into(),
+                read: CurrentRead::Intermediate {
+                    index: 0,
+                    column: 1,
+                },
+            }],
+        )
+        .unwrap(),
+    );
+    let assignments = vec![
+        assign(0, Expression::Source(0)),
+        assign(
+            1,
+            Expression::Intermediate {
+                index: 1,
+                column: 2,
+            },
+        ),
+        assign(
+            2,
+            Expression::Intermediate {
+                index: 1,
+                column: 3,
+            },
+        ),
+        assign(3, Expression::Source(2)),
+    ];
+    let plan = rebuilt(&current, &donor, &old, vec![first, second], assignments);
+    let result = plan.execute_observed_sources(&current, &[&donor], limits());
+    assert_eq!(
+        result.result.unwrap().dataset.rows(),
+        [
+            vec![
+                Value::Int(1),
+                Value::Str("one".into()),
+                Value::Str("x".into()),
+                Value::Int(1)
+            ],
+            vec![
+                Value::Int(1),
+                Value::Str("one".into()),
+                Value::Str("x".into()),
+                Value::Int(2)
+            ],
+            vec![Value::Int(3), Value::Missing, Value::Missing, Value::Int(3)],
+        ]
+    );
+    assert_eq!(
+        *current.reads.borrow(),
+        [(0, 0), (0, 2), (1, 0), (1, 2), (2, 0), (2, 2)]
+    );
+    assert_eq!(
+        result
+            .handler_counts
+            .iter()
+            .map(|h| (h.spec_path.as_str(), h.handler, h.count))
+            .collect::<Vec<_>>(),
+        [
+            (
+                "read.C1.no_match",
+                yamaa_engine::numeric_lifecycle::HandlerKind::NoMatch,
+                1
+            ),
+            (
+                "read.C2.no_match",
+                yamaa_engine::numeric_lifecycle::HandlerKind::NoMatch,
+                1
+            ),
+        ]
+    );
 }

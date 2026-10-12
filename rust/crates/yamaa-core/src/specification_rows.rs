@@ -1495,15 +1495,17 @@ impl Rows {
             });
         }
         for template in &templates {
-            for assignment in template.assignments.iter().chain(&columns) {
-                relation_predicates::admit_reads(
-                    &assignment.expression,
-                    &intermediates,
-                    template.mode.source_index(),
-                    &template.mode,
-                    &mut findings,
-                );
-            }
+            relation_predicates::admit_reads(
+                template
+                    .assignments
+                    .iter()
+                    .chain(&columns)
+                    .map(|assignment| &assignment.expression),
+                &intermediates,
+                template.mode.source_index(),
+                &template.mode,
+                &mut findings,
+            );
         }
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));

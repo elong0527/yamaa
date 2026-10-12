@@ -49,12 +49,18 @@ impl Intermediate {
     }
 }
 
+fn named_selector(index: usize, items: &[Intermediate], depth: usize) -> bool {
+    if depth > 64 {
+        return true;
+    }
+    items.get(index).is_some_and(|item| item.source.is_self() || item.filter.as_ref().is_some_and(|filter| filter.current().iter().any(|field| matches!(field.read, CurrentRead::Intermediate { index: child, .. } if named_selector(child, items, depth + 1)))))
+}
 fn named_read(read: &Read, items: &[Intermediate]) -> bool {
-    matches!(read, Read::Intermediate { index, .. } if items.get(*index).is_some_and(|item| item.source.is_self()))
+    matches!(read, Read::Intermediate { index, .. } if named_selector(*index, items, 0))
 }
 fn reads(expression: &Expression, items: &[Intermediate]) -> bool {
     match expression {
-        Expression::Intermediate { index, .. } => items.get(*index).is_some_and(|item| item.source.is_self()),
+        Expression::Intermediate { index, .. } => named_selector(*index, items, 0),
         Expression::SourceBinding { source, .. } | Expression::StrContains { source, .. }
         | Expression::StrCase { source, .. } | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. } | Expression::Round { source, .. } => reads(&source.expression, items),

@@ -256,25 +256,33 @@ pub(super) fn validate_reads(
             return Err(PlanError::InvalidIntermediate);
         }
         let item = items.get(index).ok_or(PlanError::InvalidIntermediate)?;
+        if item
+            .output_dependencies()
+            .any(|column| !available.get(column).copied().unwrap_or(false))
+        {
+            return Err(PlanError::UnavailableColumn);
+        }
+        for key in &item.keys {
+            if let Some(MatchRead::Record { column, .. }) = key.value.read() {
+                if source != 0 {
+                    return Err(PlanError::InvalidIntermediate);
+                }
+                if matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(column)) {
+                    return Err(PlanError::NonGroupSource);
+                }
+            }
+        }
         if let Some(filter) = &item.filter {
             filter.validate_context(source, mode, available)?;
             for field in filter.current() {
                 if let CurrentRead::Intermediate {
                     index: child,
-                    column,
+                    column: _,
                 } = field.read
                 {
                     if child >= index {
                         return Err(PlanError::InvalidIntermediate);
                     }
-                    let child_item = items.get(child).ok_or(PlanError::InvalidIntermediate)?;
-                    if child_item
-                        .output_dependencies()
-                        .any(|column| !available.get(column).copied().unwrap_or(false))
-                    {
-                        return Err(PlanError::UnavailableColumn);
-                    }
-                    let _ = column;
                     named(child, items, source, mode, available, depth + 1)?;
                 }
             }

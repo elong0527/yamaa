@@ -1972,15 +1972,15 @@ impl PreparedSpecification {
                 diagnostics: analysis.diagnostics,
             });
         }
-        for assignment in assignments.values() {
-            relation_predicates::admit_reads(
-                &assignment.expression,
-                &intermediates,
-                0,
-                &RowMode::Keys,
-                &mut findings,
-            );
-        }
+        relation_predicates::admit_reads(
+            assignments
+                .values()
+                .map(|assignment| &assignment.expression),
+            &intermediates,
+            0,
+            &RowMode::Keys,
+            &mut findings,
+        );
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }
