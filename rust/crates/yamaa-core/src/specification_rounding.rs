@@ -185,11 +185,7 @@ pub(super) fn bind_operand(
     let source = if let Some((index, field)) = declarations.reference(name) {
         if let Some(item) = &intermediates[index] {
             edges.extend(item.output_dependencies());
-            let operand = secondary[item.source]
-                .schema
-                .columns()
-                .iter()
-                .position(|candidate| candidate.name == field);
+            let operand = item.source_column(secondary, field);
             if let Some(column) = operand {
                 Expression::Intermediate { index, column }
             } else {

@@ -92,14 +92,13 @@ pub(super) fn common_driver<'a>(
         if !inputs
             .iter()
             .any(|&(id, _)| text(d, id).is_ok_and(|input| input == name))
-            || common.is_some_and(|prior| prior != name)
         {
             return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
                 operation: "row_driver".into(),
                 path: format!("rows[{index}].dataset"),
             }]));
         }
-        common = Some(name);
+        common.get_or_insert(name);
     }
     common.ok_or(PrepareError::Internal)
 }
@@ -173,6 +172,12 @@ pub(super) fn default_dependencies(
         .field(item, "key")
         .filter(|&id| !matches!(d.nodes()[id], N::Null))
     {
+        if matches!(d.nodes()[key], N::Sequence(_)) {
+            for &value in sequence(d, key)? {
+                register(text(d, value)?);
+            }
+            return Ok(dependencies);
+        }
         // Preparation has already admitted the closed map-valued key language.
         for &(_, value) in mapping(d, key)? {
             if let N::Text(name) = &d.nodes()[value] {
@@ -223,12 +228,7 @@ pub(super) fn bind(
         });
         return Ok(None);
     };
-    let Some(column) = secondary[item.source]
-        .schema
-        .columns()
-        .iter()
-        .position(|column| column.name == field)
-    else {
+    let Some(column) = item.source_column(secondary, field) else {
         findings.push(BindFinding::Lookup(LookupFinding::reference(
             path,
             reference,

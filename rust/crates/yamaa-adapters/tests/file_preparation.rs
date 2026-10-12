@@ -313,3 +313,135 @@ fn all_original_file_builds_preserve_full_reports_and_cached_counters() {
         }
     }
 }
+
+const DICTIONARY_SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, X, Y]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: X, type: str, derivation: {mapping: {source: SRC.CODE, dict: dict.yaml}}}\n  - {name: Y, type: str, derivation: {mapping: {source: SRC.CODE, dict: ./dict.yaml}}}\n";
+#[test]
+fn dictionary_resources_are_held_once_and_original_authored_model_is_retained() {
+    let study = Study::new();
+    fs::write(study.0.join("entry/dict.yaml"), "A: answer\n").unwrap();
+    let prepared = study.prepare(DICTIONARY_SPEC).unwrap();
+    assert_eq!(prepared.capture_reads(), 2);
+    assert_eq!(prepared.run().document().dictionary_sources().count(), 1);
+    assert_eq!(
+        prepared
+            .run()
+            .document()
+            .dictionary_sources()
+            .next()
+            .unwrap()
+            .bytes,
+        b"A: answer\n"
+    );
+    let document = prepared.run().document().model().document();
+    let columns = document.field(document.root(), "columns").unwrap();
+    let yamaa_core::schema::DocumentNode::Sequence(columns) = &document.nodes()[columns] else {
+        panic!()
+    };
+    let column = columns[1];
+    let derivation = document.field(column, "derivation").unwrap();
+    let value = document.field(derivation, "value").unwrap();
+    let mapping = document.field(value, "mapping").unwrap();
+    let dict = document.field(mapping, "dict").unwrap();
+    assert_eq!(
+        document.nodes()[dict],
+        yamaa_core::schema::DocumentNode::Text("dict.yaml".into())
+    );
+    fs::write(study.0.join("entry/dict.yaml"), b"A: changed\n").unwrap();
+    let response = prepared.run().execute_csv(b"ID,CODE\n1,A\n").unwrap();
+    assert!(response.table.is_some());
+    let outcome: Value = serde_json::from_str(
+        &yamaa_adapters::table_transport::table_snapshot(response.table.as_ref().unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        outcome["rows"],
+        json!([[{"int":"1"},{"str":"answer"},{"str":"answer"}]])
+    );
+    assert_eq!(prepared.capture_reads(), 2);
+    assert!(!study.0.join("entry/output.csv").exists());
+}
+#[test]
+fn inherited_dictionary_resources_start_at_original_declaring_layer() {
+    let study = Study::new();
+    fs::write(study.0.join("parent/base.yaml"), DICTIONARY_SPEC).unwrap();
+    fs::write(study.0.join("parent/dict.yaml"), "A: declared-parent\n").unwrap();
+    fs::write(study.0.join("entry/dict.yaml"), "A: wrong-entry\n").unwrap();
+    let prepared = study
+        .prepare("schema_version: '1.0'\nparents: [../parent/base.yaml]\n")
+        .unwrap();
+    assert_eq!(prepared.capture_reads(), 3);
+    let dictionary = prepared
+        .run()
+        .document()
+        .dictionary_sources()
+        .next()
+        .unwrap();
+    assert_eq!(dictionary.bytes, b"A: declared-parent\n");
+    assert!(dictionary.identity.ends_with("/parent/dict.yaml"));
+    let response = prepared.run().execute_csv(b"ID,CODE\n1,A\n").unwrap();
+    let outcome: Value = serde_json::from_str(
+        &yamaa_adapters::table_transport::table_snapshot(response.table.as_ref().unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        outcome["rows"],
+        json!([[{"int":"1"},{"str":"declared-parent"},{"str":"declared-parent"}]])
+    );
+    assert!(!study.0.join("parent/input.csv").exists());
+    assert!(!study.0.join("entry/output.csv").exists());
+}
+#[test]
+fn dictionary_missing_and_directory_failures_name_authored_field_without_host_identity() {
+    let study = Study::new();
+    for (path, condition) in [
+        ("absent.yaml", "resource_path_missing"),
+        (".", "resource_path_not_regular_file"),
+    ] {
+        let actual: Value = serde_json::from_str(&failure(
+            &study,
+            &DICTIONARY_SPEC.replace("dict.yaml", path),
+        ))
+        .unwrap();
+        assert_eq!(
+            actual,
+            json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":condition,"requirement":"REQ-0785","spec_paths":["columns.X.derivation.mapping.dict"],"context":{"path":path}}]}})
+        );
+    }
+}
+#[test]
+fn dictionary_invalid_content_retains_original_typed_schema_context_before_study() {
+    let study = Study::new();
+    fs::write(study.0.join("entry/dict.yaml"), "7: answer\n").unwrap();
+    let actual: Value = serde_json::from_str(&failure(&study, DICTIONARY_SPEC)).unwrap();
+    let diagnostics = actual["outcome"]["diagnostics"].as_array().unwrap();
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["condition"], "invalid_field_type");
+    assert_eq!(
+        diagnostics[0]["spec_paths"],
+        json!(["columns.X.derivation.mapping.dict.key(7)"])
+    );
+    assert_eq!(
+        diagnostics[0]["context"],
+        json!({"expected":"str","actual":"int"})
+    );
+    assert!(!study.0.join("entry/input.csv").exists());
+}
+#[cfg(unix)]
+#[test]
+fn dictionary_symlink_policy_retains_original_resource_error() {
+    let study = Study::new();
+    fs::write(study.0.join("parent/dict.yaml"), "A: answer\n").unwrap();
+    std::os::unix::fs::symlink(
+        study.0.join("parent/dict.yaml"),
+        study.0.join("entry/dict.yaml"),
+    )
+    .unwrap();
+    let error = match study.prepare(DICTIONARY_SPEC) {
+        Ok(_) => panic!(),
+        Err(error) => error,
+    };
+    assert_eq!(
+        error.into_message(),
+        "resource path contains a symbolic link"
+    );
+}

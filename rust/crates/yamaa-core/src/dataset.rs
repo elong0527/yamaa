@@ -18,6 +18,9 @@ pub use compiler::{
 #[path = "dataset_conversion.rs"]
 mod conversion;
 pub use conversion::ConversionHandler;
+#[path = "dataset_count.rs"]
+mod count;
+pub use count::{CountBoundError, RowCountBound, MAX_COUNT_BOUND_BYTES};
 #[path = "dataset_flag.rs"]
 mod flags;
 pub use flags::{
@@ -29,6 +32,9 @@ pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, Funct
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
+#[path = "dataset_self.rs"]
+mod self_relations;
+pub use self_relations::IntermediateSource;
 #[path = "dataset_match_values.rs"]
 mod match_values;
 pub use match_values::{IntermediateKey, MatchRead, MatchValue};
@@ -53,6 +59,11 @@ pub use temporal::{CalendarUnit, DateBounds, InvalidTemporal, Temporal, Temporal
 #[path = "dataset_selection.rs"]
 mod selection;
 pub use selection::{FirstAvailable, SelectionRead, SelectionSource};
+#[path = "dataset_row_stages.rs"]
+mod row_stages;
+pub use row_stages::window_stages;
+#[path = "dataset_row_drivers.rs"]
+mod row_drivers;
 #[path = "dataset_windows.rs"]
 mod windows;
 pub use windows::{OrderTerm, Window, WindowKind};
@@ -60,6 +71,10 @@ pub use windows::{OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    MappingCut {
+        source: alloc::boxed::Box<Assignment>,
+        operation: crate::mapping_cut::MappingCut,
+    },
     Extreme {
         operands: Vec<Assignment>,
         largest: bool,
@@ -92,6 +107,20 @@ pub enum Expression {
     /// Only the first TRUE branch is evaluated; FALSE and UNKNOWN continue.
     Case(Vec<CaseBranch>),
     Literal(Value),
+    /// Binding handler ownership is retained even when the variable exists.
+    SourceBinding {
+        source: alloc::boxed::Box<Assignment>,
+        absent: Option<Value>,
+        variable_absent: bool,
+        variable: String,
+        path: String,
+    },
+    /// Source-only eligibility and stable choice on an implicit secondary join.
+    SourceLookup {
+        lookup: Lookup,
+        filter: Option<BoundPredicate>,
+        selection: Option<SourceSelection>,
+    },
     /// One condition selects a raw true/false/UNKNOWN literal.
     Flag(Flag),
     /// Compiled scalar arithmetic over statically bound source/completed output reads.
@@ -113,7 +142,7 @@ pub enum Expression {
     Function(BoundFunction),
     /// Versionless package invocation, activated before any study read.
     ProjectFunction(BoundProjectFunction),
-    /// Column-phase windows over completed key-grain output rows.
+    /// Windows over completed output rows in their column or row-template context.
     Window(Window),
     /// First present raw operand in authored order, followed by one output conversion.
     FirstAvailable(alloc::boxed::Box<FirstAvailable>),
@@ -228,6 +257,11 @@ pub enum RowMode {
     Records,
     Groups(Vec<usize>),
     Keys,
+    /// A stored secondary source with one bounded record/group construction mode.
+    Driver {
+        source: usize,
+        mode: alloc::boxed::Box<RowMode>,
+    },
 }
 
 /// Assignments are supplied in resolved dependency order, not map iteration order.
@@ -280,6 +314,45 @@ pub enum Check {
         min: Option<i64>,
         max: Option<i64>,
     },
+    /// Exact authored count bounds retained as canonical decimal integers.
+    WideRowCount {
+        min: Option<RowCountBound>,
+        max: Option<RowCountBound>,
+    },
+}
+
+impl Check {
+    /// Shared mathematical count comparison for legacy probes and specifications.
+    pub fn row_count_accepts(&self, count: usize) -> Option<bool> {
+        use core::cmp::Ordering;
+        Some(match self {
+            Self::RowCount { min, max } => {
+                let count = count as i128;
+                !min.is_some_and(|min| count < i128::from(min))
+                    && !max.is_some_and(|max| count > i128::from(max))
+            }
+            Self::WideRowCount { min, max } => {
+                min.as_ref()
+                    .is_none_or(|min| min.compare_count(count) != Ordering::Greater)
+                    && max
+                        .as_ref()
+                        .is_none_or(|max| max.compare_count(count) != Ordering::Less)
+            }
+            _ => return None,
+        })
+    }
+
+    pub fn row_count_work(&self) -> usize {
+        match self {
+            Self::WideRowCount { min, max } => min
+                .iter()
+                .chain(max)
+                .map(|bound| bound.decimal().len())
+                .sum::<usize>()
+                .max(1),
+            _ => 1,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -368,6 +441,7 @@ fn validate_columns(columns: &[usize], width: usize) -> Result<(), PlanError> {
 }
 
 /// Enforce grouped source scope and already-completed output dependencies.
+#[allow(clippy::too_many_arguments)]
 fn validate_assignment(
     assignment: &Assignment,
     available: &mut [bool],
@@ -426,12 +500,13 @@ fn validate_assignment_at(
                     return Err(PlanError::InvalidColumns);
                 }
                 if let Some(when) = &branch.when {
-                    when.validate(
-                        source.columns().len(),
-                        available,
-                        matches!(mode, RowMode::Groups(_)),
-                    )
-                    .map_err(PlanError::Filter)?;
+                    if let RowMode::Groups(keys) = mode {
+                        if when.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !keys.contains(&column))) {
+                            return Err(PlanError::NonGroupSource);
+                        }
+                    }
+                    when.validate(source.columns().len(), available, false)
+                        .map_err(PlanError::Filter)?;
                 }
                 validate_assignment_at(
                     &branch.assignment,
@@ -461,20 +536,21 @@ fn validate_assignment_at(
                     let item = intermediates
                         .get(index)
                         .ok_or(PlanError::InvalidIntermediate)?;
-                    if !matches!(mode, RowMode::Keys) {
+                    if !matches!(mode, RowMode::Keys) && !item.source.is_self() {
                         return Err(PlanError::InvalidIntermediate);
                     }
-                    intermediates::validate_read(
-                        item, column, source, secondary, available, output,
+                    intermediates::validate_context_read(
+                        item, column, source, secondary, available, output, mode,
                     )?;
                 }
             }
+            if let RowMode::Groups(keys) = mode {
+                if expression.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !keys.contains(&column))) {
+                    return Err(PlanError::NonGroupSource);
+                }
+            }
             expression
-                .validate(
-                    source.columns().len(),
-                    available,
-                    matches!(mode, RowMode::Groups(_)),
-                )
+                .validate(source.columns().len(), available, false)
                 .map_err(|error| match error {
                     crate::bound_expression::ScopeError::GroupedSource => PlanError::NonGroupSource,
                     crate::bound_expression::ScopeError::InvalidSource => PlanError::InvalidSource,
@@ -531,7 +607,10 @@ fn validate_assignment_at(
                 available[assignment.column] = false;
             }
         }
-        Expression::StrCase {
+        Expression::MappingCut {
+            source: operand, ..
+        }
+        | Expression::StrCase {
             source: operand, ..
         }
         | Expression::StrPad {
@@ -630,7 +709,76 @@ fn validate_assignment_at(
         }
         Expression::Function(function) => function.validate(source, available, mode)?,
         Expression::ProjectFunction(function) => function.validate(source, available, mode)?,
-        Expression::FirstAvailable(selection) => selection.validate(source, available, mode)?,
+        Expression::FirstAvailable(selection) => {
+            selection.validate(source, available, mode)?;
+            for operand in selection.sources() {
+                if let SelectionRead::Expression(operand) = &operand.read {
+                    if operand.column != assignment.column {
+                        return Err(PlanError::InvalidColumns);
+                    }
+                    validate_assignment_at(
+                        operand,
+                        available,
+                        source,
+                        secondary,
+                        intermediates,
+                        output,
+                        mode,
+                        depth + 1,
+                        remaining,
+                    )?;
+                    available[assignment.column] = false;
+                }
+            }
+        }
+        Expression::SourceBinding {
+            source: operand,
+            path,
+            variable,
+            absent,
+            variable_absent,
+        } => {
+            if operand.column != assignment.column
+                || path.is_empty()
+                || variable.is_empty()
+                || (*variable_absent && absent.is_none())
+            {
+                return Err(PlanError::InvalidColumns);
+            }
+            validate_assignment_at(
+                operand,
+                available,
+                source,
+                secondary,
+                intermediates,
+                output,
+                mode,
+                depth + 1,
+                remaining,
+            )?;
+            available[assignment.column] = false;
+        }
+        Expression::SourceLookup {
+            lookup: bound,
+            filter,
+            selection,
+        } => {
+            if !matches!(mode, RowMode::Keys) {
+                return Err(PlanError::InvalidLookup);
+            }
+            lookup::validate_source(bound, secondary, available, output)?;
+            let width = secondary[bound.source].schema.columns().len();
+            if let Some(filter) = filter {
+                filter
+                    .validate(width, &[], false)
+                    .map_err(PlanError::Filter)?;
+            }
+            if selection.as_ref().is_some_and(|s| {
+                s.order_by.is_empty() || s.order_by.iter().any(|term| term.column >= width)
+            }) {
+                return Err(PlanError::InvalidSourceOrder);
+            }
+        }
         Expression::Intermediate { index, column } => {
             let item = intermediates
                 .get(*index)
@@ -647,7 +795,7 @@ fn validate_assignment_at(
             lookup::validate(lookup, secondary, available, output)?;
         }
         Expression::Window(window) => {
-            if depth != 0 || !matches!(mode, RowMode::Keys) {
+            if depth != 0 {
                 return Err(PlanError::InvalidWindow);
             }
             window.validate(available, output)?;
@@ -738,6 +886,7 @@ fn key_expression(expression: &Expression) -> bool {
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::MappingCut { source, .. }
         | Expression::Round { source, .. } => key_expression(&source.expression),
         Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. }
@@ -755,33 +904,70 @@ fn key_expression(expression: &Expression) -> bool {
         _ => false,
     }
 }
-fn key_grain_source_read(expression: &Expression) -> bool {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RecordReadScope {
+    Driver,
+    PrimaryMatching,
+    All,
+}
+fn current_record_read(
+    expression: &Expression,
+    intermediates: &[Intermediate],
+    scope: RecordReadScope,
+) -> bool {
+    let include_raw = scope != RecordReadScope::PrimaryMatching;
     match expression {
-        Expression::Source(_) => true,
+        Expression::Source(_) | Expression::RowLookup(_) => include_raw,
+        Expression::Intermediate { index, .. } => {
+            scope != RecordReadScope::Driver
+                && intermediates.get(*index).is_some_and(|item| {
+                    item.keys
+                        .iter()
+                        .filter_map(|key| key.value.read())
+                        .any(|read| matches!(read, MatchRead::Record { .. }))
+                })
+        }
+        Expression::SourceBinding { source, .. } => {
+            current_record_read(&source.expression, intermediates, scope)
+        }
+        Expression::FirstAvailable(selection) => {
+            selection.sources().iter().any(|source| match &source.read {
+                SelectionRead::Source(_) => include_raw,
+                SelectionRead::Expression(source) => {
+                    current_record_read(&source.expression, intermediates, scope)
+                }
+                SelectionRead::Column(_) | SelectionRead::Collect { .. } => false,
+            })
+        }
         Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
             .iter()
-            .any(|source| key_grain_source_read(&source.expression)),
+            .any(|source| current_record_read(&source.expression, intermediates, scope)),
         Expression::StrContains { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
-        | Expression::Round { source, .. } => key_grain_source_read(&source.expression),
+        | Expression::MappingCut { source, .. }
+        | Expression::Round { source, .. } => {
+            current_record_read(&source.expression, intermediates, scope)
+        }
         Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. }
         | Expression::Imputation { operands, .. } => operands
             .iter()
-            .any(|source| key_grain_source_read(&source.expression)),
-        Expression::Compute(expression) => expression.reads_source(),
-        Expression::Flag(flag) => flag.reads_source(),
-        Expression::Function(function) => function.reads_source(),
-        Expression::ProjectFunction(function) => function.reads_source(),
+            .any(|source| current_record_read(&source.expression, intermediates, scope)),
+        Expression::Compute(expression) => include_raw && expression.reads_source(),
+        Expression::Flag(flag) => include_raw && flag.reads_source(),
+        Expression::Function(function) => include_raw && function.reads_source(),
+        Expression::ProjectFunction(function) => include_raw && function.reads_source(),
         Expression::Case(branches) => branches.iter().any(|branch| {
-            branch.when.as_ref().is_some_and(|predicate| {
-                predicate
-                    .bindings()
-                    .iter()
-                    .any(|binding| matches!(binding.read, Read::Source(_)))
-            }) || key_grain_source_read(&branch.assignment.expression)
+            include_raw
+                && branch.when.as_ref().is_some_and(|predicate| {
+                    predicate
+                        .bindings()
+                        .iter()
+                        .any(|binding| matches!(binding.read, Read::Source(_)))
+                })
+                || current_record_read(&branch.assignment.expression, intermediates, scope)
         }),
         _ => false,
     }
@@ -860,19 +1046,32 @@ impl DatasetPlan {
         if templates.is_empty() {
             return Err(PlanError::NoTemplates);
         }
+        self_relations::validate(&intermediates, &templates)?;
         let width = output.columns().len();
         validate_columns(&keys, width)?;
         let mut row_columns = None;
         for template in &templates {
-            let keyed = matches!(template.mode, RowMode::Keys);
+            let (template_source, mode) = template.mode.context(&source, &secondary)?;
+            let keyed = matches!(mode, RowMode::Keys);
             if keyed && templates.len() != 1 {
                 return Err(PlanError::InvalidKeyMode);
             }
-            if let RowMode::Groups(keys) = &template.mode {
-                validate_columns(keys, source.columns().len())?;
+            if let RowMode::Groups(keys) = mode {
+                validate_columns(keys, template_source.columns().len())?;
             }
             let mut available = vec![false; width];
             for assignment in &template.assignments {
+                // A selector compiled against the primary record cannot borrow a
+                // different driver's record coordinates. Output match values are shared.
+                if template.mode.source_index() != 0
+                    && current_record_read(
+                        &assignment.expression,
+                        &intermediates,
+                        RecordReadScope::PrimaryMatching,
+                    )
+                {
+                    return Err(PlanError::InvalidIntermediate);
+                }
                 if keyed
                     && (!keys.contains(&assignment.column)
                         || !key_expression(&assignment.expression))
@@ -882,22 +1081,30 @@ impl DatasetPlan {
                 validate_assignment(
                     assignment,
                     &mut available,
-                    &source,
+                    template_source,
                     &secondary,
                     &intermediates,
                     &output,
-                    &template.mode,
+                    mode,
                 )?;
             }
             if keyed && keys.iter().any(|&column| !available[column]) {
                 return Err(PlanError::InvalidKeyMode);
             }
             if let Some(filter) = &template.filter {
+                let deferred = window_stages(&template.assignments, width, &intermediates);
+                if !matches!(mode, RowMode::Groups(_))
+                    && filter.bindings().iter().any(|binding| {
+                        matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
+                    })
+                {
+                    return Err(PlanError::Filter(BindingError::UnavailableColumn));
+                }
                 filter
                     .validate(
-                        source.columns().len(),
+                        template_source.columns().len(),
                         if keyed { &[] } else { &available },
-                        matches!(template.mode, RowMode::Groups(_)),
+                        matches!(mode, RowMode::Groups(_)),
                     )
                     .map_err(PlanError::Filter)?;
             }
@@ -909,7 +1116,17 @@ impl DatasetPlan {
             }
             row_columns = Some(available.clone());
             for assignment in &columns {
-                if keyed && key_grain_source_read(&assignment.expression) {
+                if (keyed || template.mode.source_index() != 0)
+                    && current_record_read(
+                        &assignment.expression,
+                        &intermediates,
+                        if keyed {
+                            RecordReadScope::Driver
+                        } else {
+                            RecordReadScope::All
+                        },
+                    )
+                {
                     return Err(PlanError::InvalidKeyMode);
                 }
                 validate_assignment(
@@ -919,7 +1136,7 @@ impl DatasetPlan {
                     &secondary,
                     &intermediates,
                     &output,
-                    &template.mode,
+                    mode,
                 )?;
             }
             if available.contains(&false) {
@@ -969,6 +1186,13 @@ impl DatasetPlan {
                     }
                 }
                 Check::RowCount { min, max } => {
+                    if (min.is_none() && max.is_none())
+                        || matches!((min, max), (Some(a), Some(b)) if a > b)
+                    {
+                        return Err(PlanError::InvalidBounds);
+                    }
+                }
+                Check::WideRowCount { min, max } => {
                     if (min.is_none() && max.is_none())
                         || matches!((min, max), (Some(a), Some(b)) if a > b)
                     {

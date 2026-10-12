@@ -38,7 +38,7 @@ pub(super) fn prepare(
                 .iter()
                 .enumerate()
                 .map(|(index, &value)| {
-                    cases::prepare_value(
+                    derivations::prepare_value(
                         d,
                         value,
                         &format!("{path}.sources[{index}]"),
@@ -238,6 +238,7 @@ pub(super) fn bind(
     operation: &Declaration,
     column: usize,
     catalog: &Catalog,
+    driver: &TableSchema,
     secondary: &[SecondarySource],
     intermediates: &[Option<crate::dataset::Intermediate>],
     edges: &mut Vec<usize>,
@@ -277,12 +278,10 @@ pub(super) fn bind(
             for (name, kind) in sources.iter().zip(&mut types) {
                 if let Some((index, field)) = spec.intermediates.reference(name) {
                     if let Some(item) = &intermediates[index] {
-                        *kind = secondary[item.source]
-                            .schema
-                            .columns()
-                            .iter()
-                            .find(|column| column.name == field)
-                            .map(|column| column.kind);
+                        *kind = item.source_column(secondary, field).and_then(|column| {
+                            item.source_schema(secondary)
+                                .map(|schema| schema.columns()[column].kind)
+                        });
                     }
                 }
             }
@@ -314,23 +313,20 @@ pub(super) fn bind(
                         core::slice::from_ref(source),
                         column,
                         catalog,
+                        driver,
                         secondary,
                         intermediates,
                         edges,
                         findings,
                         reported,
                     )?
-                    .map(|expression| {
+                    .and_then(|expression| {
                         // Strip the synthetic branch container; this leaf has
                         // no predicate and must not form an otherwise-only case.
                         let Expression::Case(mut branches) = expression else {
                             unreachable!("case binder result")
                         };
-                        branches
-                            .pop()
-                            .expect("one expression branch")
-                            .assignment
-                            .expression
+                        branches.pop().map(|branch| branch.assignment.expression)
                     })
                 };
                 if let Some(expression) = expression {
@@ -389,6 +385,12 @@ pub(super) fn bind_row(
     available: Option<&[usize]>,
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
+    reported: bool,
+    output: &TableSchema,
+    project: Option<&crate::project_calls::ProjectCalls>,
+    named: &intermediates::Declarations,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
     let start = findings.len();
     match operation {
@@ -400,8 +402,20 @@ pub(super) fn bind_row(
             let mut operands = Vec::new();
             for (index, source) in sources.iter().enumerate() {
                 let path = format!("{path}.sources[{index}]");
-                if let Some(expression) = rounding::bind_row_operand(
-                    source, &path, catalog, driver, row, phase, available, edges, findings,
+                if let Some(expression) = self_relations::bind_operand(
+                    source,
+                    &path,
+                    catalog,
+                    driver,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                    output,
+                    named,
+                    secondary,
+                    intermediates,
                 )? {
                     operands.push(Assignment {
                         column,
@@ -414,7 +428,21 @@ pub(super) fn bind_row(
                 sources,
                 path,
                 *largest,
-                bound_types(sources, catalog)?,
+                sources
+                    .iter()
+                    .map(|name| {
+                        if let Some((index, field)) = named.reference(name) {
+                            Ok(intermediates[index].as_ref().and_then(|item| {
+                                item.source_column(secondary, field).and_then(|column| {
+                                    item.source_schema(secondary)
+                                        .map(|schema| schema.columns()[column].kind)
+                                })
+                            }))
+                        } else {
+                            bound_types(core::slice::from_ref(name), catalog).map(|types| types[0])
+                        }
+                    })
+                    .collect::<Result<Vec<_>, BindError>>()?,
                 findings,
                 operands,
                 start,
@@ -427,7 +455,7 @@ pub(super) fn bind_row(
         } => {
             let mut operands = Vec::new();
             for source in sources {
-                let expression = bind_row_value(
+                let expression = derivations::bind_row(
                     &source.operation,
                     &source.path,
                     column,
@@ -438,6 +466,12 @@ pub(super) fn bind_row(
                     available,
                     edges,
                     findings,
+                    reported,
+                    output,
+                    project,
+                    named,
+                    secondary,
+                    intermediates,
                 )?;
                 if let Some(expression) = expression {
                     operands.push(Assignment {
@@ -453,62 +487,6 @@ pub(super) fn bind_row(
                 path: path.clone(),
             }))
         }
-    }
-}
-#[allow(clippy::too_many_arguments)]
-fn bind_row_value(
-    operation: &Operation,
-    path: &str,
-    column: usize,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-) -> Result<Option<Expression>, BindError> {
-    match operation {
-        Operation::Literal(value) => Ok(Some(Expression::Literal(value.clone()))),
-        Operation::Source(source) => rounding::bind_row_operand(
-            &source.variable,
-            path,
-            catalog,
-            driver,
-            row,
-            phase,
-            available,
-            edges,
-            findings,
-        ),
-        Operation::Scalar(operation) => bind_row(
-            operation, column, catalog, driver, row, phase, available, edges, findings,
-        ),
-        Operation::StrContains(operation) => bind_row_contains(
-            operation, column, catalog, driver, row, phase, available, edges, findings,
-        ),
-        Operation::StrExtract(operation) => str_extract::bind_row(
-            operation, column, catalog, driver, row, phase, available, edges, findings,
-        ),
-        Operation::StrTemplate(operation) => str_template::bind_row(
-            operation, column, catalog, driver, row, phase, available, edges, findings,
-        ),
-        Operation::StrCase(operation) => str_case::bind_row(
-            operation, column, catalog, driver, row, phase, available, edges, findings,
-        ),
-        Operation::StrPad(operation) => str_pad::bind_row(
-            operation, column, catalog, driver, row, phase, available, edges, findings,
-        ),
-        Operation::Round(operation) => rounding::bind_row(
-            operation, column, catalog, driver, row, phase, available, edges, findings,
-        ),
-        Operation::Temporal(operation) => temporal::bind_row(
-            operation, column, catalog, driver, row, phase, available, edges, findings,
-        ),
-        Operation::Imputation(operation) => imputation::bind_row(
-            operation, column, catalog, driver, row, phase, available, edges, findings,
-        ),
-        _ => Err(BindError::Internal),
     }
 }
 #[allow(clippy::too_many_arguments)]
@@ -532,33 +510,6 @@ pub(super) fn bind_row_contains(
         }
         _ => unreachable!(),
     }))
-}
-
-pub(super) fn validate_row_declaration(operation: &Declaration) -> Result<(), PrepareError> {
-    if let Declaration::Concat { sources, .. } = operation {
-        for source in sources {
-            match source.operation.as_ref() {
-                Operation::Scalar(child) => validate_row_declaration(child)?,
-                Operation::Literal(_)
-                | Operation::Source(_)
-                | Operation::StrContains(_)
-                | Operation::StrExtract(_)
-                | Operation::StrTemplate(_)
-                | Operation::StrCase(_)
-                | Operation::StrPad(_)
-                | Operation::Round(_)
-                | Operation::Temporal(_)
-                | Operation::Imputation(_) => (),
-                _ => {
-                    return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                        operation: "row_nested_expression".into(),
-                        path: source.path.clone(),
-                    }]))
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 /// These new scalar operands may read the driver and an admitted named
@@ -621,7 +572,7 @@ pub(super) fn unsupported_relations(
     }
 }
 
-pub(super) fn default_references(
+pub(super) fn operand_references(
     d: &Document,
     value: usize,
     names: &mut Vec<String>,
@@ -632,6 +583,15 @@ pub(super) fn default_references(
     }
     if let Some(payload) = d.field(value, "source") {
         names.push(text(d, field(d, payload, "variable")?)?.into());
+    }
+    for op in ["mapping", "cut"] {
+        if let Some(payload) = d.field(value, op) {
+            let source = field(d, payload, "source")?;
+            names.push(match &d.nodes()[source] {
+                N::Text(name) => name.clone(),
+                _ => text(d, field(d, source, "variable")?)?.into(),
+            });
+        }
     }
     for op in ["greatest", "least"] {
         if let Some(payload) = d.field(value, op) {
@@ -655,11 +615,6 @@ pub(super) fn default_references(
     ] {
         if let Some(payload) = d.field(value, op) {
             names.push(text(d, field(d, payload, "source")?)?.into());
-        }
-    }
-    if let Some(payload) = d.field(value, "str_concat") {
-        for &child in sequence(d, field(d, payload, "sources")?)? {
-            default_references(d, child, names, depth + 1)?;
         }
     }
     Ok(())

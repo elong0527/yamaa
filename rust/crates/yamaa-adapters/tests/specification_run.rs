@@ -1581,6 +1581,13 @@ fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
             "row_count min exceeds max",
         ),
         (
+            "row_count: {min: 999999999999999999999, max: 999999999999999999998}",
+            "invalid_declaration",
+            "REQ-0399",
+            "row_count",
+            "row_count min exceeds max",
+        ),
+        (
             "row_count: {id: \"a'b\", min: 0}",
             "duplicate_identifier",
             "REQ-0398",
@@ -3400,25 +3407,87 @@ fn original_column_not_missing_matches_complete_reports_and_exact_csv() {
     );
 }
 #[test]
-fn row_filter_unsupported_admission_matches_complete_envelopes_before_ports() {
-    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
-    let truth = include_str!("fixtures/row_filter_admission.tsv");
-    let mut count = 0;
-    for line in truth.lines().skip(1) {
-        let fields = line.split('\t').collect::<Vec<_>>();
-        assert_eq!(fields.len(), 3);
-        let bytes = (0..fields[1].len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&fields[1][i..i + 2], 16).unwrap())
-            .collect::<Vec<_>>();
-        let error =
-            yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &bytes))
-                .unwrap_err();
-        let actual = yamaa_adapters::specification_diagnostics::failure(&error, None);
-        assert_eq!(actual, fields[2], "{}", fields[0]);
-        count += 1;
+fn row_filter_carrier_failures_match_complete_normative_reports() {
+    replay_source_selection_truth(
+        include_str!("fixtures/row_filter_admission.tsv"),
+        "predicate-carrier",
+        2,
+    );
+}
+
+#[test]
+fn exact_wide_count_bounds_preserve_empty_counts_and_completed_check_prefix() {
+    use serde_json::json;
+    use yamaa_adapters::{
+        specification_report::{self, ArtifactPort, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_engine::specification::SourceDeclaration;
+    struct Host {
+        bytes: Arc<[u8]>,
+        reads: usize,
     }
-    assert_eq!(count, 2);
+    impl SourcePort for Host {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(&mut self, _: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+            self.reads += 1;
+            Ok(Arc::clone(&self.bytes))
+        }
+    }
+    impl ArtifactPort for Host {
+        type Error = ();
+        fn publish(&mut self, _: &str, _: &[u8]) -> Result<(), ()> {
+            panic!("failed checks published")
+        }
+    }
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let prefix = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+    for input in [b"ID\n".as_slice(), b"ID\n1\n2\n".as_slice()] {
+        for bound in [
+            "min: 999999999999999999999999999999",
+            "max: -999999999999999999999999999999",
+        ] {
+            let source = format!("{prefix}verifications:\n  - row_count: {{id: first, min: -999999999999999999999999999999, max: 999999999999999999999999999999}}\n  - row_count: {{{bound}}}\n");
+            let run = PreparedRun::prepare(prepare(&schema, source.as_bytes())).unwrap();
+            let mut host = Host {
+                bytes: input.into(),
+                reads: 0,
+            };
+            let attempt = run.execute_with_port(&mut host);
+            let result = specification_report::build_result(
+                &run,
+                &attempt,
+                Identity {
+                    runtime: "python",
+                    runtime_version: "fixture-runtime",
+                    engine_version: "fixture-engine",
+                    example: "wide-count",
+                    specification: "spec.yaml",
+                    base_directory: ".",
+                },
+            )
+            .unwrap();
+            let report = result.observations();
+            assert_eq!(host.reads, 1);
+            assert_eq!(report["outcome"], "failure");
+            assert_eq!(report["artifacts"], json!([]));
+            assert_eq!(report["verifications"].as_array().unwrap().len(), 2);
+            assert_eq!(report["verifications"][0]["verification_id"], "first");
+            assert_eq!(report["verifications"][0]["failure"], json!(null));
+            let count = if input.len() == 3 { 0 } else { 2 };
+            assert_eq!(
+                report["diagnostics"],
+                json!([{"phase":"verification", "condition":"row_count_failed", "requirement":"REQ-0385", "spec_paths":["verifications[1].row_count"], "context":{"count":count,"failure_count":1,"keys":[{}]}}])
+            );
+            assert_eq!(
+                report["verifications"][1]["failure"]["log_context"]["count"],
+                count
+            );
+        }
+    }
 }
 
 #[test]
@@ -3627,4 +3696,278 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
         count += 1;
     }
     assert_eq!(count, cases);
+}
+
+#[test]
+fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
+    use std::collections::BTreeMap;
+    use yamaa_adapters::{
+        specification_report::{self, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_engine::specification::SourceDeclaration;
+    fn bytes(hex: &str) -> Vec<u8> {
+        (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+            .collect()
+    }
+    struct Port {
+        inputs: BTreeMap<String, Arc<[u8]>>,
+        calls: Vec<String>,
+        expected: Vec<u8>,
+        saves: usize,
+    }
+    impl SourcePort for Port {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.calls.len()
+        }
+        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+            assert_eq!(source.path, format!("{}.csv", source.name.to_lowercase()));
+            self.calls.push(source.name.clone());
+            let input = &self.inputs[&source.name];
+            assert!(input.len() <= maximum);
+            Ok(Arc::clone(input))
+        }
+    }
+    impl specification_report::ArtifactPort for Port {
+        type Error = ();
+        fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), ()> {
+            assert!(!self.expected.is_empty(), "failed source binding published");
+            assert_eq!(path, "result.csv");
+            assert_eq!(content, self.expected);
+            self.saves += 1;
+            Ok(())
+        }
+    }
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let mut count = 0;
+    for line in include_str!("fixtures/original_source_bindings.tsv")
+        .lines()
+        .skip(1)
+    {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        assert_eq!(fields.len(), 5);
+        let run = PreparedRun::prepare(prepare(&schema, &bytes(fields[1]))).unwrap();
+        let inputs: BTreeMap<String, String> = serde_json::from_str(fields[2]).unwrap();
+        let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
+        // A second attempt must neither inherit choices nor accumulate handler counts.
+        for _ in 0..2 {
+            let mut port = Port {
+                inputs: inputs
+                    .iter()
+                    .map(|(n, h)| (n.clone(), bytes(h).into()))
+                    .collect(),
+                calls: vec![],
+                expected: bytes(fields[4]),
+                saves: 0,
+            };
+            let attempt = run.execute_with_port(&mut port);
+            let example = format!("source-binding-{}", fields[0]);
+            let result = specification_report::build_result(
+                &run,
+                &attempt,
+                Identity {
+                    runtime: "python",
+                    runtime_version: "fixture-runtime",
+                    engine_version: "fixture-engine",
+                    example: &example,
+                    specification: "spec.yaml",
+                    base_directory: ".",
+                },
+            )
+            .unwrap();
+            let mut unsaved = expected.clone();
+            unsaved["artifacts"] = serde_json::json!([]);
+            assert_eq!(result.observations(), unsaved, "{}", fields[0]);
+            if port.expected.is_empty() {
+                assert!(result.output().is_none());
+                assert!(matches!(
+                    result.save(&mut port),
+                    Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                ));
+            } else {
+                for _ in 0..2 {
+                    assert_eq!(*result.save(&mut port).unwrap(), expected, "{}", fields[0]);
+                }
+                assert_eq!(port.saves, 2);
+            }
+            assert_eq!(
+                port.calls,
+                if inputs.contains_key("DONOR") {
+                    vec!["SRC", "DONOR"]
+                } else {
+                    vec!["SRC"]
+                }
+            );
+        }
+        count += 1;
+    }
+    assert_eq!(count, 16);
+}
+
+#[test]
+fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
+    use std::collections::BTreeMap;
+    use yamaa_adapters::{
+        specification_report::{self, Identity},
+        specification_run::{PreparedRun, SourcePort},
+    };
+    use yamaa_engine::specification::SourceDeclaration;
+    fn bytes(hex: &str) -> Vec<u8> {
+        (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+            .collect()
+    }
+    struct Port {
+        inputs: BTreeMap<String, Arc<[u8]>>,
+        calls: Vec<String>,
+        expected: Vec<u8>,
+        saves: usize,
+    }
+    impl SourcePort for Port {
+        type Error = ();
+        fn capture_reads(&self) -> usize {
+            self.calls.len()
+        }
+        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+            assert_eq!(source.path, format!("{}.csv", source.name.to_lowercase()));
+            self.calls.push(source.name.clone());
+            let input = &self.inputs[&source.name];
+            assert!(input.len() <= maximum);
+            Ok(Arc::clone(input))
+        }
+    }
+    impl specification_report::ArtifactPort for Port {
+        type Error = ();
+        fn publish(&mut self, path: &str, content: &[u8]) -> Result<(), ()> {
+            assert!(!self.expected.is_empty(), "failed mapping/cut published");
+            assert_eq!(path, "result.csv");
+            assert_eq!(content, self.expected);
+            self.saves += 1;
+            Ok(())
+        }
+    }
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let mut count = 0;
+    for line in include_str!("fixtures/original_mapping_cut.tsv")
+        .lines()
+        .skip(1)
+    {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        assert_eq!(fields.len(), 6);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&bytes(fields[5])).unwrap(),
+            serde_json::from_str::<serde_json::Value>(fields[3]).unwrap()
+        );
+        let run = PreparedRun::prepare(prepare(&schema, &bytes(fields[1]))).unwrap();
+        let inputs: BTreeMap<String, String> = serde_json::from_str(fields[2]).unwrap();
+        let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
+        // A second attempt must neither inherit choices nor accumulate handler counts.
+        for _ in 0..2 {
+            let mut port = Port {
+                inputs: inputs
+                    .iter()
+                    .map(|(n, h)| (n.clone(), bytes(h).into()))
+                    .collect(),
+                calls: vec![],
+                expected: bytes(fields[4]),
+                saves: 0,
+            };
+            let attempt = run.execute_with_port(&mut port);
+            let example = format!("mapping-cut-{}", fields[0]);
+            let result = specification_report::build_result(
+                &run,
+                &attempt,
+                Identity {
+                    runtime: "python",
+                    runtime_version: "fixture-runtime",
+                    engine_version: "fixture-engine",
+                    example: &example,
+                    specification: "spec.yaml",
+                    base_directory: ".",
+                },
+            )
+            .unwrap();
+            let mut unsaved = expected.clone();
+            unsaved["artifacts"] = serde_json::json!([]);
+            assert_eq!(result.observations(), unsaved, "{}", fields[0]);
+            if port.expected.is_empty() {
+                assert!(result.output().is_none());
+                assert!(matches!(
+                    result.save(&mut port),
+                    Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+                ));
+            } else {
+                for _ in 0..2 {
+                    assert_eq!(*result.save(&mut port).unwrap(), expected, "{}", fields[0]);
+                }
+                assert_eq!(port.saves, 2);
+            }
+            assert_eq!(
+                port.calls,
+                if inputs.contains_key("DONOR") {
+                    vec!["SRC", "DONOR"]
+                } else {
+                    vec!["SRC"]
+                }
+            );
+        }
+        count += 1;
+    }
+    assert_eq!(count, 21);
+}
+
+#[test]
+fn source_condition_stays_unknown_under_the_normative_grammar() {
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let raw=b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: src.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation:\n      source: {variable: SRC.ID, condition: TRUE}\n";
+    let error = schema
+        .prepare_standalone(Source {
+            identity: "spec.yaml".into(),
+            bytes: raw.to_vec(),
+        })
+        .unwrap_err();
+    let finding: serde_json::Value = serde_json::from_str(
+        &yamaa_adapters::specification_diagnostics::capture_failure(&error),
+    )
+    .unwrap();
+    assert_eq!(finding["outcome"]["status"], "invalid");
+    assert!(finding["outcome"]["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|issue| issue["condition"] == "unknown_field"
+            && issue["spec_paths"]
+                == serde_json::json!(["columns.ID.derivation.source.condition"])));
+}
+
+#[test]
+fn original_mapping_cut_admission_has_complete_findings_before_study_ports() {
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    for line in include_str!("fixtures/mapping_cut_admission.tsv")
+        .lines()
+        .skip(1)
+    {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        let bytes = (0..fields[1].len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&fields[1][i..i + 2], 16).unwrap())
+            .collect::<Vec<_>>();
+        let error =
+            yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &bytes))
+                .unwrap_err();
+        let expected: serde_json::Value = serde_json::from_str(fields[2]).unwrap();
+        assert_eq!(
+            yamaa_adapters::specification_diagnostics::findings(&error, None).unwrap(),
+            expected["outcome"]["diagnostics"]
+                .as_array()
+                .unwrap()
+                .clone(),
+            "{}",
+            fields[0]
+        );
+    }
 }

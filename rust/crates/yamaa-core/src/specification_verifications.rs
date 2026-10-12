@@ -2,7 +2,7 @@
 //! executes only after derivation and output keys; unsupported vocabulary is
 //! scanned across every declaration before any source request.
 use super::*;
-use crate::dataset::{Check, Verification};
+use crate::dataset::{Check, CountBoundError, RowCountBound, Verification};
 use crate::{
     bound_expression::BoundPredicate,
     diagnostic::{ConditionCode, ContextValue, Diagnostic},
@@ -63,18 +63,13 @@ fn predicate(
             }));
         }
         Err(predicate_compiler::Error::Parse(crate::predicate_parser::ParseError::Grammar {
+            position,
+            failure,
             ..
         })) => {
-            return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                operation: "assert_predicate_diagnostic".into(),
-                path,
-            }]));
-        }
-        Err(predicate_compiler::Error::UnsupportedLiteral { .. }) => {
-            return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                operation: "predicate_literal".into(),
-                path,
-            }]));
+            return Ok(Err(failure
+                .original_diagnostic(&path, expression, position.character)
+                .map_err(|_| PrepareError::Limit("predicate_diagnostic_bytes"))?));
         }
         Err(predicate_compiler::Error::Parse(
             crate::predicate_parser::ParseError::UnsupportedRegex { .. },
@@ -226,21 +221,6 @@ impl Verifications {
                     reject(&mut extra, "verification_severity", path.clone());
                 }
             }
-            // The current dataset engine's count bounds are signed 64-bit. Do
-            // not lose arbitrary-width authored bounds through a narrowing cast.
-            for name in if op == "row_count" {
-                &["min", "max"][..]
-            } else {
-                &[]
-            } {
-                if let Some(id) = d.field(payload, name) {
-                    if let N::Integer(value) = &d.nodes()[id] {
-                        if value.parse::<i64>().is_err() {
-                            reject(&mut extra, "verification_bound", format!("{path}.{name}"));
-                        }
-                    }
-                }
-            }
         }
         if !extra.is_empty() {
             return Err(PrepareError::Unsupported(extra));
@@ -253,6 +233,13 @@ impl Verifications {
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
             let path = format!("{prefix}[{index}].{op}");
+            if op == "row_count" {
+                for name in ["min", "max"] {
+                    if d.field(payload, name).is_some_and(|id| matches!(&d.nodes()[id], N::Integer(value) if value.len() > crate::dataset::MAX_COUNT_BOUND_BYTES)) {
+                        return Err(PrepareError::Limit("verification_bound_bytes"));
+                    }
+                }
+            }
             if op == "assert" {
                 for name in ["when", "require"] {
                     if name == "require" || d.field(payload, name).is_some() {
@@ -401,7 +388,12 @@ impl Verifications {
                             let N::Integer(value) = &d.nodes()[id] else {
                                 return Err(PrepareError::Internal);
                             };
-                            value.parse::<i64>().map_err(|_| PrepareError::Internal)
+                            RowCountBound::new(value).map_err(|error| match error {
+                                CountBoundError::Invalid => PrepareError::Internal,
+                                CountBoundError::Limit => {
+                                    PrepareError::Limit("verification_bound_bytes")
+                                }
+                            })
                         })
                         .transpose()
                 };
@@ -409,7 +401,7 @@ impl Verifications {
                 let max = bound("max")?;
                 let reason = if min.is_none() && max.is_none() {
                     Some("row_count requires one bound")
-                } else if matches!((min,max),(Some(a),Some(b)) if a>b) {
+                } else if matches!((&min,&max),(Some(a),Some(b)) if a>b) {
                     Some("row_count min exceeds max")
                 } else {
                     None
@@ -419,7 +411,7 @@ impl Verifications {
                         invalid(path, ConditionCode::VerificationBounds, reason.into());
                     break;
                 }
-                Check::RowCount { min, max }
+                Check::WideRowCount { min, max }
             };
             if d.field(payload, "severity")
                 .is_some_and(|id| matches!(&d.nodes()[id], N::Text(value) if value == "warning"))

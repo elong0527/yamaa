@@ -193,9 +193,6 @@ impl Declaration {
                     | Err(predicate_compiler::Error::Parse(
                         crate::predicate_parser::ParseError::Grammar { .. },
                     )) => {}
-                    Err(predicate_compiler::Error::UnsupportedLiteral { .. }) => {
-                        reject(extra, "predicate_literal", filter_path)
-                    }
                     Err(predicate_compiler::Error::Parse(
                         crate::predicate_parser::ParseError::UnsupportedRegex { .. },
                     )) => reject(extra, "predicate_regex", filter_path),
@@ -244,6 +241,15 @@ impl Declaration {
         edges: &mut Vec<usize>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<Window>, BindError> {
+        self.bind_available(catalog, None, edges, findings)
+    }
+    pub(super) fn bind_available(
+        &self,
+        catalog: &Catalog,
+        available: Option<&[usize]>,
+        edges: &mut Vec<usize>,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<Option<Window>, BindError> {
         let start = findings.len();
         if matches!(self.kind, Kind::RowValue { offset: 0, .. }) {
             findings.push(BindFinding::Window(WindowFinding::ZeroOffset {
@@ -285,7 +291,7 @@ impl Declaration {
         };
         let mut resolve = |name: &str, path: String| -> Result<usize, BindError> {
             if let Some(finding) = catalog
-                .validate_output(name, None, None, &[0])
+                .validate_output(name, None, available, &[0])
                 .map_err(BindError::Catalog)?
             {
                 findings.push(BindFinding::OutputReference {

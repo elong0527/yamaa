@@ -56,6 +56,33 @@ fn source() -> TableSchema {
 }
 
 #[test]
+fn grouped_filters_bind_completed_row_windows() {
+    let mut template = row(
+        "groups",
+        vec![(
+            "SEQ",
+            Tree::map(vec![(
+                "row_number",
+                Tree::map(vec![(
+                    "window",
+                    Tree::map(vec![("order_by", Tree::List(vec![Tree::text("ID")]))]),
+                )]),
+            )]),
+        )],
+        Some(vec!["SRC.ID"]),
+    );
+    let Tree::Map(fields) = &mut template else {
+        panic!("row mapping");
+    };
+    fields.push(("filter".into(), Tree::text("SEQ > 1")));
+    let spec = specification_with_rows(vec![("SEQ", "int", literal(0))], vec![template]);
+    let prepared = PreparedSpecification::prepare(&spec).unwrap();
+    let plan = prepared.bind(&source()).unwrap();
+    let filter = plan.templates()[0].filter.as_ref().unwrap();
+    assert_eq!(filter.bindings()[0].read, Read::Column(1));
+}
+
+#[test]
 fn row_reads_promote_transitive_defaults_and_schedule_each_override_graph() {
     let spec = specification_with_rows(
         vec![
@@ -608,33 +635,59 @@ fn cumulative_row_context_is_bounded_before_binding_or_activation() {
 }
 
 #[test]
-fn unsupported_written_defaults_keep_authored_paths_with_or_without_row_overrides() {
+fn newly_supported_defaults_bind_in_row_scope_when_promoted_or_overridden() {
     for operation in ["row_number", "rank", "locf", "first_available"] {
         for overridden in [false, true] {
-            let spec = specification_with_rows(
-                vec![("A", "int", Tree::map(vec![(operation, Tree::map(vec![]))]))],
-                vec![row(
-                    "record",
-                    if overridden {
-                        vec![("A", literal(7))]
-                    } else {
-                        vec![]
-                    },
-                    None,
-                )],
-            );
-            let Err(PrepareError::Unsupported(features)) =
-                PreparedSpecification::prepare_with_project(&spec, &[])
-            else {
-                panic!("unsupported authored default {operation}, override={overridden}")
+            let payload = if operation == "first_available" {
+                Tree::map(vec![("sources", Tree::List(vec![Tree::text("ID")]))])
+            } else {
+                let mut fields = vec![(
+                    "window",
+                    Tree::map(vec![("order_by", Tree::List(vec![Tree::text("ID")]))]),
+                )];
+                if operation == "locf" {
+                    fields.push(("source", Tree::text("ID")));
+                }
+                Tree::map(fields)
             };
-            assert_eq!(
-                features,
-                [yamaa_core::specification::UnsupportedFeature {
-                    operation: operation.into(),
-                    path: format!("columns.A.derivation.{operation}")
-                }]
+            let mut derivations = vec![(
+                "B",
+                Tree::map(vec![(
+                    "source",
+                    Tree::map(vec![("variable", Tree::text("A"))]),
+                )]),
+            )];
+            if overridden {
+                derivations.push(("A", literal(7)));
+            }
+            let spec = specification_with_rows(
+                vec![
+                    ("A", "int", Tree::map(vec![(operation, payload)])),
+                    ("B", "int", literal(0)),
+                ],
+                vec![row("record", derivations, None)],
             );
+            let prepared = PreparedSpecification::prepare_with_project(&spec, &[]).unwrap();
+            let plan = prepared.bind(&source()).unwrap();
+            assert!(plan.columns().is_empty());
+            assert_eq!(
+                plan.templates()[0]
+                    .assignments
+                    .iter()
+                    .map(|assignment| assignment.column)
+                    .collect::<Vec<_>>(),
+                [0, 1, 2]
+            );
+            let a = &plan.templates()[0].assignments[1];
+            if overridden {
+                assert_eq!(a.expression, Expression::Literal(Value::Int(7)));
+            } else {
+                assert_eq!(a.path, format!("columns.A.derivation.{operation}"));
+                assert!(matches!(
+                    a.expression,
+                    Expression::Window(_) | Expression::FirstAvailable(_)
+                ));
+            }
         }
     }
 }
@@ -707,4 +760,76 @@ fn bare_row_reads_of_nonlocal_outputs_keep_complete_phase_diagnostics_without_fu
         );
         assert!(diagnostic.source_span.is_none() && diagnostic.operand_route.is_none());
     }
+}
+
+#[test]
+fn nested_row_case_and_concat_calls_share_activation_and_dependency_order() {
+    use yamaa_core::project_function::{Function, Language};
+    let mut definition = function("format").definition().clone();
+    definition.returns = ColumnType::Str;
+    for case in &mut definition.tests {
+        if let Value::Int(value) = case.result {
+            case.result = Value::Str(value.to_string());
+        }
+    }
+    let formatter = Function::admit(Language::Python, definition).unwrap();
+    let case = Tree::map(vec![(
+        "case",
+        Tree::List(vec![
+            Tree::map(vec![
+                ("when", Tree::text("ID > 0")),
+                ("then", call("id", vec![("x", Tree::text("C"))])),
+            ]),
+            Tree::map(vec![("otherwise", literal(0))]),
+        ]),
+    )]);
+    let concat = Tree::map(vec![(
+        "str_concat",
+        Tree::map(vec![(
+            "sources",
+            Tree::List(vec![
+                Tree::map(vec![("literal", Tree::text("prefix:"))]),
+                call("format", vec![("x", Tree::text("A"))]),
+            ]),
+        )]),
+    )]);
+    let spec = specification_with_rows(
+        vec![
+            ("A", "int", literal(0)),
+            ("C", "int", literal(7)),
+            (
+                "D",
+                "str",
+                Tree::map(vec![("literal", Tree::text("unused"))]),
+            ),
+        ],
+        vec![row("one", vec![("D", concat), ("A", case)], None)],
+    );
+    let prepared = PreparedSpecification::prepare_with_project(
+        &spec,
+        &[function("id"), formatter, function("unused")],
+    )
+    .unwrap();
+    assert_eq!(prepared.called_functions(), [0, 1]);
+    let plan = prepared.bind(&source()).unwrap();
+    assert!(plan.columns().is_empty());
+    assert_eq!(
+        plan.templates()[0]
+            .assignments
+            .iter()
+            .map(|assignment| assignment.column)
+            .collect::<Vec<_>>(),
+        [0, 2, 1, 3]
+    );
+    let Expression::StrConcat { operands, .. } = &plan.templates()[0].assignments[3].expression
+    else {
+        panic!("concat")
+    };
+    let Expression::ProjectFunction(function) = &operands[1].expression else {
+        panic!("nested function")
+    };
+    assert_eq!(
+        function.arguments()[0].input,
+        FunctionInput::Read(Read::Column(1))
+    );
 }

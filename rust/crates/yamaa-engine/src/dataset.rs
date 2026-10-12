@@ -25,12 +25,20 @@ mod imputation;
 mod key_grain;
 #[path = "dataset_lookup.rs"]
 mod lookup;
+#[path = "dataset_mapping.rs"]
+mod mapping_cut;
 #[path = "dataset_numeric.rs"]
 mod numeric;
 #[path = "dataset_ordering.rs"]
 mod ordering;
+#[path = "dataset_row_drivers.rs"]
+mod row_drivers;
+#[path = "dataset_row_windows.rs"]
+mod row_windows;
 #[path = "dataset_scalar.rs"]
 mod scalar;
+#[path = "dataset_self.rs"]
+mod self_relations;
 #[path = "dataset_text_case.rs"]
 mod str_case;
 #[path = "dataset_text_extract.rs"]
@@ -360,6 +368,7 @@ pub(crate) fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> Ex
 struct EvaluationState<'a, E> {
     functions: &'a mut dyn FunctionPort<Error = E>,
     secondary: &'a [&'a dyn TableAccess<Error = E>],
+    self_rows: &'a [Candidate],
     budget: &'a mut Budget,
     handlers: &'a mut HandlerCounter,
     intermediates: &'a mut intermediates::Run,
@@ -420,6 +429,104 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         )?;
         return Ok(value);
     }
+    if let Expression::SourceBinding {
+        source,
+        absent,
+        variable_absent,
+        path,
+        ..
+    } = &assignment.expression
+    {
+        if *variable_absent {
+            let absent = absent.as_ref().expect("admitted absence handler");
+            state.budget.work(1, 1)?;
+            if let Value::Str(text) = absent {
+                state.budget.scalar_text(text.len())?;
+            }
+            state
+                .handlers
+                .record(&alloc::format!("{path}.absent"), HandlerKind::Absent)
+                .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
+            return Ok(absent.clone());
+        }
+        return evaluate_raw_retained(table, source, candidate, plan, row, limits, state, retained);
+    }
+    if let Expression::FirstAvailable(selection) = &assignment.expression {
+        for operand in selection.sources() {
+            state.budget.work(1, 1)?;
+            let value = match &operand.read {
+                yamaa_core::dataset::SelectionRead::Expression(source) => evaluate_raw_retained(
+                    table, source, candidate, plan, row, limits, state, retained,
+                )
+                .map_err(|mut error| {
+                    // Collection cardinality belongs to the enclosing selection.
+                    // Keep operand metadata for handlers and every other failure.
+                    if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
+                        path.clone_from(&assignment.path);
+                    }
+                    error
+                })?,
+                yamaa_core::dataset::SelectionRead::Source(column) => {
+                    let source_row = candidate.members[0];
+                    let value = table.cell(source_row, *column).map_err(|error| {
+                        Box::new(ExecutionError::Cell {
+                            path: operand.path.clone(),
+                            source_row,
+                            error,
+                        })
+                    })?;
+                    if let ValueRef::Str(text) = value {
+                        state.budget.scalar_text(text.len())?;
+                    }
+                    own(value)
+                }
+                yamaa_core::dataset::SelectionRead::Column(column) => {
+                    let value = &candidate.values[*column];
+                    if let Value::Str(text) = value {
+                        state.budget.scalar_text(text.len())?;
+                    }
+                    value.clone()
+                }
+                yamaa_core::dataset::SelectionRead::Collect {
+                    column,
+                    identifier,
+                    filter,
+                } => {
+                    state.budget.work(candidate.members.len(), 1)?;
+                    key_grain::collect_bound(
+                        table,
+                        key_grain::Collection {
+                            column: *column,
+                            identifier,
+                            filter: filter.as_deref(),
+                            selection: None,
+                        },
+                        key_grain::CollectionContext {
+                            path: &operand.path,
+                            candidate,
+                            plan,
+                            row,
+                        },
+                        state.budget,
+                        state.handlers,
+                    )
+                    .map_err(|mut error| {
+                        if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
+                            *path = assignment.path.clone();
+                        }
+                        error
+                    })?
+                }
+            };
+            if value != Value::Missing {
+                return Ok(value);
+            }
+        }
+        if let Value::Str(text) = selection.missing() {
+            state.budget.scalar_text(text.len())?;
+        }
+        return Ok(selection.missing().clone());
+    }
     if let Expression::Flag(flag) = &assignment.expression {
         return flags::evaluate(flag, table, candidate, plan, row, assignment, state);
     }
@@ -460,6 +567,11 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             }
         }
         return Ok(Value::Missing);
+    }
+    if let Expression::MappingCut { source, operation } = &assignment.expression {
+        return mapping_cut::evaluate(
+            assignment, source, operation, table, candidate, plan, row, limits, state, retained,
+        );
     }
     if let Expression::Round { source, rounding } = &assignment.expression {
         state.budget.work(1, 1)?;
@@ -597,6 +709,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         | Expression::Flag(_)
         | Expression::Compute(_)
         | Expression::Case(_)
+        | Expression::MappingCut { .. }
         | Expression::Round { .. }
         | Expression::Temporal { .. }
         | Expression::Imputation { .. }
@@ -648,57 +761,27 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             row,
             budget,
         )?,
-        Expression::FirstAvailable(selection) => {
-            let mut selected = Value::Missing;
-            for operand in selection.sources() {
-                budget.work(1, 1)?;
-                let value = match &operand.read {
-                    yamaa_core::dataset::SelectionRead::Column(column) => {
-                        let value = &candidate.values[*column];
-                        if let Value::Str(text) = value {
-                            budget.scalar_text(text.len())?;
-                        }
-                        value.clone()
-                    }
-                    yamaa_core::dataset::SelectionRead::Collect {
-                        column,
-                        identifier,
-                        filter,
-                    } => {
-                        budget.work(candidate.members.len(), 1)?;
-                        key_grain::collect_bound(
-                            table,
-                            key_grain::Collection {
-                                column: *column,
-                                identifier,
-                                filter: filter.as_deref(),
-                                selection: None,
-                            },
-                            key_grain::CollectionContext {
-                                path: &assignment.path,
-                                candidate,
-                                plan,
-                                row,
-                            },
-                            budget,
-                            handlers,
-                        )?
-                    }
-                };
-                if value != Value::Missing {
-                    selected = value;
-                    break;
-                }
-            }
-            if selected == Value::Missing {
-                if let Value::Str(text) = selection.missing() {
-                    budget.scalar_text(text.len())?;
-                }
-                selection.missing().clone()
-            } else {
-                selected
-            }
+        Expression::FirstAvailable(_) | Expression::SourceBinding { .. } => {
+            unreachable!("source recursion is handled above")
         }
+        Expression::SourceLookup {
+            lookup: bound,
+            filter,
+            selection,
+        } => lookup::read_source(
+            secondary[bound.source],
+            bound,
+            filter.as_ref(),
+            selection.as_ref(),
+            &lookup::Context {
+                assignment,
+                candidate,
+                plan,
+                row,
+            },
+            budget,
+            handlers,
+        )?,
         Expression::Collect { .. } => {
             key_grain::collect(table, assignment, candidate, plan, row, budget, handlers)?
         }
@@ -771,7 +854,50 @@ fn finish<E>(
     let converted = match convert(&value, plan.output().columns()[assignment.column].kind) {
         Ok(value) => value,
         Err(error) => {
-            conversion::recover(error, assignment, candidate, plan, row, budget, handlers)?
+            match conversion::recover(error, assignment, candidate, plan, row, budget, handlers) {
+                Ok(value) => value,
+                Err(failure) => {
+                    if let Expression::SourceBinding {
+                        variable_absent: true,
+                        variable,
+                        path,
+                        ..
+                    } = &assignment.expression
+                    {
+                        if let ExecutionError::Conversion {
+                            error,
+                            path: result_path,
+                            identity,
+                            ..
+                        } = &*failure
+                        {
+                            // REQ-0364 retains the reached binding handler and completed-result context.
+                            budget.scalar_text(
+                                variable.len().saturating_add(path.len()).saturating_add(64),
+                            )?;
+                            let mut diagnostic = error.clone().into_diagnostic(result_path.clone());
+                            diagnostic.spec_paths.push(alloc::format!("{path}.absent"));
+                            diagnostic.context.insert(
+                                "variable".into(),
+                                yamaa_core::diagnostic::ContextValue::Scalar(Value::Str(
+                                    variable.clone(),
+                                )),
+                            );
+                            diagnostic.context.insert(
+                                "handler".into(),
+                                yamaa_core::diagnostic::ContextValue::Scalar(Value::Str(
+                                    "absent".into(),
+                                )),
+                            );
+                            return Err(Box::new(ExecutionError::SemanticDiagnostic {
+                                diagnostic,
+                                identity: identity.clone(),
+                            }));
+                        }
+                    }
+                    return Err(failure);
+                }
+            }
         }
     };
     budget.value(&converted)?;
@@ -952,7 +1078,7 @@ impl Executor<'_> {
             .flat_map(|template| &template.assignments)
             .chain(self.plan.columns())
         {
-            scalar::register(&assignment.expression, &mut observations.handlers);
+            scalar::register(assignment, &mut observations.handlers);
             imputation::register(&assignment.expression, &mut observations.handlers);
             str_case::register(&assignment.expression, &mut observations.handlers);
             str_extract::register(&assignment.expression, &mut observations.handlers);
@@ -996,20 +1122,7 @@ impl Executor<'_> {
             .flat_map(|template| &template.assignments)
             .chain(self.plan.columns())
         {
-            if let Expression::Function(function) = &assignment.expression {
-                if functions.signature(function.slot()) != Some(function.signature()) {
-                    return Err(Box::new(ExecutionError::FunctionBinding {
-                        slot: function.slot(),
-                    }));
-                }
-            }
-            if let Expression::ProjectFunction(function) = &assignment.expression {
-                if functions.project_signature(function.slot()) != Some(function.signature()) {
-                    return Err(Box::new(ExecutionError::FunctionBinding {
-                        slot: function.slot(),
-                    }));
-                }
-            }
+            functions::admit(&assignment.expression, functions)?;
         }
         if table.schema() != self.plan.source()
             || secondary.len() != self.plan.secondary().len()
@@ -1037,7 +1150,18 @@ impl Executor<'_> {
             candidates = key_grain::construct(self, table, limits, &mut budget, handlers)?;
         } else {
             for template in self.plan.templates() {
-                let groups = match &template.mode {
+                let table =
+                    row_drivers::Driver::new(table, secondary, template.mode.source_index());
+                let table = &table;
+                let first = candidates.len();
+                let deferred = yamaa_core::dataset::window_stages(
+                    &template.assignments,
+                    self.plan.output().columns().len(),
+                    self.plan.intermediates(),
+                );
+                let late_filter = matches!(template.mode.local_mode(), RowMode::Groups(_));
+                let groups = match template.mode.local_mode() {
+                    RowMode::Driver { .. } => unreachable!("plan admission rejects nested drivers"),
                     RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
                     RowMode::Records => {
                         // Admit the known cardinality before materializing record memberships.
@@ -1069,7 +1193,11 @@ impl Executor<'_> {
                         values: vec![Value::Missing; self.plan.output().columns().len()],
                         completed: vec![false; self.plan.output().columns().len()],
                     };
-                    for assignment in &template.assignments {
+                    for assignment in template
+                        .assignments
+                        .iter()
+                        .filter(|assignment| !deferred[assignment.column])
+                    {
                         candidate.values[assignment.column] = evaluate(
                             table,
                             assignment,
@@ -1080,6 +1208,7 @@ impl Executor<'_> {
                             &mut EvaluationState {
                                 functions,
                                 secondary,
+                                self_rows: &candidates[..first],
                                 budget: &mut budget,
                                 handlers,
                                 intermediates: &mut intermediate_run,
@@ -1087,28 +1216,42 @@ impl Executor<'_> {
                         )?;
                         candidate.completed[assignment.column] = true;
                     }
-                    if let Some(filter) = &template.filter {
-                        let source_row = candidate.members[0];
-                        let truth = crate::dataset_predicate::evaluate(
-                            filter,
-                            table,
-                            source_row,
-                            &candidate.values,
-                            budget.predicate(),
-                        )
-                        .map_err(|error| match error.kind {
-                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                Box::new(predicate_limit(limit))
-                            }
-                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                        })?;
-                        if truth != yamaa_core::predicate::Truth::True {
+                    if let Some(filter) = template.filter.as_ref().filter(|_| !late_filter) {
+                        if !row_windows::retain(filter, table, &candidate, &mut budget)? {
                             budget.discard_candidate(&candidate.values);
                             continue;
                         }
                     }
                     candidates.push(candidate);
                 }
+                let (prior, current) = candidates.split_at_mut(first);
+                row_windows::complete(
+                    table,
+                    template,
+                    &deferred,
+                    current,
+                    self,
+                    first,
+                    limits,
+                    &mut EvaluationState {
+                        functions,
+                        secondary,
+                        self_rows: prior,
+                        budget: &mut budget,
+                        handlers,
+                        intermediates: &mut intermediate_run,
+                    },
+                )?;
+                if let Some(filter) = template.filter.as_ref().filter(|_| late_filter) {
+                    for candidate in candidates.split_off(first) {
+                        if row_windows::retain(filter, table, &candidate, &mut budget)? {
+                            candidates.push(candidate);
+                        } else {
+                            budget.discard_candidate(&candidate.values);
+                        }
+                    }
+                }
+                intermediate_run.publish_self(self, &mut budget)?;
             }
         }
         let mut completed = vec![false; self.plan.output().columns().len()];
@@ -1153,8 +1296,8 @@ impl Executor<'_> {
                 } else {
                     None
                 };
-                let candidate = &mut candidates[row];
-                candidate.values[assignment.column] = if let Some(value) = number {
+                let candidate = &candidates[row];
+                let value = if let Some(value) = number {
                     finish(
                         value,
                         assignment,
@@ -1175,12 +1318,15 @@ impl Executor<'_> {
                         &mut EvaluationState {
                             functions,
                             secondary,
+                            self_rows: &candidates,
                             budget: &mut budget,
                             handlers,
                             intermediates: &mut intermediate_run,
                         },
                     )?
                 };
+                let candidate = &mut candidates[row];
+                candidate.values[assignment.column] = value;
                 candidate.completed[assignment.column] = true;
             }
             completed[assignment.column] = true;
@@ -1334,11 +1480,12 @@ impl Executor<'_> {
                         offending_rows,
                     }
                 }
-                Check::RowCount { min, max } => {
-                    budget.work(1, 1)?;
-                    let count = dataset.rows.len() as i128;
-                    let failed = min.is_some_and(|min| count < i128::from(min))
-                        || max.is_some_and(|max| count > i128::from(max));
+                Check::RowCount { .. } | Check::WideRowCount { .. } => {
+                    budget.work(1, verification.check.row_count_work())?;
+                    let failed = !verification
+                        .check
+                        .row_count_accepts(dataset.rows.len())
+                        .unwrap_or(false);
                     CheckRecord {
                         path: verification.path.clone(),
                         code: yamaa_core::diagnostic::ConditionCode::VerificationRowCountFailed,

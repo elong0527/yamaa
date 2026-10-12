@@ -91,6 +91,7 @@ impl P {
     pub fn diagnostic_code(&self) -> C {
         match self {
             Self::InvalidExpression | Self::InvalidTemporal { .. } => C::PredicateInvalidExpression,
+            Self::IntegerOverflow => C::PredicateIntegerOverflow,
             Self::InvalidEscape => C::PredicateInvalidEscape,
             Self::InvalidRegex { .. } => C::PredicateInvalidRegex,
         }
@@ -175,7 +176,7 @@ impl P {
     pub fn syntax_diagnostic(&self) -> Diagnostic {
         let mut context = Context::new();
         match self {
-            Self::InvalidExpression | Self::InvalidEscape => {}
+            Self::InvalidExpression | Self::InvalidEscape | Self::IntegerOverflow => {}
             Self::InvalidRegex { byte, reason } => {
                 context.insert("pattern_byte".into(), V::Integer(byte.to_string()));
                 context.insert("reason".into(), text(reason));

@@ -82,12 +82,6 @@ pub(super) fn prepare(
             }
             Err(diagnostic)
         }
-        Err(predicate_compiler::Error::UnsupportedLiteral { .. }) => {
-            return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                operation: "predicate_literal".into(),
-                path: format!("{path}.condition"),
-            }]))
-        }
         Err(predicate_compiler::Error::Parse(
             crate::predicate_parser::ParseError::UnsupportedRegex { .. },
         )) => {
@@ -319,12 +313,7 @@ pub(super) fn bind(
         let read = if let Some((index, field)) = declarations.reference(name) {
             if let Some(item) = &intermediates[index] {
                 edges.extend(item.output_dependencies());
-                match secondary[item.source]
-                    .schema
-                    .columns()
-                    .iter()
-                    .position(|c| c.name == field)
-                {
+                match item.source_column(secondary, field) {
                     Some(column) => Some(FlagRead::Read(Read::Intermediate { index, column })),
                     None => {
                         findings.push(BindFinding::Lookup(LookupFinding::reference(

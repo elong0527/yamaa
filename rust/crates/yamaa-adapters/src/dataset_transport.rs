@@ -372,7 +372,7 @@ impl Intermediate {
         Ok(dataset::Intermediate {
             identifier: self.identifier,
             path: self.path,
-            source: self.source,
+            source: dataset::IntermediateSource::Input(self.source),
             keys,
             filter: self.filter.map(Predicate::prepare).transpose()?,
             selection: self.selection.map(SourceSelection::prepare).transpose()?,

@@ -57,6 +57,18 @@ qualification. A passing sampled comparison cannot establish the whole grammar.
 
 ## Bounded core implementation
 
+The #1983 predicate review found no production path that constructs the reserved
+`CompileError::Unsupported` variant. Every currently decided construct either
+compiles in the portable service, produces its registered syntax finding, or
+refuses under an explicit resource policy. Predicate tests now enumerate each
+REQ-0826 rejection: Python-style named groups, inline flags, property escapes,
+invalid identity escapes and variable-width lookbehind. They also admit
+fixed-width alternatives and ECMA-style named backreferences. Predicate sites
+retain `invalid_regex` under REQ-1244; standalone regex syntax retains its own
+REQ-0827 mapping. The reserved future extension variant grants no permission to
+classify a forbidden construct as unsupported. Historical reference mismatches
+and benchmark expected files remain unchanged.
+
 `yamaa_core::regex::Pattern` now compiles an immutable postorder arena and
 provides separate search and full-match entrypoints. Its explicit backtracking
 stack preserves written alternatives, greedy/lazy choices and full-match

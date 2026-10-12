@@ -495,6 +495,140 @@ class OriginalSpecifications(unittest.TestCase):
             self.assertEqual(json.loads(result.observations()), expected)
             self.assertIsNotNone(result.output())
 
+    def test_original_source_bindings_complete_reports_and_exact_csv(self):
+        with (ROOT / "original-source-bindings.tsv").open(encoding="ascii") as stream:
+            cases = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(cases), 16)
+        def no_port(*_):
+            self.fail("standalone source binding reached an inheritance port")
+        for row in cases:
+            with self.subTest(case=row["case"]):
+                handle = yamaa_native._prepare_document("spec.yaml", bytes.fromhex(row["source_hex"]), no_port, no_port, no_port)
+                inputs = {name: bytes.fromhex(content) for name, content in json.loads(row["inputs_json"]).items()}
+                expected = json.loads(row["expected"])
+                artifact = bytes.fromhex(row["artifact_hex"])
+                for _ in range(2):
+                    calls = []
+                    def capture(name, path, maximum):
+                        self.assertEqual(path, name.lower() + ".csv")
+                        self.assertLessEqual(len(inputs[name]), maximum)
+                        calls.append(name)
+                        return inputs[name], True
+                    result = handle.build(capture, ("fixture-runtime", "fixture-engine", "source-binding-" + row["case"], "spec.yaml", "."))
+                    self.assertEqual(json.loads(result.observations()), dict(expected, artifacts=[]))
+                    self.assertEqual(calls, ["SRC", "DONOR"] if "DONOR" in inputs else ["SRC"])
+                    saves = []
+                    def publish(path, content):
+                        self.assertEqual(path, "result.csv")
+                        self.assertEqual(content, artifact)
+                        saves.append(content)
+                    if artifact:
+                        for _ in range(2):
+                            self.assertEqual(json.loads(result.save(publish)), expected)
+                        self.assertEqual(saves, [artifact, artifact])
+                    else:
+                        self.assertIsNone(result.output())
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save(publish)
+                        self.assertEqual(saves, [])
+
+    def test_native_file_dictionary_resources_match_independent_inline_truth(self):
+        # These authored dictionaries share the established independent inline truth.
+        dictionaries = {
+            "exact_typed": "{Y: 1, y: 2.0, Z: null}",
+            "ascii_fold": "{'yes': 'matched', \"\\u00e9a\": 'foreign', \"\\u00c9a\": 'capital', \"\\u00df\": 'sharp', 'ss': 'double'}",
+            "lazy_case": "{Y: 1}",
+            "nested_concat": "{Y: 'yes'}",
+            "record_mapping": "{Y: 1}",
+            "multiple_distinct_input": "{Y: yes}",
+        }
+        with (ROOT / "original-mapping-cut.tsv").open(encoding="ascii") as stream:
+            cases = {row["case"]: row for row in csv.DictReader(stream, delimiter="\t")}
+        for name, dictionary in dictionaries.items():
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                row = cases[name]
+                authored = bytes.fromhex(row["source_hex"]).decode("ascii")
+                inline = "dict: " + dictionary
+                self.assertEqual(authored.count(inline), 1)
+                (root / "spec.yaml").write_text(authored.replace(inline, "dict: ./dictionary.yaml"), encoding="ascii")
+                (root / "dictionary.yaml").write_text(dictionary + "\n", encoding="ascii")
+                inputs = {n: bytes.fromhex(value) for n, value in json.loads(row["inputs_json"]).items()}
+                for source, value in inputs.items():
+                    (root / (source.lower() + ".csv")).write_bytes(value)
+                prepared = yamaa_native._prepare_file_specification(str(root), str(root), "spec.yaml", [])
+                self.assertEqual(prepared.capture_reads(), 2)
+                self.assertEqual(json.loads(prepared.check_issues()), [])
+                expected = json.loads(row["expected"])
+                artifact = bytes.fromhex(row["artifact_hex"])
+                metadata = ("fixture-runtime", "fixture-engine", "mapping-cut-" + name, "spec.yaml", ".")
+                for created in (1, 0):
+                    for read in expected["source_reads"]:
+                        if read["snapshots_created"] is not None:
+                            read["snapshots_created"] = created
+                    result = prepared.build(metadata)
+                    self.assertEqual(json.loads(result.observations()), dict(expected, artifacts=[]))
+                    self.assertEqual(prepared.capture_reads(), 2 + len(inputs))
+                    target = root / "result.csv"
+                    if artifact:
+                        self.assertEqual(json.loads(result.save_file("result.csv", str(target))), expected)
+                        self.assertEqual(target.read_bytes(), artifact)
+                    else:
+                        self.assertIsNone(result.output())
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save_file("result.csv", str(target))
+                        self.assertFalse(target.exists())
+
+    def test_original_mapping_cut_admission_precedes_all_ports(self):
+        def no_port(*_):
+            self.fail("mapping/cut admission reached a study or inheritance port")
+        with (ROOT / "mapping-cut-admission.tsv").open(encoding="ascii") as stream:
+            rows = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(rows), 5)
+        for row in rows:
+            with self.subTest(case=row["case"]):
+                with self.assertRaises(ValueError) as failure:
+                    yamaa_native._prepare_document("spec.yaml", bytes.fromhex(row["source_hex"]), no_port, no_port, no_port)
+                self.assertEqual(json.loads(str(failure.exception)), json.loads(row["expected"]))
+
+    def test_original_mapping_cut_complete_reports_and_exact_csv(self):
+        with (ROOT / "original-mapping-cut.tsv").open(encoding="ascii") as stream:
+            cases = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(cases), 21)
+        def no_port(*_):
+            self.fail("standalone mapping/cut reached an inheritance port")
+        for row in cases:
+            with self.subTest(case=row["case"]):
+                handle = yamaa_native._prepare_document("spec.yaml", bytes.fromhex(row["source_hex"]), no_port, no_port, no_port)
+                inputs = {name: bytes.fromhex(content) for name, content in json.loads(row["inputs_json"]).items()}
+                expected = json.loads(row["expected"])
+                artifact = bytes.fromhex(row["artifact_hex"])
+                for _ in range(2):
+                    calls = []
+                    def capture(name, path, maximum):
+                        self.assertEqual(path, name.lower() + ".csv")
+                        self.assertLessEqual(len(inputs[name]), maximum)
+                        calls.append(name)
+                        return inputs[name], True
+                    result = handle.build(capture, ("fixture-runtime", "fixture-engine", "mapping-cut-" + row["case"], "spec.yaml", "."))
+                    self.assertEqual(json.loads(result.observations()), dict(expected, artifacts=[]))
+                    self.assertEqual(calls, ["SRC", "DONOR"] if "DONOR" in inputs else ["SRC"])
+                    saves = []
+                    def publish(path, content):
+                        self.assertEqual(path, "result.csv")
+                        self.assertEqual(content, artifact)
+                        saves.append(content)
+                    if artifact:
+                        for _ in range(2):
+                            self.assertEqual(json.loads(result.save(publish)), expected)
+                        self.assertEqual(saves, [artifact, artifact])
+                    else:
+                        self.assertIsNone(result.output())
+                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
+                            result.save(publish)
+                        self.assertEqual(saves, [])
+
+
     def test_original_filtered_sources_complete_reports_and_exact_csv(self):
         self._source_selection_reports("source-filters.tsv", "source-filter", 13)
 
@@ -507,16 +641,8 @@ class OriginalSpecifications(unittest.TestCase):
     def test_original_column_not_missing_complete_reports_and_exact_csv(self):
         self._source_selection_reports("original-not-missing.tsv", "column-check", 10)
 
-    def test_row_filter_unsupported_admission_precedes_all_ports(self):
-        def no_port(*_):
-            self.fail("unsupported row filter reached a parent or study port")
-        with (ROOT / "row-filter-admission.tsv").open(encoding="ascii") as stream:
-            rows = list(csv.DictReader(stream, delimiter="\t"))
-        self.assertEqual(len(rows), 2)
-        for row in rows:
-            with self.subTest(case=row["case"]), self.assertRaises(ValueError) as caught:
-                yamaa_native._prepare_document("spec.yaml", bytes.fromhex(row["source_hex"]), no_port, no_port, no_port)
-            self.assertEqual(json.loads(str(caught.exception)), json.loads(row["expected"]))
+    def test_row_filter_carrier_failures_match_complete_normative_reports(self):
+        self._source_selection_reports("row-filter-admission.tsv", "predicate-carrier", 2)
 
     def test_row_filters_complete_reports_and_exact_csv(self):
         self._source_selection_reports("row-filters.tsv", "row-filter", 27)
@@ -1925,11 +2051,17 @@ columns:
                     shutil.copytree(ROOT / "row-cases" / name, current)
                     entry = current / "spec.yaml"
                     expected = json.loads((current / "findings.json").read_text(encoding="ascii"))
+                    if name == "different-row-drivers":
+                        # Stored drivers now use the complete historical success witness.
+                        self.assertEqual(expected, case["findings"])
+                        self.assertEqual((current / "expected.csv").read_bytes(), case["csv"].encode())
                     if name == "adam-adlb-end-of-treatment":
                         gates = list(reference["eot_native_gates"])
                         self.assertEqual(len(gates), 5)
                         self.assertEqual(gates.pop(), {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
                             "spec_paths":["columns.EOTFL.derivation.flag"], "context":{"operation":"flag"}})
+                        self.assertEqual(gates.pop(), {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                            "spec_paths":["columns.ENDPOINT.derivation.source"], "context":{"operation":"secondary_source_expression"}})
                         self.assertEqual(expected, gates)
                     result = yamaa.domain(entry)
                     self.assertEqual(issues(result), expected)
@@ -2226,6 +2358,36 @@ columns:
         for function in (yamaa.domain,yamaa.check):
             with self.assertRaises(TypeError): function(None)
 
+
+    def test_public_self_donors_use_only_completed_templates_and_preserve_full_phase_refusal(self):
+        import yamaa
+        body = 'schema_version: "1.0"\ndomain: TEST\ninput:\n  SRC: {path: src.csv}\n  OTHER: {path: other.csv}\nkeys: [ID, SECTION]\noutput: {path: result.csv, columns: [ID, SECTION, K, SEQ, V, FINAL, FIRST]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: {K: K}\n    order_by: [SELF.SEQ]\n    keep: last\n    no_match: 0\n  - id: F\n    dataset: SELF\n    key: [K]\n    filter: "SECTION = \'first\'"\n    order_by: [SEQ]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: K, type: str, derivation: SRC.K}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: V, type: int, derivation: SRC.V}\n  - {name: FINAL, type: int, derivation: P.V}\n  - {name: FIRST, type: int, derivation: F.V}\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      SECTION: {literal: first}\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.K]\n    derivations:\n      ID: {literal: g}\n      SECTION: {literal: second}\n      SEQ: {literal: 4}\n      V: {compute: {expr: "P.V + 10"}}\n  - id: added\n    dataset: OTHER\n    derivations:\n      ID: OTHER.ID\n      SECTION: {literal: third}\n      K: OTHER.K\n      SEQ: {literal: 9}\n      V: {compute: {expr: "P.V + 100"}}\n'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = root / "spec.yaml"
+            entry.write_text(body)
+            (root / "src.csv").write_text("ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n")
+            (root / "other.csv").write_text("ID,K\nc,x\nd,x\n")
+            result = yamaa.domain(entry)
+            self.assertEqual(result.issues.rows(), [])
+            self.assertEqual(json.loads(result._native.observations())["handler_counts"], [{'spec_path': 'rows[1].derivations.V.compute.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'rows[2].derivations.V.compute.multiple_matches', 'handler': 'multiple_matches', 'count': 2}, {'spec_path': 'columns.FINAL.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 5}, {'spec_path': 'columns.FIRST.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 5}])
+            self.assertTrue(result.save())
+            self.assertEqual((root / "result.csv").read_bytes(), b'ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,2,5,115,5\nb,first,x,1,9,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n')
+            for name in ("src.csv", "other.csv", "result.csv"):
+                (root / name).unlink()
+            entry.write_text(body.replace("SECTION: {literal: first}", "SECTION: {source: {variable: P.K}}"))
+            for checked in (yamaa.check(entry), yamaa.domain(entry)):
+                records = checked.issues.to_dicts()
+                for record in records:
+                    record["context"] = json.loads(record["context"])
+                self.assertEqual(records, [{'phase': 'validation', 'condition': 'phase_boundary', 'requirement': 'REQ-0120', 'spec_paths': ['rows[0].derivations.SECTION.source'], 'context': {'identifier': 'P.K', 'available_phase': 'completed_prior_row_template', 'required_phase': 'row_construction'}}])
+            rejected = yamaa.domain(entry)
+            self.assertIsNone(rejected.output)
+            self.assertIsNone(rejected._native.observations())
+            with self.assertRaises(yamaa.DomainError):
+                rejected.save()
+            self.assertFalse((root / "src.csv").exists())
+            self.assertFalse((root / "result.csv").exists())
 
 if __name__ == "__main__":
     unittest.main()

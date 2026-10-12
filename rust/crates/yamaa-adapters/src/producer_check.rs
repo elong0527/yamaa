@@ -532,6 +532,32 @@ fn inheritance_issues<'a>(
                 _ => return Err(Error::Original(owner)),
             }
         }
+        I::Dictionary { document, error } => {
+            use yamaa_engine::dictionary_preparation::Cause;
+            match &error.cause {
+                Cause::Capture {
+                    reference,
+                    failure: Some(_),
+                    ..
+                } => {
+                    budget.entries(16)?;
+                    budget.text(reference.path())?;
+                    budget.text(reference.written())?;
+                }
+                Cause::Admission {
+                    arena,
+                    error: N::Invalid(findings),
+                    ..
+                } => {
+                    budget.schema_findings(
+                        document.schema(),
+                        document.dictionary_input(error, *arena),
+                        findings,
+                    )?;
+                }
+                _ => supported = false,
+            }
+        }
         I::Preparation { schema, error, .. } => match error.as_ref() {
             E::Traversal(
                 G::Unavailable { declaring, path } | G::InvalidParent { declaring, path },

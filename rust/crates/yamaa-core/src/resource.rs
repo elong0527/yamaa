@@ -21,6 +21,22 @@ impl ResourceFailure {
         }
     }
 
+    /// A planning resource belongs to an admitted declaring field, without a
+    /// fabricated dataset identity or a resolved host path in semantic context.
+    pub fn field_diagnostic(self, field: &str, written_path: &str) -> Diagnostic {
+        Diagnostic {
+            code: self.code(),
+            spec_paths: vec![field.into()],
+            context: [(
+                String::from("path"),
+                ContextValue::Scalar(Value::Str(written_path.into())),
+            )]
+            .into(),
+            source_span: None,
+            operand_route: None,
+        }
+    }
+
     /// Only authored dataset/path identities enter semantic context. Canonical
     /// filesystem names and host exception messages are deliberately unavailable.
     pub fn diagnostic(self, dataset: &str, written_path: &str) -> Diagnostic {
