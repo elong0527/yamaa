@@ -33,10 +33,10 @@ mod lookup;
 mod mapping_cut;
 #[path = "dataset_numeric.rs"]
 mod numeric;
-#[path = "dataset_ordering.rs"]
-mod ordering;
 #[path = "dataset_odm.rs"]
 mod odm;
+#[path = "dataset_ordering.rs"]
+mod ordering;
 #[path = "dataset_row_drivers.rs"]
 mod row_drivers;
 #[path = "dataset_row_windows.rs"]
