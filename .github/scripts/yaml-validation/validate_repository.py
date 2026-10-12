@@ -9195,6 +9195,7 @@ def check_declared_validation_error(
 
 
 EXPECTED_ERROR_PHASES = {
+    'parse',
     'planning',
     'engine',
     'validation',

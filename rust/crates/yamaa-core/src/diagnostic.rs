@@ -296,7 +296,6 @@ conditions! {
     PreflightRedundantSourceType => ("validation", "redundant_field_type", Some("REQ-0533")),
     SourceUnknownProfile => ("validation", "source_profile_unknown", Some("REQ-0852")),
     SourceOrdinalCollision => ("validation", "ordinal_field_collision", Some("REQ-1294")),
-    SourceOdmOrdinal => ("validation", "odm_schema_field_type", Some("REQ-1295")),
     SourceEmptyStringPresentUnsupported => ("validation", "empty_string_present_unsupported", Some("REQ-1161")),
     ProducerInvalidContract => ("validation", "invalid_producer_contract", Some("REQ-0534")),
     ProducerWorkflowCycle => ("validation", "producer_workflow_cycle", Some("REQ-0534")),

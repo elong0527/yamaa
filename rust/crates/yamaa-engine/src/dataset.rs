@@ -518,7 +518,13 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                         },
                         state.budget,
                         state.handlers,
-                    )?
+                    )
+                    .map_err(|mut error| {
+                        if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
+                            *path = assignment.path.clone();
+                        }
+                        error
+                    })?
                 }
             };
             if value != Value::Missing {

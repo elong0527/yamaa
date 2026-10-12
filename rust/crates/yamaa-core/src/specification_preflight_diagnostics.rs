@@ -260,7 +260,7 @@ impl PreflightFinding {
                 context([("dataset", text(dataset))]),
             ),
             Self::OdmSourceOrdinal { dataset } => (
-                C::SourceOdmOrdinal,
+                C::OdmDeclaredOrdinal,
                 vec![format!("input.{dataset}.ordinal")],
                 context([("dataset", text(dataset)), ("declared", text("ordinal"))]),
             ),

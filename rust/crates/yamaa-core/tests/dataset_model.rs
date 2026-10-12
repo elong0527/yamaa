@@ -63,7 +63,7 @@ fn malformed_row_filter_columns_retain_the_existing_scope_error() {
 }
 
 #[test]
-fn every_row_mode_rejects_filters_that_read_deferred_windows() {
+fn record_and_group_filters_reject_deferred_window_dependencies() {
     use yamaa_core::{
         bound_expression::{Binding, BindingError, BoundPredicate, Read},
         dataset::{OrderTerm, Window, WindowKind},

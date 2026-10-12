@@ -94,6 +94,11 @@ def samples():
         )
     result += [
         "A = " + "9" * 5000,
+        "A = -9223372036854775809",
+        "A = +0009223372036854775808",
+        "FALSE AND A IN (1, +9223372036854775808)",
+        "'\U0001f600' = -9223372036854775809",
+        "A BETWEEN 0 AND 9999999999999999999999999999999",
         "A\u2003=\u001c1",
         "str_contains(A, '('",
         "A = '\0'",
@@ -136,6 +141,28 @@ def probe(sources):
     responses = [json.loads(line) for line in run.stdout.split("\n") if line]
     assert len(responses) == len(sources)
     return responses
+
+
+def integer_overflow_position(ast):
+    """Locate the first literal outside the normative signed 64-bit carrier."""
+    pending = [ast]
+    positions = []
+    while pending:
+        node = pending.pop()
+        if isinstance(node, list):
+            pending.extend(node)
+        elif isinstance(node, dict):
+            if node.get("kind") == "literal" and node.get("type") == "int":
+                written = node["value"]
+                negative = written.startswith("-")
+                digits = written.lstrip("+-").lstrip("0") or "0"
+                bound = "9223372036854775808" if negative else "9223372036854775807"
+                if len(digits) > len(bound) or (
+                    len(digits) == len(bound) and digits > bound
+                ):
+                    positions.append(node["position"])
+            pending.extend(node.values())
+    return min(positions) if positions else None
 
 
 def main():
@@ -193,6 +220,7 @@ def main():
         else:
             assert actual["condition"] == case["condition"], (case, actual)
     escape_requirements = 0
+    overflow_requirements = 0
     for text, response in zip(sources, responses, strict=True):
         assert response["protocol"] == "predicate-syntax/1"
         actual = response["outcome"]
@@ -224,14 +252,32 @@ def main():
                     error.requirement,
                 )
         else:
-            assert actual == {
-                "status": "parsed",
-                "ast": ast,
-                "identifiers": list(predicate_identifiers(ast)),
-            }, (text, actual, ast)
+            overflow = integer_overflow_position(ast)
+            if overflow is not None:
+                # The Python syntax oracle retains mathematical integer text;
+                # REQ-0014 separately bounds the admitted Rust literal carrier.
+                assert actual == {
+                    "status": "invalid",
+                    "condition": "integer_overflow",
+                    "requirement": "REQ-0014",
+                    "message": "integer literal is outside the signed 64-bit range",
+                    "context": {},
+                    "position": {
+                        "byte": len(text[:overflow].encode()),
+                        "character": overflow,
+                    },
+                }, (text, actual, overflow)
+                overflow_requirements += 1
+            else:
+                assert actual == {
+                    "status": "parsed",
+                    "ast": ast,
+                    "identifiers": list(predicate_identifiers(ast)),
+                }, (text, actual, ast)
     assert escape_requirements == 3
+    assert overflow_requirements > 0
     print(
-        f"Predicate syntax: {len(cases)} independent contract checks; {len(sources)} reference observations; three explicit ESCAPE requirement differences retained"
+        f"Predicate syntax: {len(cases)} independent contract checks; {len(sources)} reference observations; three explicit ESCAPE requirement differences and {overflow_requirements} normative integer carrier failures retained"
     )
 
 

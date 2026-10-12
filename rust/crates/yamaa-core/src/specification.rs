@@ -2046,15 +2046,30 @@ impl PreparedSpecification {
                             &mut edges,
                             &mut findings,
                         )? {
-                            operands.push(crate::dataset::SelectionSource {
-                                path: operand_path.clone(),
-                                read: crate::dataset::SelectionRead::Expression(
+                            // Distinct-value collection failures belong to first_available.
+                            // Recursive operands retain their own expression and handler paths.
+                            let read = match expression {
+                                Expression::Collect {
+                                    column,
+                                    identifier,
+                                    filter,
+                                    selection: None,
+                                } => crate::dataset::SelectionRead::Collect {
+                                    column,
+                                    identifier,
+                                    filter: filter.map(alloc::boxed::Box::new),
+                                },
+                                expression => crate::dataset::SelectionRead::Expression(
                                     alloc::boxed::Box::new(crate::dataset::Assignment {
                                         column,
                                         expression,
                                         path: operand_path.clone(),
                                     }),
                                 ),
+                            };
+                            operands.push(crate::dataset::SelectionSource {
+                                path: operand_path.clone(),
+                                read,
                             });
                         }
                     }
