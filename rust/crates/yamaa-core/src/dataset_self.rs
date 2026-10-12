@@ -58,8 +58,30 @@ fn named_selector(index: usize, items: &[Intermediate], depth: usize) -> bool {
 fn named_read(read: &Read, items: &[Intermediate]) -> bool {
     matches!(read, Read::Intermediate { index, .. } if named_selector(*index, items, 0))
 }
+/// The admitted aggregate IR owns no named selector. Textual donor labels do
+/// not confer SELF ownership. New source/key variants must extend this proof.
+fn aggregate_reads(aggregate: &BoundAggregate) -> bool {
+    match aggregate.relation() {
+        AggregateRelation::CurrentGroup | AggregateRelation::Output { .. } => false,
+        AggregateRelation::Matched { source, keys, .. } => {
+            let donor = match source {
+                AggregateSource::Primary | AggregateSource::Secondary(_) => false,
+            };
+            donor
+                || keys.iter().any(|key| match &key.value {
+                    MatchValue::Literal(_) => false,
+                    MatchValue::Variable(read)
+                    | MatchValue::Source(read)
+                    | MatchValue::StrPad { read, .. } => match read {
+                        MatchRead::Record { .. } | MatchRead::Output { .. } => false,
+                    },
+                })
+        }
+    }
+}
 fn reads(expression: &Expression, items: &[Intermediate]) -> bool {
     match expression {
+        Expression::Aggregate(aggregate) => aggregate_reads(aggregate),
         Expression::Intermediate { index, .. } => named_selector(*index, items, 0),
         Expression::SourceBinding { source, .. } | Expression::StrContains { source, .. }
         | Expression::StrCase { source, .. } | Expression::StrPad { source, .. }
@@ -73,7 +95,10 @@ fn reads(expression: &Expression, items: &[Intermediate]) -> bool {
         Expression::Function(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if named_read(read, items))),
         Expression::ProjectFunction(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if named_read(read, items))),
         Expression::Case(branches) => branches.iter().any(|branch| branch.when.as_ref().is_some_and(|when| when.bindings().iter().any(|binding| named_read(&binding.read, items))) || reads(&branch.assignment.expression, items)),
-        _ => false,
+        Expression::Literal(_) | Expression::Window(_) | Expression::Source(_)
+        | Expression::SourceLookup { .. } | Expression::Lookup(_) | Expression::RowLookup(_)
+        | Expression::Collect { .. } | Expression::Column(_) | Expression::Reduce { .. }
+        | Expression::Count { .. } => false,
     }
 }
 pub(super) fn validate(items: &[Intermediate], templates: &[RowTemplate]) -> Result<(), PlanError> {

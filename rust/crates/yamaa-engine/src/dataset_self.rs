@@ -43,6 +43,7 @@ mod tests {
         }])
         .unwrap();
         let candidates = vec![Candidate {
+            template: Some(0),
             selection_identity: SelectionIdentity::Candidate(0),
             members: vec![],
             values: vec![Value::Str("borrowed donor Ω".into())],

@@ -234,7 +234,19 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
                 visit(&branch.assignment.expression, visitor);
             }
         }
-        _ => (),
+        // The current aggregate relation/source/key IR has no named selector.
+        // Extend this visitor when aggregate derive or named relations are added.
+        Expression::Aggregate(_)
+        | Expression::Literal(_)
+        | Expression::Window(_)
+        | Expression::Source(_)
+        | Expression::SourceLookup { .. }
+        | Expression::Lookup(_)
+        | Expression::RowLookup(_)
+        | Expression::Collect { .. }
+        | Expression::Column(_)
+        | Expression::Reduce { .. }
+        | Expression::Count { .. } => (),
     }
 }
 pub(super) fn validate_reads(
