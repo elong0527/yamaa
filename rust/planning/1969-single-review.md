@@ -2,8 +2,9 @@
 
 [#2044](https://github.com/elong0527/yamaa/pull/2044) merged at
 `14147ecfde9511fda9bf41840ae6306959c01667` on 2026-10-12. The maintainer requested
-one subsequent PR to complete the remaining migration and close its open work
-packages. Implementation, qualification repairs, consumer changes and gated
+one subsequent PR, [#2058](https://github.com/elong0527/yamaa/pull/2058), to complete
+the remaining migration and close its open work packages. Implementation,
+qualification repairs, consumer changes and gated
 cutover now accumulate on `codex/rust-migration-completion`. Keep that PR in draft
 until its complete acceptance evidence is available. Superseded source ancestry
 and qualification artifacts remain available; neither merging a component nor

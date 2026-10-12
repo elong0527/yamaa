@@ -109,7 +109,7 @@ pub fn opaque_resource_failure(attempt: &CapturedAttempt<ResourceError>) -> Opti
         Err(PortError::Capture(error))
             if !matches!(
                 error,
-                ResourceError::Missing | ResourceError::NotRegularFile
+                ResourceError::Missing | ResourceError::NotRegularFile | ResourceError::Symlink
             ) =>
         {
             Some(error)

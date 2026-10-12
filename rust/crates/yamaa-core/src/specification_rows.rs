@@ -643,7 +643,32 @@ impl Rows {
                     .iter()
                     .position(|column| text(d, key).is_ok_and(|key| key == column.name))
                 {
-                    filter_defaults.insert(column);
+                    let window_default = d
+                        .field(columns[column], "derivation")
+                        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                        .map(|id| {
+                            let value = field(d, id, "value")?;
+                            let &[(operation, _)] = mapping(d, value)? else {
+                                return Err(PrepareError::Internal);
+                            };
+                            Ok(matches!(
+                                text(d, operation)?,
+                                "row_number"
+                                    | "rank"
+                                    | "row_value"
+                                    | "previous_non_missing"
+                                    | "locf"
+                                    | "baseline_flag"
+                                    | "window"
+                            ))
+                        })
+                        .transpose()?
+                        .unwrap_or(false);
+                    // An output-key window default spans the complete constructed
+                    // dataset. Selection identity cannot make it template-local.
+                    if !window_default {
+                        filter_defaults.insert(column);
+                    }
                 }
             }
         }

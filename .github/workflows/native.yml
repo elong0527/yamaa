@@ -446,7 +446,8 @@ jobs:
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" compare \
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
-            --output public-conformance/inventory.json
+            --output public-conformance/inventory.json \
+            --ratchet "${GITHUB_WORKSPACE}/rust/qualification/public-conformance.json"
       - name: Preserve Python public benchmark inventory and saved artifacts
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -616,7 +617,8 @@ jobs:
             "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)"
           python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" compare \
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
-            --output public-conformance/inventory.json
+            --output public-conformance/inventory.json \
+            --ratchet "${GITHUB_WORKSPACE}/rust/qualification/public-conformance.json"
       - name: Preserve R public benchmark inventory and saved artifacts
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5

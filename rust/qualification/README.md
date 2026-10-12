@@ -81,9 +81,15 @@ artifacts are reference-only until cutover (#1973 item 14); Define XML/JSON are
 explicitly `not_compared` by these domain runners. The fixed-time public Define
 suites remain separate. These dispositions do not suppress table differences.
 
-The first CI integration is report-only. Each sampled PR lane and every main
-or full-dispatch lane uploads its inventory, individual records and staged saved
-artifacts. Run locally against an installed package outside the checkout:
+Each sampled PR lane and every main or full-dispatch lane uploads its inventory,
+individual records and staged saved artifacts. The committed
+`public-conformance.json` gates both installed hosts. Its first 260 cases per
+host are the independently replayed intersection of all eighteen Python lanes
+and three R hosts in full dispatch 38249603102 at
+`1e0be46f38db9b23b0a830718de030e194b5ecbb`. The remaining 50 unsupported, three
+mismatch and three error cases stay visible; two historical cases retain their
+approved exclusion. This corpus evidence does not complete other migration or
+release gates. Run locally against an installed package outside the checkout:
 
 ```sh
 python -I rust/tools/public_conformance.py plan --fixtures benchmarks --output /tmp/public-plan
@@ -100,7 +106,7 @@ Use absolute paths for the scripts, fixtures and lock when running from outside
 the checkout. The R comparator host needs `py-yaml12==0.2.0` and
 `pyarrow==25.0.1`; the R runner needs only base R and the installed package.
 
-A follow-up seeds `public-conformance.json` only from the intersection of passes
+Seed or advance `public-conformance.json` only from the intersection of passes
 in fresh inventories for every approved lane (18 Python lanes and three R
 hosts), using separate `python` and `r` lists. Passing `--ratchet FILE` to the
 comparator makes any listed benchmark's non-pass fail CI and reports new passes.

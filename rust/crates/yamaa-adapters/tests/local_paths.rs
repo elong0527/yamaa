@@ -45,6 +45,63 @@ impl Drop for Study {
 }
 
 #[test]
+fn public_uri_and_symlink_sources_keep_their_normative_cause_and_authored_path() {
+    use yamaa_adapters::{file_application, specification_report::Identity};
+    use yamaa_engine::domain_entry::Request;
+    let study = Study::new();
+    fs::write(study.0.join("shared/data.csv"), b"ID\n7\n").unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("../shared/data.csv", study.0.join("entry/link.csv")).unwrap();
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_file("../shared/data.csv", study.0.join("entry/link.csv"))
+        .unwrap();
+    for (written, condition, requirement) in [
+        (
+            "https://example.invalid/source.csv",
+            "resource_path_uri_scheme",
+            "REQ-0775",
+        ),
+        ("link.csv", "resource_path_symlink", "REQ-0783"),
+    ] {
+        let spec = format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: '{written}'}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: output.csv, columns: [ID]}}\n");
+        fs::write(study.0.join("entry/spec.yaml"), spec).unwrap();
+        let path = study.text("entry/spec.yaml");
+        let issues = file_application::domain(
+            Request {
+                specification: &path,
+                environment: None,
+            },
+            Identity {
+                runtime: "test",
+                runtime_version: "test",
+                engine_version: "test",
+                example: "test",
+                specification: &path,
+                base_directory: ".",
+            },
+        )
+        .map_or_else(
+            |issues| issues,
+            |mut result| {
+                assert!(result.output().is_none());
+                assert!(result.save().is_err());
+                result.issues()
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].phase, "validation");
+        assert_eq!(issues[0].condition, condition);
+        assert_eq!(issues[0].requirement.as_deref(), Some(requirement));
+        assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
+            serde_json::json!({"dataset":"SRC","path":written})
+        );
+        assert!(!study.0.join("entry/output.csv").exists());
+    }
+}
+
+#[test]
 fn inherited_parent_keeps_its_own_input_and_output_locations_without_configuration() {
     let study = Study::new();
     let parent = "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\noutput: {path: ../outputs/out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";

@@ -241,6 +241,8 @@ conditions! {
     ConversionTemporal => ("convert", "conversion_failed", Some("REQ-0601")),
     ResourceMissing => ("validation", "resource_path_missing", Some("REQ-0785")),
     ResourceNotRegularFile => ("validation", "resource_path_not_regular_file", Some("REQ-0785")),
+    ResourceUriScheme => ("validation", "resource_path_uri_scheme", Some("REQ-0775")),
+    ResourceSymlink => ("validation", "resource_path_symlink", Some("REQ-0783")),
     SchemaModelInvalidValue => ("validation", "model_contract_mismatch", Some("REQ-0287")),
     SchemaModelMissingField => ("validation", "model_contract_mismatch", Some("REQ-0285")),
     SchemaModelUnknownField => ("validation", "model_contract_mismatch", Some("REQ-0285")),

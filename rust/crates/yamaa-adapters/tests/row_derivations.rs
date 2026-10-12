@@ -161,6 +161,13 @@ fn invalid_grouped_case_source_and_window_filter_refuse_publication() {
     assert!(!f.0.join("output.csv").exists());
 }
 #[test]
+fn intermediate_identity_keeps_column_key_windows_over_all_constructed_templates() {
+    let body = "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {VALUE: int}}\n  D: donor.csv\nintermediates: [{id: P, dataset: D, key: ID}]\noutput: {path: output.csv, columns: [ID, SEQ, VALUE, PICK]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\n  - {name: SEQ, type: int, derivation: {row_number: {window: {group_by: [ID], order_by: [VALUE]}}}}\n  - {name: PICK, type: str, derivation: P.PICK}\nrows:\n  - {id: first, dataset: SRC, filter: \"SRC.KIND = 'A'\", derivations: {}}\n  - {id: second, dataset: SRC, filter: \"SRC.KIND = 'B'\", derivations: {}}\n";
+    let f = bespoke(body, b"ID,KIND,VALUE\nx,A,4\nx,B,1\n");
+    fs::write(f.0.join("donor.csv"), b"ID,PICK\nx,kept\n").unwrap();
+    assert_eq!(saved(&f), b"ID,SEQ,VALUE,PICK\nx,2,4,kept\nx,1,1,kept\n");
+}
+#[test]
 fn unchanged_vs_units_benchmark_runs_row_cases_and_numeric_branches() {
     let f = Fixture::new("sdtm-vs-units");
     let mut result = f.run();

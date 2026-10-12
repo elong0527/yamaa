@@ -205,14 +205,26 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         assert_eq!(diagnostic.operand_route, None);
         reached.insert(diagnostic.code);
     }
-    for (cause, condition) in [
+    for (cause, condition, requirement) in [
         (
             yamaa_core::resource::ResourceFailure::Missing,
             "resource_path_missing",
+            "REQ-0785",
         ),
         (
             yamaa_core::resource::ResourceFailure::NotRegularFile,
             "resource_path_not_regular_file",
+            "REQ-0785",
+        ),
+        (
+            yamaa_core::resource::ResourceFailure::UriScheme,
+            "resource_path_uri_scheme",
+            "REQ-0775",
+        ),
+        (
+            yamaa_core::resource::ResourceFailure::Symlink,
+            "resource_path_symlink",
+            "REQ-0783",
         ),
     ] {
         let diagnostic = cause.diagnostic("SRC", "input/data.csv");
@@ -223,7 +235,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
                 definition.condition,
                 definition.requirement
             ),
-            ("validation", condition, Some("REQ-0785"))
+            ("validation", condition, Some(requirement))
         );
         assert_eq!(diagnostic.spec_paths, ["input.SRC.path"]);
         assert_eq!(

@@ -2982,6 +2982,9 @@ fn classified_capture_failures_retain_complete_reports_without_publication() {
                 let kind = match cause {
                     ResourceFailure::Missing => "missing",
                     ResourceFailure::NotRegularFile => "not_regular_file",
+                    ResourceFailure::UriScheme | ResourceFailure::Symlink => {
+                        unreachable!("this retained fixture selects missing and nonregular causes")
+                    }
                 };
                 let row = include_str!("fixtures/source_capture.tsv")
                     .lines()

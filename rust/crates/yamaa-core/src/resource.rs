@@ -12,12 +12,16 @@ use crate::{
 pub enum ResourceFailure {
     Missing,
     NotRegularFile,
+    UriScheme,
+    Symlink,
 }
 impl ResourceFailure {
     pub fn code(self) -> ConditionCode {
         match self {
             Self::Missing => ConditionCode::ResourceMissing,
             Self::NotRegularFile => ConditionCode::ResourceNotRegularFile,
+            Self::UriScheme => ConditionCode::ResourceUriScheme,
+            Self::Symlink => ConditionCode::ResourceSymlink,
         }
     }
 
@@ -58,4 +62,23 @@ impl ResourceFailure {
             operand_route: None,
         }
     }
+}
+
+/// URI spelling is a static declaration finding. Absolute Windows drive paths
+/// remain local paths; resource ports retain authority over actual file kinds.
+pub fn has_uri_scheme(path: &str) -> bool {
+    let Some((scheme, rest)) = path.split_once(':') else {
+        return false;
+    };
+    if scheme.len() == 1
+        && scheme.as_bytes()[0].is_ascii_alphabetic()
+        && (rest.starts_with('/') || rest.starts_with('\\'))
+    {
+        return false;
+    }
+    let mut bytes = scheme.bytes();
+    bytes
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic())
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'-' | b'.'))
 }
