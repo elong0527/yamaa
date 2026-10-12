@@ -1306,7 +1306,7 @@ impl Rows {
                     .transpose()
                     .map_err(BindError::InvalidPredicateBinding)?
             };
-            if let Some(filter) = filter.as_ref().filter(|_| !grouped) {
+            if let Some(filter) = filter.as_ref() {
                 let bound = intermediates
                     .iter()
                     .filter_map(Option::as_ref)
@@ -1315,7 +1315,8 @@ impl Rows {
                 let deferred =
                     crate::dataset::window_stages(&assignments, output.columns().len(), &bound);
                 for binding in filter.bindings() {
-                    if matches!(binding.read, Read::Column(column) if deferred[column]) {
+                    if matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
+                    {
                         findings.push(BindFinding::Scalar(crate::diagnostic::Diagnostic {
                             code: crate::diagnostic::ConditionCode::RowFilterPhaseBoundary,
                             spec_paths: vec![filter_path.clone()],

@@ -56,7 +56,7 @@ fn source() -> TableSchema {
 }
 
 #[test]
-fn grouped_filters_bind_completed_row_windows() {
+fn grouped_filters_report_window_phase_boundary_before_plan_admission() {
     let mut template = row(
         "groups",
         vec![(
@@ -77,9 +77,38 @@ fn grouped_filters_bind_completed_row_windows() {
     fields.push(("filter".into(), Tree::text("SEQ > 1")));
     let spec = specification_with_rows(vec![("SEQ", "int", literal(0))], vec![template]);
     let prepared = PreparedSpecification::prepare(&spec).unwrap();
-    let plan = prepared.bind(&source()).unwrap();
-    let filter = plan.templates()[0].filter.as_ref().unwrap();
-    assert_eq!(filter.bindings()[0].read, Read::Column(1));
+    let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
+        panic!("grouped window filter must retain its normative finding");
+    };
+    assert_eq!(findings.len(), 1);
+    assert_eq!(
+        findings[0].diagnostics(prepared.source()).unwrap(),
+        vec![yamaa_core::diagnostic::Diagnostic {
+            code: yamaa_core::diagnostic::ConditionCode::RowFilterPhaseBoundary,
+            spec_paths: vec!["rows[0].filter".into()],
+            context: [
+                (
+                    "identifier".into(),
+                    ContextValue::Scalar(Value::Str("SEQ".into()))
+                ),
+                (
+                    "row".into(),
+                    ContextValue::Scalar(Value::Str("groups".into()))
+                ),
+                (
+                    "available_phase".into(),
+                    ContextValue::Scalar(Value::Str("window_derivation".into()))
+                ),
+                (
+                    "required_phase".into(),
+                    ContextValue::Scalar(Value::Str("row_filter".into()))
+                ),
+            ]
+            .into(),
+            source_span: None,
+            operand_route: None,
+        }],
+    );
 }
 
 #[test]
