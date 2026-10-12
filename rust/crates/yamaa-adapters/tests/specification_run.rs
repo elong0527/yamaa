@@ -3606,36 +3606,7 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
                 attempt.result.as_ref().err()
             )
         });
-        let mut expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
-        // Keep the historical capture unchanged; REQ-0068 now owns these
-        // independently specified row-filter phase failures.
-        if prefix == "row-filter"
-            && matches!(
-                fields[0],
-                "grouped_source_phase"
-                    | "grouped_unknown_phase"
-                    | "record_unknown_phase"
-                    | "group_and_filter_order"
-            )
-        {
-            for diagnostics in ["diagnostics", "nodes"] {
-                let values = if diagnostics == "nodes" {
-                    &mut expected["nodes"][0]["diagnostics"]
-                } else {
-                    &mut expected["diagnostics"]
-                };
-                let mut corrected = 0;
-                for finding in values.as_array_mut().unwrap() {
-                    if finding["condition"] == "phase_boundary" {
-                        assert_eq!(finding["requirement"], serde_json::Value::Null);
-                        assert_eq!(finding["spec_paths"], serde_json::json!(["rows[0].filter"]));
-                        finding["requirement"] = serde_json::json!("REQ-0068");
-                        corrected += 1;
-                    }
-                }
-                assert_eq!(corrected, 1);
-            }
-        }
+        let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
         let mut unsaved = expected.clone();
         unsaved["artifacts"] = serde_json::json!([]);
         assert_eq!(result.observations(), unsaved, "{}", fields[0]);
