@@ -32,15 +32,23 @@ Column defaults inherit each enclosing row template's scope and identity.
 Overrides retain their ordinary authored behavior. Named-intermediate and
 aggregate-derive item reads, wrong-driver reads, unknown inputs, invalid filter
 names and malformed predicates receive complete static findings before source
-capture. Deferred column defaults with ODM branches depending on completed
-dataset values remain explicitly unsupported until their template scope can be
-retained in the completed-column executor.
+capture. Deferred column defaults retain bounded, shared row-template metadata
+when their ODM branches depend on completed dataset values, including windows.
+The completed-column executor borrows the original admitted driver table,
+selects the actual candidate's occurrence or group scope, and keeps the authored
+template identity in findings. Nested ODM operands share this metadata rather
+than copying it per column; admission rejects a forged driver, template count,
+or incomplete group scope before cells. Scope traversal retains the dataset
+expression depth and work bounds.
 
 Eight engine controls pin exact item/identifier read order, unchanged opaque
 payload pointers, no retry, no Value reads during ambiguity classification,
 required-field coordinates, suppression of partial findings on later access
 failures, retained snapshots, and whole source-cell admission before cell reads.
-Core controls cover whole metadata/projection admission, fixed field order and
+Four more engine controls cover distinct occurrences after row numbers,
+secondary-driver ownership with an unread poison primary, unchanged opaque
+Value failures and leaf paths, and forged deferred-scope admission. Core
+controls cover whole metadata/projection admission, fixed field order and
 ordinary literal/dictionary spellings that cannot select ODM interpretation.
 
 Fourteen independently authored fixtures compare the complete report, source
@@ -51,6 +59,14 @@ projection, ignored nested vendor fields, malformed discarded physical data,
 type/ambiguity/missing-field findings and zero-row schema retention. Their data
 and expectations were authored independently of the Rust evaluator. Historical
 benchmark input and expected files remain unchanged.
+
+Eight additional independently authored reports and CSV artifacts cover the
+completed-window defaults, missing items, group selection and ambiguity,
+source selectors and predicates, nested string operands and unselected CASE
+branches. They are staged alongside the original fourteen for both installed
+hosts. The supplemental catalog records each actual contract consumer, including
+the six native Parquet controls, without claiming installed execution from
+catalog registration alone.
 
 Fresh Python and standalone R execution reuse the same literal fixtures.
 The complete public inventory must be reconciled against its immutable plan,

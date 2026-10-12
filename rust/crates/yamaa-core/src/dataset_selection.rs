@@ -31,6 +31,9 @@ impl FirstAvailable {
     pub fn sources(&self) -> &[SelectionSource] {
         &self.sources
     }
+    pub(super) fn sources_mut(&mut self) -> &mut [SelectionSource] {
+        &mut self.sources
+    }
     pub fn missing(&self) -> &Value {
         &self.missing
     }

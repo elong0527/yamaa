@@ -107,7 +107,7 @@ pub(super) fn bind(
         });
         return Ok(None);
     }
-    if declaration.dataset != driver {
+    if declaration.dataset != driver && !matches!(phase, Phase::Column { .. }) {
         findings.push(BindFinding::Odm(
             crate::diagnostic::OdmFinding::InvalidContext {
                 path: &declaration.path,
@@ -223,6 +223,21 @@ pub(super) fn bind(
             AggregatePhase::Derivation
         },
         scope,
+        source: if matches!(phase, Phase::Column { .. }) {
+            let reference = format!("{}.ItemOID", declaration.dataset);
+            let Some(reference_binding::Binding::Dataset { dataset, .. }) =
+                catalog.bind(&reference).map_err(BindError::Catalog)?
+            else {
+                return Err(BindError::Internal);
+            };
+            Some(if dataset == 0 {
+                crate::dataset::AggregateSource::Primary
+            } else {
+                crate::dataset::AggregateSource::Secondary(dataset - 1)
+            })
+        } else {
+            None
+        },
         selectors: declaration.selectors.clone(),
         filter,
     };

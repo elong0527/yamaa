@@ -1005,6 +1005,7 @@ cat("row-template filters complete reports, cached reads and exact saved CSV pas
 source_selection_truth("row-reductions.tsv","row-reduction",25L)
 source_selection_truth("correlated-aggregates.tsv","correlated-aggregate",16L)
 source_selection_truth("odm-reads.tsv","odm",14L)
+source_selection_truth("odm-deferred.tsv","odm-deferred",8L)
 odm_preflight <- read.delim(file.path(root,"odm-preflight.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
 stopifnot(nrow(odm_preflight)==8L)
 for(i in seq_len(nrow(odm_preflight))) for(j in seq_len(2L)) {

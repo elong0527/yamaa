@@ -31,6 +31,30 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let read = bound.read();
+    let original = match read.source {
+        None => row_drivers::Driver::Primary(table),
+        Some(AggregateSource::Primary) => row_drivers::Driver::Secondary(state.primary),
+        Some(AggregateSource::Secondary(index)) => row_drivers::Driver::Secondary(
+            *state
+                .secondary
+                .get(index)
+                .ok_or_else(|| Box::new(ExecutionError::SchemaMismatch))?,
+        ),
+    };
+    let table = &original;
+    let template = if let OdmScope::Templates(contexts) = &read.scope {
+        Some(
+            contexts
+                .get(
+                    candidate
+                        .template
+                        .ok_or_else(|| Box::new(ExecutionError::SchemaMismatch))?,
+                )
+                .ok_or_else(|| Box::new(ExecutionError::SchemaMismatch))?,
+        )
+    } else {
+        None
+    };
     let mut scope = Vec::new();
     let fields: &[usize] = match &read.scope {
         OdmScope::Keys => {
@@ -45,6 +69,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         }
         OdmScope::Records => &HIERARCHY,
         OdmScope::Groups(fields) => fields,
+        OdmScope::Templates(_) => template.unwrap().groups.as_deref().unwrap_or(&HIERARCHY),
     };
     if !fields.is_empty() {
         let representative = *candidate
@@ -147,7 +172,10 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             let diagnostic = yamaa_core::diagnostic::OdmFinding::NotUnique {
                 path: &read.path,
                 item: &read.item,
-                row: read.row.as_deref(),
+                row: read
+                    .row
+                    .as_deref()
+                    .or_else(|| template.map(|context| context.row.as_str())),
                 phase: read.phase,
                 scope: &scope,
                 differ: &differ,

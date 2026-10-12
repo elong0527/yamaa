@@ -43,6 +43,41 @@ struct Template {
         Result<crate::predicate::Plan, predicate_compiler::Error>,
     )>,
 }
+fn deferred_odm_contexts(
+    declarations: &[Template],
+    templates: &[RowTemplate],
+) -> Result<alloc::rc::Rc<[crate::dataset::OdmTemplateScope]>, BindError> {
+    declarations
+        .iter()
+        .try_fold(0usize, |used, template| {
+            used.checked_add(template.id.len()).and_then(|used| {
+                used.checked_add(
+                    core::mem::size_of::<crate::dataset::OdmTemplateScope>()
+                        + 8 * core::mem::size_of::<usize>(),
+                )
+            })
+        })
+        .filter(|&bytes| bytes <= 16_777_216)
+        .ok_or(BindError::Internal)?;
+    Ok(declarations
+        .iter()
+        .zip(templates)
+        .map(|(declaration, template)| crate::dataset::OdmTemplateScope {
+            row: declaration.id.clone(),
+            driver: template.mode.source_index(),
+            groups: match template.mode.local_mode() {
+                RowMode::Groups(groups) => Some(
+                    crate::odm_source::HIERARCHY
+                        .into_iter()
+                        .filter(|field| groups.contains(field))
+                        .collect(),
+                ),
+                _ => None,
+            },
+        })
+        .collect::<Vec<_>>()
+        .into())
+}
 #[derive(Debug)]
 pub(super) struct Rows {
     templates: Vec<Template>,
@@ -296,13 +331,7 @@ fn select_defaults(
             .filter(|&node| !matches!(d.nodes()[node], N::Null))
         {
             if odm::contains(d, derivation, 0)? {
-                if !local[column] {
-                    return Err(unsupported(
-                        "odm_deferred_default",
-                        &format!("columns.{}.derivation", output.columns()[column].name),
-                    ));
-                }
-                selected[column] = true;
+                selected[column] = local[column];
             }
         }
     }
@@ -1366,6 +1395,7 @@ impl Rows {
                 filter,
             });
         }
+        let mut odm_contexts: Option<alloc::rc::Rc<[crate::dataset::OdmTemplateScope]>> = None;
         let mut columns = Vec::new();
         let mut dependencies = alloc::vec![None; output.columns().len()];
         for declaration in &self.columns {
@@ -1375,7 +1405,7 @@ impl Rows {
                 }
             }
             let mut edges = Vec::new();
-            if let Some(value) = assignment(
+            if let Some(mut value) = assignment(
                 source,
                 name,
                 &catalog,
@@ -1389,6 +1419,16 @@ impl Rows {
                 &mut findings,
                 false,
             )? {
+                crate::dataset::odm::visit_mut(&mut value.expression, &mut |bound| {
+                    if odm_contexts.is_none() {
+                        odm_contexts = Some(
+                            deferred_odm_contexts(&self.templates, &templates)
+                                .map_err(|_| crate::dataset::PlanError::InvalidSource)?,
+                        );
+                    }
+                    bound.defer(odm_contexts.as_ref().unwrap().clone())
+                })
+                .map_err(BindError::InvalidPlan)?;
                 columns.push(value);
             }
             dependencies[declaration.column] = Some(edges);

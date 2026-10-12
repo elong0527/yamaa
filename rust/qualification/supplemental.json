@@ -2,6 +2,60 @@
   "version": "1",
   "contracts": [
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_reads.tsv",
+      "family": "odm",
+      "level": "component",
+      "consumers": ["rust/crates/yamaa-adapters/tests/specification_run.rs", "rust/tools/stage_specification_inputs.py", "rust/tests/installed_original_specifications.py", "R/yamaa/tests/original_specifications.R"]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_deferred.tsv",
+      "family": "odm",
+      "level": "component",
+      "consumers": ["rust/crates/yamaa-adapters/tests/specification_run.rs", "rust/tools/stage_specification_inputs.py", "rust/tests/installed_original_specifications.py", "R/yamaa/tests/original_specifications.R"]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_preflight.tsv",
+      "family": "odm",
+      "level": "compile",
+      "consumers": ["rust/crates/yamaa-adapters/tests/specification_run.rs", "rust/tools/stage_specification_inputs.py", "rust/tests/installed_original_specifications.py", "R/yamaa/tests/original_specifications.R"]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-vendor.parquet",
+      "family": "odm",
+      "level": "component",
+      "consumers": ["rust/crates/yamaa-adapters/tests/parquet_source.rs"]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-vendor-malformed.parquet",
+      "family": "odm",
+      "level": "component",
+      "consumers": ["rust/crates/yamaa-adapters/tests/parquet_source.rs"]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-missing.parquet",
+      "family": "odm",
+      "level": "component",
+      "consumers": ["rust/crates/yamaa-adapters/tests/parquet_source.rs"]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-wrong-type.parquet",
+      "family": "odm",
+      "level": "component",
+      "consumers": ["rust/crates/yamaa-adapters/tests/parquet_source.rs"]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-ambiguous.parquet",
+      "family": "odm",
+      "level": "component",
+      "consumers": ["rust/crates/yamaa-adapters/tests/parquet_source.rs"]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-empty.parquet",
+      "family": "odm",
+      "level": "component",
+      "consumers": ["rust/crates/yamaa-adapters/tests/parquet_source.rs"]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json",
       "family": "text",
       "level": "component",
@@ -1479,6 +1533,8 @@
     }
   ],
   "support_files": [
+    { "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_reads.md", "role": "documentation" },
+    { "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_deferred.md", "role": "documentation" },
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/datasets/README.md",
       "role": "documentation"

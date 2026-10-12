@@ -3516,6 +3516,11 @@ fn odm_reads_match_complete_independent_reports_and_exact_csv() {
 }
 
 #[test]
+fn deferred_odm_defaults_match_complete_independent_reports_and_exact_csv() {
+    replay_source_selection_truth(include_str!("fixtures/odm_deferred.tsv"), "odm-deferred", 8);
+}
+
+#[test]
 fn odm_preflight_matches_complete_independent_findings_before_source_authority() {
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut count = 0;

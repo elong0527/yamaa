@@ -656,6 +656,9 @@ class OriginalSpecifications(unittest.TestCase):
     def test_odm_reads_complete_reports_and_exact_csv(self):
         self._source_selection_reports("odm-reads.tsv", "odm", 14)
 
+    def test_deferred_odm_defaults_complete_reports_and_exact_csv(self):
+        self._source_selection_reports("odm-deferred.tsv", "odm-deferred", 8)
+
     def test_odm_preflight_complete_findings_before_any_resource_port(self):
         with (ROOT / "odm-preflight.tsv").open(encoding="ascii") as stream:
             cases=list(csv.DictReader(stream,delimiter="\t"))

@@ -36,8 +36,8 @@ pub use aggregate::{
     AggregateRowContext, AggregateSource, BoundAggregate,
 };
 #[path = "dataset_odm.rs"]
-mod odm;
-pub use odm::{BoundOdm, OdmRead, OdmScope};
+pub(crate) mod odm;
+pub use odm::{BoundOdm, OdmRead, OdmScope, OdmTemplateScope};
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
 pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
@@ -888,7 +888,7 @@ fn validate_assignment_at(
         Expression::Aggregate(aggregate) => {
             aggregate.validate(source, secondary, output, available, mode)?;
         }
-        Expression::Odm(odm) => odm.validate(source, mode)?,
+        Expression::Odm(odm) => odm.validate(source, secondary, mode)?,
         Expression::Count { column, text } => {
             if column.is_some_and(|column| column >= source.columns().len()) {
                 return Err(PlanError::InvalidSource);
@@ -969,7 +969,9 @@ fn current_record_read(
 ) -> bool {
     let include_raw = scope != RecordReadScope::PrimaryMatching;
     match expression {
-        Expression::Odm(odm) => include_raw && !matches!(odm.read().scope, OdmScope::Keys),
+        Expression::Odm(odm) => {
+            include_raw && !matches!(odm.read().scope, OdmScope::Keys | OdmScope::Templates(_))
+        }
         Expression::Aggregate(aggregate) => match aggregate.relation() {
             AggregateRelation::CurrentGroup => include_raw,
             AggregateRelation::Matched { keys, .. } => {
@@ -1129,7 +1131,7 @@ impl DatasetPlan {
         let width = output.columns().len();
         validate_columns(&keys, width)?;
         let mut row_columns = None;
-        for template in &templates {
+        for (template_index, template) in templates.iter().enumerate() {
             let (template_source, mode) = template.mode.context(&source, &secondary)?;
             let keyed = matches!(mode, RowMode::Keys);
             if keyed && templates.len() != 1 {
@@ -1201,6 +1203,12 @@ impl DatasetPlan {
             }
             row_columns = Some(available.clone());
             for assignment in &columns {
+                odm::validate_template(
+                    &assignment.expression,
+                    template,
+                    template_index,
+                    templates.len(),
+                )?;
                 relation_predicates::validate_reads(
                     &assignment.expression,
                     &intermediates,

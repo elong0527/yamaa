@@ -91,6 +91,7 @@ fn read(scope: OdmScope, filter: Option<BoundPredicate>) -> BoundOdm {
         row: Some("occurrence".into()),
         phase: AggregatePhase::Derivation,
         scope,
+        source: None,
         selectors: [None, None, None],
         filter,
     })
@@ -327,6 +328,231 @@ fn invalid_fixed_schema_or_scope_is_rejected_before_any_cell_effect() {
     .unwrap();
     assert_eq!(
         plan(&source, read(OdmScope::Records, None)).unwrap_err(),
+        PlanError::InvalidSource
+    );
+    assert!(source.reads.borrow().is_empty());
+}
+
+fn deferred_read(driver: usize, groups: Option<Vec<usize>>) -> BoundOdm {
+    let mut declaration = read(OdmScope::Records, None).read().clone();
+    declaration.row = None;
+    declaration.source = Some(if driver == 0 {
+        AggregateSource::Primary
+    } else {
+        AggregateSource::Secondary(driver - 1)
+    });
+    declaration.scope = OdmScope::Templates(
+        vec![OdmTemplateScope {
+            row: "after-window".into(),
+            driver,
+            groups,
+        }]
+        .into(),
+    );
+    BoundOdm::new(declaration).unwrap()
+}
+
+fn deferred_plan(
+    source: &Table,
+    driver: usize,
+    mode: RowMode,
+    bound: BoundOdm,
+) -> Result<DatasetPlan, PlanError> {
+    let grouped = matches!(mode, RowMode::Groups(_));
+    let output = TableSchema::new(vec![
+        Column {
+            name: "ID".into(),
+            kind: ColumnType::Str,
+        },
+        Column {
+            name: "SEQ".into(),
+            kind: ColumnType::Int,
+        },
+        Column {
+            name: "VAL".into(),
+            kind: ColumnType::Str,
+        },
+    ])
+    .unwrap();
+    let primary = if driver == 0 {
+        source.schema.clone()
+    } else {
+        schema(&["ordinary"])
+    };
+    let secondary = if driver == 0 {
+        vec![]
+    } else {
+        vec![SecondarySource {
+            name: "SRC".into(),
+            schema: source.schema.clone(),
+        }]
+    };
+    DatasetPlan::new_with_sources(
+        primary,
+        secondary,
+        output,
+        vec![RowTemplate {
+            mode: if driver == 0 {
+                mode
+            } else {
+                RowMode::Driver {
+                    source: driver,
+                    mode: Box::new(mode),
+                }
+            },
+            assignments: vec![Assignment {
+                column: 0,
+                expression: Expression::Literal(Value::Str("one".into())),
+                path: "rows[0].derivations.ID".into(),
+            }],
+            filter: if grouped {
+                None
+            } else {
+                Some(predicate("SRC.ItemOID = 'IT.ANCHOR'", 9, "rows[0].filter"))
+            },
+        }],
+        vec![
+            Assignment {
+                column: 1,
+                expression: Expression::Window(Window {
+                    kind: WindowKind::RowNumber,
+                    group_by: vec![],
+                    order_by: vec![OrderTerm {
+                        column: 0,
+                        descending: false,
+                        nulls_first: false,
+                    }],
+                    filter: None,
+                }),
+                path: "columns.SEQ.derivation".into(),
+            },
+            Assignment {
+                column: 2,
+                expression: Expression::Odm(Box::new(bound)),
+                path: "columns.VAL.derivation".into(),
+            },
+        ],
+        vec![0, 1],
+        vec![],
+    )
+}
+
+#[test]
+fn deferred_record_scope_keeps_each_original_occurrence_after_row_numbers() {
+    let mut second_anchor = record("IT.ANCHOR", "anchor2");
+    second_anchor[6] = Value::Str("2".into());
+    let mut second_item = record("IT.TEST.OID", "second");
+    second_item[6] = Value::Str("2".into());
+    let source = table(vec![
+        record("IT.ANCHOR", "anchor1"),
+        record("IT.TEST.OID", "first"),
+        second_anchor,
+        second_item,
+    ]);
+    let result = deferred_plan(&source, 0, RowMode::Records, deferred_read(0, None))
+        .unwrap()
+        .execute(&source, limits())
+        .unwrap();
+    assert_eq!(
+        result.dataset.rows(),
+        &[
+            vec![
+                Value::Str("one".into()),
+                Value::Int(1),
+                Value::Str("first".into())
+            ],
+            vec![
+                Value::Str("one".into()),
+                Value::Int(2),
+                Value::Str("second".into())
+            ],
+        ]
+    );
+}
+
+#[test]
+fn deferred_secondary_driver_borrows_original_table_without_reading_primary() {
+    let source = table(vec![
+        record("IT.ANCHOR", "anchor"),
+        record("IT.TEST.OID", "Y"),
+    ]);
+    let mut primary = table(vec![vec![Value::Str("poison".into())]]);
+    primary.schema = schema(&["ordinary"]);
+    primary.fail = Some((0, 0));
+    let attempt = deferred_plan(&source, 1, RowMode::Records, deferred_read(1, None))
+        .unwrap()
+        .execute_observed_sources(&primary, &[&source], limits());
+    assert_eq!(
+        attempt.result.unwrap().dataset.rows(),
+        &[vec![
+            Value::Str("one".into()),
+            Value::Int(1),
+            Value::Str("Y".into())
+        ]]
+    );
+    assert!(primary.reads.borrow().is_empty());
+    let mut expected = scope_prefix(2);
+    expected.push((1, 10));
+    assert_eq!(*source.reads.borrow(), expected);
+}
+
+#[test]
+fn deferred_value_access_keeps_the_original_error_and_authored_leaf_path() {
+    let mut source = table(vec![
+        record("IT.ANCHOR", "anchor"),
+        record("IT.TEST.OID", "Y"),
+    ]);
+    source.fail = Some((1, 10));
+    let attempt = deferred_plan(&source, 0, RowMode::Records, deferred_read(0, None))
+        .unwrap()
+        .execute_observed(&source, limits());
+    match *attempt.result.unwrap_err() {
+        ExecutionError::Cell {
+            path,
+            source_row: 1,
+            error: CellError::Access(Original(payload)),
+        } => {
+            assert_eq!(path, "columns.VAL.derivation.odm");
+            assert!(Rc::ptr_eq(&payload, &source.payload));
+        }
+        error => panic!("unexpected error: {error:?}"),
+    }
+    let mut expected = scope_prefix(2);
+    expected.push((1, 10));
+    assert_eq!(*source.reads.borrow(), expected);
+    assert!(attempt.handler_counts.is_empty());
+}
+
+#[test]
+fn forged_template_count_driver_and_incomplete_group_scope_fail_before_cells() {
+    let source = table(vec![record("IT.ANCHOR", "anchor")]);
+    assert_eq!(
+        deferred_plan(&source, 0, RowMode::Records, deferred_read(1, None)).unwrap_err(),
+        PlanError::InvalidSource
+    );
+    assert_eq!(
+        deferred_plan(
+            &source,
+            0,
+            RowMode::Groups(vec![0, 2, 9]),
+            deferred_read(0, Some(vec![0]))
+        )
+        .unwrap_err(),
+        PlanError::InvalidSource
+    );
+    let mut declaration = deferred_read(0, None).read().clone();
+    let OdmScope::Templates(contexts) = &mut declaration.scope else {
+        unreachable!()
+    };
+    *contexts = vec![contexts[0].clone(), contexts[0].clone()].into();
+    assert_eq!(
+        deferred_plan(
+            &source,
+            0,
+            RowMode::Records,
+            BoundOdm::new(declaration).unwrap()
+        )
+        .unwrap_err(),
         PlanError::InvalidSource
     );
     assert!(source.reads.borrow().is_empty());
