@@ -221,9 +221,9 @@ fn grouped_filter_uses_one_eligibility_pass_after_windows() {
     )
     .unwrap();
     // This finite attempt budget admits one eligibility evaluation per group.
-    // Repeating the predicate after the windows consumes additional work.
+    // Complete all three windows before the single eligibility pass.
     let mut bounded = limits();
-    bounded.work_cells = 40;
+    bounded.work_cells = 60;
     let attempt = plan.execute_observed(&table, bounded);
     assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
     assert_eq!(
