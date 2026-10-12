@@ -1047,6 +1047,12 @@ impl Executor<'_> {
                     self.plan.output().columns().len(),
                     self.plan.intermediates(),
                 );
+                let late_filter = matches!(template.mode.local_mode(), RowMode::Groups(_))
+                    && template.filter.as_ref().is_some_and(|filter| {
+                        filter.bindings().iter().any(|binding| {
+                            matches!(binding.read, yamaa_core::bound_expression::Read::Column(column) if deferred[column])
+                        })
+                    });
                 let groups = match template.mode.local_mode() {
                     RowMode::Driver { .. } => unreachable!("plan admission rejects nested drivers"),
                     RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
@@ -1102,22 +1108,8 @@ impl Executor<'_> {
                         )?;
                         candidate.completed[assignment.column] = true;
                     }
-                    if let Some(filter) = template.filter.as_ref() {
-                        let source_row = candidate.members[0];
-                        let truth = crate::dataset_predicate::evaluate(
-                            filter,
-                            table,
-                            source_row,
-                            &candidate.values,
-                            budget.predicate(),
-                        )
-                        .map_err(|error| match error.kind {
-                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                Box::new(predicate_limit(limit))
-                            }
-                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                        })?;
-                        if truth != yamaa_core::predicate::Truth::True {
+                    if let Some(filter) = template.filter.as_ref().filter(|_| !late_filter) {
+                        if !row_windows::retain(filter, table, &candidate, &mut budget)? {
                             budget.discard_candidate(&candidate.values);
                             continue;
                         }
@@ -1140,6 +1132,15 @@ impl Executor<'_> {
                         intermediates: &mut intermediate_run,
                     },
                 )?;
+                if let Some(filter) = template.filter.as_ref().filter(|_| late_filter) {
+                    for candidate in candidates.split_off(first) {
+                        if row_windows::retain(filter, table, &candidate, &mut budget)? {
+                            candidates.push(candidate);
+                        } else {
+                            budget.discard_candidate(&candidate.values);
+                        }
+                    }
+                }
             }
         }
         let mut completed = vec![false; self.plan.output().columns().len()];

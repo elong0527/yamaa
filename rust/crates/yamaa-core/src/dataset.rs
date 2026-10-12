@@ -951,10 +951,10 @@ impl DatasetPlan {
             }
             if let Some(filter) = &template.filter {
                 let deferred = window_stages(&template.assignments, width, &intermediates);
-                if filter
-                    .bindings()
-                    .iter()
-                    .any(|binding| matches!(binding.read, Read::Column(column) if deferred[column]))
+                if !matches!(mode, RowMode::Groups(_))
+                    && filter.bindings().iter().any(
+                        |binding| matches!(binding.read, Read::Column(column) if deferred[column]),
+                    )
                 {
                     return Err(PlanError::Filter(BindingError::UnavailableColumn));
                 }
