@@ -52,6 +52,12 @@ def check_terminology(
     inventory = metadata is not None and metadata.inventory_vocabulary is True
     if default is None and not overrides and not inventory:
         return ()
+    # The target and key columns are read below without any other guard
+    # (check_column's own guard runs only when the column declares
+    # verifications), so require them here, as check_column does: a table
+    # missing one must fail with the governed DeclarationError, not an
+    # ungoverned polars ColumnNotFoundError (same class as REQ-1163).
+    _require_columns(table, [column.name, *keys], f"columns.{column.name}", "REQ-0405")
     values = _values(table, column.name)
     if overrides:
         # REQ-1163 pins row-level codelist overrides to the domain's
