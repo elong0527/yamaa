@@ -27,7 +27,10 @@ impl ReferenceCause {
 #[derive(Debug)]
 pub struct LookupFinding(Diagnostic);
 impl LookupFinding {
-    fn new(path: &str, code: C) -> Self {
+    pub(super) fn from_diagnostic(diagnostic: Diagnostic) -> Self {
+        Self(diagnostic)
+    }
+    pub(super) fn new(path: &str, code: C) -> Self {
         Self(Diagnostic {
             code,
             spec_paths: vec![path.into()],
@@ -36,10 +39,21 @@ impl LookupFinding {
             operand_route: None,
         })
     }
-    fn text(&mut self, key: &str, value: &str) {
+    pub(super) fn text(&mut self, key: &str, value: &str) {
         self.0
             .context
             .insert(key.into(), ContextValue::Scalar(Value::Str(value.into())));
+    }
+    pub(super) fn texts(&mut self, key: &str, values: &[&str]) {
+        self.0.context.insert(
+            key.into(),
+            ContextValue::Sequence(
+                values
+                    .iter()
+                    .map(|value| ContextValue::Scalar(Value::Str((*value).into())))
+                    .collect(),
+            ),
+        );
     }
     pub fn diagnostic(&self) -> Diagnostic {
         self.0.clone()

@@ -63,7 +63,7 @@ fn malformed_row_filter_columns_retain_the_existing_scope_error() {
 }
 
 #[test]
-fn window_filter_admission_distinguishes_record_and_grouped_rows() {
+fn record_and_group_filters_reject_deferred_window_dependencies() {
     use yamaa_core::{
         bound_expression::{Binding, BindingError, BoundPredicate, Read},
         dataset::{OrderTerm, Window, WindowKind},
@@ -113,7 +113,7 @@ fn window_filter_admission_distinguishes_record_and_grouped_rows() {
                 vec![0],
                 vec![],
             );
-            if column == 0 || matches!(mode, RowMode::Groups(_)) {
+            if column == 0 {
                 assert!(plan.is_ok(), "{plan:?}");
             } else {
                 assert_eq!(

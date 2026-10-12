@@ -1,7 +1,7 @@
 //! Lazy source eligibility and named record selection within one dataset attempt.
 use super::*;
 #[path = "dataset_match_values.rs"]
-mod match_values;
+pub(super) mod match_values;
 use alloc::collections::BTreeMap;
 
 /// Keep only immutable row coordinates and the inherited handler outcome.
@@ -112,12 +112,14 @@ fn read_with_observations<T: TableAccess + ?Sized>(
     let donors = self_relations::Donors::<T::Error>::new(state.self_rows, plan.output());
     let table: &dyn TableAccess<Error = T::Error> = match &item.source {
         IntermediateSource::Input(index) => state.secondary[*index],
+        IntermediateSource::Primary { .. } => state.primary,
         IntermediateSource::SelfRows { .. } => &donors,
     };
-    let source_name = item
-        .source
-        .input_index()
-        .map_or("SELF", |index| plan.secondary()[index].name.as_str());
+    let source_name = match &item.source {
+        IntermediateSource::Input(index) => plan.secondary()[*index].name.as_str(),
+        IntermediateSource::Primary { name, .. } => name.as_str(),
+        IntermediateSource::SelfRows { .. } => "SELF",
+    };
     let choice = if let Some(choice) = state.intermediates.choices.get(&cache_key) {
         *choice
     } else {
@@ -147,9 +149,9 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                 .try_reserve_exact(table.row_count())
                 .map_err(|_| Box::new(ExecutionError::Allocation))?;
             for source_row in 0..table.row_count() {
-                if let Some(filter) = &item.filter {
+                if let Some(filter) = item.filter.as_ref().filter(|filter| !filter.correlated()) {
                     let truth = crate::dataset_predicate::evaluate(
-                        filter,
+                        filter.predicate(),
                         table,
                         source_row,
                         &[],
@@ -184,6 +186,23 @@ fn read_with_observations<T: TableAccess + ?Sized>(
             Some(current) => match_values::evaluate(item, &current, candidate, plan, row, state)?,
             None => match_values::ordinary(item, candidate, plan, row, primary, state)?,
         };
+        let range_value = item
+            .range
+            .as_ref()
+            .map(|range| {
+                relation_predicates::resolve_current(
+                    range.current(),
+                    range.path(),
+                    primary,
+                    candidate,
+                    plan,
+                    row,
+                    assignment,
+                    relation_predicates::CurrentObservation::Operand,
+                    state,
+                )
+            })
+            .transpose()?;
         state.budget.work(
             state
                 .intermediates
@@ -193,18 +212,22 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                 .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
             1,
         )?;
-        let eligible = &state.intermediates.eligible[&index];
-        if !keys
-            .iter()
-            .any(|(_, value)| matches!(value, Value::Missing))
+        let eligible_len = state.intermediates.eligible[&index].len();
+        if range_value
+            .as_ref()
+            .is_none_or(|value| !matches!(value, Value::Missing))
+            && !keys
+                .iter()
+                .any(|(_, value)| matches!(value, Value::Missing))
         {
             // First count every matching record without reading order or donor fields.
             let mut matching = Vec::new();
-            state.budget.work(eligible.len(), 1)?;
+            state.budget.work(eligible_len, 1)?;
             matching
-                .try_reserve_exact(eligible.len())
+                .try_reserve_exact(eligible_len)
                 .map_err(|_| Box::new(ExecutionError::Allocation))?;
-            for &source_row in eligible {
+            for position in 0..eligible_len {
+                let source_row = state.intermediates.eligible[&index][position];
                 let mut matches = true;
                 for (column, expected) in &keys {
                     let value = cell(table, item, source_row, *column, state.budget)?;
@@ -216,6 +239,55 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                     }
                 }
                 if matches {
+                    if let Some(filter) = item.filter.as_ref().filter(|filter| filter.correlated())
+                    {
+                        let owner = match &item.source {
+                            IntermediateSource::Input(index) => {
+                                relation_predicates::DonorOwner::Secondary(*index)
+                            }
+                            IntermediateSource::Primary { .. } => {
+                                relation_predicates::DonorOwner::Primary
+                            }
+                            IntermediateSource::SelfRows { .. } => {
+                                relation_predicates::DonorOwner::Completed
+                            }
+                        };
+                        if relation_predicates::evaluate(
+                            filter,
+                            relation_predicates::Donor {
+                                table,
+                                row: source_row,
+                                owner,
+                            },
+                            primary,
+                            candidate,
+                            plan,
+                            row,
+                            assignment,
+                            state,
+                        )? != yamaa_core::predicate::Truth::True
+                        {
+                            continue;
+                        }
+                    }
+                    if let (Some(range), Some(value)) = (&item.range, &range_value) {
+                        state.budget.work(1, 2)?;
+                        let allowed = range
+                            .allows(ValueRef::from(value), |column| {
+                                cell(table, item, source_row, column, state.budget)
+                            })
+                            .map_err(|failure| match failure {
+                                RelationRangeFailure::Access(error) => error,
+                                RelationRangeFailure::Incomparable(types) => {
+                                    Box::new(ExecutionError::ScalarDiagnostic(
+                                        types.diagnostic(range.path(), &item.identifier),
+                                    ))
+                                }
+                            })?;
+                        if !allowed {
+                            continue;
+                        }
+                    }
                     matching.push(source_row);
                 }
             }
@@ -328,6 +400,13 @@ fn cell<'a, E>(
                 source_row: row,
                 error,
             },
+            None if matches!(item.source, IntermediateSource::Primary { .. }) => {
+                ExecutionError::Cell {
+                    path: item.path.clone(),
+                    source_row: row,
+                    error,
+                }
+            }
             None => ExecutionError::SchemaMismatch,
         })
     })?;

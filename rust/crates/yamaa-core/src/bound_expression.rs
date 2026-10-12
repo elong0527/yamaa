@@ -2,7 +2,7 @@
 //! Admission inspects names and column availability, never table cells or hosts.
 
 use crate::{numeric_compiler::CompiledNumeric, predicate};
-use alloc::{collections::BTreeSet, string::String, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeSet, string::String, vec::Vec};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Read {
@@ -20,6 +20,7 @@ pub struct Binding {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BindingError {
     EmptyPath,
+    MetadataLimit,
     DuplicateName,
     MissingName,
     UnusedName,
@@ -92,8 +93,9 @@ fn validate_scope(
 /// A predicate owns its plan and complete, unique name-to-column map.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoundPredicate {
-    plan: predicate::Plan,
+    plan: Box<predicate::Plan>,
     bindings: Vec<Binding>,
+    collected: Vec<String>,
 }
 
 impl BoundPredicate {
@@ -109,7 +111,79 @@ impl BoundPredicate {
             return Err(BindingError::EmptyPath);
         }
         let bindings = bind_names(plan.identifiers(), bindings)?;
-        Ok(Self { plan, bindings })
+        Ok(Self {
+            plan: Box::new(plan),
+            bindings,
+            collected: Vec::new(),
+        })
+    }
+    /// Case predicates may read a kept record or lazily reduce a feeding key
+    /// group. Generic donor/output filters retain their narrower constructor.
+    /// Collection ownership is by authored name, not by an invented current row.
+    pub fn new_contextual(
+        plan: predicate::Plan,
+        bindings: Vec<Binding>,
+        mut collected: Vec<String>,
+    ) -> Result<Self, BindingError> {
+        let bytes = plan
+            .expression()
+            .len()
+            .checked_add(plan.spec_path().len())
+            .and_then(|bytes| {
+                bindings.iter().try_fold(bytes, |bytes, binding| {
+                    bytes.checked_add(binding.name.len())?.checked_add(128)
+                })
+            })
+            .and_then(|bytes| {
+                collected
+                    .iter()
+                    .try_fold(bytes, |bytes, name| bytes.checked_add(name.len()))
+            })
+            .and_then(|bytes| bytes.checked_mul(8));
+        if bytes.is_none_or(|bytes| bytes > 16_777_216)
+            || bindings.len() > 65_536
+            || collected.len() > bindings.len()
+        {
+            return Err(BindingError::MetadataLimit);
+        }
+        if plan.spec_path().is_empty() {
+            return Err(BindingError::EmptyPath);
+        }
+        let bindings = bind_names(plan.identifiers(), bindings)?;
+        collected.sort_unstable();
+        for (index, name) in collected.iter().enumerate() {
+            if index > 0 && collected[index - 1] == *name {
+                return Err(BindingError::DuplicateName);
+            }
+            if !bindings
+                .iter()
+                .any(|binding| binding.name == *name && matches!(binding.read, Read::Source(_)))
+            {
+                return Err(BindingError::InvalidSource);
+            }
+        }
+        Ok(Self {
+            plan: Box::new(plan),
+            bindings,
+            collected,
+        })
+    }
+    pub fn collected(&self) -> &[String] {
+        &self.collected
+    }
+    pub fn collects(&self, name: &str) -> bool {
+        self.collected
+            .binary_search_by(|candidate| candidate.as_str().cmp(name))
+            .is_ok()
+    }
+    /// Case owners additionally admit kept-record coordinates against their
+    /// named relation schemas; generic filters cannot acquire those coordinates.
+    pub(crate) fn validate_contextual(
+        &self,
+        source_width: usize,
+        available: &[bool],
+    ) -> Result<(), BindingError> {
+        validate_scope(&self.bindings, source_width, available, false).map_err(Into::into)
     }
     pub fn plan(&self) -> &predicate::Plan {
         &self.plan
@@ -125,6 +199,14 @@ impl BoundPredicate {
         available: &[bool],
         grouped: bool,
     ) -> Result<(), BindingError> {
+        if !self.collected.is_empty()
+            || self
+                .bindings
+                .iter()
+                .any(|binding| matches!(binding.read, Read::Intermediate { .. }))
+        {
+            return Err(BindingError::InvalidSource);
+        }
         validate_scope(&self.bindings, source_width, available, grouped).map_err(Into::into)
     }
 }

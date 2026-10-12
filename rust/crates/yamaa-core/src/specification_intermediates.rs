@@ -1,7 +1,6 @@
 //! Named stored-input and SELF selections compiled from the admitted document.
 use super::*;
 use crate::{
-    bound_expression::BoundPredicate,
     dataset::{Intermediate, IntermediateKey, Keep, OrderTerm, SecondarySource, SourceSelection},
     predicate_compiler,
     value::Value,
@@ -18,6 +17,8 @@ struct Declaration {
     order: Vec<(String, bool, bool)>,
     keep: Option<Keep>,
     no_match: Option<Value>,
+    range: Option<intermediate_range::Declaration>,
+    columns: Option<Vec<String>>,
 }
 #[derive(Debug, Default)]
 pub(super) struct Declarations(Vec<Declaration>);
@@ -48,8 +49,11 @@ impl Declarations {
                             .and_then(|filter| filter.as_ref().ok())
                             .into_iter()
                             .flat_map(|plan| plan.identifiers())
+                            .filter(|field| !field.contains('.') || field.starts_with("SELF."))
                             .map(|field| field.strip_prefix("SELF.").unwrap_or(field)),
                     )
+                    .chain(item.range.iter().flat_map(|range| range.donor_fields()))
+                    .chain(item.columns.iter().flatten().map(String::as_str))
             })
     }
     pub fn contains(&self, name: &str) -> bool {
@@ -69,6 +73,7 @@ impl Declarations {
                 .into_iter()
                 .flatten()
                 .filter_map(|(_, value)| value.reference())
+                .chain(item.range.iter().map(|range| range.value.as_str()))
         })
     }
     pub fn prepare(
@@ -93,16 +98,16 @@ impl Declarations {
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
+        let findings = intermediate_admission::declaration_findings(d, items)?;
+        if !findings.is_empty() {
+            return Err(PrepareError::Invalid(findings));
+        }
         for (index, &id) in items.iter().enumerate() {
             let path = format!("intermediates[{index}]");
-            optional_features(
-                d,
-                id,
-                &["between", "columns", "derivations", "verifications"],
-                &path,
-                extra,
-            );
+            optional_features(d, id, &["derivations", "verifications"], &path, extra);
             let name = text(d, field(d, id, "id")?)?;
+            let range = intermediate_range::prepare(d, id, &path, name)?;
+            let columns = intermediate_range::prepare_columns(d, id, limits)?;
             let dataset = text(d, field(d, id, "dataset")?)?;
             let source = if dataset == "SELF" && present(d, d.root(), "rows") {
                 self_relations::Relation::SelfRows
@@ -112,10 +117,7 @@ impl Declarations {
                 reject(extra, "intermediate_dataset", format!("{path}.dataset"));
                 continue;
             };
-            if matches!(source, self_relations::Relation::Input(index) if index == driver)
-                || result.contains(name)
-                || sources.iter().any(|source| source.name == name)
-            {
+            if result.contains(name) || sources.iter().any(|source| source.name == name) {
                 reject(extra, "intermediate_scope", path.clone());
                 continue;
             }
@@ -123,11 +125,19 @@ impl Declarations {
                 .field(id, "key")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
-                if !matches!(d.nodes()[key], N::Mapping(_) | N::Sequence(_)) {
+                if !matches!(d.nodes()[key], N::Text(_) | N::Mapping(_) | N::Sequence(_)) {
                     reject(extra, "intermediate_key", format!("{path}.key"));
                     continue;
                 }
-                if matches!(d.nodes()[key], N::Sequence(_)) {
+                if let N::Text(name) = &d.nodes()[key] {
+                    if limits.keys == 0 {
+                        return Err(PrepareError::Limit("intermediate_keys"));
+                    }
+                    Some(vec![(
+                        name.clone(),
+                        match_values::Declaration::Variable(name.clone()),
+                    )])
+                } else if matches!(d.nodes()[key], N::Sequence(_)) {
                     let fields = sequence(d, key)?;
                     if fields.len() > limits.keys {
                         return Err(PrepareError::Limit("intermediate_keys"));
@@ -246,9 +256,6 @@ impl Declarations {
                     order.push((name.into(), descending, nulls_first));
                 }
             }
-            if order.is_empty() != keep.is_none() {
-                reject(extra, "intermediate_selection", path.clone());
-            }
             let no_match = d
                 .field(id, "no_match")
                 .map(|value| literal(d, value, &format!("{path}.no_match")))
@@ -263,6 +270,8 @@ impl Declarations {
                 order,
                 keep,
                 no_match,
+                range,
+                columns,
             });
         }
         Ok(result)
@@ -278,6 +287,13 @@ impl Declarations {
         self_columns: Option<&[usize]>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(Vec<SecondarySource>, Vec<Option<Intermediate>>), BindError> {
+        intermediate_sources::admit(self.0.iter().filter_map(|item| match item.source {
+            self_relations::Relation::Input(index) if index == driver => {
+                Some((schemas[index], sources[index].name.as_str()))
+            }
+            self_relations::Relation::SelfRows => Some((output, "SELF")),
+            _ => None,
+        }))?;
         let secondary = sources
             .iter()
             .zip(schemas)
@@ -352,16 +368,26 @@ impl Declarations {
                 Default::default(),
             )
             .map_err(BindError::Catalog)?;
-            let default_keys = keys
-                .iter()
-                .map(|&column| {
-                    let name = &output.columns()[column].name;
-                    (
-                        name.clone(),
-                        match_values::Declaration::Variable(name.clone()),
-                    )
-                })
-                .collect::<Vec<_>>();
+            let default_keys = if item.keys.is_none() {
+                match intermediate_admission::inferred_keys(
+                    &catalog,
+                    output,
+                    keys,
+                    schema,
+                    &admits,
+                    &item.path,
+                    source_name,
+                    findings,
+                )? {
+                    Some(keys) => keys,
+                    None => {
+                        result.push(None);
+                        continue;
+                    }
+                }
+            } else {
+                Vec::new()
+            };
             let pairs_declared = item.keys.as_ref().unwrap_or(&default_keys);
             // Result types and donor fields precede expression declarations and reads.
             for (field, declaration) in pairs_declared {
@@ -424,25 +450,22 @@ impl Declarations {
             }
             let filter = match &item.filter {
                 Some(Ok(plan)) => {
-                    let mut bindings = Vec::new();
-                    let before = findings.len();
-                    for name in plan.identifiers() {
-                        if let Some(column) = resolve(name, plan.spec_path(), findings) {
-                            bindings.push(Binding {
-                                name: name.into(),
-                                read: Read::Source(column),
-                            });
-                        }
-                    }
-                    if findings.len() == before {
-                        Some(
-                            BoundPredicate::new(plan.clone(), bindings)
-                                .map_err(BindError::InvalidPredicateBinding)?,
-                        )
-                    } else {
+                    let filter = relation_predicates::bind(
+                        plan,
+                        source_name,
+                        schema,
+                        matches!(item.source, self_relations::Relation::SelfRows),
+                        &admits,
+                        &item.name,
+                        sources,
+                        schemas,
+                        driver,
+                        findings,
+                    )?;
+                    if filter.is_none() {
                         failed = true;
-                        None
                     }
+                    filter
                 }
                 Some(Err(predicate_compiler::Error::Parse(
                     crate::predicate_parser::ParseError::Grammar {
@@ -475,10 +498,51 @@ impl Declarations {
                     failed = true;
                 }
             }
+            let before = findings.len();
+            let columns = intermediate_range::bind_columns(
+                &item.columns,
+                source_name,
+                schema,
+                &admits,
+                &item.path,
+                &item.name,
+                findings,
+            );
+            // A rejected projection retains donor names for subsequent checkpoints.
+            // Its owned finding still prevents final plan admission.
+            let columns = (findings.len() == before).then_some(columns).flatten();
+            let range = item
+                .range
+                .as_ref()
+                .map(|declaration| {
+                    intermediate_range::bind(
+                        declaration,
+                        &item.name,
+                        schema,
+                        &admits,
+                        &catalog,
+                        sources,
+                        schemas,
+                        driver,
+                        &result,
+                        &secondary,
+                        findings,
+                    )
+                })
+                .transpose()?
+                .flatten();
+            // Range rejection owns its original cause without turning an existing
+            // donor field into a second unknown-reference diagnostic.
             result.push((!failed).then(|| Intermediate {
                 identifier: item.name.clone(),
                 path: item.path.clone(),
                 source: match item.source {
+                    self_relations::Relation::Input(index) if index == driver => {
+                        crate::dataset::IntermediateSource::Primary {
+                            schema: schemas[index].clone(),
+                            name: sources[index].name.clone(),
+                        }
+                    }
                     self_relations::Relation::Input(index) => {
                         crate::dataset::IntermediateSource::Input(if index > driver {
                             index - 1
@@ -497,6 +561,9 @@ impl Declarations {
                 filter,
                 selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
                 no_match: item.no_match.clone(),
+
+                range,
+                columns,
             }));
         }
         Ok((secondary, result))

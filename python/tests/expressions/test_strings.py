@@ -732,7 +732,7 @@ def test_str_pad_rejects_an_invalid_source_or_width(
 ) -> None:
     # REQ-0321 (via _invalid_payload): a single guard pins both the source
     # and the width contract (type(width) is not int rejects True), so the
-    # condition context must name the operation — a bare condition check
+    # condition context must name the operation; a bare condition check
     # could pass on a guard that fired elsewhere.
     result = evaluate_expression(
         {"str_pad": {"source": source, "width": width}},

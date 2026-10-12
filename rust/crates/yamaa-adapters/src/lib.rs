@@ -72,6 +72,8 @@ pub mod file_configuration;
 #[cfg(any(unix, windows))]
 pub mod file_graph;
 #[cfg(any(unix, windows))]
+mod file_metadata;
+#[cfg(any(unix, windows))]
 pub mod file_preparation;
 #[cfg(any(unix, windows))]
 pub mod file_producer_build;

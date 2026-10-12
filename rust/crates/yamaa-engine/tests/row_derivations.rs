@@ -66,7 +66,7 @@ fn limits() -> Limits {
     }
 }
 #[test]
-fn grouped_filter_keeps_window_positions_after_discarding_candidates() {
+fn grouped_filter_removes_candidates_before_numbering_windows() {
     let source = schema(&[("ID", ColumnType::Int)]);
     let table = Table {
         schema: source.clone(),
@@ -130,13 +130,13 @@ fn grouped_filter_keeps_window_positions_after_discarding_candidates() {
         plan.execute(&table, limits()).unwrap().dataset.rows(),
         [
             vec![Value::Int(1), Value::Int(2), Value::Int(1)],
-            vec![Value::Int(3), Value::Int(2), Value::Int(3)],
+            vec![Value::Int(3), Value::Int(2), Value::Int(2)],
         ]
     );
 }
 
 #[test]
-fn grouped_filter_uses_one_eligibility_pass_after_windows() {
+fn grouped_filter_uses_one_eligibility_pass_before_windows() {
     struct OnceTable {
         schema: TableSchema,
         reads: RefCell<Vec<(usize, usize)>>,
@@ -221,16 +221,16 @@ fn grouped_filter_uses_one_eligibility_pass_after_windows() {
     )
     .unwrap();
     // This finite attempt budget admits one eligibility evaluation per group.
-    // Complete all three windows before the single eligibility pass.
+    // Repeating the predicate after the windows consumes additional work.
     let mut bounded = limits();
-    bounded.work_cells = 60;
+    bounded.work_cells = 40;
     let attempt = plan.execute_observed(&table, bounded);
     assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         [
             vec![Value::Int(1), Value::Int(1), Value::Int(1)],
-            vec![Value::Int(3), Value::Int(1), Value::Int(3)]
+            vec![Value::Int(3), Value::Int(1), Value::Int(2)]
         ],
     );
     assert_eq!(

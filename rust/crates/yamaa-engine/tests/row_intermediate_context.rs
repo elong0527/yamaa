@@ -171,6 +171,9 @@ fn plan(src: &Table, donor: &Table, same_record: bool, target: T, absence: bool)
             filter: None,
             selection: None,
             no_match: absence.then_some(Value::Missing),
+
+            range: None,
+            columns: None,
         }],
         schema(&[
             ("ID", T::Str),

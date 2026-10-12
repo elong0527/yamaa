@@ -29,6 +29,7 @@ pub(super) enum Error {
     Limit,
     Unavailable(i64),
     Profile(profile::Error),
+    OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
 }
 impl From<compact::Error> for Error {
     fn from(error: compact::Error) -> Self {
@@ -54,6 +55,14 @@ pub(super) struct Decoded {
 }
 
 pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
+    read_interpreted(bytes, limits, false)
+}
+
+pub(super) fn read_odm(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
+    read_interpreted(bytes, limits, true)
+}
+
+fn read_interpreted(bytes: &[u8], limits: Limits, odm: bool) -> Result<Decoded, Error> {
     let frame = framing::admit(bytes, limits.framing)?;
     let metadata = Arc::new(
         ParquetMetaDataReader::decode_metadata(frame.metadata).map_err(|_| Error::Malformed)?,
@@ -63,6 +72,38 @@ pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
         limits.metadata,
     )?;
     let columns = metadata.file_metadata().schema_descr().columns();
+    // ODM field admission uses metadata alone. Ordinary profile findings keep
+    // their existing precedence after all physical chunks have been decoded.
+    let odm_metadata = if odm {
+        let arrow = ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
+            .map_err(|_| Error::Malformed)?;
+        let arrow_schema = schema::normalize(arrow.schema(), hint.as_ref());
+        let fields = arrow_schema
+            .fields()
+            .iter()
+            .map(|field| yamaa_core::odm_source::StoredField {
+                name: field.name(),
+                kind: columns
+                    .iter()
+                    .find(|column| {
+                        column.max_rep_level() == 0 && column.path().string() == *field.name()
+                    })
+                    .and_then(|column| profile::column_type(column, field.data_type())),
+            })
+            .collect::<Vec<_>>();
+        let binding = yamaa_core::odm_source::bind_fields(&fields)
+            .map_err(|_| Error::Limit)?
+            .map_err(Error::OdmFields)?;
+        let stored = binding.stored().map(|root| {
+            columns
+                .iter()
+                .position(|column| column.path().string() == *arrow_schema.field(root).name())
+                .expect("admitted flat ODM field")
+        });
+        Some((arrow_schema, stored))
+    } else {
+        None
+    };
     let mut expansion = expansion::Admission::new(limits.expanded_bytes);
     let mut actual_values = 0usize;
     for page in &frame.pages {
@@ -93,6 +134,9 @@ pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
         .iter()
         .enumerate()
         .map(|(index, column)| {
+            if let Some((_, stored)) = &odm_metadata {
+                return stored.contains(&index);
+            }
             arrow_schema.fields().len() == columns.len()
                 && arrow_schema.fields().get(index).is_some_and(|field| {
                     column.max_rep_level() == 0
@@ -111,6 +155,9 @@ pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
         })?;
     if group_rows != row_count {
         return Err(Error::Malformed);
+    }
+    if let Some((_, stored)) = odm_metadata {
+        return odm_decoded(raw, stored, row_count, limits);
     }
     let schema = profile::columns(&arrow_schema, metadata.file_metadata().schema_descr())
         .map_err(Error::Profile)?;
@@ -184,6 +231,61 @@ pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Decoded, Error> {
             .fields()
             .iter()
             .map(|field| arrow_schema::Field::new(field.name(), field.data_type().clone(), true))
+            .collect::<Vec<_>>(),
+    ));
+    let batch = RecordBatch::try_new(output_schema, arrays).map_err(|_| Error::Malformed)?;
+    if batch.get_array_memory_size() > limits.retained_bytes {
+        return Err(Error::Limit);
+    }
+    Ok(Decoded {
+        schema,
+        batches: vec![batch],
+    })
+}
+
+fn odm_decoded(
+    raw: Vec<physical::Column>,
+    stored: [usize; 11],
+    row_count: usize,
+    limits: Limits,
+) -> Result<Decoded, Error> {
+    use yamaa_core::{odm_source::FIELDS, table::Column};
+    let schema = TableSchema::new(
+        FIELDS
+            .iter()
+            .map(|name| Column {
+                name: (*name).into(),
+                kind: ColumnType::Str,
+            })
+            .collect(),
+    )
+    .map_err(|_| Error::Malformed)?;
+    let mut arrays: Vec<ArrayRef> = Vec::with_capacity(FIELDS.len());
+    for index in stored {
+        let physical::Column::Bytes(values) = raw.get(index).ok_or(Error::Malformed)? else {
+            return Err(Error::Malformed);
+        };
+        let strings = values
+            .iter()
+            .map(|value| {
+                value
+                    .as_ref()
+                    .map(|bytes| std::str::from_utf8(bytes.data()).map_err(|_| Error::Malformed))
+                    .transpose()
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if strings.len() != row_count {
+            return Err(Error::Malformed);
+        }
+        arrays.push(Arc::new(StringArray::from(strings)));
+    }
+    if limits.batches == 0 {
+        return Err(Error::Limit);
+    }
+    let output_schema = Arc::new(arrow_schema::Schema::new(
+        FIELDS
+            .iter()
+            .map(|name| arrow_schema::Field::new(*name, DataType::Utf8, true))
             .collect::<Vec<_>>(),
     ));
     let batch = RecordBatch::try_new(output_schema, arrays).map_err(|_| Error::Malformed)?;

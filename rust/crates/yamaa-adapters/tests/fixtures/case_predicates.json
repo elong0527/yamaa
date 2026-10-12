@@ -1,0 +1,111 @@
+{
+  "authorship": "Independent authored inputs and complete expected observations; historical benchmark truth remains unchanged.",
+  "cases": {
+    "implicit": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation:\n      case:\n        - when: \"SRC.V > 0\"\n          then: {literal: 7}\n        - when: 'FALSE'\n          then: SRC.BAD\n        - otherwise: {literal: 8}\n",
+      "inputs": {
+        "input.csv": "ID,V,BAD\na,1,hidden\na,,hidden\nb,,hidden\nc,-1,hidden\n"
+      },
+      "csv": "ID,VALUE\na,7\nb,8\nc,8\n"
+    },
+    "multiple": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation:\n      case:\n        - when: \"SRC.V > 0\"\n          then: {literal: 7}\n        - when: 'FALSE'\n          then: SRC.BAD\n        - otherwise: {literal: 8}\n",
+      "inputs": {
+        "input.csv": "ID,V,BAD\na,1,hidden\na,2,hidden\nb,,hidden\n"
+      },
+      "findings": [
+        {
+          "phase": "derivation",
+          "condition": "multiple_values_per_key",
+          "requirement": "REQ-0075",
+          "spec_paths": [
+            "columns.VALUE.derivation.case[0].when"
+          ],
+          "context": {
+            "identifier": "SRC.V",
+            "value_count": 2,
+            "keys": [
+              {
+                "ID": "a"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "column_filter": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation:\n      case:\n        - when: \"TRUE\"\n          then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}\n        - otherwise: {literal: 8}\n",
+      "inputs": {
+        "input.csv": "ID,V,BAD\na,1,hidden\nb,,hidden\n"
+      },
+      "csv": "ID,VALUE\na,a\nb,\n"
+    },
+    "record_filter": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation:\n      case:\n        - when: \"TRUE\"\n          then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}\n        - otherwise: {literal: 8}\nrows:\n  - id: records\n    dataset: SRC\n    derivations: {}\n",
+      "inputs": {
+        "input.csv": "ID,V,BAD\na,1,hidden\nb,,hidden\n"
+      },
+      "csv": "ID,VALUE\na,a\nb,\n"
+    },
+    "grouped_key_filter": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation:\n      case:\n        - when: \"TRUE\"\n          then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}\n        - otherwise: {literal: 8}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations: {}\n",
+      "inputs": {
+        "input.csv": "ID,V,BAD\na,1,hidden\nb,,hidden\n"
+      },
+      "csv": "ID,VALUE\na,a\nb,\n"
+    },
+    "case_extract": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation:\n      case:\n        - when: \"SRC.TEXT IS NOT NULL\"\n          then: {str_extract: {source: SRC.TEXT, pattern: '(?<=prefix:)([A-Z]+)', group: 1}}\n        - otherwise: {literal: none}\n",
+      "inputs": {
+        "input.csv": "ID,V,TEXT\na,1,prefix:ONE\nb,1,\n"
+      },
+      "csv": "ID,VALUE\na,ONE\nb,none\n"
+    },
+    "named_predicate": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\n  D: {path: donor.csv, types: {SEQ: int}}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    order_by: [D.SEQ]\n    keep: first\n    no_match: null\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation:\n      case:\n        - when: \"P.A = 'first'\"\n          then: {literal: yes}\n        - otherwise: {literal: no}\n",
+      "inputs": {
+        "input.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,A\na,1,first\na,2,second\nb,1,other\n"
+      },
+      "csv": "ID,VALUE\na,yes\nb,no\nc,no\n"
+    },
+    "wrong_kind_range": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation: {literal: 1}\n    verifications:\n      - range: {min: 1}\n",
+      "inputs": {
+        "input.csv": "ID\na\n"
+      },
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "invalid_declaration",
+          "requirement": "REQ-0404",
+          "spec_paths": [
+            "columns.VALUE.verifications[0].range"
+          ],
+          "context": {
+            "reason": "a str column does not admit this verification"
+          }
+        }
+      ]
+    },
+    "missing_allowed_literal": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation: {literal: 1}\n    verifications:\n      - allowed_values: {values: [null, false]}\n",
+      "inputs": {
+        "input.csv": "ID\na\n"
+      },
+      "findings": [
+        {
+          "phase": "validation",
+          "condition": "invalid_declaration",
+          "requirement": "REQ-0404",
+          "spec_paths": [
+            "columns.VALUE.verifications[0].allowed_values"
+          ],
+          "context": {
+            "reason": "listed value None is not a int value"
+          }
+        }
+      ]
+    }
+  }
+}

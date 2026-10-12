@@ -29,9 +29,31 @@ pub use flags::{
 #[path = "dataset_functions.rs"]
 mod functions;
 pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, FunctionInput};
+#[path = "dataset_aggregate.rs"]
+mod aggregate;
+pub use aggregate::{
+    AggregateBinding, AggregateBindingError, AggregatePhase, AggregateRelation,
+    AggregateRowContext, AggregateSource, BoundAggregate,
+};
+#[path = "dataset_odm.rs"]
+pub(crate) mod odm;
+pub use odm::{BoundOdm, OdmRead, OdmScope, OdmTemplateScope};
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
-pub use intermediates::{Intermediate, RecordMatchKey, SourceSchemas};
+pub use intermediates::{visit_output_dependencies, Intermediate, RecordMatchKey, SourceSchemas};
+#[path = "dataset_relation_predicate.rs"]
+pub(crate) mod relation_predicates;
+pub use relation_predicates::{CurrentField, CurrentRead, RelationPredicate};
+#[path = "dataset_relation_shape.rs"]
+mod relation_shape;
+pub use relation_shape::{
+    RelationField, RelationFieldOrigin, RelationShape, RelationShapeError, RelationShapeLimits,
+};
+#[path = "dataset_relation_range.rs"]
+mod relation_range;
+pub use relation_range::{
+    RelationRange, RelationRangeBound, RelationRangeError, RelationRangeFailure, RelationRangeTypes,
+};
 #[path = "dataset_self.rs"]
 mod self_relations;
 pub use self_relations::IntermediateSource;
@@ -71,6 +93,8 @@ pub use windows::{OrderTerm, Window, WindowKind};
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    Odm(alloc::boxed::Box<BoundOdm>),
+    Aggregate(alloc::boxed::Box<BoundAggregate>),
     MappingCut {
         source: alloc::boxed::Box<Assignment>,
         operation: crate::mapping_cut::MappingCut,
@@ -417,6 +441,7 @@ pub struct DatasetPlan {
     intermediates: Vec<Intermediate>,
     output: TableSchema,
     templates: Vec<RowTemplate>,
+    row_contexts: Vec<Option<AggregateRowContext>>,
     columns: Vec<Assignment>,
     keys: Vec<usize>,
     verifications: Vec<Verification>,
@@ -442,6 +467,9 @@ fn validate_columns(columns: &[usize], width: usize) -> Result<(), PlanError> {
 
 /// Enforce grouped source scope and already-completed output dependencies.
 #[allow(clippy::too_many_arguments)]
+const EXPRESSION_DEPTH_LIMIT: usize = 64;
+const EXPRESSION_NODE_LIMIT: usize = 65_536;
+
 fn validate_assignment(
     assignment: &Assignment,
     available: &mut [bool],
@@ -451,6 +479,7 @@ fn validate_assignment(
     output: &TableSchema,
     mode: &RowMode,
 ) -> Result<(), PlanError> {
+    let mut remaining = EXPRESSION_NODE_LIMIT;
     validate_assignment_at(
         assignment,
         available,
@@ -460,7 +489,7 @@ fn validate_assignment(
         output,
         mode,
         0,
-        &mut 65_536,
+        &mut remaining,
     )
 }
 #[allow(clippy::too_many_arguments)]
@@ -475,7 +504,7 @@ fn validate_assignment_at(
     depth: usize,
     remaining: &mut usize,
 ) -> Result<(), PlanError> {
-    if depth > 64 || *remaining == 0 {
+    if depth > EXPRESSION_DEPTH_LIMIT || *remaining == 0 {
         return Err(PlanError::InvalidColumns);
     }
     *remaining -= 1;
@@ -500,13 +529,26 @@ fn validate_assignment_at(
                     return Err(PlanError::InvalidColumns);
                 }
                 if let Some(when) = &branch.when {
+                    if !when.collected().is_empty() && !matches!(mode, RowMode::Keys) {
+                        return Err(PlanError::InvalidKeyMode);
+                    }
                     if let RowMode::Groups(keys) = mode {
                         if when.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !keys.contains(&column))) {
                             return Err(PlanError::NonGroupSource);
                         }
                     }
-                    when.validate(source.columns().len(), available, false)
+                    when.validate_contextual(source.columns().len(), available)
                         .map_err(PlanError::Filter)?;
+                    for binding in when.bindings() {
+                        if let Read::Intermediate { index, column } = binding.read {
+                            let item = intermediates
+                                .get(index)
+                                .ok_or(PlanError::InvalidIntermediate)?;
+                            intermediates::validate_context_read(
+                                item, column, source, secondary, available, output, mode,
+                            )?;
+                        }
+                    }
                 }
                 validate_assignment_at(
                     &branch.assignment,
@@ -824,7 +866,11 @@ fn validate_assignment_at(
             if *column >= source.columns().len() {
                 return Err(PlanError::InvalidSource);
             }
-            if !matches!(mode, RowMode::Keys) || identifier.is_empty() {
+            let scalar_records = filter.is_some()
+                && selection.is_none()
+                && (matches!(mode, RowMode::Records)
+                    || matches!(mode, RowMode::Groups(keys) if keys.contains(column)));
+            if (!matches!(mode, RowMode::Keys) && !scalar_records) || identifier.is_empty() {
                 return Err(PlanError::InvalidKeyMode);
             }
             if let Some(filter) = filter {
@@ -843,6 +889,10 @@ fn validate_assignment_at(
                 }
             }
         }
+        Expression::Aggregate(aggregate) => {
+            aggregate.validate(source, secondary, output, available, mode)?;
+        }
+        Expression::Odm(odm) => odm.validate(source, secondary, mode)?,
         Expression::Count { column, text } => {
             if column.is_some_and(|column| column >= source.columns().len()) {
                 return Err(PlanError::InvalidSource);
@@ -898,9 +948,15 @@ fn key_expression(expression: &Expression) -> bool {
             .bindings()
             .iter()
             .all(|binding| !matches!(binding.read, Read::Intermediate { .. })),
-        Expression::Case(branches) => branches
-            .iter()
-            .all(|branch| key_expression(&branch.assignment.expression)),
+        Expression::Case(branches) => branches.iter().all(|branch| {
+            branch.when.as_ref().is_none_or(|when| {
+                when.collected().is_empty()
+                    && when
+                        .bindings()
+                        .iter()
+                        .all(|binding| !matches!(binding.read, Read::Intermediate { .. }))
+            }) && key_expression(&branch.assignment.expression)
+        }),
         _ => false,
     }
 }
@@ -917,7 +973,24 @@ fn current_record_read(
 ) -> bool {
     let include_raw = scope != RecordReadScope::PrimaryMatching;
     match expression {
+        Expression::Odm(odm) => {
+            include_raw && !matches!(odm.read().scope, OdmScope::Keys | OdmScope::Templates(_))
+        }
+        Expression::Aggregate(aggregate) => match aggregate.relation() {
+            AggregateRelation::CurrentGroup => include_raw,
+            AggregateRelation::Matched { keys, .. } => {
+                scope != RecordReadScope::Driver
+                    && keys
+                        .iter()
+                        .filter_map(|key| key.value.read())
+                        .any(|read| matches!(read, MatchRead::Record { .. }))
+            }
+            AggregateRelation::Output { .. } => false,
+        },
         Expression::Source(_) | Expression::RowLookup(_) => include_raw,
+        // A key-grain collection is valid in the primary implicit form. A
+        // global column shared by foreign drivers cannot borrow its coordinates.
+        Expression::Collect { .. } => scope == RecordReadScope::All,
         Expression::Intermediate { index, .. } => {
             scope != RecordReadScope::Driver
                 && intermediates.get(*index).is_some_and(|item| {
@@ -925,6 +998,9 @@ fn current_record_read(
                         .iter()
                         .filter_map(|key| key.value.read())
                         .any(|read| matches!(read, MatchRead::Record { .. }))
+                        || item
+                            .current_fields()
+                            .any(|field| matches!(field.read, CurrentRead::Record { .. }))
                 })
         }
         Expression::SourceBinding { source, .. } => {
@@ -960,14 +1036,26 @@ fn current_record_read(
         Expression::Function(function) => include_raw && function.reads_source(),
         Expression::ProjectFunction(function) => include_raw && function.reads_source(),
         Expression::Case(branches) => branches.iter().any(|branch| {
-            include_raw
-                && branch.when.as_ref().is_some_and(|predicate| {
-                    predicate
-                        .bindings()
-                        .iter()
-                        .any(|binding| matches!(binding.read, Read::Source(_)))
-                })
-                || current_record_read(&branch.assignment.expression, intermediates, scope)
+            branch.when.as_ref().is_some_and(|predicate| {
+                predicate
+                    .bindings()
+                    .iter()
+                    .any(|binding| match binding.read {
+                        Read::Source(_) => {
+                            if predicate.collects(&binding.name) {
+                                scope == RecordReadScope::All
+                            } else {
+                                include_raw
+                            }
+                        }
+                        Read::Intermediate { index, column } => current_record_read(
+                            &Expression::Intermediate { index, column },
+                            intermediates,
+                            scope,
+                        ),
+                        Read::Column(_) => false,
+                    })
+            }) || current_record_read(&branch.assignment.expression, intermediates, scope)
         }),
         _ => false,
     }
@@ -1050,7 +1138,7 @@ impl DatasetPlan {
         let width = output.columns().len();
         validate_columns(&keys, width)?;
         let mut row_columns = None;
-        for template in &templates {
+        for (template_index, template) in templates.iter().enumerate() {
             let (template_source, mode) = template.mode.context(&source, &secondary)?;
             let keyed = matches!(mode, RowMode::Keys);
             if keyed && templates.len() != 1 {
@@ -1061,6 +1149,20 @@ impl DatasetPlan {
             }
             let mut available = vec![false; width];
             for assignment in &template.assignments {
+                odm::visit(&assignment.expression, &mut |bound| {
+                    if bound.read().source.is_some() {
+                        Err(PlanError::InvalidSource)
+                    } else {
+                        Ok(())
+                    }
+                })?;
+                relation_predicates::validate_reads(
+                    &assignment.expression,
+                    &intermediates,
+                    template.mode.source_index(),
+                    &template.mode,
+                    &available,
+                )?;
                 // A selector compiled against the primary record cannot borrow a
                 // different driver's record coordinates. Output match values are shared.
                 if template.mode.source_index() != 0
@@ -1093,10 +1195,9 @@ impl DatasetPlan {
             }
             if let Some(filter) = &template.filter {
                 let deferred = window_stages(&template.assignments, width, &intermediates);
-                if !matches!(mode, RowMode::Groups(_))
-                    && filter.bindings().iter().any(|binding| {
-                        matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
-                    })
+                if filter.bindings().iter().any(|binding| {
+                    matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
+                })
                 {
                     return Err(PlanError::Filter(BindingError::UnavailableColumn));
                 }
@@ -1116,6 +1217,19 @@ impl DatasetPlan {
             }
             row_columns = Some(available.clone());
             for assignment in &columns {
+                odm::validate_template(
+                    &assignment.expression,
+                    template,
+                    template_index,
+                    templates.len(),
+                )?;
+                relation_predicates::validate_reads(
+                    &assignment.expression,
+                    &intermediates,
+                    template.mode.source_index(),
+                    &template.mode,
+                    &available,
+                )?;
                 if (keyed || template.mode.source_index() != 0)
                     && current_record_read(
                         &assignment.expression,
@@ -1210,6 +1324,7 @@ impl DatasetPlan {
             columns,
             keys,
             verifications,
+            row_contexts: Vec::new(),
             column_verifications: Vec::new(),
             warning_verifications: Default::default(),
             conversion_handlers: Vec::new(),

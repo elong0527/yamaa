@@ -18,12 +18,20 @@ use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 
 #[path = "specification_binding_diagnostics.rs"]
 mod binding_diagnostics;
+#[path = "specification_intermediate_admission.rs"]
+mod intermediate_admission;
+#[path = "specification_intermediate_range.rs"]
+mod intermediate_range;
+#[path = "specification_intermediate_sources.rs"]
+mod intermediate_sources;
 #[path = "specification_intermediates.rs"]
 mod intermediates;
 #[path = "specification_lookup_diagnostics.rs"]
 mod lookup_diagnostics;
 #[path = "specification_match_values.rs"]
 mod match_values;
+#[path = "specification_relation_predicate.rs"]
+mod relation_predicates;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
 #[path = "specification_output_diagnostics.rs"]
@@ -56,6 +64,10 @@ pub use windows::WindowFinding;
 #[path = "specification_functions.rs"]
 mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
+#[path = "specification_aggregate.rs"]
+mod aggregates;
+#[path = "specification_case_predicates.rs"]
+mod case_predicates;
 #[path = "specification_cases.rs"]
 mod cases;
 #[path = "specification_derivations.rs"]
@@ -66,6 +78,8 @@ mod flags;
 mod imputation;
 #[path = "specification_mapping.rs"]
 mod mapping_cut;
+#[path = "specification_odm.rs"]
+mod odm;
 #[path = "specification_rounding.rs"]
 mod rounding;
 #[path = "specification_scalar.rs"]
@@ -126,6 +140,7 @@ impl Default for CompilationLimits {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum PreflightFinding {
+    Odm(crate::diagnostic::Diagnostic),
     Scalar(crate::diagnostic::Diagnostic),
     TextExtract(crate::diagnostic::Diagnostic),
     TextTemplate(crate::diagnostic::Diagnostic),
@@ -226,6 +241,8 @@ pub enum BindError {
 }
 #[derive(Debug)]
 pub enum BindFinding {
+    Odm(crate::diagnostic::Diagnostic),
+    AggregateDiagnostic(crate::diagnostic::Diagnostic),
     Padding(crate::diagnostic::Diagnostic),
     Scalar(crate::diagnostic::Diagnostic),
     TextExtract(crate::diagnostic::Diagnostic),
@@ -258,6 +275,12 @@ pub enum BindFinding {
         path: String,
         expression: String,
         relation: Option<String>,
+        driver: String,
+    },
+    AggregateGroupScope {
+        path: String,
+        expression: String,
+        relation: String,
     },
     QualifiedNumericReference {
         path: String,
@@ -299,6 +322,12 @@ pub enum SourceProfile {
     Csv,
     Parquet,
 }
+/// Core-selected semantic source interpretation, independent of storage profile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SourceInterpretation {
+    Ordinary,
+    Odm,
+}
 impl SourceProfile {
     pub fn from_path(path: &str) -> Option<Self> {
         let name = path.rsplit('/').next()?;
@@ -323,6 +352,8 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    Odm(alloc::boxed::Box<odm::Declaration>),
+    Aggregate(alloc::boxed::Box<aggregates::Declaration>),
     MappingCut(alloc::boxed::Box<mapping_cut::Declaration>),
     Scalar(alloc::boxed::Box<scalar::Declaration>),
     StrContains(crate::text_extract::StringExtract),
@@ -358,6 +389,7 @@ struct Declaration {
 pub struct PreparedSpecification {
     project_calls: Option<crate::project_calls::ProjectCalls>,
     sources: Vec<SourceDeclaration>,
+    source_interpretations: Vec<SourceInterpretation>,
     driver: usize,
     intermediates: intermediates::Declarations,
     output: TableSchema,
@@ -957,6 +989,7 @@ impl PreparedSpecification {
         }
         match_values::declaration_admission(d, limits)?;
         let mut findings = preflight(spec)?;
+        findings.extend(odm::context_findings(spec)?);
         let columns = sequence(d, field(d, root, "columns")?)?;
         let output = TableSchema::new(
             columns
@@ -1043,51 +1076,8 @@ impl PreparedSpecification {
             )?;
         }
         let inputs = mapping(d, field(d, root, "input")?)?;
+        let odm_inputs = odm::inputs(d)?;
         let mut source_findings = Vec::new();
-        let mut derivation_values = columns
-            .iter()
-            .filter_map(|&column| {
-                d.field(column, "derivation")
-                    .and_then(|derivation| d.field(derivation, "value"))
-            })
-            .collect::<Vec<_>>();
-        if let Some(rows) = d
-            .field(root, "rows")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        {
-            for &row in sequence(d, rows)? {
-                for &(_, derivation) in mapping(d, field(d, row, "derivations")?)? {
-                    derivation_values.extend(d.field(derivation, "value"));
-                }
-            }
-        }
-        let mut odm_datasets = alloc::collections::BTreeSet::new();
-        let mut visited_values = alloc::collections::BTreeSet::new();
-        while let Some(value) = derivation_values.pop() {
-            if !visited_values.insert(value) {
-                continue;
-            }
-            if let Some(payload) = d.field(value, "odm") {
-                let item = match &d.nodes()[payload] {
-                    N::Text(item) => Some(item.as_str()),
-                    _ => d.field(payload, "item").and_then(|id| text(d, id).ok()),
-                };
-                if let Some((dataset, _)) = item.and_then(|item| item.split_once('.')) {
-                    odm_datasets.insert(dataset);
-                }
-            }
-            if let Some(case) = d.field(value, "case") {
-                for &branch in sequence(d, case)? {
-                    for name in ["then", "otherwise"] {
-                        derivation_values.extend(d.field(branch, name));
-                    }
-                }
-            }
-            if let Some(concat) = d.field(value, "str_concat") {
-                derivation_values
-                    .extend(sequence(d, field(d, concat, "sources")?)?.iter().copied());
-            }
-        }
         let driver = if has_rows {
             row_intermediates::common_driver(d, inputs)?
         } else {
@@ -1103,9 +1093,6 @@ impl PreparedSpecification {
             .ok_or(PrepareError::Internal)?;
         for &(name, id) in inputs {
             let prefix = format!("input.{}", text(d, name)?);
-            if producers.is_none() {
-                optional_features(d, id, &["schema"], &prefix, &mut extra);
-            }
             let profile = SourceProfile::from_path(text(d, field(d, id, "path")?)?);
             if profile == Some(SourceProfile::Csv)
                 && d.field(id, "empty_string")
@@ -1121,10 +1108,28 @@ impl PreparedSpecification {
                     path: text(d, field(d, id, "path")?)?.into(),
                 });
             }
-            if present(d, id, "ordinal") && odm_datasets.contains(text(d, name)?) {
-                source_findings.push(PreflightFinding::OdmSourceOrdinal {
-                    dataset: text(d, name)?.into(),
-                });
+            if odm_inputs.contains(text(d, name)?) {
+                let declared = [
+                    ("types", crate::diagnostic::OdmDeclared::Types),
+                    ("schema", crate::diagnostic::OdmDeclared::Schema),
+                    ("ordinal", crate::diagnostic::OdmDeclared::Ordinal),
+                ]
+                .into_iter()
+                .find(|(field, _)| present(d, id, field));
+                if let Some((_, declared)) = declared {
+                    source_findings.push(PreflightFinding::Odm(
+                        crate::diagnostic::OdmFinding::Declared {
+                            dataset: text(d, name)?,
+                            declared,
+                        }
+                        .diagnostic()
+                        .map_err(|_| PrepareError::Limit("odm_diagnostic"))?,
+                    ));
+                }
+                continue;
+            }
+            if producers.is_none() {
+                optional_features(d, id, &["schema"], &prefix, &mut extra);
             }
             if profile == Some(SourceProfile::Parquet) {
                 if let Some(types) = d
@@ -1165,7 +1170,13 @@ impl PreparedSpecification {
             return Err(PrepareError::Unsupported(extra));
         }
         let mut sources = Vec::new();
+        let mut source_interpretations = Vec::new();
         for &(name, selected) in inputs {
+            source_interpretations.push(if odm_inputs.contains(text(d, name)?) {
+                SourceInterpretation::Odm
+            } else {
+                SourceInterpretation::Ordinary
+            });
             let mut source_types = Vec::new();
             if let Some(id) = d
                 .field(selected, "types")
@@ -1319,6 +1330,7 @@ impl PreparedSpecification {
             return Ok(Self {
                 project_calls: project.map(|p| p.calls),
                 sources,
+                source_interpretations,
                 driver: driver_index,
                 intermediates,
                 output,
@@ -1430,6 +1442,7 @@ impl PreparedSpecification {
         Ok(Self {
             project_calls: project.map(|p| p.calls),
             sources,
+            source_interpretations,
             driver: driver_index,
             intermediates,
             output,
@@ -1454,6 +1467,9 @@ impl PreparedSpecification {
     }
     pub fn driver_index(&self) -> usize {
         self.driver
+    }
+    pub fn source_interpretation(&self, index: usize) -> Option<SourceInterpretation> {
+        self.source_interpretations.get(index).copied()
     }
     pub fn key_names(&self) -> impl Iterator<Item = &str> {
         self.keys
@@ -1802,6 +1818,25 @@ impl PreparedSpecification {
                 Ok(binding)
             };
             let expression = match &declaration.operation {
+                Operation::Odm(operation) => odm::bind(
+                    operation,
+                    &catalog,
+                    &self.source().name,
+                    None,
+                    crate::reference_scope::Phase::Column { groups: &[] },
+                    &mut findings,
+                )?,
+                Operation::Aggregate(operation) => aggregates::bind(
+                    operation,
+                    &catalog,
+                    &self.source().name,
+                    None,
+                    crate::reference_scope::Phase::Column { groups: &[] },
+                    &self.output,
+                    &secondary,
+                    &mut edges,
+                    &mut findings,
+                )?,
                 Operation::Flag(operation) => flags::bind(
                     operation,
                     column,
@@ -2068,7 +2103,7 @@ impl PreparedSpecification {
                             .reference(name)
                             .ok_or(BindError::Internal)?;
                         if let Some(item) = &intermediates[index] {
-                            edges.extend(item.output_dependencies());
+                            edges.extend(row_intermediates::dependencies(index, &intermediates)?);
                             if let Some(column) = item.source_column(&secondary, field) {
                                 bindings.push(Binding {
                                     name: name.into(),
@@ -2149,6 +2184,15 @@ impl PreparedSpecification {
             .map(|filter| filter.bind(&self.source().name, source, &mut findings))
             .transpose()?
             .flatten();
+        relation_predicates::admit_reads(
+            assignments
+                .values()
+                .map(|assignment| &assignment.expression),
+            &intermediates,
+            0,
+            &RowMode::Keys,
+            &mut findings,
+        );
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }

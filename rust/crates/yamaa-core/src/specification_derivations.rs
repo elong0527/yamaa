@@ -60,6 +60,16 @@ pub(super) fn prepare_value_with_driver(
     let op = text(d, op)?;
     let result_path = format!("{result_path}.{op}");
     let operation = match op {
+        "odm" => Operation::Odm(alloc::boxed::Box::new(odm::prepare(
+            d,
+            payload,
+            &result_path,
+        )?)),
+        "aggregate" => Operation::Aggregate(alloc::boxed::Box::new(aggregates::prepare(
+            d,
+            payload,
+            &result_path,
+        )?)),
         "flag" => Operation::Flag(flags::prepare(d, payload, &result_path)?),
         "literal" => Operation::Literal(literal(d, payload, &result_path)?),
         "function" => Operation::ProjectFunction(
@@ -267,9 +277,6 @@ pub(super) fn prepare_value_with_driver(
             if !features.is_empty() {
                 return Err(PrepareError::Unsupported(features));
             }
-            if source.has_filter() {
-                return Err(unsupported(&result_path, "case_source_filter"));
-            }
             if source.has_selection() || source.has_absent() {
                 return Err(unsupported(&result_path, "case_source_options"));
             }
@@ -300,9 +307,15 @@ pub(super) fn bind_row(
     intermediates: &[Option<Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
     match operation {
+        Operation::Odm(operation) => odm::bind(operation, catalog, driver, row, phase, findings),
+        Operation::Aggregate(operation) => aggregates::bind(
+            operation, catalog, driver, row, phase, output, secondary, edges, findings,
+        ),
         Operation::Literal(value) => Ok(Some(Expression::Literal(value.clone()))),
         Operation::Source(source) => {
-            if named.reference(&source.variable).is_some() {
+            let before = findings.len();
+            let filter = source.bind_row_filter(path, driver, catalog, named, findings)?;
+            let expression = if named.reference(&source.variable).is_some() {
                 row_intermediates::bind(
                     &source.variable,
                     path,
@@ -314,7 +327,7 @@ pub(super) fn bind_row(
                     available,
                     edges,
                     findings,
-                )
+                )?
             } else {
                 rounding::bind_row_operand(
                     &source.variable,
@@ -326,8 +339,25 @@ pub(super) fn bind_row(
                     available,
                     edges,
                     findings,
-                )
+                )?
+            };
+            if findings.len() != before {
+                return Ok(None);
             }
+            Ok(expression.map(|expression| match filter {
+                Some(filter) => {
+                    let Expression::Source(column) = expression else {
+                        unreachable!("admitted filtered source has current-driver records");
+                    };
+                    Expression::Collect {
+                        column,
+                        identifier: source.variable.clone(),
+                        filter: Some(filter),
+                        selection: None,
+                    }
+                }
+                None => expression,
+            }))
         }
         Operation::Scalar(operation) => scalar::bind_row(
             operation,
@@ -483,7 +513,7 @@ pub(super) fn bind_row(
                             if !seen.insert(identifier) {
                                 continue;
                             }
-                            if let Some(expression) = rounding::bind_row_operand(
+                            if let Some(expression) = self_relations::bind_operand(
                                 identifier,
                                 plan.spec_path(),
                                 catalog,
@@ -493,10 +523,17 @@ pub(super) fn bind_row(
                                 available,
                                 edges,
                                 findings,
+                                output,
+                                named,
+                                secondary,
+                                intermediates,
                             )? {
                                 let read = match expression {
                                     Expression::Source(column) => Read::Source(column),
                                     Expression::Column(column) => Read::Column(column),
+                                    Expression::Intermediate { index, column } => {
+                                        Read::Intermediate { index, column }
+                                    }
                                     _ => return Err(BindError::Internal),
                                 };
                                 bindings.push(Binding {
@@ -507,7 +544,7 @@ pub(super) fn bind_row(
                         }
                         if findings.len() == before {
                             Some(
-                                BoundPredicate::new(plan.clone(), bindings)
+                                BoundPredicate::new_contextual(plan.clone(), bindings, Vec::new())
                                     .map_err(BindError::InvalidPredicateBinding)?,
                             )
                         } else {
@@ -732,6 +769,25 @@ pub(super) fn references(
     names: &mut Vec<String>,
     depth: usize,
 ) -> Result<(), PrepareError> {
+    references_mode(d, value, project, names, depth, true)
+}
+pub(super) fn current_references(
+    d: &Document,
+    value: usize,
+    project: Option<&functions::Prepared>,
+    names: &mut Vec<String>,
+    depth: usize,
+) -> Result<(), PrepareError> {
+    references_mode(d, value, project, names, depth, false)
+}
+fn references_mode(
+    d: &Document,
+    value: usize,
+    project: Option<&functions::Prepared>,
+    names: &mut Vec<String>,
+    depth: usize,
+    aggregate_relation: bool,
+) -> Result<(), PrepareError> {
     if depth > 64 {
         return Err(PrepareError::Limit("expression_depth"));
     }
@@ -758,6 +814,89 @@ pub(super) fn references(
             Ok(parsed) => names.extend(parsed.identifiers().map(String::from)),
             Err(crate::numeric_parser::ParseError::Grammar { .. }) => (),
             Err(_) => return Err(PrepareError::Limit("numeric_parser")),
+        }
+    }
+    if let Some(payload) = d.field(value, "aggregate") {
+        let id = if matches!(d.nodes()[payload], N::Text(_)) {
+            payload
+        } else {
+            field(d, payload, "expr")?
+        };
+        match crate::aggregate_parser::parse_aggregate(text(d, id)?, Default::default()) {
+            Ok(parsed) => {
+                names.extend(
+                    parsed
+                        .identifiers()
+                        .filter(|name| aggregate_relation || !name.contains('.'))
+                        .map(String::from),
+                );
+                if aggregate_relation {
+                    names.extend(parsed.star_datasets().map(|dataset| format!("{dataset}.*")));
+                }
+            }
+            Err(crate::aggregate_parser::ParseError::Grammar { .. }) => (),
+            Err(_) => return Err(PrepareError::Limit("aggregate_parser")),
+        }
+        if let Some(key) = d.field(payload, "key") {
+            match &d.nodes()[key] {
+                N::Text(name) => names.push(name.clone()),
+                N::Sequence(ids) => {
+                    for &id in ids {
+                        names.push(text(d, id)?.into());
+                    }
+                }
+                N::Mapping(pairs) => {
+                    for &(_, value) in pairs {
+                        if let N::Text(name) = &d.nodes()[value] {
+                            names.push(name.clone());
+                        } else {
+                            references_mode(
+                                d,
+                                value,
+                                project,
+                                names,
+                                depth + 1,
+                                aggregate_relation,
+                            )?;
+                        }
+                    }
+                }
+                N::Null => (),
+                _ => return Err(PrepareError::Internal),
+            }
+        }
+        if let Some(groups) = d
+            .field(payload, "group_by")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            for &id in sequence(d, groups)? {
+                let name = text(d, id)?;
+                if aggregate_relation || !name.contains('.') {
+                    names.push(name.into());
+                }
+            }
+        }
+        if let Some(filter) = d
+            .field(payload, "filter")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            let mut filter_names = Vec::new();
+            predicate_references(d, filter, &mut filter_names)?;
+            names.extend(
+                filter_names
+                    .into_iter()
+                    .filter(|name| aggregate_relation || !name.contains('.')),
+            );
+        }
+        if let Some(between) = d
+            .field(payload, "between")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            if let Some(value) = d.field(between, "value") {
+                if let N::Text(name) = &d.nodes()[value] {
+                    names.push(name.clone());
+                }
+            }
         }
     }
     if let Some(payload) = d.field(value, "flag") {
@@ -793,13 +932,13 @@ pub(super) fn references(
                 predicate_references(d, when, names)?;
             }
             if let Some(child) = d.field(item, "then").or_else(|| d.field(item, "otherwise")) {
-                references(d, child, project, names, depth + 1)?;
+                references_mode(d, child, project, names, depth + 1, aggregate_relation)?;
             }
         }
     }
     if let Some(payload) = d.field(value, "str_concat") {
         for &child in sequence(d, field(d, payload, "sources")?)? {
-            references(d, child, project, names, depth + 1)?;
+            references_mode(d, child, project, names, depth + 1, aggregate_relation)?;
         }
     }
     for op in [

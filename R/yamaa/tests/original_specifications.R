@@ -816,7 +816,12 @@ for(i in seq_len(nrow(filter_truth))) {
   handle <- prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port)
   content <- hex_raw(row$input_hex[[1L]])
   artifact <- hex_raw(row$artifact_hex[[1L]])
-  expected <- sub('"runtime":"python"','"runtime":"r"',row$expected[[1L]],fixed=TRUE)
+  # Require captured citations without changing any finding.
+  captured <- row$expected[[1L]]
+  if(prefix=="row-filter" && row$case[[1L]] %in% c("grouped_source_phase","grouped_unknown_phase","record_unknown_phase","group_and_filter_order")) {
+    stopifnot(sum(gregexpr('"requirement":"REQ-0068"',captured,fixed=TRUE)[[1L]]>0L)==2L)
+  }
+  expected <- sub('"runtime":"python"','"runtime":"r"',captured,fixed=TRUE)
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
   expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
   unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
@@ -998,6 +1003,16 @@ source_selection_truth("row-filters.tsv","row-filter",27L)
 cat("row-template filters complete reports, cached reads and exact saved CSV passed\n")
 
 source_selection_truth("row-reductions.tsv","row-reduction",25L)
+source_selection_truth("correlated-aggregates.tsv","correlated-aggregate",16L)
+source_selection_truth("odm-reads.tsv","odm",14L)
+source_selection_truth("odm-deferred.tsv","odm-deferred",8L)
+odm_preflight <- read.delim(file.path(root,"odm-preflight.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(odm_preflight)==8L)
+for(i in seq_len(nrow(odm_preflight))) for(j in seq_len(2L)) {
+  failure <- tryCatch(prepare_entry("spec.yaml",hex_raw(odm_preflight$source_hex[[i]]),no_port,no_port,no_port),error=identity)
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),odm_preflight$expected[[i]]))
+}
+cat("ODM reads complete reports, cached reads and exact saved CSV passed\n")
 cat("row-template MEAN and COUNT complete reports, cached reads and exact saved CSV passed\n")
 
 source_selection_truth("row-column-checks.tsv","row-column",48L)
@@ -1963,6 +1978,130 @@ local({
   rejected <- yamaa_domain(entry);check_issue_frame(rejected$issues,expected)
   stopifnot(is.null(rejected$output),is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"src.csv")),!file.exists(file.path(directory,"result.csv")))
   cat("completed-template SELF borrowing, complete handlers and pre-study phase refusal passed without Python\n")
+})
+
+local({
+  body <- "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, PARAM]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: float, SEQ: int}}\noutput: {path: result.csv, columns: [ID, PARAM, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: PARAM, type: str, derivation: {literal: only}}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n"
+  directory <- tempfile("yamaa-intermediate-admission-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE),add=TRUE)
+  entry <- file.path(directory,"spec.yaml")
+  writeBin(charToRaw(body),entry)
+  writeBin(charToRaw("ID\n2\n1\n3\n"),file.path(directory,"src.csv"))
+  writeBin(charToRaw("SEQ,ID,A,B\n1,1,first,\n1,1,tied,second\n0,2,two,both\n"),file.path(directory,"donor.csv"))
+  result <- yamaa_domain(entry)
+  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
+    identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,PARAM,A,B\n2,only,two,both\n1,only,first,\n3,only,,\n")))
+  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  check_handler_ledger(observed,'[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]')
+  unlink(c(file.path(directory,"src.csv"),file.path(directory,"donor.csv"),file.path(directory,"result.csv")))
+  cases <- list(
+    list(remove="    order_by: [DONOR.SEQ]\n    keep: first\n",condition="rename_only_intermediate",requirement="REQ-1248",context='{"dataset":"DONOR","intermediate":"P"}'),
+    list(remove="    keep: first\n",condition="unpaired_fields",requirement="REQ-0119",context='{"declared":["order_by"],"intermediate":"P","missing":["keep"]}'),
+    list(remove="    order_by: [DONOR.SEQ]\n",condition="unpaired_fields",requirement="REQ-0119",context='{"declared":["keep"],"intermediate":"P","missing":["order_by"]}'))
+  for(case in cases) {
+    writeBin(charToRaw(sub(case$remove,"",body,fixed=TRUE)),entry)
+    expected <- list(phase="validation",condition=case$condition,requirement=case$requirement,
+      spec_paths=list("intermediates[0]"),context=case$context)
+    checked <- yamaa_check(entry);check_issue_frame(checked$issues,expected)
+    rejected <- yamaa_domain(entry);check_issue_frame(rejected$issues,expected)
+    stopifnot(is.null(rejected$output),is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),
+      inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"src.csv")))
+  }
+  cat("inferred applicable intermediate keys, stable shared selection and complete declaration failures passed without Python\n")
+})
+
+local({
+  body <- "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: [ID]\n    filter: \"SRC.ELIG = 'Y'\"\n    order_by: [SRC.SEQ]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n"
+  directory <- tempfile("yamaa-primary-donors-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE),add=TRUE)
+  entry <- file.path(directory,"spec.yaml")
+  writeBin(charToRaw(body),entry)
+  writeBin(charToRaw("ID,SEQ,ELIG,A,B\n1,1,Y,early,x\n1,2,Y,last,\n2,1,N,hidden,hidden\n"),file.path(directory,"src.csv"))
+  stopifnot(nrow(yamaa_check(entry)$issues)==0L)
+  result <- yamaa_domain(entry)
+  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
+    identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,SEQ,A,B\n1,1,last,\n1,2,last,\n2,1,,\n")))
+  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  check_handler_ledger(observed,'[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]')
+  cat("same-input donor grain, shared missing field and complete handler accounting passed without Python\n")
+})
+
+local({
+  directory <- tempfile("yamaa-correlated-donors-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE),add=TRUE)
+  entry <- file.path(directory,"spec.yaml")
+  writeBin(charToRaw("ID,SEQ,CUT\n1,1,2\n1,2,4\n3,1,2\n1,3,\n"),file.path(directory,"src.csv"))
+  writeBin(charToRaw("ID,TIME,A,B\n1,1,one,x\n1,3,three,\n2,9,hidden,hidden\n"),file.path(directory,"donor.csv"))
+  writeBin(charToRaw("ID,SEQ,CUT\n1,1,4\n3,1,2\n"),file.path(directory,"alt.csv"))
+  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < SRC.CUT\"\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n"),entry)
+  result <- yamaa_domain(entry)
+  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,SEQ,A,B\n1,1,one,x\n1,2,three,\n3,1,,\n1,3,,\n")))
+  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  check_handler_ledger(observed,"[{\"spec_path\":\"columns.A.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.source.no_match\",\"handler\":\"no_match\",\"count\":2},{\"spec_path\":\"columns.B.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.source.no_match\",\"handler\":\"no_match\",\"count\":2}]")
+  unlink(file.path(directory,"result.csv"))
+  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < ALT.CUT\"\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\nrows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}\n"),entry)
+  result <- yamaa_domain(entry)
+  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,SEQ,A,B\n1,1,three,\n3,1,,\n")))
+  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  check_handler_ledger(observed,"[{\"spec_path\":\"rows[0].derivations.A.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[0].derivations.B.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[0].derivations.A.source.no_match\",\"handler\":\"no_match\",\"count\":1},{\"spec_path\":\"rows[0].derivations.B.source.no_match\",\"handler\":\"no_match\",\"count\":1}]")
+  unlink(file.path(directory,"result.csv"))
+  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < SRC.CUT\"\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\nrows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}\n"),entry)
+  rejected <- yamaa_domain(entry)
+  check_issue_frame(rejected$issues,list(phase="validation",condition="unknown_field",requirement="REQ-0120",spec_paths=list("intermediates[0].filter"),context='{"identifier":"SRC.CUT","intermediate":"P"}'))
+  stopifnot(is.null(rejected$output),inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"result.csv")))
+  cat("correlated donor filters, actual current driver, complete findings and handler accounting passed without Python\n")
+})
+
+local({
+  body <- "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SELECT, type: str, derivation: SRC.SELECT}\n  - name: A\n    type: str\n    derivation:\n      case:\n        - when: \"SELECT = 'Y'\"\n          then: P.A\n        - otherwise: {literal: skip}\n  - name: B\n    type: str\n    derivation:\n      case:\n        - when: \"SELECT = 'Y'\"\n          then: P.B\n        - otherwise: {literal: skip}\n"
+  directory <- tempfile("yamaa-case-intermediates-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE),add=TRUE)
+  entry <- file.path(directory,"spec.yaml")
+  writeBin(charToRaw(body),entry)
+  writeBin(charToRaw("ID,SELECT\n1,Y\n2,N\n3,Y\n"),file.path(directory,"src.csv"))
+  writeBin(charToRaw("ID,SEQ,A,B\n1,1,first,\n1,2,second,present\n2,1,hidden,hidden\n"),file.path(directory,"donor.csv"))
+  result <- yamaa_domain(entry)
+  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
+    identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,A,B\n1,first,\n2,skip,skip\n3,,\n")))
+  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  check_handler_ledger(observed,"[{\"spec_path\":\"columns.A.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.case[0].then.source.no_match\",\"handler\":\"no_match\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.no_match\",\"handler\":\"no_match\",\"count\":1}]")
+  unlink(file.path(directory,c("src.csv","donor.csv","result.csv")))
+  writeBin(charToRaw(sub("then: P.A","then: {source: {variable: P.A, absent: fallback}}",body,fixed=TRUE)),entry)
+  rejected <- yamaa_domain(entry)
+  check_issue_frame(rejected$issues,list(phase="planning",condition="unsupported_operation",requirement=NA_character_,spec_paths=list("columns.A.derivation.case[0].then.source"),context='{"operation":"case_source_options"}'))
+  stopifnot(is.null(rejected$output),is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"src.csv")),!file.exists(file.path(directory,"result.csv")))
+  cat("nested case intermediate source shares lazy kept selection and complete handler accounting without Python\n")
+})
+
+
+local({
+  failures <- read.delim(file.path(root,"case-predicate-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
+  for (case in list.dirs(file.path(root,"case-predicate-cases"),full.names=TRUE,recursive=FALSE)) {
+    directory <- tempfile("yamaa-case-predicate-");dir.create(directory)
+    file.copy(list.files(case,full.names=TRUE),directory)
+    entry <- file.path(directory,"spec.yaml")
+    result <- yamaa_domain(entry)
+    expected <- file.path(directory,"expected.csv")
+    if (file.exists(expected)) {
+      stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),rawfile(expected)))
+    } else {
+      finding <- failures[failures$case==basename(case),,drop=FALSE]
+      stopifnot(nrow(finding)==1L)
+      check_issue_frame(result$issues,list(phase=finding$phase,condition=finding$condition,requirement=finding$requirement,spec_paths=list(finding$spec_path),context=finding$context))
+      stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"result.csv")))
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  for (name in c("adam-adae-protocol-review","schema-expressions","schema-predicates","sdtm-ae-seriousness","sdtm-mh-ongoing-conditions","sdtm-tr-tumor-measurements","sdtm-tu-tumor-identification","sdtm-ds-reasons")) {
+    case <- file.path(root,"cases",name)
+    directory <- tempfile("yamaa-original-case-");dir.create(directory)
+    file.copy(list.files(case,full.names=TRUE),directory,recursive=TRUE)
+    result <- yamaa_domain(file.path(directory,"spec.yaml"))
+    stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE))
+    for (expected in list.files(file.path(directory,"expected"),pattern="\\.csv$",full.names=TRUE)) stopifnot(identical(rawfile(file.path(directory,basename(expected))),rawfile(expected)))
+    unlink(directory,recursive=TRUE)
+  }
+  cat("case predicates, branch filters and unchanged original CSV truth passed without Python\n")
 })
 
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))

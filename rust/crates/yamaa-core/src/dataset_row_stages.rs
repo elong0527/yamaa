@@ -1,12 +1,22 @@
 //! Derive template-local prewindow and window-dependent stages from admitted reads.
 use super::*;
 use crate::bound_expression::Read;
+fn intermediate_deferred(index: usize, deferred: &[bool], intermediates: &[Intermediate]) -> bool {
+    let mut found = false;
+    visit_output_dependencies(
+        index,
+        |index| intermediates.get(index),
+        |column| {
+            found |= deferred.get(column).copied().unwrap_or(false);
+        },
+    )
+    .is_err()
+        || found
+}
 fn read_deferred(read: Read, deferred: &[bool], intermediates: &[Intermediate]) -> bool {
     match read {
         Read::Column(column) => deferred[column],
-        Read::Intermediate { index, .. } => intermediates
-            .get(index)
-            .is_some_and(|item| item.output_dependencies().any(|column| deferred[column])),
+        Read::Intermediate { index, .. } => intermediate_deferred(index, deferred, intermediates),
         Read::Source(_) => false,
     }
 }
@@ -17,6 +27,12 @@ fn expression_deferred(
 ) -> bool {
     match expression {
         Expression::Window(_) => true,
+        Expression::Aggregate(aggregate) => match aggregate.relation() {
+            AggregateRelation::Output { group_by } => group_by.iter().any(|&column| deferred[column])
+                || aggregate.bindings().iter().any(|binding| deferred[binding.column]),
+            AggregateRelation::Matched { keys, .. } => keys.iter().any(|key| key.value.read().and_then(MatchRead::output_column).is_some_and(|column| deferred[column])),
+            AggregateRelation::CurrentGroup => false,
+        },
         Expression::Column(column) => deferred[*column],
         Expression::Compute(plan) => plan.bindings().iter().any(|binding| read_deferred(binding.read, deferred, intermediates)),
         Expression::Flag(plan) => plan.bindings().iter().any(|binding| matches!(&binding.read, FlagRead::Read(read) if read_deferred(*read,deferred,intermediates))),
@@ -32,9 +48,9 @@ fn expression_deferred(
             SelectionRead::Source(_) | SelectionRead::Collect { .. } => false,
         }),
         Expression::SourceLookup { lookup, .. } => lookup.keys.iter().any(|key| deferred[key.output_column]),
-        Expression::Intermediate {index,..} => intermediates.get(*index).is_some_and(|item| item.output_dependencies().any(|column| deferred[column])),
+        Expression::Intermediate {index,..} => intermediate_deferred(*index, deferred, intermediates),
         Expression::Lookup(lookup) => lookup.keys.iter().any(|key| deferred[key.output_column]),
-        Expression::Literal(_) | Expression::Source(_) | Expression::Collect {..} | Expression::RowLookup(_) | Expression::Reduce {..} | Expression::Count {..} => false,
+        Expression::Odm(_) | Expression::Literal(_) | Expression::Source(_) | Expression::Collect {..} | Expression::RowLookup(_) | Expression::Reduce {..} | Expression::Count {..} => false,
     }
 }
 /// Dependency order is already admitted; a window and every transitive reader

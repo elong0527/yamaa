@@ -103,15 +103,32 @@ class PredicateSyntax(unittest.TestCase):
                 self.assertEqual(analyze("TRUE")["status"], "parsed")
 
     def test_syntax_is_not_execution_admission(self):
-        """Wide numbers and portable calls parse independently of current dataset support."""
+        """Wide floats and portable calls parse independently of dataset support."""
         for text in [
             "A = 1e9999",
-            "A = 999999999999999999999999999999",
+            "A = 9223372036854775807",
+            "A = -9223372036854775808",
             "str_contains(A, '\\1(a)')",
             "str_contains(A, '[]')",
         ]:
-            self.assertEqual(analyze(text)["status"], "parsed")
+            with self.subTest(text=text):
+                self.assertEqual(analyze(text)["status"], "parsed")
         self.assertIs(yamaa_native.engine_info()["execution_supported"], False)
+
+    def test_integer_carrier_bounds_apply_before_execution(self):
+        """Installed syntax rejects overflow with the registered parse diagnostic."""
+        for text in [
+            "A = 9223372036854775808",
+            "A = -9223372036854775809",
+            "A = 999999999999999999999999999999",
+        ]:
+            with self.subTest(text=text):
+                result = analyze(text)
+                self.assertEqual(result["status"], "invalid")
+                self.assertEqual(result["condition"], "integer_overflow")
+                self.assertEqual(result["requirement"], "REQ-0014")
+                self.assertEqual(result["position"], {"byte": 4, "character": 4})
+                self.assertEqual(analyze("TRUE")["status"], "parsed")
 
     def test_repeated_regex_compilation_is_request_bounded(self):
         """Repeated legal literals share analysis quotas, and a new request starts fresh."""

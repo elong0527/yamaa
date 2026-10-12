@@ -172,28 +172,30 @@ pub(super) fn default_dependencies(
         .field(item, "key")
         .filter(|&id| !matches!(d.nodes()[id], N::Null))
     {
-        if matches!(d.nodes()[key], N::Sequence(_)) {
+        if let N::Text(name) = &d.nodes()[key] {
+            register(name);
+        } else if matches!(d.nodes()[key], N::Sequence(_)) {
             for &value in sequence(d, key)? {
                 register(text(d, value)?);
             }
-            return Ok(dependencies);
-        }
-        // Preparation has already admitted the closed map-valued key language.
-        for &(_, value) in mapping(d, key)? {
-            if let N::Text(name) = &d.nodes()[value] {
-                register(name);
-                continue;
-            }
-            let &[(op, payload)] = mapping(d, value)? else {
-                return Err(PrepareError::Internal);
-            };
-            match text(d, op)? {
-                "source" => register(match &d.nodes()[payload] {
-                    N::Text(name) => name,
-                    _ => text(d, field(d, payload, "variable")?)?,
-                }),
-                "str_pad" => register(text(d, field(d, payload, "source")?)?),
-                _ => (),
+        } else {
+            // Preparation has already admitted the closed map-valued key language.
+            for &(_, value) in mapping(d, key)? {
+                if let N::Text(name) = &d.nodes()[value] {
+                    register(name);
+                    continue;
+                }
+                let &[(op, payload)] = mapping(d, value)? else {
+                    return Err(PrepareError::Internal);
+                };
+                match text(d, op)? {
+                    "source" => register(match &d.nodes()[payload] {
+                        N::Text(name) => name,
+                        _ => text(d, field(d, payload, "variable")?)?,
+                    }),
+                    "str_pad" => register(text(d, field(d, payload, "source")?)?),
+                    _ => (),
+                }
             }
         }
     } else {
@@ -201,7 +203,29 @@ pub(super) fn default_dependencies(
             register(text(d, key)?);
         }
     }
+    if let Some(range) = d
+        .field(item, "between")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    {
+        register(text(d, field(d, range, "value")?)?);
+    }
     Ok(dependencies)
+}
+
+pub(super) fn dependencies(
+    index: usize,
+    items: &[Option<crate::dataset::Intermediate>],
+) -> Result<Vec<usize>, BindError> {
+    let mut columns = Vec::new();
+    crate::dataset::visit_output_dependencies(
+        index,
+        |index| items.get(index).and_then(Option::as_ref),
+        |column| columns.push(column),
+    )
+    .map_err(|_| BindError::Internal)?;
+    columns.sort_unstable();
+    columns.dedup();
+    Ok(columns)
 }
 
 /// Bind one direct read using the same selector and actual completed outputs.
@@ -239,7 +263,7 @@ pub(super) fn bind(
         return Ok(None);
     };
     let before = findings.len();
-    for dependency in item.output_dependencies() {
+    for dependency in dependencies(index, items)? {
         let name = &output.columns()[dependency].name;
         if let Some(finding) = catalog
             .validate_output(name, None, available, &[0])

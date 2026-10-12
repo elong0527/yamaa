@@ -216,6 +216,94 @@ pub struct ParsedNumeric {
 }
 
 impl ParsedNumeric {
+    /// Project an already bounded R013 subtree into the shared numeric syntax.
+    /// Reductions become opaque resolver names at their original source spans.
+    /// This private path preserves arithmetic association and never reparses text.
+    pub(crate) fn aggregate_subtree(
+        parsed: &crate::aggregate_parser::ParsedAggregate,
+        root: usize,
+    ) -> Self {
+        use crate::aggregate_parser::ParsedKind as A;
+        use alloc::collections::BTreeMap;
+        let mut pending = alloc::vec![root];
+        let mut selected = Vec::new();
+        while let Some(id) = pending.pop() {
+            selected.push(id);
+            match &parsed.nodes()[id].kind {
+                A::Unary { operand, .. } | A::Group { operand } => pending.push(*operand),
+                A::Binary { left, right, .. } => pending.extend([*left, *right]),
+                A::Call { arguments, .. } => pending.extend(arguments),
+                _ => (),
+            }
+        }
+        selected.sort_unstable();
+        let mut indices: BTreeMap<usize, usize> = BTreeMap::new();
+        let mut nodes: Vec<ParsedNode> = Vec::with_capacity(selected.len());
+        let mut identifiers = Vec::new();
+        let mut seen = BTreeSet::new();
+        for id in selected {
+            let node = &parsed.nodes()[id];
+            let index = nodes.len();
+            let mut depth = 1;
+            let mut child = |id: &usize| {
+                let index = indices[id];
+                depth = depth.max(nodes[index].depth + 1);
+                index
+            };
+            let kind = match &node.kind {
+                A::Number { fractional } => ParsedKind::Number {
+                    fractional: *fractional,
+                },
+                A::Null => ParsedKind::Null,
+                A::Identifier | A::Reduction { .. } => ParsedKind::Identifier,
+                A::Unary { operator, operand } => ParsedKind::Unary {
+                    operator: *operator,
+                    operand: child(operand),
+                },
+                A::Binary {
+                    operator,
+                    left,
+                    right,
+                } => ParsedKind::Binary {
+                    operator: *operator,
+                    left: child(left),
+                    right: child(right),
+                },
+                A::Call {
+                    function,
+                    name,
+                    arguments,
+                } => ParsedKind::Call {
+                    function: *function,
+                    name: *name,
+                    arguments: arguments.iter().map(child).collect(),
+                },
+                A::Group { operand } => ParsedKind::Group {
+                    operand: child(operand),
+                },
+                A::Star => unreachable!("COUNT record stars bypass numeric evaluation"),
+            };
+            if kind == ParsedKind::Identifier
+                && seen.insert(&parsed.expression()[node.span.start..node.span.end])
+            {
+                identifiers.push(index);
+            }
+            nodes.push(ParsedNode {
+                span: node.span,
+                kind,
+                depth,
+            });
+            indices.insert(id, index);
+        }
+        identifiers.sort_by_key(|&id| nodes[id].span.start);
+        Self {
+            expression: parsed.expression().into(),
+            root: indices[&root],
+            nodes,
+            identifiers,
+        }
+    }
+
     /// Original expression, retained without normalization.
     pub fn expression(&self) -> &str {
         &self.expression

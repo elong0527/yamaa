@@ -230,27 +230,72 @@ fn hidden_first_template_alternative_preserves_its_authored_phase_path() {
 }
 
 #[test]
-fn grouped_window_filters_publish_only_retained_completed_self_donors() {
+fn aggregate_first_template_proof_keeps_full_references_including_record_star() {
+    for (replacement, identifier, path) in [
+        (
+            "SECTION: {aggregate: {expr: 'SUM(P.V)'}}",
+            "P.V",
+            "rows[0].derivations.SECTION.aggregate",
+        ),
+        (
+            "SECTION: {aggregate: {expr: 'COUNT(P.*)'}}",
+            "P.*",
+            "rows[0].derivations.SECTION.aggregate",
+        ),
+        (
+            "SECTION: {case: [{when: 'TRUE', then: {aggregate: {expr: 'COUNT(P.*)'}}}]}",
+            "P.*",
+            "rows[0].derivations.SECTION.case[0].then.aggregate",
+        ),
+    ] {
+        let fixture = Fixture::new();
+        let body = BODY.replace("SECTION: {literal: first}", replacement);
+        assert_eq!(
+            issues(fixture.run(&body)),
+            [serde_json::json!({
+                "phase":"validation", "condition":"phase_boundary", "requirement":"REQ-0120",
+                "spec_paths":[path], "context":{"identifier":identifier,
+                    "available_phase":"completed_prior_row_template", "required_phase":"row_construction"}
+            })]
+        );
+        assert!(!fixture.0.join("src.csv").exists());
+        assert!(!fixture.0.join("other.csv").exists());
+    }
+}
+
+#[test]
+fn donor_qualified_global_aggregate_does_not_require_the_primary_row_driver() {
     let fixture = Fixture::new();
-    fs::write(fixture.0.join("src.csv"), "ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n").unwrap();
-    fs::write(fixture.0.join("other.csv"), "ID,K\nc,x\nd,x\n").unwrap();
-    let body = BODY.replace(
-        "id: collected\n    dataset: SRC\n    derivations:\n      SECTION: {literal: first}",
-        "id: collected\n    dataset: SRC\n    group_by: [SRC.ID, SRC.K, SRC.V]\n    filter: \"SEQ = 1\"\n    derivations:\n      SECTION: {literal: first}\n      SEQ: {row_number: {window: {order_by: [ID]}}}",
-    );
-    let mut result = fixture.run(&body).unwrap();
+    fs::write(fixture.0.join("src.csv"), "ID\n99\n").unwrap();
+    fs::write(fixture.0.join("alt.csv"), "ID\n1\n2\n").unwrap();
+    fs::write(fixture.0.join("donor.csv"), "ID,V\n1,4\n1,7\n2,3\n").unwrap();
+    let body = r#"schema_version: '1.0'
+domain: TEST
+base: SRC
+keys: [ID]
+input:
+  SRC: {path: src.csv, types: {ID: int}}
+  ALT: {path: alt.csv, types: {ID: int}}
+  D: {path: donor.csv, types: {ID: int, V: int}}
+output: {path: result.csv, columns: [ID, TOTAL]}
+rows:
+  - id: alternate
+    dataset: ALT
+    derivations: {ID: ALT.ID}
+columns:
+  - {name: ID, type: int}
+  - {name: TOTAL, type: int, derivation: {aggregate: {expr: 'SUM(D.V)'}}}
+"#;
+    let mut result = fixture.run(body).unwrap();
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     assert!(result.save().unwrap());
     assert_eq!(
         fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
-        "ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,1,5,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n",
+        "ID,TOTAL\n1,11\n2,3\n"
     );
     assert_eq!(
         result.observations()["handler_counts"],
-        serde_json::json!([
-            {"spec_path":"rows[2].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":2},
-            {"spec_path":"columns.FINAL.derivation.source.multiple_matches","handler":"multiple_matches","count":4},
-        ]),
+        serde_json::json!([])
     );
 }
 

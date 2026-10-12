@@ -28,7 +28,9 @@ class Workloads(unittest.TestCase):
 
     def expected(self, name):
         record, directory = self.case(name)
-        return json.loads((directory / record["expected_output"]).read_text())
+        return json.loads(
+            (directory / record["expected_output"]).read_text(encoding="utf-8")
+        )
 
     def test_stored_sum_is_not_compensated_sum_and_missing_group_stays_missing(self):
         rows = self.expected("aggregate-20-10")["rows"]
@@ -44,12 +46,16 @@ class Workloads(unittest.TestCase):
         self.assertEqual(expected[1][1], {"type": "str", "value": "\u00e9,1:0"})
         record, directory = self.case("lookup-20-4")
         donors = list(
-            csv.DictReader(io.StringIO((directory / "donor.csv").read_text()))
+            csv.DictReader(
+                io.StringIO((directory / "donor.csv").read_text(encoding="utf-8"))
+            )
         )
         self.assertEqual(
             [r["TEXT"] for r in donors[:4]], [f"\u00e9,1:{i}" for i in range(4)]
         )
-        self.assertIn('"\u00e9,1:0"', (directory / "expected/out.csv").read_text())
+        self.assertIn(
+            '"\u00e9,1:0"', (directory / "expected/out.csv").read_text(encoding="utf-8")
+        )
         self.assertEqual(record["dimensions"], {"donors_per_match": 4})
 
     def test_window_dense_ties_and_missing_offset_differ_from_last_present(self):

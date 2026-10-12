@@ -5,6 +5,11 @@ use super::*;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IntermediateSource {
     Input(usize),
+    /// The original driver relation shares its already captured table.
+    Primary {
+        schema: TableSchema,
+        name: String,
+    },
     SelfRows {
         schema: TableSchema,
         columns: Vec<usize>,
@@ -17,12 +22,12 @@ impl IntermediateSource {
     pub fn input_index(&self) -> Option<usize> {
         match self {
             Self::Input(index) => Some(*index),
-            Self::SelfRows { .. } => None,
+            Self::Primary { .. } | Self::SelfRows { .. } => None,
         }
     }
     pub fn admits_column(&self, column: usize) -> bool {
         match self {
-            Self::Input(_) => true,
+            Self::Input(_) | Self::Primary { .. } => true,
             Self::SelfRows { columns, .. } => columns.contains(&column),
         }
     }
@@ -31,7 +36,8 @@ impl Intermediate {
     pub fn source_schema<'a>(&'a self, sources: &'a [SecondarySource]) -> Option<&'a TableSchema> {
         match &self.source {
             IntermediateSource::Input(index) => sources.get(*index).map(|source| &source.schema),
-            IntermediateSource::SelfRows { schema, .. } => Some(schema),
+            IntermediateSource::Primary { schema, .. }
+            | IntermediateSource::SelfRows { schema, .. } => Some(schema),
         }
     }
     pub fn source_column(&self, sources: &[SecondarySource], name: &str) -> Option<usize> {
@@ -39,16 +45,44 @@ impl Intermediate {
             .columns()
             .iter()
             .position(|column| column.name == name)
-            .filter(|&column| self.source.admits_column(column))
+            .filter(|&column| self.admits_column(column))
     }
 }
 
+fn named_selector(index: usize, items: &[Intermediate], depth: usize) -> bool {
+    if depth > 64 {
+        return true;
+    }
+    items.get(index).is_some_and(|item| item.source.is_self() || item.current_fields().any(|field| matches!(field.read, CurrentRead::Intermediate { index: child, .. } if named_selector(child, items, depth + 1))))
+}
 fn named_read(read: &Read, items: &[Intermediate]) -> bool {
-    matches!(read, Read::Intermediate { index, .. } if items.get(*index).is_some_and(|item| item.source.is_self()))
+    matches!(read, Read::Intermediate { index, .. } if named_selector(*index, items, 0))
+}
+/// The admitted aggregate IR owns no named selector. Textual donor labels do
+/// not confer SELF ownership. New source/key variants must extend this proof.
+fn aggregate_reads(aggregate: &BoundAggregate) -> bool {
+    match aggregate.relation() {
+        AggregateRelation::CurrentGroup | AggregateRelation::Output { .. } => false,
+        AggregateRelation::Matched { source, keys, .. } => {
+            let donor = match source {
+                AggregateSource::Primary | AggregateSource::Secondary(_) => false,
+            };
+            donor
+                || keys.iter().any(|key| match &key.value {
+                    MatchValue::Literal(_) => false,
+                    MatchValue::Variable(read)
+                    | MatchValue::Source(read)
+                    | MatchValue::StrPad { read, .. } => match read {
+                        MatchRead::Record { .. } | MatchRead::Output { .. } => false,
+                    },
+                })
+        }
+    }
 }
 fn reads(expression: &Expression, items: &[Intermediate]) -> bool {
     match expression {
-        Expression::Intermediate { index, .. } => items.get(*index).is_some_and(|item| item.source.is_self()),
+        Expression::Aggregate(aggregate) => aggregate_reads(aggregate),
+        Expression::Intermediate { index, .. } => named_selector(*index, items, 0),
         Expression::SourceBinding { source, .. } | Expression::StrContains { source, .. }
         | Expression::StrCase { source, .. } | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. } | Expression::MappingCut { source, .. } | Expression::Round { source, .. } => reads(&source.expression, items),
@@ -61,7 +95,10 @@ fn reads(expression: &Expression, items: &[Intermediate]) -> bool {
         Expression::Function(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if named_read(read, items))),
         Expression::ProjectFunction(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if named_read(read, items))),
         Expression::Case(branches) => branches.iter().any(|branch| branch.when.as_ref().is_some_and(|when| when.bindings().iter().any(|binding| named_read(&binding.read, items))) || reads(&branch.assignment.expression, items)),
-        _ => false,
+        Expression::Odm(_) | Expression::Literal(_) | Expression::Window(_) | Expression::Source(_)
+        | Expression::SourceLookup { .. } | Expression::Lookup(_) | Expression::RowLookup(_)
+        | Expression::Collect { .. } | Expression::Column(_) | Expression::Reduce { .. }
+        | Expression::Count { .. } => false,
     }
 }
 pub(super) fn validate(items: &[Intermediate], templates: &[RowTemplate]) -> Result<(), PlanError> {

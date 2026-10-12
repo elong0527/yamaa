@@ -4,8 +4,8 @@ use crate::{
     file_preparation,
     file_resources::{Error as ResourceError, Resources},
     project_run::{Attempt, PreparedRun, RejectedRun},
-    project_source::{self, CapturePort, Kind, Reply, Request},
-    specification_source::{CapturedSchema, Source},
+    project_source,
+    specification_source::CapturedSchema,
 };
 use std::sync::Arc;
 use yamaa_core::project_function::Language;
@@ -174,54 +174,21 @@ pub(crate) fn capture_environment(
     host: Language,
     schema: Arc<CapturedSchema>,
 ) -> Result<project_source::OwnedEnvironment, Error> {
-    let identity = resources.resolve(written).map_err(Error::Resource)?;
-    let (bytes, _) = resources
-        .capture(written, project_source::Limits::default().bytes)
-        .map_err(Error::Resource)?;
-    project_source::prepare(
-        schema,
-        Source {
-            identity,
-            bytes: resources
-                .preparation_copy(&bytes)
-                .map_err(Error::Resource)?,
-        },
+    let mut reader = crate::file_metadata::Reader { resources };
+    let prepared = match yamaa_engine::build::prepare_environment(
+        &mut reader,
+        &mut project_source::Decoder(schema),
+        written,
         host,
-        &mut Metadata { resources },
         Default::default(),
-    )
-    .map_err(Error::Environment)
-    .map(project_source::PreparedEnvironment::into_owned)
-}
-
-struct Metadata<'a> {
-    resources: &'a mut Resources,
-}
-impl CapturePort for Metadata<'_> {
-    type Error = ResourceError;
-    fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
-        let identity = self
-            .resources
-            .resolve_from(request.declaring_source, request.written)?;
-        if identity.len() > request.remaining_identity_bytes {
-            return Err(ResourceError::Limit);
+    ) {
+        Ok(prepared) => Ok(prepared),
+        Err(yamaa_engine::build::EnvironmentFailure::Resource(error)) => {
+            return Err(Error::Resource(error));
         }
-        let (bytes, _) = self.resources.capture_from(
-            request.declaring_source,
-            request.written,
-            request.remaining_bytes,
-        )?;
-        let source = Source {
-            identity,
-            bytes: self.resources.preparation_copy(&bytes)?,
-        };
-        Ok(match request.kind {
-            Kind::Lock => Reply::Lock {
-                kind: crate::project_lock::kind(&source.bytes)
-                    .map_err(|_| ResourceError::InvalidLock)?,
-                source,
-            },
-            Kind::Function | Kind::Codelist => Reply::Document(source),
-        })
-    }
+        Err(yamaa_engine::build::EnvironmentFailure::Preparation(error)) => Err(error),
+    };
+    project_source::adapt_preparation(prepared)
+        .map_err(Error::Environment)
+        .map(project_source::PreparedEnvironment::into_owned)
 }

@@ -16,6 +16,7 @@ and codec interfaces are native traits; adapters translate values and errors.
 | `TableAccess` | core | Immutable Arrow snapshots, core normalized CSV tables and engine output tables; test fakes | Bounds or original opaque cell-access error |
 | `inheritance::SourcePort` | engine | Typed inheritance capture adapter; native captured-file port; remaining R JSON compatibility probe | Source failure or traversal resource limit |
 | `project_activation::ActivationPort` | engine | Python/R locked-package adapters; native fakes | Original lock, binding, conformance or interrupt failure |
+| `build::ResourceReader` | engine | One native metadata reader shared by original document/parent/producer/dictionary and environment/function/codelist/lock preparation | Original file/quota/snapshot failure; declaring identity and held bytes retained |
 | `project_preparation::CapturePort` | engine | Adapter native file metadata capture; shared scripted native fake | Original capture/interrupt payload, bounded source/byte/identity refusal or malformed native reply kind |
 | `project_preparation::DecodePort` | engine | Adapter captured YAML/schema codec; shared scripted native fake | Original structural failure with retained source/context; closed environment/function/codelist target |
 | `function_invocation::FunctionPort` | engine | Python/R scalar callbacks and activated registries; `project_activation::Bindings`; native fakes | Original host exception, rejected representation or typed invocation failure |
@@ -33,6 +34,21 @@ one shared ordered event log. They move original opaque errors without requiring
 Clone, Send or Sync and never retry. Default engine unit tests exercise the same
 capture, decode, execution and held-publication lifecycle; the feature also makes
 the fakes available to integration tests without adding production dependencies.
+
+`build::Request` owns the shared request shape. `build::prepare_environment`
+composes the shared reader and structural codec with the environment application,
+retaining capture and preparation failures separately. Metadata root capture resolves,
+then captures and admits the original preparation copy through one reader;
+dependency captures keep their original declaring source. `build::select_entry`
+charges the complete retained original arena, admits normalized model capacity,
+inspects the whole authored input collection and verifies held snapshots before
+returning its sealed route fact. Schema defaults cannot invent producer inputs.
+Neither operation grants activation, study-data or publication authority.
+
+This is the shared preparation foundation for #1987. The complete Build/Check
+composition, held result/publication envelope and removal of both bindings'
+route assembly remain required; the existing checked lower services retain their
+current activation, report and explicit Save behavior during that migration.
 
 ## Current lifecycle
 

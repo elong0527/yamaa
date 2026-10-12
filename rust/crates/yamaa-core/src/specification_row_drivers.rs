@@ -91,7 +91,7 @@ pub(super) fn admit_reads(
     }
     let value = field(d, declaration, "value")?;
     let mut names = Vec::new();
-    derivations::references(d, value, project, &mut names, 0)?;
+    derivations::current_references(d, value, project, &mut names, 0)?;
     template_names(d, value, templates, &mut names, 0)?;
     let matching = names
         .iter()

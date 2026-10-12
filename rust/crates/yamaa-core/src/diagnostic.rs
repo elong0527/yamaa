@@ -14,6 +14,14 @@ use crate::{numeric_parser::SourceSpan, value::Value};
 mod dataset;
 pub use dataset::DatasetFinding;
 
+#[path = "diagnostic_aggregate.rs"]
+mod aggregate;
+pub use aggregate::{AggregateContextCause, AggregateEmptyKey, AggregateFinding};
+
+#[path = "diagnostic_odm.rs"]
+mod odm;
+pub use odm::{OdmDeclared, OdmFinding, OdmLocation};
+
 #[path = "diagnostic_inheritance.rs"]
 mod inheritance;
 pub use inheritance::InheritanceFinding;
@@ -288,7 +296,6 @@ conditions! {
     PreflightRedundantSourceType => ("validation", "redundant_field_type", Some("REQ-0533")),
     SourceUnknownProfile => ("validation", "source_profile_unknown", Some("REQ-0852")),
     SourceOrdinalCollision => ("validation", "ordinal_field_collision", Some("REQ-1294")),
-    SourceOdmOrdinal => ("validation", "odm_schema_field_type", Some("REQ-1295")),
     SourceEmptyStringPresentUnsupported => ("validation", "empty_string_present_unsupported", Some("REQ-1161")),
     ProducerInvalidContract => ("validation", "invalid_producer_contract", Some("REQ-0534")),
     ProducerWorkflowCycle => ("validation", "producer_workflow_cycle", Some("REQ-0534")),
@@ -314,9 +321,27 @@ conditions! {
     AggregateProhibitedConstruct => ("validation", "prohibited_construct", Some("REQ-0512")),
     AggregateProhibitedFunction => ("validation", "prohibited_function", Some("REQ-0500")),
     AggregateNestedReduction => ("validation", "nested_reduction", Some("REQ-0502")),
+    AggregateMultipleRecords => ("derivation", "aggregate_multiple_records", Some("REQ-0501")),
+    AggregateRowMultipleRecords => ("row_construction", "aggregate_multiple_records", Some("REQ-0501")),
+    AggregateIdentifierNotGrouped => ("validation", "aggregate_identifier_not_grouped", Some("REQ-0503")),
+    AggregateIncomparableSources => ("validation", "incomparable_sources", Some("REQ-0511")),
+    AggregateOutputGroups => ("validation", "invalid_aggregate_context", Some("REQ-0507")),
+    AggregateOwnGroupKeys => ("validation", "invalid_aggregate_context", Some("REQ-0142")),
+    AggregateMixedRelations => ("validation", "mixed_relations", Some("REQ-0504")),
+    AggregateKeyReference => ("validation", "unknown_field", Some("REQ-0141")),
+    AggregateKeyType => ("validation", "incompatible_input_type", Some("REQ-0004")),
+    AggregateMissingKeys => ("validation", "missing_aggregate_keys", Some("REQ-0140")),
     SourceNonAscii => ("validation", "non_ascii_source", Some("REQ-0705")),
     SourceInvalidText => ("validation", "invalid_text", Some("REQ-0029")),
     SourceInvalidYaml => ("validation", "invalid_yaml", Some("REQ-0280")),
+    OdmFieldMissing => ("validation", "odm_schema_field_missing", Some("REQ-1275")),
+    OdmFieldAmbiguous => ("validation", "odm_schema_field_ambiguous", Some("REQ-1275")),
+    OdmFieldType => ("validation", "odm_schema_field_type", Some("REQ-1275")),
+    OdmDeclaredOrdinal => ("validation", "odm_schema_field_type", Some("REQ-1295")),
+    OdmValueMissing => ("ingest", "odm_schema_value_missing", Some("REQ-1276")),
+    OdmInvalidContext => ("validation", "invalid_odm_context", Some("REQ-1277")),
+    OdmNotUnique => ("derivation", "odm_not_unique", Some("REQ-1278")),
+    OdmRowNotUnique => ("row_construction", "odm_not_unique", Some("REQ-1278")),
     CsvInvalidText => ("ingest", "invalid_text", Some("REQ-0853")),
     CsvByteOrderMark => ("ingest", "source_byte_order_mark", Some("REQ-0851")),
     CsvHeaderAbsent => ("ingest", "source_header_absent", Some("REQ-0851")),
@@ -334,6 +359,13 @@ conditions! {
     RootFilterPhaseBoundary => ("validation", "phase_boundary", Some("REQ-1170")),
     IntermediateSelfPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0120")),
     IntermediateIdentifierCollision => ("validation", "duplicate_identifier", Some("REQ-0113")),
+    IntermediateRenameOnly => ("validation", "rename_only_intermediate", Some("REQ-1248")),
+    IntermediateSelectionUnpaired => ("validation", "unpaired_fields", Some("REQ-0119")),
+    IntermediateNoApplicableKeys => ("validation", "no_applicable_keys", Some("REQ-0153")),
+    IntermediateRangeDeclaration => ("validation", "invalid_field_type", Some("REQ-1049")),
+    IntermediateRangeReference => ("validation", "unknown_field", Some("REQ-0121")),
+    IntermediateRangeTypes => ("validation", "incomparable_range_types", Some("REQ-0121")),
+    IntermediateColumnReference => ("validation", "unknown_field", Some("REQ-0122")),
     RowDependencyPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0069")),
     QualifiedNumericReference => ("validation", "qualified_identifier", Some("REQ-0442")),
     ImplicitSourceKeyType => ("validation", "incompatible_input_type", Some("REQ-0151")),
@@ -458,6 +490,7 @@ pub enum ContextValue {
     Scalar(Value),
     Integer(String),
     Sequence(Vec<ContextValue>),
+    Object(BTreeMap<String, ContextValue>),
 }
 
 pub type Context = BTreeMap<String, ContextValue>;

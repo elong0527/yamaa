@@ -2,10 +2,8 @@
 use super::*;
 use crate::dataset::Verification;
 use crate::{
-    aggregate_parser::{parse_aggregate, ParsedKind, Reducer},
     bound_expression::{Binding, BoundPredicate, Read},
     predicate_compiler,
-    reduction::NumericReducer,
     reference_scope::{self, Phase, Reach, Scope},
 };
 
@@ -15,15 +13,6 @@ enum RowOperation {
     ProjectFunction(usize),
     Output(String),
     Source(String),
-    InvalidAggregate {
-        expression: String,
-        error: crate::aggregate_parser::GrammarFailure,
-    },
-    Reduction {
-        name: String,
-        expression: String,
-        reducer: RowReducer,
-    },
 }
 impl RowOperation {
     fn calls(&self) -> Vec<usize> {
@@ -35,11 +24,6 @@ impl RowOperation {
         }
         calls
     }
-}
-#[derive(Debug)]
-enum RowReducer {
-    Numeric(NumericReducer),
-    Count { records: bool },
 }
 #[derive(Debug)]
 struct RowDeclaration {
@@ -58,6 +42,41 @@ struct Template {
         String,
         Result<crate::predicate::Plan, predicate_compiler::Error>,
     )>,
+}
+fn deferred_odm_contexts(
+    declarations: &[Template],
+    templates: &[RowTemplate],
+) -> Result<alloc::rc::Rc<[crate::dataset::OdmTemplateScope]>, BindError> {
+    declarations
+        .iter()
+        .try_fold(0usize, |used, template| {
+            used.checked_add(template.id.len()).and_then(|used| {
+                used.checked_add(
+                    core::mem::size_of::<crate::dataset::OdmTemplateScope>()
+                        + 8 * core::mem::size_of::<usize>(),
+                )
+            })
+        })
+        .filter(|&bytes| bytes <= 16_777_216)
+        .ok_or(BindError::Internal)?;
+    Ok(declarations
+        .iter()
+        .zip(templates)
+        .map(|(declaration, template)| crate::dataset::OdmTemplateScope {
+            row: declaration.id.clone(),
+            driver: template.mode.source_index(),
+            groups: match template.mode.local_mode() {
+                RowMode::Groups(groups) => Some(
+                    crate::odm_source::HIERARCHY
+                        .into_iter()
+                        .filter(|field| groups.contains(field))
+                        .collect(),
+                ),
+                _ => None,
+            },
+        })
+        .collect::<Vec<_>>()
+        .into())
 }
 #[derive(Debug)]
 pub(super) struct Rows {
@@ -90,7 +109,7 @@ fn declaration(
     id: usize,
     column: usize,
     prefix: String,
-    grouped: bool,
+    _grouped: bool,
     limits: CompilationLimits,
     project: Option<&functions::Prepared>,
     extraction: &str_extract::Prepared,
@@ -120,51 +139,6 @@ fn declaration(
                 RowOperation::Source(name.into())
             } else {
                 RowOperation::Output(name.into())
-            }
-        }
-        "aggregate" if grouped => {
-            closed_fields(d, payload, &["expr"], &path)?;
-            let expression = text(d, field(d, payload, "expr")?)?;
-            let parsed = match parse_aggregate(expression, Default::default()) {
-                Ok(parsed) => parsed,
-                Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
-                    return Ok(RowDeclaration {
-                        handler,
-                        column,
-                        path,
-                        operation: RowOperation::InvalidAggregate {
-                            expression: expression.into(),
-                            error: failure,
-                        },
-                    })
-                }
-                Err(crate::aggregate_parser::ParseError::Limit { .. }) => {
-                    return Err(PrepareError::Limit("aggregate_parser"))
-                }
-            };
-            let ParsedKind::Reduction {
-                reducer, operand, ..
-            } = parsed.nodes()[parsed.root()].kind
-            else {
-                return Err(unsupported("aggregate_expression", &path));
-            };
-            let reducer = match (reducer, &parsed.nodes()[operand].kind) {
-                (Reducer::Sum, ParsedKind::Identifier) => RowReducer::Numeric(NumericReducer::Sum),
-                (Reducer::Mean, ParsedKind::Identifier) => {
-                    RowReducer::Numeric(NumericReducer::Mean)
-                }
-                (Reducer::Count, ParsedKind::Identifier) => RowReducer::Count { records: false },
-                (Reducer::Count, ParsedKind::Star) => RowReducer::Count { records: true },
-                (Reducer::Sum | Reducer::Mean | Reducer::Count, _) => {
-                    return Err(unsupported("aggregate_argument", &path));
-                }
-                _ => return Err(unsupported("aggregate_expression", &path)),
-            };
-            let span = parsed.nodes()[operand].span;
-            RowOperation::Reduction {
-                name: expression[span.start..span.end].into(),
-                expression: expression.into(),
-                reducer,
             }
         }
         _ => RowOperation::Shared(derivations::prepare_value_with_driver(
@@ -349,6 +323,18 @@ fn select_defaults(
         }
     }
     let mut selected = alloc::vec![false; columns.len()];
+    // A column ODM default owns the enclosing template's item scope and row
+    // identity even when no row overrides or filter reference it.
+    for (column, &node) in columns.iter().enumerate() {
+        if let Some(derivation) = d
+            .field(node, "derivation")
+            .filter(|&node| !matches!(d.nodes()[node], N::Null))
+        {
+            if odm::contains(d, derivation, 0)? {
+                selected[column] = local[column];
+            }
+        }
+    }
     for column in filter_defaults {
         selected[column] = local[column];
     }
@@ -1078,14 +1064,6 @@ impl Rows {
                     &secondary,
                     &intermediates,
                 )?,
-                RowOperation::InvalidAggregate { expression, error } => {
-                    findings.push(BindFinding::Aggregate {
-                        path: declaration.path.clone(),
-                        expression: expression.clone(),
-                        error: error.clone(),
-                    });
-                    None
-                }
                 RowOperation::Source(reference) => {
                     if named.reference(reference).is_some() {
                         if !named
@@ -1139,43 +1117,6 @@ impl Rows {
                         valid.then_some(Expression::Source(column))
                     } else {
                         None
-                    }
-                }
-                RowOperation::Reduction {
-                    name: operand,
-                    expression,
-                    reducer,
-                } => {
-                    let relation = operand.split_once('.').map(|(relation, _)| relation);
-                    if relation != Some(name) {
-                        // Scope findings follow ingestion, like grammar findings,
-                        // and suppress generic field binding for the invalid operand.
-                        findings.push(BindFinding::AggregateScope {
-                            path: declaration.path.clone(),
-                            expression: expression.clone(),
-                            relation: relation.map(String::from),
-                        });
-                        None
-                    } else if matches!(reducer, RowReducer::Count { records: true }) {
-                        Some(Expression::Count {
-                            column: None,
-                            text: expression.clone(),
-                        })
-                    } else {
-                        resolve(operand, &declaration.path, source, name, findings).map(|column| {
-                            match reducer {
-                                RowReducer::Numeric(reducer) => Expression::Reduce {
-                                    identifier: Some(operand.clone()),
-                                    column,
-                                    reducer: *reducer,
-                                    text: expression.clone(),
-                                },
-                                RowReducer::Count { .. } => Expression::Count {
-                                    column: Some(column),
-                                    text: expression.clone(),
-                                },
-                            }
-                        })
                     }
                 }
             };
@@ -1394,7 +1335,7 @@ impl Rows {
                     .transpose()
                     .map_err(BindError::InvalidPredicateBinding)?
             };
-            if let Some(filter) = filter.as_ref().filter(|_| !grouped) {
+            if let Some(filter) = filter.as_ref() {
                 let bound = intermediates
                     .iter()
                     .filter_map(Option::as_ref)
@@ -1403,7 +1344,8 @@ impl Rows {
                 let deferred =
                     crate::dataset::window_stages(&assignments, output.columns().len(), &bound);
                 for binding in filter.bindings() {
-                    if matches!(binding.read, Read::Column(column) if deferred[column]) {
+                    if matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
+                    {
                         findings.push(BindFinding::Scalar(crate::diagnostic::Diagnostic {
                             code: crate::diagnostic::ConditionCode::RowFilterPhaseBoundary,
                             spec_paths: vec![filter_path.clone()],
@@ -1453,6 +1395,7 @@ impl Rows {
                 filter,
             });
         }
+        let mut odm_contexts: Option<alloc::rc::Rc<[crate::dataset::OdmTemplateScope]>> = None;
         let mut columns = Vec::new();
         let mut dependencies = alloc::vec![None; output.columns().len()];
         for declaration in &self.columns {
@@ -1462,7 +1405,7 @@ impl Rows {
                 }
             }
             let mut edges = Vec::new();
-            if let Some(value) = assignment(
+            if let Some(mut value) = assignment(
                 source,
                 name,
                 &catalog,
@@ -1476,6 +1419,16 @@ impl Rows {
                 &mut findings,
                 false,
             )? {
+                crate::dataset::odm::visit_mut(&mut value.expression, &mut |bound| {
+                    if odm_contexts.is_none() {
+                        odm_contexts = Some(
+                            deferred_odm_contexts(&self.templates, &templates)
+                                .map_err(|_| crate::dataset::PlanError::InvalidSource)?,
+                        );
+                    }
+                    bound.defer(odm_contexts.as_ref().unwrap().clone())
+                })
+                .map_err(BindError::InvalidPlan)?;
                 columns.push(value);
             }
             dependencies[declaration.column] = Some(edges);
@@ -1492,6 +1445,19 @@ impl Rows {
                 paths,
                 diagnostics: analyzed.diagnostics,
             });
+        }
+        for template in &templates {
+            relation_predicates::admit_reads(
+                template
+                    .assignments
+                    .iter()
+                    .chain(&columns)
+                    .map(|assignment| &assignment.expression),
+                &intermediates,
+                template.mode.source_index(),
+                &template.mode,
+                &mut findings,
+            );
         }
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
@@ -1512,6 +1478,32 @@ impl Rows {
             verifications.to_vec(),
         )
         .and_then(|plan| {
+            let contexts = self
+                .templates
+                .iter()
+                .zip(plan.templates())
+                .map(|(declaration, template)| {
+                    match (&declaration.groups, template.mode.local_mode()) {
+                        (Some(names), RowMode::Groups(columns)) => {
+                            Some(crate::dataset::AggregateRowContext {
+                                row: declaration.id.clone(),
+                                groups: names
+                                    .iter()
+                                    .map(|name| {
+                                        String::from(
+                                            name.split_once('.')
+                                                .map_or(name.as_str(), |(_, field)| field),
+                                        )
+                                    })
+                                    .zip(columns.iter().copied())
+                                    .collect(),
+                            })
+                        }
+                        _ => None,
+                    }
+                })
+                .collect();
+            let plan = plan.with_row_contexts(contexts)?;
             // Repeated defaults in several templates share one declaration and
             // one counter. Only effective row declarations register handlers.
             let mut seen = alloc::collections::BTreeSet::new();

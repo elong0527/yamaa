@@ -85,12 +85,11 @@ pub(super) fn prepare(
                                     .map_err(|_| PrepareError::Limit("verification_diagnostic"))?
                             }
                             node => {
-                                crate::schema::scalar_diagnostic_label(node).ok_or_else(|| {
-                                    PrepareError::Unsupported(vec![UnsupportedFeature {
-                                        operation: "verification_literal_diagnostic".into(),
-                                        path: item_path.clone(),
-                                    }])
-                                })?
+                                // Admitted documents contain finite scalar leaves.
+                                // Invalid carriers belong to schema admission, not
+                                // an unimplemented verification operation.
+                                crate::schema::scalar_diagnostic_label(node)
+                                    .ok_or(PrepareError::Internal)?
                             }
                         };
                         if finding.is_none() {
@@ -106,27 +105,30 @@ pub(super) fn prepare(
         }
         "range" => {
             // Scan both raw bounds even if the column kind or earlier bound is invalid.
-            let bound = |name| -> Result<Option<Value>, PrepareError> {
+            let bound = |name| -> Result<Result<Option<Value>, ()>, PrepareError> {
                 let Some(id) = d
                     .field(payload, name)
                     .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 else {
-                    return Ok(None);
+                    return Ok(Ok(None));
                 };
                 let value = literal(d, id, &format!("{path}.{name}"))?;
                 if !matches!(value, Value::Int(_) | Value::Float(_)) {
-                    return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                        operation: "verification_numeric_bound".into(),
-                        path: format!("{path}.{name}"),
-                    }]));
+                    return Ok(Err(()));
                 }
-                Ok(Some(value))
+                Ok(Ok(Some(value)))
             };
             let min = bound("min")?;
             let max = bound("max")?;
             if !matches!(kind, ColumnType::Int | ColumnType::Float) {
                 return Ok(wrong_type());
             }
+            let (Ok(min), Ok(max)) = (min, max) else {
+                return Ok(invalid(
+                    ConditionCode::VerificationDeclarationRequired,
+                    "a range bound is numeric".into(),
+                ));
+            };
             if min.is_none() && max.is_none() {
                 return Ok(invalid(
                     ConditionCode::VerificationBounds,

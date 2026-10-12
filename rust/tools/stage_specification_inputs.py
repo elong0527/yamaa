@@ -15,6 +15,7 @@ _requirement_module = importlib.util.module_from_spec(_requirement_spec)
 _requirement_spec.loader.exec_module(_requirement_module)
 reconciled_schema_requirements = _requirement_module.reconciled_schema_requirements
 CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter", "negative-paired-dates", "negative-not-missing-age", "negative-implausible-age", "negative-invalid-sex", "negative-sex-code", "negative-matches-bad-pattern")
+CASE_PREDICATE_CASES = ("adam-adae-protocol-review", "adam-adfa-fever", "adam-adtte-pfs", "schema-expressions", "schema-predicates", "sdtm-ae-seriousness", "sdtm-mh-ongoing-conditions", "sdtm-tr-tumor-measurements", "sdtm-tu-tumor-identification", "sdtm-ds-reasons")
 ROUNDING_CASES = ("schema-round-half-away-from-zero-ties", "negative-round-half-away-from-zero-non-numeric-source")
 TEMPORAL_CASES = ("adam-adsl-duration", "adam-adsl-analysis-age", "negative-date-diff-endpoints", "negative-date-diff-units", "negative-study-day-datetime", "negative-epoch-day-non-date")
 IMPUTATION_CASES = ("schema-birth-date", "sdtm-dm-age", "negative-impute-bad-month", "negative-impute-unreachable-month", "negative-impute-missing-month", "negative-impute-day-rule", "negative-impute-bad-day", "negative-date-conversion", "negative-impute-bad-source", "negative-precision-bad-source", "negative-datetime-impute-bad-source", "negative-datetime-precision-bad-source")
@@ -326,14 +327,16 @@ def stage_row_intermediate_truth(destination: Path):
         findings = case["findings"]
         success = "csv" in case
         if name == "adam-adlb-end-of-treatment":
-            # Keep the historical capture; flags and implicit secondary sources
-            # are admitted while the three intermediate scope gates stay held.
+            # Keep the historical capture; only intermediate derivations and
+            # verifications remain unsupported after same-input admission.
             findings = list(reference["eot_native_gates"])
             assert len(findings) == 5
             assert findings.pop() == {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
                                       "spec_paths":["columns.EOTFL.derivation.flag"], "context":{"operation":"flag"}}
             assert findings.pop() == {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
                                       "spec_paths":["columns.ENDPOINT.derivation.source"], "context":{"operation":"secondary_source_expression"}}
+            assert findings.pop() == {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
+                                      "spec_paths":["intermediates[1]"], "context":{"operation":"intermediate_scope"}}
             success = False
         if success:
             (directory / "expected.csv").write_text(case["csv"], encoding="utf-8", newline="\n")
@@ -353,7 +356,7 @@ def stage_row_intermediate_truth(destination: Path):
         ledger = case.get("handler_counts", [])
         output = "adlb.csv" if name in reference["originals"] else "result.csv"
         entries.append(text(name) + "=list(issues=list(" + ",".join(fields) + "),success=" + ("TRUE" if success else "FALSE") + ",output=" + text(output) + ",ledger=" + text(json.dumps(ledger, sort_keys=True, separators=(",", ":"))) + ")")
-    (destination / "row-intermediate-truth.R").write_text("# Complete independent row-context truth; EOT intermediate scopes remain gated.\nrow_intermediate_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
+    (destination / "row-intermediate-truth.R").write_text("# Complete independent row-context truth; EOT derivations and verifications remain gated.\nrow_intermediate_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")
 
 def stage_inheritance_replay(destination: Path):
     """Translate existing graph inputs to raw JSON/YAML, preserving independent outcomes."""
@@ -560,6 +563,23 @@ def stage(destination: Path):
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_inspection.tsv", destination / "source-inspection.tsv")
     source_truth = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.tsv"
     shutil.copy2(source_truth, destination / "original-source-bindings.tsv")
+    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/case_predicates.json", destination / "case-predicate-truth.json")
+    truth = json.loads((destination / "case-predicate-truth.json").read_text())
+    private_cases = destination / "case-predicate-cases"
+    private_cases.mkdir()
+    with (destination / "case-predicate-diagnostics.tsv").open("w", newline="", encoding="ascii") as stream:
+        writer = csv.writer(stream, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE, quotechar=None)
+        writer.writerow(("case", "phase", "condition", "requirement", "spec_path", "context"))
+        for name, case in truth["cases"].items():
+            directory = private_cases / name
+            directory.mkdir()
+            (directory / "spec.yaml").write_text(case["specification"], encoding="ascii", newline="\n")
+            for filename, contents in case["inputs"].items():
+                (directory / filename).write_text(contents, encoding="ascii", newline="\n")
+            if "csv" in case:
+                (directory / "expected.csv").write_text(case["csv"], encoding="ascii", newline="\n")
+            for finding in case.get("findings", []):
+                writer.writerow((name, finding["phase"], finding["condition"], finding["requirement"], finding["spec_paths"][0], json.dumps(finding["context"], sort_keys=True, separators=(",", ":"))))
     source_cases = destination / "source-binding-cases"
     source_cases.mkdir()
     with source_truth.open(encoding="ascii") as stream:
@@ -588,6 +608,10 @@ def stage(destination: Path):
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_filters.tsv", destination / "row-filters.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_filter_admission.tsv", destination / "row-filter-admission.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_reductions.tsv", destination / "row-reductions.tsv")
+    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.tsv", destination / "correlated-aggregates.tsv")
+    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/odm_reads.tsv", destination / "odm-reads.tsv")
+    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/odm_deferred.tsv", destination / "odm-deferred.tsv")
+    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/odm_preflight.tsv", destination / "odm-preflight.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_column_checks.tsv", destination / "row-column-checks.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_column_values.tsv", destination / "original-column-values.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_column_matches.tsv", destination / "original-column-matches.tsv")
@@ -598,7 +622,7 @@ def stage(destination: Path):
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.tsv", destination / "original-row-conversion-handlers.tsv")
     for name in SCHEMA_MODULES:
         shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
-    for name in (*CASES, *ROUNDING_CASES, *TEMPORAL_CASES, *IMPUTATION_CASES, *TEXT_CASES, *PAD_CASES, *EXTRACTION_CASES, *TEMPLATE_CASES, *FLAG_POSITIVE_CASES, *FLAG_NEGATIVE_CASES, "schema-verification-log"):
+    for name in (*CASES, *CASE_PREDICATE_CASES, *ROUNDING_CASES, *TEMPORAL_CASES, *IMPUTATION_CASES, *TEXT_CASES, *PAD_CASES, *EXTRACTION_CASES, *TEMPLATE_CASES, *FLAG_POSITIVE_CASES, *FLAG_NEGATIVE_CASES, "schema-verification-log"):
         shutil.copytree(REPOSITORY / "benchmarks" / name, destination / "cases" / CASE_DIRECTORY_NAMES.get(name, name))
     shutil.copytree(
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specs",

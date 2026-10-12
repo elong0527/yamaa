@@ -4683,6 +4683,9 @@ fn named_item() -> yamaa_engine::dataset::Intermediate {
             keep: Keep::Last,
         }),
         no_match: Some(Value::Missing),
+
+        range: None,
+        columns: None,
     }
 }
 
@@ -4718,7 +4721,7 @@ fn named_intermediates_cache_records_and_repeat_reading_handlers() {
         ],
     );
     let mut item = named_item();
-    item.filter = Some(positive(Read::Source(0)));
+    item.filter = Some(positive(Read::Source(0)).into());
     let plan = named_plan(&source, &secondary, item).unwrap();
     for _ in 0..2 {
         secondary.reads.borrow_mut().clear();
@@ -4834,7 +4837,7 @@ fn named_intermediate_filter_scope_and_resources_are_attempt_local() {
         vec![vec![Value::Int(1), Value::Str("bad".into()), Value::Int(0)]],
     );
     let mut item = named_item();
-    item.filter = Some(positive(Read::Source(1)));
+    item.filter = Some(positive(Read::Source(1)).into());
     let plan = named_plan(&source, &secondary, item).unwrap();
     assert!(matches!(
         *plan
@@ -4882,7 +4885,7 @@ fn named_intermediate_filter_scope_and_resources_are_attempt_local() {
         Err(PlanError::InvalidLookup)
     );
     let mut item = named_item();
-    item.filter = Some(positive(Read::Column(0)));
+    item.filter = Some(positive(Read::Column(0)).into());
     assert!(matches!(
         named_plan(&source, &secondary, item),
         Err(PlanError::Filter(_))

@@ -10,7 +10,11 @@ mod diagnostics;
 mod conversion;
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
+#[path = "dataset_relation_predicate.rs"]
+mod relation_predicates;
 pub use yamaa_core::dataset::*;
+#[path = "dataset_case_predicate.rs"]
+mod case_predicates;
 #[path = "dataset_flag.rs"]
 mod flags;
 #[path = "dataset_functions.rs"]
@@ -19,6 +23,8 @@ pub use crate::function_invocation::FunctionPort;
 pub(crate) fn unavailable_functions<E>() -> impl FunctionPort<Error = E> {
     crate::function_invocation::NoFunctions::new()
 }
+#[path = "dataset_aggregate.rs"]
+mod aggregates;
 #[path = "dataset_temporal_imputation.rs"]
 mod imputation;
 #[path = "dataset_keys.rs"]
@@ -29,6 +35,8 @@ mod lookup;
 mod mapping_cut;
 #[path = "dataset_numeric.rs"]
 mod numeric;
+#[path = "dataset_odm.rs"]
+mod odm;
 #[path = "dataset_ordering.rs"]
 mod ordering;
 #[path = "dataset_row_drivers.rs"]
@@ -325,6 +333,7 @@ enum SelectionIdentity {
 }
 /// Keep source provenance per candidate for the later whole-column phase.
 struct Candidate {
+    template: Option<usize>,
     selection_identity: SelectionIdentity,
     members: Vec<usize>,
     values: Vec<Value>,
@@ -366,12 +375,14 @@ pub(crate) fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> Ex
 
 /// Resources and semantic observations belong to the same attempted run.
 struct EvaluationState<'a, E> {
+    primary: &'a dyn TableAccess<Error = E>,
     functions: &'a mut dyn FunctionPort<Error = E>,
     secondary: &'a [&'a dyn TableAccess<Error = E>],
     self_rows: &'a [Candidate],
     budget: &'a mut Budget,
     handlers: &'a mut HandlerCounter,
     intermediates: &'a mut intermediates::Run,
+    output_rows: &'a [Candidate],
 }
 
 /// Evaluate one admitted assignment and finish conversion before publishing it.
@@ -536,20 +547,9 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             let selected = match &branch.when {
                 None => true,
                 Some(when) => {
-                    let source_row = candidate.members[0];
-                    let truth = crate::dataset_predicate::evaluate(
-                        when,
-                        table,
-                        source_row,
-                        &candidate.values,
-                        state.budget.predicate(),
-                    )
-                    .map_err(|error| match error.kind {
-                        yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                            Box::new(predicate_limit(limit))
-                        }
-                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                    })?;
+                    let truth = case_predicates::evaluate(
+                        when, table, candidate, plan, row, assignment, state,
+                    )?;
                     truth == yamaa_core::predicate::Truth::True
                 }
             };
@@ -652,6 +652,12 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     if let Expression::Compute(expression) = &assignment.expression {
         return numeric::evaluate(expression, table, candidate, plan, row, assignment, state);
     }
+    if let Expression::Aggregate(expression) = &assignment.expression {
+        return aggregates::evaluate(expression, table, candidate, plan, row, state);
+    }
+    if let Expression::Odm(expression) = &assignment.expression {
+        return odm::evaluate(expression, table, candidate, plan, row, state);
+    }
     let EvaluationState {
         budget,
         handlers,
@@ -708,6 +714,8 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         | Expression::StrContains { .. }
         | Expression::Flag(_)
         | Expression::Compute(_)
+        | Expression::Aggregate(_)
+        | Expression::Odm(_)
         | Expression::Case(_)
         | Expression::MappingCut { .. }
         | Expression::Round { .. }
@@ -1142,6 +1150,7 @@ impl Executor<'_> {
             return Err(Box::new(ExecutionError::Capacity));
         }
         observer(ExecutionPhase::Derivation);
+        let primary = row_drivers::Driver::Primary(table);
         let mut budget = Budget::new(limits);
         let mut intermediate_run = intermediates::Run::default();
         let mut candidates: Vec<Candidate> = Vec::new();
@@ -1149,7 +1158,7 @@ impl Executor<'_> {
         if matches!(self.plan.templates()[0].mode, RowMode::Keys) {
             candidates = key_grain::construct(self, table, limits, &mut budget, handlers)?;
         } else {
-            for template in self.plan.templates() {
+            for (template_index, template) in self.plan.templates().iter().enumerate() {
                 let table =
                     row_drivers::Driver::new(table, secondary, template.mode.source_index());
                 let table = &table;
@@ -1159,7 +1168,6 @@ impl Executor<'_> {
                     self.plan.output().columns().len(),
                     self.plan.intermediates(),
                 );
-                let late_filter = matches!(template.mode.local_mode(), RowMode::Groups(_));
                 let groups = match template.mode.local_mode() {
                     RowMode::Driver { .. } => unreachable!("plan admission rejects nested drivers"),
                     RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
@@ -1188,6 +1196,7 @@ impl Executor<'_> {
                         .checked_add(1)
                         .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
                     let mut candidate = Candidate {
+                        template: Some(template_index),
                         selection_identity,
                         members,
                         values: vec![Value::Missing; self.plan.output().columns().len()],
@@ -1206,18 +1215,34 @@ impl Executor<'_> {
                             candidates.len(),
                             limits,
                             &mut EvaluationState {
+                                primary: &primary,
                                 functions,
                                 secondary,
                                 self_rows: &candidates[..first],
                                 budget: &mut budget,
                                 handlers,
                                 intermediates: &mut intermediate_run,
+                                output_rows: &[],
                             },
                         )?;
                         candidate.completed[assignment.column] = true;
                     }
-                    if let Some(filter) = template.filter.as_ref().filter(|_| !late_filter) {
-                        if !row_windows::retain(filter, table, &candidate, &mut budget)? {
+                    if let Some(filter) = template.filter.as_ref() {
+                        let source_row = candidate.members[0];
+                        let truth = crate::dataset_predicate::evaluate(
+                            filter,
+                            table,
+                            source_row,
+                            &candidate.values,
+                            budget.predicate(),
+                        )
+                        .map_err(|error| match error.kind {
+                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                                Box::new(predicate_limit(limit))
+                            }
+                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                        })?;
+                        if truth != yamaa_core::predicate::Truth::True {
                             budget.discard_candidate(&candidate.values);
                             continue;
                         }
@@ -1234,23 +1259,16 @@ impl Executor<'_> {
                     first,
                     limits,
                     &mut EvaluationState {
+                        primary: &primary,
                         functions,
                         secondary,
                         self_rows: prior,
                         budget: &mut budget,
                         handlers,
                         intermediates: &mut intermediate_run,
+                        output_rows: &[],
                     },
                 )?;
-                if let Some(filter) = template.filter.as_ref().filter(|_| late_filter) {
-                    for candidate in candidates.split_off(first) {
-                        if row_windows::retain(filter, table, &candidate, &mut budget)? {
-                            candidates.push(candidate);
-                        } else {
-                            budget.discard_candidate(&candidate.values);
-                        }
-                    }
-                }
                 intermediate_run.publish_self(self, &mut budget)?;
             }
         }
@@ -1316,12 +1334,14 @@ impl Executor<'_> {
                         row,
                         limits,
                         &mut EvaluationState {
+                            primary: &primary,
                             functions,
                             secondary,
                             self_rows: &candidates,
                             budget: &mut budget,
                             handlers,
                             intermediates: &mut intermediate_run,
+                            output_rows: &candidates,
                         },
                     )?
                 };

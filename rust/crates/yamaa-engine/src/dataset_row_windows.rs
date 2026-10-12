@@ -1,26 +1,5 @@
 //! Complete template-local windows and their scalar readers using the shared evaluator.
 use super::*;
-pub(super) fn retain<T: TableAccess + ?Sized>(
-    filter: &BoundPredicate,
-    table: &T,
-    candidate: &Candidate,
-    budget: &mut Budget,
-) -> Result<bool, Box<ExecutionError<T::Error>>> {
-    let source_row = candidate.members[0];
-    let truth = crate::dataset_predicate::evaluate(
-        filter,
-        table,
-        source_row,
-        &candidate.values,
-        budget.predicate(),
-    )
-    .map_err(|error| match error.kind {
-        yamaa_core::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
-        _ => Box::new(ExecutionError::Predicate { source_row, error }),
-    })?;
-    Ok(truth == yamaa_core::predicate::Truth::True)
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(super) fn complete<T: TableAccess + ?Sized>(
     table: &T,

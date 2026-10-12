@@ -19,6 +19,8 @@ pub enum Error {
     TypedSource(crate::typed_csv::Error),
     ParquetSource(crate::parquet_source::Error),
     Ordinal(yamaa_engine::source_ingestion::Error),
+    OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
+    OdmValues(Vec<yamaa_core::odm_source::MissingValues>),
     Sources(Vec<(SourceDeclaration, Error)>),
     Bind(BindError),
     Execution(DatasetTransportError),
@@ -148,6 +150,20 @@ fn run_error(error: application::RunError<Error>, prepared: &PreparedSpecificati
                 .map(|(index, error)| (prepared.sources()[index].clone(), error))
                 .collect(),
         ),
+        application::RunError::AdmittedSources(errors) => Error::Sources(
+            errors
+                .into_iter()
+                .map(|(index, error)| {
+                    (
+                        prepared.sources()[index].clone(),
+                        match error {
+                            application::SourceIssue::Decode(error) => error,
+                            application::SourceIssue::OdmValues(values) => Error::OdmValues(values),
+                        },
+                    )
+                })
+                .collect(),
+        ),
         application::RunError::Bind(error) => Error::Bind(error),
         application::RunError::SourceBytes { limit } => {
             Error::Source(TextTableError::Csv(csv_source::Error::Limit {
@@ -181,6 +197,8 @@ impl application::SourceDecoder for SourceDecoder {
                         | crate::parquet_source::Error::Unsupported { .. }
                         | crate::parquet_source::Error::Value { .. }
                 )
+                | Error::OdmFields(_)
+                | Error::OdmValues(_)
         )
     }
     fn decode(
@@ -190,6 +208,14 @@ impl application::SourceDecoder for SourceDecoder {
     ) -> Result<Self::Table, Self::Error> {
         decode_source(source, bytes, None).map(dataset_transport::Snapshot)
     }
+    fn decode_with_interpretation(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<Self::Table, Self::Error> {
+        decode_interpreted(source, bytes, None, interpretation).map(dataset_transport::Snapshot)
+    }
 }
 
 pub(crate) fn decode_source(
@@ -197,6 +223,21 @@ pub(crate) fn decode_source(
     bytes: &[u8],
     bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
 ) -> Result<ArrowTable, Error> {
+    decode_interpreted(
+        source,
+        bytes,
+        bounded,
+        yamaa_core::specification::SourceInterpretation::Ordinary,
+    )
+}
+
+pub(crate) fn decode_interpreted(
+    source: &SourceDeclaration,
+    bytes: &[u8],
+    bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
+    interpretation: yamaa_core::specification::SourceInterpretation,
+) -> Result<ArrowTable, Error> {
+    let odm = interpretation == yamaa_core::specification::SourceInterpretation::Odm;
     let cells = bounded.map_or(262_144, |l| l.cells.min(262_144));
     let table_limits = TableLimits {
         max_rows: 65_536,
@@ -205,22 +246,62 @@ pub(crate) fn decode_source(
         max_cells: cells,
     };
     let table = if source.profile == yamaa_core::specification::SourceProfile::Parquet {
-        decode_parquet(source, bytes, bounded)?
+        decode_parquet(source, bytes, bounded, odm)?
     } else {
         let csv_limits = bounded.map_or_else(csv_source::Limits::default, bounded_csv_limits);
-        crate::typed_csv::parse(
-            bytes,
-            &source.types,
-            csv_limits,
-            TableLimits {
-                max_rows: 65_536,
-                max_columns: 64,
-                max_batches: 1,
-                max_cells: cells,
-            },
-        )
-        .map_err(typed_source_error)?
+        if odm {
+            let parsed = crate::csv_source::parse(bytes, csv_limits)
+                .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
+            let fields = parsed
+                .names
+                .iter()
+                .map(|name| yamaa_core::odm_source::StoredField {
+                    name,
+                    kind: Some(yamaa_core::value::ColumnType::Str),
+                })
+                .collect::<Vec<_>>();
+            let binding = yamaa_core::odm_source::bind_fields(&fields)
+                .map_err(|_| {
+                    Error::Source(TextTableError::Csv(csv_source::Error::Limit {
+                        resource: "odm_metadata",
+                        limit: 1_048_576,
+                    }))
+                })?
+                .map_err(Error::OdmFields)?;
+            let projected = crate::csv_source::CsvSource {
+                names: yamaa_core::odm_source::FIELDS
+                    .iter()
+                    .map(|name| (*name).into())
+                    .collect(),
+                records: parsed
+                    .records
+                    .into_iter()
+                    .map(|mut row| {
+                        binding
+                            .stored()
+                            .iter()
+                            .map(|&column| row[column].take())
+                            .collect()
+                    })
+                    .collect(),
+            };
+            crate::typed_csv::convert(
+                projected,
+                yamaa_core::typed_csv::PreparedTypes::new(&[], 11)
+                    .expect("fixed text schema has no authored type declarations"),
+                TableLimits {
+                    max_columns: 11,
+                    ..table_limits
+                },
+            )
+            .map_err(typed_source_error)?
+        } else {
+            crate::typed_csv::parse(bytes, &source.types, csv_limits, table_limits)
+                .map_err(typed_source_error)?
+        }
     };
+    // ODM interpretation has already selected the fixed canonical fields.
+    // Its ordinal declaration is rejected by core before decoding begins.
     crate::source_ordinal::append(source, table, table_limits)
 }
 
@@ -251,6 +332,7 @@ fn decode_parquet(
     source: &SourceDeclaration,
     bytes: &[u8],
     bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
+    odm: bool,
 ) -> Result<ArrowTable, Error> {
     use crate::parquet_source::{self, CompressionLimits, FramingLimits, MetadataLimits};
     use arrow_array::{Array, ArrayRef, RecordBatch, StringArray};
@@ -264,7 +346,12 @@ fn decode_parquet(
     };
     let work_bytes = bounded.map_or(64 * 1024 * 1024, |l| l.work_bytes.min(64 * 1024 * 1024));
     let storage_bytes = bounded.map_or(64 * 1024 * 1024, |l| l.storage_bytes.min(64 * 1024 * 1024));
-    let table = parquet_source::parse(
+    let parse = if odm {
+        parquet_source::parse_odm
+    } else {
+        parquet_source::parse
+    };
+    let table = parse(
         bytes,
         parquet_source::Limits {
             framing: FramingLimits {
@@ -297,7 +384,10 @@ fn decode_parquet(
         },
         table_limits,
     )
-    .map_err(Error::ParquetSource)?;
+    .map_err(|error| match error {
+        parquet_source::Error::OdmFields(fields) => Error::OdmFields(fields),
+        error => Error::ParquetSource(error),
+    })?;
     // The compiler owns the input policy. Preserve buffers when no empty value
     // needs a new validity bit; all strings were admitted by the bounded codec.
     let batches = table

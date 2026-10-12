@@ -35,10 +35,17 @@ fn predicate(
             _ => None,
         });
     let Some(expression) = expression else {
-        return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-            operation: "assert_predicate_text".into(),
-            path,
-        }]));
+        return Ok(Err(Diagnostic {
+            code: ConditionCode::VerificationDeclarationRequired,
+            spec_paths: vec![path],
+            context: [(
+                "reason".into(),
+                ContextValue::Scalar(Value::Str("a predicate must be text".into())),
+            )]
+            .into(),
+            source_span: None,
+            operand_route: None,
+        }));
     };
     let plan = match predicate_compiler::compile(expression, &path, Default::default()) {
         Ok(plan) => plan,

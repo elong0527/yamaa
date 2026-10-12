@@ -105,6 +105,9 @@ fn item(keys: Vec<IntermediateKey>) -> Intermediate {
         filter: None,
         selection: None,
         no_match: Some(Value::Missing),
+
+        range: None,
+        columns: None,
     }
 }
 fn pad(width: &str) -> MatchValue {
@@ -198,7 +201,7 @@ fn padding_without_dummy_output_preserves_unicode_width_and_single_cached_select
         Value::Str("  \u{e9}\u{1f980}".into()),
     );
     let mut selected = item(vec![key(pad("4"))]);
-    selected.filter = Some(filter());
+    selected.filter = Some(filter().into());
     let plan = plan(&src, &tab, selected, T::Int).unwrap();
     for _ in 0..2 {
         trace.borrow_mut().clear();
@@ -230,7 +233,7 @@ fn expression_dependency_opaque_failure_precedes_filter_and_preserves_payload_id
     *src.fail.borrow_mut() = Some((1, Failure(payload, marker.clone())));
     *tab.fail.borrow_mut() = Some((3, Failure(Box::new(8), Rc::new(()))));
     let mut selected = item(vec![key(pad("4"))]);
-    selected.filter = Some(filter());
+    selected.filter = Some(filter().into());
     let observed = plan(&src, &tab, selected, T::Str)
         .unwrap()
         .execute_observed_sources(&src, &[&tab], limits());
@@ -259,7 +262,7 @@ fn ordinary_selector_keeps_filter_before_raw_dependency_and_its_opaque_payload()
     let marker = Rc::new(());
     *tab.fail.borrow_mut() = Some((3, Failure(payload, marker.clone())));
     let mut selected = item(vec![key(MatchValue::Variable(read()))]);
-    selected.filter = Some(filter());
+    selected.filter = Some(filter().into());
     let observed = plan(&src, &tab, selected, T::Str)
         .unwrap()
         .execute_observed_sources(&src, &[&tab], limits());
@@ -473,7 +476,7 @@ fn donor_filter_completes_before_padding_evaluation_or_its_output_quota() {
     );
     tab.rows[0][3] = Value::Str("bad".into());
     let mut selected = item(vec![key(pad("1000000"))]);
-    selected.filter = Some(filter());
+    selected.filter = Some(filter().into());
     let observed = plan(&src, &tab, selected, T::Str)
         .unwrap()
         .execute_observed_sources(
@@ -505,7 +508,7 @@ fn donor_filter_keeps_only_true_in_written_order_before_match_count_and_value() 
     kept[3] = Value::Int(1);
     tab.rows.extend([excluded, kept]);
     let mut selected = item(vec![key(MatchValue::Source(read()))]);
-    selected.filter = Some(filter());
+    selected.filter = Some(filter().into());
     let observed = plan(&src, &tab, selected, T::Int)
         .unwrap()
         .execute_observed_sources(&src, &[&tab], limits());

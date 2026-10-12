@@ -103,7 +103,7 @@ pub(crate) struct CapturedEntry {
     schema: Arc<CapturedSchema>,
     document: PreparedDocument,
     limits: Limits,
-    producer: bool,
+    selection: yamaa_engine::build::EntrySelection,
 }
 /// Entry/schema limits and written identity ownership admitted before capture.
 /// Private fields prevent an unadmitted request from entering the shared transfer.
@@ -114,7 +114,7 @@ pub(crate) struct AdmittedEntry {
 }
 impl CapturedEntry {
     pub(crate) fn is_producer(&self) -> bool {
-        self.producer
+        self.selection.is_producer()
     }
     pub(crate) fn into_ordinary_parts(
         self,
@@ -187,42 +187,33 @@ impl FileGraph {
                 .map_err(Error::Document)?,
             );
             let root = document.as_ref().expect("captured entry");
-            let d = root.normalization_input();
-            // Document is a bounded tree. One whole arena reservation bounds
-            // all mapping lookups, including inherited declaration fields.
-            resources
-                .charge_work(d.nodes().len())
-                .map_err(Error::Resource)?;
-            if root.model().document().nodes().len() > limits.graph.document_nodes {
-                return Err(Error::Limit("producer_graph_document_nodes"));
-            }
-            // Defaults cannot invent authored producer declarations. Missing or
-            // nonmapping original input remains for the selected compiler's
-            // typed admission; shipped-schema failures have already rejected.
-            let mut producer = false;
-            if let Some(input) = d.field(d.root(), "input") {
-                if let N::Mapping(entries) = &d.nodes()[input] {
-                    // Inspect the whole collection, including after a match.
-                    for &(_, declaration) in entries {
-                        producer |=
-                            yamaa_core::producer_admission::is_producer_input(d, declaration);
-                    }
+            yamaa_engine::build::select_entry(
+                yamaa_engine::build::EntryView {
+                    original: root.normalization_input(),
+                    model_nodes: root.model().document().nodes().len(),
+                },
+                limits.graph.document_nodes,
+                &mut crate::file_metadata::Reader {
+                    resources: &mut resources,
+                },
+            )
+            .map_err(|error| match error {
+                yamaa_engine::build::SelectionFailure::Resource(error) => Error::Resource(error),
+                yamaa_engine::build::SelectionFailure::Limit(code) => Error::Limit(code),
+                yamaa_engine::build::SelectionFailure::Snapshot { identity, error } => {
+                    Error::Snapshot { identity, error }
                 }
-            }
-            resources
-                .verify_captured()
-                .map_err(|(identity, error)| Error::Snapshot { identity, error })?;
-            Ok(producer)
+            })
         })();
         match result {
-            Ok(producer) => Ok(CapturedEntry {
+            Ok(selection) => Ok(CapturedEntry {
                 resources,
                 written,
                 environment,
                 schema,
                 document: document.expect("captured entry"),
                 limits,
-                producer,
+                selection,
             }),
             Err(error) => {
                 let (_, environment) = environment.into_parts();

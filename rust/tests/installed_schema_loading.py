@@ -89,6 +89,21 @@ class InstalledSchemaLoading(unittest.TestCase):
         self.assertEqual(study, [])
         self.assertTrue(all(p.suffix == ".yaml" for p in self.captured_paths(calls)))
 
+    def prepare_without_study_access(self, path, study_names):
+        """Admit supported syntax using YAML capture alone, before reading any data."""
+        original_open = Path.open
+        calls = []
+
+        def deny_study(candidate, *arguments, **keywords):
+            if candidate.name in study_names:
+                raise AssertionError("study authority during preparation")
+            return original_open(candidate, *arguments, **keywords)
+
+        with patch.object(Path, "open", new=deny_study):
+            prepared = self.native_prepare(path, calls)
+        self.assertTrue(all(p.suffix == ".yaml" for p in self.captured_paths(calls)))
+        return prepared
+
     @staticmethod
     def captured_paths(calls):
         return [Path(args[0]) for op, args in calls if op in ("entry", "capture")]
@@ -104,7 +119,7 @@ class InstalledSchemaLoading(unittest.TestCase):
         def publish(path, value):
             publications.append((path, value))
         report = json.loads(prepared.report(capture, publish, (platform.python_version(), yamaa_native.engine_info()["core_version"], "typed-loading", "spec.yaml", ".")))
-        self.assertEqual(report["outcome"], "success")
+        self.assertEqual(report["outcome"], "success", report)
         self.assertEqual(len(publications), 1)
         self.assertEqual(publications[0][1], report["artifacts"][0]["content"].encode("utf-8"))
         return publications[0][1]
@@ -248,8 +263,8 @@ class InstalledSchemaLoading(unittest.TestCase):
             })
             self.assertEqual(calls, [("entry", (str(entry),))])
 
-    def test_count_relation_keeps_native_preparation_and_current_compiler_gate(self):
-        """Typed preparation pins DM/EX pruning; compilation refuses before data IO."""
+    def test_count_relation_prepares_before_io_and_prunes_unused_sources(self):
+        """Qualified COUNT reads DM/EX only and preserves independently authored CSV."""
         document = {
             "schema_version": "1.0",
             "parents": [],
@@ -276,12 +291,23 @@ class InstalledSchemaLoading(unittest.TestCase):
             root = Path(temporary)
             path = root / "spec.yaml"
             path.write_text(json.dumps(document), encoding="ascii")
-            # Full pruned native model is independently pinned in the adapter
-            # suite. The common compiler's current aggregate gate has no study
-            # authority; the historical optional executor refusal is retired.
-            self.assert_no_study_preflight(path, {
-                "status": "unsupported", "features": [{"operation": "aggregate", "spec_path": "columns.N.derivation.aggregate"}],
-            }, ("dm.csv", "ex.csv", "never-read.csv"))
+            prepared = self.prepare_without_study_access(
+                path, ("dm.csv", "ex.csv", "never-read.csv")
+            )
+            reads = []
+            self.assertEqual(
+                self.native_csv(
+                    prepared,
+                    root,
+                    content={
+                        "dm.csv": b"ID\n01\n02\n",
+                        "ex.csv": b"ID,DOSE\n01,1\n01,2\n02,3\n",
+                    },
+                    reads=reads,
+                ),
+                b"ID,N\n01,2\n02,1\n",
+            )
+            self.assertEqual(reads, [("DM", "dm.csv"), ("EX", "ex.csv")])
 
     def test_custom_input_key_coercion_keeps_order_and_validates_replaced_members(self):
         """Custom scalar identifiers may converge to one normalized text name."""
@@ -380,9 +406,11 @@ class InstalledSchemaLoading(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             path = self.write_window_document(root, document)
-            self.assert_no_study_preflight(path, {
-                "status": "unsupported", "features": [{"operation": "intermediate_scope", "spec_path": "intermediates[0]"}],
-            }, ("input.csv",))
+            prepared = self.prepare_without_study_access(path, ("input.csv",))
+            self.assertEqual(
+                self.native_csv(prepared, root),
+                b"ID,PREV\n01,\n02,10\n03,\n04,30\n",
+            )
             # The explicit null occurrence and its raw authored origin are
             # independently checked through held native arenas, not JSON probing.
 
@@ -612,13 +640,8 @@ class InstalledSchemaLoading(unittest.TestCase):
             with self.subTest(directory=directory):
                 case = ROOT / directory
                 path = case / "spec_study.yaml"
-                if directory == "specification-column-composition":
-                    self.assert_no_study_preflight(path, {
-                        "status": "unsupported", "features": [{"operation": "mapping", "spec_path": "columns.ANRIND.derivation.mapping"}],
-                    }, ("lb.csv", "dm.csv"))
-                else:
-                    prepared = self.native_prepare(path)
-                    self.assertEqual(self.native_csv(prepared, case), (case / "expected" / artifact).read_bytes())
+                prepared = self.prepare_without_study_access(path, ("lb.csv", "dm.csv"))
+                self.assertEqual(self.native_csv(prepared, case), (case / "expected" / artifact).read_bytes())
                 # Full committed resolved documents, parent removal, defaults
                 # and provenance are checked by the typed adapter suite.
 

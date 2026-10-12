@@ -2363,7 +2363,7 @@ requirements:
   REQ-1294: {"file": "storage/ingestion.md", "sources": ["yamaa:issue-1566:ordinal-collision"]}
   REQ-1295: {"file": "storage/ingestion.md", "sources": ["yamaa:issue-1566:ordinal-odm"]}
   REQ-1296: {"file": "submission/metadata.md", "sources": ["schema_metadata.yaml:submission_dataset_class.has_no_data.description"]}
-  REQ-1297: {"file": "execution/lifecycle.md", "sources": ["yamaa:issue-2004:normative-null"]}
+  REQ-1297: {"file": "execution/lifecycle.md", "sources": ["yamaa:issue-2004:normative-null", "yamaa:issue-1986:binding-quota-classification"]}
 
 schema_prose:
   - {"source": "schema.yaml:root_class.schema_version.description", "text": "Schema bundle this specification is written against; R006 requires an exact match.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}

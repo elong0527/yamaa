@@ -1,7 +1,6 @@
 //! Bounded ordered case lowering. Unselected branches have no runtime effects.
 use super::*;
 use crate::{
-    bound_expression::BoundPredicate,
     dataset::{CaseBranch, Intermediate, SecondarySource},
     predicate::Plan,
     predicate_compiler, project_call_binding,
@@ -88,18 +87,7 @@ pub(super) fn prepare(
             let compiled =
                 predicate_compiler::compile(when, &format!("{prefix}.when"), Default::default());
             let compiled = match compiled {
-                Ok(plan) => {
-                    // Raw predicate reads require a current driver record. A
-                    // non-key implicit group has no such record; reject this
-                    // unimplemented case scope before granting study authority.
-                    if !record && plan.identifiers().iter().any(|name| name.contains('.')) {
-                        return Err(unsupported(
-                            &format!("{prefix}.when"),
-                            "case_source_predicate",
-                        ));
-                    }
-                    Ok(plan)
-                }
+                Ok(plan) => Ok(plan),
                 Err(predicate_compiler::Error::Parse(
                     error @ crate::predicate_parser::ParseError::Grammar { .. },
                 )) => Err(InvalidPredicate {
@@ -107,7 +95,11 @@ pub(super) fn prepare(
                     expression: when.into(),
                     error,
                 }),
-                Err(_) => return Err(unsupported(&format!("{prefix}.when"), "case_predicate")),
+                Err(predicate_compiler::Error::Parse(
+                    crate::predicate_parser::ParseError::UnsupportedRegex { .. },
+                )) => return Err(unsupported(&format!("{prefix}.when"), "predicate_regex")),
+                Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
+                Err(_) => return Err(PrepareError::Limit("predicate_compilation")),
             };
             (
                 Some(compiled),
@@ -227,41 +219,16 @@ pub(super) fn bind(
                         return Ok(None);
                     }
                 };
-                let mut bindings = Vec::new();
-                let mut seen = alloc::collections::BTreeSet::new();
-                for name in plan.identifiers() {
-                    // Binding owns one coordinate per name; evaluation keeps
-                    // every authored occurrence, including BETWEEN's repeat.
-                    if !seen.insert(name) {
-                        continue;
-                    }
-                    if let Some(binding) = catalog.bind(name).map_err(BindError::Catalog)? {
-                        let read = match binding {
-                            reference_binding::Binding::Output { column, .. } => {
-                                edges.push(column);
-                                Read::Column(column)
-                            }
-                            reference_binding::Binding::Dataset { field, .. } => {
-                                Read::Source(field)
-                            }
-                        };
-                        bindings.push(Binding {
-                            name: name.into(),
-                            read,
-                        });
-                    } else {
-                        findings.push(BindFinding::UnknownReference {
-                            path: plan.spec_path().into(),
-                            name: name.into(),
-                        });
-                    }
-                }
-                if findings.len() != start {
-                    return Ok(None);
-                }
-                BoundPredicate::new(plan.clone(), bindings)
-                    .map(Some)
-                    .map_err(BindError::InvalidPredicateBinding)
+                case_predicates::bind(
+                    spec,
+                    plan,
+                    column,
+                    catalog,
+                    secondary,
+                    intermediates,
+                    edges,
+                    findings,
+                )
             })
             .transpose()?
             .flatten();
@@ -450,42 +417,35 @@ pub(super) fn bind(
                 edges,
                 findings,
             )?,
-            Operation::Source(source) => {
-                if source.has_filter() {
-                    return Err(BindError::Internal);
-                }
-                match catalog.bind(&source.variable).map_err(BindError::Catalog)? {
-                    Some(reference_binding::Binding::Output { column, .. }) => {
-                        edges.push(column);
-                        Some(Expression::Column(column))
-                    }
-                    Some(reference_binding::Binding::Dataset { field, .. }) => {
-                        Some(if spec.keys.contains(&column) {
-                            Expression::Source(field)
-                        } else {
-                            Expression::Collect {
-                                column: field,
-                                identifier: source.variable.clone(),
-                                filter: None,
-                                selection: None,
-                            }
-                        })
-                    }
-                    None => {
-                        findings.push(BindFinding::UnknownReference {
-                            path: branch.path.clone(),
-                            name: source.variable.clone(),
-                        });
-                        None
-                    }
-                }
-            }
+            Operation::Source(source) => source_expressions::bind(
+                spec,
+                source,
+                column,
+                &branch.path,
+                catalog,
+                driver,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
+            Operation::Aggregate(operation) => aggregates::bind(
+                operation,
+                catalog,
+                &spec.source().name,
+                None,
+                crate::reference_scope::Phase::Column { groups: &[] },
+                &spec.output,
+                secondary,
+                edges,
+                findings,
+            )?,
             Operation::Compute(compiled) => {
                 let mut bindings = Vec::new();
                 for name in compiled.identifiers() {
                     if let Some((index, field)) = spec.intermediates.reference(name) {
                         if let Some(item) = &intermediates[index] {
-                            edges.extend(item.output_dependencies());
+                            edges.extend(row_intermediates::dependencies(index, intermediates)?);
                             if let Some(column) = item.source_column(secondary, field) {
                                 bindings.push(Binding {
                                     name: name.into(),

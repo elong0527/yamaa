@@ -179,14 +179,26 @@ fn case_grammar_findings_retain_their_original_nested_paths() {
 }
 
 #[test]
-fn non_key_case_predicate_source_scope_is_refused_before_study_authority() {
-    let Err(PrepareError::Unsupported(features)) =
-        PreparedSpecification::prepare(&case_document("SRC.ID > 0", "1"))
-    else {
-        panic!("unsupported implicit-group record read")
+fn non_key_case_predicate_owns_key_grain_collection_without_study_authority() {
+    let prepared = PreparedSpecification::prepare(&case_document("SRC.ID > 0", "1")).unwrap();
+    let plan = prepared.bind(&source()).unwrap();
+    let Expression::Case(branches) = &plan.columns()[0].expression else {
+        panic!("ordered case");
     };
-    assert_eq!(features[0].operation, "case_source_predicate");
-    assert_eq!(features[0].path, "columns.VALUE.derivation.case[0].when");
+    let when = branches[0].when.as_ref().unwrap();
+    assert_eq!(when.collected(), ["SRC.ID"]);
+    assert_eq!(
+        when.plan().spec_path(),
+        "columns.VALUE.derivation.case[0].when"
+    );
+    assert_eq!(
+        when.bindings()[0].read,
+        yamaa_core::bound_expression::Read::Source(0)
+    );
+    assert_eq!(
+        when.validate(source().columns().len(), &[true, false], false),
+        Err(yamaa_core::bound_expression::BindingError::InvalidSource)
+    );
 }
 
 #[test]
@@ -1107,4 +1119,144 @@ fn assertion_text_budget_precedes_deferred_grammar_and_charges_both_predicates()
         matches!(&plan.verifications()[1].check, yamaa_core::dataset::Check::InvalidDiagnostic(d)
         if d.code == yamaa_core::diagnostic::ConditionCode::PredicateInvalidExpression)
     );
+}
+
+fn verification_document(kind: &str, check: Tree<'_>, column: bool) -> SpecificationDocument {
+    use Tree::*;
+    let mut value = vec![
+        ("name", Text("VALUE")),
+        ("type", Text(kind)),
+        (
+            "derivation",
+            Map(vec![(
+                "value",
+                Map(vec![("literal", Scalar(N::Integer("1".into())))]),
+            )]),
+        ),
+    ];
+    if column {
+        value.push(("verifications", List(vec![check.clone()])));
+    }
+    let mut tree = vec![
+        ("schema_version", Text("1.0")),
+        ("domain", Text("TEST")),
+        (
+            "input",
+            Map(vec![("SRC", Map(vec![("path", Text("input.csv"))]))]),
+        ),
+        ("keys", List(vec![Text("ID")])),
+        (
+            "columns",
+            List(vec![
+                Map(vec![
+                    ("name", Text("ID")),
+                    ("type", Text("int")),
+                    (
+                        "derivation",
+                        Map(vec![(
+                            "value",
+                            Map(vec![("source", Map(vec![("variable", Text("SRC.ID"))]))]),
+                        )]),
+                    ),
+                ]),
+                Map(value),
+            ]),
+        ),
+        (
+            "output",
+            Map(vec![
+                ("path", Text("result.csv")),
+                ("columns", List(vec![Text("ID"), Text("VALUE")])),
+            ]),
+        ),
+    ];
+    if !column {
+        tree.push(("verifications", List(vec![check])));
+    }
+    let mut nodes = Vec::new();
+    let root = Map(tree).append(&mut nodes);
+    SpecificationDocument::admit(
+        Document::new(nodes, root, Default::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap()
+}
+#[test]
+fn malformed_assert_carriers_and_numeric_bounds_are_typed_declaration_findings() {
+    use yamaa_core::diagnostic::{ConditionCode as C, ContextValue as V};
+    use yamaa_core::value::Value;
+    use Tree::*;
+    let checks = [
+        (
+            "int",
+            false,
+            Map(vec![(
+                "assert",
+                Map(vec![
+                    ("when", Scalar(N::Boolean(true))),
+                    ("require", Text("VALUE > 0")),
+                ]),
+            )]),
+            C::VerificationDeclarationRequired,
+            "verifications[0].assert.when",
+            "a predicate must be text",
+        ),
+        (
+            "int",
+            true,
+            Map(vec![(
+                "range",
+                Map(vec![
+                    ("min", Scalar(N::Boolean(false))),
+                    ("max", Scalar(N::Integer("7".into()))),
+                ]),
+            )]),
+            C::VerificationDeclarationRequired,
+            "columns.VALUE.verifications[0].range",
+            "a range bound is numeric",
+        ),
+        (
+            "str",
+            true,
+            Map(vec![(
+                "range",
+                Map(vec![("min", Scalar(N::Boolean(false)))]),
+            )]),
+            C::VerificationColumnType,
+            "columns.VALUE.verifications[0].range",
+            "a str column does not admit this verification",
+        ),
+        (
+            "int",
+            true,
+            Map(vec![(
+                "allowed_values",
+                Map(vec![(
+                    "values",
+                    List(vec![Scalar(N::Null), Scalar(N::Boolean(false))]),
+                )]),
+            )]),
+            C::VerificationColumnType,
+            "columns.VALUE.verifications[0].allowed_values",
+            "listed value None is not a int value",
+        ),
+    ];
+    for (kind, column, check, code, path, reason) in checks {
+        let prepared =
+            PreparedSpecification::prepare(&verification_document(kind, check, column)).unwrap();
+        let findings = prepared.verification_declaration_diagnostics();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, code);
+        assert_eq!(findings[0].spec_paths, [path]);
+        assert_eq!(findings[0].definition().phase, "validation");
+        assert_eq!(
+            findings[0].context,
+            [("reason".into(), V::Scalar(Value::Str(reason.into())))].into()
+        );
+        assert!(
+            prepared.bind(&source()).is_ok(),
+            "declarations retain their runtime checkpoint"
+        );
+    }
 }

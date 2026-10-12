@@ -157,3 +157,134 @@ fn immutable_admission_preserves_deferred_failures_and_occurrences() {
         }
     }
 }
+
+#[test]
+fn contextual_case_names_do_not_expand_generic_filter_authority() {
+    let original = predicate("case.when", vec![binding("A", Read::Source(0))]).unwrap();
+    let collected = BoundPredicate::new_contextual(
+        original.plan().clone(),
+        original.bindings().to_vec(),
+        vec!["A".into()],
+    )
+    .unwrap();
+    assert_eq!(collected.collected(), ["A"]);
+    assert!(collected.collects("A"));
+    assert!(!collected.collects("B"));
+    assert_eq!(
+        collected.validate(1, &[], false),
+        Err(BindingError::InvalidSource)
+    );
+    assert_eq!(
+        BoundPredicate::new_contextual(
+            original.plan().clone(),
+            vec![binding("A", Read::Column(0))],
+            vec!["A".into()]
+        ),
+        Err(BindingError::InvalidSource)
+    );
+    assert_eq!(
+        BoundPredicate::new_contextual(
+            original.plan().clone(),
+            original.bindings().to_vec(),
+            vec!["A".into(), "A".into()]
+        ),
+        Err(BindingError::MetadataLimit)
+    );
+    let kept = BoundPredicate::new_contextual(
+        original.plan().clone(),
+        vec![binding(
+            "A",
+            Read::Intermediate {
+                index: 0,
+                column: 0,
+            },
+        )],
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(
+        kept.validate(0, &[], false),
+        Err(BindingError::InvalidSource)
+    );
+    assert_eq!(
+        BoundPredicate::new(original.plan().clone(), kept.bindings().to_vec()),
+        Err(BindingError::InvalidSource)
+    );
+    assert_eq!(
+        BoundPredicate::new_contextual(
+            original.plan().clone(),
+            vec![binding("A", Read::Source(0)); 65_537],
+            vec![]
+        ),
+        Err(BindingError::MetadataLimit)
+    );
+}
+
+#[test]
+fn contextual_case_collection_cannot_borrow_a_foreign_drivers_same_width_coordinates() {
+    use yamaa_core::{
+        dataset::{
+            Assignment, CaseBranch, DatasetPlan, Expression, PlanError, RowMode, RowTemplate,
+            SecondarySource,
+        },
+        table::{Column, TableSchema},
+        value::ColumnType,
+    };
+    let schema = TableSchema::new(vec![
+        Column {
+            name: "ID".into(),
+            kind: ColumnType::Int,
+        },
+        Column {
+            name: "V".into(),
+            kind: ColumnType::Int,
+        },
+    ])
+    .unwrap();
+    let original = predicate(
+        "columns.V.case[0].when",
+        vec![binding("A", Read::Source(1))],
+    )
+    .unwrap();
+    let when = BoundPredicate::new_contextual(
+        original.plan().clone(),
+        original.bindings().to_vec(),
+        vec!["A".into()],
+    )
+    .unwrap();
+    let result = DatasetPlan::new_with_sources(
+        schema.clone(),
+        vec![SecondarySource {
+            name: "ALT".into(),
+            schema: schema.clone(),
+        }],
+        schema,
+        vec![RowTemplate {
+            mode: RowMode::Driver {
+                source: 1,
+                mode: Box::new(RowMode::Records),
+            },
+            assignments: vec![Assignment {
+                column: 0,
+                expression: Expression::Source(0),
+                path: "rows[0].ID".into(),
+            }],
+            filter: None,
+        }],
+        vec![Assignment {
+            column: 1,
+            path: "columns.V.case".into(),
+            expression: Expression::Case(vec![CaseBranch {
+                when: Some(when),
+                assignment: Box::new(Assignment {
+                    column: 1,
+                    expression: Expression::Literal(Value::Int(7)),
+                    path: "columns.V.case[0].then".into(),
+                }),
+            }]),
+        }],
+        vec![0],
+        vec![],
+    );
+    assert_eq!(result.unwrap_err(), PlanError::InvalidKeyMode);
+}

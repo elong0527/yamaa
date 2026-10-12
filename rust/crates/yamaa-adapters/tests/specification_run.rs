@@ -3503,6 +3503,47 @@ fn row_reductions_match_complete_independent_reports_and_exact_csv() {
     );
 }
 #[test]
+fn aggregate_relations_match_complete_independent_reports_and_exact_csv() {
+    replay_source_selection_truth(
+        include_str!("fixtures/correlated_aggregates.tsv"),
+        "correlated-aggregate",
+        16,
+    );
+}
+#[test]
+fn odm_reads_match_complete_independent_reports_and_exact_csv() {
+    replay_source_selection_truth(include_str!("fixtures/odm_reads.tsv"), "odm", 14);
+}
+
+#[test]
+fn deferred_odm_defaults_match_complete_independent_reports_and_exact_csv() {
+    replay_source_selection_truth(include_str!("fixtures/odm_deferred.tsv"), "odm-deferred", 8);
+}
+
+#[test]
+fn odm_preflight_matches_complete_independent_findings_before_source_authority() {
+    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
+    let mut count = 0;
+    for row in include_str!("fixtures/odm_preflight.tsv").lines().skip(1) {
+        let fields = row.split('\t').collect::<Vec<_>>();
+        assert_eq!(fields.len(), 3);
+        let raw = (0..fields[1].len())
+            .step_by(2)
+            .map(|index| u8::from_str_radix(&fields[1][index..index + 2], 16).unwrap())
+            .collect::<Vec<_>>();
+        let error = yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &raw))
+            .unwrap_err();
+        let actual: serde_json::Value = serde_json::from_str(
+            &yamaa_adapters::specification_diagnostics::failure(&error, None),
+        )
+        .unwrap();
+        let expected: serde_json::Value = serde_json::from_str(fields[2]).unwrap();
+        assert_eq!(actual, expected, "{}", fields[0]);
+        count += 1;
+    }
+    assert_eq!(count, 8);
+}
+#[test]
 fn row_column_checks_match_complete_independent_reports_and_exact_csv() {
     replay_source_selection_truth(
         include_str!("fixtures/row_column_checks.tsv"),
@@ -3670,12 +3711,44 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
         )
         .unwrap_or_else(|error| {
             panic!(
-                "{}: {error:?}; execution: {:?}",
+                "{}: {error:?}; execution: {:?}; outcome: {:?}",
                 fields[0],
-                attempt.result.as_ref().err()
+                attempt.result.as_ref().err(),
+                attempt
+                    .result
+                    .as_ref()
+                    .ok()
+                    .map(|response| &response.outcome)
             )
         });
         let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
+        // Require the captured row-filter citations without changing any finding.
+        if prefix == "row-filter"
+            && matches!(
+                fields[0],
+                "grouped_source_phase"
+                    | "grouped_unknown_phase"
+                    | "record_unknown_phase"
+                    | "group_and_filter_order"
+            )
+        {
+            for diagnostics in ["diagnostics", "nodes"] {
+                let values = if diagnostics == "nodes" {
+                    &expected["nodes"][0]["diagnostics"]
+                } else {
+                    &expected["diagnostics"]
+                };
+                let mut phase_boundaries = 0;
+                for finding in values.as_array().unwrap() {
+                    if finding["condition"] == "phase_boundary" {
+                        assert_eq!(finding["requirement"], serde_json::json!("REQ-0068"));
+                        assert_eq!(finding["spec_paths"], serde_json::json!(["rows[0].filter"]));
+                        phase_boundaries += 1;
+                    }
+                }
+                assert_eq!(phase_boundaries, 1);
+            }
+        }
         let mut unsaved = expected.clone();
         unsaved["artifacts"] = serde_json::json!([]);
         assert_eq!(result.observations(), unsaved, "{}", fields[0]);

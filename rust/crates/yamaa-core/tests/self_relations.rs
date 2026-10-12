@@ -46,6 +46,9 @@ fn selector(columns: Vec<usize>) -> Intermediate {
         filter: None,
         selection: None,
         no_match: Some(Value::Missing),
+
+        range: None,
+        columns: None,
     }
 }
 #[test]
@@ -114,6 +117,63 @@ fn fabricated_later_column_metadata_is_rejected_and_column_coordinates_stay_outp
         ),
         Err(PlanError::InvalidIntermediate)
     );
+}
+
+#[test]
+fn typed_aggregate_raw_field_labels_cannot_invent_a_self_relation_owner() {
+    use yamaa_core::{
+        aggregate_compiler::compile_aggregate,
+        dataset::{
+            AggregateBinding, AggregatePhase, AggregateRelation, AggregateSource, BoundAggregate,
+        },
+    };
+    let expression =
+        compile_aggregate("SUM(P.V)", "rows[0].V.aggregate", Default::default()).unwrap();
+    let aggregate = BoundAggregate::new(
+        expression,
+        AggregateRelation::Matched {
+            source: AggregateSource::Primary,
+            keys: vec![IntermediateKey {
+                source_column: 0,
+                path: "rows[0].key".into(),
+                value: MatchValue::Variable(MatchRead::Record {
+                    column: 0,
+                    identifier: "ID".into(),
+                }),
+            }],
+            group_by: vec![0],
+        },
+        vec![AggregateBinding {
+            name: "P.V".into(),
+            column: 1,
+        }],
+        None,
+        AggregatePhase::RowConstruction,
+        None,
+        "rows[0].V.aggregate",
+    )
+    .unwrap();
+    let template = RowTemplate {
+        mode: RowMode::Records,
+        assignments: vec![
+            assign(0, Expression::Source(0)),
+            assign(1, Expression::Aggregate(Box::new(aggregate))),
+        ],
+        filter: None,
+    };
+    assert!(DatasetPlan::new_with_intermediates(
+        SourceSchemas {
+            primary: schema(),
+            secondary: vec![]
+        },
+        vec![selector(vec![0, 1])],
+        schema(),
+        vec![template],
+        vec![],
+        vec![0],
+        vec![]
+    )
+    .is_ok());
 }
 
 #[test]

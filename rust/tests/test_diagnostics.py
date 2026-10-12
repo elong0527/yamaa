@@ -5,7 +5,8 @@ import json
 import subprocess
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location(
     "check_diagnostics", Path(__file__).parents[1] / "tools/check_diagnostics.py"
@@ -114,6 +115,28 @@ class DiagnosticGuardTests(unittest.TestCase):
         self.save_sites()
         self.write(relative, source + "\n" + source + "\n")
         errors = guard.violations(self.root, "HEAD")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("literal allowlist grew from HEAD", errors[0])
+
+    def test_baseline_uses_git_paths_and_utf8_under_windows_defaults(self):
+        identifier = self.allow(
+            "rust/crates/yamaa-adapters/src/errors.rs",
+            'const REQUIREMENT: &str = "REQ-0001"; // \u00e9',
+        )
+        self.write(str(guard.SEED), json.dumps(self.seed, ensure_ascii=False))
+        self.commit_baseline()
+        with (
+            patch.object(guard, "CHECKER", PureWindowsPath(guard.CHECKER.as_posix())),
+            patch("subprocess._text_encoding", return_value="cp1252"),
+        ):
+            seed = PureWindowsPath(guard.SEED.as_posix())
+            allowlist = PureWindowsPath(guard.ALLOWLIST.as_posix())
+            self.assertEqual(
+                guard.baseline_errors(self.root, "HEAD", seed, allowlist), []
+            )
+            self.active[identifier] = 2
+            self.save_sites()
+            errors = guard.baseline_errors(self.root, "HEAD", seed, allowlist)
         self.assertEqual(len(errors), 1)
         self.assertIn("literal allowlist grew from HEAD", errors[0])
 

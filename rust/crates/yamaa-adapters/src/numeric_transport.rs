@@ -161,6 +161,7 @@ enum ContextValue {
     // This diagnostic-only integer may lie outside the valid runtime i64 range.
     Integer { integer: String },
     Sequence(Vec<ContextValue>),
+    Object(BTreeMap<String, ContextValue>),
 }
 
 type Context = BTreeMap<String, ContextValue>;
@@ -196,6 +197,12 @@ impl From<yamaa_core::diagnostic::ContextValue> for ContextValue {
             C::Scalar(value) => scalar(value),
             C::Integer(integer) => Self::Integer { integer },
             C::Sequence(values) => Self::Sequence(values.into_iter().map(Into::into).collect()),
+            C::Object(values) => Self::Object(
+                values
+                    .into_iter()
+                    .map(|(key, value)| (key, value.into()))
+                    .collect(),
+            ),
         }
     }
 }
