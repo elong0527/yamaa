@@ -13,16 +13,28 @@ pub(super) struct Branch {
     pub(super) path: String,
     pub(super) operation: alloc::boxed::Box<Operation>,
 }
+impl Branch {
+    pub(super) fn value(operation: Operation, path: String) -> Self {
+        Self {
+            when: None,
+            path,
+            operation: alloc::boxed::Box::new(operation),
+        }
+    }
+    pub(super) fn predicate(&self) -> Option<&Result<Plan, InvalidPredicate>> {
+        self.when.as_ref()
+    }
+}
 /// Keep the complete parser cause on the prepared branch; document reporting
 /// projects it only after source ingestion reaches predicate binding.
 #[derive(Clone, Debug)]
-struct InvalidPredicate {
+pub(super) struct InvalidPredicate {
     path: String,
     expression: String,
     error: crate::predicate_parser::ParseError,
 }
 impl InvalidPredicate {
-    fn diagnostic(&self) -> Result<crate::diagnostic::Diagnostic, BindError> {
+    pub(super) fn diagnostic(&self) -> Result<crate::diagnostic::Diagnostic, BindError> {
         let crate::predicate_parser::ParseError::Grammar {
             position, failure, ..
         } = &self.error
@@ -103,7 +115,7 @@ pub(super) fn prepare(
                 format!("{prefix}.then"),
             )
         };
-        let mut branch = prepare_value(
+        let mut branch = derivations::prepare_value(
             d,
             value,
             &result_path,
@@ -120,191 +132,6 @@ pub(super) fn prepare(
     Ok(branches)
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(super) fn prepare_value(
-    d: &Document,
-    value: usize,
-    result_path: &str,
-    project: Option<&functions::Prepared>,
-    intermediates: &intermediates::Declarations,
-    record: bool,
-    depth: usize,
-    extraction: &str_extract::Prepared,
-    templates: &str_template::Prepared,
-) -> Result<Branch, PrepareError> {
-    if depth > 64 || result_path.len() > 65_536 {
-        return Err(PrepareError::Limit("expression_depth"));
-    }
-    let &[(op, payload)] = mapping(d, value)? else {
-        return Err(PrepareError::Internal);
-    };
-    let op = text(d, op)?;
-    let result_path = format!("{result_path}.{op}");
-    let operation = match op {
-        "flag" => Operation::Flag(flags::prepare(d, payload, &result_path)?),
-        "literal" => Operation::Literal(literal(d, payload, &result_path)?),
-        "function" => Operation::ProjectFunction(
-            *project
-                .and_then(|p| p.nodes.get(&payload))
-                .ok_or_else(|| unsupported(&result_path, "function_environment"))?,
-        ),
-        "case" => Operation::Case(prepare(
-            d,
-            payload,
-            &result_path,
-            project,
-            intermediates,
-            record,
-            depth + 1,
-            extraction,
-            templates,
-        )?),
-        "str_template" => Operation::StrTemplate(templates.get(payload)?),
-        "str_extract" => Operation::StrExtract(extraction.get(payload)?),
-        "str_contains" => Operation::StrContains(extraction.get(payload)?),
-        "greatest" | "least" | "str_concat" => {
-            Operation::Scalar(alloc::boxed::Box::new(scalar::prepare(
-                d,
-                payload,
-                op,
-                &result_path,
-                project,
-                intermediates,
-                record,
-                depth + 1,
-                extraction,
-                templates,
-            )?))
-        }
-        "str_case" => {
-            let mut features = Vec::new();
-            let operation = str_case::prepare(
-                d,
-                payload,
-                &result_path,
-                None,
-                Some(intermediates),
-                &mut features,
-            )?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
-            Operation::StrCase(operation)
-        }
-        "str_pad" => {
-            let mut features = Vec::new();
-            let operation = str_pad::prepare(
-                d,
-                payload,
-                &result_path,
-                None,
-                Some(intermediates),
-                &mut features,
-            )?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
-            Operation::StrPad(operation)
-        }
-        "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision" | "to_date" => {
-            let mut features = Vec::new();
-            let operation = imputation::prepare(
-                d,
-                payload,
-                op,
-                &result_path,
-                None,
-                Some(intermediates),
-                &mut features,
-            )?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
-            Operation::Imputation(operation)
-        }
-        "date_diff" | "study_day" | "to_epoch_day" => {
-            let mut features = Vec::new();
-            let operation = temporal::prepare(
-                d,
-                payload,
-                op,
-                &result_path,
-                None,
-                Some(intermediates),
-                &mut features,
-            )?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
-            Operation::Temporal(operation)
-        }
-        "round_half_away_from_zero" => {
-            let mut features = Vec::new();
-            let rounding = rounding::prepare(
-                d,
-                payload,
-                &result_path,
-                None,
-                Some(intermediates),
-                &mut features,
-            )?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
-            Operation::Round(rounding)
-        }
-        "compute" => {
-            let expression = text(d, field(d, payload, "expr")?)?;
-            match compile_numeric_with_policy(
-                expression,
-                &result_path,
-                Default::default(),
-                crate::numeric_compiler::MathPolicy::PortableLibmV1,
-            ) {
-                Ok(compiled) => Operation::Compute(compiled),
-                Err(error @ CompileError::Parse(ParseError::Grammar { .. })) => {
-                    Operation::InvalidNumeric {
-                        expression: expression.into(),
-                        error,
-                    }
-                }
-                Err(CompileError::Unsupported { .. }) => {
-                    return Err(unsupported(&result_path, "numeric_function"))
-                }
-                Err(error) => {
-                    return Err(PrepareError::Numeric {
-                        path: format!("{result_path}.expr"),
-                        error,
-                    })
-                }
-            }
-        }
-        "source" => {
-            let mut features = Vec::new();
-            let source = source_expressions::Declaration::prepare(
-                d,
-                payload,
-                &result_path,
-                &mut features,
-                intermediates,
-            )?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
-            if source.has_filter() {
-                return Err(unsupported(&result_path, "case_source_filter"));
-            }
-            Operation::Source(alloc::boxed::Box::new(source))
-        }
-        _ => return Err(unsupported(&result_path, op)),
-    };
-    Ok(Branch {
-        when: None,
-        path: result_path,
-        operation: alloc::boxed::Box::new(operation),
-    })
-}
-
 /// A width defect shares its derivation's authored declaration-validation order
 /// with predicate and numeric grammar defects, before any reference binding.
 /// Consumers without a width defect retain their existing binding checkpoint.
@@ -319,6 +146,12 @@ pub(super) fn padding_findings(
             Operation::Case(branches) => branches
                 .iter()
                 .any(|branch| has_width_error(&branch.operation)),
+            Operation::Scalar(operation) => match operation.as_ref() {
+                scalar::Declaration::Concat { sources, .. } => sources
+                    .iter()
+                    .any(|branch| has_width_error(&branch.operation)),
+                _ => false,
+            },
             _ => false,
         }
     }
@@ -343,6 +176,13 @@ pub(super) fn padding_findings(
                         findings.push(BindFinding::Predicate(invalid.diagnostic()?));
                     }
                     append(&branch.operation, &branch.path, findings)?;
+                }
+            }
+            Operation::Scalar(operation) => {
+                if let scalar::Declaration::Concat { sources, .. } = operation.as_ref() {
+                    for branch in sources {
+                        append(&branch.operation, &branch.path, findings)?;
+                    }
                 }
             }
             _ => (),
@@ -674,6 +514,14 @@ pub(super) fn bind(
                     None
                 }
             }
+            Operation::FirstAvailable(selection) => derivations::bind_selection(
+                selection,
+                &branch.path,
+                catalog,
+                None,
+                edges,
+                findings,
+            )?,
             _ => return Err(BindError::Internal),
         };
         if let Some(expression) = expression {

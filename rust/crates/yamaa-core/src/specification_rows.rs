@@ -1,5 +1,4 @@
 //! Closed row lowering with per-template defaults and shared group-scope validation.
-//! Broader row expressions remain explicit follow-up work.
 use super::*;
 use crate::dataset::Verification;
 use crate::{
@@ -8,39 +7,34 @@ use crate::{
     predicate_compiler,
     reduction::NumericReducer,
     reference_scope::{self, Phase, Reach, Scope},
-    value::Value,
 };
 
 #[derive(Debug)]
 enum RowOperation {
-    Scalar(alloc::boxed::Box<scalar::Declaration>),
-    StrContains(crate::text_extract::StringExtract),
-    Flag(flags::Declaration),
-    StrExtract(crate::text_extract::StringExtract),
-    StrTemplate(crate::text_template::StringTemplate),
+    Shared(cases::Branch),
     ProjectFunction(usize),
     Output(String),
     Source(String),
-    Compute(CompiledNumeric),
-    Round(crate::dataset::Rounding),
-    Temporal(crate::dataset::Temporal),
-    StrCase(crate::text_case::StringCase),
-    StrPad(str_pad::Declaration),
-    Imputation(crate::dataset::Imputation),
-    InvalidNumeric {
-        expression: String,
-        error: CompileError,
-    },
     InvalidAggregate {
         expression: String,
         error: crate::aggregate_parser::GrammarFailure,
     },
-    Literal(Value),
     Reduction {
         name: String,
         expression: String,
         reducer: RowReducer,
     },
+}
+impl RowOperation {
+    fn calls(&self) -> Vec<usize> {
+        let mut calls = Vec::new();
+        match self {
+            Self::ProjectFunction(call) => calls.push(*call),
+            Self::Shared(branch) => derivations::calls(&branch.operation, &mut calls),
+            _ => (),
+        }
+        calls
+    }
 }
 #[derive(Debug)]
 enum RowReducer {
@@ -57,6 +51,7 @@ struct RowDeclaration {
 #[derive(Debug)]
 struct Template {
     id: String,
+    driver: String,
     groups: Option<Vec<String>>,
     declarations: Vec<RowDeclaration>,
     filter: Option<(
@@ -96,6 +91,7 @@ fn declaration(
     column: usize,
     prefix: String,
     grouped: bool,
+    limits: CompilationLimits,
     project: Option<&functions::Prepared>,
     extraction: &str_extract::Prepared,
     string_templates: &str_template::Prepared,
@@ -116,103 +112,14 @@ fn declaration(
                 .get(&payload)
                 .ok_or(PrepareError::Internal)?,
         ),
+        "function" if project.is_none() => return Err(unsupported("function", &path)),
         "source" => {
             closed_fields(d, payload, &["variable"], &path)?;
             let name = text(d, field(d, payload, "variable")?)?;
             if name.contains('.') {
                 RowOperation::Source(name.into())
-            } else if project.is_some() {
-                RowOperation::Output(name.into())
             } else {
-                return Err(unsupported("row_output_reference", &path));
-            }
-        }
-        "flag" => RowOperation::Flag(flags::prepare(d, payload, &path)?),
-        "literal" => RowOperation::Literal(literal(d, payload, &path)?),
-        "str_template" => RowOperation::StrTemplate(string_templates.get(payload)?),
-        "str_extract" => RowOperation::StrExtract(extraction.get(payload)?),
-        "str_contains" => RowOperation::StrContains(extraction.get(payload)?),
-        "greatest" | "least" | "str_concat" => {
-            let operation = scalar::prepare(
-                d,
-                payload,
-                op,
-                &path,
-                project,
-                intermediates,
-                true,
-                0,
-                extraction,
-                string_templates,
-            )?;
-            scalar::validate_row_declaration(&operation)?;
-            RowOperation::Scalar(alloc::boxed::Box::new(operation))
-        }
-        "str_case" => {
-            let mut features = Vec::new();
-            let operation = str_case::prepare(d, payload, &path, None, None, &mut features)?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
-            RowOperation::StrCase(operation)
-        }
-        "str_pad" => {
-            let mut features = Vec::new();
-            let operation = str_pad::prepare(d, payload, &path, None, None, &mut features)?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
-            RowOperation::StrPad(operation)
-        }
-        "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision" | "to_date" => {
-            let mut features = Vec::new();
-            let operation = imputation::prepare(d, payload, op, &path, None, None, &mut features)?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
-            RowOperation::Imputation(operation)
-        }
-        "date_diff" | "study_day" | "to_epoch_day" => {
-            let mut features = Vec::new();
-            let operation = temporal::prepare(d, payload, op, &path, None, None, &mut features)?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
-            RowOperation::Temporal(operation)
-        }
-        "round_half_away_from_zero" => {
-            let mut features = Vec::new();
-            let rounding = rounding::prepare(d, payload, &path, None, None, &mut features)?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
-            RowOperation::Round(rounding)
-        }
-        "compute" => {
-            closed_fields(d, payload, &["expr"], &path)?;
-            let expression = text(d, field(d, payload, "expr")?)?;
-            match compile_numeric_with_policy(
-                expression,
-                &path,
-                Default::default(),
-                crate::numeric_compiler::MathPolicy::PortableLibmV1,
-            ) {
-                Ok(compiled) => RowOperation::Compute(compiled),
-                Err(error @ CompileError::Parse(ParseError::Grammar { .. })) => {
-                    RowOperation::InvalidNumeric {
-                        expression: expression.into(),
-                        error,
-                    }
-                }
-                Err(CompileError::Unsupported { .. }) => {
-                    return Err(unsupported("numeric_function", &path))
-                }
-                Err(error) => {
-                    return Err(PrepareError::Numeric {
-                        path: format!("{path}.expr"),
-                        error,
-                    })
-                }
+                RowOperation::Output(name.into())
             }
         }
         "aggregate" if grouped => {
@@ -260,7 +167,19 @@ fn declaration(
                 reducer,
             }
         }
-        _ => return Err(unsupported(op, &path)),
+        _ => RowOperation::Shared(derivations::prepare_value_with_driver(
+            d,
+            field(d, id, "value")?,
+            &prefix,
+            project,
+            intermediates,
+            true,
+            0,
+            extraction,
+            string_templates,
+            None,
+            limits,
+        )?),
     };
     Ok(RowDeclaration {
         handler,
@@ -292,9 +211,20 @@ fn default_reads(
     };
     match operation {
         "literal" => {}
-        "greatest" | "least" | "str_concat" | "str_contains" => {
+        "greatest"
+        | "least"
+        | "str_concat"
+        | "str_contains"
+        | "case"
+        | "first_available"
+        | "row_number"
+        | "rank"
+        | "row_value"
+        | "previous_non_missing"
+        | "locf"
+        | "baseline_flag" => {
             let mut names = Vec::new();
-            scalar::default_references(d, value, &mut names, 0)?;
+            derivations::references(d, value, project, &mut names, 0)?;
             for name in names {
                 reference(&name);
             }
@@ -676,7 +606,7 @@ impl Rows {
             })
             .collect::<Result<Vec<_>, PrepareError>>()?;
         let mut filter_defaults = alloc::collections::BTreeSet::new();
-        for (index, (&row, filter)) in raw_rows.iter().zip(&filters).enumerate() {
+        for filter in &filters {
             if let Some((_, Ok(plan))) = filter {
                 for name in plan
                     .identifiers()
@@ -689,17 +619,6 @@ impl Rows {
                     if d.field(columns[column], "derivation")
                         .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
                     {
-                        if !present(d, row, "group_by")
-                            && !raw_rows.iter().any(|&other| {
-                                d.field(other, "derivations")
-                                    .is_some_and(|id| d.field(id, name).is_some())
-                            })
-                        {
-                            return Err(unsupported(
-                                "row_filter_default",
-                                &format!("rows[{index}].filter"),
-                            ));
-                        }
                         filter_defaults.insert(column);
                     }
                 }
@@ -731,6 +650,7 @@ impl Rows {
                     column,
                     format!("columns.{}.derivation", metadata.name),
                     false,
+                    limits,
                     project,
                     extraction,
                     string_templates,
@@ -746,14 +666,12 @@ impl Rows {
                 &["id", "dataset", "group_by", "derivations", "filter"],
                 &path,
             )?;
-            if let Some(id) = d
+            let row_driver = d
                 .field(row, "dataset")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            {
-                if text(d, id)? != driver {
-                    return Err(unsupported("row_driver", &format!("{path}.dataset")));
-                }
-            }
+                .map(|id| text(d, id))
+                .transpose()?
+                .unwrap_or(driver);
             let groups = d
                 .field(row, "group_by")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -795,12 +713,22 @@ impl Rows {
                         format!("columns.{}.derivation", metadata.name),
                     )
                 };
+                row_drivers::admit_reads(
+                    d,
+                    id,
+                    Some(row_driver),
+                    &prefix,
+                    project,
+                    string_templates,
+                    intermediates,
+                )?;
                 declarations.push(declaration(
                     d,
                     id,
                     column,
                     prefix,
                     groups.is_some(),
+                    limits,
                     project,
                     extraction,
                     string_templates,
@@ -813,7 +741,8 @@ impl Rows {
                     compiled.as_ref().is_ok_and(|plan| {
                         plan.identifiers().into_iter().any(|name| {
                             name.contains('.')
-                                && name.split_once('.').map(|(dataset, _)| dataset) != Some(driver)
+                                && name.split_once('.').map(|(dataset, _)| dataset)
+                                    != Some(row_driver)
                         })
                     })
                 })
@@ -822,6 +751,7 @@ impl Rows {
             }
             templates.push(Template {
                 id: text(d, field(d, row, "id")?)?.into(),
+                driver: row_driver.into(),
                 groups,
                 declarations,
                 filter,
@@ -857,12 +787,24 @@ impl Rows {
                 else {
                     return Err(unsupported("missing_column", &prefix));
                 };
+                if templates.iter().any(|template| template.driver != driver) {
+                    row_drivers::admit_reads(
+                        d,
+                        derivation,
+                        None,
+                        &format!("{prefix}.derivation"),
+                        project,
+                        string_templates,
+                        intermediates,
+                    )?;
+                }
                 lowered_columns.push(declaration(
                     d,
                     derivation,
                     column,
                     format!("{prefix}.derivation"),
                     false,
+                    limits,
                     project,
                     extraction,
                     string_templates,
@@ -897,7 +839,7 @@ impl Rows {
         let mut row_context = 0usize;
         for template in &self.templates {
             for declaration in &template.declarations {
-                if let RowOperation::ProjectFunction(call) = declaration.operation {
+                for call in declaration.operation.calls() {
                     let arguments = calls
                         .calls()
                         .get(call)
@@ -925,7 +867,7 @@ impl Rows {
             .flat_map(|t| &t.declarations)
             .chain(&self.columns)
         {
-            if let RowOperation::ProjectFunction(call) = declaration.operation {
+            for call in declaration.operation.calls() {
                 let count = uses.get_mut(call).ok_or(PrepareError::Internal)?;
                 *count = count
                     .checked_add(1)
@@ -964,31 +906,7 @@ impl Rows {
         intermediates: Vec<Option<crate::dataset::Intermediate>>,
         mut findings: Vec<BindFinding>,
     ) -> Result<DatasetPlan, BindError> {
-        let output_fields = output
-            .columns()
-            .iter()
-            .map(|c| reference_binding::Field {
-                name: &c.name,
-                column_type: c.kind,
-            })
-            .collect::<Vec<_>>();
-        let source_fields = source
-            .columns()
-            .iter()
-            .map(|c| reference_binding::Field {
-                name: &c.name,
-                column_type: c.kind,
-            })
-            .collect::<Vec<_>>();
-        let catalog = Catalog::compile(
-            &output_fields,
-            &[reference_binding::Dataset {
-                name,
-                fields: &source_fields,
-            }],
-            Default::default(),
-        )
-        .map_err(BindError::Catalog)?;
+        let catalog = row_drivers::catalog(output, source, name)?;
         let groups = self
             .templates
             .iter()
@@ -996,7 +914,11 @@ impl Rows {
             .map(|g| g.iter().map(String::as_str).collect::<Vec<_>>())
             .collect::<Vec<_>>();
         let column_groups = groups.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let resolve = |reference: &str, path: &str, findings: &mut Vec<BindFinding>| {
+        let resolve = |reference: &str,
+                       path: &str,
+                       source: &TableSchema,
+                       name: &str,
+                       findings: &mut Vec<BindFinding>| {
             let selected = reference
                 .split_once('.')
                 .filter(|(dataset, _)| *dataset == name)
@@ -1009,7 +931,10 @@ impl Rows {
             }
             selected
         };
-        let assignment = |declaration: &RowDeclaration,
+        let assignment = |source: &TableSchema,
+                          name: &str,
+                          catalog: &Catalog,
+                          declaration: &RowDeclaration,
                           phase: Phase<'_>,
                           row: Option<&str>,
                           available: Option<&[usize]>,
@@ -1023,7 +948,7 @@ impl Rows {
                     match crate::project_call_binding::bind(
                         project,
                         *call,
-                        &catalog,
+                        catalog,
                         crate::project_call_binding::Context {
                             source_dataset: 0,
                             source_mode: crate::project_call_binding::SourceMode::Record,
@@ -1072,10 +997,11 @@ impl Rows {
                         Some(Expression::Column(column))
                     }
                 }
-                RowOperation::Literal(value) => Some(Expression::Literal(value.clone())),
-                RowOperation::Flag(operation) => flags::bind_row(
-                    operation,
-                    &catalog,
+                RowOperation::Shared(branch) => derivations::bind_row(
+                    &branch.operation,
+                    &branch.path,
+                    declaration.column,
+                    catalog,
                     name,
                     row,
                     phase,
@@ -1083,184 +1009,12 @@ impl Rows {
                     edges,
                     findings,
                     declarations_reported,
+                    output,
+                    project,
+                    named,
+                    &secondary,
+                    &intermediates,
                 )?,
-                RowOperation::StrTemplate(operation) => str_template::bind_row(
-                    operation,
-                    declaration.column,
-                    &catalog,
-                    name,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                )?,
-                RowOperation::Scalar(operation) => scalar::bind_row(
-                    operation,
-                    declaration.column,
-                    &catalog,
-                    name,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                )?,
-                RowOperation::StrContains(operation) => scalar::bind_row_contains(
-                    operation,
-                    declaration.column,
-                    &catalog,
-                    name,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                )?,
-                RowOperation::StrExtract(operation) => str_extract::bind_row(
-                    operation,
-                    declaration.column,
-                    &catalog,
-                    name,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                )?,
-                RowOperation::StrCase(operation) => str_case::bind_row(
-                    operation,
-                    declaration.column,
-                    &catalog,
-                    name,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                )?,
-                RowOperation::StrPad(operation) => str_pad::bind_row(
-                    operation,
-                    declaration.column,
-                    &catalog,
-                    name,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                )?,
-                RowOperation::Imputation(operation) => imputation::bind_row(
-                    operation,
-                    declaration.column,
-                    &catalog,
-                    name,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                )?,
-                RowOperation::Temporal(operation) => temporal::bind_row(
-                    operation,
-                    declaration.column,
-                    &catalog,
-                    name,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                )?,
-                RowOperation::Round(rounding) => rounding::bind_row(
-                    rounding,
-                    declaration.column,
-                    &catalog,
-                    name,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                )?,
-                RowOperation::InvalidNumeric { expression, error } => {
-                    if !declarations_reported {
-                        findings.push(BindFinding::Numeric {
-                            path: format!("{}.expr", declaration.path),
-                            expression: expression.clone(),
-                            error: error.clone(),
-                        });
-                    }
-                    None
-                }
-                RowOperation::Compute(compiled) => {
-                    let before = findings.len();
-                    let mut bindings = Vec::new();
-                    for identifier in compiled.identifiers() {
-                        let path = format!("{}.expr", declaration.path);
-                        if identifier.contains('.') {
-                            let scoped = reference_scope::validate(
-                                &catalog,
-                                identifier,
-                                None,
-                                Scope {
-                                    drivers: &[name],
-                                    current_driver: false,
-                                    reach: Reach::Scalar,
-                                    joined: false,
-                                    phase,
-                                },
-                                Default::default(),
-                            )
-                            .map_err(BindError::Catalog)?;
-                            if !scoped.is_empty() {
-                                findings.extend(scoped.into_iter().map(|finding| {
-                                    BindFinding::QualifiedReference {
-                                        path: path.clone(),
-                                        name: identifier.into(),
-                                        row: row.map(String::from),
-                                        finding,
-                                    }
-                                }));
-                            } else if let Some(column) = resolve(identifier, &path, findings) {
-                                bindings.push(Binding {
-                                    name: identifier.into(),
-                                    read: Read::Source(column),
-                                });
-                            }
-                        } else if let Some(finding) = catalog
-                            .validate_output(identifier, None, available, &[0])
-                            .map_err(BindError::Catalog)?
-                        {
-                            findings.push(BindFinding::OutputReference {
-                                path,
-                                name: identifier.into(),
-                                finding,
-                            });
-                        } else if let Some(reference_binding::Binding::Output { column, .. }) =
-                            catalog.bind(identifier).map_err(BindError::Catalog)?
-                        {
-                            edges.push(column);
-                            bindings.push(Binding {
-                                name: identifier.into(),
-                                read: Read::Column(column),
-                            });
-                        } else {
-                            findings.push(BindFinding::UnknownReference {
-                                path,
-                                name: identifier.into(),
-                            });
-                        }
-                    }
-                    if before == findings.len() {
-                        Some(Expression::Compute(
-                            BoundNumeric::new(compiled.clone(), bindings)
-                                .map_err(BindError::InvalidNumericBinding)?,
-                        ))
-                    } else {
-                        None
-                    }
-                }
                 RowOperation::InvalidAggregate { expression, error } => {
                     findings.push(BindFinding::Aggregate {
                         path: declaration.path.clone(),
@@ -1285,14 +1039,16 @@ impl Rows {
                             &secondary,
                             &intermediates,
                             output,
-                            &catalog,
+                            catalog,
                             available,
                             edges,
                             findings,
                         )?
-                    } else if let Some(column) = resolve(reference, &declaration.path, findings) {
+                    } else if let Some(column) =
+                        resolve(reference, &declaration.path, source, name, findings)
+                    {
                         let scoped = reference_scope::validate(
-                            &catalog,
+                            catalog,
                             reference,
                             None,
                             Scope {
@@ -1340,17 +1096,19 @@ impl Rows {
                             text: expression.clone(),
                         })
                     } else {
-                        resolve(operand, &declaration.path, findings).map(|column| match reducer {
-                            RowReducer::Numeric(reducer) => Expression::Reduce {
-                                identifier: Some(operand.clone()),
-                                column,
-                                reducer: *reducer,
-                                text: expression.clone(),
-                            },
-                            RowReducer::Count { .. } => Expression::Count {
-                                column: Some(column),
-                                text: expression.clone(),
-                            },
+                        resolve(operand, &declaration.path, source, name, findings).map(|column| {
+                            match reducer {
+                                RowReducer::Numeric(reducer) => Expression::Reduce {
+                                    identifier: Some(operand.clone()),
+                                    column,
+                                    reducer: *reducer,
+                                    text: expression.clone(),
+                                },
+                                RowReducer::Count { .. } => Expression::Count {
+                                    column: Some(column),
+                                    text: expression.clone(),
+                                },
+                            }
                         })
                     }
                 }
@@ -1364,6 +1122,9 @@ impl Rows {
         let mut templates = Vec::new();
         for (index, template) in self.templates.iter().enumerate() {
             let filter_path = format!("rows[{index}].filter");
+            let (driver_index, row_source) =
+                row_drivers::select(source, name, &secondary, &template.driver)?;
+            let row_catalog = row_drivers::catalog(output, row_source, &template.driver)?;
             let mode = match &template.groups {
                 None => RowMode::Records,
                 Some(groups) => RowMode::Groups(
@@ -1374,6 +1135,8 @@ impl Rows {
                             resolve(
                                 name,
                                 &format!("rows[{index}].group_by[{position}]"),
+                                row_source,
+                                &template.driver,
                                 &mut findings,
                             )
                         })
@@ -1438,31 +1201,30 @@ impl Rows {
             let mut assignments = BTreeMap::new();
             // Reference planning validates one complete row template's authored
             // derivations before resolving any of that template's references.
-            let declarations_reported = template.declarations.iter().any(|declaration| {
-                matches!(&declaration.operation,
-                    RowOperation::StrPad(operation) if operation.has_width_error())
-                    || matches!(&declaration.operation, RowOperation::Flag(operation) if operation.has_findings())
-            });
+            let mut declaration_findings = Vec::new();
+            let mut declarations_reported = false;
+            for declaration in &template.declarations {
+                if let RowOperation::Shared(branch) = &declaration.operation {
+                    declarations_reported |=
+                        cases::padding_findings(&branch.operation, &mut declaration_findings)?;
+                }
+            }
             if declarations_reported {
                 for declaration in &template.declarations {
-                    match &declaration.operation {
-                        RowOperation::Flag(operation) => operation.findings(&mut findings),
-                        RowOperation::StrPad(operation) => {
-                            str_pad::declaration_findings(operation, &mut findings);
-                        }
-                        RowOperation::InvalidNumeric { expression, error } => {
-                            findings.push(BindFinding::Numeric {
-                                path: format!("{}.expr", declaration.path),
-                                expression: expression.clone(),
-                                error: error.clone(),
-                            });
-                        }
-                        _ => (),
+                    if let RowOperation::Shared(branch) = &declaration.operation {
+                        derivations::declaration_findings(
+                            &branch.operation,
+                            &branch.path,
+                            &mut findings,
+                        )?;
                     }
                 }
             }
             for declaration in &template.declarations {
                 if let Some(value) = assignment(
+                    row_source,
+                    &template.driver,
+                    &row_catalog,
                     declaration,
                     phase,
                     Some(&template.id),
@@ -1502,7 +1264,7 @@ impl Rows {
                     });
                 }
             }
-            let assignments = analyzed
+            let assignments: Vec<Assignment> = analyzed
                 .order
                 .into_iter()
                 .filter_map(|column| assignments.remove(&column))
@@ -1517,7 +1279,13 @@ impl Rows {
                     }
                     if identifier.contains('.') {
                         if !grouped {
-                            if let Some(column) = resolve(identifier, &filter_path, &mut findings) {
+                            if let Some(column) = resolve(
+                                identifier,
+                                &filter_path,
+                                row_source,
+                                &template.driver,
+                                &mut findings,
+                            ) {
                                 bindings.push(Binding {
                                     name: identifier.into(),
                                     read: Read::Source(column),
@@ -1560,8 +1328,61 @@ impl Rows {
                     .transpose()
                     .map_err(BindError::InvalidPredicateBinding)?
             };
+            if let Some(filter) = filter.as_ref() {
+                let bound = intermediates
+                    .iter()
+                    .filter_map(Option::as_ref)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let deferred =
+                    crate::dataset::window_stages(&assignments, output.columns().len(), &bound);
+                for binding in filter.bindings() {
+                    if matches!(binding.read, Read::Column(column) if deferred[column]) {
+                        findings.push(BindFinding::Scalar(crate::diagnostic::Diagnostic {
+                            code: crate::diagnostic::ConditionCode::RowFilterPhaseBoundary,
+                            spec_paths: vec![filter_path.clone()],
+                            context: [
+                                (
+                                    "identifier".into(),
+                                    crate::diagnostic::ContextValue::Scalar(
+                                        crate::value::Value::Str(binding.name.clone()),
+                                    ),
+                                ),
+                                (
+                                    "row".into(),
+                                    crate::diagnostic::ContextValue::Scalar(
+                                        crate::value::Value::Str(template.id.clone()),
+                                    ),
+                                ),
+                                (
+                                    "available_phase".into(),
+                                    crate::diagnostic::ContextValue::Scalar(
+                                        crate::value::Value::Str("window_derivation".into()),
+                                    ),
+                                ),
+                                (
+                                    "required_phase".into(),
+                                    crate::diagnostic::ContextValue::Scalar(
+                                        crate::value::Value::Str("row_filter".into()),
+                                    ),
+                                ),
+                            ]
+                            .into(),
+                            source_span: None,
+                            operand_route: None,
+                        }));
+                    }
+                }
+            }
             templates.push(RowTemplate {
-                mode,
+                mode: if driver_index == 0 {
+                    mode
+                } else {
+                    RowMode::Driver {
+                        source: driver_index,
+                        mode: alloc::boxed::Box::new(mode),
+                    }
+                },
                 assignments,
                 filter,
             });
@@ -1569,11 +1390,16 @@ impl Rows {
         let mut columns = Vec::new();
         let mut dependencies = alloc::vec![None; output.columns().len()];
         for declaration in &self.columns {
-            if let RowOperation::StrPad(operation) = &declaration.operation {
-                str_pad::declaration_findings(operation, &mut findings);
+            if let RowOperation::Shared(branch) = &declaration.operation {
+                if let Operation::StrPad(operation) = branch.operation.as_ref() {
+                    str_pad::declaration_findings(operation, &mut findings);
+                }
             }
             let mut edges = Vec::new();
             if let Some(value) = assignment(
+                source,
+                name,
+                &catalog,
                 declaration,
                 Phase::Column {
                     groups: &column_groups,

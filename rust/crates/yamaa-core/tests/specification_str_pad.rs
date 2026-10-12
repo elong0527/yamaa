@@ -225,3 +225,37 @@ fn numeric_grammar_and_widths_keep_authored_order_before_reference_binding() {
         );
     }
 }
+
+#[test]
+fn concat_retains_already_reported_operand_defects_without_panicking() {
+    let spec = specification(vec![(
+        "A",
+        "str",
+        Tree::map(vec![(
+            "str_concat",
+            Tree::map(vec![(
+                "sources",
+                Tree::List(vec![
+                    pad("SRC.ID", "0"),
+                    Tree::map(vec![(
+                        "compute",
+                        Tree::map(vec![("expr", Tree::text("ID +"))]),
+                    )]),
+                ]),
+            )]),
+        )]),
+    )]);
+    let actual = findings(&spec);
+    assert_eq!(actual[0].0, ConditionCode::StrPadWidth);
+    assert_eq!(
+        actual[1].0.definition().condition,
+        "invalid_numeric_expression"
+    );
+    assert_eq!(
+        actual.into_iter().map(|(_, path)| path).collect::<Vec<_>>(),
+        widths_and_sources(&[
+            "columns.A.derivation.str_concat.sources[0].str_pad.width",
+            "columns.A.derivation.str_concat.sources[1].compute.expr",
+        ])
+    );
+}

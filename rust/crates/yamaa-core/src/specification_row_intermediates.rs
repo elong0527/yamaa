@@ -92,14 +92,13 @@ pub(super) fn common_driver<'a>(
         if !inputs
             .iter()
             .any(|&(id, _)| text(d, id).is_ok_and(|input| input == name))
-            || common.is_some_and(|prior| prior != name)
         {
             return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
                 operation: "row_driver".into(),
                 path: format!("rows[{index}].dataset"),
             }]));
         }
-        common = Some(name);
+        common.get_or_insert(name);
     }
     common.ok_or(PrepareError::Internal)
 }

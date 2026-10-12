@@ -756,7 +756,7 @@ fn row_filters_charge_the_whole_document_before_predicate_parsing() {
 }
 
 #[test]
-fn grouped_filter_promotes_a_row_local_default_without_claiming_ungrouped_promotion() {
+fn record_and_group_filters_promote_their_complete_row_local_default() {
     use Tree::*;
     for grouped in [false, true] {
         let mut fields = vec![
@@ -783,24 +783,13 @@ fn grouped_filter_promotes_a_row_local_default_without_claiming_ungrouped_promot
             None,
             Some(List(vec![Map(fields)])),
         );
-        if grouped {
-            let plan = PreparedSpecification::prepare(&document)
-                .unwrap()
-                .bind(&source())
-                .unwrap();
-            assert_eq!(plan.templates()[0].assignments.len(), 2);
-            assert!(plan.templates()[0].filter.is_some());
-            assert!(plan.columns().is_empty());
-        } else {
-            let Err(PrepareError::Unsupported(features)) =
-                PreparedSpecification::prepare(&document)
-            else {
-                panic!("unreconciled promotion must remain unsupported");
-            };
-            assert_eq!(features.len(), 1);
-            assert_eq!(features[0].operation, "row_filter_default");
-            assert_eq!(features[0].path, "rows[0].filter");
-        }
+        let plan = PreparedSpecification::prepare(&document)
+            .unwrap()
+            .bind(&source())
+            .unwrap();
+        assert_eq!(plan.templates()[0].assignments.len(), 2);
+        assert!(plan.templates()[0].filter.is_some());
+        assert!(plan.columns().is_empty());
     }
 }
 
