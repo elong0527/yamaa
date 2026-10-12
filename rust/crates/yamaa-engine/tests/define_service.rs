@@ -471,3 +471,110 @@ fn clock_is_observed_once_and_calendar_admission_is_owned_by_the_engine() {
         assert!(spy.events.is_empty());
     }
 }
+
+#[test]
+fn resource_observations_keep_original_normative_and_implementation_wire_owners() {
+    use define::ResourceObservation as R;
+    use yamaa_core::{diagnostic::ContextValue as C, value::Value};
+    for (path, observation, code, requirement) in [
+        (
+            "datasets.DM.artifact",
+            R::Missing,
+            ConditionCode::ProducerContractMismatch,
+            "REQ-0535",
+        ),
+        (
+            "sdtm.define",
+            R::Missing,
+            ConditionCode::ResourceMissing,
+            "REQ-0785",
+        ),
+        (
+            "datasets.DM.artifact",
+            R::NotRegularFile,
+            ConditionCode::ResourceNotRegularFile,
+            "REQ-0785",
+        ),
+    ] {
+        let finding = define::resource_diagnostic(path, "declared.csv", observation);
+        assert_eq!(finding.code, code);
+        assert_eq!(finding.definition().phase, "validation");
+        assert_eq!(finding.definition().requirement, Some(requirement));
+        assert_eq!(finding.spec_paths, [path]);
+        assert_eq!(
+            finding.context,
+            [("path".into(), C::Scalar(Value::Str("declared.csv".into())))].into()
+        );
+        assert_eq!(finding.source_span, None);
+        assert_eq!(finding.operand_route, None);
+    }
+    for (observation, expected) in [
+        (R::Unreadable, "resource_unreadable"),
+        (R::InvalidRoot, "resource_root"),
+        (R::InvalidBase, "resource_base"),
+        (R::InvalidPath, "resource_path"),
+        (R::InvalidLock, "invalid_packaging_lock"),
+        (R::OutsideRoots, "resource_outside_roots"),
+        (R::Symlink, "resource_link"),
+        (R::Changed, "resource_changed"),
+        (R::Limit, "resource_limit"),
+    ] {
+        let finding = define::resource_diagnostic("sdtm.specs[0]", "declared.yaml", observation);
+        assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+        assert_eq!(finding.definition().phase, "engine");
+        assert_eq!(finding.definition().requirement, None);
+        assert_eq!(finding.spec_paths, ["sdtm.specs[0]"]);
+        assert_eq!(
+            finding.context,
+            [
+                ("path".into(), C::Scalar(Value::Str("declared.yaml".into()))),
+                ("stage".into(), C::Scalar(Value::Str("define".into()))),
+                ("code".into(), C::Scalar(Value::Str(expected.into()))),
+            ]
+            .into()
+        );
+    }
+}
+#[test]
+fn publication_stage_projection_preserves_full_width_artifact_index_and_cause_text() {
+    use define::PublicationFailure as P;
+    use yamaa_core::{diagnostic::ContextValue as C, value::Value};
+    for (stage, code, phase, requirement) in [
+        (
+            P::TargetAdmission,
+            ConditionCode::ApplicationRejected,
+            "engine",
+            None,
+        ),
+        (
+            P::Publication,
+            ConditionCode::OutputPublicationFailed,
+            "output",
+            Some("REQ-0764"),
+        ),
+    ] {
+        let finding =
+            define::publication_diagnostic(usize::MAX, stage, "opaque original cause".into());
+        assert_eq!(finding.code, code);
+        assert_eq!(finding.definition().phase, phase);
+        assert_eq!(finding.definition().requirement, requirement);
+        assert_eq!(finding.spec_paths, ["define"]);
+        let mut expected: yamaa_core::diagnostic::Context = [
+            ("artifact".into(), C::Integer(usize::MAX.to_string())),
+            (
+                "cause".into(),
+                C::Scalar(Value::Str("opaque original cause".into())),
+            ),
+        ]
+        .into();
+        if stage == P::TargetAdmission {
+            expected.insert(
+                "stage".into(),
+                C::Scalar(Value::Str("publication_target_admission".into())),
+            );
+        }
+        assert_eq!(finding.context, expected);
+        assert_eq!(finding.source_span, None);
+        assert_eq!(finding.operand_route, None);
+    }
+}

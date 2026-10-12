@@ -9,9 +9,7 @@ use crate::{
 };
 use std::path::Path;
 use yamaa_core::{
-    diagnostic::{ConditionCode, Diagnostic},
-    project_function::Language,
-    submission_composition::Finding,
+    diagnostic::Diagnostic, project_function::Language, submission_composition::Finding,
 };
 
 use yamaa_engine::define::{self as service, Ports};
@@ -339,17 +337,6 @@ fn resource(path: &str, written: &str, error: file_resources::Error) -> Failure 
     }
 }
 fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
-    let issue = |phase: &str,
-                 condition: &str,
-                 requirement: Option<&str>,
-                 path: &str,
-                 context: serde_json::Value| Issue {
-        phase: phase.into(),
-        condition: condition.into(),
-        requirement: requirement.map(str::to_owned),
-        spec_paths: vec![path.into()],
-        context: context.to_string(),
-    };
     match failure {
         Failure::Project(error) => project_application::failure(error, host),
         Failure::Metadata(findings) => findings
@@ -370,54 +357,40 @@ fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
             error,
         } => {
             use file_resources::Error as E;
-            let code = match error {
-                E::Missing if path.ends_with(".artifact") => {
-                    Some(ConditionCode::ProducerContractMismatch)
-                }
-                E::Missing => Some(ConditionCode::ResourceMissing),
-                E::NotRegularFile => Some(ConditionCode::ResourceNotRegularFile),
-                _ => None,
+            use service::ResourceObservation as R;
+            let observation = match error {
+                E::Missing => R::Missing,
+                E::Unreadable => R::Unreadable,
+                E::NotRegularFile => R::NotRegularFile,
+                E::InvalidRoot => R::InvalidRoot,
+                E::InvalidBase => R::InvalidBase,
+                E::InvalidPath => R::InvalidPath,
+                E::InvalidLock => R::InvalidLock,
+                E::OutsideRoots => R::OutsideRoots,
+                E::Symlink => R::Symlink,
+                E::Changed => R::Changed,
+                E::Limit => R::Limit,
             };
-            if let Some(code) = code {
-                let definition = code.definition();
-                vec![issue(
-                    definition.phase,
-                    definition.condition,
-                    definition.requirement,
-                    path,
-                    serde_json::json!({"path":written}),
-                )]
-            } else {
-                let mut rows = crate::file_application::resource_failure("define", error);
-                for row in &mut rows {
-                    row.spec_paths = vec![path.clone()];
-                    let mut context: serde_json::Value =
-                        serde_json::from_str(&row.context).expect("shared resource issue context");
-                    context["path"] = serde_json::json!(written);
-                    row.context = context.to_string();
-                }
-                rows
-            }
+            vec![
+                Issue::from_core(service::resource_diagnostic(path, written, observation))
+                    .expect("admitted Define resource finding"),
+            ]
         }
         Failure::TargetAdmission { index, error } => {
-            let definition = ConditionCode::ApplicationRejected.definition();
-            vec![issue(
-                definition.phase,
-                definition.condition,
-                definition.requirement,
-                "define",
-                serde_json::json!({"artifact":index,"stage":"publication_target_admission","cause":error.message()}),
-            )]
+            vec![Issue::from_core(service::publication_diagnostic(
+                *index,
+                service::PublicationFailure::TargetAdmission,
+                error.message(),
+            ))
+            .expect("admitted Define publication target finding")]
         }
         Failure::Publication { index, error } => {
-            let definition = ConditionCode::OutputPublicationFailed.definition();
-            vec![issue(
-                definition.phase,
-                definition.condition,
-                definition.requirement,
-                "define",
-                serde_json::json!({"artifact":index,"cause":error.message()}),
-            )]
+            vec![Issue::from_core(service::publication_diagnostic(
+                *index,
+                service::PublicationFailure::Publication,
+                error.message(),
+            ))
+            .expect("admitted Define publication finding")]
         }
     }
 }
@@ -542,7 +515,11 @@ mod publication_failure_tests {
         assert_eq!(result.issues()[0].phase, "output");
         assert_eq!(result.issues()[0].condition, "publication_failed");
         assert_eq!(result.issues()[0].requirement.as_deref(), Some("REQ-0764"));
-        assert!(result.issues()[0].context.contains(&error.message()));
+        assert_eq!(result.issues()[0].spec_paths, ["define"]);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&result.issues()[0].context).unwrap(),
+            serde_json::json!({"artifact":1,"cause":error.message()})
+        );
         assert_eq!(result.capture_reads(), reads);
         assert!(result.save().is_err());
         assert_eq!(

@@ -9,13 +9,14 @@ use alloc::{
     vec::Vec,
 };
 use yamaa_core::{
-    diagnostic::{ConditionCode, Diagnostic},
+    diagnostic::{ConditionCode, ContextValue, Diagnostic},
     producer_admission::WrittenPath,
     project_terminology::Catalogue,
     schema::Document,
     submission_composition::{self as composition, Finding},
     submission_document,
     table::TableAccess,
+    value::Value,
 };
 
 pub const MAX_ARTIFACT_BYTES: usize = 67_108_864;
@@ -623,4 +624,108 @@ fn created_time(
         seconds % 3600 / 60,
         seconds % 60
     ))
+}
+
+/// Infrastructure observation only; the use case owns its retained wire cause.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResourceObservation {
+    Missing,
+    Unreadable,
+    NotRegularFile,
+    InvalidRoot,
+    InvalidBase,
+    InvalidPath,
+    InvalidLock,
+    OutsideRoots,
+    Symlink,
+    Changed,
+    Limit,
+}
+pub fn resource_diagnostic(
+    path: &str,
+    written: &str,
+    observation: ResourceObservation,
+) -> Diagnostic {
+    use ResourceObservation as R;
+    let code = match observation {
+        R::Missing if path.ends_with(".artifact") => ConditionCode::ProducerContractMismatch,
+        R::Missing => ConditionCode::ResourceMissing,
+        R::NotRegularFile => ConditionCode::ResourceNotRegularFile,
+        _ => ConditionCode::ApplicationRejected,
+    };
+    let mut context: yamaa_core::diagnostic::Context = [(
+        String::from("path"),
+        ContextValue::Scalar(Value::Str(written.into())),
+    )]
+    .into();
+    if code == ConditionCode::ApplicationRejected {
+        let classification = match observation {
+            R::Unreadable => "resource_unreadable",
+            R::InvalidRoot => "resource_root",
+            R::InvalidBase => "resource_base",
+            R::InvalidPath => "resource_path",
+            R::InvalidLock => "invalid_packaging_lock",
+            R::OutsideRoots => "resource_outside_roots",
+            R::Symlink => "resource_link",
+            R::Changed => "resource_changed",
+            R::Limit => "resource_limit",
+            R::Missing | R::NotRegularFile => unreachable!("normative resource cause selected"),
+        };
+        context.insert(
+            "stage".into(),
+            ContextValue::Scalar(Value::Str("define".into())),
+        );
+        context.insert(
+            "code".into(),
+            ContextValue::Scalar(Value::Str(classification.into())),
+        );
+    }
+    Diagnostic {
+        code,
+        spec_paths: vec![path.into()],
+        context,
+        source_span: None,
+        operand_route: None,
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PublicationFailure {
+    TargetAdmission,
+    Publication,
+}
+/// Project the entered publication stage, not an inferred exception message.
+/// The native original error remains held separately from its display text.
+pub fn publication_diagnostic(
+    index: usize,
+    stage: PublicationFailure,
+    cause: String,
+) -> Diagnostic {
+    let code = match stage {
+        PublicationFailure::TargetAdmission => ConditionCode::ApplicationRejected,
+        PublicationFailure::Publication => ConditionCode::OutputPublicationFailed,
+    };
+    let mut context: yamaa_core::diagnostic::Context = [
+        (
+            String::from("artifact"),
+            ContextValue::Integer(index.to_string()),
+        ),
+        (
+            String::from("cause"),
+            ContextValue::Scalar(Value::Str(cause)),
+        ),
+    ]
+    .into();
+    if stage == PublicationFailure::TargetAdmission {
+        context.insert(
+            "stage".into(),
+            ContextValue::Scalar(Value::Str("publication_target_admission".into())),
+        );
+    }
+    Diagnostic {
+        code,
+        spec_paths: vec!["define".into()],
+        context,
+        source_span: None,
+        operand_route: None,
+    }
 }
