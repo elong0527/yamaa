@@ -51,10 +51,12 @@ _WHITESPACE_COMPLEMENT_IN_CLASS: Final = (
 _DOT_REPLACEMENT: Final = "[^\\r\\n\\u2028\\u2029]"
 
 # Escapes the contract admits after a backslash besides the translations
-# above: the single-scalar classes and anchors, the control escapes, and
-# NUL. Hex, code point, punctuation, and backreference escapes are checked
-# where they are read.
-_SIMPLE_ESCAPES: Final = frozenset("dDsSwWbBnrtfv0")
+# above: the single-scalar classes and anchors, and the control escapes.
+# Hex, code point, punctuation, and backreference escapes are checked
+# where they are read, and NUL is checked there too: `\0` must not be
+# followed by a digit, so it cannot ride along here as a pass-through --
+# the host library would read `\01` as an octal escape, not as NUL + `1`.
+_SIMPLE_ESCAPES: Final = frozenset("dDsSwWbBnrtfv")
 # `\\` plus one of these is an ordinary scalar (REQ-0826).
 _ESCAPABLE_PUNCTUATION: Final = frozenset(string.punctuation)
 
