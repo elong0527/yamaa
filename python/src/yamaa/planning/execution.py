@@ -2983,6 +2983,11 @@ def _append_reference_finding(
         return
     context = dict(finding.context)
     requirement = reference.requirement
+    if requirement is None and finding.condition in {
+        "unknown_field",
+        "unresolvable_name",
+    }:
+        requirement = "REQ-0106"
     if finding.condition == "phase_boundary":
         if row is None:
             raise ValueError("native output phase finding outside row construction")
@@ -3021,7 +3026,7 @@ def _unresolvable_reference_diagnostic(
             "unknown_field",
             reference.path,
             {"identifier": reference.name},
-            requirement=reference.requirement,
+            requirement=reference.requirement or "REQ-0106",
         )
     return _diagnostic(
         "unresolvable_name",
@@ -3030,7 +3035,7 @@ def _unresolvable_reference_diagnostic(
             "identifier": reference.name,
             "suggestion": f"{candidates[0]}.{reference.name}",
         },
-        requirement=reference.requirement,
+        requirement=reference.requirement or "REQ-0106",
     )
 
 
