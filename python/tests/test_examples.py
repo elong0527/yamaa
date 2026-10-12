@@ -3,6 +3,7 @@ from __future__ import annotations
 import runpy
 import shutil
 import tempfile
+from importlib import import_module
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,7 +11,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from yamaa import domain, yamaa_domain
+from yamaa import yamaa_domain
 from yamaa.io import ProjectResources, load_source_tables
 from yamaa.io.csv import fixed_point
 from yamaa.planning import ExecutionDiagnostic
@@ -88,7 +89,26 @@ def positive_examples() -> tuple[Path, ...]:
 
 
 def negative_contracts() -> tuple[Path, ...]:
-    return tuple(sorted(EXAMPLES.glob("negative-*/expected/error.yaml")))
+    contracts = tuple(sorted(EXAMPLES.glob("negative-*/expected/error.yaml")))
+    if not _native_extension_available():
+        # The native extension is optional for the test suite (see
+        # test_package.py): the only negative example that exercises the
+        # compiled `domain` entry point is dropped here so pure-Python dev
+        # venvs skip it instead of erroring on import.
+        contracts = tuple(
+            path
+            for path in contracts
+            if path.parents[1].name != "negative-function-contract"
+        )
+    return contracts
+
+
+def _native_extension_available() -> bool:
+    try:
+        import_module("yamaa._native")
+    except ImportError:
+        return False
+    return True
 
 
 def _negative_diagnostic(
@@ -104,6 +124,12 @@ def _negative_diagnostic(
         return load_source_tables(datasets, resources)
 
     if example.name == "negative-function-contract":
+        # Imported lazily: the native extension is optional for the test
+        # suite (see test_package.py), and this is the only test path that
+        # needs the compiled `domain` entry point. A module-level import
+        # would break collection of the whole file in pure-Python dev venvs.
+        from yamaa import domain
+
         with tempfile.TemporaryDirectory(prefix="yamaa-negative-project-") as temporary:
             staged = Path(temporary).resolve() / example.name
             shutil.copytree(example, staged)
@@ -230,7 +256,16 @@ def test_positive_example_outputs_match_expected_artifacts(
     assert expected, f"{example.name} has run.py but no expected artifact"
 
     monkeypatch.chdir(example)
-    namespace = runpy.run_path(runner.name)
+    try:
+        namespace = runpy.run_path(runner.name)
+    except ModuleNotFoundError as error:
+        if error.name != "yamaa._native":
+            raise
+        # The native extension is optional for the test suite (see
+        # test_package.py): examples whose run.py exercises the compiled
+        # `domain` entry point are skipped in pure-Python dev venvs instead
+        # of erroring on import.
+        pytest.skip("the compiled native extension is not installed")
     outputs = {
         name: value
         for name, value in namespace.items()
