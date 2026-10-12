@@ -24,6 +24,7 @@ from check_cargo_lock import check_archive as check_cargo_archive
 from check_math_portability import FUNCTIONS, compare, observations, validate_hosts
 from check_python_package_hygiene import check_archive as check_python_archive
 from math_corpus import validate_corpus
+from public_conformance import platform_matches
 
 PLATFORMS = ("ubuntu-24.04", "macos-15", "windows-latest")
 PYTHONS = ("3.12", "3.13", "3.14")
@@ -781,9 +782,8 @@ class Audit:
         require(
             inventory["package_form"] == form, "public inventory package form differs"
         )
-        expected_system = "macOS" if platform == "macos-15" else SYSTEMS[platform]
         require(
-            inventory["platform"].startswith(expected_system + "-"),
+            platform_matches(runtime, platform, inventory["platform"]),
             "public inventory OS/image differs",
         )
         require(

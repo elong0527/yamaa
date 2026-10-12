@@ -278,6 +278,45 @@ class NativeAudit(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "denominator"):
             self.auditor.public_inventory("macos-15", "python", "3.14", "wheel")
 
+    def test_r_public_inventory_accepts_native_platform_names_only_in_their_lane(self):
+        platforms = {
+            "ubuntu-24.04": "x86_64-pc-linux-gnu",
+            "macos-15": "aarch64-apple-darwin23",
+            "windows-latest": "x86_64-w64-mingw32",
+        }
+        for platform, recorded in platforms.items():
+            root = self.artifact(f"public-conformance-r-{platform}")
+            value = {
+                "runtime_version": "4.6.1",
+                "host_package_version": "0.3.0",
+                "engine_version": "0.1.0",
+                "platform": recorded,
+                "protocol": "public-conformance/1",
+                "runtime": "r",
+                "source_revision": self.auditor.source["sha"],
+                "evidence": self.auditor.run["html_url"],
+                "package_form": "source",
+                "benchmarks": [
+                    {"example": "independently-authored", "verdict": "unsupported"}
+                ],
+                "summary": {"unsupported": 1},
+                "unsupported_operations": {"authored": 1},
+            }
+            audit.write(root / "inventory.json", value)
+            with self.subTest(platform=platform):
+                self.assertEqual(
+                    self.auditor.public_inventory(platform, "r", "4.6.1", "source")[
+                        "summary"
+                    ],
+                    {"unsupported": 1},
+                )
+                value["platform"] = platforms[
+                    "macos-15" if platform != "macos-15" else "ubuntu-24.04"
+                ]
+                audit.write(root / "inventory.json", value)
+                with self.assertRaisesRegex(ValueError, "OS/image"):
+                    self.auditor.public_inventory(platform, "r", "4.6.1", "source")
+
     def producer(self):
         root = (
             self.artifact("native-public-cohort")

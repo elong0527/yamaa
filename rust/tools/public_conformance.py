@@ -25,6 +25,30 @@ RESOLVED_REASON = "reference-only resolved specification until cutover (#1973.14
 LOG_INTS = {"EVALUATED_COUNT", "FAILURE_COUNT"}
 
 
+def platform_matches(runtime, platform, recorded):
+    """Validate each host's own platform spelling against the approved lane."""
+    if not isinstance(recorded, str):
+        return False
+    if runtime == "python":
+        prefixes = {
+            "ubuntu-24.04": "Linux-",
+            "macos-15": "macOS-",
+            "windows-latest": "Windows-",
+        }
+        return platform in prefixes and recorded.startswith(prefixes[platform])
+    if runtime == "r":
+        patterns = {
+            "ubuntu-24.04": r"x86_64-(?:pc|unknown)-linux-gnu",
+            "macos-15": r"aarch64-apple-darwin[0-9]+",
+            "windows-latest": r"x86_64-w64-mingw32",
+        }
+        return (
+            platform in patterns
+            and re.fullmatch(patterns[platform], recorded) is not None
+        )
+    return False
+
+
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(

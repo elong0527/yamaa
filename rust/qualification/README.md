@@ -110,3 +110,28 @@ every lane of both hosts, retaining the full-run evidence in its PR. Deliberatel
 breaking an output must demonstrate the regression gate, then be reverted in
 that seeding PR. The assisted gates above stay in place until their separate
 retirement decision.
+
+`tools/seed_public_conformance.py` enforces that seeding contract. Download all
+`public-conformance-*` artifacts from one completed full main or dispatched
+`native.yml` run into a directory, with one subdirectory per artifact. Retain
+the run's REST metadata separately, then run:
+
+```sh
+gh api repos/elong0527/yamaa/actions/runs/RUN_ID > .cache/conformance-run.json
+gh run download RUN_ID --repo elong0527/yamaa --pattern 'public-conformance-*' \
+  --dir .cache/conformance-artifacts
+python rust/tools/seed_public_conformance.py --fixtures benchmarks \
+  --artifacts .cache/conformance-artifacts --run .cache/conformance-run.json \
+  --output .cache/public-conformance.json
+```
+
+The output must be a fresh file. The tool requires all eighteen Python and
+three R inventories from that exact revision/run, checks each host's platform,
+runtime and package identity, and replays every saved observation against the
+independent expected files. A claimed pass whose saved output changed is refused.
+Only the intersection of actual passes enters each host's list. To advance an
+existing ratchet, pass `--previous rust/qualification/public-conformance.json`;
+any reduction of its passing set is refused. Commit the verified output and
+enable `--ratchet` in both installed comparator steps after full-run evidence
+and the deliberately broken-output control pass. Missing evidence never seeds
+a partial matrix.

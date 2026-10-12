@@ -4,6 +4,9 @@ __pycache__/
 .ruff_cache/
 .venv/
 .venv-docs/
+.cache/
+.build/
+.worktrees/
 site/
 /study/
 docs/benchmark/*.html
