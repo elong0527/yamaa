@@ -554,3 +554,48 @@ spelling. The host active allowance falls from 32 sites/48 occurrences to 29/45;
 both immutable seeds and the core/engine active allowance remain unchanged.
 Deferred submission detection metadata and complete installed/inventory
 qualification remain #1985 gates; no helper or probe is retired here.
+
+
+## Submission and Define diagnostic ownership
+
+The inherited submission composer and XML/JSON renderers retain `ConditionCode`
+in each finding. Core owns its phase, condition and requirement projection;
+the native Define owner serializes that mechanical definition with the unchanged
+path and complete context. Standard selection, required declarations, explicit
+creation text and observed publication relations use portable core classification.
+Native resource acquisition, platform path equality, file decoding and publication
+remain at their existing lifecycle positions. Engine Define orchestration is a
+separate #1986 gate.
+
+Forty-nine causes retain the existing accurate requirement owners: submission
+metadata failure rules REQ-0909-0925, Define composition/rendering
+REQ-0979/0984/1004/1014-1026, scalar boundary owners REQ-1072/1074,
+value-level metadata REQ-1163-1168, inventory verification REQ-1156, and
+Dataset-JSON REQ-1195/1226/1227/1229/1231. Existing codelist binding causes
+REQ-0953-0955 remain shared. Distinct causes with the same public spelling retain
+their separate rule owners. Six value-level conditions already emitted by the
+composer are registered in `yaml/conditions.yaml` under their existing rules;
+this vocabulary admission does not introduce new failures.
+
+One historical quota classification is explicitly corrected under approved
+#1973 item 7 and REQ-1297. `BindingFinding::Limit` formerly constructed
+validation / `application_rejected` / REQ-0955. That finding is a checked quota
+refusal, while REQ-0955 governs unequal value sets. It now projects the existing
+engine / `engine_rejected` / null implementation cause, preserving the original
+column path and codelist detail. Independently owned inputs each fitting admission
+reach the actual combined binding text quota in the integration control; finite
+unequal sets independently retain validation / `codelist_values_conflict` /
+REQ-0955. The immutable literal seed preserves the original anomalous source
+spelling; historical captures and benchmark expected bytes are unchanged.
+
+Independent arena controls reach every added cause and preserve value-level row,
+column, test code and refuted derivation facts, plus inventory verification's full
+key/value context. Original fixed-time submission fixtures, installed
+`public_define` controls and retained helper probes remain in place.
+The active core/engine allowance shrinks from 98 sites/138 occurrences to
+16 sites/16 occurrences; the host allowance shrinks from
+29/45 to 14/15. Both frozen seeds remain byte-identical.
+Raw submission decoder occurrence/provenance carriers still retain their
+historical shape facts and optional scalar citation helpers; they are not wire
+null diagnostics. Their registry ownership, engine orchestration, domain metadata
+acceptance and combined installed/full-matrix qualification remain open gates.

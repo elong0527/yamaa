@@ -14,6 +14,7 @@ pub mod csv_source;
 pub mod dataset;
 pub mod dataset_checks;
 mod decimal_rounding;
+pub mod define_diagnostics;
 pub mod dependency_analysis;
 pub mod diagnostic;
 pub mod evaluation;

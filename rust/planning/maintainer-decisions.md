@@ -221,3 +221,16 @@ authorize narrowing the supported language or performing release cutover.
 Track complete qualification and the explicit transition gate in
 [#1969](https://github.com/elong0527/yamaa/issues/1969). The superseded
 [#1585](https://github.com/elong0527/yamaa/issues/1585) is historical evidence.
+
+
+## Submission binding quota classification
+
+Approved #1973 item 7, #1986 and REQ-1297 classify an actual codelist binding
+quota refusal as engine / `engine_rejected` with no normative requirement.
+The old validation / `application_rejected` / REQ-0955 spelling remains in the
+immutable diagnostic seed as historical implementation evidence. REQ-0955 owns
+ordinary unequal value sets and keeps `codelist_values_conflict`; it does not own
+resource exhaustion. The correction retains the entered column path and codelist
+detail. Independent controls reach both the actual combined binding quota and an
+ordinary finite conflict. No benchmark expected bytes or historical capture is
+rewritten, and the two normative-null implementation exceptions remain closed.

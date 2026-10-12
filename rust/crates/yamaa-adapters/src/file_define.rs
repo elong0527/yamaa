@@ -10,7 +10,6 @@ use crate::{
 use std::path::Path;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
-    project_environment::Submission,
     project_function::Language,
     submission_composition::{self as composition, Finding},
     submission_document,
@@ -98,19 +97,8 @@ impl Define {
         created: Option<&str>,
         installed: &str,
     ) -> Result<(), Failure> {
-        let family = match standard {
-            "sdtm" => Submission::Sdtm,
-            "adam" => Submission::Adam,
-            "send" => Submission::Send,
-            _ => {
-                return Err(Failure::Metadata(vec![Finding::new(
-                    "value_not_permitted",
-                    "REQ-1074",
-                    "standard",
-                    standard,
-                )]))
-            }
-        };
+        let family = yamaa_core::define_diagnostics::standard_name(standard)
+            .map_err(|finding| Failure::Metadata(vec![finding]))?;
         let created = created_time(created).map_err(|finding| Failure::Metadata(vec![finding]))?;
         let (mut resources, entry) = file_configuration::resources(environment)
             .map_err(|error| Failure::Project(project_application::Error::Configuration(error)))?;
@@ -130,33 +118,24 @@ impl Define {
         let root = &captured.normalized().document;
         let declarations = submission_document::decode(root, root.root(), Default::default())
             .map_err(|_| {
-                Failure::Metadata(vec![Finding::new(
-                    "submission_metadata_missing",
-                    "REQ-1015",
+                Failure::Metadata(vec![Finding::cause(
+                    ConditionCode::SubmissionMetadataMissing,
                     standard,
                     "invalid closed environment submission declarations",
                 )])
             })?;
-        let study = declarations.study().ok_or_else(|| {
-            Failure::Metadata(vec![Finding::new(
-                "missing_required_field",
-                "REQ-1015",
-                "study",
-                "study",
-            )])
-        })?;
-        let section = declarations
-            .sections()
-            .iter()
-            .find(|s| s.family == family)
-            .ok_or_else(|| {
-                Failure::Metadata(vec![Finding::new(
-                    "missing_required_field",
-                    "REQ-1015",
-                    standard,
-                    standard,
-                )])
-            })?;
+        let study =
+            yamaa_core::define_diagnostics::required(declarations.study(), "study", "study")
+                .map_err(|finding| Failure::Metadata(vec![finding]))?;
+        let section = yamaa_core::define_diagnostics::required(
+            declarations
+                .sections()
+                .iter()
+                .find(|section| section.family == family),
+            standard,
+            standard,
+        )
+        .map_err(|finding| Failure::Metadata(vec![finding]))?;
         let identity = &captured.source().identity;
         let define_location = resources
             .location_from(identity, &section.define.value)
@@ -182,9 +161,8 @@ impl Define {
                 ))
             })?;
             let origin = document.written_output_origin().ok_or_else(|| {
-                Failure::Metadata(vec![Finding::new(
-                    "submission_metadata_missing",
-                    "REQ-1015",
+                Failure::Metadata(vec![Finding::cause(
+                    ConditionCode::SubmissionMetadataMissing,
                     &path,
                     "output.path origin",
                 )])
@@ -208,20 +186,20 @@ impl Define {
                     .parent()
                     .is_some_and(|parent| same_location(parent, define_parent))
             {
-                return Err(Failure::Metadata(vec![Finding::new(
-                    "artifact_outside_document",
-                    "REQ-1229",
-                    &path,
-                    &format!("Dataset-JSON {reference} and Define {define_location} require parent traversal in their mutual references"),
-                )]));
+                return Err(Failure::Metadata(vec![yamaa_core::define_diagnostics::admit_relation(
+                    yamaa_core::define_diagnostics::TargetRelation::DatasetJsonOutsidePackage,
+                    &path, &format!("Dataset-JSON {reference} and Define {define_location} require parent traversal in their mutual references"),
+                ).unwrap_err()]));
             }
             if same_location(Path::new(&artifact), Path::new(&define_location)) {
-                return Err(Failure::Metadata(vec![Finding::new(
-                    "artifact_path_collision",
-                    "REQ-1195",
-                    &path,
-                    "published dataset overlaps Define target",
-                )]));
+                return Err(Failure::Metadata(vec![
+                    yamaa_core::define_diagnostics::admit_relation(
+                        yamaa_core::define_diagnostics::TargetRelation::ArtifactCollision,
+                        &path,
+                        "published dataset overlaps Define target",
+                    )
+                    .unwrap_err(),
+                ]));
             }
             if section.dataset_json.value {
                 if let Some(conflict) = targets
@@ -232,12 +210,14 @@ impl Define {
                             .then_some(&artifact)
                     })
                 {
-                    return Err(Failure::Metadata(vec![Finding::new(
-                        "dataset_json_path_collision",
-                        "REQ-1226",
-                        &path,
-                        &format!("{reference} and {conflict} name one publication target"),
-                    )]));
+                    return Err(Failure::Metadata(vec![
+                        yamaa_core::define_diagnostics::admit_relation(
+                            yamaa_core::define_diagnostics::TargetRelation::DatasetJsonCollision,
+                            &path,
+                            &format!("{reference} and {conflict} name one publication target"),
+                        )
+                        .unwrap_err(),
+                    ]));
                 }
             }
             if section.dataset_json.value {
@@ -245,12 +225,12 @@ impl Define {
             }
             let href =
                 package_reference(Path::new(&reference), define_parent).ok_or_else(|| {
-                    Failure::Metadata(vec![Finding::new(
-                        "artifact_outside_document",
-                        "REQ-1021",
+                    Failure::Metadata(vec![yamaa_core::define_diagnostics::admit_relation(
+                        yamaa_core::define_diagnostics::TargetRelation::ArtifactOutsidePackage,
                         &path,
                         "artifact must be inside the Define package",
-                    )])
+                    )
+                    .unwrap_err()])
                 })?;
             locations.push(artifact);
             hrefs.push(href);
@@ -267,9 +247,8 @@ impl Define {
                 .iter()
                 .any(|target| same_location(Path::new(target), Path::new(artifact)))
             {
-                return Err(Failure::Metadata(vec![Finding::new(
-                    "artifact_path_collision",
-                    "REQ-1195",
+                return Err(Failure::Metadata(vec![Finding::cause(
+                    ConditionCode::DefineArtifactCollision,
                     standard,
                     "published dataset overlaps Define targets",
                 )]));
@@ -441,15 +420,17 @@ impl Define {
                     .same_target(previous)
                     .map_err(|error| Failure::TargetAdmission { index, error })?
                 {
-                    return Err(Failure::Metadata(vec![Finding::new(
-                        "dataset_json_path_collision",
-                        "REQ-1226",
-                        "define.targets",
-                        &format!(
-                            "{} and {} name one physical publication target",
-                            self.artifacts[previous_index].written, artifact.written
-                        ),
-                    )]));
+                    return Err(Failure::Metadata(vec![
+                        yamaa_core::define_diagnostics::admit_relation(
+                            yamaa_core::define_diagnostics::TargetRelation::DatasetJsonCollision,
+                            "define.targets",
+                            &format!(
+                                "{} and {} name one physical publication target",
+                                self.artifacts[previous_index].written, artifact.written
+                            ),
+                        )
+                        .unwrap_err(),
+                    ]));
                 }
             }
             publishers.push(publisher);
@@ -582,7 +563,7 @@ fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
         Failure::Metadata(findings) => findings
             .iter()
             .map(|f| {
-                Issue::from_definition(f.definition, vec![f.path.clone()], f.context.clone())
+                Issue::from_definition(f.definition(), vec![f.path.clone()], f.context.clone())
                     .expect("admitted shared submission finding")
             })
             .collect(),
@@ -636,33 +617,27 @@ fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
                 serde_json::json!({"artifact":index,"stage":"publication_target_admission","cause":error.message()}),
             )]
         }
-        Failure::Publication { index, error } => vec![issue(
-            "output",
-            "publication_failed",
-            Some("REQ-0764"),
-            "define",
-            serde_json::json!({"artifact":index,"cause":error.message()}),
-        )],
+        Failure::Publication { index, error } => {
+            let definition = ConditionCode::OutputPublicationFailed.definition();
+            vec![issue(
+                definition.phase,
+                definition.condition,
+                definition.requirement,
+                "define",
+                serde_json::json!({"artifact":index,"cause":error.message()}),
+            )]
+        }
     }
 }
 fn created_time(created: Option<&str>) -> Result<String, Finding> {
     if let Some(created) = created {
-        if created.len() == 19 && created.parse::<yamaa_core::temporal::DateTime>().is_ok() {
-            return Ok(created.into());
-        }
-        return Err(Finding::new(
-            "value_not_permitted",
-            "REQ-1072",
-            "created",
-            "expected whole-second civil datetime",
-        ));
+        return yamaa_core::define_diagnostics::created_text(created).map(str::to_owned);
     }
     let seconds = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|_| {
-            Finding::new(
-                "value_not_permitted",
-                "REQ-1072",
+            Finding::cause(
+                ConditionCode::DefineCreatedInvalid,
                 "created",
                 "UTC clock before epoch",
             )
@@ -680,9 +655,8 @@ fn created_time(created: Option<&str>) -> Result<String, Finding> {
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     year += u64::from(month <= 2);
     if year > 9999 {
-        return Err(Finding::new(
-            "value_not_permitted",
-            "REQ-1072",
+        return Err(Finding::cause(
+            ConditionCode::DefineCreatedInvalid,
             "created",
             "UTC clock outside supported calendar",
         ));

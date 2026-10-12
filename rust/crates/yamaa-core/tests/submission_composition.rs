@@ -176,6 +176,6 @@ fn excessive_selected_column_scans_refuse_the_complete_section() {
     );
     let findings = compose(&documents).unwrap_err();
     assert_eq!(findings.len(), 1);
-    assert_eq!(findings[0].definition.condition, "engine_rejected");
+    assert_eq!(findings[0].definition().condition, "engine_rejected");
     assert!(format!("{:?}", findings[0].context).contains("composition_admission_limit"));
 }
