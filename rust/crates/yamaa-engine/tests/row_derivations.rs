@@ -66,7 +66,7 @@ fn limits() -> Limits {
     }
 }
 #[test]
-fn grouped_filter_removes_candidates_before_numbering_windows() {
+fn grouped_filter_keeps_window_positions_after_discarding_candidates() {
     let source = schema(&[("ID", ColumnType::Int)]);
     let table = Table {
         schema: source.clone(),
@@ -130,7 +130,7 @@ fn grouped_filter_removes_candidates_before_numbering_windows() {
         plan.execute(&table, limits()).unwrap().dataset.rows(),
         [
             vec![Value::Int(1), Value::Int(2), Value::Int(1)],
-            vec![Value::Int(3), Value::Int(2), Value::Int(2)],
+            vec![Value::Int(3), Value::Int(2), Value::Int(3)],
         ]
     );
 }

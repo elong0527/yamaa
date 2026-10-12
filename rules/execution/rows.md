@@ -16,8 +16,12 @@ status: normative
 one eligible named intermediate, named by `row.dataset`. When `root.input`
 declares exactly one dataset, a row template omitting `dataset` builds from
 that dataset. When `root.input`
-declares more than one, every row template must state `dataset`; omission
-fails validation.
+declares more than one, every row template must state `dataset`. An
+omitted driver when no single input is implied, or a driver that names
+neither a declared input nor a named intermediate, fails validation with
+`driver_unavailable` at the row template's `dataset` field, naming the row
+and its written driver (or missing when omitted). An intermediate's
+eligibility is checked separately under [REQ-1262](rows.md#req-1262).
 
 <a id="req-1262"></a>
 
@@ -168,9 +172,13 @@ follows dependency order.
 
 <a id="req-0064"></a>
 
-**REQ-0064.** A specification with no `rows` entry and no default input
-  dataset: fail. The default is root `base`, or the single declared dataset
-  when `base` is omitted.
+**REQ-0064.** A specification with absent or empty `rows` and no default
+input dataset fails validation with `driver_unavailable` at `base`. The
+default is root `base`, or the single declared dataset when `base` is
+omitted. An explicit `base` must name a declared input dataset even when
+`rows` is present; an undeclared `base` fails with the same condition and
+path, naming the written dataset. An unavailable implicit default records
+a missing row in its context.
 
 <a id="req-0065"></a>
 
@@ -195,7 +203,10 @@ follows dependency order.
   fails validation: the filter evaluates before the window pass, so no
   window result is available to it. A grouped
   `row.filter` naming a qualified variable or a column not derived by that
-  row template: fail.
+  row template: fail. A qualified grouped-filter reference or an
+unqualified filter reference outside the row template's derivations fails
+with `phase_boundary`, naming the row, identifier, available phase and
+required filter phase.
 
 <a id="req-1171"></a>
 

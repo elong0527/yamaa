@@ -340,6 +340,7 @@ pub enum PlanError {
     InvalidKeyMode,
     InvalidWindow,
     InvalidSourceOrder,
+    InvalidOutputOrder,
     InvalidLookup,
     InvalidIntermediate,
     InvalidConversionHandler,
@@ -361,6 +362,7 @@ pub struct DatasetPlan {
     warning_verifications: alloc::collections::BTreeSet<String>,
     conversion_handlers: Vec<ConversionHandler>,
     conversion_sites: BTreeMap<String, usize>,
+    output_order: Vec<OrderTerm>,
 }
 
 /// Validate nonempty, unique, bound column lists without reading table cells.
@@ -949,10 +951,10 @@ impl DatasetPlan {
             }
             if let Some(filter) = &template.filter {
                 let deferred = window_stages(&template.assignments, width, &intermediates);
-                if filter
-                    .bindings()
-                    .iter()
-                    .any(|binding| matches!(binding.read, Read::Column(column) if deferred[column]))
+                if !matches!(mode, RowMode::Groups(_))
+                    && filter.bindings().iter().any(
+                        |binding| matches!(binding.read, Read::Column(column) if deferred[column]),
+                    )
                 {
                     return Err(PlanError::Filter(BindingError::UnavailableColumn));
                 }
@@ -1063,11 +1065,29 @@ impl DatasetPlan {
             warning_verifications: Default::default(),
             conversion_handlers: Vec::new(),
             conversion_sites: BTreeMap::new(),
+            output_order: Vec::new(),
         })
     }
 }
 
 impl DatasetPlan {
+    /// Admit bound presentation terms separately from derivation and window order.
+    pub fn with_output_order(mut self, terms: Vec<OrderTerm>) -> Result<Self, PlanError> {
+        if terms.iter().enumerate().any(|(position, term)| {
+            term.column >= self.output.columns().len()
+                || terms[..position]
+                    .iter()
+                    .any(|other| other.column == term.column)
+        }) {
+            return Err(PlanError::InvalidOutputOrder);
+        }
+        self.output_order = terms;
+        Ok(self)
+    }
+    /// Presentation occurs only after all keys and verifications succeed.
+    pub fn output_order(&self) -> &[OrderTerm] {
+        &self.output_order
+    }
     /// Severity belongs to admitted check declarations, never host issue rows.
     pub fn with_warning_verifications(mut self, paths: Vec<String>) -> Result<Self, PlanError> {
         let checks: alloc::collections::BTreeSet<_> = self

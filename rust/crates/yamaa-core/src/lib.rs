@@ -36,6 +36,7 @@ pub mod reference_scope;
 pub mod resource;
 pub mod scalar_language;
 pub mod schema;
+pub mod source_ordinal;
 pub mod specification;
 pub mod specification_submission_document;
 pub mod submission_composition;

@@ -56,7 +56,7 @@ fn source() -> TableSchema {
 }
 
 #[test]
-fn grouped_filters_cannot_read_deferred_row_windows() {
+fn grouped_filters_bind_completed_row_windows() {
     let mut template = row(
         "groups",
         vec![(
@@ -77,18 +77,9 @@ fn grouped_filters_cannot_read_deferred_row_windows() {
     fields.push(("filter".into(), Tree::text("SEQ > 1")));
     let spec = specification_with_rows(vec![("SEQ", "int", literal(0))], vec![template]);
     let prepared = PreparedSpecification::prepare(&spec).unwrap();
-    let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-        panic!("grouped filter must reject the window phase");
-    };
-    assert!(
-        findings
-            .iter()
-            .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
-            .any(|diagnostic| diagnostic.code
-                == yamaa_core::diagnostic::ConditionCode::RowFilterPhaseBoundary
-                && diagnostic.spec_paths == ["rows[0].filter"]),
-        "{findings:?}"
-    );
+    let plan = prepared.bind(&source()).unwrap();
+    let filter = plan.templates()[0].filter.as_ref().unwrap();
+    assert_eq!(filter.bindings()[0].read, Read::Column(1));
 }
 
 #[test]

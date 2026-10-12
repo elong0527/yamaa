@@ -6870,3 +6870,316 @@ fn named_record_matching_keeps_raw_driver_keys_independent_of_output_columns() {
         ExecutionError::MultipleValues { .. }
     ));
 }
+
+/// Presentation admits every declared logical type, preserving stable ties and missing placement.
+#[test]
+fn presentation_order_preserves_all_types_ties_and_direction_independent_nulls() {
+    use yamaa_core::{
+        temporal::{DateTime, DateTimePrecision},
+        value::FiniteFloat,
+    };
+    use yamaa_engine::dataset::OrderTerm;
+    let date = |year, precision| Value::Date(Date::new(year, 1, 1, precision).unwrap());
+    let datetime = |year, precision| {
+        Value::DateTime(
+            DateTime::new(
+                Date::new(year, 1, 1, DatePrecision::Day).unwrap(),
+                0,
+                0,
+                0,
+                precision,
+            )
+            .unwrap(),
+        )
+    };
+    for (kind, low, high, tied) in [
+        (
+            ColumnType::Str,
+            Value::Str("A\0z".into()),
+            Value::Str("\u{00e9}".into()),
+            Value::Str("A\0z".into()),
+        ),
+        (
+            ColumnType::Int,
+            Value::Int(9_007_199_254_740_992),
+            Value::Int(9_007_199_254_740_993),
+            Value::Int(9_007_199_254_740_992),
+        ),
+        (
+            ColumnType::Float,
+            Value::Float(FiniteFloat::new(-0.0).unwrap()),
+            Value::Float(FiniteFloat::new(1.0).unwrap()),
+            Value::Float(FiniteFloat::new(0.0).unwrap()),
+        ),
+        (
+            ColumnType::Date,
+            date(2020, DatePrecision::Year),
+            date(2021, DatePrecision::Day),
+            date(2020, DatePrecision::Month),
+        ),
+        (
+            ColumnType::DateTime,
+            datetime(2020, DateTimePrecision::Day),
+            datetime(2021, DateTimePrecision::Second),
+            datetime(2020, DateTimePrecision::Second),
+        ),
+    ] {
+        let source = table(
+            &[("ID", ColumnType::Int), ("V", kind)],
+            vec![
+                vec![Value::Int(1), high],
+                vec![Value::Int(2), Value::Missing],
+                vec![Value::Int(3), low],
+                vec![Value::Int(4), tied],
+                vec![Value::Int(5), Value::Missing],
+            ],
+        );
+        for descending in [false, true] {
+            for nulls_first in [false, true] {
+                let plan = DatasetPlan::new(
+                    source.schema.clone(),
+                    source.schema.clone(),
+                    vec![RowTemplate {
+                        mode: RowMode::Records,
+                        assignments: vec![
+                            assign(0, Expression::Source(0)),
+                            assign(1, Expression::Source(1)),
+                        ],
+                        filter: None,
+                    }],
+                    vec![],
+                    vec![0],
+                    vec![],
+                )
+                .unwrap()
+                .with_output_order(vec![OrderTerm {
+                    column: 1,
+                    descending,
+                    nulls_first,
+                }])
+                .unwrap();
+                let result = plan.execute(&source, limits()).unwrap();
+                let present = if descending {
+                    vec![1, 3, 4]
+                } else {
+                    vec![3, 4, 1]
+                };
+                let expected = if nulls_first {
+                    [vec![2, 5], present].concat()
+                } else {
+                    [present, vec![2, 5]].concat()
+                };
+                assert_eq!(
+                    result
+                        .dataset
+                        .rows()
+                        .iter()
+                        .map(|r| match r[0] {
+                            Value::Int(v) => v,
+                            _ => panic!("ID"),
+                        })
+                        .collect::<Vec<_>>(),
+                    expected,
+                    "{kind:?} desc={descending} first={nulls_first}"
+                );
+                // Exact cell representations stay with their original row, including zero sign and precision.
+                for row in result.dataset.rows() {
+                    let Value::Int(id) = row[0] else { panic!("ID") };
+                    let original = &source.rows[usize::try_from(id - 1).unwrap()][1];
+                    match (&row[1], original) {
+                        (Value::Float(a), Value::Float(b)) => {
+                            assert_eq!(a.get().to_bits(), b.get().to_bits())
+                        }
+                        (Value::Date(a), Value::Date(b)) => {
+                            assert_eq!(a.collected_precision(), b.collected_precision())
+                        }
+                        (Value::DateTime(a), Value::DateTime(b)) => {
+                            assert_eq!(a.collected_precision(), b.collected_precision())
+                        }
+                        (actual, expected) => assert_eq!(actual, expected),
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Ordering follows window evaluation and admits only distinct bound columns.
+#[test]
+fn presentation_keeps_window_neighbors_and_rejects_invalid_terms() {
+    use yamaa_engine::dataset::{OrderTerm, WindowKind};
+    let source = table(
+        &[
+            ("ID", ColumnType::Int),
+            ("G", ColumnType::Str),
+            ("V", ColumnType::Int),
+        ],
+        vec![
+            vec![Value::Int(1), Value::Str("a".into()), Value::Int(10)],
+            vec![Value::Int(2), Value::Str("a".into()), Value::Int(20)],
+            vec![Value::Int(3), Value::Str("a".into()), Value::Int(30)],
+        ],
+    );
+    let plan = value_window_plan(
+        &source,
+        WindowKind::RowValue {
+            column: 2,
+            offset: -1,
+        },
+        None,
+    )
+    .unwrap()
+    .with_output_order(vec![OrderTerm {
+        column: 0,
+        descending: true,
+        nulls_first: false,
+    }])
+    .unwrap();
+    let result = plan.execute(&source, limits()).unwrap();
+    assert_eq!(
+        result
+            .dataset
+            .rows()
+            .iter()
+            .map(|r| (r[0].clone(), r[3].clone()))
+            .collect::<Vec<_>>(),
+        [
+            (Value::Int(3), Value::Int(20)),
+            (Value::Int(2), Value::Int(10)),
+            (Value::Int(1), Value::Missing)
+        ]
+    );
+    assert!(plan
+        .clone()
+        .with_output_order(vec![OrderTerm {
+            column: 99,
+            descending: false,
+            nulls_first: false
+        }])
+        .is_err());
+    let duplicate = OrderTerm {
+        column: 0,
+        descending: false,
+        nulls_first: false,
+    };
+    assert!(plan
+        .with_output_order(vec![duplicate.clone(), duplicate])
+        .is_err());
+}
+
+/// Exhaustion during presentation returns no partial artifact and retains completed checks.
+#[test]
+fn presentation_budget_failure_retains_checks_and_recovers_on_a_fresh_run() {
+    use yamaa_engine::dataset::{OrderTerm, Resource};
+    let source = table(
+        &[("ID", ColumnType::Int)],
+        vec![
+            vec![Value::Int(3)],
+            vec![Value::Int(1)],
+            vec![Value::Int(2)],
+        ],
+    );
+    let base = DatasetPlan::new(
+        source.schema.clone(),
+        source.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        vec![],
+        vec![0],
+        vec![Verification {
+            path: "verifications[0].row_count".into(),
+            check: Check::RowCount {
+                min: Some(3),
+                max: Some(3),
+            },
+        }],
+    )
+    .unwrap();
+    let ordered = base
+        .clone()
+        .with_output_order(vec![OrderTerm {
+            column: 0,
+            descending: false,
+            nulls_first: false,
+        }])
+        .unwrap();
+    let quota = (1..limits().work_cells)
+        .find(|quota| {
+            base.execute(
+                &source,
+                Limits {
+                    work_cells: *quota,
+                    ..limits()
+                },
+            )
+            .is_ok()
+        })
+        .unwrap();
+    let attempt = ordered.execute_observed(
+        &source,
+        Limits {
+            work_cells: quota,
+            ..limits()
+        },
+    );
+    assert!(matches!(
+        *attempt.result.unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::WorkCells,
+            ..
+        }
+    ));
+    assert_eq!(attempt.retained_verifications.len(), 1);
+    assert_eq!(attempt.retained_verifications[0].failed_count, 0);
+    let recovered = ordered.execute(&source, limits()).unwrap();
+    assert_eq!(
+        recovered.dataset.rows(),
+        [
+            vec![Value::Int(1)],
+            vec![Value::Int(2)],
+            vec![Value::Int(3)]
+        ]
+    );
+    assert_eq!(recovered.verifications.len(), 1);
+    // A failed verification wins before presentation can consume any sort work.
+    let fatal = DatasetPlan::new(
+        source.schema.clone(),
+        source.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        vec![],
+        vec![0],
+        vec![Verification {
+            path: "verifications[0].row_count".into(),
+            check: Check::RowCount {
+                min: Some(4),
+                max: None,
+            },
+        }],
+    )
+    .unwrap()
+    .with_output_order(vec![OrderTerm {
+        column: 0,
+        descending: false,
+        nulls_first: false,
+    }])
+    .unwrap();
+    assert!(matches!(
+        *fatal
+            .execute(
+                &source,
+                Limits {
+                    work_cells: quota,
+                    ..limits()
+                }
+            )
+            .unwrap_err(),
+        ExecutionError::VerificationFailures(_)
+    ));
+}

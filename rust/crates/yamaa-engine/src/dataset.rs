@@ -27,6 +27,8 @@ mod key_grain;
 mod lookup;
 #[path = "dataset_numeric.rs"]
 mod numeric;
+#[path = "dataset_ordering.rs"]
+mod ordering;
 #[path = "dataset_row_drivers.rs"]
 mod row_drivers;
 #[path = "dataset_row_windows.rs"]
@@ -1045,6 +1047,7 @@ impl Executor<'_> {
                     self.plan.output().columns().len(),
                     self.plan.intermediates(),
                 );
+                let late_filter = matches!(template.mode.local_mode(), RowMode::Groups(_));
                 let groups = match template.mode.local_mode() {
                     RowMode::Driver { .. } => unreachable!("plan admission rejects nested drivers"),
                     RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
@@ -1100,22 +1103,8 @@ impl Executor<'_> {
                         )?;
                         candidate.completed[assignment.column] = true;
                     }
-                    if let Some(filter) = template.filter.as_ref() {
-                        let source_row = candidate.members[0];
-                        let truth = crate::dataset_predicate::evaluate(
-                            filter,
-                            table,
-                            source_row,
-                            &candidate.values,
-                            budget.predicate(),
-                        )
-                        .map_err(|error| match error.kind {
-                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                Box::new(predicate_limit(limit))
-                            }
-                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                        })?;
-                        if truth != yamaa_core::predicate::Truth::True {
+                    if let Some(filter) = template.filter.as_ref().filter(|_| !late_filter) {
+                        if !row_windows::retain(filter, table, &candidate, &mut budget)? {
                             budget.discard_candidate(&candidate.values);
                             continue;
                         }
@@ -1138,6 +1127,15 @@ impl Executor<'_> {
                         intermediates: &mut intermediate_run,
                     },
                 )?;
+                if let Some(filter) = template.filter.as_ref().filter(|_| late_filter) {
+                    for candidate in candidates.split_off(first) {
+                        if row_windows::retain(filter, table, &candidate, &mut budget)? {
+                            candidates.push(candidate);
+                        } else {
+                            budget.discard_candidate(&candidate.values);
+                        }
+                    }
+                }
             }
         }
         let mut completed = vec![false; self.plan.output().columns().len()];
@@ -1222,7 +1220,7 @@ impl Executor<'_> {
             )?;
         }
         observer(ExecutionPhase::OutputKeys);
-        let dataset = Dataset {
+        let mut dataset = Dataset {
             schema: self.plan.output().clone(),
             rows: candidates.into_iter().map(|row| row.values).collect(),
         };
@@ -1400,6 +1398,7 @@ impl Executor<'_> {
                 core::mem::take(records),
             )));
         }
+        ordering::apply(self.plan.output_order(), &mut dataset, &mut budget)?;
         Ok(Execution {
             dataset,
             verifications: core::mem::take(records),
