@@ -37,6 +37,10 @@ pub enum SourceFinding<'a> {
         dataset: &'a str,
         finding: &'a crate::odm_source::SchemaError,
     },
+    OdmValues {
+        dataset: &'a str,
+        finding: crate::odm_source::MissingValues,
+    },
     Csv {
         cause: ProfileCause,
         record: usize,
@@ -76,6 +80,7 @@ impl SourceFinding<'_> {
     fn code(self) -> C {
         match self {
             Self::Odm { dataset, finding } => finding.finding(dataset).code(),
+            Self::OdmValues { dataset, finding } => finding.finding(dataset).code(),
             Self::Csv { cause, .. } => cause.code(),
             Self::UnknownField { .. } => C::SourceTypeUnknownField,
             Self::FieldParse { .. } => C::SourceTypeFieldParse,
@@ -99,8 +104,12 @@ impl SourceFinding<'_> {
         if let Self::Odm { dataset, finding } = self {
             return finding.finding(dataset).admit(budget);
         }
+        if let Self::OdmValues { dataset, finding } = self {
+            return finding.finding(dataset).admit(budget);
+        }
         let dataset = match self {
             Self::Odm { dataset, .. }
+            | Self::OdmValues { dataset, .. }
             | Self::Csv { dataset, .. }
             | Self::UnknownField { dataset, .. }
             | Self::FieldParse { dataset, .. }
@@ -111,7 +120,9 @@ impl SourceFinding<'_> {
         budget.text(dataset)?;
         budget.field("dataset", dataset)?;
         match self {
-            Self::Odm { .. } => unreachable!("ODM metadata has its own complete admission"),
+            Self::Odm { .. } | Self::OdmValues { .. } => {
+                unreachable!("ODM has its own complete admission")
+            }
             Self::Csv { field, path, .. } => {
                 budget.text(".path")?;
                 budget.field("path", path)?;
@@ -181,8 +192,12 @@ impl SourceFinding<'_> {
         if let Self::Odm { dataset, finding } = self {
             return finding.finding(dataset).owned();
         }
+        if let Self::OdmValues { dataset, finding } = self {
+            return finding.finding(dataset).owned();
+        }
         let dataset = match self {
             Self::Odm { dataset, .. }
+            | Self::OdmValues { dataset, .. }
             | Self::Csv { dataset, .. }
             | Self::UnknownField { dataset, .. }
             | Self::FieldParse { dataset, .. }
@@ -190,7 +205,9 @@ impl SourceFinding<'_> {
         };
         let mut context = Context::from([("dataset".into(), text(dataset))]);
         let spec_path = match self {
-            Self::Odm { .. } => unreachable!("ODM metadata has its own complete projection"),
+            Self::Odm { .. } | Self::OdmValues { .. } => {
+                unreachable!("ODM has its own complete projection")
+            }
             Self::Csv {
                 record,
                 field,

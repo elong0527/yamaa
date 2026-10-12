@@ -118,3 +118,133 @@ fn whole_metadata_admission_precedes_owned_findings() {
         Err(odm_source::AdmissionError::MetadataLimit)
     );
 }
+
+struct Records {
+    schema: yamaa_core::table::TableSchema,
+    values: Vec<Vec<yamaa_core::value::Value>>,
+    reads: std::cell::RefCell<Vec<(usize, usize)>>,
+    failure: Option<(usize, usize)>,
+    marker: std::rc::Rc<String>,
+}
+impl Records {
+    fn new() -> Self {
+        use yamaa_core::{
+            table::{Column, TableSchema},
+            value::Value,
+        };
+        Self {
+            schema: TableSchema::new(
+                odm_source::FIELDS
+                    .iter()
+                    .map(|&name| Column {
+                        name: name.into(),
+                        kind: ColumnType::Str,
+                    })
+                    .collect(),
+            )
+            .unwrap(),
+            values: vec![vec![Value::Str("id".into()); 11]; 2],
+            reads: Default::default(),
+            failure: None,
+            marker: std::rc::Rc::new("opaque original".into()),
+        }
+    }
+}
+impl yamaa_core::table::TableAccess for Records {
+    type Error = std::rc::Rc<String>;
+    fn schema(&self) -> &yamaa_core::table::TableSchema {
+        &self.schema
+    }
+    fn row_count(&self) -> usize {
+        self.values.len()
+    }
+    fn cell(
+        &self,
+        row: usize,
+        column: usize,
+    ) -> Result<yamaa_core::table::ValueRef<'_>, yamaa_core::table::CellError<Self::Error>> {
+        self.reads.borrow_mut().push((row, column));
+        if self.failure == Some((row, column)) {
+            return Err(yamaa_core::table::CellError::Access(self.marker.clone()));
+        }
+        let value = self
+            .values
+            .get(row)
+            .and_then(|values| values.get(column))
+            .ok_or(yamaa_core::table::CellError::OutOfBounds { row, column })?;
+        Ok(yamaa_core::table::ValueRef::from(value))
+    }
+}
+
+#[test]
+fn required_identifiers_report_all_fields_in_fixed_order_and_storage_record_coordinates() {
+    use yamaa_core::value::Value;
+    let mut records = Records::new();
+    records.values[1][0] = Value::Missing;
+    for row in &mut records.values {
+        row[2] = Value::Missing;
+        row[9] = Value::Missing;
+        row[4] = Value::Missing;
+        row[10] = Value::Missing;
+    }
+    assert_eq!(
+        odm_source::missing_values(&records, 2).unwrap(),
+        [
+            odm_source::MissingValues {
+                field: "StudyOID",
+                record: 3,
+                records: 1
+            },
+            odm_source::MissingValues {
+                field: "SubjectKey",
+                record: 2,
+                records: 2
+            },
+            odm_source::MissingValues {
+                field: "ItemOID",
+                record: 2,
+                records: 2
+            },
+        ]
+    );
+    assert_eq!(
+        *records.reads.borrow(),
+        [
+            (0, 0),
+            (1, 0),
+            (0, 1),
+            (1, 1),
+            (0, 2),
+            (1, 2),
+            (0, 3),
+            (1, 3),
+            (0, 5),
+            (1, 5),
+            (0, 7),
+            (1, 7),
+            (0, 9),
+            (1, 9)
+        ]
+    );
+    assert_eq!(
+        odm_source::missing_values(&records, 1).unwrap()[0].record,
+        2
+    );
+}
+
+#[test]
+fn a_later_original_ingestion_read_failure_suppresses_partial_findings_without_retry() {
+    let mut records = Records::new();
+    records.values[0][0] = yamaa_core::value::Value::Missing;
+    records.failure = Some((1, 1));
+    let odm_source::RecordError::Cell {
+        row: 1,
+        column: 1,
+        error: yamaa_core::table::CellError::Access(marker),
+    } = odm_source::missing_values(&records, 2).unwrap_err()
+    else {
+        panic!("original cell failure required")
+    };
+    assert!(std::rc::Rc::ptr_eq(&marker, &records.marker));
+    assert_eq!(*records.reads.borrow(), [(0, 0), (1, 0), (0, 1), (1, 1)]);
+}

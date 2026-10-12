@@ -62,6 +62,8 @@ mod derivations;
 mod flags;
 #[path = "specification_temporal_imputation.rs"]
 mod imputation;
+#[path = "specification_odm.rs"]
+mod odm;
 #[path = "specification_rounding.rs"]
 mod rounding;
 #[path = "specification_scalar.rs"]
@@ -122,6 +124,7 @@ impl Default for CompilationLimits {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum PreflightFinding {
+    Odm(crate::diagnostic::Diagnostic),
     Scalar(crate::diagnostic::Diagnostic),
     TextExtract(crate::diagnostic::Diagnostic),
     TextTemplate(crate::diagnostic::Diagnostic),
@@ -291,6 +294,12 @@ pub enum SourceProfile {
     Csv,
     Parquet,
 }
+/// Core-selected semantic source interpretation, independent of storage profile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SourceInterpretation {
+    Ordinary,
+    Odm,
+}
 impl SourceProfile {
     pub fn from_path(path: &str) -> Option<Self> {
         let name = path.rsplit('/').next()?;
@@ -350,6 +359,7 @@ struct Declaration {
 pub struct PreparedSpecification {
     project_calls: Option<crate::project_calls::ProjectCalls>,
     sources: Vec<SourceDeclaration>,
+    source_interpretations: Vec<SourceInterpretation>,
     driver: usize,
     intermediates: intermediates::Declarations,
     output: TableSchema,
@@ -1031,6 +1041,7 @@ impl PreparedSpecification {
             )?;
         }
         let inputs = mapping(d, field(d, root, "input")?)?;
+        let odm_inputs = odm::inputs(d)?;
         let mut source_findings = Vec::new();
         let driver = if has_rows {
             row_intermediates::common_driver(d, inputs)?
@@ -1047,10 +1058,6 @@ impl PreparedSpecification {
             .ok_or(PrepareError::Internal)?;
         for &(name, id) in inputs {
             let prefix = format!("input.{}", text(d, name)?);
-            optional_features(d, id, &["ordinal"], &prefix, &mut extra);
-            if producers.is_none() {
-                optional_features(d, id, &["schema"], &prefix, &mut extra);
-            }
             let profile = SourceProfile::from_path(text(d, field(d, id, "path")?)?);
             if profile != Some(SourceProfile::Parquet)
                 && d.field(id, "empty_string")
@@ -1060,6 +1067,30 @@ impl PreparedSpecification {
             }
             if profile.is_none() {
                 reject(&mut extra, "source_format", format!("{prefix}.path"));
+            }
+            if odm_inputs.contains(text(d, name)?) {
+                let declared = [
+                    ("types", crate::diagnostic::OdmDeclared::Types),
+                    ("schema", crate::diagnostic::OdmDeclared::Schema),
+                    ("ordinal", crate::diagnostic::OdmDeclared::Ordinal),
+                ]
+                .into_iter()
+                .find(|(field, _)| present(d, id, field));
+                if let Some((_, declared)) = declared {
+                    source_findings.push(PreflightFinding::Odm(
+                        crate::diagnostic::OdmFinding::Declared {
+                            dataset: text(d, name)?,
+                            declared,
+                        }
+                        .diagnostic()
+                        .map_err(|_| PrepareError::Limit("odm_diagnostic"))?,
+                    ));
+                }
+                continue;
+            }
+            optional_features(d, id, &["ordinal"], &prefix, &mut extra);
+            if producers.is_none() {
+                optional_features(d, id, &["schema"], &prefix, &mut extra);
             }
             if profile == Some(SourceProfile::Parquet) {
                 if let Some(types) = d
@@ -1100,7 +1131,13 @@ impl PreparedSpecification {
             return Err(PrepareError::Unsupported(extra));
         }
         let mut sources = Vec::new();
+        let mut source_interpretations = Vec::new();
         for &(name, selected) in inputs {
+            source_interpretations.push(if odm_inputs.contains(text(d, name)?) {
+                SourceInterpretation::Odm
+            } else {
+                SourceInterpretation::Ordinary
+            });
             let mut source_types = Vec::new();
             if let Some(id) = d
                 .field(selected, "types")
@@ -1227,6 +1264,7 @@ impl PreparedSpecification {
             return Ok(Self {
                 project_calls: project.map(|p| p.calls),
                 sources,
+                source_interpretations,
                 driver: driver_index,
                 intermediates,
                 output,
@@ -1333,6 +1371,7 @@ impl PreparedSpecification {
         Ok(Self {
             project_calls: project.map(|p| p.calls),
             sources,
+            source_interpretations,
             driver: driver_index,
             intermediates,
             output,
@@ -1355,6 +1394,9 @@ impl PreparedSpecification {
     }
     pub fn driver_index(&self) -> usize {
         self.driver
+    }
+    pub fn source_interpretation(&self, index: usize) -> Option<SourceInterpretation> {
+        self.source_interpretations.get(index).copied()
     }
     pub fn key_names(&self) -> impl Iterator<Item = &str> {
         self.keys

@@ -83,6 +83,76 @@ pub enum AdmissionError {
 pub struct FieldBinding {
     stored: [usize; 11],
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MissingValues {
+    pub field: &'static str,
+    pub record: usize,
+    pub records: usize,
+}
+impl MissingValues {
+    pub fn finding(self, dataset: &str) -> crate::diagnostic::OdmFinding<'_> {
+        crate::diagnostic::OdmFinding::MissingValues {
+            dataset,
+            field: self.field,
+            record: self.record,
+            records: self.records,
+        }
+    }
+}
+#[derive(Debug, PartialEq)]
+pub enum RecordError<E> {
+    Schema,
+    Coordinate,
+    Cell {
+        row: usize,
+        column: usize,
+        error: crate::table::CellError<E>,
+    },
+}
+
+/// Verify identifiers in fixed field order before granting expression reads.
+/// The original table error is moved unchanged; no diagnostic hides a read failure.
+pub fn missing_values<T: crate::table::TableAccess + ?Sized>(
+    table: &T,
+    first_record: usize,
+) -> Result<Vec<MissingValues>, RecordError<T::Error>> {
+    let columns = table.schema().columns();
+    if columns.len() != FIELDS.len()
+        || columns
+            .iter()
+            .enumerate()
+            .any(|(index, column)| column.name != FIELDS[index] || column.kind != ColumnType::Str)
+    {
+        return Err(RecordError::Schema);
+    }
+    let mut findings = Vec::new();
+    for column in REQUIRED {
+        let mut first = None;
+        let mut count = 0usize;
+        for row in 0..table.row_count() {
+            let value = table.cell(row, column).map_err(|error| RecordError::Cell {
+                row,
+                column,
+                error,
+            })?;
+            if matches!(value, crate::table::ValueRef::Missing) {
+                first.get_or_insert(row);
+                count += 1;
+            }
+        }
+        if let Some(row) = first {
+            findings.push(MissingValues {
+                field: FIELDS[column],
+                record: first_record
+                    .checked_add(row)
+                    .ok_or(RecordError::Coordinate)?,
+                records: count,
+            });
+        }
+    }
+    Ok(findings)
+}
 impl FieldBinding {
     pub fn stored(&self) -> &[usize; 11] {
         &self.stored

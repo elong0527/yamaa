@@ -4,7 +4,7 @@ use crate::dataset::{self, DatasetExecution, ExecutionAttempt};
 use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
 use yamaa_core::{
     resource::ResourceFailure,
-    specification::{BindError, PreparedSpecification, SourceDeclaration},
+    specification::{BindError, PreparedSpecification, SourceDeclaration, SourceInterpretation},
     table::TableAccess,
 };
 
@@ -57,6 +57,16 @@ pub trait SourceDecoder {
         source: &SourceDeclaration,
         bytes: &[u8],
     ) -> Result<Self::Table, Self::Error>;
+    /// The engine supplies the interpretation selected by the authored compiler.
+    /// Legacy trusted table ports keep their existing ordinary decoding behavior.
+    fn decode_with_interpretation(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        _interpretation: SourceInterpretation,
+    ) -> Result<Self::Table, Self::Error> {
+        self.decode(source, bytes)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -166,7 +176,13 @@ fn decode_and_execute<D: SourceDecoder>(
     }
     *captured_table = Some(
         decoder
-            .decode(prepared.source(), bytes)
+            .decode_with_interpretation(
+                prepared.source(),
+                bytes,
+                prepared
+                    .source_interpretation(prepared.driver_index())
+                    .expect("admitted source interpretation"),
+            )
             .map_err(RunError::Decode)?,
     );
     let table = captured_table
@@ -305,7 +321,13 @@ pub fn execute_with_functions_into<P: SourcePort, D: SourceDecoder>(
         };
         // Invalid snapshots still occupy held memory and consume the same budget.
         bytes_left = remaining;
-        match decoder.decode(declaration, bytes) {
+        match decoder.decode_with_interpretation(
+            declaration,
+            bytes,
+            prepared
+                .source_interpretation(index)
+                .expect("admitted source interpretation"),
+        ) {
             Ok(table) => observed.table = Some(table),
             Err(error) => {
                 let continuing = decoder.continue_after(&error);
