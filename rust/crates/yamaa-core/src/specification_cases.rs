@@ -204,6 +204,7 @@ pub(super) fn bind(
     branches: &[Branch],
     column: usize,
     catalog: &Catalog,
+    driver: &TableSchema,
     secondary: &[SecondarySource],
     intermediates: &[Option<Intermediate>],
     edges: &mut Vec<usize>,
@@ -294,6 +295,7 @@ pub(super) fn bind(
                 branches,
                 column,
                 catalog,
+                driver,
                 secondary,
                 intermediates,
                 edges,
@@ -354,6 +356,7 @@ pub(super) fn bind(
                 operation,
                 column,
                 catalog,
+                driver,
                 secondary,
                 intermediates,
                 edges,
@@ -436,36 +439,18 @@ pub(super) fn bind(
                 edges,
                 findings,
             )?,
-            Operation::Source(source) => {
-                if source.has_filter() {
-                    return Err(BindError::Internal);
-                }
-                match catalog.bind(&source.variable).map_err(BindError::Catalog)? {
-                    Some(reference_binding::Binding::Output { column, .. }) => {
-                        edges.push(column);
-                        Some(Expression::Column(column))
-                    }
-                    Some(reference_binding::Binding::Dataset { field, .. }) => {
-                        Some(if spec.keys.contains(&column) {
-                            Expression::Source(field)
-                        } else {
-                            Expression::Collect {
-                                column: field,
-                                identifier: source.variable.clone(),
-                                filter: None,
-                                selection: None,
-                            }
-                        })
-                    }
-                    None => {
-                        findings.push(BindFinding::UnknownReference {
-                            path: branch.path.clone(),
-                            name: source.variable.clone(),
-                        });
-                        None
-                    }
-                }
-            }
+            Operation::Source(source) => source_expressions::bind(
+                spec,
+                source,
+                column,
+                &branch.path,
+                catalog,
+                driver,
+                secondary,
+                intermediates,
+                edges,
+                findings,
+            )?,
             Operation::Compute(compiled) => {
                 let mut bindings = Vec::new();
                 for name in compiled.identifiers() {

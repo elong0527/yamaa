@@ -1916,6 +1916,27 @@ local({
   cat("correlated donor filters, actual current driver, complete findings and handler accounting passed without Python\n")
 })
 
+local({
+  body <- "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SELECT, type: str, derivation: SRC.SELECT}\n  - name: A\n    type: str\n    derivation:\n      case:\n        - when: \"SELECT = 'Y'\"\n          then: P.A\n        - otherwise: {literal: skip}\n  - name: B\n    type: str\n    derivation:\n      case:\n        - when: \"SELECT = 'Y'\"\n          then: P.B\n        - otherwise: {literal: skip}\n"
+  directory <- tempfile("yamaa-case-intermediates-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE),add=TRUE)
+  entry <- file.path(directory,"spec.yaml")
+  writeBin(charToRaw(body),entry)
+  writeBin(charToRaw("ID,SELECT\n1,Y\n2,N\n3,Y\n"),file.path(directory,"src.csv"))
+  writeBin(charToRaw("ID,SEQ,A,B\n1,1,first,\n1,2,second,present\n2,1,hidden,hidden\n"),file.path(directory,"donor.csv"))
+  result <- yamaa_domain(entry)
+  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
+    identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,A,B\n1,first,\n2,skip,skip\n3,,\n")))
+  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  check_handler_ledger(observed,"[{\"spec_path\":\"columns.A.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.case[0].then.source.no_match\",\"handler\":\"no_match\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.no_match\",\"handler\":\"no_match\",\"count\":1}]")
+  unlink(file.path(directory,c("src.csv","donor.csv","result.csv")))
+  writeBin(charToRaw(sub("then: P.A","then: {source: {variable: P.A, absent: fallback}}",body,fixed=TRUE)),entry)
+  rejected <- yamaa_domain(entry)
+  check_issue_frame(rejected$issues,list(phase="planning",condition="unsupported_operation",requirement=NA_character_,spec_paths=list("columns.A.derivation.case[0].then.source"),context='{"operation":"case_source_options"}'))
+  stopifnot(is.null(rejected$output),is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"src.csv")),!file.exists(file.path(directory,"result.csv")))
+  cat("nested case intermediate source shares lazy kept selection and complete handler accounting without Python\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)
