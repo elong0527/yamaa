@@ -115,6 +115,11 @@ pub enum Failure<E, PE> {
     TargetAdmission { index: usize, error: PE },
     Publication { index: usize, error: PE },
 }
+type PreflightResult<P> = Result<
+    Vec<<P as Ports>::Publisher>,
+    Failure<<P as Ports>::Error, <P as Ports>::PublicationError>,
+>;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PublicationState {
     Ready,
@@ -484,10 +489,7 @@ impl<P: Ports> Application<P> {
         self.preflight(ports)?;
         Ok(())
     }
-    fn preflight(
-        &self,
-        ports: &mut P,
-    ) -> Result<Vec<P::Publisher>, Failure<P::Error, P::PublicationError>> {
+    fn preflight(&self, ports: &mut P) -> PreflightResult<P> {
         let mut publishers: Vec<P::Publisher> = Vec::with_capacity(self.artifacts.len());
         for (index, artifact) in self.artifacts.iter().enumerate() {
             let publisher = ports
