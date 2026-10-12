@@ -257,13 +257,13 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0278](../reference/schema-language.md#req-0278) | `reference/schema-language.md` | R006-37 |
 | [REQ-0279](../reference/schema-language.md#req-0279) | `reference/schema-language.md` | R006-38 |
 | [REQ-0280](../reference/schema-language.md#req-0280) | `reference/schema-language.md` | R006-39 |
-| [REQ-0281](../reference/schema-language.md#req-0281) | `reference/schema-language.md` | R006-40, yamaa:issue-1973:item-7:schema-version-citation |
+| [REQ-0281](../reference/schema-language.md#req-0281) | `reference/schema-language.md` | R006-40 |
 | [REQ-0282](../reference/schema-language.md#req-0282) | `reference/schema-language.md` | R006-41 |
 | [REQ-0283](../reference/schema-language.md#req-0283) | `reference/schema-language.md` | R006-42 |
 | [REQ-0284](../reference/schema-language.md#req-0284) | `reference/schema-language.md` | R006-43 |
-| [REQ-0285](../reference/schema-language.md#req-0285) | `reference/schema-language.md` | R006-44, yamaa:issue-1973:item-7:field-citations |
-| [REQ-0286](../reference/schema-language.md#req-0286) | `reference/schema-language.md` | R006-45, yamaa:issue-1973:item-7:registry-citations |
-| [REQ-0287](../reference/schema-language.md#req-0287) | `reference/schema-language.md` | R006-46, yamaa:issue-1973:item-7:model-value-citation |
+| [REQ-0285](../reference/schema-language.md#req-0285) | `reference/schema-language.md` | R006-44 |
+| [REQ-0286](../reference/schema-language.md#req-0286) | `reference/schema-language.md` | R006-45 |
+| [REQ-0287](../reference/schema-language.md#req-0287) | `reference/schema-language.md` | R006-46 |
 | [REQ-0288](../operations/expressions.md#req-0288) | `operations/expressions.md` | R007-1 |
 | [REQ-0289](../operations/expressions.md#req-0289) | `operations/expressions.md` | R007-2 |
 | [REQ-0290](../operations/expressions.md#req-0290) | `operations/expressions.md` | R007-3 |
@@ -623,7 +623,7 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-0654](../specification/composition.md#req-0654) | `specification/composition.md` | R017-41 |
 | [REQ-0655](../specification/composition.md#req-0655) | `specification/composition.md` | R017-42 |
 | [REQ-0656](../specification/composition.md#req-0656) | `specification/composition.md` | R017-43 |
-| [REQ-0657](../specification/composition.md#req-0657) | `specification/composition.md` | R017-44, yamaa:issue-845:resolved-output-required, yamaa:issue-1973:item-7:resolved-output-citation |
+| [REQ-0657](../specification/composition.md#req-0657) | `specification/composition.md` | R017-44 |
 | [REQ-0658](../specification/composition.md#req-0658) | `specification/composition.md` | R017-45 |
 | [REQ-0659](../specification/composition.md#req-0659) | `specification/composition.md` | R017-46 |
 | [REQ-0660](../specification/composition.md#req-0660) | `specification/composition.md` | R017-47 |
