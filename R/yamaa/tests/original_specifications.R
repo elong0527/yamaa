@@ -880,6 +880,52 @@ for(i in seq_len(nrow(source_binding_truth))) {
 }
 cat("original source bindings complete reports and exact repeated CSV passed\n")
 
+mapping_cut_admission <- read.delim(file.path(root,"mapping-cut-admission.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(mapping_cut_admission)==5L)
+for(i in seq_len(nrow(mapping_cut_admission))) {
+  row <- mapping_cut_admission[i,,drop=FALSE]
+  failure <- tryCatch(prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port),error=identity)
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),row$expected[[1L]]))
+}
+cat("original mapping/cut admission complete findings before ports passed\n")
+
+# Original mapping and cut operations have independently authored complete truth.
+mapping_cut_truth <- read.delim(file.path(root,"original-mapping-cut.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(mapping_cut_truth)==21L)
+for(i in seq_len(nrow(mapping_cut_truth))) {
+  row <- mapping_cut_truth[i,,drop=FALSE]
+  handle <- prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port)
+  artifact <- hex_raw(row$artifact_hex[[1L]])
+  expected <- sub('"runtime":"python"','"runtime":"r"',rawToChar(hex_raw(row$expected_wire_hex[[1L]])),fixed=TRUE)
+  expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
+  expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
+  unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
+  case <- file.path(root,"mapping-cut-cases",paste0(row$case[[1L]],"-fixture"))
+  for(j in seq_len(2L)) {
+    calls <- character();saves <- 0L
+    capture <- function(name,path,maximum) {
+      stopifnot(path==paste0(tolower(name),".csv"))
+      content <- rawfile(file.path(case,path));stopifnot(length(content)<=maximum)
+      calls <<- c(calls,name);list(content,TRUE)
+    }
+    publish <- function(path,content) {
+      stopifnot(length(artifact)>0L,path=="result.csv",identical(content,artifact))
+      saves <<- saves+1L;TRUE
+    }
+    result <- build(handle,capture,paste0("mapping-cut-",row$case[[1L]]))
+    stopifnot(identical(build_observations(result),unsaved),identical(calls,if(file.exists(file.path(case,"donor.csv"))) c("SRC","DONOR") else "SRC"))
+    if(length(artifact)) {
+      for(k in seq_len(2L)) stopifnot(identical(build_save(result,publish),expected))
+      stopifnot(saves==2L)
+    } else {
+      stopifnot(is.null(build_output(result)))
+      failure <- tryCatch(build_save(result,publish),error=identity)
+      stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),"cannot save a failed build"),saves==0L)
+    }
+  }
+}
+cat("original mapping/cut complete reports and exact repeated CSV passed\n")
+
 source_selection_truth("source-filters.tsv","source-filter",13L)
 cat("original source filters complete reports, cached reads and exact saved CSV passed\n")
 source_selection_truth("first-available.tsv","first-available",11L)

@@ -60,6 +60,8 @@ mod derivations;
 mod flags;
 #[path = "specification_temporal_imputation.rs"]
 mod imputation;
+#[path = "specification_mapping.rs"]
+mod mapping_cut;
 #[path = "specification_rounding.rs"]
 mod rounding;
 #[path = "specification_scalar.rs"]
@@ -306,6 +308,7 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    MappingCut(alloc::boxed::Box<mapping_cut::Declaration>),
     Scalar(alloc::boxed::Box<scalar::Declaration>),
     StrContains(crate::text_extract::StringExtract),
     Flag(flags::Declaration),
@@ -1262,6 +1265,9 @@ impl PreparedSpecification {
                     }
                     Some(Operation::Source(alloc::boxed::Box::new(source)))
                 }
+                "mapping" | "cut" => Some(Operation::MappingCut(alloc::boxed::Box::new(
+                    mapping_cut::prepare(d, payload, op, &path, &intermediates, &mut extra)?,
+                ))),
                 "first_available" => {
                     let selection = source_expressions::FirstAvailable::prepare(
                         d,
@@ -1667,6 +1673,7 @@ impl PreparedSpecification {
                     branches,
                     column,
                     &catalog,
+                    source,
                     &secondary,
                     &intermediates,
                     &mut edges,
@@ -1712,6 +1719,17 @@ impl PreparedSpecification {
                     }
                 }
                 Operation::Literal(value) => Some(Expression::Literal(value.clone())),
+                Operation::MappingCut(operation) => mapping_cut::bind(
+                    self,
+                    operation,
+                    column,
+                    &catalog,
+                    source,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
                 Operation::Round(rounding) => rounding::bind(
                     rounding,
                     column,
@@ -1739,6 +1757,7 @@ impl PreparedSpecification {
                     operation,
                     column,
                     &catalog,
+                    source,
                     &secondary,
                     &intermediates,
                     &mut edges,

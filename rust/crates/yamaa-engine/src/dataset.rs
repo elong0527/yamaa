@@ -25,6 +25,8 @@ mod imputation;
 mod key_grain;
 #[path = "dataset_lookup.rs"]
 mod lookup;
+#[path = "dataset_mapping.rs"]
+mod mapping_cut;
 #[path = "dataset_numeric.rs"]
 mod numeric;
 #[path = "dataset_row_drivers.rs"]
@@ -543,6 +545,11 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         }
         return Ok(Value::Missing);
     }
+    if let Expression::MappingCut { source, operation } = &assignment.expression {
+        return mapping_cut::evaluate(
+            assignment, source, operation, table, candidate, plan, row, limits, state, retained,
+        );
+    }
     if let Expression::Round { source, rounding } = &assignment.expression {
         state.budget.work(1, 1)?;
         let value = evaluate_raw(table, source, candidate, plan, row, limits, state)?;
@@ -679,6 +686,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         | Expression::Flag(_)
         | Expression::Compute(_)
         | Expression::Case(_)
+        | Expression::MappingCut { .. }
         | Expression::Round { .. }
         | Expression::Temporal { .. }
         | Expression::Imputation { .. }
@@ -1221,6 +1229,15 @@ impl Executor<'_> {
                         intermediates: &mut intermediate_run,
                     },
                 )?;
+                if matches!(template.mode.local_mode(), RowMode::Groups(_)) {
+                    row_windows::filter_groups(
+                        table,
+                        template,
+                        &mut candidates,
+                        first,
+                        &mut budget,
+                    )?;
+                }
             }
         }
         let mut completed = vec![false; self.plan.output().columns().len()];

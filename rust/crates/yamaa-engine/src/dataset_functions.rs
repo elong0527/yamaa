@@ -181,6 +181,7 @@ pub(super) fn admit<E>(
         | Expression::StrExtract { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
+        | Expression::MappingCut { source, .. }
         | Expression::Round { source, .. } => admit(&source.expression, functions)?,
         Expression::SourceBinding { source, .. } => admit(&source.expression, functions)?,
         Expression::FirstAvailable(selection) => {

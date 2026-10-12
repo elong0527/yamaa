@@ -65,3 +65,41 @@ pub(super) fn complete<T: TableAccess + ?Sized>(
     }
     Ok(())
 }
+
+/// Group filters see completed group reductions and window values. Compact once in
+/// construction order; filtering neither repeats reads nor refunds evaluation work.
+pub(super) fn filter_groups<T: TableAccess + ?Sized>(
+    table: &T,
+    template: &yamaa_core::dataset::RowTemplate,
+    candidates: &mut Vec<Candidate>,
+    first: usize,
+    budget: &mut Budget,
+) -> Result<(), Box<ExecutionError<T::Error>>> {
+    let Some(filter) = &template.filter else {
+        return Ok(());
+    };
+    let mut kept = first;
+    for index in first..candidates.len() {
+        let candidate = &candidates[index];
+        let source_row = candidate.members[0];
+        let truth = crate::dataset_predicate::evaluate(
+            filter,
+            table,
+            source_row,
+            &candidate.values,
+            budget.predicate(),
+        )
+        .map_err(|error| match error.kind {
+            yamaa_core::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
+            _ => Box::new(ExecutionError::Predicate { source_row, error }),
+        })?;
+        if truth == yamaa_core::predicate::Truth::True {
+            candidates.swap(kept, index);
+            kept += 1;
+        } else {
+            budget.discard_candidate(&candidate.values);
+        }
+    }
+    candidates.truncate(kept);
+    Ok(())
+}
