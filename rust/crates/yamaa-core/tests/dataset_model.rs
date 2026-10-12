@@ -29,7 +29,7 @@ fn assign(column: usize, expression: Expression) -> Assignment {
 }
 
 #[test]
-fn every_row_mode_rejects_filters_that_read_deferred_windows() {
+fn window_filter_admission_distinguishes_record_and_grouped_rows() {
     use yamaa_core::{
         bound_expression::{Binding, BindingError, BoundPredicate, Read},
         dataset::{OrderTerm, Window, WindowKind},
@@ -79,7 +79,7 @@ fn every_row_mode_rejects_filters_that_read_deferred_windows() {
                 vec![0],
                 vec![],
             );
-            if column == 0 {
+            if column == 0 || matches!(mode, RowMode::Groups(_)) {
                 assert!(plan.is_ok(), "{plan:?}");
             } else {
                 assert_eq!(

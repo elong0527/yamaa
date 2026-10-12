@@ -94,7 +94,7 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
             {
                 return Err(DecodeError::Metadata(diagnostic));
             }
-            crate::typed_csv::convert(
+            let table = crate::typed_csv::convert(
                 parsed,
                 types,
                 crate::arrow_table::TableLimits {
@@ -104,7 +104,18 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
                     max_cells: limits.cells.min(262_144),
                 },
             )
-            .map_err(|e| DecodeError::Codec(crate::specification_run::typed_source_error(e)))?
+            .map_err(|e| DecodeError::Codec(crate::specification_run::typed_source_error(e)))?;
+            crate::source_ordinal::append(
+                source,
+                table,
+                crate::arrow_table::TableLimits {
+                    max_rows: 65_536,
+                    max_columns: 64,
+                    max_batches: 1,
+                    max_cells: limits.cells.min(262_144),
+                },
+            )
+            .map_err(DecodeError::Codec)?
         } else {
             crate::specification_run::decode_source(source, bytes, Some(limits))
                 .map_err(DecodeError::Codec)?

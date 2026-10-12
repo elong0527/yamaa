@@ -21,12 +21,22 @@ class DiagnosticGuardTests(unittest.TestCase):
         self.root = Path(self.directory.name)
         self.write("rules/values.md", "**REQ-0001.** A normative requirement.\n")
         self.write(
+            str(guard.NULL_POLICY),
+            "Explicit implementation exception.\n"
+            + guard.NULL_START
+            + "\n- `engine_rejected` (`engine`)\n"
+            + guard.NULL_END
+            + "\n",
+        )
+        self.write(
             "yaml/conditions.yaml",
-            'version: "1.0"\nconditions:\n  invalid_value: {phases: [validation]}\n',
+            'version: "1.0"\nconditions:\n  invalid_value: {phases: [validation]}\n'
+            "  engine_rejected: {phases: [engine]}\n",
         )
         self.write(
             "rust/crates/yamaa-core/src/diagnostic.rs",
-            'conditions! {\n    Invalid => ("validation", "invalid_value", Some("REQ-0001")),\n}\n',
+            'conditions! {\n    Invalid => ("validation", "invalid_value", Some("REQ-0001")),\n'
+            '    Rejected => ("engine", "engine_rejected", None),\n}\n',
         )
         self.seed = {}
         self.active = {}
@@ -146,6 +156,70 @@ class DiagnosticGuardTests(unittest.TestCase):
 
     def test_registered_core_mapping_passes(self):
         self.assertEqual(self.errors(), [])
+
+    def test_new_null_language_cause_is_rejected(self):
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
+        path.write_text(path.read_text().replace('Some("REQ-0001")', "None"))
+        self.assertTrue(
+            any(
+                "null requirement is not normatively permitted" in e
+                for e in self.errors()
+            )
+        )
+
+    def test_implementation_condition_must_retain_null(self):
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic.rs"
+        path.write_text(path.read_text().replace("None", 'Some("REQ-0001")'))
+        self.assertTrue(
+            any("must retain a null requirement" in e for e in self.errors())
+        )
+
+    def test_null_policy_is_explicit_registered_and_reached(self):
+        path = self.root / guard.NULL_POLICY
+        original = path.read_text()
+        for body, expected in [
+            ("", "expected one normative null policy block"),
+            (original + original, "expected one normative null policy block"),
+            (guard.NULL_END + guard.NULL_START, "reversed normative null policy block"),
+            (
+                original.replace("- `engine_rejected` (`engine`)", ""),
+                "no normative null conditions",
+            ),
+            (
+                original.replace("- `engine_rejected` (`engine`)", "- engine_rejected"),
+                "invalid normative null entry",
+            ),
+            (
+                original.replace("(`engine`)", "(`validation`)"),
+                "unregistered normative null entry",
+            ),
+            (
+                original.replace("engine_rejected", "unknown_condition"),
+                "unregistered normative null entry",
+            ),
+            (
+                original.replace(
+                    guard.NULL_END, "- `engine_rejected` (`engine`)\n" + guard.NULL_END
+                ),
+                "duplicate normative null entry",
+            ),
+            (
+                original.replace(
+                    guard.NULL_END,
+                    "- `invalid_value` (`validation`)\n" + guard.NULL_END,
+                ),
+                "unused normative null condition",
+            ),
+        ]:
+            with self.subTest(expected=expected):
+                path.write_text(body)
+                self.assertTrue(
+                    any(expected in e for e in self.errors()), self.errors()
+                )
+        path.unlink()
+        self.assertTrue(
+            any("unavailable normative null policy" in e for e in self.errors())
+        )
 
     def test_unknown_requirement_is_rejected_in_every_crate(self):
         for crate in ("yamaa-core", "yamaa-engine", *sorted(guard.HOST_CRATES)):
@@ -301,12 +375,18 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
 
     def test_missing_condition_and_wrong_phase_fail(self):
         path = self.root / "yaml/conditions.yaml"
-        path.write_text("conditions:\n  other_value: {phases: [validation]}\n")
+        path.write_text(
+            "conditions:\n  other_value: {phases: [validation]}\n"
+            "  engine_rejected: {phases: [engine]}\n"
+        )
         self.assertEqual(
             self.errors(),
             ["core diagnostic registry:Invalid: unregistered condition invalid_value"],
         )
-        path.write_text("conditions:\n  invalid_value: {phases: [derivation]}\n")
+        path.write_text(
+            "conditions:\n  invalid_value: {phases: [derivation]}\n"
+            "  engine_rejected: {phases: [engine]}\n"
+        )
         self.assertEqual(
             self.errors(),
             [
