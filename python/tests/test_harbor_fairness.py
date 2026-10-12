@@ -263,6 +263,8 @@ def test_runner_restores_evidence_after_verifier_reset(tmp_path, monkeypatch):
     job_dir = tmp_path / "jobs" / "test"
     verifier = job_dir / "trial" / "verifier"
 
+    calls = []
+
     class FakeJob:
         def __init__(self):
             self.callbacks = {}
@@ -271,6 +273,7 @@ def test_runner_restores_evidence_after_verifier_reset(tmp_path, monkeypatch):
             self.callbacks[event] = callback
 
         async def run(self):
+            calls.append("run")
             event = SimpleNamespace(
                 task_name="yamaa/adam-adsl-age-group-python", trial_name="trial"
             )
@@ -297,6 +300,11 @@ def test_runner_restores_evidence_after_verifier_reset(tmp_path, monkeypatch):
             }
         )
     )
+    # The assertions above live inside FakeJob.run; guard them at top level
+    # so a runner that never runs the job cannot pass this test vacuously.
+    assert calls == ["run"]
+    assert (verifier / "evaluation.json").is_file()
+    assert "changed = true" in (verifier / "task.toml").read_text()
 
 
 def test_job_evidence_survives_harbors_archive_allowlist(tmp_path):
