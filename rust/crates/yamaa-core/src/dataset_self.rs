@@ -51,7 +51,7 @@ fn reads(expression: &Expression, items: &[Intermediate]) -> bool {
         Expression::Intermediate { index, .. } => items.get(*index).is_some_and(|item| item.source.is_self()),
         Expression::SourceBinding { source, .. } | Expression::StrContains { source, .. }
         | Expression::StrCase { source, .. } | Expression::StrPad { source, .. }
-        | Expression::StrExtract { source, .. } | Expression::Round { source, .. } => reads(&source.expression, items),
+        | Expression::StrExtract { source, .. } | Expression::MappingCut { source, .. } | Expression::Round { source, .. } => reads(&source.expression, items),
         Expression::FirstAvailable(selection) => selection.sources().iter().any(|source| matches!(&source.read, SelectionRead::Expression(source) if reads(&source.expression, items))),
         Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. }
         | Expression::StrTemplate { operands, .. } | Expression::Temporal { operands, .. }

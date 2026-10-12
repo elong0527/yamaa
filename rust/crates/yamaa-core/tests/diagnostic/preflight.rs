@@ -208,6 +208,153 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
         );
         reached.insert(diagnostic.code);
     }
+    for (names, condition, position, name) in [
+        (vec!["ID", "ID"], "duplicate_order_term", 1, "ID"),
+        (vec!["SRC.ID"], "undeclared_column", 0, "SRC.ID"),
+    ] {
+        let mut fields = base(
+            "TEST",
+            inputs(),
+            vec![column("ID", Some(source()))],
+            vec![Text("ID")],
+        );
+        fields.push(("base", Text("SRC")));
+        fields
+            .iter_mut()
+            .find(|(name, _)| *name == "output")
+            .unwrap()
+            .1 = Map(vec![
+            ("path", Text("result.csv")),
+            ("columns", List(vec![Text("ID")])),
+            (
+                "order_by",
+                List(
+                    names
+                        .into_iter()
+                        .map(|name| {
+                            Map(vec![
+                                ("variable", Text(name)),
+                                ("direction", Text("asc")),
+                                ("nulls", Text("last")),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+        ]);
+        let mut nodes = Vec::new();
+        let root = Map(fields).append(&mut nodes);
+        let model = SpecificationDocument::admit(
+            Document::new(nodes, root, Default::default()).unwrap(),
+            &mut ValidationBudget::new(Default::default()),
+        )
+        .unwrap()
+        .unwrap();
+        let compiled = PreparedSpecification::prepare(&model).unwrap();
+        let findings = compiled.output_findings();
+        assert_eq!(findings.len(), 1);
+        let diagnostic = findings[0].diagnostic();
+        assert_eq!(
+            (
+                diagnostic.definition().phase,
+                diagnostic.definition().condition,
+                diagnostic.definition().requirement
+            ),
+            ("validation", condition, Some("REQ-0224"))
+        );
+        assert_eq!(
+            diagnostic.spec_paths,
+            [format!("output.order_by[{position}]")]
+        );
+        assert_eq!(
+            diagnostic.context,
+            [("column".into(), text(name))].into_iter().collect()
+        );
+        reached.insert(diagnostic.code);
+    }
+    let mut fields = base(
+        "TEST",
+        Map(vec![("SRC", Map(vec![("path", Text("source.csv"))]))]),
+        vec![column("ID", Some(source()))],
+        vec![Text("ID")],
+    );
+    fields.push(("filter", Text("ID = 1")));
+    let mut nodes = Vec::new();
+    let root = Map(fields).append(&mut nodes);
+    let model = SpecificationDocument::admit(
+        Document::new(nodes, root, Default::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap();
+    let prepared = PreparedSpecification::prepare(&model).unwrap();
+    let source = yamaa_core::table::TableSchema::new(vec![yamaa_core::table::Column {
+        name: "ID".into(),
+        kind: yamaa_core::value::ColumnType::Int,
+    }])
+    .unwrap();
+    let Err(yamaa_core::specification::BindError::Invalid(findings)) = prepared.bind(&source)
+    else {
+        panic!("root phase")
+    };
+    assert_eq!(findings.len(), 1);
+    let diagnostic = findings[0]
+        .diagnostics(prepared.source())
+        .unwrap()
+        .remove(0);
+    assert_eq!(
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().requirement
+        ),
+        ("validation", "phase_boundary", Some("REQ-1170"))
+    );
+    assert_eq!(diagnostic.spec_paths, ["filter"]);
+    assert_eq!(
+        diagnostic.context,
+        [
+            ("identifier".into(), text("ID")),
+            ("available_phase".into(), text("column_derivation")),
+            ("required_phase".into(), text("row_filter"))
+        ]
+        .into()
+    );
+    reached.insert(diagnostic.code);
+    let collision = yamaa_core::source_ordinal::Ordinal::admit(
+        &source,
+        0,
+        "ID",
+        yamaa_core::source_ordinal::Limits {
+            columns: 0,
+            cells: 0,
+        },
+    )
+    .err()
+    .unwrap();
+    let diagnostic = collision
+        .finding("SRC", "ID")
+        .unwrap()
+        .diagnostic()
+        .unwrap();
+    assert_eq!(
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().requirement
+        ),
+        ("validation", "ordinal_field_collision", Some("REQ-1294"))
+    );
+    assert_eq!(diagnostic.spec_paths, ["input.SRC.ordinal"]);
+    assert_eq!(
+        diagnostic.context,
+        [
+            ("dataset".into(), text("SRC")),
+            ("field".into(), text("ID"))
+        ]
+        .into()
+    );
+    reached.insert(diagnostic.code);
     reached
 }
 
@@ -273,6 +420,63 @@ fn base<'a>(
 
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
     let mut log_codes = BTreeSet::new();
+    log_codes.extend(check(
+        base(
+            "TEST",
+            Map(vec![(
+                "SRC",
+                Map(vec![
+                    ("path", Text("source.parquet")),
+                    ("ordinal", Text("REC")),
+                ]),
+            )]),
+            vec![column(
+                "ID",
+                Some(Map(vec![(
+                    "value",
+                    Map(vec![("odm", Map(vec![("item", Text("SRC.ITEM"))]))]),
+                )])),
+            )],
+            vec![Text("ID")],
+        ),
+        vec![(
+            "odm_schema_field_type",
+            Some("REQ-1295"),
+            vec!["input.SRC.ordinal"],
+            vec![("dataset", text("SRC")), ("declared", text("ordinal"))],
+        )],
+    ));
+    for (path, policy, condition, requirement, spec_path, fields) in [
+        (
+            "input.txt",
+            "missing",
+            "source_profile_unknown",
+            "REQ-0852",
+            "input.SRC.path",
+            vec![("dataset", text("SRC")), ("path", text("input.txt"))],
+        ),
+        (
+            "input.CSV",
+            "present",
+            "empty_string_present_unsupported",
+            "REQ-1161",
+            "input.SRC.empty_string",
+            vec![("dataset", text("SRC"))],
+        ),
+    ] {
+        log_codes.extend(check(
+            base(
+                "TEST",
+                Map(vec![(
+                    "SRC",
+                    Map(vec![("path", Text(path)), ("empty_string", Text(policy))]),
+                )]),
+                vec![column("ID", Some(source()))],
+                vec![Text("ID")],
+            ),
+            vec![(condition, Some(requirement), vec![spec_path], fields)],
+        ));
+    }
     for (warning, verification, condition, requirement, paths) in [
         (
             Some("result.csv"),
@@ -379,7 +583,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             ),
             (
                 "driver_unavailable",
-                None,
+                Some("REQ-0064"),
                 vec!["base"],
                 vec![("dataset", text("ABSENT"))],
             ),
@@ -395,7 +599,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         ),
         vec![(
             "driver_unavailable",
-            None,
+            Some("REQ-0064"),
             vec!["base"],
             vec![("row", V::Scalar(Value::Missing))],
         )],
@@ -443,7 +647,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         vec![
             (
                 "undeclared_column",
-                None,
+                Some("REQ-0202"),
                 vec!["rows[0].derivations.BOGUS"],
                 vec![("column", text("BOGUS"))],
             ),
@@ -470,7 +674,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             ),
             (
                 "driver_unavailable",
-                None,
+                Some("REQ-0034"),
                 vec!["rows[0].dataset"],
                 vec![("row", text("first")), ("dataset", text("ABSENT"))],
             ),
@@ -492,7 +696,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             ),
             (
                 "driver_unavailable",
-                None,
+                Some("REQ-0034"),
                 vec!["rows[2].dataset"],
                 vec![
                     ("row", text("third")),

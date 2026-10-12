@@ -228,3 +228,75 @@ fn hidden_first_template_alternative_preserves_its_authored_phase_path() {
         })]
     );
 }
+
+#[test]
+fn grouped_window_filters_publish_only_retained_completed_self_donors() {
+    let fixture = Fixture::new();
+    fs::write(fixture.0.join("src.csv"), "ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n").unwrap();
+    fs::write(fixture.0.join("other.csv"), "ID,K\nc,x\nd,x\n").unwrap();
+    let body = BODY.replace(
+        "id: collected\n    dataset: SRC\n    derivations:\n      SECTION: {literal: first}",
+        "id: collected\n    dataset: SRC\n    group_by: [SRC.ID, SRC.K, SRC.V]\n    filter: \"SEQ = 1\"\n    derivations:\n      SECTION: {literal: first}\n      SEQ: {row_number: {window: {order_by: [ID]}}}",
+    );
+    let mut result = fixture.run(&body).unwrap();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(result.save().unwrap());
+    assert_eq!(
+        fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
+        "ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,1,5,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n",
+    );
+    assert_eq!(
+        result.observations()["handler_counts"],
+        serde_json::json!([
+            {"spec_path":"rows[2].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":2},
+            {"spec_path":"columns.FINAL.derivation.source.multiple_matches","handler":"multiple_matches","count":4},
+        ]),
+    );
+}
+
+#[test]
+fn mapping_and_cut_read_completed_self_donor_types() {
+    for operation in [
+        "mapping: {source: P.K, dict: {x: 15}}",
+        "cut: {source: P.V, breaks: [10], labels: ['15', '25']}",
+    ] {
+        let fixture = Fixture::new();
+        fs::write(fixture.0.join("src.csv"), "ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n").unwrap();
+        fs::write(fixture.0.join("other.csv"), "ID,K\nc,x\nd,x\n").unwrap();
+        let body = BODY.replace("compute: {expr: \"P.V + 10\"}", operation);
+        let mut result = fixture.run(&body).unwrap();
+        assert!(result.issues().is_empty(), "{:?}", result.issues());
+        assert!(result.save().unwrap());
+        assert_eq!(
+            fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
+            "ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,2,5,115,5\nb,first,x,1,9,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n",
+            "{operation}",
+        );
+    }
+}
+
+#[test]
+fn first_template_mapping_and_cut_self_reads_fail_before_study_access() {
+    for operation in [
+        "mapping: {source: P.K, dict: {x: first}}",
+        "cut: {source: P.V, breaks: [10], labels: [first, later]}",
+    ] {
+        let fixture = Fixture::new();
+        let body = BODY.replace("literal: first", operation);
+        let operation_name = operation.split(':').next().unwrap();
+        let identifier = if operation_name == "mapping" {
+            "P.K"
+        } else {
+            "P.V"
+        };
+        assert_eq!(
+            issues(fixture.run(&body)),
+            vec![serde_json::json!({
+                "phase":"validation", "condition":"phase_boundary", "requirement":"REQ-0120",
+                "spec_paths":[format!("rows[0].derivations.SECTION.{operation_name}")],
+                "context":{"identifier":identifier,"available_phase":"completed_prior_row_template","required_phase":"row_construction"}
+            })],
+        );
+        assert!(!fixture.0.join("src.csv").exists());
+    }
+}

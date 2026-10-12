@@ -1224,3 +1224,4 @@ Historical and retired IDs are tracked in migration.yaml.
 | [REQ-1294](../storage/ingestion.md#req-1294) | `storage/ingestion.md` | Schema prose |
 | [REQ-1295](../storage/ingestion.md#req-1295) | `storage/ingestion.md` | Schema prose |
 | [REQ-1296](../submission/metadata.md#req-1296) | `submission/metadata.md` | Schema prose |
+| [REQ-1297](../execution/lifecycle.md#req-1297) | `execution/lifecycle.md` | Schema prose |

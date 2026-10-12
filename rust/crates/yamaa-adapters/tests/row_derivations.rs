@@ -247,7 +247,7 @@ rows:
 }
 
 #[test]
-fn grouped_filters_reject_window_reads_before_candidate_windows() {
+fn grouped_filters_read_completed_windows_before_discarding_candidate_groups() {
     let fixture = bespoke(
         r#"schema_version: '1.0'
 domain: TEST
@@ -269,24 +269,5 @@ rows:
 "#,
         b"I,V\n3,8\n2,3\n1,5\n2,4\n",
     );
-    // This rejection control is independently authored here; candidate filters
-    // under REQ-0058 run before window derivations can supply SEQ.
-    let issues = attempt(&fixture).map_or_else(|issues| issues, |result| result.issues().to_vec());
-    assert_eq!(
-        issues,
-        vec![yamaa_adapters::issue_rows::Issue {
-            phase: "validation".into(),
-            condition: "phase_boundary".into(),
-            requirement: None,
-            spec_paths: vec!["rows[0].filter".into()],
-            context: serde_json::json!({
-                "available_phase": "window_derivation",
-                "identifier": "SEQ",
-                "required_phase": "row_filter",
-                "row": "selected",
-            })
-            .to_string(),
-        }],
-    );
-    assert!(!fixture.0.join("output.csv").exists());
+    assert_eq!(saved(&fixture), b"ID,TOTAL,SEQ\n2,7,2\n");
 }

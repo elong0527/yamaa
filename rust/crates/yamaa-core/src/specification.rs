@@ -30,6 +30,8 @@ use lookup_diagnostics::ReferenceCause;
 mod output_diagnostics;
 #[path = "specification_preflight_diagnostics.rs"]
 mod preflight_diagnostics;
+#[path = "specification_root_filter.rs"]
+mod root_filter;
 #[path = "specification_sources.rs"]
 mod source_expressions;
 pub use source_expressions::SourceFinding;
@@ -62,6 +64,8 @@ mod derivations;
 mod flags;
 #[path = "specification_temporal_imputation.rs"]
 mod imputation;
+#[path = "specification_mapping.rs"]
+mod mapping_cut;
 #[path = "specification_rounding.rs"]
 mod rounding;
 #[path = "specification_scalar.rs"]
@@ -196,6 +200,16 @@ pub enum PreflightFinding {
         field: String,
         kind: ColumnType,
     },
+    UnknownSourceProfile {
+        dataset: String,
+        path: String,
+    },
+    EmptyStringPresentUnsupported {
+        dataset: String,
+    },
+    OdmSourceOrdinal {
+        dataset: String,
+    },
 }
 #[derive(Debug)]
 pub enum BindError {
@@ -277,6 +291,7 @@ pub struct SourceDeclaration {
     pub types: Vec<(String, ColumnType)>,
     pub profile: SourceProfile,
     pub empty_string_present: bool,
+    pub ordinal: Option<String>,
 }
 /// The closed source profile is selected by the authored path, never its bytes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -308,6 +323,7 @@ impl SourceDeclaration {
 }
 #[derive(Clone, Debug)]
 enum Operation {
+    MappingCut(alloc::boxed::Box<mapping_cut::Declaration>),
     Scalar(alloc::boxed::Box<scalar::Declaration>),
     StrContains(crate::text_extract::StringExtract),
     Flag(flags::Declaration),
@@ -349,6 +365,8 @@ pub struct PreparedSpecification {
     output_path: String,
     output_logs: OutputLogs,
     output_decimals: Option<String>,
+    output_order: Vec<(String, bool, bool)>,
+    root_filter: Option<root_filter::RootFilter>,
     keys: Vec<usize>,
     declarations: Vec<Declaration>,
     rows: Option<rows::Rows>,
@@ -830,6 +848,15 @@ impl PreparedSpecification {
         // Per-expression parser limits remain in force. Charge the entire sum
         // before compiling any formula, including malformed/unsupported formulas.
         let mut numeric_bytes = 0usize;
+        if let Some(filter) = d
+            .field(root, "filter")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            numeric_bytes = text(d, filter)?.len();
+            if numeric_bytes > limits.numeric_bytes {
+                return Err(PrepareError::Limit("numeric_bytes"));
+            }
+        }
         for &column in sequence(d, field(d, root, "columns")?)? {
             let expr = d
                 .field(column, "derivation")
@@ -1002,14 +1029,14 @@ impl PreparedSpecification {
             return Err(PrepareError::Invalid(findings));
         }
         let mut extra = Vec::new();
-        let has_rows = present(d, root, "rows");
-        optional_features(
-            d,
-            root,
-            &["parents", "filter", "submission"],
-            "",
-            &mut extra,
-        );
+        let has_rows = d
+            .field(root, "rows")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+            .map(|id| sequence(d, id))
+            .transpose()?
+            .is_some_and(|rows| !rows.is_empty());
+        optional_features(d, root, &["parents", "submission"], "", &mut extra);
+        let root_filter = root_filter::RootFilter::prepare(d, &mut extra)?;
         metadata_features(d, root, "", false, &mut extra)?;
         for &column in sequence(d, field(d, root, "columns")?)? {
             let name = text(d, field(d, column, "name")?)?;
@@ -1024,6 +1051,50 @@ impl PreparedSpecification {
         }
         let inputs = mapping(d, field(d, root, "input")?)?;
         let mut source_findings = Vec::new();
+        let mut derivation_values = columns
+            .iter()
+            .filter_map(|&column| {
+                d.field(column, "derivation")
+                    .and_then(|derivation| d.field(derivation, "value"))
+            })
+            .collect::<Vec<_>>();
+        if let Some(rows) = d
+            .field(root, "rows")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            for &row in sequence(d, rows)? {
+                for &(_, derivation) in mapping(d, field(d, row, "derivations")?)? {
+                    derivation_values.extend(d.field(derivation, "value"));
+                }
+            }
+        }
+        let mut odm_datasets = alloc::collections::BTreeSet::new();
+        let mut visited_values = alloc::collections::BTreeSet::new();
+        while let Some(value) = derivation_values.pop() {
+            if !visited_values.insert(value) {
+                continue;
+            }
+            if let Some(payload) = d.field(value, "odm") {
+                let item = match &d.nodes()[payload] {
+                    N::Text(item) => Some(item.as_str()),
+                    _ => d.field(payload, "item").and_then(|id| text(d, id).ok()),
+                };
+                if let Some((dataset, _)) = item.and_then(|item| item.split_once('.')) {
+                    odm_datasets.insert(dataset);
+                }
+            }
+            if let Some(case) = d.field(value, "case") {
+                for &branch in sequence(d, case)? {
+                    for name in ["then", "otherwise"] {
+                        derivation_values.extend(d.field(branch, name));
+                    }
+                }
+            }
+            if let Some(concat) = d.field(value, "str_concat") {
+                derivation_values
+                    .extend(sequence(d, field(d, concat, "sources")?)?.iter().copied());
+            }
+        }
         let driver = if has_rows {
             row_intermediates::common_driver(d, inputs)?
         } else {
@@ -1039,19 +1110,28 @@ impl PreparedSpecification {
             .ok_or(PrepareError::Internal)?;
         for &(name, id) in inputs {
             let prefix = format!("input.{}", text(d, name)?);
-            optional_features(d, id, &["ordinal"], &prefix, &mut extra);
             if producers.is_none() {
                 optional_features(d, id, &["schema"], &prefix, &mut extra);
             }
             let profile = SourceProfile::from_path(text(d, field(d, id, "path")?)?);
-            if profile != Some(SourceProfile::Parquet)
+            if profile == Some(SourceProfile::Csv)
                 && d.field(id, "empty_string")
                     .is_some_and(|id| !matches!(&d.nodes()[id],N::Text(v) if v=="missing"))
             {
-                reject(&mut extra, "empty_string", format!("{prefix}.empty_string"));
+                source_findings.push(PreflightFinding::EmptyStringPresentUnsupported {
+                    dataset: text(d, name)?.into(),
+                });
             }
             if profile.is_none() {
-                reject(&mut extra, "source_format", format!("{prefix}.path"));
+                source_findings.push(PreflightFinding::UnknownSourceProfile {
+                    dataset: text(d, name)?.into(),
+                    path: text(d, field(d, id, "path")?)?.into(),
+                });
+            }
+            if present(d, id, "ordinal") && odm_datasets.contains(text(d, name)?) {
+                source_findings.push(PreflightFinding::OdmSourceOrdinal {
+                    dataset: text(d, name)?.into(),
+                });
             }
             if profile == Some(SourceProfile::Parquet) {
                 if let Some(types) = d
@@ -1124,6 +1204,11 @@ impl PreparedSpecification {
                 empty_string_present: d.field(selected, "empty_string").is_some_and(
                     |id| matches!(&d.nodes()[id], N::Text(value) if value == "present"),
                 ),
+                ordinal: d
+                    .field(selected, "ordinal")
+                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                    .map(|id| text(d, id).map(String::from))
+                    .transpose()?,
             });
             if let Some(producer) = producers.and_then(|p| {
                 p.iter()
@@ -1140,7 +1225,29 @@ impl PreparedSpecification {
             }
         }
         let output_id = field(d, root, "output")?;
-        optional_features(d, output_id, &["order_by"], "output", &mut extra);
+        let output_order = d
+            .field(output_id, "order_by")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+            .map(|id| {
+                sequence(d, id)?
+                    .iter()
+                    .map(|&term| {
+                        if let N::Text(name) = &d.nodes()[term] {
+                            return Ok((name.clone(), false, false));
+                        }
+                        let name = text(d, field(d, term, "variable")?)?.into();
+                        let descending = d.field(term, "direction").is_some_and(
+                            |id| matches!(&d.nodes()[id], N::Text(value) if value == "desc"),
+                        );
+                        let nulls_first = d.field(term, "nulls").is_some_and(
+                            |id| matches!(&d.nodes()[id], N::Text(value) if value == "first"),
+                        );
+                        Ok((name, descending, nulls_first))
+                    })
+                    .collect::<Result<Vec<_>, PrepareError>>()
+            })
+            .transpose()?
+            .unwrap_or_default();
         let output_path = String::from(text(d, field(d, output_id, "path")?)?);
         // Keep arbitrary-width schema integers. Output declaration validation
         // retains its existing post-verification phase; width is a codec quota.
@@ -1226,6 +1333,8 @@ impl PreparedSpecification {
                 output_path,
                 output_logs,
                 output_decimals,
+                output_order,
+                root_filter,
                 keys,
                 declarations: Vec::new(),
                 rows: Some(rows),
@@ -1264,6 +1373,9 @@ impl PreparedSpecification {
                     }
                     Some(Operation::Source(alloc::boxed::Box::new(source)))
                 }
+                "mapping" | "cut" => Some(Operation::MappingCut(alloc::boxed::Box::new(
+                    mapping_cut::prepare(d, payload, op, &path, &intermediates, &mut extra)?,
+                ))),
                 "first_available" => {
                     let selection = source_expressions::FirstAvailable::prepare(
                         d,
@@ -1332,6 +1444,8 @@ impl PreparedSpecification {
             output_path,
             output_logs,
             output_decimals,
+            output_order,
+            root_filter,
             keys,
             declarations,
             rows: None,
@@ -1520,7 +1634,51 @@ impl PreparedSpecification {
                 });
             }
         }
+        for (position, (name, _, _)) in self.output_order.iter().enumerate() {
+            if self.output_order[..position]
+                .iter()
+                .any(|(previous, _, _)| previous == name)
+            {
+                findings.push(OutputFinding::DuplicateOrderTerm {
+                    position,
+                    name: name.clone(),
+                });
+            } else if !self
+                .output
+                .columns()
+                .iter()
+                .any(|column| &column.name == name)
+            {
+                findings.push(OutputFinding::UndeclaredOrderColumn {
+                    position,
+                    name: name.clone(),
+                });
+            }
+        }
         findings
+    }
+
+    fn bound_output_order(&self) -> Vec<crate::dataset::OrderTerm> {
+        // Output declaration findings are emitted after successful verification.
+        // A rejected declaration must not enter presentation or its resource work.
+        if !self.output_findings().is_empty() {
+            return Vec::new();
+        }
+        self.output_order
+            .iter()
+            .map(
+                |(name, descending, nulls_first)| crate::dataset::OrderTerm {
+                    column: self
+                        .output
+                        .columns()
+                        .iter()
+                        .position(|column| &column.name == name)
+                        .expect("validated output order names a declared column"),
+                    descending: *descending,
+                    nulls_first: *nulls_first,
+                },
+            )
+            .collect()
     }
 
     /// Selected environment indices are in declaration order, matching activation slots.
@@ -1572,6 +1730,7 @@ impl PreparedSpecification {
                         .and_then(|plan| {
                             plan.with_warning_verifications(self.warning_verification_paths())
                         })
+                        .and_then(|plan| plan.with_output_order(self.bound_output_order()))
                         .map_err(BindError::InvalidPlan)
                 });
         }
@@ -1671,6 +1830,7 @@ impl PreparedSpecification {
                     branches,
                     column,
                     &catalog,
+                    source,
                     &secondary,
                     &intermediates,
                     &mut edges,
@@ -1716,6 +1876,17 @@ impl PreparedSpecification {
                     }
                 }
                 Operation::Literal(value) => Some(Expression::Literal(value.clone())),
+                Operation::MappingCut(operation) => mapping_cut::bind(
+                    self,
+                    operation,
+                    column,
+                    &catalog,
+                    source,
+                    &secondary,
+                    &intermediates,
+                    &mut edges,
+                    &mut findings,
+                )?,
                 Operation::Round(rounding) => rounding::bind(
                     rounding,
                     column,
@@ -1743,6 +1914,7 @@ impl PreparedSpecification {
                     operation,
                     column,
                     &catalog,
+                    source,
                     &secondary,
                     &intermediates,
                     &mut edges,
@@ -1966,6 +2138,12 @@ impl PreparedSpecification {
                 diagnostics: analysis.diagnostics,
             });
         }
+        let root_filter = self
+            .root_filter
+            .as_ref()
+            .map(|filter| filter.bind(&self.source().name, source, &mut findings))
+            .transpose()?
+            .flatten();
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }
@@ -1992,7 +2170,7 @@ impl PreparedSpecification {
             vec![RowTemplate {
                 mode: RowMode::Keys,
                 assignments: key_assignments,
-                filter: None,
+                filter: root_filter,
             }],
             columns,
             self.keys.clone(),
@@ -2000,6 +2178,7 @@ impl PreparedSpecification {
         )
         .and_then(|plan| plan.with_column_verifications(self.column_verification_groups()))
         .and_then(|plan| plan.with_warning_verifications(self.warning_verification_paths()))
+        .and_then(|plan| plan.with_output_order(self.bound_output_order()))
         .and_then(|plan| {
             plan.with_conversion_handlers(
                 self.declarations
@@ -2027,6 +2206,8 @@ pub enum OutputFinding {
     DuplicateColumn { position: usize, name: String },
     UndeclaredColumn { position: usize, name: String },
     InternalKey { position: usize, name: String },
+    DuplicateOrderTerm { position: usize, name: String },
+    UndeclaredOrderColumn { position: usize, name: String },
 }
 fn output_basename(path: &str) -> &str {
     path.split('/')

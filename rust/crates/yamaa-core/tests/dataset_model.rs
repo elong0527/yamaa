@@ -63,7 +63,7 @@ fn malformed_row_filter_columns_retain_the_existing_scope_error() {
 }
 
 #[test]
-fn every_row_mode_rejects_filters_that_read_deferred_windows() {
+fn window_filter_admission_distinguishes_record_and_grouped_rows() {
     use yamaa_core::{
         bound_expression::{Binding, BindingError, BoundPredicate, Read},
         dataset::{OrderTerm, Window, WindowKind},
@@ -113,13 +113,66 @@ fn every_row_mode_rejects_filters_that_read_deferred_windows() {
                 vec![0],
                 vec![],
             );
-            if column == 0 {
+            if column == 0 || matches!(mode, RowMode::Groups(_)) {
                 assert!(plan.is_ok(), "{plan:?}");
             } else {
                 assert_eq!(
                     plan,
                     Err(PlanError::Filter(BindingError::UnavailableColumn))
                 );
+            }
+        }
+    }
+}
+
+#[test]
+fn key_grain_admission_sees_raw_reads_through_recursive_source_containers() {
+    use yamaa_core::dataset::{FirstAvailable, SelectionRead, SelectionSource};
+    let source = schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]);
+    let binding = |expression| Expression::SourceBinding {
+        source: Box::new(assign(1, expression)),
+        absent: None,
+        variable_absent: false,
+        variable: "SRC.V".into(),
+        path: "columns.V.derivation.source".into(),
+    };
+    let selection = |expression| {
+        Expression::FirstAvailable(Box::new(FirstAvailable::new(
+            vec![SelectionSource {
+                path: "columns.V.derivation.first_available.sources[0]".into(),
+                read: SelectionRead::Expression(Box::new(assign(1, expression))),
+            }],
+            Value::Int(0),
+        )))
+    };
+    for raw in [false, true] {
+        let value = if raw {
+            Expression::Source(1)
+        } else {
+            Expression::Literal(Value::Int(7))
+        };
+        for expression in [
+            binding(value.clone()),
+            selection(value.clone()),
+            binding(selection(value.clone())),
+            selection(binding(value.clone())),
+        ] {
+            let plan = DatasetPlan::new(
+                source.clone(),
+                source.clone(),
+                vec![RowTemplate {
+                    mode: RowMode::Keys,
+                    assignments: vec![assign(0, Expression::Source(0))],
+                    filter: None,
+                }],
+                vec![assign(1, expression)],
+                vec![0],
+                vec![],
+            );
+            if raw {
+                assert_eq!(plan, Err(PlanError::InvalidKeyMode));
+            } else {
+                assert!(plan.is_ok(), "{plan:?}");
             }
         }
     }

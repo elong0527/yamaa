@@ -25,8 +25,12 @@ mod imputation;
 mod key_grain;
 #[path = "dataset_lookup.rs"]
 mod lookup;
+#[path = "dataset_mapping.rs"]
+mod mapping_cut;
 #[path = "dataset_numeric.rs"]
 mod numeric;
+#[path = "dataset_ordering.rs"]
+mod ordering;
 #[path = "dataset_row_drivers.rs"]
 mod row_drivers;
 #[path = "dataset_row_windows.rs"]
@@ -554,6 +558,11 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         }
         return Ok(Value::Missing);
     }
+    if let Expression::MappingCut { source, operation } = &assignment.expression {
+        return mapping_cut::evaluate(
+            assignment, source, operation, table, candidate, plan, row, limits, state, retained,
+        );
+    }
     if let Expression::Round { source, rounding } = &assignment.expression {
         state.budget.work(1, 1)?;
         let value = evaluate_raw(table, source, candidate, plan, row, limits, state)?;
@@ -690,6 +699,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         | Expression::Flag(_)
         | Expression::Compute(_)
         | Expression::Case(_)
+        | Expression::MappingCut { .. }
         | Expression::Round { .. }
         | Expression::Temporal { .. }
         | Expression::Imputation { .. }
@@ -1139,6 +1149,7 @@ impl Executor<'_> {
                     self.plan.output().columns().len(),
                     self.plan.intermediates(),
                 );
+                let late_filter = matches!(template.mode.local_mode(), RowMode::Groups(_));
                 let groups = match template.mode.local_mode() {
                     RowMode::Driver { .. } => unreachable!("plan admission rejects nested drivers"),
                     RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
@@ -1195,22 +1206,8 @@ impl Executor<'_> {
                         )?;
                         candidate.completed[assignment.column] = true;
                     }
-                    if let Some(filter) = template.filter.as_ref() {
-                        let source_row = candidate.members[0];
-                        let truth = crate::dataset_predicate::evaluate(
-                            filter,
-                            table,
-                            source_row,
-                            &candidate.values,
-                            budget.predicate(),
-                        )
-                        .map_err(|error| match error.kind {
-                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                Box::new(predicate_limit(limit))
-                            }
-                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                        })?;
-                        if truth != yamaa_core::predicate::Truth::True {
+                    if let Some(filter) = template.filter.as_ref().filter(|_| !late_filter) {
+                        if !row_windows::retain(filter, table, &candidate, &mut budget)? {
                             budget.discard_candidate(&candidate.values);
                             continue;
                         }
@@ -1235,6 +1232,15 @@ impl Executor<'_> {
                         intermediates: &mut intermediate_run,
                     },
                 )?;
+                if let Some(filter) = template.filter.as_ref().filter(|_| late_filter) {
+                    for candidate in candidates.split_off(first) {
+                        if row_windows::retain(filter, table, &candidate, &mut budget)? {
+                            candidates.push(candidate);
+                        } else {
+                            budget.discard_candidate(&candidate.values);
+                        }
+                    }
+                }
                 intermediate_run.publish_self(self, &mut budget)?;
             }
         }
@@ -1323,7 +1329,7 @@ impl Executor<'_> {
             )?;
         }
         observer(ExecutionPhase::OutputKeys);
-        let dataset = Dataset {
+        let mut dataset = Dataset {
             schema: self.plan.output().clone(),
             rows: candidates.into_iter().map(|row| row.values).collect(),
         };
@@ -1501,6 +1507,7 @@ impl Executor<'_> {
                 core::mem::take(records),
             )));
         }
+        ordering::apply(self.plan.output_order(), &mut dataset, &mut budget)?;
         Ok(Execution {
             dataset,
             verifications: core::mem::take(records),
