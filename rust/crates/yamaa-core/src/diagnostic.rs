@@ -236,7 +236,7 @@ conditions! {
     GroupedRowReference => ("validation", "ungrouped_driver_field", Some("REQ-0067")),
     GroupedColumnReference => ("validation", "ungrouped_driver_field", Some("REQ-0107")),
     AggregateDriverScope => ("validation", "invalid_aggregate_context", Some("REQ-0329")),
-    RowFilterPhaseBoundary => ("validation", "phase_boundary", None),
+    RowFilterPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0068")),
     RootFilterPhaseBoundary => ("validation", "phase_boundary", Some("REQ-1170")),
     RowDependencyPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0069")),
     QualifiedNumericReference => ("validation", "qualified_identifier", Some("REQ-0442")),
