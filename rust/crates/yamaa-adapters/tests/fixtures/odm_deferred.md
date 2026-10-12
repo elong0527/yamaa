@@ -1,7 +1,7 @@
 # Deferred ODM defaults
 
-Eight independently authored reports and CSV artifacts retain REQ-1265–1278
-semantics when a column default depends on a completed row-number window.
+Eight independently authored reports and CSV artifacts retain REQ-1265 through
+REQ-1278 semantics when a column default depends on a completed row-number window.
 They cover record occurrence scope, missing items, group hierarchy scope,
 selectors followed by source-only predicates, an unselected CASE branch,
 a nested string operand, and complete ambiguity context with the authored

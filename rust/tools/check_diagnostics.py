@@ -216,13 +216,14 @@ def baseline_errors(
             "--name-only",
             reference,
             "--",
-            str(seed_path),
-            str(allowlist_path),
-            str(CHECKER),
+            seed_path.as_posix(),
+            allowlist_path.as_posix(),
+            CHECKER.as_posix(),
         ],
         cwd=root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     if command.returncode:
@@ -231,10 +232,11 @@ def baseline_errors(
 
     def previous(relative: Path):
         result = subprocess.run(
-            ["git", "show", f"{reference}:{relative}"],
+            ["git", "show", f"{reference}:{relative.as_posix()}"],
             cwd=root,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
         )
         if result.returncode:
@@ -242,16 +244,22 @@ def baseline_errors(
         return result.stdout
 
     try:
-        if str(seed_path) not in present and str(allowlist_path) not in present:
+        if (
+            seed_path.as_posix() not in present
+            and allowlist_path.as_posix() not in present
+        ):
             # The first guard PR deliberately introduces both files. Once the
             # old checker refers to them, absence is corruption, not bootstrap.
-            old_checker = previous(CHECKER) if str(CHECKER) in present else ""
+            old_checker = previous(CHECKER) if CHECKER.as_posix() in present else ""
             if seed_path.name in old_checker or allowlist_path.name in old_checker:
                 return [
                     f"diagnostic literal baseline {reference}: existing guard is missing its seed and allowlist"
                 ]
             return []
-        if str(seed_path) not in present or str(allowlist_path) not in present:
+        if (
+            seed_path.as_posix() not in present
+            or allowlist_path.as_posix() not in present
+        ):
             return [
                 f"diagnostic literal baseline {reference}: incomplete seed and allowlist"
             ]

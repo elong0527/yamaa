@@ -1,6 +1,7 @@
 # Independently authored ODM reads
 
-These fourteen literal reports and CSV artifacts follow REQ-1265–1278.
+These fourteen literal reports and CSV artifacts follow REQ-1265 through
+REQ-1278.
 Eight separate complete preflight failures in `odm_preflight.tsv` also cover
 REQ-1295.
 They were authored independently of the new Rust evaluator; no native output
