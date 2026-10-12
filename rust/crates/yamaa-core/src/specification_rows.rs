@@ -1448,7 +1448,11 @@ impl Rows {
                                 row: declaration.id.clone(),
                                 groups: names
                                     .iter()
-                                    .cloned()
+                                    .map(|name| {
+                                        name.split_once('.')
+                                            .map_or(name.as_str(), |(_, field)| field)
+                                            .to_string()
+                                    })
                                     .zip(columns.iter().copied())
                                     .collect(),
                             })

@@ -95,7 +95,7 @@ fn reads(expression: &Expression, items: &[Intermediate]) -> bool {
         Expression::Function(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if named_read(read, items))),
         Expression::ProjectFunction(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if named_read(read, items))),
         Expression::Case(branches) => branches.iter().any(|branch| branch.when.as_ref().is_some_and(|when| when.bindings().iter().any(|binding| named_read(&binding.read, items))) || reads(&branch.assignment.expression, items)),
-        Expression::Literal(_) | Expression::Window(_) | Expression::Source(_)
+        Expression::Odm(_) | Expression::Literal(_) | Expression::Window(_) | Expression::Source(_)
         | Expression::SourceLookup { .. } | Expression::Lookup(_) | Expression::RowLookup(_)
         | Expression::Collect { .. } | Expression::Column(_) | Expression::Reduce { .. }
         | Expression::Count { .. } => false,

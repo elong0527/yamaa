@@ -618,8 +618,14 @@ pub(super) fn bind(
                 .iter()
                 .zip(grain.iter())
                 .map(|(name, _)| {
-                    resolve(name, &declaration.path, findings)
-                        .map(|value| (name.to_string(), value.expect("bound enclosing group").0))
+                    resolve(name, &declaration.path, findings).map(|value| {
+                        (
+                            name.split_once('.')
+                                .map_or(name.as_str(), |(_, field)| field)
+                                .to_string(),
+                            value.expect("bound enclosing group").0,
+                        )
+                    })
                 })
                 .collect::<Result<_, _>>()?,
         })

@@ -739,7 +739,7 @@ class OriginalSpecifications(unittest.TestCase):
                 spec = yamaa_native._prepare_document("spec.yaml", raw, no_parent, no_parent, no_parent)
                 content = bytes.fromhex(record["input_hex"])
                 expected = json.loads(record["expected"])
-                # Preserve captured truth; REQ-0068 owns these phase failures.
+                # Require captured citations without changing any finding.
                 if prefix == "row-filter" and record["case"] in (
                     "grouped_source_phase", "grouped_unknown_phase",
                     "record_unknown_phase", "group_and_filter_order",
@@ -747,9 +747,8 @@ class OriginalSpecifications(unittest.TestCase):
                     for diagnostics in (expected["diagnostics"], expected["nodes"][0]["diagnostics"]):
                         findings = [d for d in diagnostics if d["condition"] == "phase_boundary"]
                         self.assertEqual(len(findings), 1)
-                        self.assertIsNone(findings[0]["requirement"])
+                        self.assertEqual(findings[0]["requirement"], "REQ-0068")
                         self.assertEqual(findings[0]["spec_paths"], ["rows[0].filter"])
-                        findings[0]["requirement"] = "REQ-0068"
                 metadata = ("fixture-runtime", "fixture-engine", prefix + "-" + record["case"], "spec.yaml", ".")
                 calls = []
                 def capture(name, path, maximum):

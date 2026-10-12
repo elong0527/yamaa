@@ -3716,9 +3716,8 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
                     .map(|response| &response.outcome)
             )
         });
-        let mut expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
-        // Keep the historical capture unchanged; REQ-0068 now owns these
-        // independently specified row-filter phase failures.
+        let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
+        // Require the captured row-filter citations without changing any finding.
         if prefix == "row-filter"
             && matches!(
                 fields[0],
@@ -3730,20 +3729,19 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
         {
             for diagnostics in ["diagnostics", "nodes"] {
                 let values = if diagnostics == "nodes" {
-                    &mut expected["nodes"][0]["diagnostics"]
+                    &expected["nodes"][0]["diagnostics"]
                 } else {
-                    &mut expected["diagnostics"]
+                    &expected["diagnostics"]
                 };
-                let mut corrected = 0;
-                for finding in values.as_array_mut().unwrap() {
+                let mut phase_boundaries = 0;
+                for finding in values.as_array().unwrap() {
                     if finding["condition"] == "phase_boundary" {
-                        assert_eq!(finding["requirement"], serde_json::Value::Null);
+                        assert_eq!(finding["requirement"], serde_json::json!("REQ-0068"));
                         assert_eq!(finding["spec_paths"], serde_json::json!(["rows[0].filter"]));
-                        finding["requirement"] = serde_json::json!("REQ-0068");
-                        corrected += 1;
+                        phase_boundaries += 1;
                     }
                 }
-                assert_eq!(corrected, 1);
+                assert_eq!(phase_boundaries, 1);
             }
         }
         let mut unsaved = expected.clone();

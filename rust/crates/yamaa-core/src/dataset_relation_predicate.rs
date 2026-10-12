@@ -175,6 +175,7 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
     match expression {
         Expression::Intermediate { index, .. } => visitor(*index),
         Expression::SourceBinding { source, .. }
+        | Expression::MappingCut { source, .. }
         | Expression::StrContains { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
@@ -237,6 +238,7 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
         // The current aggregate relation/source/key IR has no named selector.
         // Extend this visitor when aggregate derive or named relations are added.
         Expression::Aggregate(_)
+        | Expression::Odm(_)
         | Expression::Literal(_)
         | Expression::Window(_)
         | Expression::Source(_)
