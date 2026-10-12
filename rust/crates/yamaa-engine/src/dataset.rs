@@ -1047,12 +1047,7 @@ impl Executor<'_> {
                     self.plan.output().columns().len(),
                     self.plan.intermediates(),
                 );
-                let late_filter = matches!(template.mode.local_mode(), RowMode::Groups(_))
-                    && template.filter.as_ref().is_some_and(|filter| {
-                        filter.bindings().iter().any(|binding| {
-                            matches!(binding.read, yamaa_core::bound_expression::Read::Column(column) if deferred[column])
-                        })
-                    });
+                let late_filter = matches!(template.mode.local_mode(), RowMode::Groups(_));
                 let groups = match template.mode.local_mode() {
                     RowMode::Driver { .. } => unreachable!("plan admission rejects nested drivers"),
                     RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
