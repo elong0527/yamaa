@@ -16,12 +16,12 @@ mod dataset;
 #[path = "diagnostic/predicate_evaluation.rs"]
 mod predicate_evaluation;
 
+#[path = "diagnostic/mapping_cut.rs"]
+mod mapping_cut;
 #[path = "diagnostic/schema.rs"]
 mod schema;
 #[path = "diagnostic/submission.rs"]
 mod submission;
-#[path = "diagnostic/mapping_cut.rs"]
-mod mapping_cut;
 #[path = "diagnostic/temporal_imputation.rs"]
 mod temporal_imputation;
 #[path = "diagnostic/text_case.rs"]
