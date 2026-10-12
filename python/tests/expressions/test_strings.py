@@ -238,8 +238,8 @@ def test_a_nul_escape_followed_by_a_digit_is_malformed(pattern: str) -> None:
         # Only ASCII digits make `\0` malformed (matching the Rust
         # parser's `is_ascii_digit`); non-ASCII digit-like characters
         # stay literal after the NUL escape.
-        (r"\0²", "\x00²"),
-        (r"\0٢", "\x00٢"),
+        ("\\0\u00b2", "\x00\u00b2"),
+        ("\\0\u0662", "\x00\u0662"),
     ],
 )
 def test_a_bare_nul_escape_matches_nul(pattern: str, subject: str) -> None:
