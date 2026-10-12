@@ -1449,9 +1449,10 @@ impl Rows {
                                 groups: names
                                     .iter()
                                     .map(|name| {
-                                        name.split_once('.')
-                                            .map_or(name.as_str(), |(_, field)| field)
-                                            .to_string()
+                                        String::from(
+                                            name.split_once('.')
+                                                .map_or(name.as_str(), |(_, field)| field),
+                                        )
                                     })
                                     .zip(columns.iter().copied())
                                     .collect(),

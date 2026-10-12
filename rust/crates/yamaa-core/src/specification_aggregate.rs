@@ -621,7 +621,7 @@ pub(super) fn bind(
                     resolve(name, &declaration.path, findings).map(|value| {
                         (
                             name.split_once('.')
-                                .map_or(name.as_str(), |(_, field)| field)
+                                .map_or(*name, |(_, field)| field)
                                 .to_string(),
                             value.expect("bound enclosing group").0,
                         )
