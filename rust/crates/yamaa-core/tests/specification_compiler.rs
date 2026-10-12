@@ -945,13 +945,19 @@ fn unqualified_key_source_options_retain_the_planning_diagnostic() {
 }
 
 #[test]
-fn first_available_nested_assignments_retain_each_operand_path() {
+fn first_available_retains_collection_and_decorated_operand_paths() {
     use Tree::*;
     let document = operation_document(
         "first_available",
         Map(vec![(
             "sources",
-            List(vec![Map(vec![("variable", Text("SRC.ID"))])]),
+            List(vec![
+                Map(vec![("variable", Text("SRC.ID"))]),
+                Map(vec![
+                    ("variable", Text("SRC.ID")),
+                    ("absent", Scalar(N::Integer("7".into()))),
+                ]),
+            ]),
         )]),
         "input.csv",
     );
@@ -960,14 +966,24 @@ fn first_available_nested_assignments_retain_each_operand_path() {
     let Expression::FirstAvailable(selection) = &plan.columns()[0].expression else {
         panic!("compiled first_available");
     };
-    let yamaa_core::dataset::SelectionRead::Expression(assignment) = &selection.sources()[0].read
+    assert_eq!(
+        selection.sources()[0].path,
+        "columns.VALUE.derivation.first_available.sources[0]"
+    );
+    assert!(matches!(
+        &selection.sources()[0].read,
+        yamaa_core::dataset::SelectionRead::Collect { identifier, .. } if identifier == "SRC.ID"
+    ));
+    let yamaa_core::dataset::SelectionRead::Expression(assignment) = &selection.sources()[1].read
     else {
         panic!("nested source expression");
     };
     assert_eq!(
         assignment.path,
-        "columns.VALUE.derivation.first_available.sources[0]"
+        "columns.VALUE.derivation.first_available.sources[1]"
     );
+    assert!(matches!(&assignment.expression,
+        Expression::SourceBinding { path, .. } if path == &assignment.path));
 }
 
 #[test]
