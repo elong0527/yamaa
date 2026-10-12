@@ -15,6 +15,8 @@ mod declarative_flags;
 mod aggregate;
 #[path = "diagnostic/dataset.rs"]
 mod dataset;
+#[path = "diagnostic/odm.rs"]
+mod odm;
 #[path = "diagnostic/predicate_evaluation.rs"]
 mod predicate_evaluation;
 
@@ -452,6 +454,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(dataset::reached());
     reached.extend(aggregate::reached());
     reached.extend(verification::reached());
+    reached.extend(odm::reached());
     let diagnostic = yamaa_core::dataset::Rounding::new(
         "SEX",
         "columns.RND.derivation.round_half_away_from_zero",

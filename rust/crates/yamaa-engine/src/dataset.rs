@@ -35,6 +35,8 @@ mod mapping_cut;
 mod numeric;
 #[path = "dataset_ordering.rs"]
 mod ordering;
+#[path = "dataset_odm.rs"]
+mod odm;
 #[path = "dataset_row_drivers.rs"]
 mod row_drivers;
 #[path = "dataset_row_windows.rs"]
@@ -656,6 +658,9 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     if let Expression::Aggregate(expression) = &assignment.expression {
         return aggregates::evaluate(expression, table, candidate, plan, row, state);
     }
+    if let Expression::Odm(expression) = &assignment.expression {
+        return odm::evaluate(expression, table, candidate, plan, row, state);
+    }
     let EvaluationState {
         budget,
         handlers,
@@ -713,6 +718,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         | Expression::Flag(_)
         | Expression::Compute(_)
         | Expression::Aggregate(_)
+        | Expression::Odm(_)
         | Expression::Case(_)
         | Expression::MappingCut { .. }
         | Expression::Round { .. }

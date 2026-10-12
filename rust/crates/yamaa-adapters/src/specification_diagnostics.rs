@@ -112,6 +112,11 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
                     .ok()?,
             )?])
         }
+        Error::OdmFields(_) | Error::OdmValues(_) => {
+            crate::source_diagnostics::findings(error, source)
+                .ok()?
+                .and_then(|findings| findings.into_iter().map(portable_diagnostic).collect())
+        }
         Error::ParquetSource(error) => {
             let source = source?;
             Some(vec![portable_diagnostic(
@@ -142,7 +147,9 @@ pub fn findings_with_limit(
         | Error::ParquetSource(_)
         | Error::TypedSource(_)
         | Error::Source(_)
-        | Error::Ordinal(_) => Ok(crate::source_diagnostics::findings_with_limit(
+        | Error::Ordinal(_)
+        | Error::OdmFields(_)
+        | Error::OdmValues(_) => Ok(crate::source_diagnostics::findings_with_limit(
             error, source, maximum,
         )?
         .and_then(|findings| {
@@ -212,6 +219,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             Error::Execution(error) if error.is_internal() => ("execute", "internal"),
             Error::Execution(_) => ("execute", "execution_boundary"),
             Error::Sources(_) => ("ingest", "source_collection_boundary"),
+            Error::OdmFields(_) | Error::OdmValues(_) => ("ingest", "odm_projection_boundary"),
         };
         json!({"status":"rejected","stage":stage,"code":code})
     };

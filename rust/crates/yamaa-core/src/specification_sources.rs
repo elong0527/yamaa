@@ -29,7 +29,7 @@ impl SourceFinding {
     pub fn definition(&self) -> crate::diagnostic::Definition {
         self.0.definition()
     }
-    fn new(code: C, path: &str, fields: &[(&str, &str)]) -> Self {
+    pub(super) fn new(code: C, path: &str, fields: &[(&str, &str)]) -> Self {
         Self(Diagnostic {
             code,
             spec_paths: vec![path.into()],

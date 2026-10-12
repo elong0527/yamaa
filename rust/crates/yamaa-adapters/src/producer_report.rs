@@ -589,6 +589,25 @@ fn decoded_finding(
     let DecodeError::Codec(error) = error else {
         return Ok(false);
     };
+    if matches!(
+        error,
+        crate::specification_run::Error::OdmFields(_)
+            | crate::specification_run::Error::OdmValues(_)
+    ) {
+        let Some(diagnostics) = crate::source_diagnostics::findings_with_limit(
+            error,
+            Some(source),
+            budget.remaining_bytes(),
+        )
+        .map_err(|_| Error::OutputLimit)?
+        else {
+            return Ok(false);
+        };
+        for diagnostic in diagnostics {
+            push_diagnostic(budget, findings, &diagnostic)?;
+        }
+        return Ok(true);
+    }
     for _ in 0..4 {
         budget.text(&source.name)?;
         budget.text(&source.path)?;
@@ -807,6 +826,41 @@ fn failed_observations<'a, E>(
                     .get(*index)
                     .ok_or(Error::InvalidObservation)?;
                 portable &= decoded_finding(budget, &mut diagnostics, source, error)?;
+            }
+        }
+        Err(PortError::Run(RunError::AdmittedSources(errors))) => {
+            use yamaa_engine::specification_run::SourceIssue;
+            budget.entries(errors.len())?;
+            for (index, issue) in errors {
+                let source = view
+                    .compiled()
+                    .sources()
+                    .get(*index)
+                    .ok_or(Error::InvalidObservation)?;
+                match issue {
+                    SourceIssue::Decode(error) => {
+                        portable &= decoded_finding(budget, &mut diagnostics, source, error)?
+                    }
+                    SourceIssue::OdmValues(values) => {
+                        let borrowed = values
+                            .iter()
+                            .map(
+                                |&finding| yamaa_core::diagnostic::SourceFinding::OdmValues {
+                                    dataset: &source.name,
+                                    finding,
+                                },
+                            )
+                            .collect::<Vec<_>>();
+                        let report = yamaa_core::diagnostic::admit_source_diagnostics(
+                            &borrowed,
+                            budget.remaining_bytes(),
+                        )
+                        .map_err(|_| Error::OutputLimit)?;
+                        for diagnostic in report.iter() {
+                            push_diagnostic(budget, &mut diagnostics, &diagnostic)?;
+                        }
+                    }
+                }
             }
         }
         _ => portable = false,

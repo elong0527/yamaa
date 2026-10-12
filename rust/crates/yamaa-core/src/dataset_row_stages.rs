@@ -40,7 +40,7 @@ fn expression_deferred(
         Expression::SourceLookup { lookup, .. } => lookup.keys.iter().any(|key| deferred[key.output_column]),
         Expression::Intermediate {index,..} => intermediates.get(*index).is_some_and(|item| item.output_dependencies().any(|column| deferred[column])),
         Expression::Lookup(lookup) => lookup.keys.iter().any(|key| deferred[key.output_column]),
-        Expression::Literal(_) | Expression::Source(_) | Expression::Collect {..} | Expression::RowLookup(_) | Expression::Reduce {..} | Expression::Count {..} => false,
+        Expression::Odm(_) | Expression::Literal(_) | Expression::Source(_) | Expression::Collect {..} | Expression::RowLookup(_) | Expression::Reduce {..} | Expression::Count {..} => false,
     }
 }
 /// Dependency order is already admitted; a window and every transitive reader

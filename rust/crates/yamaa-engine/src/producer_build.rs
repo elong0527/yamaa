@@ -49,6 +49,19 @@ pub trait DecodePort: SourceDecoder {
         contract: Option<&yamaa_core::producer_contract::Contract>,
         limits: DecodeLimits,
     ) -> Result<Self::Table, DecodeError<Self::Error>>;
+    /// Carry the authored fixed-source interpretation through producer routing.
+    /// Trusted legacy ports retain their explicit table profile; canonical ODM
+    /// coordinates and identifiers are independently admitted by the engine.
+    fn decode_bounded_interpreted(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        contract: Option<&yamaa_core::producer_contract::Contract>,
+        limits: DecodeLimits,
+        _interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<Self::Table, DecodeError<Self::Error>> {
+        self.decode_bounded(source, bytes, contract, limits)
+    }
 }
 /// Encode through the exact node's admitted profile/precision. The engine enters
 /// this port only after execution and ordinary output gates have passed.
@@ -461,6 +474,18 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
         source: &SourceDeclaration,
         bytes: &[u8],
     ) -> Result<D::Table, Self::Error> {
+        self.decode_with_interpretation(
+            source,
+            bytes,
+            yamaa_core::specification::SourceInterpretation::Ordinary,
+        )
+    }
+    fn decode_with_interpretation(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<D::Table, Self::Error> {
         let mut declaration = None;
         for producer in self.node.producers() {
             charge_routing(self.work_left).map_err(DecodeError::Limit)?;
@@ -469,7 +494,7 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
                 break;
             }
         }
-        let table = self.decoder.decode_bounded(
+        let table = self.decoder.decode_bounded_interpreted(
             source,
             bytes,
             declaration.map(|p| p.contract()),
@@ -478,6 +503,7 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
                 storage_bytes: self.storage_bytes,
                 work_bytes: self.work_bytes,
             },
+            interpretation,
         )?;
         let schema = table.schema();
         if let Some(declaration) = declaration {

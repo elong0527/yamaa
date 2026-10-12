@@ -1013,6 +1013,14 @@ cat("row-template filters complete reports, cached reads and exact saved CSV pas
 
 source_selection_truth("row-reductions.tsv","row-reduction",25L)
 source_selection_truth("correlated-aggregates.tsv","correlated-aggregate",16L)
+source_selection_truth("odm-reads.tsv","odm",14L)
+odm_preflight <- read.delim(file.path(root,"odm-preflight.tsv"),sep="\t",quote="",comment.char="",colClasses="character",fileEncoding="ASCII",check.names=FALSE)
+stopifnot(nrow(odm_preflight)==8L)
+for(i in seq_len(nrow(odm_preflight))) for(j in seq_len(2L)) {
+  failure <- tryCatch(prepare_entry("spec.yaml",hex_raw(odm_preflight$source_hex[[i]]),no_port,no_port,no_port),error=identity)
+  stopifnot(inherits(failure,"error"),identical(conditionMessage(failure),odm_preflight$expected[[i]]))
+}
+cat("ODM reads complete reports, cached reads and exact saved CSV passed\n")
 cat("row-template MEAN and COUNT complete reports, cached reads and exact saved CSV passed\n")
 
 source_selection_truth("row-column-checks.tsv","row-column",48L)

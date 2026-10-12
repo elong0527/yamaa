@@ -33,6 +33,14 @@ pub enum ParquetFinding<'a> {
 /// A classified failure borrows the original error, declaration and codec spelling.
 #[derive(Clone, Copy, Debug)]
 pub enum SourceFinding<'a> {
+    Odm {
+        dataset: &'a str,
+        finding: &'a crate::odm_source::SchemaError,
+    },
+    OdmValues {
+        dataset: &'a str,
+        finding: crate::odm_source::MissingValues,
+    },
     Csv {
         cause: ProfileCause,
         record: usize,
@@ -75,6 +83,8 @@ fn kind(value: ColumnType) -> &'static str {
 impl SourceFinding<'_> {
     fn code(self) -> C {
         match self {
+            Self::Odm { dataset, finding } => finding.finding(dataset).code(),
+            Self::OdmValues { dataset, finding } => finding.finding(dataset).code(),
             Self::Csv { cause, .. } => cause.code(),
             Self::UnknownField { .. } => C::SourceTypeUnknownField,
             Self::OrdinalCollision { .. } => C::SourceOrdinalCollision,
@@ -96,8 +106,16 @@ impl SourceFinding<'_> {
         if let Some(requirement) = code.requirement {
             budget.text(requirement)?;
         }
+        if let Self::Odm { dataset, finding } = self {
+            return finding.finding(dataset).admit(budget);
+        }
+        if let Self::OdmValues { dataset, finding } = self {
+            return finding.finding(dataset).admit(budget);
+        }
         let dataset = match self {
-            Self::Csv { dataset, .. }
+            Self::Odm { dataset, .. }
+            | Self::OdmValues { dataset, .. }
+            | Self::Csv { dataset, .. }
             | Self::UnknownField { dataset, .. }
             | Self::FieldParse { dataset, .. }
             | Self::Parquet { dataset, .. } => dataset,
@@ -111,6 +129,9 @@ impl SourceFinding<'_> {
             Self::OrdinalCollision { field, .. } => {
                 budget.text(".ordinal")?;
                 budget.field("field", field)?;
+            }
+            Self::Odm { .. } | Self::OdmValues { .. } => {
+                unreachable!("ODM has its own complete admission")
             }
             Self::Csv { field, path, .. } => {
                 budget.text(".path")?;
@@ -178,8 +199,16 @@ impl SourceFinding<'_> {
     /// Unbounded owned compatibility for the existing error diagnostic methods.
     /// Public callers should migrate to complete-report admission before removal.
     pub fn owned_compatibility(self) -> Diagnostic {
+        if let Self::Odm { dataset, finding } = self {
+            return finding.finding(dataset).owned();
+        }
+        if let Self::OdmValues { dataset, finding } = self {
+            return finding.finding(dataset).owned();
+        }
         let dataset = match self {
-            Self::Csv { dataset, .. }
+            Self::Odm { dataset, .. }
+            | Self::OdmValues { dataset, .. }
+            | Self::Csv { dataset, .. }
             | Self::UnknownField { dataset, .. }
             | Self::FieldParse { dataset, .. }
             | Self::Parquet { dataset, .. } => dataset,
@@ -190,6 +219,9 @@ impl SourceFinding<'_> {
             Self::OrdinalCollision { field, .. } => {
                 context.insert("field".into(), text(field));
                 format!("input.{dataset}.ordinal")
+            }
+            Self::Odm { .. } | Self::OdmValues { .. } => {
+                unreachable!("ODM has its own complete projection")
             }
             Self::Csv {
                 record,

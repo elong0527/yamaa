@@ -60,6 +60,11 @@ pub(super) fn prepare_value_with_driver(
     let op = text(d, op)?;
     let result_path = format!("{result_path}.{op}");
     let operation = match op {
+        "odm" => Operation::Odm(alloc::boxed::Box::new(odm::prepare(
+            d,
+            payload,
+            &result_path,
+        )?)),
         "aggregate" => Operation::Aggregate(alloc::boxed::Box::new(aggregates::prepare(
             d,
             payload,
@@ -305,6 +310,7 @@ pub(super) fn bind_row(
     intermediates: &[Option<Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
     match operation {
+        Operation::Odm(operation) => odm::bind(operation, catalog, driver, row, phase, findings),
         Operation::Aggregate(operation) => aggregates::bind(
             operation, catalog, driver, row, phase, output, secondary, edges, findings,
         ),

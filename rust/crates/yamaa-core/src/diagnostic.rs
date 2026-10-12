@@ -18,6 +18,10 @@ pub use dataset::DatasetFinding;
 mod aggregate;
 pub use aggregate::{AggregateContextCause, AggregateEmptyKey, AggregateFinding};
 
+#[path = "diagnostic_odm.rs"]
+mod odm;
+pub use odm::{OdmDeclared, OdmFinding, OdmLocation};
+
 #[path = "diagnostic_inheritance.rs"]
 mod inheritance;
 pub use inheritance::InheritanceFinding;
@@ -331,6 +335,14 @@ conditions! {
     SourceNonAscii => ("validation", "non_ascii_source", Some("REQ-0705")),
     SourceInvalidText => ("validation", "invalid_text", Some("REQ-0029")),
     SourceInvalidYaml => ("validation", "invalid_yaml", Some("REQ-0280")),
+    OdmFieldMissing => ("validation", "odm_schema_field_missing", Some("REQ-1275")),
+    OdmFieldAmbiguous => ("validation", "odm_schema_field_ambiguous", Some("REQ-1275")),
+    OdmFieldType => ("validation", "odm_schema_field_type", Some("REQ-1275")),
+    OdmDeclaredOrdinal => ("validation", "odm_schema_field_type", Some("REQ-1295")),
+    OdmValueMissing => ("ingest", "odm_schema_value_missing", Some("REQ-1276")),
+    OdmInvalidContext => ("validation", "invalid_odm_context", Some("REQ-1277")),
+    OdmNotUnique => ("derivation", "odm_not_unique", Some("REQ-1278")),
+    OdmRowNotUnique => ("row_construction", "odm_not_unique", Some("REQ-1278")),
     CsvInvalidText => ("ingest", "invalid_text", Some("REQ-0853")),
     CsvByteOrderMark => ("ingest", "source_byte_order_mark", Some("REQ-0851")),
     CsvHeaderAbsent => ("ingest", "source_header_absent", Some("REQ-0851")),

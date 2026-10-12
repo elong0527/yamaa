@@ -4,7 +4,7 @@ use crate::dataset::{self, DatasetExecution, ExecutionAttempt};
 use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
 use yamaa_core::{
     resource::ResourceFailure,
-    specification::{BindError, PreparedSpecification, SourceDeclaration},
+    specification::{BindError, PreparedSpecification, SourceDeclaration, SourceInterpretation},
     table::TableAccess,
 };
 
@@ -57,6 +57,16 @@ pub trait SourceDecoder {
         source: &SourceDeclaration,
         bytes: &[u8],
     ) -> Result<Self::Table, Self::Error>;
+    /// The engine supplies the interpretation selected by the authored compiler.
+    /// Legacy trusted table ports keep their existing ordinary decoding behavior.
+    fn decode_with_interpretation(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        _interpretation: SourceInterpretation,
+    ) -> Result<Self::Table, Self::Error> {
+        self.decode(source, bytes)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -70,9 +80,88 @@ pub struct Limits {
 pub enum RunError<E> {
     Decode(E),
     Sources(Vec<(usize, E)>),
+    AdmittedSources(Vec<(usize, SourceIssue<E>)>),
     Bind(BindError),
     SourceBytes { limit: usize },
     SourceCells,
+}
+
+#[derive(Debug)]
+pub enum SourceIssue<E> {
+    Decode(E),
+    OdmValues(Vec<yamaa_core::odm_source::MissingValues>),
+}
+
+fn source_errors<E>(errors: Vec<(usize, SourceIssue<E>)>) -> RunError<E> {
+    if errors
+        .iter()
+        .all(|(_, error)| matches!(error, SourceIssue::Decode(_)))
+    {
+        RunError::Sources(
+            errors
+                .into_iter()
+                .map(|(index, error)| {
+                    let SourceIssue::Decode(error) = error else {
+                        unreachable!("checked decode-only sources")
+                    };
+                    (index, error)
+                })
+                .collect(),
+        )
+    } else {
+        RunError::AdmittedSources(errors)
+    }
+}
+
+fn odm_records<T: TableAccess>(
+    table: &T,
+    declaration: &SourceDeclaration,
+    index: usize,
+    driver: usize,
+) -> Result<Vec<yamaa_core::odm_source::MissingValues>, Box<dataset::ExecutionError<T::Error>>> {
+    yamaa_core::odm_source::missing_values(
+        table,
+        if declaration.profile == yamaa_core::specification::SourceProfile::Csv {
+            2
+        } else {
+            1
+        },
+    )
+    .map_err(|error| {
+        Box::new(match error {
+            yamaa_core::odm_source::RecordError::Schema => dataset::ExecutionError::SchemaMismatch,
+            yamaa_core::odm_source::RecordError::Coordinate => dataset::ExecutionError::Capacity,
+            yamaa_core::odm_source::RecordError::Cell { row, column, error } => {
+                let path = alloc::format!(
+                    "input.{}.{}",
+                    declaration.name,
+                    yamaa_core::odm_source::FIELDS[column]
+                );
+                if index == driver {
+                    dataset::ExecutionError::Cell {
+                        path,
+                        source_row: row,
+                        error,
+                    }
+                } else {
+                    dataset::ExecutionError::SecondaryCell {
+                        path,
+                        source: if index < driver { index } else { index - 1 },
+                        source_row: row,
+                        error,
+                    }
+                }
+            }
+        })
+    })
+}
+
+fn ingestion_failure<E>(error: Box<dataset::ExecutionError<E>>) -> ExecutionAttempt<E> {
+    ExecutionAttempt {
+        result: Err(error),
+        handler_counts: Vec::new(),
+        retained_verifications: Vec::new(),
+    }
 }
 
 /// The acquisition actually entered, separate from snapshot creation counts.
@@ -166,12 +255,42 @@ fn decode_and_execute<D: SourceDecoder>(
     }
     *captured_table = Some(
         decoder
-            .decode(prepared.source(), bytes)
+            .decode_with_interpretation(
+                prepared.source(),
+                bytes,
+                prepared
+                    .source_interpretation(prepared.driver_index())
+                    .expect("admitted source interpretation"),
+            )
             .map_err(RunError::Decode)?,
     );
     let table = captured_table
         .as_ref()
         .expect("decoded table is held for this attempt");
+    if prepared.source_interpretation(prepared.driver_index()) == Some(SourceInterpretation::Odm) {
+        if table
+            .row_count()
+            .checked_mul(table.schema().columns().len())
+            .is_none_or(|cells| cells > limits.source_cells)
+        {
+            return Err(RunError::SourceCells);
+        }
+        match odm_records(
+            table,
+            prepared.source(),
+            prepared.driver_index(),
+            prepared.driver_index(),
+        ) {
+            Ok(values) if !values.is_empty() => {
+                return Err(RunError::AdmittedSources(vec![(
+                    prepared.driver_index(),
+                    SourceIssue::OdmValues(values),
+                )]))
+            }
+            Ok(_) => (),
+            Err(error) => return Ok(ingestion_failure(error)),
+        }
+    }
     let plan = prepared.bind(table.schema()).map_err(RunError::Bind)?;
     let cells = table
         .row_count()
@@ -305,20 +424,59 @@ pub fn execute_with_functions_into<P: SourcePort, D: SourceDecoder>(
         };
         // Invalid snapshots still occupy held memory and consume the same budget.
         bytes_left = remaining;
-        match decoder.decode(declaration, bytes) {
-            Ok(table) => observed.table = Some(table),
+        match decoder.decode_with_interpretation(
+            declaration,
+            bytes,
+            prepared
+                .source_interpretation(index)
+                .expect("admitted source interpretation"),
+        ) {
+            Ok(table) => {
+                observed.table = Some(table);
+                if prepared.source_interpretation(index) == Some(SourceInterpretation::Odm) {
+                    let cells = attempt
+                        .sources
+                        .iter()
+                        .filter_map(|source| source.table.as_ref())
+                        .try_fold(0usize, |used, table| {
+                            used.checked_add(
+                                table
+                                    .row_count()
+                                    .checked_mul(table.schema().columns().len())?,
+                            )
+                        });
+                    if cells.is_none_or(|cells| cells > limits.source_cells) {
+                        attempt.result = Err(PortError::Run(RunError::SourceCells));
+                        return;
+                    }
+                    let table = attempt.sources[index]
+                        .table
+                        .as_ref()
+                        .expect("decoded ODM source");
+                    match odm_records(table, declaration, index, prepared.driver_index()) {
+                        Ok(values) if !values.is_empty() => {
+                            errors.push((index, SourceIssue::OdmValues(values)))
+                        }
+                        Ok(_) => (),
+                        Err(error) => {
+                            attempt.result = Ok(ingestion_failure(error));
+                            return;
+                        }
+                    }
+                }
+            }
             Err(error) => {
                 let continuing = decoder.continue_after(&error);
-                errors.push((index, error));
+                errors.push((index, SourceIssue::Decode(error)));
                 if !continuing {
-                    attempt.result = Err(PortError::Run(RunError::Sources(errors)));
+                    attempt.result = Err(PortError::Run(source_errors(errors)));
                     return;
                 }
             }
         }
     }
     if !errors.is_empty() {
-        attempt.result = Err(PortError::Run(RunError::Sources(errors)));
+        attempt.result = Err(PortError::Run(source_errors(errors)));
         return;
     }
     let schemas = attempt

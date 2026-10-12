@@ -661,6 +661,22 @@ class OriginalSpecifications(unittest.TestCase):
     def test_aggregate_relations_complete_reports_and_exact_csv(self):
         self._source_selection_reports("correlated-aggregates.tsv", "correlated-aggregate", 16)
 
+    def test_odm_reads_complete_reports_and_exact_csv(self):
+        self._source_selection_reports("odm-reads.tsv", "odm", 14)
+
+    def test_odm_preflight_complete_findings_before_any_resource_port(self):
+        with (ROOT / "odm-preflight.tsv").open(encoding="ascii") as stream:
+            cases=list(csv.DictReader(stream,delimiter="\t"))
+        self.assertEqual(len(cases),8)
+        def no_port(*_):
+            self.fail("ODM preflight entered a resource authority")
+        for row in cases:
+            with self.subTest(case=row["case"]):
+                for _ in range(2):
+                    with self.assertRaises(ValueError) as caught:
+                        yamaa_native._prepare_document("spec.yaml",bytes.fromhex(row["source_hex"]),no_port,no_port,no_port)
+                    self.assertEqual(json.loads(str(caught.exception)),json.loads(row["expected"]))
+
     def test_row_column_checks_complete_reports_and_exact_csv(self):
         self._source_selection_reports("row-column-checks.tsv", "row-column", 48)
 
