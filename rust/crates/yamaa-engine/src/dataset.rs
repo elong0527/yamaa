@@ -1237,15 +1237,6 @@ impl Executor<'_> {
                         intermediates: &mut intermediate_run,
                     },
                 )?;
-                if matches!(template.mode.local_mode(), RowMode::Groups(_)) {
-                    row_windows::filter_groups(
-                        table,
-                        template,
-                        &mut candidates,
-                        first,
-                        &mut budget,
-                    )?;
-                }
             }
         }
         let mut completed = vec![false; self.plan.output().columns().len()];

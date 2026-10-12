@@ -136,6 +136,120 @@ fn grouped_filter_removes_candidates_before_numbering_windows() {
 }
 
 #[test]
+fn grouped_filter_uses_one_eligibility_pass_before_windows() {
+    struct OnceTable {
+        schema: TableSchema,
+        reads: RefCell<Vec<(usize, usize)>>,
+        payload: Rc<str>,
+    }
+    impl TableAccess for OnceTable {
+        type Error = Rc<str>;
+        fn schema(&self) -> &TableSchema {
+            &self.schema
+        }
+        fn row_count(&self) -> usize {
+            3
+        }
+        fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Self::Error>> {
+            let mut reads = self.reads.borrow_mut();
+            let repeated = reads.contains(&(row, column));
+            reads.push((row, column));
+            match column {
+                0 => Ok(ValueRef::Int(row as i64 + 1)),
+                1 if repeated => Err(CellError::Access(Rc::clone(&self.payload))),
+                1 => Ok(ValueRef::Int(if row == 1 { 0 } else { 1 })),
+                _ => panic!("unexpected source column"),
+            }
+        }
+    }
+    let source = schema(&[("ID", ColumnType::Int), ("KEEP", ColumnType::Int)]);
+    let table = OnceTable {
+        schema: source.clone(),
+        reads: RefCell::default(),
+        payload: Rc::from("filter source was revisited"),
+    };
+    let filter = BoundPredicate::new(
+        yamaa_core::predicate_compiler::compile("KEEP > 0", "row.filter", Default::default())
+            .unwrap(),
+        vec![Binding {
+            name: "KEEP".into(),
+            read: Read::Column(1),
+        }],
+    )
+    .unwrap();
+    let plan = DatasetPlan::new(
+        source,
+        schema(&[
+            ("ID", ColumnType::Int),
+            ("KEEP", ColumnType::Int),
+            ("SEQ", ColumnType::Int),
+        ]),
+        vec![RowTemplate {
+            mode: RowMode::Groups(vec![0]),
+            assignments: vec![
+                assign(0, Expression::Source(0), "row.ID"),
+                assign(
+                    1,
+                    Expression::Reduce {
+                        identifier: None,
+                        column: 1,
+                        reducer: yamaa_core::reduction::NumericReducer::Sum,
+                        text: "SUM(SRC.KEEP)".into(),
+                    },
+                    "row.KEEP",
+                ),
+                assign(
+                    2,
+                    Expression::Window(Window {
+                        kind: WindowKind::RowNumber,
+                        group_by: vec![],
+                        order_by: vec![OrderTerm {
+                            column: 0,
+                            descending: false,
+                            nulls_first: false,
+                        }],
+                        filter: None,
+                    }),
+                    "row.SEQ",
+                ),
+            ],
+            filter: Some(filter),
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    // This finite attempt budget admits one eligibility evaluation per group.
+    // Repeating the predicate after the windows consumes additional work.
+    let mut bounded = limits();
+    bounded.work_cells = 40;
+    let attempt = plan.execute_observed(&table, bounded);
+    assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
+    assert_eq!(
+        attempt.result.unwrap().dataset.rows(),
+        [
+            vec![Value::Int(1), Value::Int(1), Value::Int(1)],
+            vec![Value::Int(3), Value::Int(1), Value::Int(2)]
+        ],
+    );
+    assert_eq!(
+        *table.reads.borrow(),
+        [
+            (0, 0),
+            (1, 0),
+            (2, 0),
+            (0, 0),
+            (0, 1),
+            (1, 0),
+            (1, 1),
+            (2, 0),
+            (2, 1)
+        ],
+    );
+}
+
+#[test]
 fn windows_number_each_template_after_filter_without_revisiting_sources() {
     let source = schema(&[("ID", ColumnType::Int)]);
     let table = Table {
