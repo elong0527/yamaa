@@ -816,13 +816,7 @@ for(i in seq_len(nrow(filter_truth))) {
   handle <- prepare_entry("spec.yaml",hex_raw(row$source_hex[[1L]]),no_port,no_port,no_port)
   content <- hex_raw(row$input_hex[[1L]])
   artifact <- hex_raw(row$artifact_hex[[1L]])
-  # Preserve historical captures; REQ-0068 owns these row-filter failures.
-  captured <- row$expected[[1L]]
-  if(prefix=="row-filter" && row$case[[1L]] %in% c("grouped_source_phase","grouped_unknown_phase","record_unknown_phase","group_and_filter_order")) {
-    stopifnot(length(gregexpr('"requirement":null',captured,fixed=TRUE)[[1L]])==2L)
-    captured <- gsub('"requirement":null','"requirement":"REQ-0068"',captured,fixed=TRUE)
-  }
-  expected <- sub('"runtime":"python"','"runtime":"r"',captured,fixed=TRUE)
+  expected <- sub('"runtime":"python"','"runtime":"r"',row$expected[[1L]],fixed=TRUE)
   expected <- sub('fixture-runtime',as.character(getRversion()),expected,fixed=TRUE)
   expected <- sub('fixture-engine',engine_info()$core_version,expected,fixed=TRUE)
   unsaved <- if(length(artifact)) sub('"artifacts":\\[.*?\\],"backend"','"artifacts":[],"backend"',expected,perl=TRUE) else expected
