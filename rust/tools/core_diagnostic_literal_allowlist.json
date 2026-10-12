@@ -1,18 +1,5 @@
 {
   "rust/crates/yamaa-core/src/producer_admission.rs:398": 1,
   "rust/crates/yamaa-core/src/specification.rs:520": 1,
-  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:419": 1,
-  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:529": 1,
-  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:537": 1,
-  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:694": 1,
-  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:709": 1,
-  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:757": 1,
-  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:765": 1,
-  "rust/crates/yamaa-core/src/specification_submission_document/decode.rs:797": 1,
-  "rust/crates/yamaa-core/src/submission_document/model.rs:126": 1,
-  "rust/crates/yamaa-core/src/submission_document/model.rs:127": 1,
-  "rust/crates/yamaa-core/src/submission_document/model.rs:128": 1,
-  "rust/crates/yamaa-core/src/submission_document/model.rs:129": 1,
-  "rust/crates/yamaa-core/src/submission_document/model.rs:137": 1,
   "rust/crates/yamaa-engine/src/numeric_lifecycle.rs:33": 1
 }

@@ -1,5 +1,5 @@
 //! Closed declaration values and normalized occurrence facts. None grants IO.
-use crate::project_environment::Submission;
+use crate::{diagnostic::ScalarSubmissionRule, project_environment::Submission};
 use alloc::{string::String, vec::Vec};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -121,12 +121,12 @@ pub struct Finding {
 impl Finding {
     /// Only scalar rules whose current normative causes are known are portable
     /// here. Shape/transport and unsupported choices retain their original facts.
-    pub fn requirement(&self) -> Option<&'static str> {
+    pub fn scalar_rule(&self) -> Option<ScalarSubmissionRule> {
         match self.kind {
-            Kind::InvalidIdentifier => Some("REQ-1046"),
-            Kind::InvalidDefineId => Some("REQ-1068"),
-            Kind::InvalidHref => Some("REQ-1070"),
-            Kind::InvalidLanguage => Some("REQ-1073"),
+            Kind::InvalidIdentifier => Some(ScalarSubmissionRule::Identifier),
+            Kind::InvalidDefineId => Some(ScalarSubmissionRule::DefineId),
+            Kind::InvalidHref => Some(ScalarSubmissionRule::Href),
+            Kind::InvalidLanguage => Some(ScalarSubmissionRule::Language),
             Kind::InvalidChoice
                 if self.origin.map(|v| v.field) == Some(FieldName::Name)
                     && self
@@ -134,10 +134,14 @@ impl Finding {
                         .steps()
                         .any(|v| v == Step::Field(FieldName::Standard)) =>
             {
-                Some("REQ-1074")
+                Some(ScalarSubmissionRule::StandardName)
             }
             _ => None,
         }
+    }
+    /// Compatibility view of the original optional scalar citation.
+    pub fn requirement(&self) -> Option<&'static str> {
+        self.scalar_rule().map(ScalarSubmissionRule::requirement)
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -1,5 +1,6 @@
 //! Complete non-owning admission followed by one owned decode of the same input.
 use super::*;
+use crate::diagnostic::ScalarSubmissionRule;
 use alloc::{boxed::Box, string::String, vec::Vec};
 use FieldName as F;
 
@@ -272,7 +273,7 @@ impl<'a> Parser<'a, '_> {
         field: Option<(usize, Option<usize>)>,
         path: Path,
         kind: Kind,
-        requirement: Option<&'static str>,
+        scalar_rule: Option<ScalarSubmissionRule>,
     ) -> Result<(), Cause> {
         if let Some(budget) = &mut self.budget {
             budget.charge(Resource::Findings, 1)?;
@@ -287,7 +288,7 @@ impl<'a> Parser<'a, '_> {
                 origin,
                 path,
                 kind,
-                requirement,
+                scalar_rule,
             });
         }
         self.count = self
@@ -301,7 +302,7 @@ impl<'a> Parser<'a, '_> {
         origin: Origin,
         path: Path,
         kind: Kind,
-        requirement: Option<&'static str>,
+        scalar_rule: Option<ScalarSubmissionRule>,
     ) -> Result<(), Cause> {
         self.fault_at(
             origin.node.unwrap_or(origin.container),
@@ -309,7 +310,7 @@ impl<'a> Parser<'a, '_> {
             Some((origin.container, origin.key)),
             path,
             kind,
-            requirement,
+            scalar_rule,
         )
     }
     fn get(&self, node: usize, field: F) -> Origin {
@@ -415,14 +416,15 @@ impl<'a> Parser<'a, '_> {
             }
         };
         let failure = match rule {
-            TextRule::Identifier if !identifier(value) => {
-                Some((Kind::InvalidIdentifier, Some("REQ-1046")))
-            }
+            TextRule::Identifier if !identifier(value) => Some((
+                Kind::InvalidIdentifier,
+                Some(ScalarSubmissionRule::Identifier),
+            )),
             TextRule::NonEmpty if value.is_empty() => Some((Kind::EmptyText, None)),
             _ => None,
         };
-        if let Some((kind, requirement)) = failure {
-            self.fault(origin, path, kind, requirement)?;
+        if let Some((kind, scalar_rule)) = failure {
+            self.fault(origin, path, kind, scalar_rule)?;
             return Ok(None);
         }
         Ok(Some(Field {
@@ -451,7 +453,7 @@ impl<'a> Parser<'a, '_> {
         values: &[(&str, T)],
         default: Option<T>,
         required: bool,
-        requirement: Option<&'static str>,
+        scalar_rule: Option<ScalarSubmissionRule>,
     ) -> Result<Option<Field<T>>, Cause> {
         let Some(node) = origin.node else {
             if let Some(value) = default {
@@ -469,7 +471,7 @@ impl<'a> Parser<'a, '_> {
         if let Some(&(_, value)) = values.iter().find(|v| v.0 == text) {
             Ok(Some(Field { value, origin }))
         } else {
-            self.fault(origin, path, Kind::InvalidChoice, requirement)?;
+            self.fault(origin, path, Kind::InvalidChoice, scalar_rule)?;
             Ok(None)
         }
     }
@@ -526,7 +528,7 @@ impl<'a> Parser<'a, '_> {
             DatasetClass::VALUES,
             None,
             true,
-            Some("REQ-1146"),
+            Some(ScalarSubmissionRule::DatasetClass),
         )?;
         let subclass = self.choice(
             self.get(node, F::Subclass),
@@ -534,7 +536,7 @@ impl<'a> Parser<'a, '_> {
             DatasetSubclass::VALUES,
             None,
             false,
-            Some("REQ-1147"),
+            Some(ScalarSubmissionRule::DatasetSubclass),
         )?;
         let structure = self.text_field(node, F::Structure, path, TextRule::NonEmpty, true)?;
         let repeating = self.boolean(
@@ -691,7 +693,7 @@ impl<'a> Parser<'a, '_> {
             Core::VALUES,
             None,
             false,
-            Some("REQ-1141"),
+            Some(ScalarSubmissionRule::Core),
         )?;
         let mandatory = self.boolean(
             self.get(node, F::Mandatory),
@@ -706,7 +708,7 @@ impl<'a> Parser<'a, '_> {
             DataType::VALUES,
             None,
             false,
-            Some("REQ-1145"),
+            Some(ScalarSubmissionRule::DataType),
         )?;
         let length = self.text_field(node, F::Length, path, TextRule::Integer, false)?;
         let significant_digits =
@@ -754,7 +756,7 @@ impl<'a> Parser<'a, '_> {
             OriginType::VALUES,
             None,
             true,
-            Some("REQ-1142"),
+            Some(ScalarSubmissionRule::OriginType),
         )?;
         let source = self.choice(
             self.get(node, F::Source),
@@ -762,7 +764,7 @@ impl<'a> Parser<'a, '_> {
             OriginSource::VALUES,
             None,
             false,
-            Some("REQ-1143"),
+            Some(ScalarSubmissionRule::OriginSource),
         )?;
         let description = self.text_field(node, F::Description, path, TextRule::NonEmpty, false)?;
         let documents = self.documents(self.get(node, F::Documents), path.field(F::Documents))?;
@@ -794,7 +796,7 @@ impl<'a> Parser<'a, '_> {
             MethodType::VALUES,
             Some(MethodType::Computation),
             false,
-            Some("REQ-1144"),
+            Some(ScalarSubmissionRule::MethodType),
         )?;
         let description = self.text_field(node, F::Description, path, TextRule::NonEmpty, true)?;
         let expression =

@@ -88,6 +88,59 @@ pub struct Definition {
     pub requirement: Option<&'static str>,
 }
 
+/// Normative ownership of scalar submission decoder facts. These citations do
+/// not assign a wire condition or phase to raw document shape findings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ScalarSubmissionRule {
+    Identifier,
+    DefineId,
+    Href,
+    Language,
+    StandardName,
+    Core,
+    OriginType,
+    OriginSource,
+    MethodType,
+    DataType,
+    DatasetClass,
+    DatasetSubclass,
+}
+
+impl ScalarSubmissionRule {
+    pub fn requirement(self) -> &'static str {
+        match self {
+            Self::Identifier => "REQ-1046",
+            Self::DefineId => "REQ-1068",
+            Self::Href => "REQ-1070",
+            Self::Language => "REQ-1073",
+            Self::StandardName => "REQ-1074",
+            Self::Core => "REQ-1141",
+            Self::OriginType => "REQ-1142",
+            Self::OriginSource => "REQ-1143",
+            Self::MethodType => "REQ-1144",
+            Self::DataType => "REQ-1145",
+            Self::DatasetClass => "REQ-1146",
+            Self::DatasetSubclass => "REQ-1147",
+        }
+    }
+}
+
+/// Each citation owner is reached by independent raw decoder controls.
+pub const SCALAR_SUBMISSION_RULES: &[ScalarSubmissionRule] = &[
+    ScalarSubmissionRule::Identifier,
+    ScalarSubmissionRule::DefineId,
+    ScalarSubmissionRule::Href,
+    ScalarSubmissionRule::Language,
+    ScalarSubmissionRule::StandardName,
+    ScalarSubmissionRule::Core,
+    ScalarSubmissionRule::OriginType,
+    ScalarSubmissionRule::OriginSource,
+    ScalarSubmissionRule::MethodType,
+    ScalarSubmissionRule::DataType,
+    ScalarSubmissionRule::DatasetClass,
+    ScalarSubmissionRule::DatasetSubclass,
+];
+
 macro_rules! conditions {
     ($($code:ident => ($phase:literal, $condition:literal, $requirement:expr),)*) => {
         /// Stable internal cause identity; no wire spelling or numeric discriminant.

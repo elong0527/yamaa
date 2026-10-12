@@ -1,4 +1,5 @@
 //! Closed declarations and normalized occurrence facts; no written-file claim.
+use crate::diagnostic::ScalarSubmissionRule;
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 macro_rules! vocabulary {
@@ -93,11 +94,16 @@ pub struct Finding {
     pub origin: Option<Origin>,
     pub path: Path,
     pub kind: Kind,
-    pub(super) requirement: Option<&'static str>,
+    pub(super) scalar_rule: Option<ScalarSubmissionRule>,
 }
 impl Finding {
+    /// Scalar ownership is separate from the retained raw document shape facts.
+    pub fn scalar_rule(&self) -> Option<ScalarSubmissionRule> {
+        self.scalar_rule
+    }
+    /// Compatibility view of the original optional scalar citation.
     pub fn requirement(&self) -> Option<&'static str> {
-        self.requirement
+        self.scalar_rule.map(ScalarSubmissionRule::requirement)
     }
 }
 /// Every class keeps its original normalized mapping order as occurrence facts.
