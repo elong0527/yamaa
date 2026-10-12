@@ -29,6 +29,40 @@ fn assign(column: usize, expression: Expression) -> Assignment {
 }
 
 #[test]
+fn malformed_row_filter_columns_retain_the_existing_scope_error() {
+    use yamaa_core::bound_expression::{Binding, BindingError, BoundPredicate, Read};
+    let source = schema(&[("ID", ColumnType::Int)]);
+    for mode in [RowMode::Records, RowMode::Groups(vec![0]), RowMode::Keys] {
+        for column in [1, usize::MAX] {
+            let filter = BoundPredicate::new(
+                yamaa_core::predicate_compiler::compile("F > 0", "row.filter", Default::default())
+                    .unwrap(),
+                vec![Binding {
+                    name: "F".into(),
+                    read: Read::Column(column),
+                }],
+            )
+            .unwrap();
+            assert_eq!(
+                DatasetPlan::new(
+                    source.clone(),
+                    source.clone(),
+                    vec![RowTemplate {
+                        mode: mode.clone(),
+                        assignments: vec![assign(0, Expression::Source(0))],
+                        filter: Some(filter),
+                    }],
+                    vec![],
+                    vec![0],
+                    vec![],
+                ),
+                Err(PlanError::Filter(BindingError::UnavailableColumn)),
+            );
+        }
+    }
+}
+
+#[test]
 fn window_filter_admission_distinguishes_record_and_grouped_rows() {
     use yamaa_core::{
         bound_expression::{Binding, BindingError, BoundPredicate, Read},

@@ -278,12 +278,10 @@ pub(super) fn bind(
             for (name, kind) in sources.iter().zip(&mut types) {
                 if let Some((index, field)) = spec.intermediates.reference(name) {
                     if let Some(item) = &intermediates[index] {
-                        *kind = secondary[item.source]
-                            .schema
-                            .columns()
-                            .iter()
-                            .find(|column| column.name == field)
-                            .map(|column| column.kind);
+                        *kind = item.source_column(secondary, field).and_then(|column| {
+                            item.source_schema(secondary)
+                                .map(|schema| schema.columns()[column].kind)
+                        });
                     }
                 }
             }
@@ -404,8 +402,20 @@ pub(super) fn bind_row(
             let mut operands = Vec::new();
             for (index, source) in sources.iter().enumerate() {
                 let path = format!("{path}.sources[{index}]");
-                if let Some(expression) = rounding::bind_row_operand(
-                    source, &path, catalog, driver, row, phase, available, edges, findings,
+                if let Some(expression) = self_relations::bind_operand(
+                    source,
+                    &path,
+                    catalog,
+                    driver,
+                    row,
+                    phase,
+                    available,
+                    edges,
+                    findings,
+                    output,
+                    named,
+                    secondary,
+                    intermediates,
                 )? {
                     operands.push(Assignment {
                         column,
@@ -418,7 +428,21 @@ pub(super) fn bind_row(
                 sources,
                 path,
                 *largest,
-                bound_types(sources, catalog)?,
+                sources
+                    .iter()
+                    .map(|name| {
+                        if let Some((index, field)) = named.reference(name) {
+                            Ok(intermediates[index].as_ref().and_then(|item| {
+                                item.source_column(secondary, field).and_then(|column| {
+                                    item.source_schema(secondary)
+                                        .map(|schema| schema.columns()[column].kind)
+                                })
+                            }))
+                        } else {
+                            bound_types(core::slice::from_ref(name), catalog).map(|types| types[0])
+                        }
+                    })
+                    .collect::<Result<Vec<_>, BindError>>()?,
                 findings,
                 operands,
                 start,

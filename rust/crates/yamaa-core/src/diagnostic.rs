@@ -238,6 +238,8 @@ conditions! {
     AggregateDriverScope => ("validation", "invalid_aggregate_context", Some("REQ-0329")),
     RowFilterPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0068")),
     RootFilterPhaseBoundary => ("validation", "phase_boundary", Some("REQ-1170")),
+    IntermediateSelfPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0120")),
+    IntermediateIdentifierCollision => ("validation", "duplicate_identifier", Some("REQ-0113")),
     RowDependencyPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0069")),
     QualifiedNumericReference => ("validation", "qualified_identifier", Some("REQ-0442")),
     ImplicitSourceKeyType => ("validation", "incompatible_input_type", Some("REQ-0151")),

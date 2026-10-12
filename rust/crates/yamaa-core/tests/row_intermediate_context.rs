@@ -360,7 +360,7 @@ fn typed_record_plan_rejects_uncompleted_matching_outputs_and_grouped_reads() {
             vec![Intermediate {
                 identifier: "P".into(),
                 path: "intermediates[0]".into(),
-                source: 0,
+                source: yamaa_core::dataset::IntermediateSource::Input(0),
                 keys: vec![IntermediateKey {
                     source_column: 0,
                     path: "intermediates[0].key".into(),
@@ -404,7 +404,7 @@ fn secondary_row_drivers_share_output_matching_without_reusing_primary_record_co
             vec![Intermediate {
                 identifier: "P".into(),
                 path: "intermediates[0]".into(),
-                source: 0,
+                source: yamaa_core::dataset::IntermediateSource::Input(0),
                 keys: vec![IntermediateKey {
                     source_column: 0,
                     path: "intermediates[0].key".into(),

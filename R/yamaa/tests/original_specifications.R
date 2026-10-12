@@ -1864,6 +1864,69 @@ local({
   cat("all 19 unchanged scalar-key captures match complete ordered findings, CSV and handler ledgers twice without Python passed\n")
 })
 
+# Compare complete independently authored ledgers while ignoring only JSON object
+# key order. Array order, every field, duplicate fields and integer text remain
+# part of the comparison; no semantic observation is selected or discarded.
+check_handler_ledger <- function(report, expected) {
+  string <- '"(?:[^"\\\\]|\\\\.)*"'
+  field <- paste0(string,':(?:',string,'|0|[1-9][0-9]*)')
+  object <- paste0('\\{',field,'(?:,',field,')*\\}')
+  array <- paste0('\\[(?:',object,'(?:,',object,')*)?\\]')
+  canonical <- function(value) {
+    stopifnot(grepl(paste0('^',array,'$'),value,perl=TRUE))
+    objects <- regmatches(value,gregexpr(object,value,perl=TRUE))[[1L]]
+    ordered <- vapply(objects,function(value) {
+      fields <- regmatches(value,gregexpr(field,value,perl=TRUE))[[1L]]
+      paste0('{',paste(sort(fields,method="radix"),collapse=','),'}')
+    },character(1L),USE.NAMES=FALSE)
+    paste0('[',paste(ordered,collapse=','),']')
+  }
+  prefix <- '"handler_counts":'
+  ledgers <- regmatches(report,gregexpr(paste0(prefix,array),report,perl=TRUE))[[1L]]
+  stopifnot(sum(gregexpr(prefix,report,fixed=TRUE)[[1L]]>0L)==2L,
+    length(ledgers)==2L,
+    identical(vapply(substring(ledgers,nchar(prefix)+1L),canonical,character(1L),USE.NAMES=FALSE),
+      rep(canonical(expected),2L)))
+}
+local({
+  expected <- '[{"spec_path":"rows[1].V","handler":"multiple_matches","count":2}]'
+  observed <- '[{"count":2,"handler":"multiple_matches","spec_path":"rows[1].V"}]'
+  report <- function(value) paste0('{"handler_counts":',value,',"node":{"handler_counts":',value,'}}')
+  check_handler_ledger(report(observed),expected)
+  for(value in c(sub('"count":2','"count":1',observed,fixed=TRUE),
+    sub(',"handler":"multiple_matches"','',observed,fixed=TRUE),
+    sub('"count":2','"count":2,"extra":0',observed,fixed=TRUE),
+    sub('"count":2','"count":2,"count":2',observed,fixed=TRUE),
+    paste0('[',substring(observed,2L,nchar(observed)-1L),',',substring(observed,2L,nchar(observed)-1L),']'))) {
+    stopifnot(inherits(tryCatch(check_handler_ledger(report(value),expected),error=identity),"error"))
+  }
+  ordered <- '[{"count":1,"handler":"no_match","spec_path":"A"},{"count":2,"handler":"no_match","spec_path":"B"}]'
+  reversed <- '[{"count":2,"handler":"no_match","spec_path":"B"},{"count":1,"handler":"no_match","spec_path":"A"}]'
+  stopifnot(inherits(tryCatch(check_handler_ledger(report(reversed),ordered),error=identity),"error"))
+})
+
+local({
+  body <- "schema_version: \"1.0\"\ndomain: TEST\ninput:\n  SRC: {path: src.csv}\n  OTHER: {path: other.csv}\nkeys: [ID, SECTION]\noutput: {path: result.csv, columns: [ID, SECTION, K, SEQ, V, FINAL, FIRST]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: {K: K}\n    order_by: [SELF.SEQ]\n    keep: last\n    no_match: 0\n  - id: F\n    dataset: SELF\n    key: [K]\n    filter: \"SECTION = 'first'\"\n    order_by: [SEQ]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: K, type: str, derivation: SRC.K}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: V, type: int, derivation: SRC.V}\n  - {name: FINAL, type: int, derivation: P.V}\n  - {name: FIRST, type: int, derivation: F.V}\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      SECTION: {literal: first}\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.K]\n    derivations:\n      ID: {literal: g}\n      SECTION: {literal: second}\n      SEQ: {literal: 4}\n      V: {compute: {expr: \"P.V + 10\"}}\n  - id: added\n    dataset: OTHER\n    derivations:\n      ID: OTHER.ID\n      SECTION: {literal: third}\n      K: OTHER.K\n      SEQ: {literal: 9}\n      V: {compute: {expr: \"P.V + 100\"}}\n"
+  directory <- tempfile("yamaa-self-donors-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE),add=TRUE)
+  entry <- file.path(directory,"spec.yaml")
+  writeBin(charToRaw(body),entry)
+  writeBin(charToRaw("ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n"),file.path(directory,"src.csv"))
+  writeBin(charToRaw("ID,K\nc,x\nd,x\n"),file.path(directory,"other.csv"))
+  result <- yamaa_domain(entry)
+  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,2,5,115,5\nb,first,x,1,9,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n")))
+  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  check_handler_ledger(observed,"[{\"spec_path\":\"rows[1].derivations.V.compute.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[2].derivations.V.compute.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":2},{\"spec_path\":\"columns.FINAL.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5},{\"spec_path\":\"columns.FIRST.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5}]")
+
+  unlink(file.path(directory,c("src.csv","other.csv","result.csv")))
+  writeBin(charToRaw(sub("SECTION: {literal: first}","SECTION: {source: {variable: P.K}}",body,fixed=TRUE)),entry)
+  expected <- list(phase="validation",condition="phase_boundary",requirement="REQ-0120",spec_paths=list("rows[0].derivations.SECTION.source"),context="{\"available_phase\":\"completed_prior_row_template\",\"identifier\":\"P.K\",\"required_phase\":\"row_construction\"}")
+  check_issue_frame(yamaa_check(entry)$issues,expected)
+  rejected <- yamaa_domain(entry);check_issue_frame(rejected$issues,expected)
+  stopifnot(is.null(rejected$output),is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"src.csv")),!file.exists(file.path(directory,"result.csv")))
+  cat("completed-template SELF borrowing, complete handlers and pre-study phase refusal passed without Python\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

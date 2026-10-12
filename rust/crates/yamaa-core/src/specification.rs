@@ -45,6 +45,8 @@ mod row_drivers;
 mod row_intermediates;
 #[path = "specification_rows.rs"]
 mod rows;
+#[path = "specification_self.rs"]
+mod self_relations;
 #[path = "specification_verifications.rs"]
 mod verifications;
 pub use logs::{LogFinding, OutputLogs};
@@ -1707,6 +1709,7 @@ impl PreparedSpecification {
                 schemas,
                 &self.output,
                 &self.keys,
+                Some(&rows.self_columns()),
                 &mut findings,
             )?;
             return rows
@@ -1764,6 +1767,7 @@ impl PreparedSpecification {
             schemas,
             &self.output,
             &self.keys,
+            None,
             &mut findings,
         )?;
         let mut assignments = BTreeMap::new();
@@ -2060,12 +2064,7 @@ impl PreparedSpecification {
                             .ok_or(BindError::Internal)?;
                         if let Some(item) = &intermediates[index] {
                             edges.extend(item.output_dependencies());
-                            if let Some(column) = secondary[item.source]
-                                .schema
-                                .columns()
-                                .iter()
-                                .position(|c| c.name == field)
-                            {
+                            if let Some(column) = item.source_column(&secondary, field) {
                                 bindings.push(Binding {
                                     name: name.into(),
                                     read: Read::Intermediate { index, column },

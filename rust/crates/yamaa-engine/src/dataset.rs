@@ -37,6 +37,8 @@ mod row_drivers;
 mod row_windows;
 #[path = "dataset_scalar.rs"]
 mod scalar;
+#[path = "dataset_self.rs"]
+mod self_relations;
 #[path = "dataset_text_case.rs"]
 mod str_case;
 #[path = "dataset_text_extract.rs"]
@@ -362,6 +364,7 @@ pub(crate) fn predicate_limit<E>(limit: yamaa_core::predicate::LimitError) -> Ex
 struct EvaluationState<'a, E> {
     functions: &'a mut dyn FunctionPort<Error = E>,
     secondary: &'a [&'a dyn TableAccess<Error = E>],
+    self_rows: &'a [Candidate],
     budget: &'a mut Budget,
     handlers: &'a mut HandlerCounter,
     intermediates: &'a mut intermediates::Run,
@@ -450,7 +453,15 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             let value = match &operand.read {
                 yamaa_core::dataset::SelectionRead::Expression(source) => evaluate_raw_retained(
                     table, source, candidate, plan, row, limits, state, retained,
-                )?,
+                )
+                .map_err(|mut error| {
+                    // Collection cardinality belongs to the enclosing selection.
+                    // Keep operand metadata for handlers and every other failure.
+                    if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
+                        path.clone_from(&assignment.path);
+                    }
+                    error
+                })?,
                 yamaa_core::dataset::SelectionRead::Source(column) => {
                     let source_row = candidate.members[0];
                     let value = table.cell(source_row, *column).map_err(|error| {
@@ -1187,6 +1198,7 @@ impl Executor<'_> {
                             &mut EvaluationState {
                                 functions,
                                 secondary,
+                                self_rows: &candidates[..first],
                                 budget: &mut budget,
                                 handlers,
                                 intermediates: &mut intermediate_run,
@@ -1202,17 +1214,19 @@ impl Executor<'_> {
                     }
                     candidates.push(candidate);
                 }
+                let (prior, current) = candidates.split_at_mut(first);
                 row_windows::complete(
                     table,
                     template,
                     &deferred,
-                    &mut candidates[first..],
+                    current,
                     self,
                     first,
                     limits,
                     &mut EvaluationState {
                         functions,
                         secondary,
+                        self_rows: prior,
                         budget: &mut budget,
                         handlers,
                         intermediates: &mut intermediate_run,
@@ -1227,6 +1241,7 @@ impl Executor<'_> {
                         }
                     }
                 }
+                intermediate_run.publish_self(self, &mut budget)?;
             }
         }
         let mut completed = vec![false; self.plan.output().columns().len()];
@@ -1271,8 +1286,8 @@ impl Executor<'_> {
                 } else {
                     None
                 };
-                let candidate = &mut candidates[row];
-                candidate.values[assignment.column] = if let Some(value) = number {
+                let candidate = &candidates[row];
+                let value = if let Some(value) = number {
                     finish(
                         value,
                         assignment,
@@ -1293,12 +1308,15 @@ impl Executor<'_> {
                         &mut EvaluationState {
                             functions,
                             secondary,
+                            self_rows: &candidates,
                             budget: &mut budget,
                             handlers,
                             intermediates: &mut intermediate_run,
                         },
                     )?
                 };
+                let candidate = &mut candidates[row];
+                candidate.values[assignment.column] = value;
                 candidate.completed[assignment.column] = true;
             }
             completed[assignment.column] = true;

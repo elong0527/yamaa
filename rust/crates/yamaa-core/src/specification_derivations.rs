@@ -402,7 +402,7 @@ pub(super) fn bind_row(
             let before = findings.len();
             let mut bindings = Vec::new();
             for identifier in compiled.identifiers() {
-                if let Some(expression) = rounding::bind_row_operand(
+                if let Some(expression) = self_relations::bind_operand(
                     identifier,
                     &format!("{path}.expr"),
                     catalog,
@@ -412,10 +412,17 @@ pub(super) fn bind_row(
                     available,
                     edges,
                     findings,
+                    output,
+                    named,
+                    secondary,
+                    intermediates,
                 )? {
                     let read = match expression {
                         Expression::Source(column) => Read::Source(column),
                         Expression::Column(column) => Read::Column(column),
+                        Expression::Intermediate { index, column } => {
+                            Read::Intermediate { index, column }
+                        }
                         _ => return Err(BindError::Internal),
                     };
                     bindings.push(Binding {
@@ -552,6 +559,11 @@ pub(super) fn bind_row(
                 phase,
                 available,
             }),
+            column,
+            output,
+            named,
+            secondary,
+            intermediates,
             edges,
             findings,
         ),
@@ -599,11 +611,17 @@ pub(super) struct SelectionContext<'a> {
     available: Option<&'a [usize]>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn bind_selection(
     selection: &source_expressions::FirstAvailable,
     path: &str,
     catalog: &Catalog,
     row_context: Option<SelectionContext<'_>>,
+    column: usize,
+    output: &TableSchema,
+    named: &intermediates::Declarations,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
@@ -611,7 +629,27 @@ pub(super) fn bind_selection(
     let mut operands = Vec::new();
     for (index, source) in selection.sources.iter().enumerate() {
         let path = format!("{path}.sources[{index}]");
-        let read = if let Some(SelectionContext {
+        let read = if named.reference(&source.variable).is_some() {
+            row_intermediates::bind(
+                &source.variable,
+                &path,
+                named,
+                secondary,
+                intermediates,
+                output,
+                catalog,
+                row_context.as_ref().and_then(|context| context.available),
+                edges,
+                findings,
+            )?
+            .map(|expression| {
+                crate::dataset::SelectionRead::Expression(alloc::boxed::Box::new(Assignment {
+                    column,
+                    expression,
+                    path: path.clone(),
+                }))
+            })
+        } else if let Some(SelectionContext {
             driver,
             row,
             phase,

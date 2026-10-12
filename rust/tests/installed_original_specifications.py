@@ -2320,5 +2320,35 @@ columns:
             with self.assertRaises(TypeError): function(None)
 
 
+    def test_public_self_donors_use_only_completed_templates_and_preserve_full_phase_refusal(self):
+        import yamaa
+        body = 'schema_version: "1.0"\ndomain: TEST\ninput:\n  SRC: {path: src.csv}\n  OTHER: {path: other.csv}\nkeys: [ID, SECTION]\noutput: {path: result.csv, columns: [ID, SECTION, K, SEQ, V, FINAL, FIRST]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: {K: K}\n    order_by: [SELF.SEQ]\n    keep: last\n    no_match: 0\n  - id: F\n    dataset: SELF\n    key: [K]\n    filter: "SECTION = \'first\'"\n    order_by: [SEQ]\n    keep: last\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: K, type: str, derivation: SRC.K}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: V, type: int, derivation: SRC.V}\n  - {name: FINAL, type: int, derivation: P.V}\n  - {name: FIRST, type: int, derivation: F.V}\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      SECTION: {literal: first}\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.K]\n    derivations:\n      ID: {literal: g}\n      SECTION: {literal: second}\n      SEQ: {literal: 4}\n      V: {compute: {expr: "P.V + 10"}}\n  - id: added\n    dataset: OTHER\n    derivations:\n      ID: OTHER.ID\n      SECTION: {literal: third}\n      K: OTHER.K\n      SEQ: {literal: 9}\n      V: {compute: {expr: "P.V + 100"}}\n'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = root / "spec.yaml"
+            entry.write_text(body)
+            (root / "src.csv").write_text("ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n")
+            (root / "other.csv").write_text("ID,K\nc,x\nd,x\n")
+            result = yamaa.domain(entry)
+            self.assertEqual(result.issues.rows(), [])
+            self.assertEqual(json.loads(result._native.observations())["handler_counts"], [{'spec_path': 'rows[1].derivations.V.compute.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'rows[2].derivations.V.compute.multiple_matches', 'handler': 'multiple_matches', 'count': 2}, {'spec_path': 'columns.FINAL.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 5}, {'spec_path': 'columns.FIRST.derivation.source.multiple_matches', 'handler': 'multiple_matches', 'count': 5}])
+            self.assertTrue(result.save())
+            self.assertEqual((root / "result.csv").read_bytes(), b'ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,2,5,115,5\nb,first,x,1,9,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n')
+            for name in ("src.csv", "other.csv", "result.csv"):
+                (root / name).unlink()
+            entry.write_text(body.replace("SECTION: {literal: first}", "SECTION: {source: {variable: P.K}}"))
+            for checked in (yamaa.check(entry), yamaa.domain(entry)):
+                records = checked.issues.to_dicts()
+                for record in records:
+                    record["context"] = json.loads(record["context"])
+                self.assertEqual(records, [{'phase': 'validation', 'condition': 'phase_boundary', 'requirement': 'REQ-0120', 'spec_paths': ['rows[0].derivations.SECTION.source'], 'context': {'identifier': 'P.K', 'available_phase': 'completed_prior_row_template', 'required_phase': 'row_construction'}}])
+            rejected = yamaa.domain(entry)
+            self.assertIsNone(rejected.output)
+            self.assertIsNone(rejected._native.observations())
+            with self.assertRaises(yamaa.DomainError):
+                rejected.save()
+            self.assertFalse((root / "src.csv").exists())
+            self.assertFalse((root / "result.csv").exists())
+
 if __name__ == "__main__":
     unittest.main()
