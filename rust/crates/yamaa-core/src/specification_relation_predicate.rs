@@ -21,7 +21,11 @@ pub(super) fn bind(
     let before = findings.len();
     let mut bindings = Vec::new();
     let mut current = Vec::new();
+    let mut seen = alloc::collections::BTreeSet::new();
     for name in plan.identifiers() {
+        if !seen.insert(name) {
+            continue;
+        }
         let own = name
             .strip_prefix(&format!("{donor_name}."))
             .or_else(|| (self_rows && !name.contains('.')).then_some(name));

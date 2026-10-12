@@ -112,6 +112,22 @@ fn secondary_body(filter: &str) -> String {
         .replace("columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}","rows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}")
 }
 #[test]
+fn repeated_donor_and_current_identifiers_share_bindings_without_changing_selection() {
+    let fixture = Fixture::new();
+    populate(&fixture);
+    let body = BODY.replace(
+        "D.TIME < SRC.CUT",
+        "D.TIME < SRC.CUT AND (D.TIME IS NULL OR D.TIME < SRC.CUT)",
+    );
+    let mut result = fixture.run(&body).unwrap();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(result.save().unwrap());
+    assert_eq!(
+        fs::read(fixture.0.join("result.csv")).unwrap(),
+        b"ID,SEQ,A,B\n1,1,one,x\n1,2,three,\n3,1,,\n1,3,,\n"
+    );
+}
+#[test]
 fn secondary_driver_fields_bind_to_the_actual_template_and_original_native_port() {
     let fixture = Fixture::new();
     populate(&fixture);

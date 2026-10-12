@@ -257,18 +257,23 @@ fn entry_and_outside_resource_links_remain_refused() {
     )
     .unwrap();
     let path = study.text("entry/spec.yaml");
-    let issues = file_application::domain(
+    let mut result = file_application::domain(
         Request {
             specification: &path,
             environment: None,
         },
         identity(&path),
     )
-    .err()
     .unwrap();
+    assert!(result.output().is_none());
+    assert!(result.save().is_err());
+    let issues = result.issues();
+    // REQ-0783 classifies an authored study-source link before any byte read.
+    assert_eq!(issues[0].condition, "resource_path_symlink");
+    assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0783"));
     assert_eq!(
         issues[0].context,
-        "{\"code\":\"resource_link\",\"stage\":\"capture\"}"
+        "{\"dataset\":\"SRC\",\"path\":\"../outside-link.csv\"}"
     );
     std::os::unix::fs::symlink("spec.yaml", study.0.join("entry/link.yaml")).unwrap();
     let (resources, entry) = file_configuration::resources(&study.text("entry/link.yaml")).unwrap();

@@ -1,10 +1,14 @@
 # Shared Rust migration review
 
-The remaining migration implementation is reviewed in
-[#2044](https://github.com/elong0527/yamaa/pull/2044), following the maintainer's
-request to combine recent unmerged PRs. Further fixes and implementation update
-that PR. Superseded branches, source ancestry and their qualification artifacts
-remain available; closing a superseded PR does not close its work-package issue.
+[#2044](https://github.com/elong0527/yamaa/pull/2044) merged at
+`14147ecfde9511fda9bf41840ae6306959c01667` on 2026-10-12. The maintainer requested
+one subsequent PR, [#2058](https://github.com/elong0527/yamaa/pull/2058), to complete
+the remaining migration and close its open work packages. Implementation,
+qualification repairs, consumer changes and gated
+cutover now accumulate on `codex/rust-migration-completion`. Keep that PR in draft
+until its complete acceptance evidence is available. Superseded source ancestry
+and qualification artifacts remain available; neither merging a component nor
+closing a superseded PR closes a work-package issue by itself.
 
 The combined branch preserves scalar and recursive source selections, source
 options and ordinals, mapping and cut, dictionary resources, row and root
@@ -34,3 +38,11 @@ The work-package issues and the
 public API, shared ownership, consumer, performance and retirement work. Keep
 the reference evaluator and component consumers until their replacement
 coverage and the prescribed cutover gates pass.
+
+The completion PR follows the work packages in #1969. Its critical path is the
+full #1974 inventory, completion of remaining language and shared ownership,
+qualification of the public APIs and consumers, then performance, rollback and
+reference retirement. Keep all changes in that PR; use separately validated
+commits for the evaluator families described by the transition plan. A closure
+comment must identify the implementing change and the complete acceptance
+evidence. Keep unrelated issues outside the migration scope.

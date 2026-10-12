@@ -1093,6 +1093,13 @@ impl PreparedSpecification {
             .ok_or(PrepareError::Internal)?;
         for &(name, id) in inputs {
             let prefix = format!("input.{}", text(d, name)?);
+            let written = text(d, field(d, id, "path")?)?;
+            if crate::resource::has_uri_scheme(written) {
+                source_findings.push(PreflightFinding::Scalar(
+                    crate::resource::ResourceFailure::UriScheme.diagnostic(text(d, name)?, written),
+                ));
+                continue;
+            }
             let profile = SourceProfile::from_path(text(d, field(d, id, "path")?)?);
             if profile == Some(SourceProfile::Csv)
                 && d.field(id, "empty_string")
@@ -1720,6 +1727,7 @@ impl PreparedSpecification {
             )?;
             return rows
                 .bind(
+                    self,
                     source,
                     &self.source().name,
                     &self.output,

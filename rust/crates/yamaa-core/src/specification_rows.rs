@@ -643,7 +643,32 @@ impl Rows {
                     .iter()
                     .position(|column| text(d, key).is_ok_and(|key| key == column.name))
                 {
-                    filter_defaults.insert(column);
+                    let window_default = d
+                        .field(columns[column], "derivation")
+                        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                        .map(|id| {
+                            let value = field(d, id, "value")?;
+                            let &[(operation, _)] = mapping(d, value)? else {
+                                return Err(PrepareError::Internal);
+                            };
+                            Ok(matches!(
+                                text(d, operation)?,
+                                "row_number"
+                                    | "rank"
+                                    | "row_value"
+                                    | "previous_non_missing"
+                                    | "locf"
+                                    | "baseline_flag"
+                                    | "window"
+                            ))
+                        })
+                        .transpose()?
+                        .unwrap_or(false);
+                    // An output-key window default spans the complete constructed
+                    // dataset. Selection identity cannot make it template-local.
+                    if !window_default {
+                        filter_defaults.insert(column);
+                    }
                 }
             }
         }
@@ -944,6 +969,7 @@ impl Rows {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind(
         &self,
+        prepared: &PreparedSpecification,
         source: &TableSchema,
         name: &str,
         output: &TableSchema,
@@ -1065,7 +1091,24 @@ impl Rows {
                     &intermediates,
                 )?,
                 RowOperation::Source(reference) => {
-                    if named.reference(reference).is_some() {
+                    if matches!(phase, Phase::Column { .. })
+                        && reference.split_once('.').is_some_and(|(dataset, _)| {
+                            secondary.iter().any(|source| source.name == dataset)
+                        })
+                    {
+                        source_expressions::bind(
+                            prepared,
+                            &source_expressions::Declaration::variable(reference),
+                            declaration.column,
+                            &declaration.path,
+                            catalog,
+                            source,
+                            &secondary,
+                            &intermediates,
+                            edges,
+                            findings,
+                        )?
+                    } else if named.reference(reference).is_some() {
                         if !named
                             .reference(reference)
                             .is_some_and(|(index, _)| named.is_self(index))

@@ -1050,6 +1050,7 @@ impl yamaa_engine::specification_run::SourcePort for Resources {
         match error {
             Error::Missing => Some(ResourceFailure::Missing),
             Error::NotRegularFile => Some(ResourceFailure::NotRegularFile),
+            Error::Symlink => Some(ResourceFailure::Symlink),
             _ => None,
         }
     }

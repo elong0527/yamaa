@@ -81,9 +81,16 @@ artifacts are reference-only until cutover (#1973 item 14); Define XML/JSON are
 explicitly `not_compared` by these domain runners. The fixed-time public Define
 suites remain separate. These dispositions do not suppress table differences.
 
-The first CI integration is report-only. Each sampled PR lane and every main
-or full-dispatch lane uploads its inventory, individual records and staged saved
-artifacts. Run locally against an installed package outside the checkout:
+Each sampled PR lane and every main or full-dispatch lane uploads its inventory,
+individual records and staged saved artifacts. The committed
+`public-conformance.json` gates both installed hosts. Its first 260 cases per
+host are the independently replayed intersection of all eighteen Python lanes
+and three R hosts in combined-main run 38250972601 at
+`14147ecfde9511fda9bf41840ae6306959c01667`. The preceding exact-head full
+dispatch 38249603102 has the same passing set. The remaining 50 unsupported, three
+mismatch and three error cases stay visible; two historical cases retain their
+approved exclusion. This corpus evidence does not complete other migration or
+release gates. Run locally against an installed package outside the checkout:
 
 ```sh
 python -I rust/tools/public_conformance.py plan --fixtures benchmarks --output /tmp/public-plan
@@ -100,7 +107,7 @@ Use absolute paths for the scripts, fixtures and lock when running from outside
 the checkout. The R comparator host needs `py-yaml12==0.2.0` and
 `pyarrow==25.0.1`; the R runner needs only base R and the installed package.
 
-A follow-up seeds `public-conformance.json` only from the intersection of passes
+Seed or advance `public-conformance.json` only from the intersection of passes
 in fresh inventories for every approved lane (18 Python lanes and three R
 hosts), using separate `python` and `r` lists. Passing `--ratchet FILE` to the
 comparator makes any listed benchmark's non-pass fail CI and reports new passes.
@@ -110,3 +117,28 @@ every lane of both hosts, retaining the full-run evidence in its PR. Deliberatel
 breaking an output must demonstrate the regression gate, then be reverted in
 that seeding PR. The assisted gates above stay in place until their separate
 retirement decision.
+
+`tools/seed_public_conformance.py` enforces that seeding contract. Download all
+`public-conformance-*` artifacts from one completed full main or dispatched
+`native.yml` run into a directory, with one subdirectory per artifact. Retain
+the run's REST metadata separately, then run:
+
+```sh
+gh api repos/elong0527/yamaa/actions/runs/RUN_ID > .cache/conformance-run.json
+gh run download RUN_ID --repo elong0527/yamaa --pattern 'public-conformance-*' \
+  --dir .cache/conformance-artifacts
+python rust/tools/seed_public_conformance.py --fixtures benchmarks \
+  --artifacts .cache/conformance-artifacts --run .cache/conformance-run.json \
+  --output .cache/public-conformance.json
+```
+
+The output must be a fresh file. The tool requires all eighteen Python and
+three R inventories from that exact revision/run, checks each host's platform,
+runtime and package identity, and replays every saved observation against the
+independent expected files. A claimed pass whose saved output changed is refused.
+Only the intersection of actual passes enters each host's list. To advance an
+existing ratchet, pass `--previous rust/qualification/public-conformance.json`;
+any reduction of its passing set is refused. Commit the verified output and
+enable `--ratchet` in both installed comparator steps after full-run evidence
+and the deliberately broken-output control pass. Missing evidence never seeds
+a partial matrix.
