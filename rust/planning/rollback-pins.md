@@ -44,7 +44,7 @@ assert version("yamaa") == "0.3.0"
 
 ## R source pin
 
-The reviewed yamaa record for a compatible prior `renv.lock` is:
+The yamaa record prepared for review in a compatible prior `renv.lock` is:
 
 ```json
 {
@@ -71,7 +71,8 @@ stopifnot(identical(as.character(packageVersion("yamaa")), "0.3.0"))
 
 Before publication, authorized review can retrieve the exact assets through
 `https://api.github.com/repos/elong0527/yamaa/releases/assets/637944563` (Python
-source) or `/637944247` (R source), using authenticated release-asset requests
+source) or `https://api.github.com/repos/elong0527/yamaa/releases/assets/637944247`
+(R source), using authenticated release-asset requests
 with `Accept: application/octet-stream`. The hosted receipt already verifies
 those responses against the approved source bytes. These draft references do
 not approve evaluator removal, remaining rollback tuples, B17 budgets or the

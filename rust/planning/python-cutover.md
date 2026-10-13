@@ -140,4 +140,6 @@ The [asset receipt](../qualification/rollback-assets.json) pins the exact releas
 source and asset IDs without digests. R source asset 637944247 and prior Python
 sdist asset 637944563 remain unpublished. Durable reviewed study pins, all required rollback tuples, B17
 budgets and item 11 transition approval remain gates. Publication requires root
-review of the concrete asset identities and receipts.
+review of the concrete asset identities, receipts and
+[prior study source pin selections](rollback-pins.md). Complete renv restoration
+from the published URL remains distinct from the passing fresh-library installs.
