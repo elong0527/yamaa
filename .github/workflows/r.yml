@@ -2,6 +2,11 @@ name: R shared grammar
 
 on:
   workflow_dispatch:
+    inputs:
+      rollback_r:
+        description: Rehearse the retained qualified pre-cutover R source artifact
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'R/yamaa/**'
@@ -19,6 +24,7 @@ permissions:
 
 jobs:
   installed-grammar:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.rollback_r }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
@@ -74,3 +80,78 @@ jobs:
             ${{ runner.temp }}/r-shared-grammar.log
             ${{ runner.temp }}/yamaa_0.3.0.tar.gz
           if-no-files-found: warn
+
+  rollback-source:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.rollback_r }}
+    name: R source rollback (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      RUSTUP_TOOLCHAIN: '1.90.0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.6.1'
+          rtools-version: ${{ runner.os == 'Windows' && '45' || '' }}
+          use-public-rspm: true
+      - name: Install the prior package's required compiler
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal
+          if [ "${{ runner.os }}" = Windows ]; then
+            rustup target add --toolchain 1.90.0 x86_64-pc-windows-gnu
+          fi
+      - name: Fetch exact retained source artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          # One exact source tarball is the proposed durable rollback asset.
+          artifact-ids: 11811851297
+          path: ${{ runner.temp }}/prior-r-source
+          run-id: 38394553441
+          github-token: ${{ github.token }}
+      - name: Verify source, artifact and package identities before installation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/r-rollback-proof"
+          gh api repos/elong0527/yamaa/actions/runs/38394553441 --jq '{id,head_sha,run_attempt,conclusion,status,html_url}' > "${RUNNER_TEMP}/r-rollback-proof/prior-run.json"
+          gh api repos/elong0527/yamaa/actions/artifacts/11811851297 --jq '{id,name,expired,expires_at,workflow_run}' > "${RUNNER_TEMP}/r-rollback-proof/prior-artifact.json"
+          python rust/tools/prepare_r_rollback.py "${RUNNER_TEMP}/prior-r-source" "${RUNNER_TEMP}/r-rollback-proof" \
+            --artifact-id 11811851297 --artifact-name native-r-ubuntu-24.04
+      - name: Install exact old archive in an empty isolated library
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir prior-r-library
+          R CMD INSTALL --library="${RUNNER_TEMP}/prior-r-library" prior-r-source/yamaa_0.3.0.tar.gz 2>&1 | tee r-rollback-proof/install.log
+      - name: Rehearse a fresh whole run before publishing any replay outputs
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/prior-r-library
+          R_LIBS_USER: ${{ runner.temp }}/prior-r-library
+        run: |
+          Rscript --vanilla "${GITHUB_WORKSPACE}/rust/tests/r_rollback.R" \
+            "${RUNNER_TEMP}/prior-r-library" "${RUNNER_TEMP}/r-rollback-proof" 2>&1 | tee r-rollback-proof/rehearsal.log
+      - name: Preserve rollback evidence and exact prior source bytes
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: r-source-rollback-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/r-rollback-proof
+            ${{ runner.temp }}/prior-r-source/yamaa_0.3.0.tar.gz
+          if-no-files-found: error
