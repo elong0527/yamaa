@@ -10,12 +10,13 @@ again or changing expected artifacts.
 | Host | Backend | Coverage |
 | --- | --- | --- |
 | Python | Python | Cases declaring `python` in `benchmarks/execution-manifest.yaml`. |
-| Python | Rust | Not implemented; blocked by #1585. |
+| Python | Rust | Single-node examples executed through the installed native dataset bridge (`--backend rust`); producer workflows report `unsupported`. The manifest still declares `python` coverage only. |
 | R | Rust | Not implemented; blocked by #1585. |
 | R | Legacy R | Package and grammar tests only; no claim of current-schema benchmark execution. |
 
 Accepting a backend label in a report is protocol support, not an implementation
-of that backend. The current CLI always runs the Python backend. Unsupported or
+of that backend. The CLI runs the Python backend by default; `--backend rust`
+selects the native bridge above, and this CLI implements no R host. Unsupported or
 infrastructure-error reports never establish parity, even against identical
 reports. Add manifest coverage only after an actual runtime executes the fixture.
 
