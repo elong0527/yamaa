@@ -241,6 +241,7 @@ def collect(args):
             "measure_public_lifecycle.py",
             "prepare_public_workloads.py",
             "public_lifecycle_worker_protocol.json",
+        "child_peak_rss.py",
             *lifecycle.WORKERS.values(),
         ):
             shutil.copyfile(lifecycle.HERE / name, harness / name)

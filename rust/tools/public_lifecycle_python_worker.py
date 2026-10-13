@@ -79,18 +79,24 @@ def issues(value, pl):
 
 
 def metadata(yamaa):
-    # This explicit native metadata call is made only after public Build.
-    native = yamaa._native
-    info = native.engine_info()
+    # Installed metadata follows Build. Core version requires source/build evidence.
+    native = getattr(yamaa, "_native", None)
+    if native is None:
+        import importlib.util
+        native_origin = importlib.util.find_spec("yamaa._native").origin
+    else:
+        native_origin = native.__file__
     return {
         "host": "python",
         "runtime_version": platform.python_version(),
         "report_runtime_version": sys.version,
         "package_version": yamaa.__version__,
-        "engine_version": info["core_version"],
+        "engine_version": getattr(native, "_CORE_VERSION", None),
+        "engine_version_availability": ("compiled metadata constant" if getattr(native, "_CORE_VERSION", None) else
+                                        "compiled core metadata unavailable; source build attestation retained"),
         "installed_origins": {
             "package": str(Path(yamaa.__file__).resolve().parent),
-            "native": str(Path(native.__file__).resolve()),
+            "native": str(Path(native_origin).resolve()),
         },
         "executable": str(Path(sys.executable).resolve()),
         "system": platform.system(),
@@ -146,7 +152,7 @@ def run(request):
 
             # Resolve the lazy public facade and its native module during import.
             # This performs no explicit native API call.
-            domain = yamaa.domain
+            domain = yamaa.yamaa_domain if request.get("evaluator") == "python-reference" else yamaa.domain
             import polars as pl
 
             return yamaa, domain, pl
@@ -179,6 +185,8 @@ def run(request):
             "saved_files": {},
             "save_returns": [],
             "evidence_capture_failures": [],
+            "host_view_access_counts": {},
+            "callback_observation": None,
             "views": f"rep-{declaration['index']}-views.json",
         }
         views = {}
@@ -196,7 +204,8 @@ def run(request):
             # A secondary transport error never replaces a pending public cause.
             try:
                 filename = prefix + "-" + label + "-report.json"
-                raw = result._native.observations()
+                raw = (None if request.get("evaluator") == "python-reference"
+                       else result._native.observations())
                 (output / filename).write_bytes(
                     b"null" if raw is None else raw.encode("utf-8")
                 )
@@ -246,6 +255,34 @@ def run(request):
                         }
                     )
 
+        def access(name):
+            counts = row["host_view_access_counts"]
+            counts[name] = counts.get(name, 0) + 1
+            return getattr(result, name)
+
+        callback_module = None
+        original_callback = None
+        callback_trace = []
+        if request.get("observe_callbacks"):
+            import functools
+            import yamaa_benchmarks as callback_module
+            original_callback = callback_module.project_value
+
+            @functools.wraps(original_callback)
+            def observed_callback(x):
+                trace = {"parameters": {"x": cell(x, "float")},
+                         "result": None, "failure": None}
+                callback_trace.append(trace)
+                try:
+                    returned = original_callback(x=x)
+                    trace["result"] = cell(returned, "float")
+                    return returned
+                except BaseException as error:
+                    trace["failure"] = {"class": type(error).__name__, "message": str(error)}
+                    raise
+
+            callback_module.project_value = observed_callback
+
         try:
             if target.exists():
                 raise RuntimeError(
@@ -257,6 +294,7 @@ def run(request):
                 "public_build",
                 lambda: domain(
                     declaration["entry"],
+                    **({"schema_root": request["reference_schema"]} if request.get("reference_schema") else {}),
                     **(
                         {"environment": declaration["environment"]}
                         if declaration.get("environment")
@@ -278,10 +316,10 @@ def run(request):
             )
 
             for name, call in (
-                ("output", lambda: frame(result.output, pl)),
-                ("issues", lambda: issues(result.issues, pl)),
-                ("verification_log", lambda: frame(result.verification_log, pl)),
-                ("warning_log", lambda: frame(result.warning_log, pl)),
+                ("output", lambda: frame(access("output"), pl)),
+                ("issues", lambda: issues(access("issues"), pl)),
+                ("verification_log", lambda: frame(access("verification_log"), pl)),
+                ("warning_log", lambda: frame(access("warning_log"), pl)),
             ):
                 views[name] = timed(row["durations"], "copied_" + name, call)
                 write_json(output / row["views"], views)
@@ -291,11 +329,11 @@ def run(request):
                     returned = timed(row["durations"], "held_" + label, result.save)
                 finally:
                     retain_reached(label, include_output=True)
-                row["save_returns"].append(returned)
+                row["save_returns"].append(str(returned) if isinstance(returned, Path) else returned)
                 if capture_errors:
                     raise capture_errors[0]
                 write_json(output / "response.json", response)
-            views["output_after_save_2"] = frame(result.output, pl)
+            views["output_after_save_2"] = frame(access("output"), pl)
             write_json(output / row["views"], views)
             row["status"] = "success"
         except BaseException as error:
@@ -306,6 +344,11 @@ def run(request):
             }
             print(row["failure"]["traceback"], file=sys.stderr)
         finally:
+            if callback_module is not None:
+                callback_module.project_value = original_callback
+                row["callback_observation"] = {"provider": "once-delegating installed callable wrapper",
+                    "scope": "activation tests and derivation combined; stage split unavailable",
+                    "count": len(callback_trace), "trace": callback_trace}
             try:
                 row["rss"] = rss()
             except BaseException as error:

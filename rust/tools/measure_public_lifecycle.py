@@ -25,6 +25,7 @@ import traceback
 import zipfile
 from pathlib import Path, PureWindowsPath
 
+
 CASES = ("adam-adlb-ordered-sum", "schema-window-functions", "schema-lookup")
 OUTPUTS = dict(zip(CASES, ("adlb.csv", "advs.csv", "adsl.csv")))
 FORMS = {"python": ("wheel", "source"), "r": ("source",)}
@@ -536,11 +537,12 @@ def actual_origins(observed, declared, repository):
         "host",
         "runtime_version",
         "package_version",
-        "engine_version",
         "system",
     ):
         if observed[field] != declared[field]:
             raise ValueError(f"actual installed identity differs: {field}")
+    if observed.get("engine_version") is not None and observed["engine_version"] != declared["engine_version"]:
+        raise ValueError("actual installed core version differs from build attestation")
     roots = checkout_roots(repository)
     origins = {
         key: outside_checkout(value, repository, roots)
@@ -759,20 +761,28 @@ def launch(command, child):
         (child / "stdout.txt").open("wb") as out,
         (child / "stderr.txt").open("wb") as err,
     ):
+        broker = [sys.executable, "-I", str(HERE / "child_peak_rss.py"),
+                  "--command", json.dumps(command), "--record", str(child / "process.json")]
         process = subprocess.Popen(
-            command, cwd=child, env=environment, stdout=out, stderr=err
+            broker, cwd=child, env=environment, stdout=out, stderr=err
         )
         try:
             code = process.wait()
         except BaseException:
-            process.terminate()
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                process.terminate()
             try:
                 process.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
             raise
-    return {"exit_code": code, "pid": process.pid}
+    if code:
+        raise ValueError("child RSS broker failed; retain stdout/stderr and unavailable peak")
+    return read_json(child / "process.json")
 
 
 def prepare(args):
@@ -826,6 +836,7 @@ def prepare(args):
     for name in (
         Path(__file__).name,
         "public_lifecycle_worker_protocol.json",
+        "child_peak_rss.py",
         *WORKERS.values(),
     ):
         shutil.copyfile(HERE / name, harness / name)

@@ -8,10 +8,20 @@
     "scope_decision": "2026-10-11 approved lookup/aggregate/window/callback/producer at 1000/10000/100000 rows, 10 cold and 30 warm after 3 warmups, compatible previous release on the same machine",
     "correctness_smoke": "One case per run, both installed hosts, 1 cold/1 warm after 1 warmup; functional execution only",
     "truth": "Candidate-free stdlib algorithms regenerate and compare every input/expected byte and the retained generator. Original fixtures remain unchanged.",
-    "request_extensions": ["optional explicit host environment", "artifact_names for every root/producer output"],
-    "worker_extensions": ["build_artifact_presence from actual files before Save", "saved_artifacts for every named output after each Save"],
+    "request_extensions": [
+      "optional explicit host environment",
+      "artifact_names for every root/producer output"
+    ],
+    "worker_extensions": [
+      "build_artifact_presence from actual files before Save",
+      "saved_artifacts for every named output after each Save"
+    ],
     "acceptance": "Exact copied root cells/types/order/binary64 bits, empty issues/null logs, independently declared node/source ledgers, zero published files after Build, complete Build/two Save observations, successful Save returns, exact artifact identities/order/columns/rows/bytes. Prospective report artifacts are retained without interpreting them as publication.",
-    "remaining": "Approved-size capacity, qualified candidate/baseline characterization, phase and actual callback instrumentation, additional memory providers, and numeric budgets remain open. This extension does not close B17/B18."
+    "remaining": "Approved-size capacity, qualified candidate/baseline characterization, phase and actual callback instrumentation, additional memory providers, and numeric budgets remain open. This extension does not close B17/B18.",
+    "representative_controller": "collect_public_performance.py",
+    "representative_scope": "independent truth child before every case; all 21 installed tuples in dispatched performance.yml; source-built previous release archive/wheel retained; no unsupported baseline API becomes a timing sample",
+    "optional_callback_observer": "once-delegating signature-preserving installed callable wrapper; full independent parameter/result trace; ordinary and observer complete normalized reports and both held Saves must agree; observer child never counts toward characterization",
+    "host_view_access_counts": "actual output/issues/log getter invocations; not internal allocation/copy estimates"
   },
   "workers": {
     "python": "public_lifecycle_python_worker.py",
@@ -31,12 +41,13 @@
     "python": "yamaa.domain(entry)",
     "r": "yamaa_domain(entry)"
   },
-  "first_explicit_native_call": "first public Build after resolving/importing the public facade; engine_info AFTER Build",
+  "first_explicit_native_call": "first public Build after resolving/importing the facade; compiled core metadata is read after Build; no engine_info probe",
   "initialization_limits": "Package import may load the native library; shipped-schema and OS filesystem caches are uncontrolled. The controller does not time process startup.",
   "controller_dependencies": [
     "Python standard library",
     "Git",
-    "Unix ps or Windows PowerShell process inventory"
+    "Unix ps or Windows PowerShell process inventory",
+    "fresh small child RSS broker"
   ],
   "worker_dependencies": {
     "python": [
@@ -112,7 +123,15 @@
     "python_macos": "same provider, original bytes",
     "python_windows": null,
     "r": null,
-    "scope": "whole child lifetime including imports, copies and raw evidence writes; cumulative across warm repetitions, excludes parent/controller acceptance; sampled at end of each repetition"
+    "scope": "whole child lifetime including imports, copies and raw evidence writes; cumulative across warm repetitions, excludes parent/controller acceptance; sampled at end of each repetition",
+    "controller_child_lifetime": {
+      "linux": "os.wait4(child_pid).ru_maxrss, original KiB",
+      "macos": "os.wait4(child_pid).ru_maxrss, original bytes",
+      "windows": "GetProcessMemoryInfo(child_handle).PeakWorkingSetSize, original bytes",
+      "launch": "fresh small broker excludes large generator/controller fork RSS",
+      "retention": "process.json preserves child identity, exit status and actual observation; unavailable provider never becomes zero",
+      "qualification": "actual Linux allocation and parent-isolation controls; macOS/Windows require installed CI evidence"
+    }
   },
   "unavailable": {
     "phase_durations": null,

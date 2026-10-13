@@ -108,7 +108,6 @@ issues <- function(value) {
        }))
 }
 metadata <- function() {
-  info <- get("engine_info", asNamespace("yamaa"))() # Private metadata follows Build.
   collectors <- lapply(names(request$provenance$collectors), function(name) {
     list(version = as.character(utils::packageVersion(name)),
          origin = normalizePath(find.package(name), winslash = "/", mustWork = TRUE))
@@ -117,7 +116,8 @@ metadata <- function() {
   list(host = "r", runtime_version = as.character(getRversion()),
        report_runtime_version = as.character(getRversion()),
        package_version = as.character(utils::packageVersion("yamaa")),
-       engine_version = info$core_version,
+       engine_version = if (exists(".core_version", asNamespace("yamaa"), inherits = FALSE)) get(".core_version", asNamespace("yamaa"))() else NULL,
+       engine_version_availability = "compiled metadata accessor when available; source build attestation retained",
        installed_origins = list(package = normalizePath(find.package("yamaa"), winslash = "/", mustWork = TRUE),
                                 native = normalizePath(getLoadedDLLs()[["yamaa"]][["path"]], winslash = "/", mustWork = TRUE)),
        system = unname(Sys.info()[["sysname"]]), machine = unname(Sys.info()[["machine"]]),
@@ -149,7 +149,7 @@ for (declaration in request$repetitions) {
               durations = list(), metadata = NULL, native_call_order = list(),
               unavailable = request$unavailable, rss = NULL, failure = NULL,
               reports = list(), saved_files = list(), save_returns = list(),
-              evidence_capture_failures = list(),
+              evidence_capture_failures = list(), host_view_access_counts = list(), callback_observation = NULL,
               views = paste0("rep-", declaration$index, "-views.json"))
   views <- list()
   result <- NULL
@@ -206,6 +206,37 @@ for (declaration in request$repetitions) {
          interrupt = function(error) secondary_failure(error, paste0(label, "_output")))
     }
   }
+  callback_namespace <- NULL
+  original_callback <- NULL
+  callback_trace <- list()
+  if (isTRUE(request$observe_callbacks)) {
+    callback_namespace <- asNamespace("yamaabenchmarks")
+    original_callback <- get("project_value", callback_namespace)
+    observed_callback <- function(x) {
+      trace <- list(parameters = list(x = cell(x, 1L, "float")), result = NULL, failure = NULL)
+      slot <- length(callback_trace) + 1L
+      callback_trace[[slot]] <<- trace
+      returned <- tryCatch(original_callback(x = x), error = function(error) {
+        trace$failure <- failure(error)
+        callback_trace[[slot]] <<- trace
+        stop(error)
+      }, interrupt = function(error) {
+        trace$failure <- failure(error)
+        callback_trace[[slot]] <<- trace
+        stop(error)
+      })
+      trace$result <- cell(returned, 1L, "float")
+      callback_trace[[slot]] <<- trace
+      returned
+    }
+    unlockBinding("project_value", callback_namespace)
+    assign("project_value", observed_callback, callback_namespace)
+    lockBinding("project_value", callback_namespace)
+  }
+  access <- function(name) {
+    row$host_view_access_counts[[name]] <<- if (is.null(row$host_view_access_counts[[name]])) 1L else row$host_view_access_counts[[name]] + 1L
+    result[[name]]
+  }
   tryCatch({
     if (file.exists(target)) stop("fresh Build directory already has an output")
     row$native_call_order <- c(row$native_call_order, list("public_build"))
@@ -220,14 +251,14 @@ for (declaration in request$repetitions) {
     if (length(secondary_conditions)) stop(secondary_conditions[[1L]])
     row$native_call_order <- c(row$native_call_order, list("metadata_after_build"))
     row$metadata <- timed(state, "metadata_after_build", metadata())
-    views["output"] <- list(timed(state, "copied_output", frame(result$output)))
+    views["output"] <- list(timed(state, "copied_output", frame(access("output"))))
     persist()
-    views$issues <- timed(state, "copied_issues", issues(result$issues))
+    views$issues <- timed(state, "copied_issues", issues(access("issues")))
     persist()
     # Use [name] assignment to preserve explicit JSON null in a named list.
-    views["verification_log"] <- list(timed(state, "copied_verification_log", frame(result$verification_log)))
+    views["verification_log"] <- list(timed(state, "copied_verification_log", frame(access("verification_log"))))
     persist()
-    views["warning_log"] <- list(timed(state, "copied_warning_log", frame(result$warning_log)))
+    views["warning_log"] <- list(timed(state, "copied_warning_log", frame(access("warning_log"))))
     persist()
     for (number in 1:2) {
       label <- paste0("save_", number)
@@ -237,10 +268,18 @@ for (declaration in request$repetitions) {
       if (length(secondary_conditions)) stop(secondary_conditions[[1L]])
       persist()
     }
-    views$output_after_save_2 <- frame(result$output)
+    views$output_after_save_2 <- frame(access("output"))
     row$status <- "success"
   }, error = function(error) { row$failure <<- failure(error) },
      interrupt = function(error) { row$failure <<- failure(error); interrupted <<- TRUE })
+  if (!is.null(callback_namespace)) {
+    unlockBinding("project_value", callback_namespace)
+    assign("project_value", original_callback, callback_namespace)
+    lockBinding("project_value", callback_namespace)
+    row$callback_observation <- list(provider = "once-delegating installed callable wrapper",
+      scope = "activation tests and derivation combined; stage split unavailable",
+      count = length(callback_trace), trace = callback_trace)
+  }
   if (!is.null(row$failure)) message(row$failure$message)
   if (interrupted) response$failure <- row$failure
   final_transport_failed <- FALSE

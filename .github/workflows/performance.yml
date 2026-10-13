@@ -1,0 +1,270 @@
+name: Public performance evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      native_run_id:
+        description: Completed successful full native run supplying candidate distributions
+        required: true
+        type: string
+      purpose:
+        description: Frontier retains refusals; characterization admits only exact truth
+        default: capacity-frontier
+        type: choice
+        options: [capacity-frontier, characterization]
+      baseline_ref:
+        description: Previous release source retained and built before collection
+        default: yamaa-py-0.3.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  RUSTUP_TOOLCHAIN: 1.90.0
+  CARGO_BUILD_JOBS: '2'
+  CARGO_INCREMENTAL: '0'
+  COLLECTION_PURPOSE: ${{ inputs.purpose }}
+  BASELINE_REF: ${{ inputs.baseline_ref }}
+  NATIVE_RUN_ID: ${{ inputs.native_run_id }}
+
+jobs:
+  python:
+    name: performance-python (${{ matrix.os }}, ${{ matrix.python }}, ${{ matrix.form }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+        python: ['3.12', '3.13', '3.14']
+        form: [wheel, source]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.native_run_id }}
+          name: native-python-${{ matrix.os }}-3.14
+          path: ${{ runner.temp }}/candidate-distribution
+      - name: Admit candidate source identity and prepare previous release source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NATIVE_RUN_ID: ${{ inputs.native_run_id }}
+          BASELINE_REF: ${{ inputs.baseline_ref }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN_ID}" > "${RUNNER_TEMP}/native-run.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          run=json.loads((Path(os.environ['RUNNER_TEMP'])/'native-run.json').read_text())
+          assert run['status']=='completed' and run['conclusion']=='success', 'candidate native run is not successful'
+          assert run['path']=='.github/workflows/native.yml', 'candidate distributions need native workflow provenance'
+          with open(os.environ['GITHUB_ENV'],'a') as env:
+              env.write('CANDIDATE_REVISION='+run['head_sha']+'\n')
+          PY
+          git archive --format=tar.gz --prefix=previous-release/ -o "${RUNNER_TEMP}/previous-release.tar.gz" "${BASELINE_REF}"
+          git rev-parse "${BASELINE_REF}^{commit}" > "${RUNNER_TEMP}/baseline-revision.txt"
+          mkdir "${RUNNER_TEMP}/previous-release"
+          tar -xzf "${RUNNER_TEMP}/previous-release.tar.gz" -C "${RUNNER_TEMP}/previous-release" --strip-components=1
+      - name: Build and install both owners before measurement
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal
+          python -m pip install uv==0.11.6
+          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/requirements.txt"
+          uv venv --python "$(command -v python)" "${RUNNER_TEMP}/candidate-env"
+          uv venv --python "$(command -v python)" "${RUNNER_TEMP}/baseline-env"
+          if [ "${{ runner.os }}" = Windows ]; then
+            candidate_python="${RUNNER_TEMP}/candidate-env/Scripts/python.exe"
+            baseline_python="${RUNNER_TEMP}/baseline-env/Scripts/python.exe"
+          else
+            candidate_python="${RUNNER_TEMP}/candidate-env/bin/python"
+            baseline_python="${RUNNER_TEMP}/baseline-env/bin/python"
+          fi
+          printf 'CANDIDATE_PYTHON=%s\nBASELINE_PYTHON=%s\n' "${candidate_python}" "${baseline_python}" >> "${GITHUB_ENV}"
+          if [ "${{ matrix.form }}" = wheel ]; then
+            uv pip install --python "${candidate_python}" --no-deps -r "${RUNNER_TEMP}/requirements.txt" "${RUNNER_TEMP}"/candidate-distribution/*.whl
+          else
+            uv pip install --python "${candidate_python}" --no-deps -r "${RUNNER_TEMP}/requirements.txt" "${RUNNER_TEMP}"/candidate-distribution/*.tar.gz
+          fi
+          uv pip install --python "${candidate_python}" --no-deps rust/tests/project-programs/python
+          CARGO_TARGET_DIR="${RUNNER_TEMP}/baseline-target" uv build --wheel "${RUNNER_TEMP}/previous-release/python" --out-dir "${RUNNER_TEMP}/baseline-distribution" 2>&1 | tee "${RUNNER_TEMP}/baseline-build.log"
+          uv pip install --python "${baseline_python}" --no-deps -r "${RUNNER_TEMP}/requirements.txt" "${RUNNER_TEMP}"/baseline-distribution/*.whl
+      - name: Record actual installed origins and archive associations
+        run: |
+          candidate_artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"candidate-distribution").glob("*.whl" if "${{ matrix.form }}"=="wheel" else "*.tar.gz")))')
+          baseline_artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"baseline-distribution").glob("*.whl")))')
+          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host python --executable "${CANDIDATE_PYTHON}" --artifact "${candidate_artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/native-python-${{ matrix.os }}-3.14/$(basename "${candidate_artifact}")" --form "${{ matrix.form }}" --build-association "completed native workflow source/package association; current job installs wheel or rebuilds source before measurement" --output "${RUNNER_TEMP}/candidate-installation"
+          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "$(cat "${RUNNER_TEMP}/baseline-revision.txt")" --host python --executable "${BASELINE_PYTHON}" --artifact "${baseline_artifact}" --artifact-reference "source-built:${BASELINE_REF}/$(basename "${baseline_artifact}")" --form wheel --build-association "clean source-built previous release archive; baseline-build.log retained; not a downloaded previous-release binary" --output "${RUNNER_TEMP}/baseline-installation"
+      - name: Collect candidate with independent truth before timing
+        id: candidate
+        continue-on-error: true
+        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${CANDIDATE_PYTHON}" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence"
+      - name: Collect compatible previous-release Python reference on the same runner
+        id: baseline
+        continue-on-error: true
+        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence"
+      - name: Preserve source baseline, distributions and every raw observation
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-python-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.form }}
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/native-run.json
+            ${{ runner.temp }}/previous-release.tar.gz
+            ${{ runner.temp }}/baseline-revision.txt
+            ${{ runner.temp }}/baseline-build.log
+            ${{ runner.temp }}/baseline-distribution
+            ${{ runner.temp }}/candidate-distribution
+            ${{ runner.temp }}/candidate-installation
+            ${{ runner.temp }}/baseline-installation
+            ${{ runner.temp }}/candidate-evidence
+            ${{ runner.temp }}/baseline-evidence
+          if-no-files-found: error
+      - name: Require complete evidence after preserving failures
+        if: always()
+        run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success
+
+  r:
+    name: performance-r (${{ matrix.os }}, source)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.6.1'
+          rtools-version: ${{ runner.os == 'Windows' && '45' || '' }}
+          use-public-rspm: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.native_run_id }}
+          name: native-r-${{ matrix.os }}
+          path: ${{ runner.temp }}/candidate-distribution
+      - name: Admit source identity and build R and its admitted monotonic timer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NATIVE_RUN_ID: ${{ inputs.native_run_id }}
+          R_LIBS: ${{ runner.temp }}/performance-r-library
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN_ID}" > "${RUNNER_TEMP}/native-run.json"
+          python - <<'PY'
+          import json, os, tarfile, urllib.request
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          run=json.loads((root/'native-run.json').read_text())
+          assert run['status']=='completed' and run['conclusion']=='success', 'candidate native run is not successful'
+          assert run['path']=='.github/workflows/native.yml', 'unexpected candidate artifact workflow'
+          (root/'performance-r-library').mkdir()
+          archive=root/'microbenchmark_1.5.0.tar.gz'
+          with urllib.request.urlopen('https://cran.r-project.org/src/contrib/microbenchmark_1.5.0.tar.gz') as source:
+              archive.write_bytes(source.read())
+          with tarfile.open(archive) as source:
+              source.extractall(root/'timer-source', filter='data')
+          with open(os.environ['GITHUB_ENV'],'a') as env:
+              env.write('CANDIDATE_REVISION='+run['head_sha']+'\n')
+              env.write('R_LIBS='+str(root/'performance-r-library')+'\n')
+          PY
+          rustup toolchain install 1.90.0 --profile minimal
+          if [ "${{ runner.os }}" = Windows ]; then
+            rustup target add --toolchain 1.90.0 x86_64-pc-windows-gnu
+          fi
+          Rscript --vanilla -e 'install.packages("jsonlite", repos="https://cloud.r-project.org", lib=Sys.getenv("R_LIBS"))'
+          R CMD INSTALL --library="${R_LIBS}" "${RUNNER_TEMP}/timer-source/microbenchmark" 2>&1 | tee "${RUNNER_TEMP}/timer-build.log"
+          R CMD INSTALL --library="${R_LIBS}" rust/tests/project-programs/r
+          R CMD INSTALL --library="${R_LIBS}" "${RUNNER_TEMP}"/candidate-distribution/*.tar.gz 2>&1 | tee "${RUNNER_TEMP}/candidate-build.log"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          extensions={'.so','.dll','.dylib'}
+          libraries=[p for p in (root/'timer-source/microbenchmark/src').rglob('*') if p.suffix in extensions]
+          assert len(libraries)==1, 'retained built timer library missing or ambiguous'
+          config=root/'timer-build.log' if os.name=='nt' else root/'timer-source/microbenchmark/src/config.h'
+          assert config.is_file(), 'actual selected timer config missing'
+          with open(os.environ['GITHUB_ENV'],'a') as env:
+              env.write('TIMER_LIBRARY='+str(libraries[0])+'\n')
+              env.write('TIMER_CONFIG='+str(config)+'\n')
+          PY
+      - name: Record actual installed R origins and source association
+        run: |
+          artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"candidate-distribution").glob("*.tar.gz")))')
+          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "${CANDIDATE_REVISION}" --host r --executable "$(command -v Rscript)" --artifact "${artifact}" --artifact-reference "github-actions:${NATIVE_RUN_ID}/native-r-${{ matrix.os }}/$(basename "${artifact}")" --form source --build-association "completed native workflow source archive; rebuilt before collection; candidate-build.log retained" --clock-config "${TIMER_CONFIG}" --clock-library "${TIMER_LIBRARY}" --output "${RUNNER_TEMP}/candidate-installation"
+      - name: Secure and install previous-release Python reference on the R runner
+        env:
+          BASELINE_REF: ${{ inputs.baseline_ref }}
+        run: |
+          python -m pip install uv==0.11.6
+          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/requirements.txt"
+          git archive --format=tar.gz --prefix=previous-release/ -o "${RUNNER_TEMP}/previous-release.tar.gz" "${BASELINE_REF}"
+          git rev-parse "${BASELINE_REF}^{commit}" > "${RUNNER_TEMP}/baseline-revision.txt"
+          mkdir "${RUNNER_TEMP}/previous-release"
+          tar -xzf "${RUNNER_TEMP}/previous-release.tar.gz" -C "${RUNNER_TEMP}/previous-release" --strip-components=1
+          CARGO_TARGET_DIR="${RUNNER_TEMP}/baseline-target" uv build --wheel "${RUNNER_TEMP}/previous-release/python" --out-dir "${RUNNER_TEMP}/baseline-distribution" 2>&1 | tee "${RUNNER_TEMP}/baseline-build.log"
+          uv venv --python "$(command -v python)" "${RUNNER_TEMP}/baseline-env"
+          if [ "${{ runner.os }}" = Windows ]; then
+            baseline_python="${RUNNER_TEMP}/baseline-env/Scripts/python.exe"
+          else
+            baseline_python="${RUNNER_TEMP}/baseline-env/bin/python"
+          fi
+          printf 'BASELINE_PYTHON=%s\n' "${baseline_python}" >> "${GITHUB_ENV}"
+          uv pip install --python "${baseline_python}" --no-deps -r "${RUNNER_TEMP}/requirements.txt" "${RUNNER_TEMP}"/baseline-distribution/*.whl
+          artifact=$(python -c 'from pathlib import Path; import os; print(next((Path(os.environ["RUNNER_TEMP"])/"baseline-distribution").glob("*.whl")))')
+          python rust/tools/performance_installation.py --repository "${GITHUB_WORKSPACE}" --revision "$(cat "${RUNNER_TEMP}/baseline-revision.txt")" --host python --executable "${baseline_python}" --artifact "${artifact}" --artifact-reference "source-built:${BASELINE_REF}/$(basename "${artifact}")" --form wheel --build-association "clean source-built previous release archive on the R measurement runner; baseline-build.log retained" --output "${RUNNER_TEMP}/baseline-installation"
+      - name: Collect installed R with independent truth and child lifetime peak RSS
+        id: candidate
+        continue-on-error: true
+        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host r --executable "$(command -v Rscript)" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence"
+      - name: Collect compatible previous-release reference on the same R runner
+        id: baseline
+        continue-on-error: true
+        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence"
+      - name: Preserve R package, clock build and every raw observation
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: performance-r-${{ matrix.os }}-source
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/native-run.json
+            ${{ runner.temp }}/candidate-distribution
+            ${{ runner.temp }}/candidate-build.log
+            ${{ runner.temp }}/timer-build.log
+            ${{ runner.temp }}/microbenchmark_1.5.0.tar.gz
+            ${{ runner.temp }}/timer-source
+            ${{ runner.temp }}/candidate-installation
+            ${{ runner.temp }}/candidate-evidence
+            ${{ runner.temp }}/previous-release.tar.gz
+            ${{ runner.temp }}/baseline-revision.txt
+            ${{ runner.temp }}/baseline-build.log
+            ${{ runner.temp }}/baseline-distribution
+            ${{ runner.temp }}/baseline-installation
+            ${{ runner.temp }}/baseline-evidence
+          if-no-files-found: error
+      - name: Require complete evidence after preserving failures
+        if: always()
+        run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success

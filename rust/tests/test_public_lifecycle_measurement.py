@@ -499,6 +499,7 @@ class Pipeline(unittest.TestCase):
         for name in (
             "measure_public_lifecycle.py",
             "public_lifecycle_worker_protocol.json",
+            "child_peak_rss.py",
             *controller.WORKERS.values(),
         ):
             shutil.copyfile(TOOLS / name, harness_repo / name)  # deliberately untracked
@@ -1042,7 +1043,7 @@ cat("actual jsonlite authored binary64 transport PASS\\n")
                 ),
             ):
                 self.assertEqual(worker.run(request), 0)
-            self.assertEqual(calls, ["build", "metadata", "build", "metadata"])
+            self.assertEqual(calls, ["build", "build"])
             self.assertIsNot(domains[0], domains[1])
             response = json.loads((root / "response.json").read_text(encoding="utf-8"))
             self.assertEqual(
