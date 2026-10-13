@@ -26,6 +26,42 @@ CASES = (
 
 
 class PublicEnvironment(unittest.TestCase):
+    def test_supplied_missing_environment_precedes_bad_or_absent_entry_without_activation(self):
+        directory = self.directory.resolve()
+        os.chdir(directory)
+        # The diagnostic echoes the path in the operating system's working-
+        # directory spelling: physical on POSIX, but Windows preserves the
+        # 8.3 short components of the temp path (RUNNER~1), which
+        # Path.resolve() would expand. Build the expectation from Path.cwd().
+        expected = {
+            "phase": "validation", "condition": "project_environment_missing",
+            "requirement": "REQ-0694", "spec_paths": ["environment"],
+            "context": json.dumps({"cause": "missing", "path": (Path.cwd() / "missing-environment.yaml").as_posix()},
+                ensure_ascii=False, separators=(",", ":")),
+        }
+        with (
+            patch.object(host, "verify_versions", side_effect=AssertionError("unexpected activation")),
+            patch.object(host, "resolve_callable", side_effect=AssertionError("unexpected binding")),
+        ):
+            for content in (None, "[entry must not be read"):
+                if content is not None:
+                    Path("spec.yaml").write_text(content)
+                checked = yamaa.check("spec.yaml", environment="missing-environment.yaml")
+                failed = yamaa.domain("spec.yaml", environment="missing-environment.yaml")
+                self.assertEqual(checked.issues.to_dicts(), [expected])
+                self.assertEqual(failed.issues.to_dicts(), [expected])
+                self.assertIsNone(failed.output)
+                with self.assertRaises(yamaa.DomainError):
+                    failed.save()
+        self.assertEqual(sorted(p.name for p in self.directory.iterdir()), ["spec.yaml"])
+        Path("spec.yaml").unlink()
+        Path("environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
+        checked = yamaa.check("spec.yaml", environment="environment.yaml")
+        self.assertEqual(checked.issues["condition"].to_list(), ["engine_rejected"])
+        self.assertEqual(json.loads(checked.issues["context"][0]),
+            {"code": "resource_missing", "stage": "prepare"})
+        self.assertEqual(sorted(p.name for p in self.directory.iterdir()), ["environment.yaml"])
+
     def test_submission_version_schema_admission_precedes_any_artifact_or_study_read(self):
         os.chdir(self.directory)
         Path("spec.yaml").write_text(

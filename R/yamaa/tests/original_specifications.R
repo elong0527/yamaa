@@ -1241,7 +1241,12 @@ dir.create(file.path(directory,"absent"))
 stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(file.path(directory,"absent/output.csv")),charToRaw("ID\n-9223372036854775808\n9223372036854775807\n")))
 refused <- yamaa_domain("absent.yaml",environment="absent-environment.yaml")
 stopifnot(is.null(domain_observations(refused)))
-stopifnot(is.null(refused$output),identical(refused$issues$condition,"engine_rejected"),identical(refused$issues,yamaa_check("absent.yaml",environment="absent-environment.yaml")$issues))
+stopifnot(is.null(refused$output),identical(refused$issues$phase,"validation"),
+  identical(refused$issues$condition,"project_environment_missing"),
+  identical(refused$issues$requirement,"REQ-0694"),identical(refused$issues$spec_paths,list("environment")),
+  identical(refused$issues$context,paste0('{"cause":"missing","path":',
+    json_text(file.path(normalizePath(getwd(),winslash="/"),"absent-environment.yaml")),'}')),
+  identical(refused$issues,yamaa_check("absent.yaml",environment="absent-environment.yaml")$issues))
 stopifnot(inherits(tryCatch(yamaa_domain(NULL),error=identity),"error"))
 for(path in c(strrep("x",65537L),strrep("\u00e9",32769L))) {
   refused <- yamaa_domain(path)
