@@ -232,6 +232,7 @@ pub struct NativeReport<'a, 'i> {
     id: Identity<'i>,
     selected: Option<usize>,
     maximum: usize,
+    encoded_left: Option<usize>,
     budget: Option<Budget>,
     value: Option<StoredReport>,
     logs: Vec<NodeLogs>,
@@ -243,6 +244,7 @@ impl<'a, 'i> NativeReport<'a, 'i> {
             id,
             selected: None,
             maximum: 0,
+            encoded_left: None,
             budget: None,
             value: None,
             logs: Vec::new(),
@@ -254,15 +256,38 @@ impl<'a, 'i> NativeReport<'a, 'i> {
             .nth(self.selected.ok_or(Error::InvalidObservation)?)
             .ok_or(Error::InvalidObservation)
     }
-    fn finish(&self, value: StoredReport) -> Result<StoredReport, Error> {
-        crate::report_projection::encoded_within_limit(&value, self.maximum)?;
-        report::bounded(value)
+    fn admit_budget(&mut self, maximum: usize) {
+        if self.encoded_left.is_none() {
+            let maximum = maximum.min(yamaa_engine::capacity::REPORT_ENCODED_BYTES);
+            self.encoded_left = Some(maximum);
+            self.budget = Some(Budget::new(maximum));
+        }
+    }
+    fn finish(&mut self, value: StoredReport) -> Result<StoredReport, Error> {
+        let length = crate::report_projection::encoded_length_within_limit(
+            &value,
+            self.maximum
+                .min(self.encoded_left.ok_or(Error::InvalidObservation)?),
+        )?;
+        let value = report::bounded(value)?;
+        *self
+            .encoded_left
+            .as_mut()
+            .ok_or(Error::InvalidObservation)? -= length;
+        Ok(value)
     }
     pub(crate) fn take_logs(&mut self) -> Vec<NodeLogs> {
         std::mem::take(&mut self.logs)
     }
 }
 impl ReportPort for NativeReport<'_, '_> {
+    fn report_allowance(&mut self, total: usize, _nodes: usize) -> usize {
+        self.admit_budget(total);
+        total.min(
+            self.encoded_left
+                .expect("admitted cumulative report budget"),
+        )
+    }
     fn prepare_diagnostics<C, D, T: TableAccess>(
         &mut self,
         node: &Node,
@@ -270,6 +295,7 @@ impl ReportPort for NativeReport<'_, '_> {
         output_bytes: usize,
         report_bytes: usize,
     ) -> Result<usize, Error> {
+        self.admit_budget(report_bytes);
         use crate::verification_logs::{self as logs, PreparationLimits};
         let count = self.provenance.metadata().nodes().len();
         let index = self
@@ -288,7 +314,7 @@ impl ReportPort for NativeReport<'_, '_> {
         if !declarations.declared() {
             return Ok(0);
         }
-        let mut budget = Budget::new(report_bytes);
+        let budget = self.budget.as_mut().ok_or(Error::InvalidObservation)?;
         budget.entries(count)?;
         budget.work(count.checked_mul(3).ok_or(Error::OutputLimit)?)?;
         if self.logs.len() >= count || self.logs.iter().any(|held| held.node == index) {
@@ -296,7 +322,7 @@ impl ReportPort for NativeReport<'_, '_> {
         }
         let slots = usize::from(declarations.verification().is_some())
             + usize::from(declarations.warning().is_some());
-        let value = log_observations(&view, attempt, &identity(&view, &self.id), &mut budget)?;
+        let value = log_observations(&view, attempt, &identity(&view, &self.id), budget)?;
         let success = attempt
             .result
             .as_ref()
@@ -332,10 +358,10 @@ impl ReportPort for NativeReport<'_, '_> {
         maximum: usize,
     ) -> Result<(), Error> {
         self.selected = None;
-        self.budget = None;
         self.value = None;
         self.maximum = maximum;
-        let mut budget = Budget::new(maximum);
+        self.admit_budget(maximum);
+        let budget = self.budget.as_mut().ok_or(Error::InvalidObservation)?;
         let count = self.provenance.metadata().nodes().len();
         budget.entries(count)?;
         budget.work(count.checked_mul(3).ok_or(Error::OutputLimit)?)?;
@@ -351,10 +377,8 @@ impl ReportPort for NativeReport<'_, '_> {
             .report_views()
             .nth(index)
             .ok_or(Error::InvalidObservation)?;
-        let value =
-            successful_observations(&view, attempt, &identity(&view, &self.id), &mut budget)?;
+        let value = successful_observations(&view, attempt, &identity(&view, &self.id), budget)?;
         self.selected = Some(index);
-        self.budget = Some(budget);
         self.value = Some(value);
         Ok(())
     }

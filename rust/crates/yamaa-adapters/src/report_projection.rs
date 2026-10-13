@@ -79,6 +79,28 @@ impl Budget {
         self.work(cells)?;
         Ok(())
     }
+    /// Three callers use this charge for actual Arrow, public Option<T> vectors
+    /// and IPC ownership. Each pass reserves 64 bytes per visited typed cell:
+    /// at most twice the 24-byte Option<String> slot, primitive/null/offset
+    /// buffers and bounded IPC capacity. Per-column admission covers minimum
+    /// UTF-8 builder capacity and schema/array owners. No JSON map is allocated.
+    pub(crate) fn typed_shape(&mut self, rows: usize, columns: usize) -> Result<(), Error> {
+        let cells = rows.checked_mul(columns).ok_or(Error::OutputLimit)?;
+        self.cells = self.cells.checked_sub(cells).ok_or(Error::OutputLimit)?;
+        self.work(cells)?;
+        self.retained_bytes(cells.checked_mul(64).ok_or(Error::OutputLimit)?)?;
+        self.retained_bytes(columns.checked_mul(2048).ok_or(Error::OutputLimit)?)
+    }
+    /// Borrowed string payloads can coexist in an exact owned string, grown
+    /// Arrow data and grown IPC byte vector. The three admitted passes retain
+    /// twelve bytes per input UTF-8 byte in total; other scalars own no text.
+    pub(crate) fn typed_cell(&mut self, value: &ValueRef<'_>) -> Result<(), Error> {
+        if let ValueRef::Str(text) = value {
+            self.work(text.len().checked_mul(2).ok_or(Error::OutputLimit)?)?;
+            self.retained_bytes(text.len().checked_mul(4).ok_or(Error::OutputLimit)?)?;
+        }
+        Ok(())
+    }
     pub(crate) fn scalar(&mut self, value: &Scalar) -> Result<(), Error> {
         match value {
             Scalar::Str(text) => self.text(text),
@@ -247,10 +269,10 @@ impl Drop for Budget {
 
 /// Count the actual compact encoded representation without first allocating
 /// an unbounded temporary String. The writer stops at the admitted ceiling.
-pub(crate) fn encoded_within_limit(
+pub(crate) fn encoded_length_within_limit(
     value: &impl serde::Serialize,
     maximum: usize,
-) -> Result<(), Error> {
+) -> Result<usize, Error> {
     struct Counter {
         remaining: usize,
         exceeded: bool,
@@ -277,7 +299,7 @@ pub(crate) fn encoded_within_limit(
         exceeded: false,
     };
     match serde_json::to_writer(&mut counter, value) {
-        Ok(()) => Ok(()),
+        Ok(()) => Ok(maximum - counter.remaining),
         Err(_) if counter.exceeded => Err(Error::OutputLimit),
         Err(_) => Err(Error::InvalidObservation),
     }
@@ -303,6 +325,55 @@ mod tests {
         let value = Value::Array(vec![Value::String("x".repeat(4096)); 100]);
         assert!(matches!(
             encoded_within_limit(&value, 4096),
+            Err(Error::OutputLimit)
+        ));
+    }
+}
+
+/// Admit the complete encoded value without retaining its serialization.
+pub(crate) fn encoded_within_limit(
+    value: &impl serde::Serialize,
+    maximum: usize,
+) -> Result<(), Error> {
+    encoded_length_within_limit(value, maximum).map(|_| ())
+}
+
+#[cfg(test)]
+mod typed_copy_tests {
+    use super::*;
+    #[test]
+    fn typed_copy_admission_counts_actual_slots_utf8_and_exact_byte_boundaries() {
+        assert!(std::mem::size_of::<Option<String>>() <= 24);
+        assert!(std::mem::size_of::<Option<i64>>() <= 16);
+        assert!(std::mem::size_of::<Option<f64>>() <= 16);
+        assert!(std::mem::size_of::<Option<i32>>() <= 8);
+        for (available, accepted) in [(64 + 2048 + 4 * 3, true), (64 + 2048 + 4 * 3 - 1, false)] {
+            let mut budget = Budget::new(16_777_216);
+            budget.bytes = available;
+            budget.typed_shape(1, 1).unwrap();
+            assert_eq!(budget.typed_cell(&ValueRef::Str("éx")).is_ok(), accepted);
+            if accepted {
+                assert_eq!(budget.bytes, 0);
+            }
+        }
+        let mut budget = Budget::new(16_777_216);
+        let before = budget.bytes;
+        for cell in [
+            ValueRef::Int(i64::MAX),
+            ValueRef::Bool(true),
+            ValueRef::Missing,
+        ] {
+            budget.typed_cell(&cell).unwrap();
+        }
+        assert_eq!(budget.bytes, before);
+    }
+    #[test]
+    fn cumulative_encoded_admission_returns_actual_bytes_and_refuses_one_over() {
+        let value = serde_json::json!({"rows":["é",1,true]});
+        let actual = serde_json::to_vec(&value).unwrap().len();
+        assert_eq!(encoded_length_within_limit(&value, actual).unwrap(), actual);
+        assert!(matches!(
+            encoded_length_within_limit(&value, actual - 1),
             Err(Error::OutputLimit)
         ));
     }

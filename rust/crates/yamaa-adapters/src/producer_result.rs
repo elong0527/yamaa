@@ -618,7 +618,7 @@ fn root_output<E>(
     // before any of those owners allocate. Serialized CSV precision is irrelevant.
     for _ in 0..3 {
         budget
-            .shape(table.row_count(), columns.len())
+            .typed_shape(table.row_count(), columns.len())
             .map_err(|_| TableTransportError::OutputLimit)?;
         for (index, column) in columns.iter().enumerate() {
             budget
@@ -627,7 +627,7 @@ fn root_output<E>(
             for row in 0..table.row_count() {
                 let cell = table.cell(row, index).map_err(|_| invalid)?;
                 budget
-                    .cell(&cell)
+                    .typed_cell(&cell)
                     .map_err(|_| TableTransportError::OutputLimit)?;
             }
         }

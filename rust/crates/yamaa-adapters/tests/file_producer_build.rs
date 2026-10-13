@@ -1480,7 +1480,13 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
     use yamaa_adapters::{producer_result, table_transport::TableTransportError};
     let study = Study::new();
     study.rounded();
-    let declarations = (0..59).map(|index| format!("  - {{name: EXTRA{index}, type: float, label: Extra value, derivation: {{literal: 1.234}}}}\n")).collect::<String>();
+    study.write(
+        "producer/layers/base.yaml",
+        PRODUCER
+            .replace("ID: int", "ID: str")
+            .replace("name: ID, type: int", "name: ID, type: str"),
+    );
+    let declarations = (0..59).map(|index| format!("  - {{name: EXTRA{index}, type: str, label: Extra value, derivation: {{literal: null}}}}\n")).collect::<String>();
     let names = std::iter::once("ID".to_owned())
         .chain(std::iter::once("VALUE".to_owned()))
         .chain((0..59).map(|index| format!("EXTRA{index}")))
@@ -1489,6 +1495,7 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
     study.write(
         "consumer/root.yaml",
         CONSUMER
+            .replace("name: ID, type: int", "name: ID, type: str")
             .replace("output: {path:", &format!("{declarations}output: {{path:"))
             .replace(
                 "columns: [ID, VALUE], decimals: 2",
@@ -1499,7 +1506,7 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
         "raw/raw.csv",
         format!(
             "ID,VALUE\n{}",
-            (1..=1200)
+            (1..=6000)
                 .map(|index| format!("{index},1.234\n"))
                 .collect::<String>()
         ),
@@ -1509,7 +1516,9 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
     let attempt = build.build_reported(&mut host, report_id(), Limits::default());
     assert!(attempt.accepted());
     let before = host.trace.clone();
-    match producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]) {
+    // Three actual typed-copy passes visit more than one million cells.
+    // The complete indexed graph and encoded report remain accepted first.
+    match producer_result::prepare_classified(&attempt, report_id(), 16_777_216, &[]) {
         Err(producer_result::Error::Output {
             attempt: held,
             observations,
@@ -2029,7 +2038,7 @@ fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier
         attempt_report(&first, report_id(), 16_777_216).unwrap()["error"]["code"],
         "output_limit"
     );
-    limits.engine.report_bytes = 16384;
+    limits.engine.report_bytes = 8192;
     let later = build.build_reported(&mut activation, report_id(), limits);
     assert!(!later.accepted());
     assert_eq!(later.graph.nodes.len(), 2);

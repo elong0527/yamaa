@@ -14,9 +14,10 @@ pub const IDENTITY_TEXT_BYTES: usize = 8 * 1024 * 1024;
 
 /// Encoded JSON and pre-clone retained storage have different units. The first
 /// prototype leaves the existing encoded ceiling intact while admitting at
-/// most four retained-storage bytes per encoded-budget byte, capped at 64 MiB.
-/// Allocation charges still precede ownership growth; graph node fractions
-/// preserve the aggregate ceiling. Actual RSS qualification remains required.
+/// most six retained-storage bytes per encoded-budget byte, capped at 96 MiB.
+/// Allocation charges precede ownership growth. Native graph reports pool actual
+/// encoded lengths and cumulative retained charges. This is an unapproved
+/// frontier prototype; actual RSS qualification remains required.
 pub const REPORT_ENCODED_BYTES: usize = 16 * 1024 * 1024;
-pub const REPORT_RETAINED_FACTOR: usize = 4;
-pub const REPORT_RETAINED_BYTES: usize = 64 * 1024 * 1024;
+pub const REPORT_RETAINED_FACTOR: usize = 6;
+pub const REPORT_RETAINED_BYTES: usize = 96 * 1024 * 1024;

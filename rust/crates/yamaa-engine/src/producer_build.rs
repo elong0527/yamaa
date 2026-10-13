@@ -78,6 +78,12 @@ pub trait CodecPort {
 /// Select the original node context and enforce this report's complete byte
 /// budget. Reports own observations only; no method grants publication authority.
 pub trait ReportPort: OutputReport {
+    /// Default report ports retain the conservative equal share. A native port
+    /// may pool this capacity only while admitting cumulative actual encoded
+    /// lengths and retained storage before making any artifact available.
+    fn report_allowance(&mut self, total: usize, nodes: usize) -> usize {
+        total / nodes
+    }
     /// Prepare bounded diagnostic output from this actual entered attempt before
     /// its primary can become available to any dependent. This also runs after
     /// an execution/source failure, preserving the original attempt unchanged.
@@ -391,11 +397,12 @@ impl PreparedBuild {
                 node_limits,
                 &mut entered.dataset,
             );
+            let report_allowance = ports.report.report_allowance(limits.report_bytes, count);
             let diagnostics = ports.report.prepare_diagnostics(
                 node,
                 &entered.dataset,
                 output_left,
-                limits.report_bytes / count,
+                report_allowance,
             );
             match diagnostics {
                 Ok(bytes) if bytes <= output_left => output_left -= bytes,
@@ -420,12 +427,13 @@ impl PreparedBuild {
                 attempt.outcome = Err(Failure::Node { node: index });
                 return Err("producer_build_failed");
             };
+            let report_allowance = ports.report.report_allowance(limits.report_bytes, count);
             let prepared = prepare_output(
                 node,
                 plan,
                 &entered.dataset,
                 execution,
-                (output_left, limits.report_bytes / count),
+                (output_left, report_allowance),
                 ports.report,
                 ports.codec,
             );

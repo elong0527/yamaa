@@ -392,7 +392,8 @@ mod tests {
     #[test]
     fn row_buffer_equality_and_one_over_admit_before_any_owned_bytes() {
         use std::io::Write;
-        for (allowance, accepted) in [(12, true), (11, false)] {
+        let minimum = 48usize.div_ceil(yamaa_engine::capacity::REPORT_RETAINED_FACTOR);
+        for (allowance, accepted) in [(minimum, true), (minimum - 1, false)] {
             let mut budget = crate::report_projection::Budget::new(allowance);
             let mut writer = RowWriter {
                 bytes: Vec::new(),
