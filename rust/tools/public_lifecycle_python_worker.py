@@ -79,18 +79,24 @@ def issues(value, pl):
 
 
 def metadata(yamaa):
-    # This explicit native metadata call is made only after public Build.
-    native = yamaa._native
-    info = native.engine_info()
+    # Installed metadata follows Build. Core version requires source/build evidence.
+    native = getattr(yamaa, "_native", None)
+    if native is None:
+        import importlib.util
+        native_origin = importlib.util.find_spec("yamaa._native").origin
+    else:
+        native_origin = native.__file__
     return {
         "host": "python",
         "runtime_version": platform.python_version(),
         "report_runtime_version": sys.version,
         "package_version": yamaa.__version__,
-        "engine_version": info["core_version"],
+        "engine_version": getattr(native, "_CORE_VERSION", None),
+        "engine_version_availability": ("compiled metadata constant" if getattr(native, "_CORE_VERSION", None) else
+                                        "compiled core metadata unavailable; source build attestation retained"),
         "installed_origins": {
             "package": str(Path(yamaa.__file__).resolve().parent),
-            "native": str(Path(native.__file__).resolve()),
+            "native": str(Path(native_origin).resolve()),
         },
         "executable": str(Path(sys.executable).resolve()),
         "system": platform.system(),
