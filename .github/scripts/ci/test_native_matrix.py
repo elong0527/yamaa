@@ -1,4 +1,4 @@
-"""Check that Linux PR coverage retains its dependencies and main retains all coverage."""
+"""Check installed matrices and the main-only shared Rust coverage policy."""
 
 import itertools
 import json
@@ -36,6 +36,7 @@ class NativeCoverage(unittest.TestCase):
                 )
                 self.assertIn(values["compare-os"], native_matrix.PLATFORMS)
                 self.assertEqual(values["full"], str(event != "pull_request").lower())
+                self.assertEqual(values["run-rust"], str(event == "push").lower())
                 self.assertEqual(
                     len(json.loads(values["qualify"])["include"]),
                     4 if event == "pull_request" else 18,
@@ -62,12 +63,16 @@ class NativeCoverage(unittest.TestCase):
         self.assertEqual(len(coverage["build"]["include"]), 3)
         self.assertEqual(coverage["r"]["os"], list(native_matrix.PLATFORMS))
         self.assertTrue(coverage["full"])
+        self.assertTrue(coverage["run-rust"])
 
-    def test_dispatch_qualifies_the_same_full_matrix_before_merge(self):
+    def test_dispatch_qualifies_the_same_installed_matrix_before_merge(self):
+        dispatch = native_matrix.plan("workflow_dispatch")
+        main = native_matrix.plan("push")
         self.assertEqual(
-            native_matrix.plan("workflow_dispatch"),
-            native_matrix.plan("push"),
+            {key: value for key, value in dispatch.items() if key != "run-rust"},
+            {key: value for key, value in main.items() if key != "run-rust"},
         )
+        self.assertFalse(dispatch["run-rust"])
 
     def test_pr_checks_both_installation_forms_on_linux_and_python_endpoints(self):
         coverage = native_matrix.plan("pull_request")
@@ -92,6 +97,7 @@ class NativeCoverage(unittest.TestCase):
         self.assertFalse(coverage["full"])
         self.assertEqual(coverage["r"]["os"], ["ubuntu-24.04"])
         self.assertTrue(coverage["run-r"])
+        self.assertFalse(coverage["run-rust"])
 
     def test_comparison_uses_only_selected_evidence_and_requires_r_on_every_os(self):
         for platform in native_matrix.PLATFORMS:

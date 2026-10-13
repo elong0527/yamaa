@@ -42,6 +42,7 @@ def plan(event):
         "qualify": {"include": combinations},
         "r": {"os": r_platforms},
         "run-r": bool(r_platforms),
+        "run-rust": event == "push",
         "full": event in {"push", "workflow_dispatch"},
         "compare-os": platforms[0],
     }
@@ -126,15 +127,19 @@ def main():
     with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
         if coverage["full"]:
             summary.write(
-                "Full native coverage: all 18 Python combinations and all three R hosts.\n"
+                "Full installed native coverage: all 18 Python combinations "
+                "and all three R hosts.\n"
             )
         else:
             summary.write(
                 "PR native coverage: Linux, Python 3.12 and 3.14, "
                 "wheel and source installs.\n\n"
-                "Full platform coverage, cross-platform math, and complete cohort "
+                "Full installed platform coverage and complete cohort "
                 "comparisons run on main pushes or manual full-matrix dispatches.\n"
             )
+        summary.write(
+            "Shared Rust checks and cross-platform math run only on pushes to main.\n"
+        )
 
 
 if __name__ == "__main__":
