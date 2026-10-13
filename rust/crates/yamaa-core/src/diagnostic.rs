@@ -390,6 +390,7 @@ conditions! {
     ImplicitSourceKeyType => ("validation", "incompatible_input_type", Some("REQ-0151")),
     ImplicitSourceNoApplicableKeys => ("validation", "no_applicable_keys", Some("REQ-0152")),
     SourceFilterReference => ("validation", "unknown_field", Some("REQ-0132")),
+    SourceSelectionUnpaired => ("validation", "unpaired_fields", Some("REQ-0119")),
     SourceFilterSingleValue => ("validation", "prohibited_construct", Some("REQ-0148")),
     SourceUnknownReference => ("validation", "unknown_field", Some("REQ-0103")),
     VerificationUnknownReference => ("validation", "unknown_field", Some("REQ-0405")),

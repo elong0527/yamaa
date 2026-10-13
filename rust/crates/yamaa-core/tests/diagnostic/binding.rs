@@ -150,6 +150,37 @@ fn failures(prepared: &PreparedSpecification) -> Vec<BindFinding> {
 
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
+    for (declared, missing, value) in [
+        ("keep", "order_by", Text("first")),
+        ("order_by", "keep", List(vec![Text("SRC.V")])),
+    ] {
+        let prepared = compile(
+            Map(vec![(
+                "value",
+                Map(vec![(
+                    "source",
+                    Map(vec![("variable", Text("SRC.V")), (declared, value)]),
+                )]),
+            )]),
+            None,
+        );
+        let findings = failures(&prepared);
+        assert_eq!(findings.len(), 1);
+        reached.insert(check(
+            findings[0]
+                .diagnostics(prepared.source())
+                .unwrap()
+                .remove(0),
+            "unpaired_fields",
+            Some("REQ-0119"),
+            &["columns.VALUE.derivation.source"],
+            vec![
+                ("operation", text("source")),
+                ("declared", V::Sequence(vec![text(declared)])),
+                ("missing", V::Sequence(vec![text(missing)])),
+            ],
+        ));
+    }
     let source = source();
     let stored = [
         Field {
