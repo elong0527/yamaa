@@ -2396,7 +2396,12 @@ columns:
         result=yamaa.domain("absent.yaml",environment="absent-environment.yaml")
         self.assertIsNone(result._native.observations())
         self.assertIsNone(result.output)
-        self.assertEqual(result.issues["condition"].to_list(),["engine_rejected"])
+        self.assertEqual(result.issues.to_dicts(), [{
+            "phase": "validation", "condition": "project_environment_missing",
+            "requirement": "REQ-0694", "spec_paths": ["environment"],
+            "context": json.dumps({"cause": "missing", "path": Path("absent-environment.yaml").resolve().as_posix()},
+                                  ensure_ascii=False, separators=(",", ":")),
+        }])
         self.assertEqual(yamaa.check("absent.yaml",environment="absent-environment.yaml").issues.rows(),result.issues.rows())
         for path in ("x" * 65537, "\u00e9" * 32769):
             refused = yamaa.domain(path)
