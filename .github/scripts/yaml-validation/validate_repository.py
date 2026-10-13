@@ -7895,8 +7895,7 @@ def validate_spec_document(
         else:
             message = condition + ': ' + encoded
         sources = context.get('declaring_sources') or []
-        if isinstance(sources, str):
-            sources = [sources]
+        sources = [sources] if isinstance(sources, str) else list(sources)
         sources.extend([context[key] for key in ('source_identity', 'source')
             if isinstance(context.get(key), str)])
         contributed = next((source for source in sources
