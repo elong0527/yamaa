@@ -51,7 +51,7 @@ def validate_reference(case, authored, child, request, response, record, reposit
         for stage in ("save_1", "save_2"):
             for artifact in case["expected_artifacts"]:
                 name = actual.get("saved_artifacts", {}).get(stage, {}).get(artifact["path"])
-                if name is None or (child / name).read_bytes() != (authored / artifact["expected"]).read_bytes():
+                if name is None or lifecycle.retained_bytes(child / name) != (authored / artifact["expected"]).read_bytes():
                     raise ValueError("reference Save differs from independent bytes: " + artifact["path"])
 
 
@@ -149,7 +149,8 @@ def collect(args):
                            "host": args.host, "output": str(child), "provenance": record,
                            "unavailable": lifecycle.UNAVAILABLE, "repetitions": staged,
                            "evaluator": args.evaluator, "reference_schema": str(reference_schema) if reference_schema else None,
-                           "observe_callbacks": mode == "callback-observer"}
+                           "observe_callbacks": mode == "callback-observer",
+                           "compress_evidence": args.purpose == "characterization"}
                 lifecycle.write_json(child / "request.json", request)
                 process = lifecycle.launch(lifecycle.worker_command(args.host, executable,
                     harness / lifecycle.WORKERS[args.host], child / "request.json"), child)
@@ -178,8 +179,8 @@ def collect(args):
                     ordinary_child = output / row["children"][0]["child"]
                     ordinary = lifecycle.read_json(ordinary_child / "response.json")["repetitions"][0]
                     for stage in ("build", "save_1", "save_2"):
-                        lhs = (ordinary_child / ordinary["reports"][stage]).read_text().replace(ordinary["declaration"]["work_directory"], "<work>")
-                        rhs = (child / response["repetitions"][0]["reports"][stage]).read_text().replace(staged[0]["work_directory"], "<work>")
+                        lhs = lifecycle.retained_bytes(ordinary_child / ordinary["reports"][stage]).decode("utf-8").replace(ordinary["declaration"]["work_directory"], "<work>")
+                        rhs = lifecycle.retained_bytes(child / response["repetitions"][0]["reports"][stage]).decode("utf-8").replace(staged[0]["work_directory"], "<work>")
                         if json.loads(lhs) != json.loads(rhs):
                             raise ValueError("callback observer changed complete public observations")
                     observation["actual_callback_calls"] = actual["count"]

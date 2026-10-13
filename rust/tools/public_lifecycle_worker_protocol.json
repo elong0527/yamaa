@@ -21,7 +21,8 @@
     "representative_controller": "collect_public_performance.py",
     "representative_scope": "independent truth child before every case; all 21 installed tuples in dispatched performance.yml; source-built previous release archive/wheel retained; no unsupported baseline API becomes a timing sample",
     "optional_callback_observer": "once-delegating signature-preserving installed callable wrapper; full independent parameter/result trace; ordinary and observer complete normalized reports and both held Saves must agree; observer child never counts toward characterization",
-    "host_view_access_counts": "actual output/issues/log getter invocations; not internal allocation/copy estimates"
+    "host_view_access_counts": "actual output/issues/log getter invocations; not internal allocation/copy estimates",
+    "retention_compression": "characterization retains views, raw reports and copied saved bytes as lossless gzip members; decompressed original bytes decide independent acceptance. Clocks and compression are separate boundaries; public work files remain ordinary original files."
   },
   "workers": {
     "python": "public_lifecycle_python_worker.py",

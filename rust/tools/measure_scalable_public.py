@@ -175,7 +175,7 @@ def validate(case, authored, child, request, response, record, repository):
                 raise ValueError("held Save changes completed Build observations")
             for artifact in case["expected_artifacts"]:
                 name = actual["saved_artifacts"][stage][artifact["path"]]
-                if (child / name).read_bytes() != (
+                if lifecycle.retained_bytes(child / name) != (
                     authored / artifact["expected"]
                 ).read_bytes():
                     raise ValueError(

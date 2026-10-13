@@ -16,10 +16,17 @@ collector_paths <- vapply(request$provenance$collectors, function(x) dirname(x$o
 .libPaths(unique(c(dirname(request$provenance$installed_origins$package), collector_paths, .libPaths())))
 if (!requireNamespace("microbenchmark", quietly = TRUE)) stop("collector microbenchmark is absent")
 output <- request$output
+write_bytes <- function(path, bytes) {
+  if (endsWith(path, ".gz")) {
+    target <- gzfile(path, "wb", compression = 1L)
+    on.exit(close(target))
+    writeBin(bytes, target)
+  } else writeBin(bytes, path)
+}
 write_json <- function(path, value) {
   json <- jsonlite::toJSON(value, auto_unbox = TRUE, null = "null", na = "null",
                           digits = NA, pretty = TRUE, force = TRUE)
-  writeBin(charToRaw(enc2utf8(paste0(json, "\n"))), path)
+  write_bytes(path, charToRaw(enc2utf8(paste0(json, "\n"))))
 }
 failure <- function(error) {
   list(class = as.list(class(error)), message = conditionMessage(error),
@@ -150,7 +157,7 @@ for (declaration in request$repetitions) {
               unavailable = request$unavailable, rss = NULL, failure = NULL,
               reports = list(), saved_files = list(), save_returns = list(),
               evidence_capture_failures = list(), host_view_access_counts = list(), callback_observation = NULL,
-              views = paste0("rep-", declaration$index, "-views.json"))
+              views = paste0("rep-", declaration$index, "-views.json", if (isTRUE(request$compress_evidence)) ".gz" else ""))
   views <- list()
   result <- NULL
   prefix <- paste0("rep-", declaration$index)
@@ -173,20 +180,20 @@ for (declaration in request$repetitions) {
   retain_reached <- function(label, include_output = FALSE) {
     # Safe finally transport: never retry a Build/Save or replace its public cause.
     tryCatch({
-      filename <- paste0(prefix, "-", label, "-report.json")
+      filename <- paste0(prefix, "-", label, "-report.json", if (isTRUE(request$compress_evidence)) ".gz" else "")
       raw <- get(".domain_observations", asNamespace("yamaa"))(result)
-      writeBin(if (is.null(raw)) charToRaw("null") else raw, file.path(output, filename))
+      write_bytes(file.path(output, filename), if (is.null(raw)) charToRaw("null") else raw)
       row$reports[[label]] <<- filename
     }, error = function(error) secondary_failure(error, paste0(label, "_report")),
        interrupt = function(error) secondary_failure(error, paste0(label, "_report")))
     if (include_output) {
       tryCatch({
         if (file.exists(target)) {
-          filename <- paste0(prefix, "-", label, "-", declaration$output_name)
+          filename <- paste0(prefix, "-", label, "-", declaration$output_name, if (isTRUE(request$compress_evidence)) ".gz" else "")
           size <- file.info(target)$size
           if (is.na(size)) stop("reached output size is unavailable")
           bytes <- readBin(target, "raw", n = size)
-          writeBin(bytes, file.path(output, filename))
+          write_bytes(file.path(output, filename), bytes)
           row$saved_files[[label]] <<- filename
         }
         for (name in declaration$artifact_names) {
@@ -196,9 +203,9 @@ for (declaration in request$repetitions) {
           }
           artifact <- file.path(declaration$work_directory, name)
           if (file.exists(artifact)) {
-            filename <- paste0(prefix, "-", label, "-", name)
+            filename <- paste0(prefix, "-", label, "-", name, if (isTRUE(request$compress_evidence)) ".gz" else "")
             bytes <- readBin(artifact, "raw", n = file.info(artifact)$size)
-            writeBin(bytes, file.path(output, filename))
+            write_bytes(file.path(output, filename), bytes)
             row$saved_artifacts[[label]][[name]] <<- filename
           }
         }

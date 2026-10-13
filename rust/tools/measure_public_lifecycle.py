@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import copy
 import functools
+import gzip
 import json
 import math
 import os
@@ -62,8 +63,12 @@ def write_json(path, value):
     )
 
 
+def retained_bytes(path):
+    return gzip.decompress(path.read_bytes()) if path.suffix == ".gz" else path.read_bytes()
+
+
 def read_json(path):
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(retained_bytes(path).decode("utf-8"))
 
 
 @functools.lru_cache(maxsize=2048)

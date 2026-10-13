@@ -112,6 +112,9 @@ forms and a retained previous-release baseline before collection, and covers all
 truth child before timing. Characterization requires complete provenance and the
 approved counts. It retains every child, warm-up, raw report, saved bytes, RSS,
 failure and unlaunched slot, and preserves failures before rejecting the job.
+Characterization compresses retained views/reports/copied CSV bytes losslessly
+to keep the full raw scope within runner storage; comparisons use the original
+decompressed bytes. An actual installed compressed aggregate control passes.
 Callback observation runs separately and does not count toward timing samples.
 
 The 90-day Actions retention is a collection window. Preserve the accepted

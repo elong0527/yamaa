@@ -7,6 +7,7 @@ views and the held public Domain's raw observations for controller acceptance.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import platform
 import struct
@@ -17,10 +18,20 @@ from pathlib import Path
 
 
 def write_json(path, value):
-    path.write_text(
-        json.dumps(value, ensure_ascii=False, allow_nan=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    content = json.dumps(value, ensure_ascii=False, allow_nan=False, indent=2) + "\n"
+    if path.suffix == ".gz":
+        with gzip.open(path, "wt", encoding="utf-8", compresslevel=1) as target:
+            target.write(content)
+    else:
+        path.write_text(content, encoding="utf-8")
+
+
+def write_bytes(path, content):
+    if path.suffix == ".gz":
+        with gzip.open(path, "wb", compresslevel=1) as target:
+            target.write(content)
+    else:
+        path.write_bytes(content)
 
 
 def timed(durations, name, call):
@@ -187,7 +198,7 @@ def run(request):
             "evidence_capture_failures": [],
             "host_view_access_counts": {},
             "callback_observation": None,
-            "views": f"rep-{declaration['index']}-views.json",
+            "views": f"rep-{declaration['index']}-views.json" + (".gz" if request.get("compress_evidence") else ""),
         }
         views = {}
         result = None
@@ -203,12 +214,10 @@ def run(request):
             # Called once at the reached boundary, including from Save's finally.
             # A secondary transport error never replaces a pending public cause.
             try:
-                filename = prefix + "-" + label + "-report.json"
+                filename = prefix + "-" + label + "-report.json" + (".gz" if request.get("compress_evidence") else "")
                 raw = (None if request.get("evaluator") == "python-reference"
                        else result._native.observations())
-                (output / filename).write_bytes(
-                    b"null" if raw is None else raw.encode("utf-8")
-                )
+                write_bytes(output / filename, b"null" if raw is None else raw.encode("utf-8"))
                 row["reports"][label] = filename
             except BaseException as error:
                 capture_errors.append(error)
@@ -225,8 +234,9 @@ def run(request):
                     if target.exists():
                         filename = (
                             prefix + "-" + label + "-" + declaration["output_name"]
+                            + (".gz" if request.get("compress_evidence") else "")
                         )
-                        (output / filename).write_bytes(target.read_bytes())
+                        write_bytes(output / filename, target.read_bytes())
                         row["saved_files"][label] = filename
                     for name in declaration.get("artifact_names", []):
                         if (
@@ -239,8 +249,8 @@ def run(request):
                             continue
                         artifact = Path(declaration["work_directory"]) / name
                         if artifact.exists():
-                            filename = prefix + "-" + label + "-" + name
-                            (output / filename).write_bytes(artifact.read_bytes())
+                            filename = prefix + "-" + label + "-" + name + (".gz" if request.get("compress_evidence") else "")
+                            write_bytes(output / filename, artifact.read_bytes())
                             row.setdefault("saved_artifacts", {}).setdefault(label, {})[
                                 name
                             ] = filename
