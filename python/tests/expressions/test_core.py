@@ -55,6 +55,38 @@ def test_source_distinguishes_absence_present_missing_and_resolution_failure() -
     assert failed.condition == failure
 
 
+def test_empty_variable_name_is_absent_not_a_validation_error() -> None:
+    # An empty source name is absent like any other undeclared name: every
+    # resolver that reports absence used to raise a pydantic ValidationError
+    # constructing AbsentValue for it (its name required min_length=1), so
+    # evaluation escaped as a raw crash instead of the closed condition an
+    # absent name earns, and the `absent` handler could not answer it.
+    resolver = MappingResolver({})
+
+    absent = evaluate_expression({"source": ""}, resolver)
+    assert isinstance(absent, ConditionResult)
+    assert absent.condition.condition == "missing_input"
+    assert absent.condition.applicable_handler == "absent"
+
+    handled = evaluate_expression(
+        {"source": {"variable": "", "absent": None}},
+        resolver,
+    )
+    assert isinstance(handled, ValueResult)
+    assert handled.value is MISSING
+    assert handled.handled_by == "absent"
+
+    # A handler that resolves its source (str_pad) reports the same absence
+    # as its unknown_field condition rather than crashing in the resolver.
+    padded = evaluate_expression(
+        {"str_pad": {"source": "", "width": 3}},
+        resolver,
+    )
+    assert isinstance(padded, ConditionResult)
+    assert padded.condition.condition == "unknown_field"
+    assert padded.condition.context["identifier"] == ""
+
+
 def test_literal_normalizes_non_finite_values() -> None:
     result = evaluate_expression({"literal": math.inf}, MappingResolver({}))
 
