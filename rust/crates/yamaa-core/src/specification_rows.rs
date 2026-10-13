@@ -881,27 +881,6 @@ impl Rows {
                 filter,
             });
         }
-        for template in &templates {
-            if template.groups.is_some() {
-                for declaration in &template.declarations {
-                    if let RowOperation::Source(reference) = &declaration.operation {
-                        if row_intermediates::named_reference(d, reference)?
-                            && reference
-                                .split_once('.')
-                                .is_none_or(|(owner, _)| owner != template.driver)
-                            && !intermediates
-                                .reference(reference)
-                                .is_some_and(|(index, _)| intermediates.is_self(index))
-                        {
-                            return Err(unsupported(
-                                "grouped_intermediate_source",
-                                &declaration.path,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
         let mut self_admission =
             self_relations::FirstTemplate::new(d, project, intermediates, string_templates);
         for declaration in &templates[0].declarations {
@@ -960,22 +939,6 @@ impl Rows {
                     string_templates,
                     intermediates,
                 )?);
-            }
-        }
-        if templates.iter().any(|template| template.groups.is_some()) {
-            for declaration in &lowered_columns {
-                if let RowOperation::Source(reference) = &declaration.operation {
-                    if row_intermediates::named_reference(d, reference)?
-                        && !intermediates
-                            .reference(reference)
-                            .is_some_and(|(index, _)| intermediates.is_self(index))
-                    {
-                        return Err(unsupported(
-                            "grouped_intermediate_source",
-                            &declaration.path,
-                        ));
-                    }
-                }
             }
         }
         Ok(Self {
@@ -1199,16 +1162,6 @@ impl Rows {
                             .split_once('.')
                             .is_none_or(|(owner, _)| owner != name)
                     {
-                        if !named
-                            .reference(reference)
-                            .is_some_and(|(index, _)| named.is_self(index))
-                            && (matches!(phase, Phase::Row { group_by: Some(_) })
-                                || matches!(phase, Phase::Column { .. }) && !groups.is_empty())
-                        {
-                            return Err(BindError::InvalidPlan(
-                                crate::dataset::PlanError::InvalidIntermediate,
-                            ));
-                        }
                         row_intermediates::bind(
                             reference,
                             &declaration.path,
@@ -1277,13 +1230,14 @@ impl Rows {
                 named,
                 &intermediates,
             )?;
-            if let Some(named_index) = named_driver {
+            if let Some(named_driver) = named_driver {
                 named.driver_findings(
                     &template.driver,
                     &format!("rows[{index}].dataset"),
-                    intermediates[named_index]
+                    intermediates[named_driver]
                         .as_ref()
                         .ok_or(BindError::Internal)?,
+                    &secondary,
                     &mut findings,
                 )?;
             }

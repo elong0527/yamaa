@@ -40,7 +40,10 @@ pub(crate) mod odm;
 pub use odm::{BoundOdm, OdmRead, OdmScope, OdmTemplateScope};
 #[path = "dataset_intermediates.rs"]
 mod intermediates;
-pub use intermediates::{visit_output_dependencies, Intermediate, RecordMatchKey, SourceSchemas};
+pub use intermediates::{
+    visit_output_dependencies, Intermediate, IntermediateDerivations, IntermediateUnique,
+    RecordMatchKey, SourceSchemas,
+};
 #[path = "dataset_relation_predicate.rs"]
 pub(crate) mod relation_predicates;
 pub use relation_predicates::{CurrentField, CurrentRead, RelationPredicate};
@@ -59,7 +62,7 @@ mod self_relations;
 pub use self_relations::IntermediateSource;
 #[path = "dataset_match_values.rs"]
 mod match_values;
-pub use match_values::{IntermediateKey, MatchRead, MatchValue};
+pub use match_values::{ContextualMatch, IntermediateKey, MatchRead, MatchValue};
 #[path = "dataset_joined.rs"]
 mod joined;
 #[path = "dataset_lookup.rs"]
@@ -558,6 +561,7 @@ fn validate_function_intermediates(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn validate_assignment(
     assignment: &Assignment,
     available: &mut [bool],
@@ -566,6 +570,7 @@ fn validate_assignment(
     intermediates: &[Intermediate],
     output: &TableSchema,
     mode: &RowMode,
+    record_derivation: bool,
 ) -> Result<(), PlanError> {
     let mut remaining = EXPRESSION_NODE_LIMIT;
     validate_assignment_at(
@@ -579,6 +584,7 @@ fn validate_assignment(
         mode,
         0,
         &mut remaining,
+        record_derivation,
     )
 }
 /// Donor reads and named current-row reads use separate admitted schemas.
@@ -604,7 +610,126 @@ fn validate_record_assignment(
         &RowMode::Records,
         0,
         &mut remaining,
+        false,
     )
+}
+/// The augmented primary stores completed fields in output coordinates and
+/// appends immutable correlated operands after them. A raw source binding cannot
+/// use a later output coordinate just because the merged source schema contains it.
+fn validate_donor_reads(
+    expression: &Expression,
+    available: &[bool],
+    intermediates: &[Intermediate],
+) -> Result<(), PlanError> {
+    let column = |column: usize| {
+        if column < available.len() && !available[column] {
+            Err(PlanError::UnavailableColumn)
+        } else {
+            Ok(())
+        }
+    };
+    let read = |read: &Read| match read {
+        Read::Source(index) => column(*index),
+        Read::Intermediate { index, .. } => {
+            let item = intermediates
+                .get(*index)
+                .ok_or(PlanError::InvalidIntermediate)?;
+            for key in &item.keys {
+                if let Some(MatchRead::Record { column: index, .. }) = key.value.read() {
+                    column(*index)?;
+                }
+            }
+            for field in item.current_fields() {
+                if let CurrentRead::Record {
+                    source: 0,
+                    column: index,
+                } = field.read
+                {
+                    column(index)?;
+                }
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    };
+    match expression {
+        Expression::Source(index)
+        | Expression::Collect { column: index, .. }
+        | Expression::Reduce { column: index, .. } => column(*index)?,
+        Expression::Count {
+            column: Some(index),
+            ..
+        } => column(*index)?,
+        Expression::Intermediate { index, column } => read(&Read::Intermediate {
+            index: *index,
+            column: *column,
+        })?,
+        Expression::Compute(expression) => {
+            for binding in expression.bindings() {
+                read(&binding.read)?;
+            }
+        }
+        Expression::Flag(flag) => {
+            for binding in flag.bindings() {
+                match &binding.read {
+                    FlagRead::Read(value) => read(value)?,
+                    FlagRead::Collect { column: index, .. } => column(*index)?,
+                }
+            }
+        }
+        Expression::Function(function) => {
+            for argument in function.arguments() {
+                if let FunctionInput::Read(value) = &argument.input {
+                    read(value)?;
+                }
+            }
+        }
+        Expression::ProjectFunction(function) => {
+            for argument in function.arguments() {
+                if let FunctionInput::Read(value) = &argument.input {
+                    read(value)?;
+                }
+            }
+        }
+        Expression::Case(branches) => {
+            for branch in branches {
+                if let Some(predicate) = &branch.when {
+                    for binding in predicate.bindings() {
+                        read(&binding.read)?;
+                    }
+                }
+            }
+        }
+        Expression::ContextWindow(window) => {
+            for (_, index) in &window.sources {
+                column(*index)?;
+            }
+        }
+        Expression::FirstAvailable(selection) => {
+            for operand in selection.sources() {
+                match &operand.read {
+                    SelectionRead::Source(index) | SelectionRead::Collect { column: index, .. } => {
+                        column(*index)?
+                    }
+                    _ => (),
+                }
+            }
+        }
+        Expression::RowLookup(lookup) => {
+            for key in &lookup.keys {
+                column(key.driver_column)?;
+            }
+        }
+        Expression::Aggregate(aggregate)
+            if matches!(aggregate.relation(), AggregateRelation::CurrentGroup) =>
+        {
+            for binding in aggregate.bindings() {
+                column(binding.column)?;
+            }
+        }
+        _ => (),
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -619,6 +744,7 @@ fn validate_assignment_at(
     mode: &RowMode,
     depth: usize,
     remaining: &mut usize,
+    record_derivation: bool,
 ) -> Result<(), PlanError> {
     if depth > EXPRESSION_DEPTH_LIMIT || *remaining == 0 {
         return Err(PlanError::InvalidColumns);
@@ -632,6 +758,9 @@ fn validate_assignment_at(
     }
     if available[assignment.column] {
         return Err(PlanError::DuplicateAssignment);
+    }
+    if record_derivation {
+        validate_donor_reads(&assignment.expression, available, intermediates)?;
     }
     match &assignment.expression {
         Expression::Joined(read) => read.validate(source, secondary, output, available)?,
@@ -698,6 +827,7 @@ fn validate_assignment_at(
                     mode,
                     depth + 1,
                     remaining,
+                    record_derivation,
                 )?;
                 available[assignment.column] = false;
             }
@@ -716,9 +846,6 @@ fn validate_assignment_at(
                     let item = intermediates
                         .get(index)
                         .ok_or(PlanError::InvalidIntermediate)?;
-                    if !matches!(mode, RowMode::Keys) && !item.source.is_self() {
-                        return Err(PlanError::InvalidIntermediate);
-                    }
                     intermediates::validate_context_read(
                         item, column, primary, secondary, available, output, mode,
                     )?;
@@ -760,6 +887,7 @@ fn validate_assignment_at(
                 mode,
                 depth + 1,
                 remaining,
+                record_derivation,
             )?;
             available[assignment.column] = false;
         }
@@ -785,6 +913,7 @@ fn validate_assignment_at(
                     mode,
                     depth + 1,
                     remaining,
+                    record_derivation,
                 )?;
                 available[assignment.column] = false;
             }
@@ -818,6 +947,7 @@ fn validate_assignment_at(
                 mode,
                 depth + 1,
                 remaining,
+                record_derivation,
             )?;
             available[assignment.column] = false;
         }
@@ -837,6 +967,7 @@ fn validate_assignment_at(
                     mode,
                     depth + 1,
                     remaining,
+                    record_derivation,
                 )?;
                 available[assignment.column] = false;
             }
@@ -863,6 +994,7 @@ fn validate_assignment_at(
                     mode,
                     depth + 1,
                     remaining,
+                    record_derivation,
                 )?;
                 available[assignment.column] = false;
             }
@@ -889,6 +1021,7 @@ fn validate_assignment_at(
                     mode,
                     depth + 1,
                     remaining,
+                    record_derivation,
                 )?;
                 available[assignment.column] = false;
             }
@@ -935,6 +1068,7 @@ fn validate_assignment_at(
                         mode,
                         depth + 1,
                         remaining,
+                        record_derivation,
                     )?;
                     available[assignment.column] = false;
                 }
@@ -965,6 +1099,7 @@ fn validate_assignment_at(
                 mode,
                 depth + 1,
                 remaining,
+                record_derivation,
             )?;
             available[assignment.column] = false;
         }
@@ -1341,6 +1476,48 @@ impl DatasetPlan {
         keys: Vec<usize>,
         verifications: Vec<Verification>,
     ) -> Result<Self, PlanError> {
+        Self::new_implementation(
+            sources,
+            intermediates,
+            output,
+            templates,
+            columns,
+            keys,
+            verifications,
+            true,
+        )
+    }
+    /// Donor evaluation has no publication key gate; all expression and metadata
+    /// admission is shared with the dataset compiler. Only that compiler creates it.
+    pub(crate) fn new_donor(
+        sources: SourceSchemas,
+        intermediates: Vec<Intermediate>,
+        output: TableSchema,
+        templates: Vec<RowTemplate>,
+        columns: Vec<Assignment>,
+    ) -> Result<Self, PlanError> {
+        Self::new_implementation(
+            sources,
+            intermediates,
+            output,
+            templates,
+            columns,
+            Vec::new(),
+            Vec::new(),
+            false,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn new_implementation(
+        sources: SourceSchemas,
+        intermediates: Vec<Intermediate>,
+        output: TableSchema,
+        templates: Vec<RowTemplate>,
+        columns: Vec<Assignment>,
+        keys: Vec<usize>,
+        verifications: Vec<Verification>,
+        publication: bool,
+    ) -> Result<Self, PlanError> {
         let SourceSchemas {
             primary: source,
             secondary,
@@ -1360,7 +1537,9 @@ impl DatasetPlan {
         }
         self_relations::validate(&intermediates, &templates)?;
         let width = output.columns().len();
-        validate_columns(&keys, width)?;
+        if publication {
+            validate_columns(&keys, width)?;
+        }
         let mut row_columns = None;
         for (template_index, template) in templates.iter().enumerate() {
             let (template_source, mode) =
@@ -1414,6 +1593,7 @@ impl DatasetPlan {
                     &intermediates,
                     &output,
                     mode,
+                    false,
                 )?;
             }
             if keyed && keys.iter().any(|&column| !available[column]) {
@@ -1531,6 +1711,7 @@ impl DatasetPlan {
                     &intermediates,
                     &output,
                     mode,
+                    !publication,
                 )?;
             }
             if available.contains(&false) {
@@ -1839,3 +2020,7 @@ impl DatasetPlan {
             .map(|index| &self.conversion_handlers[*index].handler)
     }
 }
+
+#[cfg(test)]
+#[path = "dataset_donor_admission.rs"]
+mod donor_admission_tests;

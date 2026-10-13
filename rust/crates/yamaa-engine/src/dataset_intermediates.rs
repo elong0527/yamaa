@@ -2,7 +2,7 @@
 use super::*;
 #[path = "dataset_match_values.rs"]
 pub(super) mod match_values;
-use alloc::collections::BTreeMap;
+use alloc::{collections::BTreeMap, rc::Rc};
 
 /// Keep only immutable row coordinates and the inherited handler outcome.
 #[derive(Clone, Copy)]
@@ -16,6 +16,7 @@ enum Choice {
 pub(super) struct Run {
     eligible: BTreeMap<usize, Vec<usize>>,
     choices: BTreeMap<(SelectionIdentity, usize), Choice>,
+    materialized: BTreeMap<(usize, Option<SelectionIdentity>), Rc<Dataset>>,
 }
 
 impl Run {
@@ -43,8 +44,454 @@ impl Run {
             .retain(|index, _| !plan.intermediates()[*index].source.is_self());
         self.choices
             .retain(|(_, index), _| !plan.intermediates()[*index].source.is_self());
+        self.materialized
+            .retain(|(index, _), _| !plan.intermediates()[*index].source.is_self());
         Ok(())
     }
+}
+
+/// Source-only checks are eager even when no output expression reads the selector.
+pub(super) fn verify<E>(
+    plan: &DatasetPlan,
+    self_only: bool,
+    limits: Limits,
+    state: &mut EvaluationState<'_, E>,
+) -> Result<(), Box<ExecutionError<E>>> {
+    let donors = self_relations::Donors::<E>::new(state.self_rows, plan.output());
+    let context = Candidate {
+        template: None,
+        selection_identity: SelectionIdentity::Probe,
+        members: Vec::new(),
+        values: vec![Value::Missing; plan.output().columns().len()],
+        completed: vec![false; plan.output().columns().len()],
+    };
+    let assignment = Assignment {
+        column: 0,
+        path: "intermediate-verification".into(),
+        expression: Expression::Literal(Value::Missing),
+    };
+    let mut failures = Vec::new();
+    for (index, item) in plan.intermediates().iter().enumerate() {
+        if item.source.is_self() != self_only || item.unique.is_empty() {
+            continue;
+        }
+        let prepared = materialize(index, &assignment, &context, plan, 0, limits, state)?;
+        let materialized = prepared.as_ref().map(|data| Data::<E>::new(data));
+        let table: &dyn TableAccess<Error = E> = if let Some(data) = &materialized {
+            data
+        } else {
+            match &item.source {
+                IntermediateSource::Input(index) => state.secondary[*index],
+                IntermediateSource::Primary { .. } => state.primary,
+                IntermediateSource::SelfRows { .. } => &donors,
+            }
+        };
+        let name = source_name(item, plan);
+        let eligible = eligibility(table, item, state.budget)?;
+        let filtered = Filtered {
+            table,
+            rows: &eligible,
+        };
+        for check in &item.unique {
+            state.budget.work(eligible.len(), check.columns.len())?;
+            let mut columns = Vec::new();
+            for &column in &check.columns {
+                if !columns.contains(&column) {
+                    columns.push(column);
+                }
+            }
+            let groups = partition(&filtered, &columns, limits.output_rows, limits.key_cells)
+                .map_err(|error| Box::new(ExecutionError::Grouping(error)))?;
+            let count = groups.iter().filter(|group| group.len() > 1).count();
+            if count != 0 {
+                failures.push(check.diagnostic(item, table.schema(), name, count));
+            }
+        }
+        state.intermediates.eligible.insert(index, eligible);
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(Box::new(ExecutionError::IntermediateVerifications(
+            failures,
+        )))
+    }
+}
+fn source_name<'a>(item: &'a Intermediate, plan: &'a DatasetPlan) -> &'a str {
+    match &item.source {
+        IntermediateSource::Input(index) => &plan.secondary()[*index].name,
+        IntermediateSource::Primary { name, .. } => name,
+        IntermediateSource::SelfRows { .. } => "SELF",
+    }
+}
+pub(super) struct Data<'a, E> {
+    dataset: &'a Dataset,
+    error: core::marker::PhantomData<E>,
+}
+impl<'a, E> Data<'a, E> {
+    pub(super) fn new(dataset: &'a Dataset) -> Self {
+        Self {
+            dataset,
+            error: core::marker::PhantomData,
+        }
+    }
+}
+impl<E> TableAccess for Data<'_, E> {
+    type Error = E;
+    fn schema(&self) -> &TableSchema {
+        &self.dataset.schema
+    }
+    fn row_count(&self) -> usize {
+        self.dataset.rows.len()
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<E>> {
+        self.dataset
+            .rows
+            .get(row)
+            .and_then(|row| row.get(column))
+            .map(ValueRef::from)
+            .ok_or(CellError::OutOfBounds { row, column })
+    }
+}
+
+/// An immutable donor snapshot is shared only across contexts supplying the same current row.
+#[allow(clippy::too_many_arguments)]
+fn materialize<E>(
+    index: usize,
+    assignment: &Assignment,
+    context: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    limits: Limits,
+    state: &mut EvaluationState<'_, E>,
+) -> Result<Option<Rc<Dataset>>, Box<ExecutionError<E>>> {
+    let item = &plan.intermediates()[index];
+    let Some(derived) = &item.derivations else {
+        return Ok(None);
+    };
+    let key = (
+        index,
+        (!derived.current.is_empty()).then_some(context.selection_identity),
+    );
+    if let Some(data) = state.intermediates.materialized.get(&key) {
+        return Ok(Some(Rc::clone(data)));
+    }
+    let primary = row_drivers::Driver::Primary(state.primary);
+    let mut current = Vec::new();
+    for field in &derived.current {
+        current.push(relation_predicates::resolve_current(
+            field,
+            &assignment.path,
+            &primary,
+            context,
+            plan,
+            row,
+            assignment,
+            relation_predicates::CurrentObservation::Operand,
+            state,
+        )?);
+    }
+    let donors = self_relations::Donors::<E>::new(state.self_rows, plan.output());
+    let table: &dyn TableAccess<Error = E> = match &item.source {
+        IntermediateSource::Input(index) => state.secondary[*index],
+        IntermediateSource::Primary { .. } => state.primary,
+        IntermediateSource::SelfRows { .. } => &donors,
+    };
+    let nested = &derived.plan;
+    let width = nested.source().columns().len();
+    let output_width = nested.output().columns().len();
+    if table
+        .row_count()
+        .checked_mul(width)
+        .is_none_or(|cells| cells > limits.output_cells)
+    {
+        return Err(Box::new(ExecutionError::Capacity));
+    }
+    state.budget.work(table.row_count(), width)?;
+    let mut input = Dataset {
+        schema: nested.source().clone(),
+        rows: Vec::new(),
+    };
+    let mut candidates = Vec::new();
+    input
+        .rows
+        .try_reserve_exact(table.row_count())
+        .map_err(|_| Box::new(ExecutionError::Allocation))?;
+    candidates
+        .try_reserve_exact(table.row_count())
+        .map_err(|_| Box::new(ExecutionError::Allocation))?;
+    for source_row in 0..table.row_count() {
+        let mut values = vec![Value::Missing; width];
+        for (column, target) in values.iter_mut().enumerate().take(derived.stored_columns) {
+            *target = own(cell(table, item, source_row, column, state.budget)?);
+            state.budget.value(target)?;
+        }
+        for (index, value) in current.iter().enumerate() {
+            if let Value::Str(text) = value {
+                state.budget.scalar_text(text.len())?;
+            }
+            values[output_width + index] = value.clone();
+            state.budget.value(value)?;
+        }
+        let output = values[..output_width].to_vec();
+        for value in &output {
+            state.budget.value(value)?;
+        }
+        candidates.push(Candidate {
+            template: Some(0),
+            selection_identity: SelectionIdentity::Candidate(source_row),
+            members: vec![source_row],
+            values: output,
+            completed: (0..output_width)
+                .map(|column| column < derived.stored_columns)
+                .collect(),
+        });
+        input.rows.push(values);
+    }
+    let nested_secondary = nested
+        .secondary()
+        .iter()
+        .map(|source| {
+            plan.secondary()
+                .iter()
+                .position(|outer| outer.name == source.name)
+                .map_or(state.primary, |index| state.secondary[index])
+        })
+        .collect::<Vec<_>>();
+    let mut intermediate_run = Run::default();
+    // Raw donor fields have no output lifecycle conversion or handler ledger.
+    let mut donor_handlers = HandlerCounter::default();
+    for assignment in nested.columns() {
+        let table = Data::<E>::new(&input);
+        let mut numbers = windows::Evaluation::new(
+            assignment,
+            &candidates,
+            nested,
+            &table,
+            limits,
+            state.budget,
+            &mut donor_handlers,
+        )?;
+        let mut nested_windows = windows::Cache::default();
+        for row in 0..candidates.len() {
+            let table = Data::<E>::new(&input);
+            let value = if let Some(run) = &mut numbers {
+                run.value(row, &candidates, &table, state.budget, assignment, nested)?
+            } else {
+                evaluate_raw_retained(
+                    &table,
+                    assignment,
+                    &candidates[row],
+                    nested,
+                    row,
+                    limits,
+                    &mut EvaluationState {
+                        primary: &table,
+                        functions: state.functions,
+                        secondary: &nested_secondary,
+                        self_rows: &[],
+                        budget: state.budget,
+                        handlers: &mut donor_handlers,
+                        intermediates: &mut intermediate_run,
+                        output_rows: &candidates,
+                        output_offset: 0,
+                        windows: &mut nested_windows,
+                        aggregate_row: None,
+                    },
+                    false,
+                )
+                .map_err(|error| donor_failure(error, item, plan, nested))?
+            };
+            state.budget.value(&value)?;
+            state.budget.value(&value)?;
+            input.rows[row][assignment.column] = value.clone();
+            candidates[row].values[assignment.column] = value;
+            candidates[row].completed[assignment.column] = true;
+        }
+    }
+    for row in &input.rows {
+        state.budget.discard_candidate(row);
+    }
+    let data = Rc::new(Dataset {
+        schema: nested.output().clone(),
+        rows: candidates
+            .into_iter()
+            .map(|candidate| candidate.values)
+            .collect(),
+    });
+    state
+        .intermediates
+        .materialized
+        .insert(key, Rc::clone(&data));
+    Ok(Some(data))
+}
+
+/// A raw donor failure has donor provenance, rather than a destination identity.
+fn donor_failure<E>(
+    mut error: Box<ExecutionError<E>>,
+    item: &Intermediate,
+    outer: &DatasetPlan,
+    nested: &DatasetPlan,
+) -> Box<ExecutionError<E>> {
+    match error.as_mut() {
+        ExecutionError::Numeric { identity, .. }
+        | ExecutionError::MultipleValues { identity, .. }
+        | ExecutionError::MultipleMatches { identity, .. }
+        | ExecutionError::UnmatchedKey { identity, .. }
+        | ExecutionError::Reduction { identity, .. }
+        | ExecutionError::SemanticDiagnostic { identity, .. } => *identity = None,
+        ExecutionError::SecondaryCell { source, .. } => {
+            let name = &nested.secondary()[*source].name;
+            if let Some(index) = outer
+                .secondary()
+                .iter()
+                .position(|source| source.name == *name)
+            {
+                *source = index;
+            } else if let ExecutionError::SecondaryCell {
+                path,
+                source_row,
+                error: original,
+                ..
+            } = core::mem::replace(error.as_mut(), ExecutionError::SchemaMismatch)
+            {
+                *error = ExecutionError::Cell {
+                    path,
+                    source_row,
+                    error: original,
+                };
+            }
+        }
+        ExecutionError::Cell { .. } => {
+            if let IntermediateSource::Input(source) = item.source {
+                if let ExecutionError::Cell {
+                    path,
+                    source_row,
+                    error: original,
+                } = core::mem::replace(error.as_mut(), ExecutionError::SchemaMismatch)
+                {
+                    *error = ExecutionError::SecondaryCell {
+                        source,
+                        path,
+                        source_row,
+                        error: original,
+                    };
+                }
+            }
+        }
+        _ => (),
+    }
+    error
+}
+
+pub(super) struct DriverRelation {
+    pub(super) materialized: Option<Rc<Dataset>>,
+    pub(super) eligible: Vec<usize>,
+}
+
+/// Row drivers consume the complete source-only donor set without executing a match.
+pub(super) fn driver<E>(
+    index: usize,
+    plan: &DatasetPlan,
+    limits: Limits,
+    state: &mut EvaluationState<'_, E>,
+) -> Result<DriverRelation, Box<ExecutionError<E>>> {
+    let context = Candidate {
+        template: None,
+        selection_identity: SelectionIdentity::Probe,
+        members: Vec::new(),
+        values: vec![Value::Missing; plan.output().columns().len()],
+        completed: vec![false; plan.output().columns().len()],
+    };
+    let assignment = Assignment {
+        column: 0,
+        path: plan.intermediates()[index].path.clone(),
+        expression: Expression::Literal(Value::Missing),
+    };
+    let prepared = materialize(index, &assignment, &context, plan, 0, limits, state)?;
+    let data = prepared.as_ref().map(|data| Data::<E>::new(data));
+    let item = &plan.intermediates()[index];
+    let table: &dyn TableAccess<Error = E> = if let Some(data) = &data {
+        data
+    } else {
+        match item.source {
+            IntermediateSource::Input(index) => state.secondary[index],
+            IntermediateSource::Primary { .. } => state.primary,
+            _ => return Err(Box::new(ExecutionError::SchemaMismatch)),
+        }
+    };
+    let eligible = eligibility(table, item, state.budget)?;
+    Ok(DriverRelation {
+        materialized: prepared,
+        eligible,
+    })
+}
+
+pub(super) fn driver_groups<E>(
+    table: &dyn TableAccess<Error = E>,
+    eligible: &[usize],
+    keys: &[usize],
+    limits: Limits,
+) -> Result<Vec<Vec<usize>>, Box<ExecutionError<E>>> {
+    let filtered = Filtered {
+        table,
+        rows: eligible,
+    };
+    partition(&filtered, keys, limits.source_rows, limits.key_cells)
+        .map(|groups| {
+            groups
+                .into_iter()
+                .map(|group| group.into_iter().map(|row| eligible[row]).collect())
+                .collect()
+        })
+        .map_err(|error| Box::new(ExecutionError::Grouping(error)))
+}
+struct Filtered<'a, E> {
+    table: &'a dyn TableAccess<Error = E>,
+    rows: &'a [usize],
+}
+impl<E> TableAccess for Filtered<'_, E> {
+    type Error = E;
+    fn schema(&self) -> &TableSchema {
+        self.table.schema()
+    }
+    fn row_count(&self) -> usize {
+        self.rows.len()
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<E>> {
+        self.table.cell(self.rows[row], column)
+    }
+}
+fn eligibility<E>(
+    table: &dyn TableAccess<Error = E>,
+    item: &Intermediate,
+    budget: &mut Budget,
+) -> Result<Vec<usize>, Box<ExecutionError<E>>> {
+    budget.work(table.row_count(), 1)?;
+    let mut eligible = Vec::new();
+    eligible
+        .try_reserve_exact(table.row_count())
+        .map_err(|_| Box::new(ExecutionError::Allocation))?;
+    for source_row in 0..table.row_count() {
+        if let Some(filter) = item.filter.as_ref().filter(|filter| !filter.correlated()) {
+            let truth = crate::dataset_predicate::evaluate(
+                filter.predicate(),
+                table,
+                source_row,
+                &[],
+                budget.predicate(),
+            )
+            .map_err(|error| match error.kind {
+                yamaa_core::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
+                _ => Box::new(ExecutionError::Predicate { source_row, error }),
+            })?;
+            if truth != yamaa_core::predicate::Truth::True {
+                continue;
+            }
+        }
+        eligible.push(source_row);
+    }
+    Ok(eligible)
 }
 
 /// Reuse a selected record while recording each reading's own inherited handler site.
@@ -127,11 +574,25 @@ fn read_with_observations<T: TableAccess + ?Sized>(
     )?;
     let cache_key = (candidate.selection_identity, index);
     let item = &plan.intermediates()[index];
+    let prepared = materialize(
+        index,
+        assignment,
+        candidate,
+        plan,
+        row,
+        state.budget.limits(),
+        state,
+    )?;
+    let materialized = prepared.as_ref().map(|data| Data::<T::Error>::new(data));
     let donors = self_relations::Donors::<T::Error>::new(state.self_rows, plan.output());
-    let table: &dyn TableAccess<Error = T::Error> = match &item.source {
-        IntermediateSource::Input(index) => state.secondary[*index],
-        IntermediateSource::Primary { .. } => state.primary,
-        IntermediateSource::SelfRows { .. } => &donors,
+    let table: &dyn TableAccess<Error = T::Error> = if let Some(data) = &materialized {
+        data
+    } else {
+        match &item.source {
+            IntermediateSource::Input(index) => state.secondary[*index],
+            IntermediateSource::Primary { .. } => state.primary,
+            IntermediateSource::SelfRows { .. } => &donors,
+        }
     };
     let source_name = match &item.source {
         IntermediateSource::Input(index) => plan.secondary()[*index].name.as_str(),
@@ -159,34 +620,13 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                 .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
             1,
         )?;
-        if !state.intermediates.eligible.contains_key(&index) {
-            // Complete the source-only filter before checking the current match values.
-            state.budget.work(table.row_count(), 1)?;
-            let mut eligible = Vec::new();
-            eligible
-                .try_reserve_exact(table.row_count())
-                .map_err(|_| Box::new(ExecutionError::Allocation))?;
-            for source_row in 0..table.row_count() {
-                if let Some(filter) = item.filter.as_ref().filter(|filter| !filter.correlated()) {
-                    let truth = crate::dataset_predicate::evaluate(
-                        filter.predicate(),
-                        table,
-                        source_row,
-                        &[],
-                        state.budget.predicate(),
-                    )
-                    .map_err(|error| match error.kind {
-                        yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                            Box::new(predicate_limit(limit))
-                        }
-                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                    })?;
-                    if truth != yamaa_core::predicate::Truth::True {
-                        continue;
-                    }
-                }
-                eligible.push(source_row);
-            }
+        if !state.intermediates.eligible.contains_key(&index)
+            || item
+                .derivations
+                .as_ref()
+                .is_some_and(|derived| !derived.current.is_empty())
+        {
+            let eligible = eligibility(table, item, state.budget)?;
             state.budget.work(
                 state
                     .intermediates
@@ -464,86 +904,4 @@ fn select<E>(
         }
     }
     Ok(best)
-}
-
-/// A driver reads the source-only eligible records without running a keyed match.
-pub(super) fn driver_records<T: TableAccess + ?Sized>(
-    table: &T,
-    item: &Intermediate,
-    budget: &mut Budget,
-) -> Result<Vec<usize>, Box<ExecutionError<T::Error>>> {
-    budget.work(table.row_count(), 1)?;
-    let mut eligible = Vec::new();
-    eligible
-        .try_reserve_exact(table.row_count())
-        .map_err(|_| Box::new(ExecutionError::Allocation))?;
-    for source_row in 0..table.row_count() {
-        if let Some(filter) = &item.filter {
-            let truth = crate::dataset_predicate::evaluate(
-                filter.predicate(),
-                table,
-                source_row,
-                &[],
-                budget.predicate(),
-            )
-            .map_err(|error| match error.kind {
-                yamaa_core::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
-                _ => Box::new(ExecutionError::Predicate { source_row, error }),
-            })?;
-            if truth != yamaa_core::predicate::Truth::True {
-                continue;
-            }
-        }
-        eligible.push(source_row);
-    }
-    Ok(eligible)
-}
-struct DriverRows<'a, T: TableAccess + ?Sized> {
-    table: &'a T,
-    rows: &'a [usize],
-}
-impl<T: TableAccess + ?Sized> TableAccess for DriverRows<'_, T> {
-    type Error = T::Error;
-    fn schema(&self) -> &TableSchema {
-        self.table.schema()
-    }
-    fn row_count(&self) -> usize {
-        self.rows.len()
-    }
-    fn cell(
-        &self,
-        row: usize,
-        column: usize,
-    ) -> Result<yamaa_core::table::ValueRef<'_>, yamaa_core::table::CellError<Self::Error>> {
-        self.table.cell(
-            self.rows
-                .get(row)
-                .copied()
-                .ok_or(yamaa_core::table::CellError::OutOfBounds { row, column })?,
-            column,
-        )
-    }
-}
-pub(super) fn driver_groups<T: TableAccess + ?Sized>(
-    table: &T,
-    eligible: &[usize],
-    keys: &[usize],
-    limits: Limits,
-) -> Result<Vec<Vec<usize>>, Box<ExecutionError<T::Error>>> {
-    partition(
-        &DriverRows {
-            table,
-            rows: eligible,
-        },
-        keys,
-        limits.source_rows,
-        limits.key_cells,
-    )
-    .map(|groups| {
-        groups
-            .into_iter()
-            .map(|group| group.into_iter().map(|row| eligible[row]).collect())
-            .collect()
-    })
-    .map_err(|error| Box::new(ExecutionError::Grouping(error)))
 }

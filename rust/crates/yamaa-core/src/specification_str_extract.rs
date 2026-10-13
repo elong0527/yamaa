@@ -184,6 +184,28 @@ fn walk(
             }
         }
     }
+    if let Some(items) = d
+        .field(d.root(), "intermediates")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    {
+        for (index, &item) in sequence(d, items)?.iter().enumerate() {
+            if let Some(items) = d
+                .field(item, "derivations")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+            {
+                for &(name, handled) in mapping(d, items)? {
+                    expression(
+                        d,
+                        field(d, handled, "value")?,
+                        &format!("intermediates[{index}].derivations.{}", text(d, name)?),
+                        true,
+                        0,
+                        visit,
+                    )?;
+                }
+            }
+        }
+    }
     Ok(())
 }
 fn kind_name(kind: ColumnType) -> &'static str {

@@ -18,8 +18,8 @@ impl Declaration {
         d: &Document,
         value: usize,
         path: &str,
-        sources: &[SourceDeclaration],
-        driver: usize,
+        _sources: &[SourceDeclaration],
+        _driver: usize,
         extra: &mut Vec<UnsupportedFeature>,
     ) -> Result<Self, PrepareError> {
         if let N::Text(name) = &d.nodes()[value] {
@@ -66,13 +66,6 @@ impl Declaration {
         };
         if let Some(name) = declaration.expression_reference() {
             if let Some((relation, _)) = name.split_once('.') {
-                if sources
-                    .iter()
-                    .enumerate()
-                    .any(|(index, source)| index != driver && source.name == relation)
-                {
-                    reject(extra, "secondary_source_expression", path.into());
-                }
                 if d.field(d.root(), "intermediates").is_some_and(|items| {
                     sequence(d, items).is_ok_and(|items| {
                         items.iter().any(|&item| {
@@ -132,6 +125,25 @@ impl Declaration {
         catalog: &Catalog,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<MatchValue>, BindError> {
+        self.bind_in_context(path, intermediate, catalog, findings, false)
+    }
+    pub(super) fn bind_deferred(
+        &self,
+        path: &str,
+        intermediate: &str,
+        catalog: &Catalog,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<Option<MatchValue>, BindError> {
+        self.bind_in_context(path, intermediate, catalog, findings, true)
+    }
+    fn bind_in_context(
+        &self,
+        path: &str,
+        intermediate: &str,
+        catalog: &Catalog,
+        findings: &mut Vec<BindFinding>,
+        defer_unknown: bool,
+    ) -> Result<Option<MatchValue>, BindError> {
         if let Self::StrPad(operation) = self {
             str_pad::declaration_findings(operation, findings);
         }
@@ -146,10 +158,35 @@ impl Declaration {
                 column,
                 identifier: name.into(),
             },
-            Some(reference_binding::Binding::Dataset { field, .. }) => MatchRead::Record {
+            Some(reference_binding::Binding::Dataset {
+                dataset: 0, field, ..
+            }) => MatchRead::Record {
                 column: field,
                 identifier: name.into(),
             },
+            Some(reference_binding::Binding::Dataset { dataset, field, .. }) => {
+                MatchRead::SecondaryRecord {
+                    source: dataset - 1,
+                    column: field,
+                    identifier: name.into(),
+                }
+            }
+            None if defer_unknown => {
+                use crate::dataset::ContextualMatch;
+                let declaration = match self {
+                    Self::Variable(_) => ContextualMatch::Variable(name.into()),
+                    Self::Source(_) => ContextualMatch::Source(name.into()),
+                    Self::StrPad(operation) => ContextualMatch::StrPad {
+                        identifier: name.into(),
+                        operation: match operation {
+                            str_pad::Declaration::Valid(operation) => Some(operation.clone()),
+                            str_pad::Declaration::WidthError { .. } => None,
+                        },
+                    },
+                    Self::Literal(_) => return Err(BindError::Internal),
+                };
+                return Ok(Some(MatchValue::Contextual(declaration)));
+            }
             None => {
                 let suggestion = name
                     .strip_prefix("SELF.")

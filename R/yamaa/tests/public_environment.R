@@ -400,3 +400,25 @@ qualify_row_callback_joins <- function() {
   cat("public R row callbacks join primary and secondary source records by completed keys\n")
 }
 qualify_row_callback_joins()
+
+qualify_intermediate_callback <- function() {
+  previous <- getwd(); on.exit(setwd(previous))
+  work <- tempfile("intermediate-callback-"); dir.create(work); setwd(work); dir.create("r")
+  stopifnot(file.copy(file.path(root, "negative-function-contract", "r", c("environment.yaml", "renv.lock")), "r"))
+  writeLines(c("ID,N", "1,10", "1,30", "2,40"), "a.csv")
+  writeLines(c("ID,N", "1,one", "2,two"), "b.csv")
+  writeLines(c("schema_version: '1.0'", "domain: TEST", "input:",
+    "  SRC: {path: a.csv, types: {ID: int, N: float}}", "  B: {path: b.csv, types: {ID: int, N: str}}",
+    "base: SRC", "keys: [ID, N]", "intermediates:",
+    "  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}",
+    "  - id: DON", "    dataset: B", "    key: [ID]", "    order_by: [B.ID]", "    keep: first",
+    "    derivations:", "      BASE: CAP.N", "      VALUE: {function: {name: project_value, args: {x: BASE}}}",
+    "columns:", "  - {name: ID, type: int, derivation: SRC.ID}", "  - {name: N, type: float, derivation: SRC.N}",
+    "  - {name: VALUE, type: float, derivation: DON.VALUE}", "output: {path: output.csv, columns: [ID, N, VALUE]}"), "spec.yaml")
+  result <- yamaa_domain("spec.yaml", environment="r/environment.yaml")
+  stopifnot(nrow(result$issues)==0L, identical(result$output$N,c(10,30,40)),
+    identical(result$output$VALUE,c(10,10,40)), result$save(), result$save(),
+    identical(rawToChar(rawfile("output.csv")), "ID,N,VALUE\n1,10,10\n1,30,10\n2,40,40\n"))
+  cat("public R intermediate callbacks preserve prior values and selected donor field types\n")
+}
+qualify_intermediate_callback()

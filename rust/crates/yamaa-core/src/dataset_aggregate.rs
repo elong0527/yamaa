@@ -231,7 +231,7 @@ impl BoundAggregate {
                             .schema
                     }
                 };
-                match_values::validate(keys, primary, donor, output, available)?;
+                match_values::validate(keys, primary, secondary, donor, output, available)?;
                 if group_by
                     .iter()
                     .any(|&column| column >= donor.columns().len())

@@ -104,6 +104,7 @@ impl FunctionFinding {
 pub(super) struct Prepared {
     pub calls: ProjectCalls,
     pub nodes: BTreeMap<usize, usize>,
+    pub returns: BTreeMap<usize, ColumnType>,
 }
 fn invalid(finding: FunctionFinding) -> PreflightFinding {
     PreflightFinding::ProjectFunction(finding)
@@ -230,6 +231,28 @@ pub(super) fn prepare(
                 false,
                 &mut requests,
             )?;
+        }
+    }
+    if let Some(items) = d
+        .field(d.root(), "intermediates")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    {
+        for (index, &item) in sequence(d, items)?.iter().enumerate() {
+            if let Some(derived) = d
+                .field(item, "derivations")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+            {
+                for &(name, handled) in mapping(d, derived)? {
+                    collect_calls(
+                        d,
+                        field(d, handled, "value")?,
+                        &format!("intermediates[{index}].derivations.{}", text(d, name)?),
+                        0,
+                        true,
+                        &mut requests,
+                    )?;
+                }
+            }
         }
     }
     let has_rows = present(d, d.root(), "rows");
@@ -459,12 +482,29 @@ pub(super) fn prepare(
         ));
     }
     let calls = admitted.ok_or(PrepareError::Internal)?;
+    let returns = origins
+        .iter()
+        .enumerate()
+        .map(|(index, (_, node, _, _))| {
+            Ok((
+                *node,
+                definitions[index]
+                    .ok_or(PrepareError::Internal)?
+                    .definition()
+                    .returns,
+            ))
+        })
+        .collect::<Result<_, PrepareError>>()?;
     let nodes = origins
         .into_iter()
         .enumerate()
         .map(|(index, (_, node, _, _))| (node, index))
         .collect();
-    Ok(Prepared { calls, nodes })
+    Ok(Prepared {
+        calls,
+        nodes,
+        returns,
+    })
 }
 
 /// Static row calls remain unselected until defaults and per-template overrides
@@ -487,6 +527,7 @@ pub(super) fn select_rows(
     Ok(Prepared {
         calls,
         nodes: prepared.nodes,
+        returns: prepared.returns,
     })
 }
 

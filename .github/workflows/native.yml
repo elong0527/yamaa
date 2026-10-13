@@ -80,7 +80,9 @@ jobs:
     needs: plan
     name: native-rust (${{ matrix.os }}, ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 40 || 30 }}
+    # Cold optimized test builds on Windows can consume more than 20 minutes.
+    # Leave time for the complete shared guard and assessment suites afterward.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || 30 }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.build) }}

@@ -256,33 +256,24 @@ fn aggregate_key_count_refuses_before_deferred_width_ownership_or_findings() {
     ));
 }
 #[test]
-fn unsupported_operations_and_secondary_scope_keep_the_authored_gate_path() {
-    for (key, operation, path) in [
-        (
+fn unsupported_operations_keep_the_authored_gate_path() {
+    let (key, operation, path) = (
+        Tree::Map(vec![(
+            "K",
             Tree::Map(vec![(
-                "K",
-                Tree::Map(vec![(
-                    "compute",
-                    Tree::Map(vec![("expr", Tree::Text("1 / 0"))]),
-                )]),
+                "compute",
+                Tree::Map(vec![("expr", Tree::Text("1 / 0"))]),
             )]),
-            "compute",
-            "intermediates[0].key.K.compute",
-        ),
-        (
-            Tree::Map(vec![("K", pad("TAB.K", "8"))]),
-            "secondary_source_expression",
-            "intermediates[0].key.K",
-        ),
-    ] {
-        let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&doc(key))
-        else {
-            panic!("explicit unsupported gate")
-        };
-        assert!(features
-            .iter()
-            .any(|f| f.operation == operation && f.path == path));
-    }
+        )]),
+        "compute",
+        "intermediates[0].key.K.compute",
+    );
+    let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&doc(key)) else {
+        panic!("explicit unsupported gate")
+    };
+    assert!(features
+        .iter()
+        .any(|f| f.operation == operation && f.path == path));
 }
 #[test]
 fn borrowed_equality_preserves_complete_integer_precision_and_missingness() {

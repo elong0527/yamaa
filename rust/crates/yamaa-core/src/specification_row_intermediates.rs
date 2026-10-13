@@ -5,22 +5,6 @@ use super::*;
 const METADATA_BYTES: usize = 16_777_216;
 const BINDING_WORK: usize = 100_000_000;
 
-pub(super) fn named_reference(d: &Document, reference: &str) -> Result<bool, PrepareError> {
-    let Some((name, _)) = reference.split_once('.') else {
-        return Ok(false);
-    };
-    let Some(items) = d
-        .field(d.root(), "intermediates")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    else {
-        return Ok(false);
-    };
-    Ok(sequence(d, items)?.iter().any(|&item| {
-        d.field(item, "id")
-            .is_some_and(|id| text(d, id).is_ok_and(|id| id == name))
-    }))
-}
-
 /// Refuse aggregate binding metadata/work before cloning secondary schemas.
 pub(super) fn admit_sources(
     schemas: &[&TableSchema],
@@ -287,6 +271,18 @@ pub(super) fn bind(
         });
         return Ok(None);
     };
+    if let Some(reader) = declarations.reader() {
+        if item.source.is_self() {
+            let mut finding = LookupFinding::new(
+                path,
+                crate::diagnostic::ConditionCode::IntermediateDerivationSelfPhase,
+            );
+            finding.text("intermediate", reader);
+            finding.text("identifier", reference);
+            findings.push(BindFinding::Lookup(finding));
+            return Ok(None);
+        }
+    }
     let Some(column) = item.source_column(secondary, field) else {
         findings.push(BindFinding::Lookup(LookupFinding::reference(
             path,
@@ -297,7 +293,95 @@ pub(super) fn bind(
         )));
         return Ok(None);
     };
+    let missing_dependency = |identifier: &str, key_path: &str| {
+        if let Some(reader) = declarations.reader() {
+            let mut finding = LookupFinding::new(
+                path,
+                crate::diagnostic::ConditionCode::IntermediateDerivationDependency,
+            );
+            finding.text("intermediate", reader);
+            finding.text("identifier", identifier);
+            finding.text("read", &item.identifier);
+            BindFinding::Lookup(finding)
+        } else {
+            BindFinding::Lookup(LookupFinding::reference(
+                key_path,
+                identifier,
+                Some(&item.identifier),
+                ReferenceCause::OutputKey,
+                None,
+            ))
+        }
+    };
     let before = findings.len();
+    for key in &item.keys {
+        if let crate::dataset::MatchValue::Contextual(declaration) = &key.value {
+            findings.push(missing_dependency(declaration.identifier(), &key.path));
+            continue;
+        }
+        if let Some(crate::dataset::MatchRead::Output { column, identifier }) = key.value.read() {
+            if available.is_some_and(|available| !available.contains(column)) {
+                findings.push(missing_dependency(identifier, &key.path));
+                continue;
+            }
+        }
+        if let Some(crate::dataset::MatchRead::SecondaryRecord { identifier, .. }) =
+            key.value.read()
+        {
+            if catalog
+                .bind(identifier)
+                .map_err(BindError::Catalog)?
+                .is_some_and(|read| {
+                    matches!(read, reference_binding::Binding::Dataset { dataset: 0, .. })
+                })
+            {
+                continue;
+            }
+            findings.push(missing_dependency(identifier, &key.path));
+        }
+    }
+    if findings.len() != before {
+        return Ok(None);
+    }
+    let donor = item.source_schema(secondary).ok_or(BindError::Internal)?;
+    for key in &item.keys {
+        let read_kind = key
+            .value
+            .read()
+            .map(|read| catalog.bind(read.identifier()))
+            .transpose()
+            .map_err(BindError::Catalog)?
+            .flatten()
+            .map(|read| match read {
+                reference_binding::Binding::Output { column_type, .. }
+                | reference_binding::Binding::Dataset { column_type, .. } => column_type,
+            });
+        let field = donor
+            .columns()
+            .get(key.source_column)
+            .ok_or(BindError::Internal)?;
+        if let Some(kind) = key.value.result_type(read_kind) {
+            if !crate::key_relation::comparable(kind, field.kind.into()) {
+                let name = if key.value.is_expression() {
+                    format!("key[{}]", field.name)
+                } else {
+                    key.value
+                        .read()
+                        .map_or(field.name.clone(), |read| read.identifier().into())
+                };
+                findings.push(BindFinding::Lookup(LookupFinding::key_type(
+                    &format!("{}.key", item.path),
+                    &item.identifier,
+                    &name,
+                    kind,
+                    field.kind,
+                )));
+            }
+        }
+    }
+    if findings.len() != before {
+        return Ok(None);
+    }
     for dependency in dependencies(index, items)? {
         let name = &output.columns()[dependency].name;
         if let Some(finding) = catalog

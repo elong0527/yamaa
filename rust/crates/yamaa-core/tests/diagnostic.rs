@@ -51,6 +51,8 @@ mod grammar;
 mod inheritance;
 #[path = "diagnostic/intermediate_ranges.rs"]
 mod intermediate_ranges;
+#[path = "diagnostic/intermediate_scopes.rs"]
+mod intermediate_scopes;
 #[path = "diagnostic/parquet.rs"]
 mod parquet;
 #[path = "diagnostic/preflight.rs"]
@@ -293,6 +295,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(grammar::predicate_reached());
     reached.extend(predicate_evaluation::reached());
     reached.extend(binding::reached());
+    reached.extend(intermediate_scopes::reached());
     reached.extend(binding::window_reached());
     reached.extend(binding::lookup_reached());
     reached.extend(binding::source_filter_reached());
