@@ -56,3 +56,64 @@ then runs API/dependency guards, repository validation and the full installed
 matrix. A still-live import, unported assertion or failed public comparison
 stops that slice. Deletion commits stay separate from the helper port and
 from the R rollback rehearsal, so reviewers can retain or restore one family.
+
+## Concrete source and assertion inventory
+
+[python-retirement-inventory.json](python-retirement-inventory.json) freezes the
+pre-removal source revision, all 99 retiring source/assets files and every named
+function in the 76 retiring test files (1,192 functions before parametrization).
+It records the retained source/proof families and deliberate API dispositions.
+The inventory makes source-level review possible; it does not claim that a list
+of proof paths establishes new installed qualification.
+
+The exact-value arithmetic, conversion, numeric literal, reduction, predicate and
+numeric-lifecycle fixtures remain in their typed Rust owners. Python component
+endpoints and their JSON/envelope refusal tests disappear under #1990, while the
+original-specification report fixtures remain independent authored M1 truth.
+Complete report comparison retains exact scalar bits, missing/empty distinctions,
+types, row/node/source/callback order, handler counts and verification ledgers.
+The reviewed mutation controls refuse incomplete reports, observation changes,
+wrong source truth, wrong installed owner/core/runtime and altered publication
+types or saved artifacts.
+
+Public domain/check/Define suites preserve semantic output, diagnostics, logs,
+argument, ownership and held Save assertions. Python planner/model objects,
+custom evaluator injection, arbitrary Save destinations, exposed input/resolved
+views, legacy ODM binding objects and the old submission authoring interface
+retire under the approved scope. Root discovery, root containment and fallback
+path expectations retire under #1905; file-kind/symlink, snapshot, byte-bound and
+declaring-file path assertions retain typed adapters and installed public owners.
+
+The separate prerequisite commits must be composed before applying the deletion
+series: the complete #2002 validator delegation, qualification's numerical CLI
+ports, the public file-resources port and the reviewed M1 owner comparison. The
+series retains `_odm`, the private style package, all eight approved root exports,
+native facades/results/callbacks and the single distribution's extension. It
+removes assisted qualification manifests and the legacy reference workflow only
+after their assertions and active consumers have those successors. Historical
+audits remain readable through the explicit v1 audit branch; retained authored
+report truth is never relabeled as a fresh reference run.
+
+## Retained prior-package rollback preparation
+
+The prior Python package is tag `yamaa-py-0.3.0` at source
+`845a91ff9ba4ab6599efbd79fafe1c4e1dd14255`. Its retained Linux abi3 wheel was built
+from that source with Rust 1.90.0 and locked dependencies. The old release had no
+package assets, and registry version 0.3.0 was unavailable. The source-built
+package is distinct from the qualified installed pre-cutover R candidate at
+`a1a9c2d216075f331ac108aa4d3638573f103cea`; no prior R release was published.
+
+An explicit fresh Linux CPython 3.12.14 reinstall of the exact Python wheel
+verified version 0.3.0 before extracting or reading study inputs. All 135 installed
+wheel members except generated `RECORD` matched the retained archive bytes.
+Unchanged committed lookup, ordered aggregate and window CSV outputs passed;
+each prior result saved twice after its input/specification directory was removed.
+The retained prior `uv.lock`, exact dependency pins, receipts and output bytes
+are in the unpublished preparation kit. This is one Linux wheel tuple, not the
+complete rollback matrix or a full producer graph Save baseline.
+
+The R source-package rehearsal passed all three platforms with their retained
+pre-cutover source archives in run 38426887552 at preparation head 560c5bd3.
+Rehearsal of one canonical archive on all three platforms is separately recorded
+before preparing a durable single source asset. Durable retrievable asset pins,+all required rollback tuples, B17 budgets and item 11 transition approval remain
+gates. Preparation kits stay unpublished until root review.
