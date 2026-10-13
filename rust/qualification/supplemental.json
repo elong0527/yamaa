@@ -189,8 +189,6 @@
       "family": "inheritance",
       "level": "compile",
       "consumers": [
-        "R/yamaa/tests/inheritance.R",
-        "rust/crates/yamaa-adapters/tests/inheritance_transport.rs",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
@@ -201,8 +199,6 @@
       "family": "inheritance",
       "level": "compile",
       "consumers": [
-        "R/yamaa/tests/inheritance.R",
-        "rust/crates/yamaa-adapters/tests/inheritance_transport.rs",
         "rust/tools/stage_specification_inputs.py",
         "rust/tests/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R"
@@ -1180,13 +1176,6 @@
       "path": "R/yamaa/tests/functions.R",
       "staged_path": "functions.R",
       "level": "component"
-    },
-    {
-      "id": "r/inheritance",
-      "runtime": "r",
-      "path": "R/yamaa/tests/inheritance.R",
-      "staged_path": "inheritance.R",
-      "level": "compile"
     },
     {
       "id": "r/installation",
