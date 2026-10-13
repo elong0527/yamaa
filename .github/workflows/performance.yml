@@ -88,8 +88,13 @@ jobs:
           PY
           git archive --format=tar.gz --prefix=previous-release/ -o "${RUNNER_TEMP}/previous-release.tar.gz" "${BASELINE_REF}"
           git rev-parse "${BASELINE_REF}^{commit}" > "${RUNNER_TEMP}/baseline-revision.txt"
-          mkdir "${RUNNER_TEMP}/previous-release"
-          tar -xzf "${RUNNER_TEMP}/previous-release.tar.gz" -C "${RUNNER_TEMP}/previous-release" --strip-components=1
+          python - <<'PY'
+          import os, tarfile
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          with tarfile.open(root/'previous-release.tar.gz') as archive:
+              archive.extractall(root, filter='data')
+          PY
       - name: Build and install both owners before measurement
         run: |
           rustup toolchain install 1.90.0 --profile minimal
@@ -237,8 +242,13 @@ jobs:
           uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/requirements.txt"
           git archive --format=tar.gz --prefix=previous-release/ -o "${RUNNER_TEMP}/previous-release.tar.gz" "${BASELINE_REF}"
           git rev-parse "${BASELINE_REF}^{commit}" > "${RUNNER_TEMP}/baseline-revision.txt"
-          mkdir "${RUNNER_TEMP}/previous-release"
-          tar -xzf "${RUNNER_TEMP}/previous-release.tar.gz" -C "${RUNNER_TEMP}/previous-release" --strip-components=1
+          python - <<'PY'
+          import os, tarfile
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          with tarfile.open(root/'previous-release.tar.gz') as archive:
+              archive.extractall(root, filter='data')
+          PY
           CARGO_TARGET_DIR="${RUNNER_TEMP}/baseline-target" uv build --wheel "${RUNNER_TEMP}/previous-release/python" --out-dir "${RUNNER_TEMP}/baseline-distribution" 2>&1 | tee "${RUNNER_TEMP}/baseline-build.log"
           uv venv --python "$(command -v python)" "${RUNNER_TEMP}/baseline-env"
           if [ "${{ runner.os }}" = Windows ]; then
