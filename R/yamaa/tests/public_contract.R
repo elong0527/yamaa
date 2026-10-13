@@ -1,5 +1,6 @@
 # Installed public API contracts; inputs and exact truth are independently authored.
 library(yamaa)
+stopifnot(identical(sort(getNamespaceExports("yamaa")), c("yamaa_check", "yamaa_define", "yamaa_domain")))
 check_issues <- function(result) {
   value <- result$issues
   stopifnot(is.data.frame(value),

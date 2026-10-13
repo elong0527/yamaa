@@ -119,9 +119,13 @@ impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
                 return Err(DecodeError::Limit("producer_source_fields"));
             }
             let header = parsed.names.iter().map(String::as_str).collect::<Vec<_>>();
-            if let Some(diagnostic) = contract
-                .validate_header(&source.name, &header, contract_limits)
-                .map_err(DecodeError::Contract)?
+            if let Some(diagnostic) = yamaa_engine::source_header::validate_header(
+                contract,
+                &source.name,
+                &header,
+                contract_limits,
+            )
+            .map_err(DecodeError::Contract)?
             {
                 return Err(DecodeError::Metadata(diagnostic));
             }

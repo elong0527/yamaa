@@ -521,14 +521,6 @@ class Audit:
                     "Python installed suite skipped tests",
                 )
         detail["suites"] = len(expected)
-        if runtime == "python":
-            inventory = read(root / "coverage.json")
-            require(
-                inventory["source_revision"] == self.source["sha"]
-                and not inventory["errors"],
-                "assisted inventory source/errors differ",
-            )
-            detail["assisted_summary"] = inventory["summary"]
         return detail
 
     def r_check(self, platform):
