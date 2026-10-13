@@ -63,42 +63,70 @@ pub(super) fn branch(
     branch: &cases::Branch,
     findings: &mut Vec<BindFinding>,
 ) -> Result<(), BindError> {
+    scoped_branch(branch, None, findings)
+}
+
+pub(super) fn scoped_branch(
+    branch: &cases::Branch,
+    scope: Option<(&str, crate::reference_scope::Phase<'_>)>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<(), BindError> {
     if let Some(Err(error)) = branch.predicate() {
         findings.push(BindFinding::Predicate(error.diagnostic()?));
     }
-    operation(&branch.operation, &branch.path, findings)
+    derivations::declaration_findings(&branch.operation, &branch.path, findings)?;
+    filters(&branch.operation, &branch.path, scope, findings)
 }
 
 fn operation(op: &Operation, path: &str, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
     // Build already uses this declaration pass for flags, padding, nested cases,
     // numeric failures and concatenation operands. Keep exactly its paths/causes.
     derivations::declaration_findings(op, path, findings)?;
-    filters(op, path, findings)
+    filters(op, path, None, findings)
 }
 
-fn filters(op: &Operation, path: &str, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+fn source_filter(
+    source: &source_expressions::Declaration,
+    path: &str,
+    scope: Option<(&str, crate::reference_scope::Phase<'_>)>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<(), BindError> {
+    if scope.is_some_and(|(driver, phase)| {
+        source.reject_group_key_filter(path, driver, phase, findings)
+    }) {
+        return Ok(());
+    }
+    source.check_findings(path, findings)
+}
+
+fn filters(
+    op: &Operation,
+    path: &str,
+    scope: Option<(&str, crate::reference_scope::Phase<'_>)>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<(), BindError> {
     match op {
         Operation::Case(branches) => {
             for item in branches {
-                filters(&item.operation, &item.path, findings)?;
+                filters(&item.operation, &item.path, scope, findings)?;
             }
         }
-        Operation::Source(source) => source.check_findings(path, findings)?,
+        Operation::Source(source) => source_filter(source, path, scope, findings)?,
         Operation::FirstAvailable(selection) => {
             for (index, source) in selection.sources.iter().enumerate() {
-                source.check_findings(&format!("{path}.sources[{index}]"), findings)?;
+                source_filter(source, &format!("{path}.sources[{index}]"), scope, findings)?;
             }
         }
-        Operation::MappingCut(mapping) => mapping
-            .source
-            .check_findings(&format!("{path}.source"), findings)?,
+        Operation::MappingCut(mapping) => {
+            source_filter(&mapping.source, &format!("{path}.source"), scope, findings)?
+        }
         Operation::Window(window) => window.check_findings(findings)?,
         Operation::Aggregate(aggregate) => aggregate.check_findings(findings)?,
         Operation::Odm(odm) => odm.check_findings(findings)?,
         Operation::Scalar(scalar) => {
             if let scalar::Declaration::Concat { sources, .. } = &**scalar {
                 for source in sources {
-                    filters(&source.operation, &source.path, findings)?;
+                    filters(&source.operation, &source.path, scope, findings)?;
                 }
             }
         }

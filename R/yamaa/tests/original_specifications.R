@@ -2111,11 +2111,21 @@ local({
 })
 
 local({
-  source(file.path(root,"source-selection-truth.R"),local=TRUE)
+  # Historical private truth is retained separately from the normative correction.
+  source(file.path(root,"case-predicate-dispositions.R"),local=TRUE)
+  for (name in names(case_predicate_dispositions)) {
+    disposition <- case_predicate_dispositions[[name]]
+    stopifnot(identical(disposition$classification,"historical_private_reference_defect"),
+      identical(disposition$requirement,"REQ-0148"),
+      identical(rawfile(file.path(root,"case-predicate-history",name,"expected.csv")),
+        charToRaw(disposition$historical_csv)))
+  }
+  for (label in c("source-selection","source-filter-scope")) {
+  source(file.path(root,paste0(label,"-truth.R")),local=TRUE)
   for (name in names(source_selection_truth)) for (attempt in seq_len(2L)) {
     truth <- source_selection_truth[[name]]
     directory <- tempfile("yamaa-source-selection-");dir.create(directory)
-    file.copy(list.files(file.path(root,"source-selection-cases",name),full.names=TRUE),directory)
+    file.copy(list.files(file.path(root,paste0(label,"-cases"),name),full.names=TRUE),directory)
     entry <- file.path(directory,"spec.yaml")
     check_issue_frame(yamaa_check(entry)$issues,truth$check_issues)
     result <- yamaa_domain(entry)
@@ -2141,6 +2151,7 @@ local({
     } else stopifnot(is.null(result$output),
       inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"result.csv")))
     unlink(directory,recursive=TRUE)
+  }
   }
   cat("independent source selection, key-phase ordering, full int64 cells and retained bytes passed without Python\n")
 })

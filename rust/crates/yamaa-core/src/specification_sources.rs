@@ -63,6 +63,58 @@ impl SourceFinding {
     }
 }
 impl Declaration {
+    /// A declared grouped key is already one scalar in both row and column phase.
+    /// Group scope is declaration metadata and grants no study-source authority.
+    pub fn reject_group_key_filter(
+        &self,
+        path: &str,
+        driver: &str,
+        phase: crate::reference_scope::Phase<'_>,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        if self.filter.is_none() || self.declaration_finding.is_some() {
+            return false;
+        }
+        let scalar = self.is_group_key(driver, phase);
+        if scalar {
+            findings.push(BindFinding::Source(SourceFinding::new(
+                C::SourceFilterSingleValue,
+                &format!("{path}.filter"),
+                &[("identifier", &self.variable)],
+            )));
+        }
+        scalar
+    }
+
+    pub fn is_group_key(&self, driver: &str, phase: crate::reference_scope::Phase<'_>) -> bool {
+        let Some((dataset, _)) = self.variable.split_once('.') else {
+            return false;
+        };
+        match phase {
+            crate::reference_scope::Phase::Row { group_by } => {
+                dataset == driver
+                    && group_by.is_some_and(|group| group.contains(&self.variable.as_str()))
+            }
+            crate::reference_scope::Phase::Column { groups } => {
+                let mut relevant = false;
+                let shared = groups
+                    .iter()
+                    .filter(|group| {
+                        group.iter().any(|field| {
+                            field
+                                .split_once('.')
+                                .is_some_and(|(owner, _)| owner == dataset)
+                        })
+                    })
+                    .all(|group| {
+                        relevant = true;
+                        group.contains(&self.variable.as_str())
+                    });
+                relevant && shared
+            }
+        }
+    }
+
     pub fn prepare(
         d: &Document,
         payload: usize,
