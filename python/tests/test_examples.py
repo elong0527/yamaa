@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import json
 import runpy
 import shutil
 import tempfile
@@ -232,6 +234,119 @@ def _read_expected(path: Path, schema: pl.Schema) -> pl.DataFrame:
     return pl.read_csv(path, schema=schema)
 
 
+def _uses_public_domain(runner: Path) -> bool:
+    return any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "yamaa"
+        and node.func.attr == "domain"
+        for node in ast.walk(ast.parse(runner.read_text(encoding="utf-8")))
+    )
+
+
+def _output_declarations(specification: Path) -> dict[str, tuple[Path, object]]:
+    """Read output locations and precision without invoking a reference evaluator."""
+    document = read_yaml_document(specification)
+    declarations = {}
+    parents = document.get("parents", [])
+    if isinstance(parents, str):
+        parents = [parents]
+    for parent in parents:
+        declarations.update(_output_declarations(specification.parent / parent))
+    declarations.update(
+        {
+            key: (specification.parent, value)
+            for key, value in document.get("output", {}).items()
+        }
+    )
+    return declarations
+
+
+def _test_public_runner(
+    runner: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    if not _native_extension_available():
+        pytest.skip("the compiled native extension is not installed")
+    package = import_module("yamaa")
+    real_domain = package.domain
+    builds = []
+
+    def capture_domain(specification, **kwargs):
+        result = real_domain(specification, **kwargs)
+        assert result.issues.is_empty(), result.issues
+        builds.append((Path(specification), result))
+        return result
+
+    example = tmp_path / runner.parent.name
+    shutil.copytree(runner.parent, example)
+    if (example / "python/environment.yaml").exists():
+        shutil.copyfile(EXAMPLES.parent / "python/uv.lock", example / "python/uv.lock")
+    monkeypatch.chdir(example)
+    monkeypatch.setattr(package, "domain", capture_domain)
+    namespace = runpy.run_path(runner.name)
+    outputs = {
+        name: value
+        for name, value in namespace.items()
+        if not name.startswith("_") and isinstance(value, pl.DataFrame)
+    }
+    compared = set()
+    output_stems = set()
+    assert builds
+    for specification, result in builds:
+        declarations = _output_declarations(specification)
+        assert result.save()
+        for attribute, field in (
+            ("output", "path"),
+            ("warning_log", "warning_log"),
+            ("verification_log", "verification_log"),
+        ):
+            if field not in declarations:
+                continue
+            directory, declared = declarations[field]
+            actual_path = directory / declared
+            expected_path = example / "expected" / Path(declared).name
+            actual = getattr(result, attribute)
+            assert actual is not None
+            if attribute == "output":
+                output_stems.add(expected_path.stem)
+                assert_frame_equal(
+                    outputs[expected_path.stem], actual, check_exact=True
+                )
+                decimals = declarations.get("decimals", (None, None))[1]
+                if decimals is not None:
+                    actual = _reported_frame(actual, decimals)
+            assert_frame_equal(
+                actual, _read_expected(expected_path, actual.schema), check_exact=True
+            )
+            if expected_path.suffix == ".csv":
+                assert actual_path.read_bytes() == expected_path.read_bytes(), declared
+            else:
+                assert_frame_equal(
+                    pl.read_parquet(actual_path),
+                    pl.read_parquet(expected_path),
+                    check_exact=True,
+                )
+            compared.add(expected_path.name)
+    assert set(outputs) == output_stems
+    assert compared == {
+        path.name
+        for path in (example / "expected").iterdir()
+        if path.suffix in {".csv", ".parquet"}
+    }
+
+
+def test_public_runners_match_the_qualified_positive_batch() -> None:
+    ratchet = json.loads(
+        (EXAMPLES.parent / "rust/qualification/public-conformance.json").read_text()
+    )
+    qualified = set(ratchet["python"]) & set(ratchet["r"])
+    runners = positive_runners()
+    assert {
+        runner.parent.name for runner in runners if _uses_public_domain(runner)
+    } == {runner.parent.name for runner in runners if runner.parent.name in qualified}
+
+
 @pytest.mark.parametrize(
     "runner",
     positive_runners(),
@@ -242,6 +357,9 @@ def test_positive_example_outputs_match_expected_artifacts(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    if _uses_public_domain(runner):
+        _test_public_runner(runner, monkeypatch, tmp_path)
+        return
     example = runner.parent
     if (example / "python/environment.yaml").exists():
         staged = tmp_path / example.name

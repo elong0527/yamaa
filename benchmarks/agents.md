@@ -43,8 +43,16 @@ its entry specification:
 
     import yamaa
 
-    <domain> = yamaa.yamaa_domain("<entry spec>").output
+    <domain> = yamaa.domain("<entry spec>").output
     <domain>
+
+Existing runners move to `yamaa.domain` only when their benchmark appears in
+both host lists in `rust/qualification/public-conformance.json`. Run
+`python rust/tools/migrate_benchmark_runners.py` to inspect the eligible batch,
+then add `--write` to apply it. The tool preserves unqualified runners and
+passes the host function environment explicitly. Repeat it as the gate grows.
+The example tests compare public outputs and logs with independent truth and
+check exact saved CSV bytes in an isolated study directory.
 
 Every positive benchmark also carries `run.R`, the same snippet in R. It
 targets the `yamaa` R package (issue #200) and mirrors `run.py` line for
@@ -92,8 +100,8 @@ beside the entry's, and the runner binds every domain, the entry last:
 
     import yamaa
 
-    dm = yamaa.yamaa_domain("spec_dm.yaml").output
-    suppdm = yamaa.yamaa_domain("spec_suppdm.yaml").output
+    dm = yamaa.domain("spec_dm.yaml").output
+    suppdm = yamaa.domain("spec_suppdm.yaml").output
     dm, suppdm
 
 `sdtm-dm-race-ethnicity` is the worked example. A producer kept under

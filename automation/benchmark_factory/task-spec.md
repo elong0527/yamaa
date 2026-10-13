@@ -41,7 +41,10 @@ The proposed benchmark must satisfy, in order:
    `README.md`, `spec.yaml` (or the applicable `spec_<variant>.yaml`
    files), `input/*.csv`, `expected/*.csv` (or `expected/error.yaml`
    for a negative benchmark), `run.py` and `run.R` for positive
-   benchmarks.
+   benchmarks. Python runners call `yamaa.domain("<entry spec>").output`,
+   with `environment="python/environment.yaml"` when they call project
+   functions. Existing runners migrate only after both public host ratchets
+   qualify their benchmark; use `rust/tools/migrate_benchmark_runners.py`.
 2. **Naming.** The directory names what the benchmark derives, not the
    construct it uses (`adam-adlb-bds`, not `adam-adlb-rows`).
    `negative-*` pins a failure; `schema-*` exercises the spec language
