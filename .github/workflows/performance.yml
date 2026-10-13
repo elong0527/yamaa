@@ -206,6 +206,10 @@ jobs:
           fi
           Rscript --vanilla -e 'install.packages("jsonlite", repos="https://cloud.r-project.org", lib=Sys.getenv("R_LIBS"))'
           R CMD INSTALL --library="${R_LIBS}" "${RUNNER_TEMP}/timer-source/microbenchmark" 2>&1 | tee "${RUNNER_TEMP}/timer-build.log"
+          if [ "${{ runner.os }}" = Windows ]; then
+            r_include=$(Rscript --vanilla -e 'cat(R.home("include"))')
+            gcc -dM -E -I "${r_include}" "${RUNNER_TEMP}/timer-source/microbenchmark/src/nanotimer.c" > "${RUNNER_TEMP}/timer-windows-macros.txt"
+          fi
           R CMD INSTALL --library="${R_LIBS}" rust/tests/project-programs/r
           R CMD INSTALL --library="${R_LIBS}" "${RUNNER_TEMP}"/candidate-distribution/*.tar.gz 2>&1 | tee "${RUNNER_TEMP}/candidate-build.log"
           python - <<'PY'
@@ -215,7 +219,7 @@ jobs:
           extensions={'.so','.dll','.dylib'}
           libraries=[p for p in (root/'timer-source/microbenchmark/src').rglob('*') if p.suffix in extensions]
           assert len(libraries)==1, 'retained built timer library missing or ambiguous'
-          config=root/'timer-build.log' if os.name=='nt' else root/'timer-source/microbenchmark/src/config.h'
+          config=root/'timer-windows-macros.txt' if os.name=='nt' else root/'timer-source/microbenchmark/src/config.h'
           assert config.is_file(), 'actual selected timer config missing'
           with open(os.environ['GITHUB_ENV'],'a') as env:
               env.write('TIMER_LIBRARY='+str(libraries[0])+'\n')
@@ -265,6 +269,7 @@ jobs:
             ${{ runner.temp }}/candidate-distribution
             ${{ runner.temp }}/candidate-build.log
             ${{ runner.temp }}/timer-build.log
+            ${{ runner.temp }}/timer-windows-macros.txt
             ${{ runner.temp }}/microbenchmark_1.5.0.tar.gz
             ${{ runner.temp }}/timer-source
             ${{ runner.temp }}/candidate-installation
