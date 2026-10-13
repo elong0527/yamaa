@@ -89,6 +89,16 @@ archive's previously qualified goldens. A sentinel candidate output must
 remain unchanged throughout. Source bytes, identities, installed versions,
 logs and saved replay outputs are retained as evidence.
 
-The rehearsal is pending until all three hosted jobs pass. It proves a fresh
-source-archive restore; it does not claim an existing `renv.lock` release pin,
-durable publication, performance acceptance or transition approval.
+All three platform-specific source restores passed in
+[run 38426887552](https://github.com/elong0527/yamaa/actions/runs/38426887552),
+at immutable rehearsal head `560c5bd3685340945bb3ad52b322514534f54a5a`.
+Downloaded proof archives retain exact byte equality with each prior artifact.
+The current workflow selects the same canonical Linux-built source archive on
+all three platforms, matching the proposed single durable source asset. This
+additional cross-platform rehearsal remains pending. The source contains
+both Unix and Windows build rules; its publication requires that exact-byte
+installation proof on every supported R platform.
+
+The rehearsals prove fresh source-archive restores. They do not claim an
+existing published R release, a restored `renv.lock`, durable publication,
+performance acceptance or transition approval.
