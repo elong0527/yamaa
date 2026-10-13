@@ -3116,9 +3116,11 @@
   },
   "prerequisites": {
     "validator": "complete #2002 native routing head, pending",
-    "numeric_tools": "qualification agent owns reference-assisted CLI ports, pending",
-    "file_resources": "f5086d63e1495ef027677397948cd5ece944837d; source/public ports prepared, hosted R pending",
-    "M1": "a63476a64514b1305dc451989e937df9b27436bd; reviewed prerequisite, full combined matrix pending"
+    "numeric_tools": "#2109 isolated native-tool port; currently composed initial aeaef9c3, final metadata/bootstrap stack pending root review",
+    "file_resources": "f5086d63e1495ef027677397948cd5ece944837d composed as aa0da446; hosted R feedback pending",
+    "M1": "a63476a64514b1305dc451989e937df9b27436bd; reviewed prerequisite, full combined matrix pending",
+    "audit_bootstrap": "d6fc41e8c5de13746985333bb8b01c67942b49c0 composed as 5e8fe27a; stdlib audit controls and all41 M1 controls pass",
+    "grammar_bootstrap": "d0b2e1cb634ee33da45fa8c370a1961e17cf4f93 composed as 50028f0d; clean codec-only stager proof passes"
   },
   "gates": [
     "complete public ratchet and immutable installed 21-tuple matrix",
@@ -3520,5 +3522,7 @@
     "retained_path": "rust/tests/support/producer_input_literals.py",
     "test_function": "test_shared_producer_executes_once_and_shares_generated_snapshot",
     "scope": "Exact original three write_text input literals retained unchanged; independent fixture identity assertion still executes. No expected output regenerated."
-  }
+  },
+  "retained_distribution_guard": "python/tests/test_package.py: exact eight root exports, version metadata, one installed distribution owns native/facade, all retired package/source members absent",
+  "packaging_note": "native-reference wheel copy temporarily remains as identical comparator dependency/provenance packaging, not a reference evaluator. Existing audit byte/ownership assertions and legacy admission remain unchanged."
 }
