@@ -14,6 +14,8 @@ pub mod inheritance_transport;
 pub mod numeric_transport;
 mod predicate_transport;
 pub mod reference_transport;
+mod report_publication;
+pub mod report_storage;
 pub mod scalar_transport;
 
 /// Exercise resource inclusion without depending on the checkout at runtime.

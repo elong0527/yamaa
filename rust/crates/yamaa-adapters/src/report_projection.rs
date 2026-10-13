@@ -40,6 +40,23 @@ impl Budget {
             .ok_or(Error::OutputLimit)?;
         Ok(())
     }
+    pub(crate) fn retained_bytes(&mut self, count: usize) -> Result<(), Error> {
+        self.bytes = self.bytes.checked_sub(count).ok_or(Error::OutputLimit)?;
+        Ok(())
+    }
+    pub(crate) fn row_shape(&mut self, rows: usize, columns: usize) -> Result<(), Error> {
+        let cells = rows.checked_mul(columns).ok_or(Error::OutputLimit)?;
+        self.cells = self.cells.checked_sub(cells).ok_or(Error::OutputLimit)?;
+        self.entries(columns.checked_add(1).ok_or(Error::OutputLimit)?)?;
+        self.work(cells)
+    }
+    pub(crate) fn shared_report(
+        &mut self,
+        report: &crate::report_storage::StoredReport,
+    ) -> Result<(), Error> {
+        self.json(report)?;
+        self.entries(report.row_blocks())
+    }
     pub(crate) fn text(&mut self, text: &str) -> Result<(), Error> {
         self.work(text.len().checked_mul(2).ok_or(Error::OutputLimit)?)?;
         self.bytes = self
@@ -230,7 +247,10 @@ impl Drop for Budget {
 
 /// Count the actual compact encoded representation without first allocating
 /// an unbounded temporary String. The writer stops at the admitted ceiling.
-pub(crate) fn encoded_within_limit(value: &Value, maximum: usize) -> Result<(), Error> {
+pub(crate) fn encoded_within_limit(
+    value: &impl serde::Serialize,
+    maximum: usize,
+) -> Result<(), Error> {
     struct Counter {
         remaining: usize,
         exceeded: bool,

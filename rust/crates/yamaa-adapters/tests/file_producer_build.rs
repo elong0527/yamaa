@@ -1499,7 +1499,7 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
         "raw/raw.csv",
         format!(
             "ID,VALUE\n{}",
-            (1..=100)
+            (1..=1200)
                 .map(|index| format!("{index},1.234\n"))
                 .collect::<String>()
         ),
@@ -1839,9 +1839,11 @@ fn native_complete_reports_pin_independent_rounded_truth_and_union_after_all_own
                 {"name":"root","profile":"csv","columns":["ID","VALUE"],"types":["int","float"],"row_count":2,"records":["ID,VALUE","1,2.46","2,4.70"],"byte_length":23,"content":"ID,VALUE\n1,2.46\n2,4.70\n","specification":consumer}],
             "tables":tables,"diagnostics":[],"unsupported":[],"handler_counts":[],"verifications":[],"callbacks":[],"error":null,
             "source_reads":[{"base_directory":study.path("producer"),"path":"../raw/raw.csv","outcome":"captured","condition":null,"snapshots_created":created,"specification":producer}]});
-        assert_eq!(observed, expected);
+        assert_eq!(observed.observations_value(false), expected);
         assert_eq!(
-            attempt_report(attempt, report_id(), 16_777_216).unwrap(),
+            attempt_report(attempt, report_id(), 16_777_216)
+                .unwrap()
+                .observations_value(false),
             expected
         );
         let bytes = attempt.graph.nodes[1]
@@ -2027,7 +2029,7 @@ fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier
         attempt_report(&first, report_id(), 16_777_216).unwrap()["error"]["code"],
         "output_limit"
     );
-    limits.engine.report_bytes = 65536;
+    limits.engine.report_bytes = 16384;
     let later = build.build_reported(&mut activation, report_id(), limits);
     assert!(!later.accepted());
     assert_eq!(later.graph.nodes.len(), 2);
@@ -2182,7 +2184,7 @@ fn a_larger_caller_report_budget_cannot_defer_the_fixed_formatter_ceiling_until_
             "str",
         ),
     );
-    let text = "x".repeat(1_400_000);
+    let text = "x".repeat(4_300_000);
     study.write("raw/raw.csv", format!("ID,VALUE\n1,{text}\n"));
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::Lock);
@@ -2214,12 +2216,18 @@ fn a_larger_caller_report_budget_cannot_defer_the_fixed_formatter_ceiling_until_
             .unwrap(),
         ValueRef::Str(&text)
     );
-    assert!(matches!(
-        yamaa_adapters::producer_report::attempt_report(&attempt, report_id(), usize::MAX),
-        Err(yamaa_adapters::producer_report::ProjectionError::Report(
-            yamaa_adapters::specification_report::Error::OutputLimit
-        ))
-    ));
+    // The immutable failed prefix excludes the refused derived table/artifact.
+    // Its source block fits, so retain it exactly rather than repeating a
+    // fictitious per-cell map charge merely to force projection refusal.
+    let failed = yamaa_adapters::producer_report::attempt_report(&attempt, report_id(), usize::MAX)
+        .unwrap()
+        .observations_value(false);
+    assert_eq!(failed["error"]["code"], "output_limit");
+    assert_eq!(failed["artifacts"], serde_json::json!([]));
+    assert_eq!(
+        failed["tables"][0]["rows"][0][1],
+        serde_json::json!({"type":"str","value":text})
+    );
     assert!(!study.0.join("generated").exists());
 }
 

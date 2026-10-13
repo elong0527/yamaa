@@ -215,7 +215,8 @@ impl FileBuild {
         activation: &mut A,
         id: crate::specification_report::Identity<'_>,
         limits: Limits,
-    ) -> Attempt<A::Error, serde_json::Value, crate::specification_report::Error> {
+    ) -> Attempt<A::Error, crate::report_storage::StoredReport, crate::specification_report::Error>
+    {
         let provenance = Arc::clone(&self.provenance);
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
         self.build(activation, &mut report, limits)

@@ -6,6 +6,7 @@ use crate::{
     project_report::Classified,
     public_table::PublicTable,
     report_projection::Budget,
+    report_storage::StoredReport,
     specification_report::{Error as ReportError, Identity},
     table_transport::{self, TableTransportError},
 };
@@ -14,7 +15,7 @@ use std::sync::Arc;
 use yamaa_core::table::TableAccess;
 
 pub struct RootResult {
-    observations: Value,
+    observations: StoredReport,
     issues: Vec<Issue>,
     output: Option<(PublicTable, Vec<u8>)>,
     root: usize,
@@ -25,12 +26,21 @@ pub struct RootResult {
     publication: Option<Arc<crate::producer_publication::Publication>>,
     publication_refusal: Option<&'static str>,
     base_issues: usize,
-    latest: Option<Value>,
+    latest: Option<StoredReport>,
     save_attempt: Option<crate::producer_publication::Attempt>,
 }
 impl RootResult {
-    pub fn observations(&self) -> &Value {
-        self.latest.as_ref().unwrap_or(&self.observations)
+    pub fn observations(&self) -> Value {
+        self.latest
+            .as_ref()
+            .unwrap_or(&self.observations)
+            .observations_value(false)
+    }
+    pub fn observations_json(&self) -> String {
+        self.latest
+            .as_ref()
+            .unwrap_or(&self.observations)
+            .observations_json(false)
     }
     pub fn issues(&self) -> &[Issue] {
         &self.issues
@@ -99,14 +109,35 @@ impl RootResult {
         // every publisher. Save never classifies a host error or rerenders Build.
         let mut budget = Budget::new(maximum);
         let admitted = (|| {
-            budget.json(&self.observations)?;
+            budget.shared_report(&self.observations)?;
             budget.entries(publication.artifacts().len().saturating_mul(64))?;
             for artifact in publication.artifacts() {
                 for _ in 0..4 {
                     budget.text(artifact.path())?;
                 }
             }
-            Ok::<_, ReportError>(())
+            let mut value = self.observations.clone();
+            value["publication"] = serde_json::json!({"status":"failure",
+                "entered":publication.artifacts().iter().map(|item|serde_json::json!({"node":item.node(),"published":false})).collect::<Vec<_>>(),
+                "error":null});
+            let locations = publication
+                .artifacts()
+                .iter()
+                .map(|item| crate::report_publication::Location {
+                    key: item.node(),
+                    node: item.node(),
+                    field: None,
+                    path: None,
+                })
+                .collect::<Vec<_>>();
+            let fields = crate::report_publication::Prepared::new(
+                &mut value,
+                &locations,
+                false,
+                maximum,
+                &mut budget,
+            )?;
+            Ok::<_, ReportError>((value, fields))
         })();
         if admitted.is_err() {
             self.issues.extend(crate::file_application::rejected(
@@ -115,7 +146,7 @@ impl RootResult {
             ));
             return Ok(false);
         }
-        let mut value = self.observations.clone();
+        let (mut value, mut fields) = admitted.expect("admitted publication report");
         let mut attempt = crate::producer_publication::Attempt::default();
         publication.save_into(limits, &mut attempt);
         use yamaa_engine::producer_publication::Failure;
@@ -169,9 +200,14 @@ impl RootResult {
             self.issues
                 .extend(crate::file_application::rejected("output", code));
         }
-        value["publication"] = serde_json::json!({"status":if saved {"success"} else {"failure"},
-            "entered":attempt.entered.entered.iter().map(|item|serde_json::json!({"node":item.node,"published":item.published})).collect::<Vec<_>>(),
-            "error":if saved {Value::Null} else {serde_json::json!({"stage":"publication","code":code,"node":node})}});
+        let entries = value["publication"]["entered"]
+            .as_array_mut()
+            .expect("admitted publication entries");
+        entries.truncate(attempt.entered.entered.len());
+        for (entry, actual) in entries.iter_mut().zip(&attempt.entered.entered) {
+            entry["published"] = Value::Bool(actual.published);
+        }
+        fields.finish(&mut value, saved, code, node);
         self.latest = Some(value);
         self.save_attempt = Some(attempt);
         Ok(saved)
@@ -214,9 +250,27 @@ impl RootResult {
             // Own the complete report before any write. Every actual prefix is
             // formed by dropping already-owned artifact/entry suffixes; it never
             // reprojects observations or clones their tables and CSV content.
-            publication.prefix_report(&self.observations, failed, count, count, &mut budget)
+            let mut value =
+                publication.prefix_report(&self.observations, failed, count, count, &mut budget)?;
+            let locations = publication
+                .requests(failed)
+                .map(|(key, request)| crate::report_publication::Location {
+                    key,
+                    node: request.node,
+                    field: Some(request.field),
+                    path: Some(&request.path),
+                })
+                .collect::<Vec<_>>();
+            let fields = crate::report_publication::Prepared::new(
+                &mut value,
+                &locations,
+                true,
+                maximum,
+                &mut budget,
+            )?;
+            Ok::<_, ReportError>((value, fields))
         })();
-        let mut value = match report {
+        let (mut value, mut fields) = match report {
             Ok(report) => report,
             Err(_) => {
                 self.issues.extend(crate::file_application::rejected(
@@ -301,27 +355,26 @@ impl RootResult {
         for (entry, actual) in entries.iter_mut().zip(&attempt.entered) {
             entry["published"] = Value::Bool(actual.published);
         }
-        value["publication"]["status"] =
-            Value::String(if saved { "success" } else { "failure" }.into());
-        if saved {
-            value["publication"]["error"] = Value::Null;
-        } else {
+        fields.finish(&mut value, saved, code, request);
+        if !saved {
             let actual = attempt
                 .entered
                 .last()
                 .filter(|entry| Some(entry.request) == request);
             let request = request.map(|index| publication.request(index));
-            value["publication"]["error"] = serde_json::json!({"stage":"publication","code":code,
-                "node":actual.map(|entry|entry.node).or_else(||request.map(|request|request.node)),
-                "field":actual.map(|entry|entry.field).or_else(||request.map(|request|request.field)),
-                "path":actual.map(|entry|entry.path.as_str()).or_else(||request.map(|request|request.path.as_str()))});
             if let Some(request) = request {
                 for issue in &mut self.issues[self.base_issues..] {
-                    issue.spec_paths = vec![format!("output.{}", request.field)];
+                    issue.spec_paths = vec![format!(
+                        "output.{}",
+                        actual.map_or(request.field, |entry| entry.field)
+                    )];
                     let mut context: Value =
                         serde_json::from_str(&issue.context).expect("native issue context");
-                    context["node"] = serde_json::json!(request.node);
-                    context["path"] = serde_json::json!(request.path);
+                    context["node"] =
+                        serde_json::json!(actual.map_or(request.node, |entry| entry.node));
+                    context["path"] = serde_json::json!(
+                        actual.map_or(request.path.as_str(), |entry| entry.path.as_str())
+                    );
                     context["entered"] = serde_json::json!(entered);
                     context["completed"] = serde_json::json!(completed);
                     issue.context = context.to_string();
@@ -344,7 +397,7 @@ pub enum Error<'a, E> {
     Report(ProjectionError<'a, E>),
     Output {
         attempt: &'a NativeAttempt<E>,
-        observations: Value,
+        observations: StoredReport,
         error: TableTransportError,
     },
 }
@@ -372,7 +425,7 @@ pub fn prepare_classified<'a, E>(
 }
 fn prepare_observations<'a, E>(
     attempt: &'a NativeAttempt<E>,
-    observations: Value,
+    observations: StoredReport,
     maximum: usize,
     output_allowed: bool,
 ) -> Result<RootResult, Error<'a, E>> {

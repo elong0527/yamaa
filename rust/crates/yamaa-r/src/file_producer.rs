@@ -278,7 +278,7 @@ pub(crate) mod platform {
                 State::Report {
                     domain: Some(result),
                     ..
-                } => Some(result.observations().to_string()),
+                } => Some(result.observations_json()),
                 State::Report { observations, .. } => observations.clone(),
                 _ => None,
             }

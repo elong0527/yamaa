@@ -1,4 +1,5 @@
 //! One native lifecycle behind both hosts' file entry points.
+use crate::report_storage::StoredReport;
 use crate::{
     file_preparation::{self, FileSpecification},
     issue_rows::Issue,
@@ -130,7 +131,7 @@ pub struct Domain {
     output: Option<(crate::public_table::PublicTable, Vec<u8>)>,
     targets: Option<Vec<crate::file_publication::AnchoredTarget>>,
     publication_issues: Failure,
-    published: Option<Value>,
+    published: Option<StoredReport>,
     publication_attempt: PublicationAttempt,
 }
 #[derive(Default)]
@@ -255,14 +256,16 @@ impl Domain {
     /// Retain complete run observations without recapture. Artifacts describe
     /// only a successful latest save; a refused save returns build observations.
     pub fn observations(&self) -> Value {
-        self.published
-            .clone()
-            .unwrap_or_else(|| self.result.observations())
+        self.published.as_ref().map_or_else(
+            || self.result.observations(),
+            |report| report.observations_value(false),
+        )
     }
     pub fn observations_json(&self) -> String {
-        self.published
-            .as_ref()
-            .map_or_else(|| self.result.observations_json(), Value::to_string)
+        self.published.as_ref().map_or_else(
+            || self.result.observations_json(),
+            |report| report.observations_json(false),
+        )
     }
     /// Preflight the complete target set before writing held log/primary bytes.
     /// Failed builds may publish their diagnostic log on explicit Save and still

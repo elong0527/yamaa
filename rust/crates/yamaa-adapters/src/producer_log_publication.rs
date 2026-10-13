@@ -7,6 +7,7 @@ use crate::{
     producer_publication::{same_location, selected_bound, AdmissionFailure},
     producer_report::{NativeAttempt, NodeLogs},
     report_projection::Budget,
+    report_storage::StoredReport,
     specification_report::Error as ReportError,
 };
 use serde_json::Value;
@@ -501,17 +502,17 @@ impl Publication {
     }
     pub(crate) fn prefix_report(
         &self,
-        original: &Value,
+        original: &StoredReport,
         diagnostic: bool,
         entered: usize,
         completed: usize,
         budget: &mut Budget,
-    ) -> Result<Value, ReportError> {
+    ) -> Result<StoredReport, ReportError> {
         let count = self.requests(diagnostic).count();
         if completed > entered || entered > count {
             return Err(ReportError::InvalidObservation);
         }
-        budget.json(original)?;
+        budget.shared_report(original)?;
         budget.entries(32)?;
         for (_, request) in self.requests(diagnostic).take(entered) {
             budget.entries(16)?;
@@ -521,15 +522,7 @@ impl Publication {
         for (_, request) in self.requests(diagnostic).take(completed) {
             budget.json(&request.observation)?;
         }
-        let mut result = Value::Object(
-            original
-                .as_object()
-                .ok_or(ReportError::InvalidObservation)?
-                .iter()
-                .filter(|(key, _)| key.as_str() != "artifacts")
-                .map(|(key, value)| (key.clone(), value.clone()))
-                .collect(),
-        );
+        let mut result = original.without_artifacts_cloned()?;
         result["artifacts"] = Value::Array(
             self.requests(diagnostic)
                 .take(completed)

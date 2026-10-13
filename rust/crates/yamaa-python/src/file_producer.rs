@@ -493,8 +493,7 @@ impl Report {
                     result
                         .try_lock()
                         .map_err(|_| borrow_error())?
-                        .observations()
-                        .to_string(),
+                        .observations_json(),
                 ))
             })
             .unwrap_or_else(|| Ok(self.observations.clone()))
