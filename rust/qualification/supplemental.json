@@ -1168,6 +1168,17 @@
       "family": "predicate",
       "level": "component",
       "consumers": ["rust/crates/yamaa-adapters/tests/declarative_case_predicates.rs", "rust/tools/stage_specification_inputs.py", "rust/tests/installed_original_specifications.py", "R/yamaa/tests/original_specifications.R"]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/completed_lookup_assertions.json",
+      "family": "completed selected-record assertion scope and eager ordering",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/completed_lookup_assertions.rs",
+          "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
     }
   ],
   "suites": [

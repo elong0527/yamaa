@@ -10,6 +10,10 @@ use crate::{
     value::Value,
 };
 
+#[path = "specification_verification_lookups.rs"]
+mod lookups;
+use lookups::{PendingAssert, PreparedPredicate};
+
 #[derive(Clone, Debug)]
 enum DeclarationFinding {
     Reason {
@@ -26,7 +30,8 @@ fn predicate(
     field_name: &str,
     path: &str,
     output: &TableSchema,
-) -> Result<Result<BoundPredicate, Diagnostic>, PrepareError> {
+    allow_lookup: bool,
+) -> Result<Result<PreparedPredicate, Diagnostic>, PrepareError> {
     let path = format!("{path}.{field_name}");
     let expression = d
         .field(payload, field_name)
@@ -92,7 +97,10 @@ fn predicate(
     if let Some(name) = plan
         .identifiers()
         .into_iter()
-        .filter(|name| !output.columns().iter().any(|column| column.name == *name))
+        .filter(|name| {
+            !(output.columns().iter().any(|column| column.name == *name)
+                || allow_lookup && declared_lookup(d, name))
+        })
         .min()
     {
         return Ok(Err(Diagnostic {
@@ -106,6 +114,14 @@ fn predicate(
             source_span: None,
             operand_route: None,
         }));
+    }
+    if allow_lookup
+        && plan
+            .identifiers()
+            .into_iter()
+            .any(|name| declared_lookup(d, name))
+    {
+        return Ok(Ok(PreparedPredicate::Lookup(plan)));
     }
     let names: alloc::collections::BTreeSet<_> = plan.identifiers().into_iter().collect();
     let bindings = names
@@ -122,8 +138,24 @@ fn predicate(
         })
         .collect();
     BoundPredicate::new(plan, bindings)
-        .map(Ok)
+        .map(|predicate| Ok(PreparedPredicate::Ready(predicate)))
         .map_err(|_| PrepareError::Internal)
+}
+fn declared_lookup(d: &Document, name: &str) -> bool {
+    let Some((qualifier, _)) = name.split_once('.') else {
+        return false;
+    };
+    d.field(d.root(), "intermediates")
+        .and_then(|id| match &d.nodes()[id] {
+            N::Sequence(items) => Some(items),
+            _ => None,
+        })
+        .is_some_and(|items| {
+            items.iter().any(|&id| {
+                d.field(id, "id")
+                    .is_some_and(|id| matches!(&d.nodes()[id], N::Text(name) if name == qualifier))
+            })
+        })
 }
 #[derive(Debug, Default)]
 pub(super) struct Verifications {
@@ -132,6 +164,7 @@ pub(super) struct Verifications {
     pub warning_paths: Vec<String>,
     pub declared_warning_paths: Vec<String>,
     deferred: Option<DeclarationFinding>,
+    pending_assertions: Vec<PendingAssert>,
 }
 fn operation(d: &Document, id: usize) -> Result<(&str, usize), PrepareError> {
     let &[(name, payload)] = mapping(d, id)? else {
@@ -281,8 +314,10 @@ impl Verifications {
                     ["filter", "when"]
                 } {
                     if name == "require" || d.field(payload, name).is_some() {
-                        predicates
-                            .insert((index, name), predicate(d, payload, name, &path, output)?);
+                        predicates.insert(
+                            (index, name),
+                            predicate(d, payload, name, &path, output, op == "assert")?,
+                        );
                     }
                 }
             }
@@ -390,13 +425,48 @@ impl Verifications {
                     Check::Unique(columns)
                 }
             } else if op == "assert" {
+                let when = predicates.remove(&(index, "when"));
+                let require = predicates
+                    .remove(&(index, "require"))
+                    .ok_or(PrepareError::Internal)?;
+                if when
+                    .as_ref()
+                    .is_some_and(|p| p.as_ref().is_ok_and(PreparedPredicate::has_lookup))
+                    || require.as_ref().is_ok_and(PreparedPredicate::has_lookup)
+                {
+                    let pending = PendingAssert {
+                        position: result.checks.len(),
+                        path: path.clone(),
+                        identity,
+                        when,
+                        require,
+                    };
+                    let stop = pending.finding().is_some();
+                    result.pending_assertions.push(pending);
+                    if d.field(payload, "severity").is_some_and(
+                        |id| matches!(&d.nodes()[id], N::Text(value) if value == "warning"),
+                    ) {
+                        result.warning_paths.push(path);
+                    }
+                    if stop {
+                        break;
+                    }
+                    continue;
+                }
+                if let Some(when) = when {
+                    predicates.insert((index, "when"), when);
+                }
+                predicates.insert((index, "require"), require);
                 let mut when = None;
                 let mut require = None;
                 for name in ["when", "require"] {
                     if let Some(predicate) = predicates.remove(&(index, name)) {
                         match predicate {
-                            Ok(predicate) if name == "when" => when = Some(predicate),
-                            Ok(predicate) => require = Some(predicate),
+                            Ok(PreparedPredicate::Ready(predicate)) if name == "when" => {
+                                when = Some(predicate)
+                            }
+                            Ok(PreparedPredicate::Ready(predicate)) => require = Some(predicate),
+                            Ok(PreparedPredicate::Lookup(_)) => return Err(PrepareError::Internal),
                             Err(diagnostic) => {
                                 if let Some(when) = when.take() {
                                     result.checks.push(Verification {
@@ -530,8 +600,9 @@ impl Verifications {
                 for name in ["filter", "when"] {
                     if let Some(predicate) = predicates.remove(&(index, name)) {
                         match predicate {
-                            Ok(p) if name == "filter" => filter = Some(p),
-                            Ok(p) => when = Some(p),
+                            Ok(PreparedPredicate::Ready(p)) if name == "filter" => filter = Some(p),
+                            Ok(PreparedPredicate::Ready(p)) => when = Some(p),
+                            Ok(PreparedPredicate::Lookup(_)) => return Err(PrepareError::Internal),
                             Err(diagnostic) => {
                                 result.deferred = Some(DeclarationFinding::Diagnostic(diagnostic));
                                 break;

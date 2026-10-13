@@ -74,6 +74,8 @@ mod str_extract;
 mod str_pad;
 #[path = "dataset_text_template.rs"]
 mod str_template;
+#[path = "dataset_verification.rs"]
+mod verification;
 #[path = "dataset_windows.rs"]
 mod windows;
 
@@ -166,6 +168,47 @@ impl TableAccess for Dataset {
             .and_then(|values| values.get(column))
             .map(ValueRef::from)
             .ok_or(CellError::OutOfBounds { row, column })
+    }
+}
+
+/// Verification borrows completed values and their original selection identities.
+struct CompletedDataset<'a> {
+    schema: &'a TableSchema,
+    rows: &'a [Candidate],
+}
+impl CompletedDataset<'_> {
+    fn rows(&self) -> impl Iterator<Item = &[Value]> {
+        self.rows.iter().map(|row| row.values.as_slice())
+    }
+}
+impl TableAccess for CompletedDataset<'_> {
+    type Error = Infallible;
+    fn schema(&self) -> &TableSchema {
+        self.schema
+    }
+    fn row_count(&self) -> usize {
+        self.rows.len()
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Self::Error>> {
+        self.rows
+            .get(row)
+            .and_then(|row| row.values.get(column))
+            .map(ValueRef::from)
+            .ok_or(CellError::OutOfBounds { row, column })
+    }
+}
+/// Both owned output and its held construction view lend keys without cell effects.
+pub(crate) trait CompletedRows {
+    fn completed_row(&self, row: usize) -> &[Value];
+}
+impl CompletedRows for Dataset {
+    fn completed_row(&self, row: usize) -> &[Value] {
+        &self.rows[row]
+    }
+}
+impl CompletedRows for CompletedDataset<'_> {
+    fn completed_row(&self, row: usize) -> &[Value] {
+        &self.rows[row].values
     }
 }
 
@@ -1561,9 +1604,9 @@ impl Executor<'_> {
             )?;
         }
         observer(ExecutionPhase::OutputKeys);
-        let mut dataset = Dataset {
-            schema: self.plan.output().clone(),
-            rows: candidates.into_iter().map(|row| row.values).collect(),
+        let dataset = CompletedDataset {
+            schema: self.plan.output(),
+            rows: &candidates,
         };
         let mut failures = Vec::new();
         budget.work(dataset.rows.len(), self.plan.keys().len())?;
@@ -1572,7 +1615,9 @@ impl Executor<'_> {
                 .rows
                 .iter()
                 .enumerate()
-                .filter_map(|(row, values)| matches!(values[column], Value::Missing).then_some(row))
+                .filter_map(|(row, values)| {
+                    matches!(values.values[column], Value::Missing).then_some(row)
+                })
                 .collect();
             if !missing.is_empty() {
                 failures.push(CheckRecord {
@@ -1647,10 +1692,16 @@ impl Executor<'_> {
                     }));
                 }
                 Check::Assert { .. } | Check::PredicateDeclaration(_) => {
-                    let Some(record) = crate::dataset_verification::predicate_check(
+                    let Some(record) = verification::predicate_check(
                         verification,
                         &dataset,
                         self.plan.keys(),
+                        table,
+                        self,
+                        functions,
+                        secondary,
+                        &mut intermediate_run,
+                        handlers,
                         &mut budget,
                         records,
                     )?
@@ -1697,10 +1748,10 @@ impl Executor<'_> {
                 Check::AllOrNone(columns) => {
                     budget.work(dataset.rows.len(), columns.len())?;
                     let offending = dataset.rows.iter().enumerate().filter_map(|(index, row)| {
-                        let missing = matches!(row[columns[0]], Value::Missing);
+                        let missing = matches!(row.values[columns[0]], Value::Missing);
                         columns
                             .iter()
-                            .any(|&column| matches!(row[column], Value::Missing) != missing)
+                            .any(|&column| matches!(row.values[column], Value::Missing) != missing)
                             .then_some(index)
                     });
                     let offending_rows =
@@ -1718,7 +1769,7 @@ impl Executor<'_> {
                         offending_rows,
                     }
                 }
-                Check::ScopedRowCount(check) => crate::dataset_verification::row_count_check(
+                Check::ScopedRowCount(check) => verification::row_count_check(
                     verification,
                     check,
                     &dataset,
@@ -1757,6 +1808,10 @@ impl Executor<'_> {
                 core::mem::take(records),
             )));
         }
+        let mut dataset = Dataset {
+            schema: self.plan.output().clone(),
+            rows: candidates.into_iter().map(|row| row.values).collect(),
+        };
         ordering::apply(self.plan.output_order(), &mut dataset, &mut budget)?;
         Ok(Execution {
             dataset,
@@ -2096,7 +2151,7 @@ impl Executor<'_> {
 
 /// Retain original output keys without substituting projected or row-number identity.
 pub(crate) fn identities<E>(
-    dataset: &Dataset,
+    dataset: &impl CompletedRows,
     keys: &[usize],
     rows: impl IntoIterator<Item = usize>,
     budget: &mut Budget,
@@ -2104,12 +2159,15 @@ pub(crate) fn identities<E>(
     let mut identities = Vec::new();
     for position in rows {
         budget.work(1, keys.len())?;
-        budget.identity(keys.iter().map(|&column| &dataset.rows[position][column]))?;
+        budget.identity(
+            keys.iter()
+                .map(|&column| &dataset.completed_row(position)[column]),
+        )?;
         identities.push(RowIdentity {
             position,
             values: keys
                 .iter()
-                .map(|&column| dataset.rows[position][column].clone())
+                .map(|&column| dataset.completed_row(position)[column].clone())
                 .collect(),
         });
     }

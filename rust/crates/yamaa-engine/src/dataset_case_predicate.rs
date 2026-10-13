@@ -16,38 +16,48 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     assignment: &Assignment,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<predicate::Truth, Box<ExecutionError<T::Error>>> {
-    predicate
-        .plan()
-        .evaluate_in_context(&mut Context {
-            predicate,
-            table,
-            candidate,
-            plan,
-            row,
-            assignment,
-            state,
-        })
-        .map_err(|error| {
-            let predicate::EvaluationError {
-                spec_path,
-                expression,
-                route,
-                kind,
-            } = error;
-            match kind {
-                predicate::ErrorKind::Resolution { error, .. } => error,
-                predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
-                predicate::ErrorKind::Condition(condition) => Box::new(ExecutionError::Predicate {
-                    source_row: candidate.members[0],
-                    error: predicate::EvaluationError {
-                        spec_path,
-                        expression,
-                        route,
-                        kind: predicate::ErrorKind::Condition(condition),
-                    },
-                }),
-            }
-        })
+    evaluate_context(predicate, table, candidate, plan, row, assignment, state).map_err(|error| {
+        let predicate::EvaluationError {
+            spec_path,
+            expression,
+            route,
+            kind,
+        } = error;
+        match kind {
+            predicate::ErrorKind::Resolution { error, .. } => error,
+            predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
+            predicate::ErrorKind::Condition(condition) => Box::new(ExecutionError::Predicate {
+                source_row: candidate.members[0],
+                error: predicate::EvaluationError {
+                    spec_path,
+                    expression,
+                    route,
+                    kind: predicate::ErrorKind::Condition(condition),
+                },
+            }),
+        }
+    })
+}
+/// Reuse exactly the native operand context while the caller owns its semantic phase.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn evaluate_context<T: TableAccess + ?Sized>(
+    predicate: &BoundPredicate,
+    table: &T,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    assignment: &Assignment,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Result<predicate::Truth, predicate::EvaluationError<Box<ExecutionError<T::Error>>>> {
+    predicate.plan().evaluate_in_context(&mut Context {
+        predicate,
+        table,
+        candidate,
+        plan,
+        row,
+        assignment,
+        state,
+    })
 }
 struct Context<'a, 'state, T: TableAccess + ?Sized> {
     predicate: &'a BoundPredicate,

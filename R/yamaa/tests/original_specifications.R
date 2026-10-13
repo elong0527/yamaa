@@ -2125,11 +2125,13 @@ local({
       identical(rawfile(file.path(root,"case-predicate-history",name,"expected.csv")),
         charToRaw(disposition$historical_csv)))
   }
-  for (label in c("source-selection","source-filter-scope","source-filter-mixed")) {
+  for (label in c("source-selection","source-filter-scope","source-filter-mixed","completed-lookup-assertions")) {
   source(file.path(root,paste0(label,"-truth.R")),local=TRUE)
+  if (label == "completed-lookup-assertions") stopifnot(length(source_selection_truth)==17L)
   for (name in names(source_selection_truth)) for (attempt in seq_len(2L)) {
     truth <- source_selection_truth[[name]]
     directory <- tempfile("yamaa-source-selection-");dir.create(directory)
+    if (label == "completed-lookup-assertions") directory <- normalizePath(directory,winslash="/",mustWork=TRUE)
     file.copy(list.files(file.path(root,paste0(label,"-cases"),truth$directory),full.names=TRUE),directory)
     entry <- file.path(directory,"spec.yaml")
     check_issue_frame(yamaa_check(entry)$issues,truth$check_issues)
@@ -2137,6 +2139,10 @@ local({
     check_issue_frame(result$issues,truth$issues)
     report <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
     check_handler_ledger(report,truth$handlers)
+    if (!is.null(truth$verifications)) {
+      expected <- gsub('"__SPECIFICATION__"',json_text(entry),truth$verifications,fixed=TRUE)
+      stopifnot(grepl(paste0('"verifications":',expected),report,fixed=TRUE))
+    }
     expected_reads <- paste0('"source_reads":',truth$source_reads)
     stopifnot(grepl(expected_reads,report,fixed=TRUE),grepl('"artifacts":[]',report,fixed=TRUE))
     if (!is.null(truth$columns)) {

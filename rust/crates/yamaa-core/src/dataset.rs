@@ -1759,14 +1759,17 @@ impl DatasetPlan {
                 | Check::Matches(_) => return Err(PlanError::InvalidColumns),
                 Check::InvalidDiagnostic(_) => {}
                 Check::InvalidDeclaration { .. } => {}
-                Check::PredicateDeclaration(predicate) => predicate
-                    .validate(0, &vec![true; width], true)
-                    .map_err(PlanError::Predicate)?,
+                Check::PredicateDeclaration(predicate) => {
+                    validate_verification_predicate(predicate, width, &intermediates, &secondary)?;
+                }
                 Check::Assert { when, require } => {
                     for predicate in when.iter().chain([require]) {
-                        predicate
-                            .validate(0, &vec![true; width], true)
-                            .map_err(PlanError::Predicate)?;
+                        validate_verification_predicate(
+                            predicate,
+                            width,
+                            &intermediates,
+                            &secondary,
+                        )?;
                     }
                 }
                 Check::Unique(columns) => {
@@ -2042,3 +2045,52 @@ impl DatasetPlan {
 #[cfg(test)]
 #[path = "dataset_donor_admission.rs"]
 mod donor_admission_tests;
+
+/// Completed verification scopes admit output columns and declared selected records only.
+fn validate_verification_predicate(
+    predicate: &BoundPredicate,
+    width: usize,
+    intermediates: &[Intermediate],
+    secondary: &[SecondarySource],
+) -> Result<(), PlanError> {
+    // Keep the existing completed-output rejection for raw source/collection
+    // operands. Only an admitted selected-record coordinate extends this scope.
+    use crate::bound_expression::{BindingError, Read};
+    if !predicate.collected().is_empty()
+        || predicate
+            .bindings()
+            .iter()
+            .any(|binding| matches!(binding.read, Read::Joined(_)))
+    {
+        return Err(PlanError::Predicate(BindingError::InvalidSource));
+    }
+    if predicate
+        .bindings()
+        .iter()
+        .any(|binding| matches!(binding.read, Read::Source(_)))
+    {
+        return Err(PlanError::Predicate(BindingError::GroupedSource));
+    }
+    predicate
+        .validate_contextual(0, &vec![true; width])
+        .map_err(PlanError::Predicate)?;
+    for binding in predicate.bindings() {
+        match binding.read {
+            crate::bound_expression::Read::Column(_) => {}
+            crate::bound_expression::Read::Intermediate { index, column } => {
+                let Some(item) = intermediates.get(index) else {
+                    return Err(PlanError::InvalidSource);
+                };
+                if item
+                    .source_schema(secondary)
+                    .is_none_or(|schema| column >= schema.columns().len())
+                    || !item.admits_column(column)
+                {
+                    return Err(PlanError::InvalidSource);
+                }
+            }
+            _ => return Err(PlanError::InvalidSource),
+        }
+    }
+    Ok(())
+}

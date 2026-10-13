@@ -20,6 +20,7 @@ class PortableSourceSelectionStage(unittest.TestCase):
             ("source_selection", "source-selection"),
             ("source_filter_scope", "source-filter-scope"),
             ("source_filter_mixed", "source-filter-mixed"),
+            ("completed_lookup_assertions", "completed-lookup-assertions"),
         ):
             with (
                 self.subTest(fixture=fixture),

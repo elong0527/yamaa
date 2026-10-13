@@ -1,10 +1,16 @@
 //! Predicate declarations and row checks at the completed-dataset verification phase.
+use super::{
+    intermediates, row_drivers, windows, Assignment, Candidate, Check, CheckRecord,
+    CompletedDataset, DatasetPlan, EvaluationState, ExecutionError, Expression, FunctionPort,
+    Verification,
+};
+use crate::dataset;
 use crate::{
-    dataset::{self, Check, CheckRecord, Dataset, ExecutionError, Verification},
-    dataset_budget::Budget,
-    dataset_predicate::BoundPredicate,
+    dataset_budget::Budget, dataset_predicate::BoundPredicate, numeric_lifecycle::HandlerCounter,
 };
 use alloc::{boxed::Box, vec::Vec};
+#[path = "dataset_verification_lookup.rs"]
+mod lookup;
 use yamaa_core::{
     predicate::{ErrorKind, Truth},
     table::TableAccess,
@@ -13,7 +19,7 @@ use yamaa_core::{
 };
 
 /// Nonmissing representatives expose invalid declarations even for empty output.
-fn sample(kind: ColumnType) -> Value {
+pub(super) fn sample(kind: ColumnType) -> Value {
     match kind {
         ColumnType::Str => Value::Str("sample".into()),
         ColumnType::Int => Value::Int(0),
@@ -34,13 +40,20 @@ fn sample(kind: ColumnType) -> Value {
 
 /// Validate declarations in order, then evaluate every row without a `when` short circuit.
 /// Semantic failures retain previously completed check records and never an output artifact.
-pub(crate) fn predicate_check<E>(
+#[allow(clippy::too_many_arguments)]
+pub(super) fn predicate_check<T: TableAccess + ?Sized>(
     verification: &Verification,
-    dataset: &Dataset,
+    dataset: &CompletedDataset<'_>,
     keys: &[usize],
+    table: &T,
+    plan: &DatasetPlan,
+    functions: &mut dyn FunctionPort<Error = T::Error>,
+    secondary: &[&dyn TableAccess<Error = T::Error>],
+    intermediate_run: &mut intermediates::Run,
+    handlers: &mut HandlerCounter,
     budget: &mut Budget,
     records: &mut Vec<CheckRecord>,
-) -> Result<Option<CheckRecord>, Box<ExecutionError<E>>> {
+) -> Result<Option<CheckRecord>, Box<ExecutionError<T::Error>>> {
     let (when, require, metadata) = match &verification.check {
         Check::Assert { when, require } => (
             when.as_ref(),
@@ -50,39 +63,41 @@ pub(crate) fn predicate_check<E>(
         Check::PredicateDeclaration(predicate) => (None, predicate, None),
         _ => unreachable!("only predicate checks use this service"),
     };
-    let samples: Vec<_> = dataset
-        .schema()
-        .columns()
-        .iter()
-        .map(|column| sample(column.kind))
-        .collect();
-    let mut evaluate = |predicate: &BoundPredicate, values: &[Value]| {
-        crate::dataset_predicate::evaluate(predicate, dataset, 0, values, budget.predicate())
-            .map_err(|error| {
-                Box::new(match error.kind {
-                    ErrorKind::Limit(limit) => dataset::predicate_limit(limit),
-                    _ => ExecutionError::VerificationPredicate {
-                        error,
-                        records: core::mem::take(records),
-                    },
-                })
-            })
-    };
-    // Both declarations are validated before the first actual-row predicate read.
+    // Schema representatives have no selector, table-cell or function authority.
     if let Some(when) = when {
-        evaluate(when, &samples)?;
+        lookup::sample(when, dataset, plan, budget, records)?;
     }
-    evaluate(require, &samples)?;
+    lookup::sample(require, dataset, plan, budget, records)?;
     let Some(code) = metadata else {
         return Ok(None);
     };
     let mut offending = Vec::new();
-    for (position, values) in dataset.rows().iter().enumerate() {
+    for (position, candidate) in dataset.rows.iter().enumerate() {
+        let mut windows = windows::Cache::default();
+        let primary = row_drivers::Driver::Primary(table);
+        let mut state = EvaluationState {
+            primary: &primary,
+            functions,
+            secondary,
+            self_rows: dataset.rows,
+            budget,
+            handlers,
+            intermediates: intermediate_run,
+            output_rows: dataset.rows,
+            output_offset: 0,
+            windows: &mut windows,
+            aggregate_row: None,
+        };
         let binds = match when {
-            Some(when) => evaluate(when, values)?,
+            Some(when) => lookup::actual(
+                when, dataset, table, candidate, plan, position, &mut state, records,
+            )?,
             None => Truth::True,
         };
-        let holds = evaluate(require, values)?;
+        // REQ-0383 evaluates require even when when exempts this row.
+        let holds = lookup::actual(
+            require, dataset, table, candidate, plan, position, &mut state, records,
+        )?;
         if binds == Truth::True && holds != Truth::True {
             offending.push(position);
         }
@@ -90,9 +105,9 @@ pub(crate) fn predicate_check<E>(
     Ok(Some(CheckRecord {
         path: verification.path.clone(),
         code,
-        evaluated_count: dataset.rows().len(),
+        evaluated_count: dataset.row_count(),
         failed_count: offending.len(),
-        output_rows: dataset.rows().len(),
+        output_rows: dataset.row_count(),
         codelist: None,
         inventory: None,
         row_count: None,
@@ -101,10 +116,10 @@ pub(crate) fn predicate_check<E>(
 }
 
 /// Partition all artifact rows before applying predicates; a filtered-empty group remains visible.
-pub(crate) fn row_count_check<E>(
+pub(super) fn row_count_check<E>(
     verification: &Verification,
     check: &yamaa_core::dataset::RowCount,
-    dataset: &Dataset,
+    dataset: &CompletedDataset<'_>,
     limits: dataset::Limits,
     budget: &mut Budget,
     records: &mut Vec<CheckRecord>,
@@ -115,7 +130,7 @@ pub(crate) fn row_count_check<E>(
         .iter()
         .map(|column| sample(column.kind))
         .collect();
-    budget.work(dataset.rows().len(), 2)?;
+    budget.work(dataset.row_count(), 2)?;
     let mut evaluate = |predicate: &BoundPredicate, values: &[Value]| {
         crate::dataset_predicate::evaluate(predicate, dataset, 0, values, budget.predicate())
             .map_err(|error| {
@@ -132,8 +147,8 @@ pub(crate) fn row_count_check<E>(
     for predicate in check.filter.iter().chain(&check.when) {
         evaluate(predicate, &samples)?;
     }
-    let mut admitted = Vec::with_capacity(dataset.rows().len());
-    let mut bound = Vec::with_capacity(dataset.rows().len());
+    let mut admitted = Vec::with_capacity(dataset.row_count());
+    let mut bound = Vec::with_capacity(dataset.row_count());
     for values in dataset.rows() {
         admitted.push(match &check.filter {
             Some(filter) => evaluate(filter, values)? == Truth::True,
@@ -147,11 +162,11 @@ pub(crate) fn row_count_check<E>(
         });
     }
     let groups = if let Some(columns) = &check.group_by {
-        budget.work(dataset.rows().len(), columns.len())?;
+        budget.work(dataset.row_count(), columns.len())?;
         crate::table_grouping::partition(dataset, columns, limits.output_rows, limits.key_cells)
             .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?
     } else {
-        alloc::vec![(0..dataset.rows().len()).collect()]
+        alloc::vec![(0..dataset.row_count()).collect()]
     };
     budget.work(groups.len(), check.bound_work())?;
     let mut offenders = Vec::new();
@@ -167,7 +182,7 @@ pub(crate) fn row_count_check<E>(
                 .group_by
                 .iter()
                 .flatten()
-                .map(|&column| &dataset.rows()[members[0]][column]);
+                .map(|&column| &dataset.rows[members[0]].values[column]);
             budget.identity(borrowed.clone())?;
             let values = borrowed.cloned().collect();
             offenders.push(dataset::RowIdentity {
@@ -183,7 +198,7 @@ pub(crate) fn row_count_check<E>(
         code: yamaa_core::diagnostic::ConditionCode::VerificationRowCountFailed,
         evaluated_count: groups.len(),
         failed_count: offenders.len(),
-        output_rows: dataset.rows().len(),
+        output_rows: dataset.row_count(),
         offending_rows: offenders,
         codelist: None,
         inventory: None,

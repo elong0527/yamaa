@@ -1017,7 +1017,7 @@ impl Rows {
         name: &str,
         output: &TableSchema,
         keys: &[usize],
-        verifications: &[Verification],
+        _verifications: &[Verification],
         project: Option<&crate::project_calls::ProjectCalls>,
         named: &intermediates::Declarations,
         secondary: Vec<crate::dataset::SecondarySource>,
@@ -1654,6 +1654,10 @@ impl Rows {
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }
+        let verifications =
+            _prepared
+                .verifications
+                .bind_assertions(_prepared, &secondary, &intermediates)?;
         DatasetPlan::new_with_intermediates(
             crate::dataset::SourceSchemas {
                 primary: source.clone(),
@@ -1667,7 +1671,7 @@ impl Rows {
             templates,
             columns,
             keys.to_vec(),
-            verifications.to_vec(),
+            verifications,
         )
         .and_then(|plan| {
             let contexts = self

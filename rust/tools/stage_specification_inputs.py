@@ -550,6 +550,9 @@ def stage_source_selection_truth(destination: Path, fixture="source_selection", 
             (directory / path).write_text(contents, encoding="ascii", newline="\n")
         fields = ["directory=" + text(case_paths[name]), "issues=" + issues(case["issues"]), "check_issues=" + issues(case["check_issues"]),
                   "handlers=" + text(json.dumps(case["handlers"], sort_keys=True, separators=(",", ":")))]
+        if "verifications" in case:
+            records = [{**record, "specification": "__SPECIFICATION__"} for record in case["verifications"]]
+            fields.append("verifications=" + text(json.dumps(records, sort_keys=True, separators=(",", ":"))))
         reads = [{"base_directory": ".", "condition": None, "outcome": "captured",
                   "path": path, "snapshots_created": 1} for path in case["source_reads"]]
         fields.append("source_reads=" + text(json.dumps(reads, sort_keys=True, separators=(",", ":"))))
@@ -579,6 +582,7 @@ def stage(destination: Path):
     stage_source_selection_truth(destination)
     stage_source_selection_truth(destination, "source_filter_scope", "source-filter-scope")
     stage_source_selection_truth(destination, "source_filter_mixed", "source-filter-mixed")
+    stage_source_selection_truth(destination, "completed_lookup_assertions", "completed-lookup-assertions")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv", destination / "inheritance-preparation.tsv")
     # Preserve historical reports and stage only approved citation dispositions separately.
     with (destination / "inheritance-preparation.tsv").open(encoding="ascii", newline="") as stream:

@@ -1487,6 +1487,11 @@ impl PreparedSpecification {
                 }
                 _ => None,
             })
+            .chain(
+                self.verifications
+                    .pending_findings()
+                    .map(VerificationDeclarationFinding::Diagnostic),
+            )
     }
     pub fn verification_identity(&self, path: &str) -> Option<&str> {
         core::iter::once(&self.verifications)
@@ -1497,6 +1502,7 @@ impl PreparedSpecification {
                     .iter()
                     .position(|c| c.path == path)
                     .and_then(|index| group.identities[index].as_deref())
+                    .or_else(|| group.pending_identity(path))
             })
     }
     pub fn verification_target(&self, path: &str) -> Option<&str> {
@@ -2164,6 +2170,9 @@ impl PreparedSpecification {
         let record_windows = key_assignments
             .iter()
             .any(|a| a.expression.window().is_some());
+        let verifications = self
+            .verifications
+            .bind_assertions(self, &secondary, &intermediates)?;
         DatasetPlan::new_with_intermediates(
             crate::dataset::SourceSchemas {
                 primary: source.clone(),
@@ -2185,7 +2194,7 @@ impl PreparedSpecification {
             }],
             columns,
             self.keys.clone(),
-            self.verifications.checks.clone(),
+            verifications,
         )
         .and_then(|plan| plan.with_column_verifications(self.column_verification_groups()))
         .and_then(|plan| plan.with_warning_verifications(self.warning_verification_paths()))

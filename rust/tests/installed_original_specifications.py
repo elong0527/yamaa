@@ -499,7 +499,7 @@ class OriginalSpecifications(unittest.TestCase):
     def test_original_source_bindings_complete_reports_and_exact_csv(self):
         with (ROOT / "original-source-bindings.tsv").open(encoding="ascii") as stream:
             cases = list(csv.DictReader(stream, delimiter="\t"))
-        self.assertEqual(len(cases), 16)
+        self.assertEqual(len(cases), 17)
         def no_port(*_):
             self.fail("standalone source binding reached an inheritance port")
         for row in cases:
@@ -2576,6 +2576,57 @@ columns:
                 self.assertTrue(result.save())
                 for expected in (destination / "expected").glob("*.csv"):
                     self.assertEqual((destination / expected.name).read_bytes(), expected.read_bytes())
+
+    def test_public_completed_selected_assertions_preserve_complete_records_and_order(self):
+        import polars as pl
+        import yamaa
+
+        label = "completed-lookup-assertions"
+        cases = json.loads((ROOT / (label + "-truth.json")).read_text())["cases"]
+        paths = json.loads((ROOT / (label + "-case-paths.json")).read_text())
+        self.assertEqual(len(cases), 17)
+
+        def issues(frame):
+            rows = frame.to_dicts()
+            for row in rows:
+                self.assertIsInstance(row["context"], str)
+                row["context"] = json.loads(row["context"])
+            return rows
+
+        for name, case in cases.items():
+            for attempt in range(2):
+                with self.subTest(case=name, attempt=attempt), tempfile.TemporaryDirectory() as directory:
+                    destination = Path(directory).resolve() / "case"
+                    shutil.copytree(ROOT / (label + "-cases") / paths[name], destination)
+                    entry = destination / "spec.yaml"
+                    self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
+                    result = yamaa.domain(entry)
+                    self.assertEqual(issues(result.issues), case["issues"])
+                    report = json.loads(result._native.observations())
+                    expected = [{**record, "specification": str(entry)} for record in case["verifications"]]
+                    self.assertEqual(report["verifications"], expected)
+                    self.assertEqual(report["handler_counts"], case["handlers"])
+                    self.assertEqual(report["source_reads"], [
+                        {"base_directory": ".", "condition": None, "outcome": "captured", "path": path, "snapshots_created": 1}
+                        for path in case["source_reads"]])
+                    self.assertEqual(report["artifacts"], [])
+                    if "table" in case:
+                        expected_table = case["table"]
+                        self.assertEqual(result.output.columns, [column for column, _ in expected_table["columns"]])
+                        self.assertEqual(result.output.dtypes, [pl.String if kind == "str" else pl.Int64
+                                                               for _, kind in expected_table["columns"]])
+                        self.assertEqual([[None if value is None else str(value) for value in row]
+                                          for row in result.output.rows()], expected_table["rows"])
+                        self.assertTrue(result.save())
+                        self.assertEqual((destination / "result.csv").read_bytes(), case["csv"].encode())
+                        (destination / "donor.csv").write_bytes(b"changed after build")
+                        self.assertTrue(result.save())
+                        self.assertEqual((destination / "result.csv").read_bytes(), case["csv"].encode())
+                    else:
+                        self.assertIsNone(result.output)
+                        with self.assertRaises(yamaa.DomainError):
+                            result.save()
+                        self.assertFalse((destination / "result.csv").exists())
 
     def test_public_source_selection_preserves_authored_types_effect_order_and_save_bytes(self):
         import polars as pl
