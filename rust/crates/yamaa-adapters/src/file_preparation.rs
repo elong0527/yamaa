@@ -85,16 +85,20 @@ impl FileSpecification {
         entry: crate::file_graph::CapturedEntry,
     ) -> Result<Self, Box<RejectedPlain>> {
         let (mut resources, entry, document, _) = entry.into_ordinary_parts();
-        let result = PreparedRun::prepare(document).and_then(|run| {
-            let findings = crate::verification_logs::location_findings(&resources, &run);
-            if findings.is_empty() {
-                Ok(run)
-            } else {
-                Err(crate::specification_run::Error::Prepare(
-                    yamaa_core::specification::PrepareError::Invalid(findings),
-                ))
-            }
-        });
+        let result =
+            PreparedRun::prepare_with_profile_inspection(document, |document, dataset, path| {
+                crate::source_profile_inspection::inspect(document, &resources, dataset, path)
+            })
+            .and_then(|run| {
+                let findings = crate::verification_logs::location_findings(&resources, &run);
+                if findings.is_empty() {
+                    Ok(run)
+                } else {
+                    Err(crate::specification_run::Error::Prepare(
+                        yamaa_core::specification::PrepareError::Invalid(findings),
+                    ))
+                }
+            });
         match result {
             Ok(run) => {
                 resources.finish_metadata_budget();

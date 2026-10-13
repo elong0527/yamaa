@@ -1468,3 +1468,83 @@ fn absent_environment_selects_producer_without_capturing_or_inventing_metadata()
     fs::remove_dir_all(&study.0).unwrap();
     assert!(producer_check::prepared(&graph).unwrap().is_empty());
 }
+
+#[test]
+fn plain_workflow_profile_inspection_keeps_physical_kind_before_study_capture() {
+    use yamaa_core::diagnostic::{ConditionCode as C, ContextValue};
+    use yamaa_core::specification::PrepareError;
+    use yamaa_core::value::Value;
+
+    let study = Study::new();
+    study.write("environment.yaml", "[");
+    study.write("parent/base.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/unknown}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n");
+    study.write(
+        "entry/root.yaml",
+        "schema_version: '1.0'\nparents: [../parent/base.yaml]\n",
+    );
+    fs::create_dir_all(study.0.join("parent/input")).unwrap();
+    for (kind, expected) in [
+        (0, C::ResourceNotRegularFile),
+        (1, C::SourceUnknownProfile),
+        (2, C::SourceUnknownProfile),
+        (3, C::ResourceSymlink),
+    ] {
+        let input = study.0.join("parent/input/unknown");
+        match kind {
+            0 => fs::create_dir(&input).unwrap(),
+            1 => fs::write(&input, b"ID\n1\n").unwrap(),
+            2 => (),
+            _ => {
+                fs::write(study.0.join("parent/input/target"), b"ID\n1\n").unwrap();
+                #[cfg(unix)]
+                std::os::unix::fs::symlink("target", &input).unwrap();
+                #[cfg(windows)]
+                std::os::windows::fs::symlink_file("target", &input).unwrap();
+            }
+        }
+        let Err(file_workflow::SelectionError::Plain(owner)) = file_workflow::select_request(
+            yamaa_engine::build::Request {
+                specification: &study.path("entry/root.yaml"),
+                environment: None,
+            },
+            Language::Python,
+        ) else {
+            panic!("plain route must retain its preparation rejection");
+        };
+        assert_eq!(
+            owner.capture_reads(),
+            2,
+            "only root and parent metadata were captured"
+        );
+        let yamaa_adapters::file_preparation::Error::Compile(
+            yamaa_adapters::specification_run::Error::Prepare(PrepareError::Invalid(findings)),
+        ) = owner.error()
+        else {
+            panic!("original compiler finding remains owned");
+        };
+        let issue = findings[0].diagnostic();
+        assert_eq!(issue.code, expected);
+        assert_eq!(issue.spec_paths, ["input.SRC.path"]);
+        if matches!(kind, 0 | 3) {
+            assert_eq!(
+                issue.context["path"],
+                ContextValue::Scalar(Value::Str("input/unknown".into()))
+            );
+            assert_eq!(
+                issue.context["dataset"],
+                ContextValue::Scalar(Value::Str("SRC".into()))
+            );
+        }
+        let sources = owner.retained_sources(16, 16_777_216).unwrap();
+        assert_eq!(sources.len(), 2);
+        assert!(sources
+            .iter()
+            .all(|(identity, _)| !identity.ends_with("environment.yaml")
+                && !identity.ends_with("input/unknown")));
+        match kind {
+            0 => fs::remove_dir(&input).unwrap(),
+            2 => (),
+            _ => fs::remove_file(&input).unwrap(),
+        }
+    }
+}
