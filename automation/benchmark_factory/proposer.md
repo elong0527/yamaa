@@ -45,8 +45,10 @@ feedback until it is accepted or rejected.
    engine rejects it in the phase the task spec names, and write
    `expected/error.yaml` with `phase`, `condition`, `spec_paths`,
    `requirement`, and `context`.
-4. **Run the engine** (`benchmarks/<name>/run.py` style: load the entry
-   spec, take `.output`) and **independently reproduce the golden**:
+4. **Run the engine** (`benchmarks/<name>/run.py` style: call
+   `yamaa.domain("<entry spec>", environment=...)`, take `.output`;
+   omit the environment argument when no project functions are used)
+   and **independently reproduce the golden**:
    read the inputs, apply the rule by hand or in a short throwaway
    script, and compare cell by cell. Commit only the compared golden.
    Never ship the engine's raw output as the golden.

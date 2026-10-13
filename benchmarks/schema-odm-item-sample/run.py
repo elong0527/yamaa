@@ -1,4 +1,4 @@
 import yamaa
 
-lb = yamaa.yamaa_domain("spec.yaml").output
+lb = yamaa.domain("spec.yaml").output
 lb

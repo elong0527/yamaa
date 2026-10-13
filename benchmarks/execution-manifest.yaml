@@ -3,261 +3,337 @@ version: "1.0"
 # Execution manifest for #101: every benchmark exactly once.
 # status is executable or blocked, and an executable entry names the
 # runtimes that reproduce what it committed. The reference Python runner covers
-# entries without reference_retired_by. #1757's five project studies instead
-# qualify through the installed Python/R public environment suites; their retired
-# reference routes remain visible in the inventory and cannot qualify native runs.
+# entries without reference_retired_by. #1992's qualified positive runners use
+# the shared public domain API; Python/R are backed by the committed both-host
+# conformance gate. #1757's project studies also qualify their environments.
+# Retired reference routes remain visible and cannot qualify native runs.
 examples:
   schema-source-ordinal:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   negative-source-ordinal-collision:
     status: executable
     runtimes: ['python']
   adam-adae-death:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-severity:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-occurrence-flags:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-partial-dates:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-onset-emergence:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-post-index:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-prior-serious-event:
     status: executable
     runtimes: ['python']
   adam-adae-protocol-review:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-query-flags:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-review-order:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-serious-events:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-serious-sequence:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-severity-override:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-severity-rank:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-text-cleanup:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adae-worsening-emergence:
     status: executable
     runtimes: ['python']
   adam-adae-worst-severity:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adce-worst-toxicity:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adcm-atc-classes:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adcm-on-treatment:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adeg-derived-intervals:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adex-cumulative-dose:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adex-dose-reduction:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adex-uncollected:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adfa-fever:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adlb-end-of-treatment:
     status: executable
     runtimes: ['python']
   adam-adlb-lymphocytes:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adlb-bds:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adlb-closest-visit:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adlb-mean:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adlb-ordered-sum:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adlb-reported-precision:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adlb-shift-criteria:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adlb-supplb-padded-key:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adlbc-row-window:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adlbc-window-chain:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adoe-study-eye:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adqs-missed-visit-locf:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adqs-multi-scale-scoring:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adqs-subscale-score:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adrs-best-response:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adrs-response-prep:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adrs-composite-response:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adrs-confirmed-response:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adrs-measurable-disease:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adrs-response-records:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-age-group:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-age-quality:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-analysis-age:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-bmi:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
     reference_retired_by: '#1757'
   adam-adsl-completion-flag:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-crossover-periods:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-flag-chain:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-disposition:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-dose-adjustment:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-duration:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-country-region:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-site-parse:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-investigator-comment:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-alive-date:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-demographics:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-new-therapy:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-randomization:
     status: executable
     runtimes: ['python']
   adam-adsl-rescue-med:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adsl-treatment:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adtr-nadir:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adtr-sum:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adtte-dor:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adtte-first-ae:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adtte-os:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adtte-pfs:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-adtte-pro-deterioration:
     status: executable
     runtimes: ['python']
   adam-advs-windows:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-advs-window-table:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-advs-bmi:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-advs-bsa:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-advs-percentiles:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
     reference_retired_by: '#1757'
   adam-advs-map:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-advs-carryforward:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-advs-prior-result:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-advs-first-observed-carry:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   negative-review-arithmetic:
     status: executable
     runtimes: ['python']
@@ -663,122 +739,157 @@ examples:
     runtimes: ['python']
   schema-aggregate-derive-intermediate:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-aggregation:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-birth-date:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-derive-date-epoch:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-derive-text-score:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-numeric-functions:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-odm-column-override:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-odm-form-items:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-odm-item-sample:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-odm-item-subject:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-ordering:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-parquet:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-rows-override:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-sentence-case:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-functions:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
     reference_retired_by: '#1757'
   schema-shorthand:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-str-contains:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-str-contains-missing:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-ae-coding:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-ae-meddra-hierarchy:
     status: executable
     runtimes: ['python']
   sdtm-ae-odm-repeated:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-ae-partial-dates:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-ae-seriousness:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-cm-whodrug-coding:
     status: executable
     runtimes: ['python']
   sdtm-dm-arms:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-dm-basic:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-cm-collected-medications:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-cm-odm-repeated:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-dm-age:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-dm-death:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-dm-metadata:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-dm-race-ethnicity:
     status: executable
     runtimes: ['python']
   sdtm-dm-dates:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-ds-multi-form-disposition:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-ds-reasons:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-ds-sequence:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-ec-collected-exposure:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-ex-combination:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-ex-intervals:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-ex-from-ec:
     status: executable
     runtimes: ['python']
@@ -787,130 +898,168 @@ examples:
     runtimes: ['python']
   sdtm-fa-odm-multitest:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-fa-reactogenicity-diary:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-lb-character-results:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-lb-compartments:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-lb-grading:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-lb-findings:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-lb-multiform:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-lb-lab-specific-ranges:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-lb-ranges:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-lb-last-observation-before-exposure:
     status: executable
     runtimes: ['python']
   sdtm-lb-metadata:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-mh-prespecified-conditions:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-pr-procedures:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-qs-questionnaire-items:
     status: executable
     runtimes: ['python']
   sdtm-relrec-dataset-level:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-relrec-links:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-mh-ongoing-conditions:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-rs-timepoint-response:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-se-subject-elements:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-suppmh-linkage:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-sv-subject-visits:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-suppmh-qualifiers:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-vs-epoch-from-subject-elements:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-vs-replicates:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-vs-units:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-vs-collected-form:
     status: executable
     runtimes: ['python']
   sdtm-vs-study-day:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-vs-planned-time-points:
     status: executable
     runtimes: ['python']
   schema-column-composition:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-expressions:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-handlers:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-inheritance:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-inheritance-project-root:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-inherited-output:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-source-binding:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-structure:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-text-functions:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-text-mapping:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-text-mapping-unmapped:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-lifecycle:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-verification-log:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-lookup:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-lookup-intermediate-derived-filter:
     status: executable
     runtimes: ['python']
@@ -922,38 +1071,47 @@ examples:
     runtimes: ['python']
   schema-lookup-filters:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-non-finite:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
     reference_retired_by: '#1757'
   schema-window-functions:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-window-intermediate-rank:
     status: executable
     runtimes: ['python']
   schema-round-half-away-from-zero-ties:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-row-count-fractions:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-row-templates:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   schema-predicates:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-advs-locf:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   adam-advs-locf-record:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   bimo-clinsite-site-level:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   negative-locf-no-order:
     status: executable
     runtimes: ['python']
@@ -962,7 +1120,9 @@ examples:
     runtimes: ['python']
   sdtm-tr-tumor-measurements:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'
   sdtm-tu-tumor-identification:
     status: executable
-    runtimes: ['python']
+    runtimes: ['python', 'r']
+    reference_retired_by: '#1992'

@@ -1,4 +1,4 @@
 import yamaa
 
-adex = yamaa.yamaa_domain("spec.yaml").output
+adex = yamaa.domain("spec.yaml").output
 adex

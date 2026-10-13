@@ -1,4 +1,4 @@
 import yamaa
 
-relrec = yamaa.yamaa_domain("spec.yaml").output
+relrec = yamaa.domain("spec.yaml").output
 relrec
