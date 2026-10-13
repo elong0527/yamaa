@@ -37,7 +37,6 @@ class PublicEnvironment(unittest.TestCase):
             "phase": "validation", "condition": "project_environment_missing",
             "requirement": "REQ-0694", "spec_paths": ["environment"],
             "context": json.dumps({"cause": "missing", "path": (Path.cwd() / "missing-environment.yaml").as_posix()},
-
                 ensure_ascii=False, separators=(",", ":")),
         }
         with (

@@ -63,7 +63,7 @@ on all required Python wheel/source and R source platforms, including Windows R.
 
 ## Component endpoint retirement
 
-#1990 removes every installed prototype endpoint and request protocol. The 24
+#1990 removes every installed prototype endpoint and request protocol. The 25
 remaining installed suites qualify public domain/check/define and retained typed
 lifecycle ports. Python `_CORE_VERSION` and R's private `.core_version()` expose
 compiled package metadata without the former capabilities/installation probe.
@@ -90,3 +90,23 @@ spec_paths and context. Installed issue context remains JSON text; retained
 report observations use the same fields with their admitted context object.
 Retired malformed-envelope tests have no surviving API to qualify. No benchmark
 expected bytes or the #1974 benchmark inventory are changed by retirement.
+
+The filesystem suites use public domain/check and actual files in both installed
+hosts, with Python reference imports forbidden and Python absent from R's PATH.
+Eight original physical capture configurations now exercise public inspection
+before study reads. The seven unchanged inspection cases run twice, including
+malformed surviving files which must remain unread. Fresh builds reinspect
+changed or absent files, while earlier results retain their complete reports,
+owned output and two exact Saves after all original files disappear. Public
+parent-relative and absolute paths follow #1905; physical symlinks retain their
+native refusal, with an explicit unavailable-control record when the host cannot
+create one.
+
+Private capture-stage partial reports and cached-source accounting still consume
+all eight `source_capture.tsv` rows in typed `specification_run` tests and the
+installed original-specification suite. The native engine's reused-build tests
+pin inspection/capture ordering. Typed `file_resources` tests pin exact shared
+snapshot ownership, byte ceilings, cached-content changes and unchanged capture
+counts. Those private facts require no installed component endpoint or Python IO
+implementation. The new public suites do not relabel their fresh builds as cached
+captures or retain historical project containment as public behavior.

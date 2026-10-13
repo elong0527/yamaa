@@ -7,6 +7,7 @@ listing a contract or one of its consumers never qualifies its behavior.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import platform
@@ -30,6 +31,74 @@ def _path(root, name):
 def _keys(value, expected):
     if not isinstance(value, dict) or set(value) != set(expected):
         raise ValueError(f"expected exactly these fields: {sorted(expected)}")
+
+
+def require_native_consumer(source, name):
+    """Reject reference semantic imports in retained installed Python suites."""
+    prefixes = (
+        "yamaa._reference_domain",
+        "yamaa.adapters",
+        "yamaa.models",
+        "yamaa.runtime",
+        "yamaa.planning",
+        "yamaa.expressions",
+        "yamaa.regex",
+        "yamaa.specification",
+        "yamaa.schema",
+        "yamaa.verification",
+        "yamaa.submission",
+        "yamaa.functions",
+    )
+
+    def reference(module):
+        return (
+            module == "yamaa.io"
+            or module.startswith("yamaa.io.")
+            or any(
+                module == prefix or module.startswith(prefix + ".")
+                for prefix in prefixes
+            )
+        )
+
+    tree = ast.parse(source, filename=name)
+    imports = {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "importlib"
+        for alias in node.names
+        if alias.name == "import_module"
+    }
+    imports.add("__import__")
+    for node in ast.walk(tree):
+        modules = []
+        if isinstance(node, ast.Import):
+            modules = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            modules = [node.module or ""]
+            if node.module == "yamaa":
+                modules.extend("yamaa." + alias.name for alias in node.names)
+        elif (
+            isinstance(node, ast.Call)
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+        ):
+            function = node.func
+            if (isinstance(function, ast.Name) and function.id in imports) or (
+                isinstance(function, ast.Attribute) and function.attr == "import_module"
+            ):
+                modules = (
+                    [node.args[0].value] if isinstance(node.args[0].value, str) else []
+                )
+        for module in modules:
+            if reference(module) or module in (
+                "yamaa.yamaa_domain",
+                "yamaa.DomainRun",
+                "yamaa.DomainRunError",
+                "yamaa.generate_study_document",
+            ):
+                raise ValueError(
+                    f"retained suite imports reference semantics: {name}:{node.lineno}: {module}"
+                )
 
 
 def load_catalog(root, catalog_path):
@@ -82,6 +151,10 @@ def load_catalog(root, catalog_path):
             raise ValueError(f"duplicate suite: {suite['id']}")
         if not _path(root, suite["path"]).is_file():
             raise ValueError(f"missing suite: {suite['path']}")
+        if suite["runtime"] == "python":
+            require_native_consumer(
+                _path(root, suite["path"]).read_text(encoding="utf-8"), suite["path"]
+            )
         _path(root, suite["staged_path"])
         stage = suite["runtime"], suite["staged_path"]
         if stage in staged:
@@ -197,7 +270,11 @@ def run_suites(root, catalog, *, runtime, staged_root, output, evidence):
     output.mkdir(parents=True, exist_ok=True)
     environment = os.environ | {
         "YAMAA_SUPPLEMENTAL_EVIDENCE": json.dumps(
-            {"scope": "supplemental_suites", "evidence": evidence, "installation": metadata},
+            {
+                "scope": "supplemental_suites",
+                "evidence": evidence,
+                "installation": metadata,
+            },
             ensure_ascii=True,
         )
     }

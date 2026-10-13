@@ -20,6 +20,28 @@ class RepositoryCatalog(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         module.load_catalog(root, root / "rust/qualification/supplemental.json")
 
+    def test_reference_consumers_cannot_reenter_installed_qualification(self):
+        for source in (
+            "from yamaa.io.project import ProjectResources",
+            "from yamaa.io.odm import reference_walker",
+            "from yamaa import yamaa_domain",
+            "import yamaa.expressions.numeric as parser",
+            "def lazy():\n    from yamaa.models import TypedColumn",
+            "import importlib\nimportlib.import_module('yamaa.runtime')",
+            "from importlib import import_module as load\nload('yamaa.specification')",
+        ):
+            with (
+                self.subTest(source=source),
+                self.assertRaisesRegex(ValueError, "reference semantics"),
+            ):
+                module.require_native_consumer(source, "installed_control.py")
+        module.require_native_consumer(
+            "import yamaa\nfrom yamaa import domain, _native\n"
+            "blocked = ('yamaa.io.project', 'yamaa.runtime')\n"
+            "import importlib\nimportlib.import_module('yamaa._native_results')",
+            "installed_control.py",
+        )
+
 
 class SupplementalEvidence(unittest.TestCase):
     def setUp(self):
@@ -135,22 +157,36 @@ class SupplementalEvidence(unittest.TestCase):
             )
         self.assertFalse(self.output.exists())
 
-    def test_actual_suite_receives_its_checked_source_and_installed_artifact_provenance(self):
+    def test_actual_suite_receives_its_checked_source_and_installed_artifact_provenance(
+        self,
+    ):
         code = 'import os\nprint(os.environ["YAMAA_SUPPLEMENTAL_EVIDENCE"])\n'
         self.write("rust/tests/installed_first.py", code)
         (self.staged / "installed_first.py").write_text(code)
         self.catalog["suites"] = self.catalog["suites"][:1]
-        evidence = {"source_revision": "checked-revision", "artifact_reference": "installed-archive"}
+        evidence = {
+            "source_revision": "checked-revision",
+            "artifact_reference": "installed-archive",
+        }
         with (
             patch.object(module, "installed_metadata", return_value=self.metadata),
-            patch.dict(module.os.environ, {"YAMAA_SUPPLEMENTAL_EVIDENCE": "stale inherited claim"}),
+            patch.dict(
+                module.os.environ,
+                {"YAMAA_SUPPLEMENTAL_EVIDENCE": "stale inherited claim"},
+            ),
         ):
-            status = module.run_suites(self.root,self.catalog,runtime="python",
-                staged_root=self.staged,output=self.output,evidence=evidence)
-        self.assertEqual(status,0)
+            status = module.run_suites(
+                self.root,
+                self.catalog,
+                runtime="python",
+                staged_root=self.staged,
+                output=self.output,
+                evidence=evidence,
+            )
+        self.assertEqual(status, 0)
         report = json.loads((self.output / "python-first.log").read_text())
-        self.assertEqual(report["evidence"],evidence)
-        self.assertEqual(report["installation"],self.metadata)
+        self.assertEqual(report["evidence"], evidence)
+        self.assertEqual(report["installation"], self.metadata)
 
     def test_distinct_suite_ids_cannot_overwrite_the_same_log(self):
         # Both IDs used to map to python-first-nested.log after slash replacement.
