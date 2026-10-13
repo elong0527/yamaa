@@ -6,12 +6,29 @@ import shutil
 import sys
 from pathlib import Path
 
-_spec = importlib.util.spec_from_file_location(
-    "_public_reports", Path(__file__).with_name("_public_reports.py")
-)
-reports = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = reports
-_spec.loader.exec_module(reports)
+
+class _Reports:
+    """Lazy ``_public_reports`` handle: its decoder libraries (Polars/PyArrow)
+    are only present in qualification environments, so load on first use."""
+
+    _module = None
+
+    def _load(self):
+        if self._module is None:
+            spec = importlib.util.spec_from_file_location(
+                "_public_reports", Path(__file__).with_name("_public_reports.py")
+            )
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            self._module = module
+        return self._module
+
+    def __getattr__(self, name):
+        return getattr(self._load(), name)
+
+
+reports = _Reports()
 
 COHORT = (
     "adam-adlb-ordered-sum",
