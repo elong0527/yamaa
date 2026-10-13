@@ -39,6 +39,7 @@ pub mod regex_transport;
 pub mod predicate_syntax;
 mod schema_diagnostic_kinds;
 pub mod schema_transport;
+pub mod style_values;
 pub mod yaml_decode;
 mod yaml_source;
 pub mod yaml_transport;
