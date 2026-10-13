@@ -200,6 +200,7 @@ fn key_grain_admission_sees_raw_reads_through_recursive_source_containers() {
         source: Box::new(assign(1, expression)),
         absent: None,
         variable_absent: false,
+        selection_declared: false,
         variable: "SRC.V".into(),
         path: "columns.V.derivation.source".into(),
     };
@@ -727,21 +728,19 @@ fn first_available_admits_every_operand_before_any_source_access() {
     );
     let selection =
         Expression::FirstAvailable(Box::new(FirstAvailable::new(vec![], Value::Int(1))));
-    assert_eq!(
-        DatasetPlan::new(
-            source.clone(),
-            output.clone(),
-            vec![RowTemplate {
-                mode: RowMode::Keys,
-                assignments: vec![assign(0, selection.clone())],
-                filter: None
-            }],
-            vec![assign(1, Expression::Literal(Value::Int(2)))],
-            vec![0],
-            vec![]
-        ),
-        Err(PlanError::InvalidKeyMode)
-    );
+    assert!(DatasetPlan::new(
+        source.clone(),
+        output.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Keys,
+            assignments: vec![assign(0, selection.clone())],
+            filter: None
+        }],
+        vec![assign(1, Expression::Literal(Value::Int(2)))],
+        vec![0],
+        vec![]
+    )
+    .is_ok());
     assert!(DatasetPlan::new(
         source,
         output,

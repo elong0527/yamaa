@@ -8,8 +8,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
     plan: &DatasetPlan,
     table: &T,
     limits: Limits,
-    budget: &mut Budget,
-    handlers: &mut HandlerCounter,
+    state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Vec<Candidate>, Box<ExecutionError<T::Error>>> {
     let rows = table.row_count();
     if rows
@@ -27,20 +26,23 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
     retained
         .try_reserve_exact(rows)
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
-    budget.work(rows, 1)?;
+    state.budget.work(rows, 1)?;
     for row in 0..rows {
         if let Some(filter) = &plan.templates()[0].filter {
-            let truth =
-                crate::dataset_predicate::evaluate(filter, table, row, &[], budget.predicate())
-                    .map_err(|error| match error.kind {
-                        yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                            Box::new(predicate_limit(limit))
-                        }
-                        _ => Box::new(ExecutionError::Predicate {
-                            source_row: row,
-                            error,
-                        }),
-                    })?;
+            let truth = crate::dataset_predicate::evaluate(
+                filter,
+                table,
+                row,
+                &[],
+                state.budget.predicate(),
+            )
+            .map_err(|error| match error.kind {
+                yamaa_core::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
+                _ => Box::new(ExecutionError::Predicate {
+                    source_row: row,
+                    error,
+                }),
+            })?;
             if truth != yamaa_core::predicate::Truth::True {
                 continue;
             }
@@ -65,33 +67,14 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
     for &row in &retained {
         let mut probe = Candidate {
             template: None,
-            selection_identity: SelectionIdentity::Probe,
+            selection_identity: SelectionIdentity::KeyCandidate(row),
             members: vec![row],
             values: vec![Value::Missing; plan.output().columns().len()],
             completed: vec![false; plan.output().columns().len()],
         };
         for assignment in &plan.templates()[0].assignments {
-            probe.values[assignment.column] = evaluate(
-                table,
-                assignment,
-                &probe,
-                plan,
-                row,
-                limits,
-                &mut EvaluationState {
-                    functions: &mut crate::function_invocation::NoFunctions::new(),
-                    budget,
-                    handlers,
-                    secondary: &[],
-                    primary: &row_drivers::Driver::Primary(table),
-                    self_rows: &[],
-                    intermediates: &mut intermediates::Run::default(),
-                    output_rows: &[],
-                    aggregate_row: None,
-                    output_offset: 0,
-                    windows: &mut windows::Cache::default(),
-                },
-            )?;
+            probe.values[assignment.column] =
+                evaluate(table, assignment, &probe, plan, row, limits, state)?;
             probe.completed[assignment.column] = true;
         }
         key_table.rows.push(
@@ -102,7 +85,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         );
     }
     let key_columns: Vec<_> = (0..plan.keys().len()).collect();
-    budget.work(rows, plan.keys().len())?;
+    state.budget.work(rows, plan.keys().len())?;
     let partitions = partition(
         &key_table,
         &key_columns,
@@ -110,8 +93,8 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         limits.key_cells,
     )
     .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
-    budget.work(partitions.len(), plan.keys().len())?;
-    budget.work(rows, 1)?;
+    state.budget.work(partitions.len(), plan.keys().len())?;
+    state.budget.work(rows, 1)?;
     let mut groups = Vec::new();
     groups
         .try_reserve_exact(rows)
@@ -137,7 +120,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
     for members in groups {
         let keys = core::mem::take(&mut key_table.rows[members[0]]);
         for &duplicate in &members[1..] {
-            budget.discard_candidate(&key_table.rows[duplicate]);
+            state.budget.discard_candidate(&key_table.rows[duplicate]);
             key_table.rows[duplicate].clear();
         }
         let mut candidate = Candidate {
