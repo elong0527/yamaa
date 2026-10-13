@@ -40,10 +40,8 @@ def prepare(source_directory, proof_directory, artifact_name, artifact_id):
     archive = archives[0]
     with tarfile.open(archive, "r:gz") as contents:
         description = contents.extractfile("yamaa/DESCRIPTION").read().decode("utf-8")
-        if (
-            "Package: yamaa\n" not in description
-            or "Version: 0.3.0\n" not in description
-        ):
+        fields = description.splitlines()
+        if "Package: yamaa" not in fields or "Version: 0.3.0" not in fields:
             raise ValueError("retained archive package/version does not match")
         required = (
             "yamaa/src/rust/Cargo.lock",

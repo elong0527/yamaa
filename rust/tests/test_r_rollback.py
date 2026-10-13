@@ -77,6 +77,19 @@ class RetainedSourceIdentity(unittest.TestCase):
             self.prepare()
         self.assertFalse((self.proof / "artifact-receipt.json").exists())
 
+    def test_windows_description_is_parsed_without_changing_source_bytes(self):
+        with tarfile.open(self.archive, "r:gz") as source:
+            members = [(member, source.extractfile(member).read()) for member in source]
+        with tarfile.open(self.archive, "w:gz") as destination:
+            for member, data in members:
+                if member.name == "yamaa/DESCRIPTION":
+                    data = data.replace(b"\n", b"\r\n")
+                    member.size = len(data)
+                destination.addfile(member, io.BytesIO(data))
+        unchanged = self.archive.read_bytes()
+        self.prepare()
+        self.assertEqual((self.source / "yamaa_0.3.0.tar.gz").read_bytes(), unchanged)
+
     def test_expired_or_failed_qualification_does_not_become_rollback_evidence(self):
         for expired, conclusion in ((True, "success"), (False, "failure")):
             with self.subTest(expired=expired, conclusion=conclusion):
