@@ -56,17 +56,16 @@ From an FDA [warning letter](https://www.fda.gov/inspections-compliance-enforcem
 
 ## Evidence: prompt completeness decides success
 
-| Prompt tier | Python | R |
-| --- | --- | --- |
-| Full (every rule stated) | 98.5% (131/133) | 85.7% (114/133) |
-| Conventions (labels and value rules) | 39.8% (53/133) | 36.8% (49/133) |
-| Brief (columns only) | 18.0% (24/133) | 18.0% (24/133) |
+| Prompt tier | Python | R | opensas |
+| --- | --- | --- | --- |
+| Full (every rule stated) | 99.3% (133/134) | 98.5% (132/134) | 86.6% (116/134) |
+| Conventions (labels and value rules) | 35.8% (48/134) | 33.6% (45/134) | 34.3% (46/134) |
+| Brief (columns only) | 18.7% (25/134) | 17.9% (24/134) | 15.7% (21/134) |
 
-* Same 133 benchmarks, same agent — only the prompt changed.
-* Task pass rate collapses as prompts lose detail; Python outscores R on full and conventions tiers, and both tie at 18% on brief prompts.
+* Same 134 tasks, same agent. Only the prompt changed.
 
 ::: {style="font-size: 75%;"}
-Agent: opencode · Model: muse-spark-1.3 , Oct 2026
+Agent: opencode 1.18.33. Model: opencode-go/muse-spark-1.3-contributor, 1 attempt, Oct 12 2026
 :::
 
 ## Mean arterial pressure: three prompts {#example-mean-arterial-pressure-the-three-prompts .map-prompts}
