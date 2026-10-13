@@ -548,6 +548,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_define.R" public_define.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_contract.R" public_contract.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_grammar.R" public_grammar.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_file_resources.R" public_file_resources.R
           YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
             --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
             --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \

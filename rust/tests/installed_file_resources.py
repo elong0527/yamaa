@@ -1,206 +1,297 @@
-"""Installed descriptor-backed source capture without reference semantic imports."""
+"""Public filesystem qualification with reference imports forbidden.
+
+The eight capture-stage partial reports and private cache/limit/Changed facts
+remain in typed native tests and installed_original_specifications.py. Public
+builds inspect all sources first, so physical missing/directory cases use the
+unchanged inspection truth and retain zero study reads.
+"""
 
 import builtins
 import csv
 import gc
 import json
-import os
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from yamaa import _native as yamaa_native
+import yamaa
+from yamaa import _native
 
 ROOT = Path(__file__).with_name("specification-original")
+PATHS = {"DM": "input/dm.csv", "AE": "input/ae.csv", "MEDDRA": "input/meddict.csv"}
 
 
 class FileResources(unittest.TestCase):
     def setUp(self):
         original = builtins.__import__
+        blocked = (
+            "yamaa._reference_domain",
+            "yamaa.io",
+            "yamaa.models",
+            "yamaa.adapters",
+            "yamaa.runtime",
+            "yamaa.planning",
+            "yamaa.expressions",
+            "yamaa.regex",
+            "yamaa.verification",
+            "yamaa.submission",
+            "yamaa.specification",
+            "yamaa.schema",
+        )
 
         def reject(name, *args, **kwargs):
-            if name.startswith((
-                "yamaa.domain", "yamaa._reference_domain", "yamaa.runtime", "yamaa.planning", "yamaa.expressions",
-                "yamaa.verification", "yamaa.submission", "yamaa.specification",
-                "yamaa.io.artifact", "yamaa.io.source", "yamaa.io.csv", "yamaa.io.parquet",
-            )) or name.split(".")[0] in {"yaml", "yaml12", "pyarrow", "polars"}:
+            if name in {"yaml", "yaml12", "pydantic"} or any(
+                name == prefix or name.startswith(prefix + ".") for prefix in blocked
+            ):
                 raise AssertionError("reference semantic import: " + name)
             return original(name, *args, **kwargs)
 
         guard = patch("builtins.__import__", side_effect=reject)
         guard.start()
         self.addCleanup(guard.stop)
-        from yamaa.io._native_source_capture import SourceCapture
-        from yamaa.io.project import ProjectResources, ResourceByteLimit, ResourceFailure
-        self.capture_type = SourceCapture
-        self.resources_type = ProjectResources
-        self.byte_limit = ResourceByteLimit
-        self.resource_failure = ResourceFailure
 
-    def prepare(self):
-        def no_parent(*_):
-            self.fail("standalone entry reached inheritance authority")
-        source = (ROOT / "cases/schema-lookup/spec.yaml").read_bytes()
-        return yamaa_native._prepare_document("spec.yaml", source, no_parent, no_parent, no_parent)
+    def case(self, directory):
+        target = Path(directory) / "case"
+        shutil.copytree(ROOT / "cases/schema-lookup", target)
+        return target, target / "spec.yaml"
 
-    def test_real_files_preserve_complete_classified_capture_reports(self):
-        with (ROOT / "source-capture.tsv").open(encoding="ascii") as stream:
-            records = list(csv.DictReader(stream, delimiter="\t"))
-        self.assertEqual(len(records), 8)
-        for record in records:
-            with self.subTest(kind=record["kind"], at=record["fail_at"], cached=record["cached"]):
-                with tempfile.TemporaryDirectory() as directory:
-                    root = Path(directory).resolve()
-                    shutil.copytree(ROOT / "cases/schema-lookup/input", root / "input")
-                    fail_at, cached = int(record["fail_at"]), bool(int(record["cached"]))
-                    failed = root / ("input/dm.csv" if fail_at == 0 else "input/ae.csv")
-                    failed.unlink()
-                    if record["kind"] == "not_regular_file":
-                        failed.mkdir()
-                    resources = self.resources_type(root)
-                    if fail_at and cached:
-                        resources.capture("input/dm.csv")
-                    before = resources.capture_reads
-                    capture = self.capture_type(resources)
-                    spec = self.prepare()
-                    result = spec.build(capture, ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", "."))
-                    expected = json.loads(record["expected"])
-                    self.assertEqual(json.loads(result.observations()), expected)
-                    self.assertEqual(resources.capture_reads - before, int(fail_at > 0 and not cached))
-                    self.assertIsNone(result.output())
-                    del capture, resources, spec
-                    gc.collect()
-                    with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
-                        result.save(lambda *_: self.fail("failed file capture published"))
-                    self.assertEqual(json.loads(result.observations()), expected)
+    def records(self, name, count):
+        with (ROOT / name).open(encoding="ascii", newline="") as stream:
+            rows = list(csv.DictReader(stream, delimiter="\t"))
+        self.assertEqual(len(rows), count)
+        return rows
 
-    def test_real_file_inspection_fails_before_every_study_capture(self):
-        with (ROOT / "source-inspection.tsv").open(encoding="ascii") as stream:
-            records = list(csv.DictReader(stream, delimiter="\t"))
-        self.assertEqual(len(records), 7)
-        paths = {"DM": "input/dm.csv", "AE": "input/ae.csv", "MEDDRA": "input/meddict.csv"}
-        for record in records:
-            for cached in (False, True):
-                with self.subTest(case=record["case"], cached=cached):
-                    with tempfile.TemporaryDirectory() as directory:
-                        root = Path(directory).resolve()
-                        shutil.copytree(ROOT / "cases/schema-lookup/input", root / "input")
-                        resources = self.resources_type(root)
-                        if cached:
-                            resources.capture("input/dm.csv")
-                        before = resources.capture_reads
-                        for name, kind in json.loads(record["failures"]).items():
-                            location = root / paths[name]
-                            location.unlink()
-                            if kind == "not_regular_file":
-                                location.mkdir()
-                        capture = self.capture_type(resources)
-                        events = []
-                        def inspect(name, path):
-                            events.append((name, path))
-                            return capture.inspect(name, path)
-                        spec = self.prepare()
-                        with patch("yamaa.io.project.os.read", side_effect=AssertionError("metadata inspection read study bytes")):
-                            result = spec.build(capture, ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", "."), inspect=inspect)
-                        self.assertEqual(events, list(paths.items()))
-                        self.assertEqual(resources.capture_reads, before)
-                        expected = json.loads(record["expected"])
-                        self.assertEqual(json.loads(result.observations()), expected)
-                        self.assertIsNone(result.output())
-                        with self.assertRaisesRegex(ValueError, "cannot save a failed build"):
-                            result.save(lambda *_: self.fail("metadata failure published"))
+    def expected(self, report, entry, artifacts=False):
+        report = json.loads(report)
+        report.update(
+            runtime="python",
+            runtime_version=sys.version,
+            engine_version=_native._CORE_VERSION,
+            example="domain",
+        )
+        for group in ("nodes", "tables", "verifications", "callbacks"):
+            for observation in report[group]:
+                self.assertEqual(observation["specification"], "spec.yaml")
+                observation["specification"] = str(entry)
+        if not artifacts:
+            report["artifacts"] = []
+        return report
 
-    def test_real_file_inspection_repeats_before_successful_cached_capture(self):
+    def lookup_expected(self, entry, artifacts=False):
+        return self.expected(
+            (ROOT / "expected/schema-lookup.json").read_text(), entry, artifacts
+        )
+
+    def observe(self, result):
+        return json.loads(result._native.observations())
+
+    def fail_files(self, case, failures):
+        for name, kind in failures.items():
+            path = case / PATHS[name]
+            path.unlink()
+            if kind == "not_regular_file":
+                path.mkdir()
+
+    def failed(self, result, expected, case):
+        self.assertEqual(self.observe(result), expected)
+        self.assertIsNone(result.output)
+        self.assertEqual(
+            result.issues.columns,
+            ["phase", "condition", "requirement", "spec_paths", "context"],
+        )
+        self.assertEqual(
+            result.issues.to_dicts(),
+            [
+                {
+                    **finding,
+                    "context": json.dumps(
+                        finding["context"],
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                }
+                for finding in expected["diagnostics"]
+            ],
+        )
+        gc.collect()
+        for _ in range(2):
+            with self.assertRaises(yamaa.DomainError):
+                result.save()
+            self.assertEqual(self.observe(result), expected)
+            self.assertFalse((case / "adsl.csv").exists())
+
+    def test_original_physical_capture_cases_keep_complete_public_preflight_failures(
+        self,
+    ):
+        inspection = {
+            tuple(sorted(json.loads(row["failures"]).items())): row["expected"]
+            for row in self.records("source-inspection.tsv", 7)
+        }
+        for row in self.records("source-capture.tsv", 8):
+            # Private capture-stage/cache assertions still consume this exact
+            # fixture. The public route owns inspection before byte capture.
+            name = "DM" if row["fail_at"] == "0" else "AE"
+            failures = {name: row["kind"]}
+            with (
+                self.subTest(kind=row["kind"], at=row["fail_at"], cached=row["cached"]),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                case, entry = self.case(directory)
+                self.fail_files(case, failures)
+                expected = self.expected(inspection[tuple(failures.items())], entry)
+                for _ in range(2):
+                    self.failed(yamaa.domain(entry), expected, case)
+
+    def test_all_physical_inspection_failures_precede_every_study_read(self):
+        for row in self.records("source-inspection.tsv", 7):
+            with (
+                self.subTest(case=row["case"]),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                case, entry = self.case(directory)
+                failures = json.loads(row["failures"])
+                self.fail_files(case, failures)
+                # Any premature decode would fail differently. Exact truth
+                # requires every metadata cause in order, with zero reads.
+                for name in PATHS.keys() - failures.keys():
+                    (case / PATHS[name]).write_bytes(b"\xff")
+                self.assertTrue(yamaa.check(entry).issues.is_empty())
+                expected = self.expected(row["expected"], entry)
+                for _ in range(2):
+                    self.failed(yamaa.domain(entry), expected, case)
+
+    def test_each_public_build_reinspects_files_without_reusing_prior_source_bytes(
+        self,
+    ):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            shutil.copytree(ROOT / "cases/schema-lookup/input", root / "input")
-            resources = self.resources_type(root)
-            capture = self.capture_type(resources)
-            spec = self.prepare()
-            expected = json.loads((ROOT / "expected/schema-lookup.json").read_text())
-            expected["artifacts"] = []
-            events = []
-            def inspect(name, path):
-                events.append(("inspect", name))
-                return capture.inspect(name, path)
-            def read(name, path, maximum):
-                events.append(("capture", name))
-                return capture(name, path, maximum)
-            for created in (1, 0):
-                events.clear()
-                result = spec.build(read, ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", "."), inspect=inspect)
-                self.assertEqual(events, [(kind, name) for kind in ("inspect", "capture") for name in ("DM", "AE", "MEDDRA")])
-                for observation in expected["source_reads"]:
-                    observation["snapshots_created"] = created
-                expected.update(runtime_version="fixture-runtime", engine_version="fixture-engine")
-                self.assertEqual(json.loads(result.observations()), expected)
-            self.assertEqual(resources.capture_reads, 3)
+            case, entry = self.case(directory)
+            expected = self.lookup_expected(entry)
+            first = yamaa.domain(entry)
+            self.assertEqual(self.observe(first), expected)
+            content = (case / PATHS["DM"]).read_bytes()
+            (case / PATHS["DM"]).unlink()
+            missing = next(
+                row
+                for row in self.records("source-inspection.tsv", 7)
+                if row["case"] == "missing_first"
+            )
+            self.failed(
+                yamaa.domain(entry), self.expected(missing["expected"], entry), case
+            )
+            self.assertEqual(self.observe(first), expected)
+            (case / PATHS["DM"]).write_bytes(content)
+            self.assertEqual(self.observe(yamaa.domain(entry)), expected)
 
-    def test_byte_limit_and_changed_cached_bytes_stay_opaque(self):
+    def test_changed_files_do_not_replace_owned_values_and_fresh_builds_read_new_bytes(
+        self,
+    ):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            source = root / "source.csv"
-            source.write_bytes(b"held")
-            resources = self.resources_type(root)
-            capture = self.capture_type(resources)
-            with self.assertRaises(self.byte_limit):
-                capture("SRC", "source.csv", 3)
-            self.assertEqual(resources.capture_reads, 0)
-            self.assertEqual(capture("SRC", "source.csv", 4), (b"held", True))
-            self.assertEqual(capture("SRC", "source.csv", 4), (b"held", False))
-            source.write_bytes(b"changed")
-            with self.assertRaises(self.resource_failure) as caught:
-                capture("SRC", "source.csv", 4)
-            self.assertEqual(caught.exception.condition, "resource_path_content_changed")
-            self.assertEqual(caught.exception.phase, "ingest")
-            self.assertEqual(resources.capture_reads, 1)
+            case, entry = self.case(directory)
+            first = yamaa.domain(entry)
+            expected = self.lookup_expected(entry)
+            self.assertEqual(self.observe(first), expected)
+            source = case / PATHS["AE"]
+            content = source.read_bytes()
+            old = b"MYOCARDIAL INFARCTION,FATAL,150\n"
+            self.assertEqual(content.count(old), 1)
+            source.write_bytes(
+                content.replace(old, b"MYOCARDIAL INFARCTION,FATAL,151\n")
+            )
+            second = yamaa.domain(entry)
+            self.assertTrue(second.issues.is_empty(), second.issues)
+            self.assertEqual(first.output["DTHDY"].to_list(), [150, 80, None, None])
+            self.assertEqual(second.output["DTHDY"].to_list(), [151, 80, None, None])
+            self.assertEqual(self.observe(first), expected)
+            self.assertEqual(
+                [r["snapshots_created"] for r in self.observe(second)["source_reads"]],
+                [1, 1, 1],
+            )
+            self.assertTrue(first.save())
+            self.assertEqual(
+                (case / "adsl.csv").read_bytes(),
+                (case / "expected/adsl.csv").read_bytes(),
+            )
 
-    def test_lookup_file_capture_keeps_complete_result_and_exact_saved_bytes(self):
+    def test_original_lookup_keeps_complete_owned_report_and_two_exact_saves(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            shutil.copytree(ROOT / "cases/schema-lookup/input", root / "input")
-            resources = self.resources_type(root)
-            capture = self.capture_type(resources)
-            spec = self.prepare()
-            result = spec.build(capture, ("fixture-runtime", "fixture-engine", "schema-lookup", "spec.yaml", "."))
-            expected = json.loads((ROOT / "expected/schema-lookup.json").read_text())
-            self.assertEqual(json.loads(result.observations()), dict(expected, artifacts=[]))
-            self.assertEqual(resources.capture_reads, 3)
-            for path in (root / "input").iterdir():
-                path.unlink()
-            del resources, capture, spec
+            case, entry = self.case(directory)
+            result = yamaa.domain(entry)
+            self.assertEqual(self.observe(result), self.lookup_expected(entry))
+            self.assertTrue(result.issues.is_empty())
+            held = result.output
+            self.assertEqual(held["USUBJID"].to_list(), ["01", "02", "03", "04"])
+            self.assertEqual(held["DTHDY"].to_list(), [150, 80, None, None])
+            golden = (case / "expected/adsl.csv").read_bytes()
+            expected = self.lookup_expected(entry, True)
+            entry.unlink()
+            shutil.rmtree(case / "input")
             gc.collect()
-            publications = []
-            def publish(path, content):
-                self.assertEqual(path, "adsl.csv")
-                self.assertEqual(content, (ROOT / "cases/schema-lookup/expected/adsl.csv").read_bytes())
-                pending = root / "pending"
-                pending.write_bytes(content)
-                os.replace(pending, root / path)
-                publications.append((root / path).read_bytes())
             for _ in range(2):
-                self.assertEqual(json.loads(result.save(publish)), expected)
-            self.assertEqual(len(publications), 2)
-            self.assertEqual(publications[0], publications[1])
-            self.assertEqual(json.loads(result.observations()), dict(expected, artifacts=[]))
+                self.assertTrue(result.save())
+                self.assertEqual((case / "adsl.csv").read_bytes(), golden)
+                self.assertEqual(self.observe(result), expected)
+                self.assertTrue(result.output.equals(held))
+            del result
+            gc.collect()
+            self.assertEqual(held["DTHDY"].to_list(), [150, 80, None, None])
 
-    def test_existing_containment_and_symlink_failures_stay_opaque(self):
+    def simple_document(self, source):
+        return (
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            f"input: {{SRC: {json.dumps(source)}}}\n"
+            "columns: [{name: ID, type: int, derivation: SRC.ID}]\n"
+            "output: {path: result.csv, columns: [ID]}\n"
+        )
+
+    def test_parent_and_absolute_local_sources_use_approved_public_paths(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            (root / "source.csv").write_bytes(b"held")
-            capture = self.capture_type(self.resources_type(root))
-            with self.assertRaises(self.resource_failure) as caught:
-                capture("SRC", "../outside.csv", 4)
-            self.assertEqual(caught.exception.condition, "resource_path_outside_project")
+            source = root / "outside.csv"
+            source.write_bytes(b"ID\n7\n")
+            case = root / "case"
+            case.mkdir()
+            entry = case / "spec.yaml"
+            for written in ("../outside.csv", source.as_posix()):
+                entry.write_text(self.simple_document(written), encoding="ascii")
+                result = yamaa.domain(entry)
+                self.assertTrue(result.issues.is_empty(), result.issues)
+                self.assertEqual(result.output["ID"].to_list(), [7])
+                self.assertTrue(result.save())
+                self.assertEqual((case / "result.csv").read_bytes(), b"ID\n7\n")
+
+    def test_physical_symlink_refusal_retains_native_condition_without_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            case = Path(directory).resolve()
+            (case / "source.csv").write_bytes(b"ID\n7\n")
             try:
-                (root / "alias.csv").symlink_to("source.csv")
-            except OSError:
-                return  # Windows may lack symlink creation permission.
-            with self.assertRaises(self.resource_failure) as caught:
-                capture("SRC", "alias.csv", 4)
-            self.assertEqual(caught.exception.condition, "resource_path_symlink")
+                (case / "alias.csv").symlink_to("source.csv")
+            except OSError as error:
+                self.skipTest(
+                    "host cannot create physical symlink control: " + str(error)
+                )
+            entry = case / "spec.yaml"
+            entry.write_text(self.simple_document("alias.csv"), encoding="ascii")
+            result = yamaa.domain(entry)
+            self.assertIsNone(result.output)
+            self.assertEqual(
+                result.issues.to_dicts(),
+                [
+                    {
+                        "phase": "validation",
+                        "condition": "resource_path_symlink",
+                        "requirement": "REQ-0783",
+                        "spec_paths": ["input.SRC.path"],
+                        "context": '{"dataset":"SRC","path":"alias.csv"}',
+                    }
+                ],
+            )
+            with self.assertRaises(yamaa.DomainError):
+                result.save()
+            self.assertFalse((case / "result.csv").exists())
 
 
 if __name__ == "__main__":
