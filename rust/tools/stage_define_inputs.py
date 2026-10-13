@@ -9,6 +9,10 @@ CASES = ("sdtm-dm-metadata", "sdtm-ae-coding", "sdtm-vs-epoch-from-subject-eleme
 
 def stage(destination: Path):
     destination.mkdir()
+    # The installed Define tests validate against the vendored CDISC schemas;
+    # they ship with the test fixtures since the reference submission package
+    # was retired (#2110).
+    shutil.copytree(ROOT / "rust/tests/schemas", destination / "schemas")
     for name in CASES:
         original = ROOT / "benchmarks" / name
         target = destination / name
