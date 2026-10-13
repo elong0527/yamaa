@@ -63,6 +63,7 @@ jobs:
           R_LIBS: ${{ runner.temp }}/grammar-r-library
         run: |
           Rscript --vanilla "${GITHUB_WORKSPACE}/R/yamaa/tests/public_grammar.R" 2>&1 | tee r-shared-grammar.log
+          Rscript --vanilla "${GITHUB_WORKSPACE}/R/yamaa/tests/scalars.R" 2>&1 | tee -a r-shared-grammar.log
           Rscript --vanilla -e 'print(sessionInfo()); print(packageVersion("yamaa"))' >> r-shared-grammar.log
       - name: Preserve grammar evidence and standalone source artifact
         if: always()
