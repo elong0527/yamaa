@@ -408,3 +408,27 @@ if(Sys.info()[["sysname"]]=="Darwin") {
   unlink(work,recursive=TRUE)
   cat("R macOS parent case policy and unproven Unicode names refuse before publication\n")
 }
+
+# Environment absence is a request fact, even beside malformed environment YAML.
+# Both Check and Build use the producer closure without activation authority.
+work <- study()
+write(work,"producer/layers/base.yaml",sub("{function: {name: id_float, args: {x: RAW.VALUE}}}","RAW.VALUE",producer,fixed=TRUE))
+write(work,"env/environment.yaml","[")
+dir.create(file.path(work,"generated"))
+poison <- function(...) stop("absent environment entered host activation")
+result <- with_caps(poison,poison,{
+  built <- yamaa_domain(file.path(work,"consumer/root.yaml"))
+  stopifnot(nrow(built$issues)==0L,identical(built$output$VALUE,c(2.46,4.70)),
+    grepl('"environment":{"lock_source":null,"source":null}',observe(built),fixed=TRUE),
+    grepl('"lock":"not_requested"',observe(built),fixed=TRUE),
+    !any(vapply(evidence(built)$sources,function(item) endsWith(rawToChar(item$name),"environment.yaml"),logical(1))))
+  unlink(file.path(work,"raw/raw.csv"))
+  stopifnot(nrow(yamaa_check(file.path(work,"consumer/root.yaml"))$issues)==0L)
+  unlink(file.path(work,c("consumer/root.yaml","producer/p.yaml","producer/layers/base.yaml")))
+  for(index in 1:2) stopifnot(isTRUE(built$save()),
+    identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,1.23\n2,2.35\n")),
+    identical(readBin(file.path(work,"generated/root.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,2.46\n2,4.70\n")))
+  built
+})
+unlink(work,recursive=TRUE)
+cat("R absent environment graphs capture no environment and repeat Save from held bytes\n")

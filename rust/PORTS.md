@@ -16,6 +16,8 @@ and codec interfaces are native traits; adapters translate values and errors.
 | `TableAccess` | core | Immutable Arrow snapshots, core normalized CSV tables and engine output tables; test fakes | Bounds or original opaque cell-access error |
 | `inheritance::SourcePort` | engine | Typed inheritance capture adapter; native captured-file port; remaining R JSON compatibility probe | Source failure or traversal resource limit |
 | `project_activation::ActivationPort` | engine | Python/R locked-package adapters; native fakes | Original lock, binding, conformance or interrupt failure |
+| `build::PreparationPort` | engine | One shared native metadata connector, for absent or explicit environments and recursive producers; native spies | Original retained preparation owner; sealed whole-entry selection before execution |
+| `build::Ports` | engine | One shared native application with Python/R activation and result ports; native fakes | Preparation failure before study authority; checked activation/build/output/report failures remain distinct; no Build publication authority |
 | `build::ResourceReader` | engine | One native metadata reader shared by original document/parent/producer/dictionary and environment/function/codelist/lock preparation | Original file/quota/snapshot failure; declaring identity and held bytes retained |
 | `project_preparation::CapturePort` | engine | Adapter native file metadata capture; shared scripted native fake | Original capture/interrupt payload, bounded source/byte/identity refusal or malformed native reply kind |
 | `project_preparation::DecodePort` | engine | Adapter captured YAML/schema codec; shared scripted native fake | Original structural failure with retained source/context; closed environment/function/codelist target |
@@ -45,10 +47,25 @@ inspects the whole authored input collection and verifies held snapshots before
 returning its sealed route fact. Schema defaults cannot invent producer inputs.
 Neither operation grants activation, study-data or publication authority.
 
-This is the shared preparation foundation for #1987. The complete Build/Check
-composition, held result/publication envelope and removal of both bindings'
-route assembly remain required; the existing checked lower services retain their
-current activation, report and explicit Save behavior during that migration.
+`build::prepare` owns route selection from that sealed original-entry fact.
+An ordinary entry without an environment keeps its plain checked capability;
+explicit environments use the checked project, and producer graphs use the
+checked graph with either an explicit or absent environment. Absence has no root
+capture, dependency, lock or discovery location; producer reports retain a null
+source identity. Metadata is captured once and moved into the selected capability.
+
+`build::domain` and `build::check`, also exposed by `domain_entry`, are the one
+Build and Check entry points for both installed hosts. Their shared native
+application composes the metadata connector and static checks with host activation
+and result-conversion ports. The bindings convert arguments and owned results;
+they do not select or reconstruct a route. Existing checked engine services own
+lock/binding/function-test admission before study capture, source decoding,
+execution and output gates. Report and public projection complete before the held
+result exposes explicit Save. No publisher is accepted during Build or Check;
+Save uses only the completed result's held bytes and preserves original failures
+and publication prefixes without replay. Native spies cover all four combinations
+of producer/ordinary and explicit/absent environment, and original non-Clone
+failures stop subsequent effects.
 
 ## Current lifecycle
 

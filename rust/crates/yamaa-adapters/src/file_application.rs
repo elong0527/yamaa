@@ -1,6 +1,5 @@
 //! One native lifecycle behind both hosts' file entry points.
 use crate::{
-    file_configuration,
     file_preparation::{self, FileSpecification},
     issue_rows::Issue,
     specification_report::{self, BuildResult, Identity},
@@ -10,7 +9,7 @@ use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
-use yamaa_engine::domain_entry::{self, Ports, Request};
+use yamaa_engine::domain_entry::{self, Request};
 
 pub type Failure = Vec<Issue>;
 
@@ -389,39 +388,75 @@ pub struct FailedBuild;
 struct Native<'a> {
     identity: Identity<'a>,
 }
-impl Ports for Native<'_> {
-    type Environment = ();
-    type Prepared = FileSpecification;
+/// The host provides activation and original-error conversion. All route
+/// preparation, static checks and dispatch stay behind the shared application.
+pub trait RuntimePort {
+    type Result;
+    type Error;
+    fn plain(&mut self, prepared: FileSpecification) -> Result<Self::Result, Self::Error>;
+    fn project(
+        &mut self,
+        prepared: Box<crate::file_project::FileProject>,
+    ) -> Result<Self::Result, Self::Error>;
+    fn producer(
+        &mut self,
+        prepared: Box<crate::file_graph::FileGraph>,
+    ) -> Result<Self::Result, Self::Error>;
+}
+pub enum ApplicationError<E> {
+    Preparation(crate::file_workflow::SelectionError),
+    Runtime(E),
+}
+pub struct Application<R> {
+    pub host: yamaa_engine::host_values::Language,
+    pub runtime: R,
+}
+impl<R: RuntimePort> yamaa_engine::build::Ports for Application<R> {
+    type Plain = FileSpecification;
+    type Project = Box<crate::file_project::FileProject>;
+    type Producer = Box<crate::file_graph::FileGraph>;
     type CheckResult = Failure;
-    type BuildResult = Domain;
-    type Failure = Failure;
-    fn environment(&mut self, path: Option<&str>) -> Result<(), Failure> {
-        if path.is_some() {
-            Err(unsupported("environment", Some("environment")))
-        } else {
-            Ok(())
-        }
+    type BuildResult = R::Result;
+    type Failure = ApplicationError<R::Error>;
+    fn prepare(
+        &mut self,
+        request: Request<'_>,
+    ) -> Result<crate::file_workflow::Selected, Self::Failure> {
+        crate::file_workflow::select_request(request, self.host)
+            .map_err(ApplicationError::Preparation)
     }
-    fn prepare(&mut self, path: &str) -> Result<FileSpecification, Failure> {
-        let (resources, entry) =
-            file_configuration::resources(path).map_err(|error| match error {
-                file_configuration::Error::Path(error) => resource_failure("prepare", &error),
-            })?;
-        FileSpecification::prepare(resources, &entry).map_err(|error| match error {
-            file_preparation::Error::Resource(error) => resource_failure("prepare", &error),
-            error => preparation_failure(error.into_message()),
-        })
+    fn check_plain(&mut self, prepared: FileSpecification) -> Result<Failure, Self::Failure> {
+        Ok(crate::specification_check::issue_rows(prepared.run())
+            .unwrap_or_else(|_| rejected("check", "issue_projection")))
     }
-    fn check(&mut self, prepared: FileSpecification, _: &()) -> Result<Failure, Failure> {
-        crate::specification_check::issue_rows(prepared.run())
-            .map_err(|_| rejected("check", "issue_projection"))
+    fn check_project(&mut self, prepared: Self::Project) -> Result<Failure, Self::Failure> {
+        Ok(crate::project_check::prepared(prepared.run())
+            .unwrap_or_else(|_| rejected("check", "issue_projection")))
     }
-    fn activate(&mut self, _: &FileSpecification, _: &()) -> Result<(), Failure> {
-        // The closed compiler rejects all function/environment vocabulary before
-        // this checkpoint. No activation or reference fallback is admitted yet.
-        Ok(())
+    fn check_producer(&mut self, prepared: Self::Producer) -> Result<Failure, Self::Failure> {
+        Ok(crate::producer_check::prepared(&prepared)
+            .unwrap_or_else(|_| rejected("check", "issue_projection")))
     }
-    fn build(&mut self, mut prepared: FileSpecification, _: &()) -> Result<Domain, Failure> {
+    fn build_plain(&mut self, prepared: FileSpecification) -> Result<R::Result, Self::Failure> {
+        self.runtime
+            .plain(prepared)
+            .map_err(ApplicationError::Runtime)
+    }
+    fn build_project(&mut self, prepared: Self::Project) -> Result<R::Result, Self::Failure> {
+        self.runtime
+            .project(prepared)
+            .map_err(ApplicationError::Runtime)
+    }
+    fn build_producer(&mut self, prepared: Self::Producer) -> Result<R::Result, Self::Failure> {
+        self.runtime
+            .producer(prepared)
+            .map_err(ApplicationError::Runtime)
+    }
+}
+impl RuntimePort for Native<'_> {
+    type Result = Domain;
+    type Error = Failure;
+    fn plain(&mut self, mut prepared: FileSpecification) -> Result<Domain, Failure> {
         let attempt = prepared.build();
         if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
             return Err(resource_failure("capture", error));
@@ -447,17 +482,51 @@ impl Ports for Native<'_> {
             }
         })
     }
+    fn project(&mut self, _: Box<crate::file_project::FileProject>) -> Result<Domain, Failure> {
+        Err(unsupported("environment", Some("environment")))
+    }
+    fn producer(&mut self, _: Box<crate::file_graph::FileGraph>) -> Result<Domain, Failure> {
+        Err(unsupported("producer_host", None))
+    }
+}
+
+/// Convert an already checked plain capability without recapturing metadata.
+pub fn plain(prepared: FileSpecification, identity: Identity<'_>) -> Result<Domain, Failure> {
+    Native { identity }.plain(prepared)
+}
+fn native(identity: Identity<'_>) -> Application<Native<'_>> {
+    Application {
+        host: if identity.runtime == "r" {
+            yamaa_engine::host_values::Language::R
+        } else {
+            yamaa_engine::host_values::Language::Python
+        },
+        runtime: Native { identity },
+    }
 }
 pub fn check(request: Request<'_>, identity: Identity<'_>) -> Failure {
-    domain_entry::check(request, &mut Native { identity }).unwrap_or_else(|issues| issues)
+    let mut application = native(identity);
+    domain_entry::check(request, &mut application).unwrap_or_else(|error| match error {
+        ApplicationError::Preparation(error) => {
+            crate::project_application::selection_failure(&error, application.host)
+        }
+        ApplicationError::Runtime(issues) => issues,
+    })
 }
 pub fn domain(request: Request<'_>, identity: Identity<'_>) -> Result<Domain, Failure> {
-    domain_entry::domain(request, &mut Native { identity })
+    let mut application = native(identity);
+    domain_entry::domain(request, &mut application).map_err(|error| match error {
+        ApplicationError::Preparation(error) => {
+            crate::project_application::selection_failure(&error, application.host)
+        }
+        ApplicationError::Runtime(issues) => issues,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::file_configuration;
     use std::{
         fs,
         path::PathBuf,
