@@ -384,6 +384,7 @@ struct EvaluationState<'a, E> {
     handlers: &'a mut HandlerCounter,
     intermediates: &'a mut intermediates::Run,
     output_rows: &'a [Candidate],
+    aggregate_row: Option<Candidate>,
 }
 
 /// Evaluate one admitted assignment and finish conversion before publishing it.
@@ -434,6 +435,34 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     state: &mut EvaluationState<'_, T::Error>,
     retained: bool,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    if let Expression::Function(function) = &assignment.expression {
+        state.budget.work(1, 1)?;
+        return functions::evaluate(
+            function,
+            table,
+            candidate,
+            functions::Context {
+                plan,
+                row,
+                assignment,
+            },
+            state,
+        );
+    }
+    if let Expression::ProjectFunction(function) = &assignment.expression {
+        state.budget.work(1, 1)?;
+        return functions::evaluate_project(
+            function,
+            table,
+            candidate,
+            functions::Context {
+                plan,
+                row,
+                assignment,
+            },
+            state,
+        );
+    }
     if let Expression::Intermediate { index, column } = assignment.expression {
         state.budget.work(1, 1)?;
         let value = intermediates::read(
@@ -663,7 +692,6 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         budget,
         handlers,
         secondary,
-        functions,
         ..
     } = state;
     budget.work(1, 1)?;
@@ -676,32 +704,9 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     };
     budget.work(reads, 1)?;
     let value = match &assignment.expression {
-        Expression::Function(function) => functions::evaluate(
-            function,
-            table,
-            candidate,
-            functions::Context {
-                plan,
-                row,
-                assignment,
-            },
-            budget,
-            handlers,
-            *functions,
-        )?,
-        Expression::ProjectFunction(function) => functions::evaluate_project(
-            function,
-            table,
-            candidate,
-            functions::Context {
-                plan,
-                row,
-                assignment,
-            },
-            budget,
-            handlers,
-            *functions,
-        )?,
+        Expression::Function(_) | Expression::ProjectFunction(_) => {
+            unreachable!("callback arguments resolve through complete run state")
+        }
         Expression::Window(_) => unreachable!("window assignments execute by whole column"),
         Expression::Intermediate { .. } => unreachable!("intermediates execute through run state"),
         Expression::Literal(value) => {
@@ -1224,6 +1229,7 @@ impl Executor<'_> {
                                 handlers,
                                 intermediates: &mut intermediate_run,
                                 output_rows: &[],
+                                aggregate_row: None,
                             },
                         )?;
                         candidate.completed[assignment.column] = true;
@@ -1268,6 +1274,7 @@ impl Executor<'_> {
                         handlers,
                         intermediates: &mut intermediate_run,
                         output_rows: &[],
+                        aggregate_row: None,
                     },
                 )?;
                 intermediate_run.publish_self(self, &mut budget)?;
@@ -1343,6 +1350,7 @@ impl Executor<'_> {
                             handlers,
                             intermediates: &mut intermediate_run,
                             output_rows: &candidates,
+                            aggregate_row: None,
                         },
                     )?
                 };

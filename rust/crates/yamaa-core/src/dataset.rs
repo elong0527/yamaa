@@ -32,8 +32,8 @@ pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, Funct
 #[path = "dataset_aggregate.rs"]
 mod aggregate;
 pub use aggregate::{
-    AggregateBinding, AggregateBindingError, AggregatePhase, AggregateRelation,
-    AggregateRowContext, AggregateSource, BoundAggregate,
+    AggregateBinding, AggregateBindingError, AggregateDerivation, AggregatePhase,
+    AggregateRelation, AggregateRowContext, AggregateSource, BoundAggregate,
 };
 #[path = "dataset_odm.rs"]
 pub(crate) mod odm;
@@ -515,6 +515,30 @@ fn validate_columns(columns: &[usize], width: usize) -> Result<(), PlanError> {
 const EXPRESSION_DEPTH_LIMIT: usize = 64;
 const EXPRESSION_NODE_LIMIT: usize = 65_536;
 
+#[allow(clippy::too_many_arguments)]
+fn validate_function_intermediates(
+    arguments: &[FunctionArgument],
+    source: &TableSchema,
+    secondary: &[SecondarySource],
+    items: &[Intermediate],
+    available: &[bool],
+    output: &TableSchema,
+    mode: &RowMode,
+) -> Result<(), PlanError> {
+    for argument in arguments {
+        if let FunctionInput::Read(Read::Intermediate { index, column }) = argument.input {
+            let item = items.get(index).ok_or(PlanError::InvalidIntermediate)?;
+            if item.selection.is_none() {
+                return Err(PlanError::InvalidIntermediate);
+            }
+            intermediates::validate_context_read(
+                item, column, source, secondary, available, output, mode,
+            )?;
+        }
+    }
+    Ok(())
+}
+
 fn validate_assignment(
     assignment: &Assignment,
     available: &mut [bool],
@@ -529,6 +553,7 @@ fn validate_assignment(
         assignment,
         available,
         source,
+        source,
         secondary,
         intermediates,
         output,
@@ -537,11 +562,38 @@ fn validate_assignment(
         &mut remaining,
     )
 }
+/// Donor reads and named current-row reads use separate admitted schemas.
+#[allow(clippy::too_many_arguments)]
+fn validate_record_assignment(
+    assignment: &Assignment,
+    available: &mut [bool],
+    donor: &TableSchema,
+    primary: &TableSchema,
+    secondary: &[SecondarySource],
+    intermediates: &[Intermediate],
+    output: &TableSchema,
+) -> Result<(), PlanError> {
+    let mut remaining = EXPRESSION_NODE_LIMIT;
+    validate_assignment_at(
+        assignment,
+        available,
+        donor,
+        primary,
+        secondary,
+        intermediates,
+        output,
+        &RowMode::Records,
+        0,
+        &mut remaining,
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn validate_assignment_at(
     assignment: &Assignment,
     available: &mut [bool],
     source: &TableSchema,
+    primary: &TableSchema,
     secondary: &[SecondarySource],
     intermediates: &[Intermediate],
     output: &TableSchema,
@@ -590,7 +642,7 @@ fn validate_assignment_at(
                                 .get(index)
                                 .ok_or(PlanError::InvalidIntermediate)?;
                             intermediates::validate_context_read(
-                                item, column, source, secondary, available, output, mode,
+                                item, column, primary, secondary, available, output, mode,
                             )?;
                         }
                     }
@@ -599,6 +651,7 @@ fn validate_assignment_at(
                     &branch.assignment,
                     available,
                     source,
+                    primary,
                     secondary,
                     intermediates,
                     output,
@@ -627,7 +680,7 @@ fn validate_assignment_at(
                         return Err(PlanError::InvalidIntermediate);
                     }
                     intermediates::validate_context_read(
-                        item, column, source, secondary, available, output, mode,
+                        item, column, primary, secondary, available, output, mode,
                     )?;
                 }
             }
@@ -660,6 +713,7 @@ fn validate_assignment_at(
                 operand,
                 available,
                 source,
+                primary,
                 secondary,
                 intermediates,
                 output,
@@ -684,6 +738,7 @@ fn validate_assignment_at(
                     operand,
                     available,
                     source,
+                    primary,
                     secondary,
                     intermediates,
                     output,
@@ -716,6 +771,7 @@ fn validate_assignment_at(
                 operand,
                 available,
                 source,
+                primary,
                 secondary,
                 intermediates,
                 output,
@@ -734,6 +790,7 @@ fn validate_assignment_at(
                     operand,
                     available,
                     source,
+                    primary,
                     secondary,
                     intermediates,
                     output,
@@ -759,6 +816,7 @@ fn validate_assignment_at(
                     operand,
                     available,
                     source,
+                    primary,
                     secondary,
                     intermediates,
                     output,
@@ -784,6 +842,7 @@ fn validate_assignment_at(
                     operand,
                     available,
                     source,
+                    primary,
                     secondary,
                     intermediates,
                     output,
@@ -794,8 +853,30 @@ fn validate_assignment_at(
                 available[assignment.column] = false;
             }
         }
-        Expression::Function(function) => function.validate(source, available, mode)?,
-        Expression::ProjectFunction(function) => function.validate(source, available, mode)?,
+        Expression::Function(function) => {
+            function.validate(source, available, mode)?;
+            validate_function_intermediates(
+                function.arguments(),
+                primary,
+                secondary,
+                intermediates,
+                available,
+                output,
+                mode,
+            )?;
+        }
+        Expression::ProjectFunction(function) => {
+            function.validate(source, available, mode)?;
+            validate_function_intermediates(
+                function.arguments(),
+                primary,
+                secondary,
+                intermediates,
+                available,
+                output,
+                mode,
+            )?;
+        }
         Expression::FirstAvailable(selection) => {
             selection.validate(source, available, mode)?;
             for operand in selection.sources() {
@@ -807,6 +888,7 @@ fn validate_assignment_at(
                         operand,
                         available,
                         source,
+                        primary,
                         secondary,
                         intermediates,
                         output,
@@ -836,6 +918,7 @@ fn validate_assignment_at(
                 operand,
                 available,
                 source,
+                primary,
                 secondary,
                 intermediates,
                 output,
@@ -871,7 +954,7 @@ fn validate_assignment_at(
                 .get(*index)
                 .ok_or(PlanError::InvalidIntermediate)?;
             intermediates::validate_context_read(
-                item, *column, source, secondary, available, output, mode,
+                item, *column, primary, secondary, available, output, mode,
             )?;
         }
         Expression::RowLookup(lookup) => lookup::validate_row(lookup, source, secondary, mode)?,
@@ -935,7 +1018,7 @@ fn validate_assignment_at(
             }
         }
         Expression::Aggregate(aggregate) => {
-            aggregate.validate(source, secondary, output, available, mode)?;
+            aggregate.validate(source, secondary, intermediates, output, available, mode)?;
         }
         Expression::Odm(odm) => odm.validate(source, secondary, mode)?,
         Expression::Count { column, text } => {
@@ -1011,6 +1094,21 @@ enum RecordReadScope {
     PrimaryMatching,
     All,
 }
+fn function_record_read(
+    arguments: &[FunctionArgument],
+    intermediates: &[Intermediate],
+    scope: RecordReadScope,
+) -> bool {
+    arguments.iter().any(|argument| match argument.input {
+        FunctionInput::Read(Read::Source(_)) => scope != RecordReadScope::PrimaryMatching,
+        FunctionInput::Read(Read::Intermediate { index, column }) => current_record_read(
+            &Expression::Intermediate { index, column },
+            intermediates,
+            scope,
+        ),
+        _ => false,
+    })
+}
 fn current_record_read(
     expression: &Expression,
     intermediates: &[Intermediate],
@@ -1025,10 +1123,20 @@ fn current_record_read(
             AggregateRelation::CurrentGroup => include_raw,
             AggregateRelation::Matched { keys, .. } => {
                 scope != RecordReadScope::Driver
-                    && keys
+                    && (keys
                         .iter()
                         .filter_map(|key| key.value.read())
                         .any(|read| matches!(read, MatchRead::Record { .. }))
+                        || aggregate.range().is_some_and(|range| {
+                            matches!(range.current().read, CurrentRead::Record { .. })
+                        })
+                        || aggregate.derivations().iter().any(|binding| {
+                            current_record_read(
+                                &binding.assignment.expression,
+                                intermediates,
+                                RecordReadScope::PrimaryMatching,
+                            )
+                        }))
             }
             AggregateRelation::Output { .. } => false,
         },
@@ -1078,8 +1186,12 @@ fn current_record_read(
             .any(|source| current_record_read(&source.expression, intermediates, scope)),
         Expression::Compute(expression) => include_raw && expression.reads_source(),
         Expression::Flag(flag) => include_raw && flag.reads_source(),
-        Expression::Function(function) => include_raw && function.reads_source(),
-        Expression::ProjectFunction(function) => include_raw && function.reads_source(),
+        Expression::Function(function) => {
+            function_record_read(function.arguments(), intermediates, scope)
+        }
+        Expression::ProjectFunction(function) => {
+            function_record_read(function.arguments(), intermediates, scope)
+        }
         Expression::Case(branches) => branches.iter().any(|branch| {
             branch.when.as_ref().is_some_and(|predicate| {
                 predicate

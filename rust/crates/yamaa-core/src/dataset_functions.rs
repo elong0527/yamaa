@@ -107,13 +107,6 @@ impl<S> BoundFunction<S> {
         &self.arguments
     }
 
-    /// Key-grain non-key calls must not choose a single feeding source row.
-    pub(super) fn reads_source(&self) -> bool {
-        self.arguments
-            .iter()
-            .any(|a| matches!(a.input, FunctionInput::Read(Read::Source(_))))
-    }
-
     /// Validate completed outputs and record/group source scope without reading cells.
     pub(super) fn validate(
         &self,
@@ -123,9 +116,8 @@ impl<S> BoundFunction<S> {
     ) -> Result<(), PlanError> {
         for argument in &self.arguments {
             match &argument.input {
-                FunctionInput::Read(Read::Intermediate { .. }) => {
-                    return Err(PlanError::InvalidIntermediate)
-                }
+                // The enclosing plan validates selected relations and key dependencies.
+                FunctionInput::Read(Read::Intermediate { .. }) => {}
                 FunctionInput::Read(Read::Source(column)) => {
                     if *column >= source.columns().len() {
                         return Err(PlanError::InvalidSource);

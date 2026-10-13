@@ -59,6 +59,11 @@ impl Declarations {
     pub fn contains(&self, name: &str) -> bool {
         self.0.iter().any(|item| item.name == name)
     }
+    pub(super) fn kept(&self, name: &str) -> bool {
+        self.0
+            .iter()
+            .any(|item| item.name == name && item.keep.is_some())
+    }
     pub fn reference<'a>(&self, name: &'a str) -> Option<(usize, &'a str)> {
         let (relation, field) = name.split_once('.')?;
         self.0

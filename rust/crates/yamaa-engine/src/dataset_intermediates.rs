@@ -93,6 +93,24 @@ fn read_with_observations<T: TableAccess + ?Sized>(
     state: &mut EvaluationState<'_, T::Error>,
     observe_handlers: bool,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    // Aggregate derive bindings keep their donor record separate from the
+    // current output row used by a named, kept intermediate selection.
+    if let Some(current) = state.aggregate_row.take() {
+        let primary = state.primary;
+        let result = read_with_observations(
+            index,
+            column,
+            assignment,
+            &current,
+            plan,
+            row,
+            primary,
+            state,
+            observe_handlers,
+        );
+        state.aggregate_row = Some(current);
+        return result;
+    }
     // Admission forbids named reads during destination-free key probes.
     if candidate.selection_identity == SelectionIdentity::Probe {
         return Err(Box::new(ExecutionError::SchemaMismatch));

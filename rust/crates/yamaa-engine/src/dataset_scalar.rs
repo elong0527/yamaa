@@ -6,6 +6,18 @@ use yamaa_core::{
 };
 pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
     match &assignment.expression {
+        Expression::Aggregate(aggregate) => {
+            for binding in aggregate.derivations() {
+                if let Some(handler) = &binding.handler {
+                    counter.register(&handler.spec_path, HandlerKind::Unconvertible);
+                }
+                register(&binding.assignment, counter);
+                imputation::register(&binding.assignment.expression, counter);
+                str_case::register(&binding.assignment.expression, counter);
+                str_extract::register(&binding.assignment.expression, counter);
+                str_template::register(&binding.assignment.expression, counter);
+            }
+        }
         Expression::MappingCut { source, operation } => {
             if operation.missing().is_some() {
                 counter.register(

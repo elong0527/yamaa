@@ -114,7 +114,8 @@ fn collect_calls(
     value: usize,
     path: &str,
     depth: usize,
-    requests: &mut Vec<(usize, String)>,
+    contextual: bool,
+    requests: &mut Vec<(usize, String, bool)>,
 ) -> Result<(), PrepareError> {
     if depth > 64 || path.len() > 65_536 {
         return Err(PrepareError::Limit("function_calls"));
@@ -123,7 +124,24 @@ fn collect_calls(
         if requests.len() >= 1024 {
             return Err(PrepareError::Limit("function_calls"));
         }
-        requests.push((node, format!("{path}.function")));
+        requests.push((node, format!("{path}.function"), contextual));
+    }
+    if let Some(bindings) = d
+        .field(value, "aggregate")
+        .and_then(|payload| d.field(payload, "derive"))
+        .filter(|&node| !matches!(d.nodes()[node], N::Null))
+    {
+        for (index, &binding) in sequence(d, bindings)?.iter().enumerate() {
+            let value = field(d, field(d, binding, "derivation")?, "value")?;
+            collect_calls(
+                d,
+                value,
+                &format!("{path}.aggregate.derive[{index}].derivation"),
+                depth + 1,
+                true,
+                requests,
+            )?;
+        }
     }
     if let Some(payload) = d.field(value, "str_concat") {
         for (index, &child) in sequence(d, field(d, payload, "sources")?)?
@@ -135,6 +153,7 @@ fn collect_calls(
                 child,
                 &format!("{path}.str_concat.sources[{index}]"),
                 depth + 1,
+                contextual,
                 requests,
             )?;
         }
@@ -152,6 +171,7 @@ fn collect_calls(
                         value,
                         &format!("{path}.case[{index}].{name}"),
                         depth + 1,
+                        contextual,
                         requests,
                     )?;
                 }
@@ -207,6 +227,7 @@ pub(super) fn prepare(
                 value,
                 &format!("columns.{name}.derivation"),
                 0,
+                false,
                 &mut requests,
             )?;
         }
@@ -225,6 +246,7 @@ pub(super) fn prepare(
                         value,
                         &format!("rows[{row}].derivations.{}", text(d, name)?),
                         0,
+                        false,
                         &mut requests,
                     )?;
                 }
@@ -232,7 +254,7 @@ pub(super) fn prepare(
         }
     }
     let mut bytes = 0usize;
-    for (node, path) in &requests {
+    for (node, path, _) in &requests {
         let cost = project_call_document::text_cost(d, *node, path, Default::default())
             .map_err(|_| PrepareError::Limit("function_calls"))?;
         bytes = bytes
@@ -243,7 +265,7 @@ pub(super) fn prepare(
     let mut calls = Vec::new();
     let mut origins = Vec::new();
     let mut findings = Vec::new();
-    for (request, (node, path)) in requests.iter().enumerate() {
+    for (request, (node, path, _)) in requests.iter().enumerate() {
         match project_call_document::decode(d, *node, path, Default::default()) {
             Ok(call) => {
                 origins.push((request, *node, path.clone(), call.name.clone()));
@@ -330,11 +352,16 @@ pub(super) fn prepare(
         .map(|(_, _, _, name)| function_index.get(name.as_str()).copied())
         .collect::<Vec<_>>();
     let uses = alloc::vec![usize::from(!has_rows); calls.len()];
-    let admitted = match ProjectCalls::admit_with_reference_types_and_uses(
+    let contextual = origins
+        .iter()
+        .map(|(request, _, _, _)| requests[*request].2)
+        .collect::<Vec<_>>();
+    let admitted = match ProjectCalls::admit_contextual(
         functions,
         calls,
         &types,
         &uses,
+        &contextual,
         Default::default(),
     ) {
         Ok(calls) => Some(calls),

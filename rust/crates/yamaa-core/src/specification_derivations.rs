@@ -69,6 +69,11 @@ pub(super) fn prepare_value_with_driver(
             d,
             payload,
             &result_path,
+            project,
+            intermediates,
+            depth,
+            extraction,
+            templates,
         )?)),
         "flag" => Operation::Flag(flags::prepare(d, payload, &result_path)?),
         "literal" => Operation::Literal(literal(d, payload, &result_path)?),
@@ -309,7 +314,18 @@ pub(super) fn bind_row(
     match operation {
         Operation::Odm(operation) => odm::bind(operation, catalog, driver, row, phase, findings),
         Operation::Aggregate(operation) => aggregates::bind(
-            operation, catalog, driver, row, phase, output, secondary, edges, findings,
+            operation,
+            catalog,
+            driver,
+            row,
+            phase,
+            output,
+            named,
+            secondary,
+            intermediates,
+            project,
+            edges,
+            findings,
         ),
         Operation::Literal(value) => Ok(Some(Expression::Literal(value.clone()))),
         Operation::Source(source) => {
@@ -745,6 +761,7 @@ pub(super) fn bind_selection(
 pub(super) fn calls(operation: &Operation, result: &mut Vec<usize>) {
     match operation {
         Operation::ProjectFunction(call) => result.push(*call),
+        Operation::Aggregate(operation) => operation.calls(result),
         Operation::Case(branches) => {
             for branch in branches {
                 calls(&branch.operation, result);
