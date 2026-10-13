@@ -20,6 +20,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import _cohort_evidence as committed_cohort
 from check_cargo_lock import check_archive as check_cargo_archive
 from check_math_portability import FUNCTIONS, compare, observations, validate_hosts
 from check_python_package_hygiene import check_archive as check_python_archive
@@ -156,7 +157,7 @@ def snapshot(repository, run_id, destination):
     ]
     write(destination / "artifacts.json", artifacts)
     errors = []
-    for name in SOURCE_FILES:
+    for name in (*SOURCE_FILES, *committed_cohort.TRUTH_PATHS.values()):
         content = gh_json(f"{prefix}/contents/{name}?ref={run['head_sha']}")
         target = destination / "source" / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -449,9 +450,10 @@ class Audit:
             "incomplete installation metadata",
         )
         require(
-            runtime != "python"
-            or installation["runtime_version"].startswith(version + "."),
-            "wrong installed Python version",
+            installation["runtime_version"].startswith(version + ".")
+            if runtime == "python"
+            else installation["runtime_version"] == "4.6.1",
+            "wrong installed supported runtime version",
         )
         expected_system = "macOS" if platform == "macos-15" else SYSTEMS[platform]
         require(
@@ -579,6 +581,10 @@ class Audit:
         root = self.artifact("native-public-cohort") / platform / version / form
         directory = root / "producer-cohort" if producer else root
         inventory = read(directory / "coverage.json")
+        if inventory.get("protocol") == committed_cohort.PROTOCOL:
+            return self.committed_cohort(
+                platform, version, form, producer, directory, inventory
+            )
         require(
             inventory["source_revision"] == self.source["sha"]
             and not inventory["errors"],
@@ -752,6 +758,162 @@ class Audit:
             "required_tuples": len(expected),
             "summary": inventory["summary"],
             "scope": "retained comparator verdict and reports; no engine execution",
+        }
+
+    def committed_cohort(self, platform, version, form, producer, directory, inventory):
+        """Recheck every v2 actual owner against exact-source committed report bytes."""
+        names = (committed_cohort.PRODUCER,) if producer else committed_cohort.COHORT
+        committed_cohort.validate_inventory(inventory, self.source["sha"], names)
+        for owner in inventory["batches"]:
+            host = owner["runtime"]
+            record = read(directory / (host + "-installed-evidence.json"))
+            self.evidence(
+                record,
+                host,
+                platform,
+                version if host == "python" else "4.6.1",
+                form if host == "python" else "source",
+            )
+            require(
+                owner == committed_cohort.batch(record, host, "reports/" + host),
+                "cohort actual installed owner differs",
+            )
+        for row in inventory["coverage"]:
+            truth = row["truth"]
+            source = self.directory / "source" / truth["path"]
+            retained = directory / truth["retained_path"]
+            require(
+                source.read_bytes() == retained.read_bytes(),
+                "cohort authored truth differs from exact source bytes",
+            )
+            expected = committed_cohort.reports.read_report(retained)
+            actual = committed_cohort.reports.read_report(directory / row["report"])
+            require(
+                actual.error is None,
+                "cohort actual complete report retains an infrastructure error",
+            )
+            owner = next(
+                b for b in inventory["batches"] if b["runtime"] == row["runtime"]
+            )
+            committed_cohort.require_report_owner(
+                actual,
+                read(directory / (row["runtime"] + "-installed-evidence.json")),
+                row["runtime"],
+            )
+            require(
+                (actual.example, actual.runtime, actual.backend, actual.engine_version)
+                == (row["example"], row["runtime"], "rust", owner["core_version"]),
+                "cohort actual report identity/core differs",
+            )
+            require(
+                committed_cohort.reports.compare_reports(expected, actual).passed,
+                "cohort complete report differs from committed authored truth",
+            )
+        if producer:
+            from qualify_producer_cohort import project_report
+
+            comparisons = read(directory / "complete-comparisons.json")
+            require(
+                len(comparisons) == 4
+                and all(c["passed"] and not c["findings"] for c in comparisons),
+                "producer complete comparisons failed/missing",
+            )
+            expected = committed_cohort.reports.read_report(
+                directory / inventory["coverage"][0]["truth"]["retained_path"]
+            )
+            for runtime in ("python", "r"):
+                owner = directory / "raw" / runtime / committed_cohort.PRODUCER
+                case = (owner / "case-directory.txt").read_text(encoding="utf-8")
+                record = read(directory / (runtime + "-installed-evidence.json"))
+                require(
+                    read(owner / "provenance.json")
+                    == {
+                        "scope": "supplemental_suites",
+                        "evidence": record["evidence"],
+                        "installation": record["installation"],
+                    },
+                    "producer raw owner provenance differs",
+                )
+                before = read(owner / "before.json")
+                require(
+                    "publication" not in before, "Build contains a publication attempt"
+                )
+                projected_before = project_report(before, case)
+                committed_cohort.require_report_owner(projected_before, record, runtime)
+                require(
+                    committed_cohort.reports.compare_reports(
+                        expected, projected_before
+                    ).passed,
+                    "producer complete Build report differs",
+                )
+                snapshots = []
+                for attempt in (1, 2):
+                    saved = owner / f"after-{attempt}"
+                    after = read(saved / "report.json")
+                    require(
+                        committed_cohort.exact_json(
+                            after.pop("publication"),
+                            {
+                                "status": "success",
+                                "error": None,
+                                "entered": [
+                                    {"node": 1, "published": True},
+                                    {"node": 0, "published": True},
+                                ],
+                            },
+                        ),
+                        "producer publication prefix differs",
+                    )
+                    require(
+                        committed_cohort.exact_json(after, before),
+                        "Save changed complete producer execution evidence",
+                    )
+                    projected = project_report(after, case)
+                    require(
+                        committed_cohort.reports.compare_reports(
+                            expected, projected
+                        ).passed,
+                        "producer complete Save report differs",
+                    )
+                    published = directory / "published" / runtime / str(attempt)
+                    payloads = {
+                        name: (saved / name).read_bytes()
+                        for name in ("produced.parquet", "out.csv")
+                    }
+                    require(
+                        all(
+                            (published / "expected" / name).read_bytes() == value
+                            for name, value in payloads.items()
+                        ),
+                        "published producer bytes differ from held Save",
+                    )
+                    artifacts = {a.name: a for a in projected.artifacts}
+                    for name, payload in payloads.items():
+                        artifact = artifacts[Path(name).stem]
+                        require(
+                            len(payload) == artifact.byte_length
+                            and (
+                                artifact.profile != "csv"
+                                or payload == artifact.content.encode("utf-8")
+                            ),
+                            "saved producer bytes differ from actual held report",
+                        )
+                    require(
+                        committed_cohort.reports.compare_example(
+                            projected, published
+                        ).passed,
+                        "saved producer CSV/logical Parquet differs",
+                    )
+                    snapshots.append(payloads)
+                require(
+                    snapshots[0] == snapshots[1],
+                    "repeat Save changed held producer bytes",
+                )
+        return {
+            "required_tuples": len(names) * 2,
+            "summary": inventory["summary"],
+            "scope": committed_cohort.TRUTH_KIND
+            + "; actual complete installed public owners and held Save bytes",
         }
 
     def public_inventory(self, platform, runtime, version, form):
