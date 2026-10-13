@@ -1,5 +1,8 @@
 //! Lazy source eligibility and named record selection within one dataset attempt.
 use super::*;
+#[cfg(test)]
+#[path = "dataset_choice_cache_tests.rs"]
+mod cache_tests;
 #[path = "dataset_key_index.rs"]
 mod key_index;
 #[path = "dataset_match_values.rs"]
@@ -11,6 +14,18 @@ use alloc::{collections::BTreeMap, rc::Rc};
 enum Choice {
     Record { row: usize, multiple: bool },
     Absent,
+}
+
+fn choice_search_work<E>(entries: usize, bounded: bool) -> Result<usize, Box<ExecutionError<E>>> {
+    if bounded {
+        // The typed tuple's comparison can visit its identity tag, identity value
+        // and intermediate index. The tree itself admits no source value/text.
+        Ok(key_index::search_work(entries) * 3)
+    } else {
+        entries
+            .checked_add(1)
+            .ok_or_else(|| Box::new(ExecutionError::Capacity))
+    }
 }
 
 /// Fresh for every attempt, with no entries for unused intermediate declarations.
@@ -566,18 +581,15 @@ fn read_with_observations<T: TableAccess + ?Sized>(
     if candidate.selection_identity == SelectionIdentity::Probe {
         return Err(Box::new(ExecutionError::SchemaMismatch));
     }
-    // A linear comparison bound admits tree lookups before inspecting retained keys.
+    let item = &plan.intermediates()[index];
+    // Materialized and expression contexts retain their existing admission
+    // until aggregate retained-schema/text bounds are separately qualified.
+    let bounded_choice = item.derivations.is_none() && !item.has_expression_keys();
     state.budget.work(
-        state
-            .intermediates
-            .choices
-            .len()
-            .checked_add(1)
-            .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
+        choice_search_work(state.intermediates.choices.len(), bounded_choice)?,
         1,
     )?;
     let cache_key = (candidate.selection_identity, index);
-    let item = &plan.intermediates()[index];
     let prepared = materialize(
         index,
         assignment,
@@ -831,14 +843,14 @@ fn read_with_observations<T: TableAccess + ?Sized>(
             }));
         };
         state.budget.work(
-            state
-                .intermediates
-                .choices
-                .len()
-                .checked_add(1)
-                .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
+            choice_search_work(state.intermediates.choices.len(), bounded_choice)?,
             1,
         )?;
+        if bounded_choice {
+            // One fixed typed identity, item index and selected choice are retained.
+            // Existing entries and source key/value text are never copied here.
+            state.budget.work(1, 3)?;
+        }
         state.intermediates.choices.insert(cache_key, choice);
         choice
     };
