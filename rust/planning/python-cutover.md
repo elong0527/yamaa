@@ -115,5 +115,6 @@ complete rollback matrix or a full producer graph Save baseline.
 The R source-package rehearsal passed all three platforms with their retained
 pre-cutover source archives in run 38426887552 at preparation head 560c5bd3.
 Rehearsal of one canonical archive on all three platforms is separately recorded
-before preparing a durable single source asset. Durable retrievable asset pins,+all required rollback tuples, B17 budgets and item 11 transition approval remain
+before preparing a durable single source asset. Durable retrievable asset pins,
+all required rollback tuples, B17 budgets and item 11 transition approval remain
 gates. Preparation kits stay unpublished until root review.
