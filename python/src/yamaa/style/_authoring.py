@@ -31,7 +31,7 @@ def _filter_identifiers(predicate: object) -> frozenset[str]:
         return frozenset()
     import re
 
-    return frozenset(re.findall(r"\b[A-Za-z][A-Za-z0-9_]*\b", predicate))
+    return frozenset(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", predicate))
 
 
 _DATASET_LEVEL_OPERATIONS = frozenset(
