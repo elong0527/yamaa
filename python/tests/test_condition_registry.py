@@ -26,6 +26,16 @@ def _raised_conditions() -> set[str]:
     names: set[str] = set()
     for path in SOURCE_ROOT.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        condition_positions = {
+            index
+            for definition in ast.walk(tree)
+            if isinstance(definition, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and definition.name == "_condition"
+            for index, parameter in enumerate(
+                [*definition.args.posonlyargs, *definition.args.args]
+            )
+            if parameter.arg == "condition"
+        }
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -48,6 +58,15 @@ def _raised_conditions() -> set[str]:
                     condition.value, str
                 ):
                     names.add(condition.value)
+            if name == "_condition":
+                for index in condition_positions:
+                    if len(node.args) <= index:
+                        continue
+                    condition = node.args[index]
+                    if isinstance(condition, ast.Constant) and isinstance(
+                        condition.value, str
+                    ):
+                        names.add(condition.value)
     return names
 
 
