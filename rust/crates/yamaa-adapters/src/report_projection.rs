@@ -19,10 +19,10 @@ impl Budget {
             .min(yamaa_engine::capacity::REPORT_RETAINED_BYTES);
         Self {
             bytes,
-            cells: 1_048_576,
-            work: 67_108_864,
+            cells: yamaa_engine::capacity::REPORT_CELLS,
+            work: yamaa_engine::capacity::REPORT_WORK,
             initial_bytes: bytes,
-            initial_work: 67_108_864,
+            initial_work: yamaa_engine::capacity::REPORT_WORK,
         }
     }
     pub(crate) fn remaining_bytes(&self) -> usize {
@@ -260,7 +260,7 @@ impl Drop for Budget {
                 "report-capacity retained_limit={} retained_charged={} cells_charged={} work_charged={}",
                 self.initial_bytes,
                 self.initial_bytes - self.bytes,
-                1_048_576 - self.cells,
+                yamaa_engine::capacity::REPORT_CELLS - self.cells,
                 self.initial_work - self.work
             );
         }

@@ -155,6 +155,17 @@ pub(crate) fn encode_rows<T: TableAccess>(
     if let Some(budget) = writer.budget.as_deref_mut() {
         budget.work(writer.bytes.len())?;
     }
+    if std::env::var_os("YAMAA_REPORT_CAPACITY_TRACE").is_some() {
+        use std::io::Write;
+        let _ = writeln!(
+            std::io::stderr(),
+            "row-capacity rows={} columns={} encoded_bytes={} requested_buffer_capacity={}",
+            table.row_count(),
+            table.schema().columns().len(),
+            writer.bytes.len(),
+            writer.bytes.capacity()
+        );
+    }
     let string = String::from_utf8(writer.bytes).map_err(|_| Error::InvalidObservation)?;
     let rows = RawValue::from_string(string).map_err(|_| Error::InvalidObservation)?;
     Ok(Arc::from(rows))

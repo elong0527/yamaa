@@ -78,7 +78,10 @@ impl RootResult {
         self.save_attempt.as_ref()
     }
     pub fn save(&mut self) -> Result<bool, crate::file_application::FailedBuild> {
-        self.save_with_limits(Default::default(), 16_777_216)
+        self.save_with_limits(
+            Default::default(),
+            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+        )
     }
     pub fn save_with_limits(
         &mut self,

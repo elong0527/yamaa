@@ -210,13 +210,13 @@ pub(crate) mod platform {
             fields,
             verify,
             resolve_host,
-            yamaa_adapters::host_limits::REPLY_BYTES,
+            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
         );
         Ok(PublicResult {
             state: format_attempt(
                 attempt,
                 &formatter,
-                yamaa_adapters::host_limits::REPLY_BYTES,
+                yamaa_engine::capacity::REPORT_ENCODED_BYTES,
                 true,
             )?,
             _slot: slot,

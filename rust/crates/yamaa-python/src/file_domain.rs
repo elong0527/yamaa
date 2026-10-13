@@ -104,9 +104,9 @@ impl RuntimePort for Runtime<'_, '_> {
             py,
             &mut build,
             fields,
-            yamaa_adapters::host_limits::REPLY_BYTES,
+            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
         );
-        let producer = attempt.formatted(py, yamaa_adapters::host_limits::REPLY_BYTES, true)?;
+        let producer = attempt.formatted(py, yamaa_engine::capacity::REPORT_ENCODED_BYTES, true)?;
         Ok(Domain {
             producer: Some(producer),
             inner: None,

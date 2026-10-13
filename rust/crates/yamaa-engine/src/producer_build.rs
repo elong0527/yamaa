@@ -138,18 +138,18 @@ impl Default for Limits {
         Self {
             nodes: 64,
             source_bytes: 16_777_216,
-            source_cells: 1_048_576,
+            source_cells: crate::capacity::SOURCE_CELLS,
             source_storage_bytes: 67_108_864,
             decode_work_bytes: 268_435_456,
             output_bytes: 16_777_216,
-            report_bytes: 16_777_216,
+            report_bytes: crate::capacity::REPORT_ENCODED_BYTES,
             routing_work: 67_108_864,
             execution: dataset::Limits {
                 source_rows: 1_048_576,
                 output_rows: 1_048_576,
-                output_cells: 1_048_576,
+                output_cells: crate::capacity::GRAPH_OUTPUT_CELLS,
                 key_cells: 1_048_576,
-                work_cells: 67_108_864,
+                work_cells: crate::capacity::EXECUTION_WORK,
                 scalar_text_bytes: 16_777_216,
                 output_text_bytes: 16_777_216,
                 identity_cells: 1_048_576,
@@ -315,6 +315,32 @@ impl PreparedBuild {
                 return Err("producer_build_failed");
             }
         };
+        let column_count = match plans.iter().try_fold(0usize, |sum, plan| {
+            sum.checked_add(plan.output().columns().len())
+        }) {
+            Some(count) => count,
+            _ => {
+                attempt.outcome = Err(Failure::Limit("producer_output_cells"));
+                return Err("producer_build_failed");
+            }
+        };
+        let output_cells = match plans
+            .iter()
+            .map(|plan| {
+                output_cell_allowance(
+                    limits.execution.output_cells,
+                    plan.output().columns().len(),
+                    column_count,
+                )
+            })
+            .collect::<Option<Vec<_>>>()
+        {
+            Some(cells) => cells,
+            None => {
+                attempt.outcome = Err(Failure::Limit("producer_output_cells"));
+                return Err("producer_build_failed");
+            }
+        };
         // Every declared source, including aliases, reserves a codec share. This
         // conservative reservation bounds all retained/staged decoded ownership
         // without deriving an identity or trusting post-allocation size checks.
@@ -385,6 +411,7 @@ impl PreparedBuild {
             let node_limits = run::Limits {
                 execution: dataset::Limits {
                     source_rows: source_rows[index],
+                    output_cells: output_cells[index],
                     ..node_limits.execution
                 },
                 ..node_limits
@@ -722,6 +749,31 @@ fn row_allowance(total: usize, slots: usize, all: usize) -> Option<usize> {
     (total / all)
         .checked_mul(slots)?
         .checked_add((total % all).checked_mul(slots)? / all)
+}
+fn output_cell_allowance(total: usize, columns: usize, all: usize) -> Option<usize> {
+    if columns == 0 {
+        Some(0)
+    } else {
+        row_allowance(total, columns, all)
+    }
+}
+#[cfg(test)]
+mod output_cell_allowance_tests {
+    use super::output_cell_allowance;
+    #[test]
+    fn actual_owned_columns_reserve_a_wider_root_without_expanding_the_total() {
+        let widths = [2, 2, 2, 2, 2, 4];
+        let total = 2_097_152;
+        let allocated = widths.map(|width| output_cell_allowance(total, width, 14).unwrap());
+        assert_eq!(allocated[5], 599_186);
+        assert!(allocated[..5].iter().all(|&cells| cells >= 200_000));
+        assert!(allocated.iter().sum::<usize>() <= total);
+        assert_eq!(output_cell_allowance(total, 0, 0), Some(0));
+        assert_eq!(
+            output_cell_allowance(usize::MAX, 4, 14),
+            Some(usize::MAX / 14 * 4 + (usize::MAX % 14) * 4 / 14)
+        );
+    }
 }
 #[cfg(test)]
 mod row_allowance_tests {

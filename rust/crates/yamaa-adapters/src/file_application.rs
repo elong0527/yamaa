@@ -271,9 +271,10 @@ impl Domain {
     /// Failed builds may publish their diagnostic log on explicit Save and still
     /// raise the original failed-build result. Build itself never writes.
     pub fn save(&mut self) -> Result<bool, FailedBuild> {
-        self.save_with(16_777_216, |publisher, path, bytes| {
-            publisher.publish(path, bytes)
-        })
+        self.save_with(
+            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+            |publisher, path, bytes| publisher.publish(path, bytes),
+        )
     }
     fn save_with(
         &mut self,

@@ -1506,7 +1506,7 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
         "raw/raw.csv",
         format!(
             "ID,VALUE\n{}",
-            (1..=6000)
+            (1..=23000)
                 .map(|index| format!("{index},1.234\n"))
                 .collect::<String>()
         ),
@@ -1516,9 +1516,15 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
     let attempt = build.build_reported(&mut host, report_id(), Limits::default());
     assert!(attempt.accepted());
     let before = host.trace.clone();
-    // Three actual typed-copy passes visit more than one million cells.
+    // Three actual typed-copy passes visit 4,347,000 cells, exceeding the
+    // cumulative 4,194,304-cell copying allowance.
     // The complete indexed graph and encoded report remain accepted first.
-    match producer_result::prepare_classified(&attempt, report_id(), 16_777_216, &[]) {
+    match producer_result::prepare_classified(
+        &attempt,
+        report_id(),
+        yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+        &[],
+    ) {
         Err(producer_result::Error::Output {
             attempt: held,
             observations,
@@ -1544,7 +1550,12 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
     fs::remove_dir_all(&study.0).unwrap();
     assert!(attempt.accepted());
     assert!(matches!(
-        producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]),
+        producer_result::prepare_classified(
+            &attempt,
+            report_id(),
+            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+            &[]
+        ),
         Err(producer_result::Error::Output {
             error: TableTransportError::OutputLimit,
             ..
@@ -2173,7 +2184,7 @@ fn whole_report_rejects_contradictory_actual_activation_and_node_order_without_r
 }
 
 #[test]
-fn a_larger_caller_report_budget_cannot_defer_the_fixed_formatter_ceiling_until_after_copy() {
+fn a_larger_caller_budget_cannot_bypass_retained_formatter_admission_before_identity_copy() {
     let study = Study::new();
     study.write(
         "producer/p.yaml",
@@ -2193,13 +2204,20 @@ fn a_larger_caller_report_budget_cannot_defer_the_fixed_formatter_ceiling_until_
             "str",
         ),
     );
-    let text = "x".repeat(4_300_000);
+    let text = "small";
     study.write("raw/raw.csv", format!("ID,VALUE\n1,{text}\n"));
+    // Borrowed caller metadata exceeds the fixed retained admission by itself.
+    // It must be rejected before report JSON copies it, even with usize::MAX.
+    let oversized_runtime = "x".repeat(yamaa_engine::capacity::REPORT_RETAINED_BYTES / 12 + 1);
+    let identity = yamaa_adapters::specification_report::Identity {
+        runtime_version: &oversized_runtime,
+        ..report_id()
+    };
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::Lock);
     let mut limits = Limits::default();
     limits.engine.report_bytes = usize::MAX;
-    let attempt = build.build_reported(&mut host, report_id(), limits);
+    let attempt = build.build_reported(&mut host, identity, limits);
     assert!(!attempt.accepted());
     assert!(host.trace.is_empty());
     assert_eq!(attempt.graph.nodes.len(), 1);
@@ -2223,11 +2241,11 @@ fn a_larger_caller_report_budget_cannot_defer_the_fixed_formatter_ceiling_until_
             .unwrap()
             .cell(0, 1)
             .unwrap(),
-        ValueRef::Str(&text)
+        ValueRef::Str(text)
     );
-    // The immutable failed prefix excludes the refused derived table/artifact.
-    // Its source block fits, so retain it exactly rather than repeating a
-    // fictitious per-cell map charge merely to force projection refusal.
+    // The original attempt still owns its admitted source and execution.
+    // A separately bounded diagnostic view uses ordinary metadata and excludes
+    // the refused derived table/artifact; it does not replay original inputs.
     let failed = yamaa_adapters::producer_report::attempt_report(&attempt, report_id(), usize::MAX)
         .unwrap()
         .observations_value(false);

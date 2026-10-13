@@ -139,7 +139,7 @@ impl PreparedRun {
 
 pub(crate) fn limits() -> application::Limits {
     application::Limits {
-        source_bytes: csv_source::Limits::default().bytes,
+        source_bytes: yamaa_engine::capacity::SOURCE_BYTES,
         source_cells: dataset_transport::MAX_SOURCE_CELLS,
         execution: dataset_transport::LIMITS,
     }
@@ -255,9 +255,11 @@ pub(crate) fn decode_interpreted(
     interpretation: yamaa_core::specification::SourceInterpretation,
 ) -> Result<ArrowTable, Error> {
     let odm = interpretation == yamaa_core::specification::SourceInterpretation::Odm;
-    let cells = bounded.map_or(262_144, |l| l.cells.min(262_144));
+    let cells = bounded.map_or(yamaa_engine::capacity::SOURCE_CELLS, |l| {
+        l.cells.min(yamaa_engine::capacity::SOURCE_CELLS)
+    });
     let table_limits = TableLimits {
-        max_rows: 65_536,
+        max_rows: yamaa_engine::capacity::SOURCE_ROWS,
         max_columns: 64,
         max_batches: 1,
         max_cells: cells,
@@ -333,7 +335,7 @@ pub(crate) fn bounded_csv_limits(
     limits: yamaa_engine::producer_build::DecodeLimits,
 ) -> csv_source::Limits {
     let ordinary = csv_source::Limits::default();
-    let cells = limits.cells.min(262_144);
+    let cells = limits.cells.min(yamaa_engine::capacity::SOURCE_CELLS);
     csv_source::Limits {
         bytes: ordinary
             .bytes
@@ -356,10 +358,12 @@ fn decode_parquet(
     use std::sync::Arc;
     use yamaa_core::table::TableAccess;
     let table_limits = TableLimits {
-        max_rows: 65_536,
+        max_rows: yamaa_engine::capacity::SOURCE_ROWS,
         max_columns: 64,
         max_batches: 1,
-        max_cells: bounded.map_or(262_144, |l| l.cells.min(262_144)),
+        max_cells: bounded.map_or(yamaa_engine::capacity::SOURCE_CELLS, |l| {
+            l.cells.min(yamaa_engine::capacity::SOURCE_CELLS)
+        }),
     };
     let work_bytes = bounded.map_or(64 * 1024 * 1024, |l| l.work_bytes.min(64 * 1024 * 1024));
     let storage_bytes = bounded.map_or(64 * 1024 * 1024, |l| l.storage_bytes.min(64 * 1024 * 1024));
