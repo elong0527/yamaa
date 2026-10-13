@@ -7,8 +7,8 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from yamaa._odm.errors import ODMError
 from yamaa import write_odm_parquet
+from yamaa._odm.errors import ODMError
 from yamaa._odm.schema import ODM_ITEM_SCHEMA
 
 

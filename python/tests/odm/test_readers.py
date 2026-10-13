@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from _odm_documents import ODM_13, ODM_20
 
-from yamaa._odm.errors import ODMError
 from yamaa import read_odm
+from yamaa._odm.errors import ODMError
 from yamaa._odm.readers import iter_odm_records
 from yamaa._odm.schema import ODM_ITEM_SCHEMA
 
