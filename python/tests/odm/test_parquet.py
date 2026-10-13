@@ -7,9 +7,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from yamaa.odm.errors import ODMError
-from yamaa.odm.parquet import write_odm_parquet
-from yamaa.odm.schema import ODM_ITEM_SCHEMA
+from yamaa import write_odm_parquet
+from yamaa._odm.errors import ODMError
+from yamaa._odm.schema import ODM_ITEM_SCHEMA
 
 
 def test_writer_publishes_one_parquet_file(odm13_path: Path, tmp_path: Path) -> None:
