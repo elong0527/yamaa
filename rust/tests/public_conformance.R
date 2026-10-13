@@ -27,18 +27,10 @@ write_json <- function(path, value) {
   dir.create(dirname(path), recursive=TRUE, showWarnings=FALSE)
   writeBin(charToRaw(paste0(json(value), "\n")), path)
 }
-copy_inputs <- function(source, target) {
-  dir.create(target, recursive=TRUE, showWarnings=FALSE)
-  for (path in list.files(source, full.names=TRUE, all.files=TRUE, no..=TRUE)) {
-    name <- basename(path)
-    if (name %in% c("expected", "run.py", "run.R", "README.md")) next
-    destination <- file.path(target, name)
-    link <- Sys.readlink(path)
-    if (!is.na(link) && nzchar(link)) {
-      if (!file.symlink(link, destination)) stop("could not stage symbolic link")
-    } else if (dir.exists(path)) copy_inputs(path, destination)
-    else if (!file.copy(path, destination)) stop("could not stage input: ", path)
-  }
+move_inputs <- function(source, target) {
+  if (!dir.exists(source)) stop("missing fresh R inputs; regenerate the conformance plan: ", source)
+  dir.create(dirname(target), recursive=TRUE, showWarnings=FALSE)
+  if (!file.rename(source, target)) stop("could not move staged R inputs to execution work: ", source)
 }
 public_table <- function(frame) {
   if (is.null(frame)) return(NULL)
@@ -100,7 +92,7 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     record <- tryCatch({
       if (!nzchar(entries$excluded[[1L]])) {
         case <- file.path(output, "work", name)
-        copy_inputs(file.path(fixtures, name), case)
+        move_inputs(file.path(args[[1L]], "r-inputs", name), case)
         for (index in seq_len(nrow(entries))) {
           entry <- entries[index, , drop=FALSE]
           environment <- if(nzchar(entry$environment[[1L]])) entry$environment[[1L]] else NULL
