@@ -134,6 +134,21 @@ pub(crate) fn build_selected(
     fields: Arc<Vec<String>>,
     report_bytes: usize,
 ) -> Attempt {
+    build_selected_with_observer(
+        py,
+        build,
+        fields,
+        report_bytes,
+        yamaa_engine::application_observer::Scope::new(&yamaa_engine::application_observer::Noop),
+    )
+}
+pub(crate) fn build_selected_with_observer(
+    py: Python<'_>,
+    build: &mut FileBuild,
+    fields: Arc<Vec<String>>,
+    report_bytes: usize,
+    scope: yamaa_engine::application_observer::Scope<'_>,
+) -> Attempt {
     let provenance = Arc::clone(build.provenance());
     let mut port = crate::project_activation::Port::new(
         py,
@@ -144,10 +159,11 @@ pub(crate) fn build_selected(
     );
     let mut limits = Limits::default();
     limits.engine.report_bytes = report_bytes;
-    let inner = build.build_owned_reported(
+    let inner = build.build_owned_reported_with_observer(
         &mut port,
         crate::specification_result::identity(&fields),
         limits,
+        scope,
     );
     Attempt {
         inner: Arc::new(Mutex::new(inner)),
@@ -484,6 +500,15 @@ impl Report {
                     self.refusal,
                 ))
             })
+    }
+    pub(crate) fn domain_accepted(&self) -> bool {
+        self.domain.as_ref().is_some_and(|result| {
+            result
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .output()
+                .is_some()
+        })
     }
     pub(crate) fn domain_observations(&self) -> PyResult<Option<String>> {
         self.domain

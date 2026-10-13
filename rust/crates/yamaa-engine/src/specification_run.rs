@@ -343,36 +343,99 @@ pub fn execute_with_functions_into<P: SourcePort, D: SourceDecoder>(
     limits: Limits,
     attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
 ) {
-    execute_functions_scoped(prepared, port, decoder, functions, limits, attempt, None);
-}
-/// Keep one graph-wide WorkCells owner while every source and binding gate stays
-/// in its original order. Only an actually entered dataset spends this owner.
-pub fn execute_with_functions_and_work_into<P: SourcePort, D: SourceDecoder>(
-    prepared: &PreparedSpecification,
-    port: &mut P,
-    decoder: &mut D,
-    functions: &mut dyn dataset::FunctionPort<Error = <D::Table as TableAccess>::Error>,
-    limits: Limits,
-    attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
-    work: &crate::execution_work::WorkBudget,
-) {
-    execute_functions_scoped(
+    execute_with_observer_into(
         prepared,
         port,
         decoder,
         functions,
         limits,
         attempt,
-        Some(work),
+        crate::application_observer::Scope::new(&crate::application_observer::Noop),
     );
 }
-fn execute_functions_scoped<P: SourcePort, D: SourceDecoder>(
+
+/// Preserve the same attempt and entered effect prefix while forwarding trusted
+/// stage observations. An event before a real call also survives its unwind.
+pub fn execute_with_observer_into<P: SourcePort, D: SourceDecoder>(
     prepared: &PreparedSpecification,
     port: &mut P,
     decoder: &mut D,
     functions: &mut dyn dataset::FunctionPort<Error = <D::Table as TableAccess>::Error>,
     limits: Limits,
     attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+    scope: crate::application_observer::Scope<'_>,
+) {
+    execute_scoped_into(
+        prepared, port, decoder, functions, limits, attempt, scope, None,
+    );
+}
+/// Combine actual application observations and the one entered graph work owner.
+#[allow(clippy::too_many_arguments)]
+pub fn execute_with_observer_and_work_into<P: SourcePort, D: SourceDecoder>(
+    prepared: &PreparedSpecification,
+    port: &mut P,
+    decoder: &mut D,
+    functions: &mut dyn dataset::FunctionPort<Error = <D::Table as TableAccess>::Error>,
+    limits: Limits,
+    attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+    scope: crate::application_observer::Scope<'_>,
+    work: &crate::execution_work::WorkBudget,
+) {
+    execute_scoped_into(
+        prepared,
+        port,
+        decoder,
+        functions,
+        limits,
+        attempt,
+        scope,
+        Some(work),
+    );
+}
+#[allow(clippy::too_many_arguments)]
+fn execute_scoped_into<P: SourcePort, D: SourceDecoder>(
+    prepared: &PreparedSpecification,
+    port: &mut P,
+    decoder: &mut D,
+    functions: &mut dyn dataset::FunctionPort<Error = <D::Table as TableAccess>::Error>,
+    limits: Limits,
+    attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+    scope: crate::application_observer::Scope<'_>,
+    work: Option<&crate::execution_work::WorkBudget>,
+) {
+    scope.phase(crate::application_observer::Phase::Input);
+    let input_finished = core::cell::Cell::new(false);
+    execute_inner_with_observer_into(
+        prepared,
+        port,
+        decoder,
+        functions,
+        limits,
+        attempt,
+        (scope, &input_finished),
+        work,
+    );
+    if !input_finished.get() {
+        let outcome = match &attempt.result {
+            Ok(execution) => crate::application_observer::Outcome::from_result(&execution.result),
+            Err(_) => crate::application_observer::Outcome::Failed,
+        };
+        scope.exit(crate::application_observer::Phase::Input, outcome);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
+    prepared: &PreparedSpecification,
+    port: &mut P,
+    decoder: &mut D,
+    functions: &mut dyn dataset::FunctionPort<Error = <D::Table as TableAccess>::Error>,
+    limits: Limits,
+    attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+    (scope, input_finished): (
+        crate::application_observer::Scope<'_>,
+        &core::cell::Cell<bool>,
+    ),
     work: Option<&crate::execution_work::WorkBudget>,
 ) {
     *attempt = CapturedAttempt::new(prepared.source());
@@ -551,10 +614,40 @@ fn execute_functions_scoped<P: SourcePort, D: SourceDecoder>(
                 as &dyn TableAccess<Error = <D::Table as TableAccess>::Error>
         })
         .collect::<Vec<_>>();
-    attempt.result = Ok(match work {
-        Some(work) => {
-            plan.execute_with_work_budget(primary, &secondary, functions, limits.execution, work)
+    let phase = core::cell::Cell::new(dataset::ExecutionPhase::Admission);
+    let mut functions = scope.functions(functions, &phase);
+    input_finished.set(true);
+    scope.exit(
+        crate::application_observer::Phase::Input,
+        crate::application_observer::Outcome::Succeeded,
+    );
+    let mut observer = |event| match event {
+        dataset::ExecutionEvent::Phase(current) => {
+            phase.set(current);
+            scope.phase(crate::application_observer::Phase::Dataset(current));
         }
-        None => plan.execute_observed_functions(primary, &secondary, functions, limits.execution),
+        dataset::ExecutionEvent::Exit { phase, outcome } => {
+            scope.exit(crate::application_observer::Phase::Dataset(phase), outcome)
+        }
+        dataset::ExecutionEvent::Refusal { phase, refusal } => {
+            scope.refusal(crate::application_observer::Phase::Dataset(phase), refusal)
+        }
+    };
+    attempt.result = Ok(match work {
+        Some(work) => plan.execute_with_execution_observer_and_work(
+            primary,
+            &secondary,
+            &mut functions,
+            limits.execution,
+            &mut observer,
+            work,
+        ),
+        None => plan.execute_with_execution_observer(
+            primary,
+            &secondary,
+            &mut functions,
+            limits.execution,
+            &mut observer,
+        ),
     });
 }

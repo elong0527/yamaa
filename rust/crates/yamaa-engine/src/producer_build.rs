@@ -78,9 +78,9 @@ pub trait CodecPort {
 /// Select the original node context and enforce this report's complete byte
 /// budget. Reports own observations only; no method grants publication authority.
 pub trait ReportPort: OutputReport {
-    /// Default report ports retain the conservative equal share. A native port
-    /// may pool this capacity only while admitting cumulative actual encoded
-    /// lengths and retained storage before making any artifact available.
+    /// A generic port retains equal reservations. A native port may pool this
+    /// capacity only while admitting cumulative actual encoded lengths and
+    /// retained projection charges across every entered node.
     fn report_allowance(&mut self, total: usize, nodes: usize) -> usize {
         total / nodes
     }
@@ -274,6 +274,29 @@ impl PreparedBuild {
         R: ReportPort,
         C: CodecPort,
     {
+        self.build_publication_with_observer_into(
+            ports,
+            limits,
+            attempt,
+            crate::application_observer::Scope::new(&crate::application_observer::Noop),
+        )
+    }
+
+    pub fn build_publication_with_observer_into<A, P, D, R, C>(
+        &self,
+        ports: Ports<'_, A, P, D, R, C>,
+        limits: Limits,
+        attempt: &mut BuildAttempt<A, P, D, R, C>,
+        scope: crate::application_observer::Scope<'_>,
+    ) -> Result<crate::producer_publication::PreparedPublication, &'static str>
+    where
+        A: ActivationPort,
+        P: StudyPort,
+        D: DecodePort,
+        D::Table: TableAccess<Error = A::Error>,
+        R: ReportPort,
+        C: CodecPort,
+    {
         *attempt = Attempt::default();
         let graph = self.metadata();
         let count = graph.nodes().len();
@@ -355,14 +378,20 @@ impl PreparedBuild {
         let activated = if selected.is_empty() {
             Vec::new()
         } else {
-            match project_activation::activate_references_observed(
+            scope.phase(crate::application_observer::Phase::Activation);
+            let result = project_activation::activate_references_observed(
                 environment.language().expect("admitted called language"),
                 environment.lock().expect("admitted called lock"),
                 &selected,
-                ports.activation,
+                &mut scope.activation(ports.activation),
                 limits.activation,
                 &mut attempt.activation,
-            ) {
+            );
+            scope.exit(
+                crate::application_observer::Phase::Activation,
+                crate::application_observer::Outcome::from_result(&result),
+            );
+            match result {
                 Ok(functions) => functions,
                 Err(error) => {
                     attempt.outcome = Err(Failure::Activation(error));
@@ -407,6 +436,7 @@ impl PreparedBuild {
         };
         for &index in graph.order() {
             let node = &graph.nodes()[index];
+            let node_scope = scope.for_node(index, node.identity());
             let plan = plans[index];
             let node_limits = run::Limits {
                 execution: dataset::Limits {
@@ -435,7 +465,7 @@ impl PreparedBuild {
             let mut functions =
                 Bindings::projected(&activated, node.activation_slots(), calls, ports.activation)
                     .expect("complete graph projections preflighted before sources");
-            run::execute_with_functions_and_work_into(
+            run::execute_with_observer_and_work_into(
                 plan,
                 &mut sources,
                 &mut NodeDecoder {
@@ -449,60 +479,70 @@ impl PreparedBuild {
                 &mut functions,
                 node_limits,
                 &mut entered.dataset,
+                node_scope,
                 &execution_work,
             );
-            let report_allowance = ports.report.report_allowance(limits.report_bytes, count);
-            let diagnostics = ports.report.prepare_diagnostics(
-                node,
-                &entered.dataset,
-                output_left,
-                report_allowance,
-            );
-            match diagnostics {
-                Ok(bytes) if bytes <= output_left => output_left -= bytes,
-                Ok(_) => {
-                    entered.output = Err(output::CompleteError::OutputLimit);
+            node_scope.phase(crate::application_observer::Phase::Output);
+            let output_result = (|| {
+                let report_allowance = ports.report.report_allowance(limits.report_bytes, count);
+                let diagnostics = ports.report.prepare_diagnostics(
+                    node,
+                    &entered.dataset,
+                    output_left,
+                    report_allowance,
+                );
+                match diagnostics {
+                    Ok(bytes) if bytes <= output_left => output_left -= bytes,
+                    Ok(_) => {
+                        entered.output = Err(output::CompleteError::OutputLimit);
+                        attempt.outcome = Err(Failure::Node { node: index });
+                        return Err("producer_build_failed");
+                    }
+                    Err(error) => {
+                        entered.output = Err(output::CompleteError::Report(error));
+                        attempt.outcome = Err(Failure::Node { node: index });
+                        return Err("producer_build_failed");
+                    }
+                }
+                let execution = entered
+                    .dataset
+                    .result
+                    .as_ref()
+                    .ok()
+                    .and_then(|execution| execution.result.as_ref().ok());
+                let Some(execution) = execution else {
                     attempt.outcome = Err(Failure::Node { node: index });
                     return Err("producer_build_failed");
-                }
-                Err(error) => {
-                    entered.output = Err(output::CompleteError::Report(error));
+                };
+                let report_allowance = ports.report.report_allowance(limits.report_bytes, count);
+                let prepared = prepare_output(
+                    node,
+                    plan,
+                    &entered.dataset,
+                    execution,
+                    (output_left, report_allowance),
+                    ports.report,
+                    ports.codec,
+                );
+                entered.output = prepared.map(Some);
+                let artifact = entered
+                    .output
+                    .as_ref()
+                    .ok()
+                    .and_then(Option::as_ref)
+                    .and_then(PreparedOutput::artifact);
+                let Some(artifact) = artifact else {
                     attempt.outcome = Err(Failure::Node { node: index });
                     return Err("producer_build_failed");
-                }
-            }
-            let execution = entered
-                .dataset
-                .result
-                .as_ref()
-                .ok()
-                .and_then(|execution| execution.result.as_ref().ok());
-            let Some(execution) = execution else {
-                attempt.outcome = Err(Failure::Node { node: index });
-                return Err("producer_build_failed");
-            };
-            let report_allowance = ports.report.report_allowance(limits.report_bytes, count);
-            let prepared = prepare_output(
-                node,
-                plan,
-                &entered.dataset,
-                execution,
-                (output_left, report_allowance),
-                ports.report,
-                ports.codec,
+                };
+                output_left -= artifact.bytes().len(); // output::prepare enforced remaining quota.
+                Ok(())
+            })();
+            node_scope.exit(
+                crate::application_observer::Phase::Output,
+                crate::application_observer::Outcome::from_result(&output_result),
             );
-            entered.output = prepared.map(Some);
-            let artifact = entered
-                .output
-                .as_ref()
-                .ok()
-                .and_then(Option::as_ref)
-                .and_then(PreparedOutput::artifact);
-            let Some(artifact) = artifact else {
-                attempt.outcome = Err(Failure::Node { node: index });
-                return Err("producer_build_failed");
-            };
-            output_left -= artifact.bytes().len(); // output::prepare enforced remaining quota.
+            output_result?;
         }
         attempt.outcome = Ok(());
         crate::producer_publication::PreparedPublication::from_actual(

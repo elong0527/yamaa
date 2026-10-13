@@ -28,9 +28,9 @@
 
 # Private qualification reads the same handle retained by the public save closure.
 # This is transport of Rust observations, with no host semantic preparation.
-.domain_observations <- function(result) {
+.domain_observations <- function(result, include_measurements = FALSE) {
   handle <- get("h", envir = environment(result$save), inherits = FALSE)
-  .domain_reply(.Call(wrap__domain_observations, handle))
+  .domain_reply(.Call(wrap__domain_observations, handle, include_measurements))
 }
 
 #' Build a domain through the shared Rust engine

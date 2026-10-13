@@ -104,6 +104,21 @@ pub enum ExecutionPhase {
     Finished,
 }
 
+/// Completion is emitted at the actual admitted checkpoint or returned result,
+/// before Finished. A panic retains entry without inventing a returned outcome.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionEvent {
+    Phase(ExecutionPhase),
+    Exit {
+        phase: ExecutionPhase,
+        outcome: crate::application_observer::Outcome,
+    },
+    Refusal {
+        phase: ExecutionPhase,
+        refusal: crate::application_observer::Refusal,
+    },
+}
+
 /// Caller-selected capacity limits, not normative language limits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
@@ -1043,6 +1058,24 @@ pub trait DatasetExecution {
         limits: Limits,
         observer: &mut dyn FnMut(ExecutionPhase),
     ) -> ExecutionAttempt<T::Error>;
+    /// Forward actual typed exits/refusals through the same cumulative work entry.
+    fn execute_with_execution_observer_and_work<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+        work: &crate::execution_work::WorkBudget,
+    ) -> ExecutionAttempt<T::Error>;
+    fn execute_with_execution_observer<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+    ) -> ExecutionAttempt<T::Error>;
 }
 impl DatasetExecution for DatasetPlan {
     fn execute<T: TableAccess + ?Sized>(
@@ -1103,6 +1136,35 @@ impl DatasetExecution for DatasetPlan {
     ) -> ExecutionAttempt<T::Error> {
         Executor { plan: self }
             .execute_with_phase_observer(table, secondary, functions, limits, observer)
+    }
+    fn execute_with_execution_observer_and_work<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+        work: &crate::execution_work::WorkBudget,
+    ) -> ExecutionAttempt<T::Error> {
+        Executor { plan: self }.execute_scoped(
+            table,
+            secondary,
+            functions,
+            limits,
+            observer,
+            Some(work),
+        )
+    }
+    fn execute_with_execution_observer<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+    ) -> ExecutionAttempt<T::Error> {
+        Executor { plan: self }
+            .execute_with_execution_observer(table, secondary, functions, limits, observer)
     }
 }
 // A service borrows the one admitted model; it owns no second plan representation.
@@ -1175,6 +1237,21 @@ impl Executor<'_> {
         limits: Limits,
         observer: &mut dyn FnMut(ExecutionPhase),
     ) -> ExecutionAttempt<T::Error> {
+        self.execute_with_execution_observer(table, secondary, functions, limits, &mut |event| {
+            if let ExecutionEvent::Phase(phase) = event {
+                observer(phase);
+            }
+        })
+    }
+
+    pub fn execute_with_execution_observer<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        limits: Limits,
+        observer: &mut dyn FnMut(ExecutionEvent),
+    ) -> ExecutionAttempt<T::Error> {
         self.execute_scoped(table, secondary, functions, limits, observer, None)
     }
     #[allow(clippy::too_many_arguments)]
@@ -1184,10 +1261,19 @@ impl Executor<'_> {
         secondary: &[&dyn TableAccess<Error = T::Error>],
         functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
-        observer: &mut dyn FnMut(ExecutionPhase),
+        observer: &mut dyn FnMut(ExecutionEvent),
         work: Option<&crate::execution_work::WorkBudget>,
     ) -> ExecutionAttempt<T::Error> {
-        observer(ExecutionPhase::Admission);
+        let active = core::cell::Cell::new(ExecutionPhase::Admission);
+        let mut observer = |event| {
+            if let ExecutionEvent::Phase(phase) = event {
+                if phase != ExecutionPhase::Finished {
+                    active.set(phase);
+                }
+            }
+            observer(event);
+        };
+        observer(ExecutionEvent::Phase(ExecutionPhase::Admission));
         let mut observations = AttemptObservations::default();
         for declaration in self.plan.conversion_handlers() {
             observations
@@ -1213,15 +1299,36 @@ impl Executor<'_> {
             functions,
             limits,
             &mut observations,
-            observer,
+            &mut observer,
             work,
         );
+        if let Err(error) = &result {
+            if let ExecutionError::Limit {
+                resource,
+                limit,
+                required,
+            } = error.as_ref()
+            {
+                observer(ExecutionEvent::Refusal {
+                    phase: active.get(),
+                    refusal: crate::application_observer::Refusal {
+                        resource: *resource,
+                        limit: *limit,
+                        required: *required,
+                    },
+                });
+            }
+        }
+        observer(ExecutionEvent::Exit {
+            phase: active.get(),
+            outcome: crate::application_observer::Outcome::from_result(&result),
+        });
         let attempt = ExecutionAttempt {
             result,
             handler_counts: observations.handlers.snapshot().to_vec(),
             retained_verifications: observations.verifications,
         };
-        observer(ExecutionPhase::Finished);
+        observer(ExecutionEvent::Phase(ExecutionPhase::Finished));
         attempt
     }
 
@@ -1234,7 +1341,7 @@ impl Executor<'_> {
         functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
         observations: &mut AttemptObservations,
-        observer: &mut dyn FnMut(ExecutionPhase),
+        observer: &mut dyn FnMut(ExecutionEvent),
         work: Option<&crate::execution_work::WorkBudget>,
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
         functions::admit_plan(self.plan, functions)?;
@@ -1255,6 +1362,10 @@ impl Executor<'_> {
         if rows.is_none_or(|rows| rows > limits.source_rows) {
             return Err(Box::new(ExecutionError::Capacity));
         }
+        observer(ExecutionEvent::Exit {
+            phase: ExecutionPhase::Admission,
+            outcome: crate::application_observer::Outcome::Succeeded,
+        });
         let reservation = work.map(crate::execution_work::WorkBudget::enter);
         let mut budget = match &reservation {
             Some(reservation) => {
@@ -1262,7 +1373,7 @@ impl Executor<'_> {
             }
             None => Budget::new(limits),
         };
-        observer(ExecutionPhase::Derivation);
+        observer(ExecutionEvent::Phase(ExecutionPhase::Derivation));
         let result = self.execute_admitted(
             table,
             secondary,
@@ -1285,7 +1396,7 @@ impl Executor<'_> {
         functions: &mut dyn FunctionPort<Error = T::Error>,
         limits: Limits,
         observations: &mut AttemptObservations,
-        observer: &mut dyn FnMut(ExecutionPhase),
+        observer: &mut dyn FnMut(ExecutionEvent),
         budget: &mut Budget,
     ) -> Result<Execution, Box<ExecutionError<T::Error>>> {
         let AttemptObservations {
@@ -1595,7 +1706,11 @@ impl Executor<'_> {
             completed[assignment.column] = true;
             self.check_columns(&candidates, &completed, &mut next_column, records, budget)?;
         }
-        observer(ExecutionPhase::OutputKeys);
+        observer(ExecutionEvent::Exit {
+            phase: ExecutionPhase::Derivation,
+            outcome: crate::application_observer::Outcome::Succeeded,
+        });
+        observer(ExecutionEvent::Phase(ExecutionPhase::OutputKeys));
         let mut dataset = Dataset {
             schema: self.plan.output().clone(),
             rows: candidates.into_iter().map(|row| row.values).collect(),
@@ -1654,7 +1769,11 @@ impl Executor<'_> {
         if !failures.is_empty() {
             return Err(Box::new(ExecutionError::KeyFailures(failures)));
         }
-        observer(ExecutionPhase::Verification);
+        observer(ExecutionEvent::Exit {
+            phase: ExecutionPhase::OutputKeys,
+            outcome: crate::application_observer::Outcome::Succeeded,
+        });
+        observer(ExecutionEvent::Phase(ExecutionPhase::Verification));
         for verification in self.plan.verifications() {
             let record = match &verification.check {
                 Check::NotMissing
