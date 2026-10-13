@@ -108,11 +108,21 @@ fn lb_value_metadata_uses_original_published_bytes_and_family_valid_completion()
 fn original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes() {
     let temp = Temp::fixture("sdtm-lb-metadata", true);
     let overlay = fs::read_to_string(temp.0.join("submission-spec.yaml")).unwrap();
-    fs::write(
-        temp.0.join("submission-spec.yaml"),
-        overlay.split("rows:\n").next().unwrap(),
-    )
-    .unwrap();
+    // Drop the rows: block only; the style contract orders the top-level
+    // submission: block after rows:, so keep any block that follows it.
+    let mut stripped = String::new();
+    let mut in_rows = false;
+    for line in overlay.split_inclusive('\n') {
+        if line.trim_end() == "rows:" {
+            in_rows = true;
+        } else if in_rows && !line.starts_with(char::is_whitespace) {
+            in_rows = false;
+            stripped.push_str(line);
+        } else if !in_rows {
+            stripped.push_str(line);
+        }
+    }
+    fs::write(temp.0.join("submission-spec.yaml"), stripped).unwrap();
     let mut run = temp.run("2026-09-11T00:00:00");
     assert!(
         run.issues()

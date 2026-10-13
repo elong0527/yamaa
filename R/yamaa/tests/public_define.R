@@ -108,7 +108,13 @@ for (mode in c("original source", "value codelist", "metadata only", "arbitrary 
     overlay <- readLines(file.path(root, "submission-spec.yaml"))
     rows <- which(overlay == "rows:")
     stopifnot(length(rows) == 1L)
-    writeLines(overlay[seq_len(rows - 1L)], file.path(root, "submission-spec.yaml"))
+    # Drop the rows: block only; the style contract orders the top-level
+    # submission: block after rows:, so keep any block that follows it.
+    after <- overlay[-seq_len(rows)]
+    following <- which(nzchar(after) & !grepl("^[ \t]", after))
+    kept <- overlay[seq_len(rows - 1L)]
+    if (length(following)) kept <- c(kept, after[seq.int(min(following), length(after))])
+    writeLines(kept, file.path(root, "submission-spec.yaml"))
     stopifnot(identical(rawfile(file.path(root, "spec.yaml")), rawfile(file.path(fixtures, "sdtm-lb-metadata/spec.yaml"))))
   } else if (mode == "value codelist") {
     csv <- readLines(file.path(root, "lb.csv"))
