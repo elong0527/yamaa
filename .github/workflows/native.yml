@@ -140,7 +140,7 @@ jobs:
             uv run --project ../python --locked --no-editable python tools/check_numeric_syntax.py
             uv run --project ../python --locked --no-editable python tools/check_predicate_syntax.py
             uv run --project ../python --locked --no-editable python tools/check_regex.py
-            uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-reference-assessment.json"
+            uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-native-assessment.json"
             python tools/check_dependencies.py
             python tools/check_diagnostics.py --baseline-ref HEAD^
             uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p 'test_*.py'
@@ -205,8 +205,8 @@ jobs:
       - name: Preserve regex reference discrepancies
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: regex-reference-${{ matrix.os }}-${{ matrix.python }}
-          path: ${{ runner.temp }}/regex-reference-assessment.json
+          name: regex-native-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/regex-native-assessment.json
           if-no-files-found: error
 
   dist:
