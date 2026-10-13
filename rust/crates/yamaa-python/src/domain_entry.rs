@@ -8,6 +8,8 @@ pyo3::create_exception!(yamaa, DomainError, PyException);
 
 #[pyclass(frozen, module = "yamaa._native", name = "_DomainResult")]
 pub struct Domain {
+    pub(crate) measurements:
+        Option<std::sync::Arc<yamaa_adapters::application_measurements::Measurements>>,
     #[cfg(any(unix, windows))]
     pub(crate) inner: Option<Mutex<yamaa_adapters::file_application::Domain>>,
     #[cfg(any(unix, windows))]
@@ -87,21 +89,28 @@ impl Domain {
         Ok(Vec::new())
     }
     /// Private installed-run evidence; unsupported preparation has no build report.
-    fn observations(&self) -> PyResult<Option<String>> {
-        #[cfg(any(unix, windows))]
-        if let Some(inner) = &self.inner {
-            return inner
-                .try_lock()
-                .map(|inner| Some(inner.observations().to_string()))
-                .map_err(|_| {
-                    pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
-                });
-        }
-        #[cfg(any(unix, windows))]
-        if let Some(producer) = &self.producer {
-            return producer.domain_observations();
-        }
-        Ok(None)
+    #[pyo3(signature=(include_measurements=false))]
+    fn observations(&self, include_measurements: bool) -> PyResult<Option<String>> {
+        let observed = (|| {
+            #[cfg(any(unix, windows))]
+            if let Some(inner) = &self.inner {
+                return inner
+                    .try_lock()
+                    .map(|inner| Some(inner.observations_json()))
+                    .map_err(|_| {
+                        pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
+                    });
+            }
+            #[cfg(any(unix, windows))]
+            if let Some(producer) = &self.producer {
+                return producer.domain_observations();
+            }
+            Ok(None)
+        })()?;
+        Ok(match (include_measurements, self.measurements.as_ref()) {
+            (true, Some(measurements)) => Some(measurements.envelope(observed)),
+            _ => observed,
+        })
     }
     fn output<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyBytes>>> {
         #[cfg(any(unix, windows))]
@@ -163,21 +172,53 @@ impl Domain {
         Ok(None)
     }
     fn save(&self) -> PyResult<bool> {
-        #[cfg(any(unix, windows))]
-        if let Some(inner) = &self.inner {
-            return inner
-                .try_lock()
-                .map_err(|_| {
-                    pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
-                })?
-                .save()
-                .map_err(|_| DomainError::new_err("cannot save a failed build"));
+        if let Some(measurements) = &self.measurements {
+            measurements.save_entered();
         }
-        #[cfg(any(unix, windows))]
-        if let Some(producer) = &self.producer {
-            return producer.domain_save();
+        let returned = (|| {
+            #[cfg(any(unix, windows))]
+            if let Some(inner) = &self.inner {
+                return inner
+                    .try_lock()
+                    .map_err(|_| {
+                        pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
+                    })?
+                    .save()
+                    .map_err(|_| DomainError::new_err("cannot save a failed build"));
+            }
+            #[cfg(any(unix, windows))]
+            if let Some(producer) = &self.producer {
+                return producer.domain_save();
+            }
+            Err(DomainError::new_err("cannot save a failed build"))
+        })();
+        if let Some(measurements) = &self.measurements {
+            measurements.save_completed(match &returned {
+                Ok(true) => "succeeded",
+                Ok(false) => "refused",
+                Err(_) => "failed",
+            });
         }
-        Err(DomainError::new_err("cannot save a failed build"))
+        returned
+    }
+}
+
+impl Domain {
+    fn measurement_accepted(&self) -> bool {
+        #[cfg(any(unix, windows))]
+        {
+            if let Some(inner) = &self.inner {
+                return inner
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .output()
+                    .is_some();
+            }
+            if let Some(producer) = &self.producer {
+                return producer.domain_accepted();
+            }
+        }
+        false
     }
 }
 
@@ -201,18 +242,22 @@ pub fn _domain_file(
             host: yamaa_engine::host_values::Language::Python,
             runtime: crate::file_domain::Runtime { py, specification },
         };
-        match yamaa_engine::domain_entry::domain(
+        let measurements =
+            std::sync::Arc::new(yamaa_adapters::application_measurements::Measurements::new());
+        let returned = match yamaa_engine::domain_entry::domain_with_observer(
             yamaa_engine::domain_entry::Request {
                 specification,
                 environment,
             },
             &mut ports,
+            yamaa_engine::application_observer::Scope::new(measurements.as_ref()),
         ) {
             Ok(result) => Ok(result),
             Err(yamaa_adapters::file_application::ApplicationError::Runtime(error)) => Err(error),
             Err(yamaa_adapters::file_application::ApplicationError::Preparation(error)) => {
                 Ok(Domain {
                     producer: None,
+                    measurements: None,
                     inner: None,
                     project: None,
                     failures: yamaa_adapters::project_application::selection_failure(
@@ -221,12 +266,24 @@ pub fn _domain_file(
                     _preparation: Some(error),
                 })
             }
+        };
+        match returned {
+            Ok(mut result) => {
+                measurements.complete(result.measurement_accepted());
+                result.measurements = Some(measurements);
+                Ok(result)
+            }
+            Err(error) => {
+                measurements.complete(false);
+                Err(error)
+            }
         }
     }
     #[cfg(not(any(unix, windows)))]
     {
         let _ = (py, specification, environment);
         Ok(Domain {
+            measurements: None,
             failures: unavailable(),
         })
     }

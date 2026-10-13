@@ -193,9 +193,21 @@ impl FileProject {
         &'run mut self,
         factory: impl FnOnce(&'run PreparedRun) -> A,
     ) -> Attempt<ResourceError, A::Error> {
+        self.build_with_observer(
+            factory,
+            yamaa_engine::application_observer::Scope::new(
+                &yamaa_engine::application_observer::Noop,
+            ),
+        )
+    }
+    pub fn build_with_observer<'run, A: ActivationPort>(
+        &'run mut self,
+        factory: impl FnOnce(&'run PreparedRun) -> A,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Attempt<ResourceError, A::Error> {
         let mut activation = factory(&self.run);
         self.run
-            .execute_with_ports(&mut activation, &mut self.resources)
+            .execute_with_observer(&mut activation, &mut self.resources, scope)
     }
 }
 

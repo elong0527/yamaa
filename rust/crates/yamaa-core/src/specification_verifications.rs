@@ -2,6 +2,8 @@
 //! executes only after derivation and output keys; unsupported vocabulary is
 //! scanned across every declaration before any source request.
 use super::*;
+#[path = "specification_verification_lookup.rs"]
+mod lookups;
 use crate::dataset::{Check, CountBoundError, RowCount, RowCountBound, Verification};
 use crate::{
     bound_expression::BoundPredicate,
@@ -26,6 +28,7 @@ fn predicate(
     field_name: &str,
     path: &str,
     output: &TableSchema,
+    allow_lookups: bool,
 ) -> Result<Result<BoundPredicate, Diagnostic>, PrepareError> {
     let path = format!("{path}.{field_name}");
     let expression = d
@@ -92,7 +95,10 @@ fn predicate(
     if let Some(name) = plan
         .identifiers()
         .into_iter()
-        .filter(|name| !output.columns().iter().any(|column| column.name == *name))
+        .filter(|name| {
+            !(output.columns().iter().any(|column| column.name == *name)
+                || allow_lookups && lookups::declared(d, name).is_some())
+        })
         .min()
     {
         return Ok(Err(Diagnostic {
@@ -112,16 +118,20 @@ fn predicate(
         .into_iter()
         .map(|name| Binding {
             name: name.into(),
-            read: Read::Column(
-                output
-                    .columns()
-                    .iter()
-                    .position(|column| column.name == name)
-                    .expect("known output"),
-            ),
+            read: match output
+                .columns()
+                .iter()
+                .position(|column| column.name == name)
+            {
+                Some(column) => Read::Column(column),
+                None => Read::Intermediate {
+                    index: lookups::declared(d, name).expect("declared lookup"),
+                    column: 0,
+                },
+            },
         })
         .collect();
-    BoundPredicate::new(plan, bindings)
+    BoundPredicate::new_contextual(plan, bindings, Vec::new())
         .map(Ok)
         .map_err(|_| PrepareError::Internal)
 }
@@ -140,6 +150,15 @@ fn operation(d: &Document, id: usize) -> Result<(&str, usize), PrepareError> {
     Ok((text(d, name)?, payload))
 }
 impl Verifications {
+    pub(super) fn bind(
+        &self,
+        spec: &PreparedSpecification,
+        secondary: &[crate::dataset::SecondarySource],
+        intermediates: &[Option<crate::dataset::Intermediate>],
+    ) -> Result<Vec<Verification>, BindError> {
+        lookups::bind(&self.checks, spec, secondary, intermediates)
+    }
+
     pub(super) fn append_metadata(&mut self, verification: Verification) {
         // Ordinary explicit/implicit column checks precede terminology hooks.
         let index = self
@@ -281,8 +300,10 @@ impl Verifications {
                     ["filter", "when"]
                 } {
                     if name == "require" || d.field(payload, name).is_some() {
-                        predicates
-                            .insert((index, name), predicate(d, payload, name, &path, output)?);
+                        predicates.insert(
+                            (index, name),
+                            predicate(d, payload, name, &path, output, op == "assert")?,
+                        );
                     }
                 }
             }

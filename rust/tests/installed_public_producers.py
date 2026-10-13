@@ -468,10 +468,13 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
         self.assertGreater(result.issues.height, 0)
 
     def test_public_copy_quota_preserves_complete_accepted_graph_without_output_or_save(self):
-        extra = "".join(f"  - {{name: EXTRA{index}, type: float, label: Extra value, derivation: {{literal: 1.234}}}}\n" for index in range(59))
+        self.write("producer/layers/base.yaml", PRODUCER.replace("ID: int", "ID: str").replace("name: ID, type: int", "name: ID, type: str"))
+        extra = "".join(f"  - {{name: EXTRA{index}, type: str, label: Extra value, derivation: {{literal: null}}}}\n" for index in range(59))
         names = ", ".join(["ID", "VALUE"] + [f"EXTRA{index}" for index in range(59)])
-        self.write("consumer/root.yaml", CONSUMER.replace("output: {path:", extra + "output: {path:").replace("columns: [ID, VALUE], decimals: 2", f"columns: [{names}], decimals: 2"))
-        self.write("raw/raw.csv", b"ID,VALUE\n" + "".join(f"{index},1.234\n" for index in range(1, 101)).encode())
+        self.write("consumer/root.yaml", CONSUMER.replace("name: ID, type: int", "name: ID, type: str").replace("output: {path:", extra + "output: {path:").replace("columns: [ID, VALUE], decimals: 2", f"columns: [{names}], decimals: 2"))
+        # 23,000 rows with 63 owned columns visit 4,347,000 cells across the
+        # three public-copy passes, exceeding the 4,194,304-cell allowance.
+        self.write("raw/raw.csv", b"ID,VALUE\n" + "".join(f"{index},1.234\n" for index in range(1, 23001)).encode())
         result = self.build()
         self.assertTrue(self.entered(result).accepted())
         self.assertEqual(self.entered(result).entered_nodes(), [1, 0])

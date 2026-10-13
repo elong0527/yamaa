@@ -72,6 +72,30 @@ impl CheckedSpecification {
         );
     }
 
+    /// The observer receives stage transitions and actual calls only; immutable
+    /// checked metadata and the original attempt remain the semantic authority.
+    pub fn build_with_observer_into<P: SourcePort, D: SourceDecoder>(
+        &self,
+        port: &mut P,
+        decoder: &mut D,
+        functions: &mut dyn crate::dataset::FunctionPort<
+            Error = <D::Table as yamaa_core::table::TableAccess>::Error,
+        >,
+        limits: Limits,
+        attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+        scope: crate::application_observer::Scope<'_>,
+    ) {
+        specification_run::execute_with_observer_into(
+            &self.compiled,
+            port,
+            decoder,
+            functions,
+            limits,
+            attempt,
+            scope,
+        );
+    }
+
     /// Borrow the core-owned plan for provenance/reporting and explicit probes.
     pub fn compiled(&self) -> &PreparedSpecification {
         &self.compiled

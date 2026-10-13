@@ -11,7 +11,7 @@ yamaa-core = { path = "../yamaa-core" }
 yamaa-engine = { path = "../yamaa-engine" }
 toml = { version = "=0.9.8", default-features = false, features = ["parse", "std", "serde"] }
 serde = { version = "=1.0.228", features = ["derive"] }
-serde_json = { version = "=1.0.145", features = ["arbitrary_precision"] }
+serde_json = { version = "=1.0.145", features = ["arbitrary_precision", "raw_value"] }
 # Same parser revision used by the existing Python/R yaml12 packages. Keep
 # source parsing at the adapter boundary; the core accepts owned documents.
 saphyr-parser = { git = "https://github.com/t-kalinowski/saphyr", rev = "bd5bf9624347b24fa77cc2ef4a67ab2ef5c2cf8b", default-features = false }

@@ -6,6 +6,7 @@ use yamaa_core::{predicate, table::ValueRef, value::Value};
 /// These counters bound retained data and logical work, not allocator overhead or CPU time.
 pub(crate) struct Budget {
     limits: Limits,
+    work_limit: usize,
     output_text: usize,
     identity_cells: usize,
     identity_text: usize,
@@ -13,7 +14,7 @@ pub(crate) struct Budget {
 }
 impl Budget {
     pub(crate) fn work_cell_limit(&self) -> usize {
-        self.limits.work_cells
+        self.work_limit
     }
     pub(crate) fn limits(&self) -> Limits {
         self.limits
@@ -24,13 +25,19 @@ impl Budget {
     }
     /// Start a fresh accounting scope; reuse of a plan never reuses counters.
     pub(crate) fn new(limits: Limits) -> Self {
-        Self {
+        Self::with_work(limits, limits.work_cells, 0)
+    }
+    /// Seed only the cumulative WorkCells counter. Predicate resolutions,
+    /// regex, retained text and identities retain their existing local limits.
+    pub(crate) fn with_work(limits: Limits, work_limit: usize, prior: usize) -> Self {
+        let mut budget = Self {
             limits,
+            work_limit,
             output_text: 0,
             identity_cells: 0,
             identity_text: 0,
             runtime: predicate::Budget::new(predicate::Usage {
-                work: limits.work_cells,
+                work: work_limit,
                 resolutions: limits.work_cells,
                 text_bytes: limits.scalar_text_bytes,
                 like_work: limits.work_cells,
@@ -40,7 +47,12 @@ impl Budget {
                     state_cells: limits.work_cells,
                 },
             }),
-        }
+        };
+        assert!(budget.runtime.work(prior).is_ok());
+        budget
+    }
+    pub(crate) fn used_work(&self) -> usize {
+        self.runtime.used().work
     }
 
     /// Charge logical table visits before reads, folds or verification scans begin.
@@ -58,7 +70,7 @@ impl Budget {
         }
         Err(Box::new(ExecutionError::Limit {
             resource: Resource::WorkCells,
-            limit: self.limits.work_cells,
+            limit: self.work_limit,
             required,
         }))
     }
