@@ -111,6 +111,9 @@ mod file_inventory;
 
 pub mod host_limits;
 
+#[cfg(test)]
+mod test_diagnostic_truth;
+
 pub mod callback;
 pub mod dataset_result;
 mod dataset_snapshot;

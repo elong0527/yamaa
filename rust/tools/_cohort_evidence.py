@@ -7,13 +7,13 @@ import sys
 from pathlib import Path
 
 
-class _ReportReader:
-    """Load comparison libraries only when complete report evidence is read."""
+class _Reports:
+    """Lazy ``_public_reports`` handle: its decoder libraries (Polars/PyArrow)
+    are only present in qualification environments, so load on first use."""
 
-    def __init__(self):
-        self._module = None
+    _module = None
 
-    def __getattr__(self, name):
+    def _load(self):
         if self._module is None:
             spec = importlib.util.spec_from_file_location(
                 "_public_reports", Path(__file__).with_name("_public_reports.py")
@@ -22,10 +22,13 @@ class _ReportReader:
             sys.modules[spec.name] = module
             spec.loader.exec_module(module)
             self._module = module
-        return getattr(self._module, name)
+        return self._module
+
+    def __getattr__(self, name):
+        return getattr(self._load(), name)
 
 
-reports = _ReportReader()
+reports = _Reports()
 
 COHORT = (
     "adam-adlb-ordered-sum",

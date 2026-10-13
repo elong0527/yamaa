@@ -3524,5 +3524,48 @@
     "scope": "Exact original three write_text input literals retained unchanged; independent fixture identity assertion still executes. No expected output regenerated."
   },
   "retained_distribution_guard": "python/tests/test_package.py: exact eight root exports, version metadata, one installed distribution owns native/facade, all retired package/source members absent",
-  "packaging_note": "native-reference wheel copy temporarily remains as identical comparator dependency/provenance packaging, not a reference evaluator. Existing audit byte/ownership assertions and legacy admission remain unchanged."
+  "packaging_note": "native-reference wheel copy temporarily remains as identical comparator dependency/provenance packaging, not a reference evaluator. Existing audit byte/ownership assertions and legacy admission remain unchanged.",
+  "later_owner_corrections": {
+    "source_revision": "8ce985a5dd6946071d8dfe10ab47291d0c77ffcd",
+    "lazy_report_loader": "owner _Reports implementation preserved; unchanged strict comparator and 41 controls pass",
+    "diagnostic_allowlist": "owner shrinking {} preserved with new native diagnostic truth controls",
+    "new_reference_test_functions": [
+      {
+        "path": "python/tests/expressions/test_dates.py",
+        "new_functions": [
+          "test_a_list_valued_enum_field_is_refused_rather_than_crashing"
+        ],
+        "source_revision": "8ce985a5dd6946071d8dfe10ab47291d0c77ffcd",
+        "disposition": "Retained shared schema/public conformance guards reject malformed closed enum payloads; duplicate Python internal constructor tests retire with their approved API.",
+        "proofs": [
+          "rust/crates/yamaa-core/tests/schema_validation.rs",
+          "rust/tests/installed_original_specifications.py"
+        ]
+      },
+      {
+        "path": "python/tests/expressions/test_windows.py",
+        "new_functions": [
+          "test_an_unhashable_method_is_refused_rather_than_crashing"
+        ],
+        "source_revision": "8ce985a5dd6946071d8dfe10ab47291d0c77ffcd",
+        "disposition": "Retained shared schema/public conformance guards reject malformed closed enum payloads; duplicate Python internal constructor tests retire with their approved API.",
+        "proofs": [
+          "rust/crates/yamaa-core/tests/schema_validation.rs",
+          "rust/tests/installed_original_specifications.py"
+        ]
+      },
+      {
+        "path": "python/tests/verification/test_checks.py",
+        "new_functions": [
+          "test_an_unhashable_severity_is_refused_rather_than_crashing"
+        ],
+        "source_revision": "8ce985a5dd6946071d8dfe10ab47291d0c77ffcd",
+        "disposition": "Retained shared schema/public conformance guards reject malformed closed enum payloads; duplicate Python internal constructor tests retire with their approved API.",
+        "proofs": [
+          "rust/crates/yamaa-core/tests/schema_validation.rs",
+          "rust/tests/installed_original_specifications.py"
+        ]
+      }
+    ]
+  }
 }

@@ -953,6 +953,22 @@
       "consumers": [
         "rust/crates/yamaa-adapters/src/execution_diagnostics.rs"
       ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/diagnostic_literal_truth.json",
+      "family": "diagnostics",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/src/test_diagnostic_truth.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/check_invalid_regex_truth.json",
+      "family": "diagnostics",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/src/specification_check.rs"
+      ]
     }
   ],
   "suites": [
