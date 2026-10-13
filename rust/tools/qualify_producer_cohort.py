@@ -74,11 +74,10 @@ def project_report(raw, case):
                 observation["specification"], case
             )
     for observation in protocol["source_reads"]:
-        if relative_identity(observation.pop("specification"), case) not in {
-            "producer.yaml",
-            "spec.yaml",
-        }:
-            raise ValueError("resource request is not from an original graph node")
+        if relative_identity(observation.pop("specification"), case) != "producer.yaml":
+            raise ValueError(
+                "seed resource request is not owned by its original producer"
+            )
         observation["base_directory"] = relative_identity(
             observation["base_directory"], case
         )
@@ -150,15 +149,21 @@ def retain_owner(directory, runtime, record, expected, output):
         saved = raw_directory / f"after-{attempt}"
         after = read(saved / "report.json")
         publication = after.pop("publication")
-        if publication != {
-            "status": "success",
-            "error": None,
-            "entered": [{"node": 1, "published": True}, {"node": 0, "published": True}],
-        }:
+        if not cohort.exact_json(
+            publication,
+            {
+                "status": "success",
+                "error": None,
+                "entered": [
+                    {"node": 1, "published": True},
+                    {"node": 0, "published": True},
+                ],
+            },
+        ):
             raise ValueError(
                 "producer publication does not retain its exact successful prefix"
             )
-        if after != before:
+        if not cohort.exact_json(after, before):
             raise ValueError("Save changed original execution or source evidence")
         projected = project_report(after, case)
         comparisons.append(

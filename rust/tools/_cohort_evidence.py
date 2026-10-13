@@ -43,6 +43,21 @@ def read(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def exact_json(left, right):
+    """Compare raw protocol values without Python's bool/int equivalence."""
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(
+            exact_json(left[key], right[key]) for key in left
+        )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            exact_json(a, b) for a, b in zip(left, right)
+        )
+    return left == right
+
+
 def write(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
