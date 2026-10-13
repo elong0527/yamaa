@@ -2,9 +2,10 @@
 use super::{CallbackError, Error};
 use crate::{function_signature, scalar_transport::ScalarValue};
 use serde::{Deserialize, Serialize};
+use yamaa_core::dataset::ExpressionDeclaration;
 use yamaa_core::table::{CellError, TableAccess, TableSchema, ValueRef};
 use yamaa_engine::{
-    dataset::{ExpressionDeclaration, FunctionArgument, FunctionInput},
+    dataset::{FunctionArgument, FunctionInput},
     dataset_predicate::Read,
     function_invocation::InvocationFailure,
 };

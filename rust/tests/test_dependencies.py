@@ -1,6 +1,7 @@
 """Mutation checks for the dependency guard (including non-runtime edges)."""
 
 import importlib.util
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -45,6 +46,24 @@ class DependencyTests(unittest.TestCase):
     def test_allowed_graph(self):
         self.assertEqual(guard.violations(self.metadata()), [])
 
+    def test_binding_source_cannot_restore_semantics_or_capacity_literals(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            source = workspace / "crates/yamaa-python/src/lib.rs"
+            source.parent.mkdir(parents=True)
+            for code in (
+                "use yamaa_core::value::Value;",
+                "const LIMIT: usize = 65_536;",
+                "const LIMIT: usize = 65536;",
+                "const LIMIT: usize = 16_777_216;",
+                "value.is_finite()",
+            ):
+                with self.subTest(code=code):
+                    source.write_text(code)
+                    self.assertTrue(guard.source_violations(workspace))
+            source.write_text("use yamaa_engine::host_values::Value;")
+            self.assertEqual(guard.source_violations(workspace), [])
+
     def test_rejects_runtime_build_and_dev_edges(self):
         for crate in ("yamaa-core", "yamaa-engine"):
             for kind in (None, "build", "dev"):
@@ -71,6 +90,15 @@ class DependencyTests(unittest.TestCase):
                             {"name": dependency, "kind": kind}
                         )
                         self.assertTrue(guard.violations(metadata))
+
+    def test_bindings_cannot_depend_on_core_in_any_dependency_kind(self):
+        for crate in ("yamaa-python", "yamaa-r"):
+            for kind in (None, "build", "dev"):
+                with self.subTest(crate=crate, kind=kind):
+                    metadata = self.metadata()
+                    package = next(p for p in metadata["packages"] if p["name"] == crate)
+                    package["dependencies"].append({"name": "yamaa-core", "kind": kind})
+                    self.assertTrue(guard.violations(metadata))
 
     def test_rejects_reverse_internal_edge(self):
         metadata = self.metadata()

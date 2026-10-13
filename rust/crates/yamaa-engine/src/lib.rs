@@ -15,6 +15,7 @@ pub mod domain;
 pub mod domain_entry;
 pub mod file_preparation;
 pub mod function_invocation;
+pub mod host_values;
 pub mod inheritance;
 pub mod inheritance_capture;
 pub mod inheritance_preparation;

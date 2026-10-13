@@ -6,12 +6,8 @@ use yamaa_adapters::{
     project_lock::{self, Finding, Reason},
     scalar_bytes,
 };
-use yamaa_core::{
-    function_signature::{LogicalSignature, ProjectFunctionIdentity},
-    project_environment::{LockKind, LockReference},
-    project_function::Language,
-    table::ValueRef,
-    value::Value,
+use yamaa_engine::host_values::{
+    Language, LockKind, LockReference, LogicalSignature, ProjectFunctionIdentity, Value, ValueRef,
 };
 use yamaa_engine::{
     function_invocation::{Argument, HostError},
@@ -161,8 +157,8 @@ impl ActivationPort for Port<'_> {
     ) -> std::result::Result<(), Error> {
         if language != Language::R
             || lock.kind != LockKind::Renv
-            || self.lock.len() > 16_777_216
-            || functions.len() > 1024
+            || self.lock.len() > yamaa_adapters::host_limits::REPLY_BYTES
+            || functions.len() > yamaa_adapters::host_limits::FUNCTIONS
         {
             return Err(Error::Protocol);
         }

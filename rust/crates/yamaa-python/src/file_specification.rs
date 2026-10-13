@@ -69,7 +69,7 @@ pub fn _prepare_file_specification(
     if data_roots.len() >= 64
         || [project_root, base_directory, entry]
             .iter()
-            .any(|text| text.len() > 65536)
+            .any(|text| text.len() > yamaa_adapters::host_limits::IDENTITY_BYTES)
     {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "file specification path or root limit",
@@ -80,7 +80,7 @@ pub fn _prepare_file_specification(
         .map(|value| {
             let value = value.cast::<PyString>()?;
             let text = value.to_str()?;
-            if text.len() > 65536 {
+            if text.len() > yamaa_adapters::host_limits::IDENTITY_BYTES {
                 return Err(pyo3::exceptions::PyValueError::new_err(
                     "file specification path byte limit",
                 ));

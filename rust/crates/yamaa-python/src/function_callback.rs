@@ -9,12 +9,10 @@ use yamaa_adapters::function_transport::{
     CallbackError, FunctionTransportError as Error, PreparedInvocation, MAX_ERROR_BYTES,
     MAX_RESULT_BYTES,
 };
-use yamaa_core::{
-    table::ValueRef,
-    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
-    value::Value,
-};
 use yamaa_engine::function_invocation::{Argument, FunctionPort, HostError};
+use yamaa_engine::host_values::{
+    Date, DatePrecision, DateTime, DateTimePrecision, Value, ValueRef,
+};
 
 /// Execute one bounded request with an explicit callable; labels do not prove
 /// artifact authorization. No GIL release, worker thread, discovery or retry.
@@ -77,7 +75,7 @@ fn execute_dataset_bound(
     callbacks: &Bound<'_, pyo3::types::PyList>,
     mut profile: Option<&mut yamaa_adapters::dataset_profile::DatasetProfile>,
 ) -> PyResult<yamaa_adapters::dataset_transport::DatasetResponse> {
-    use yamaa_adapters::dataset_transport::{PreparedDataset, MAX_SOURCES};
+    use yamaa_adapters::dataset_transport::PreparedDataset;
     let prepared = PreparedDataset::parse(request).map_err(crate::dataset_error)?;
     if let Some(profile) = profile.as_deref_mut() {
         profile.enter(yamaa_adapters::dataset_profile::ProfilePhase::HostBindings);
@@ -103,9 +101,8 @@ fn execute_dataset_bound(
             Ok(callback)
         })
         .collect::<PyResult<Vec<_>>>()?;
-    if secondary.len() >= MAX_SOURCES {
-        return Err(PyValueError::new_err("too many secondary dataset sources"));
-    }
+    yamaa_adapters::dataset_transport::admit_secondary_count(secondary.len())
+        .map_err(|_| PyValueError::new_err("too many secondary dataset sources"))?;
     let buffers = secondary
         .iter()
         .map(|value| value.cast_into::<pyo3::types::PyBytes>())
@@ -326,9 +323,10 @@ pub(super) fn host_result(value: &Bound<'_, PyAny>) -> Result<Value, CallbackErr
             .map_err(|_| rejected("a returned integer exceeds 64 bits", None));
     }
     if value.is_exact_instance_of::<PyFloat>() {
-        return value
+        let number: f64 = value
             .extract()
-            .map(Value::float)
+            .map_err(|_| CallbackError::Boundary(Error::Internal))?;
+        return yamaa_adapters::scalar_bytes::decode(2, &number.to_le_bytes())
             .map_err(|_| CallbackError::Boundary(Error::Internal));
     }
     if let Ok(text) = value.cast::<PyString>() {

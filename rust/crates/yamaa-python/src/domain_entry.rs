@@ -54,11 +54,16 @@ impl Domain {
     ) -> PyResult<Vec<(String, Bound<'py, PyBytes>)>> {
         #[cfg(any(unix, windows))]
         if let Some(error) = &self._preparation {
-            let sources = error.retained_sources(65_536, 16_777_216).map_err(|_| {
-                pyo3::exceptions::PyValueError::new_err(
-                    "source evidence limit; original preparation remains retained",
+            let sources = error
+                .retained_sources(
+                    yamaa_adapters::host_limits::RECORDS,
+                    yamaa_adapters::host_limits::REPLY_BYTES,
                 )
-            })?;
+                .map_err(|_| {
+                    pyo3::exceptions::PyValueError::new_err(
+                        "source evidence limit; original preparation remains retained",
+                    )
+                })?;
             crate::file_producer::source_budget(
                 sources
                     .iter()
@@ -182,11 +187,10 @@ impl Domain {
 
 #[cfg(not(any(unix, windows)))]
 fn unavailable() -> Vec<Issue> {
-    vec![Issue::from_core(yamaa_core::application_issue::unsupported(
-        "native_file_transport",
-        None,
-    ))
-    .expect("application issue")]
+    vec![
+        Issue::from_core(yamaa_engine::host_values::unavailable_file_transport())
+            .expect("application issue"),
+    ]
 }
 #[pyfunction]
 #[pyo3(signature=(specification,environment=None))]
@@ -201,7 +205,7 @@ pub fn _domain_file(
             let selected = match yamaa_adapters::file_workflow::select(
                 specification,
                 environment,
-                yamaa_core::project_function::Language::Python,
+                yamaa_engine::host_values::Language::Python,
             ) {
                 Ok(selected) => selected,
                 Err(error) => {
@@ -211,7 +215,7 @@ pub fn _domain_file(
                         project: None,
                         failures: yamaa_adapters::project_application::selection_failure(
                             &error,
-                            yamaa_core::project_function::Language::Python,
+                            yamaa_engine::host_values::Language::Python,
                         ),
                         _preparation: Some(error),
                     })
@@ -225,7 +229,7 @@ pub fn _domain_file(
                         py,
                         [
                             py.version(),
-                            yamaa_core::VERSION,
+                            yamaa_engine::host_values::VERSION,
                             "domain",
                             specification,
                             ".",
@@ -233,9 +237,14 @@ pub fn _domain_file(
                     )?;
                     let fields =
                         std::sync::Arc::new(crate::specification_result::fields(&metadata)?);
-                    let attempt =
-                        crate::file_producer::build_selected(py, &mut build, fields, 16_777_216);
-                    let producer = attempt.formatted(py, 16_777_216, true)?;
+                    let attempt = crate::file_producer::build_selected(
+                        py,
+                        &mut build,
+                        fields,
+                        yamaa_adapters::host_limits::REPLY_BYTES,
+                    );
+                    let producer =
+                        attempt.formatted(py, yamaa_adapters::host_limits::REPLY_BYTES, true)?;
                     return Ok(Domain {
                         producer: Some(producer),
                         inner: None,
@@ -261,7 +270,7 @@ pub fn _domain_file(
                 py,
                 [
                     py.version(),
-                    yamaa_core::VERSION,
+                    yamaa_engine::host_values::VERSION,
                     "domain",
                     specification,
                     ".",
@@ -295,7 +304,7 @@ pub fn _domain_file(
             yamaa_adapters::specification_report::Identity {
                 runtime: "python",
                 runtime_version: py.version(),
-                engine_version: yamaa_core::VERSION,
+                engine_version: yamaa_engine::host_values::VERSION,
                 example: "domain",
                 specification,
                 base_directory: ".",
@@ -340,7 +349,7 @@ pub fn _check_file(
                 &yamaa_adapters::project_application::check(
                     specification,
                     environment,
-                    yamaa_core::project_function::Language::Python,
+                    yamaa_engine::host_values::Language::Python,
                 ),
             );
         }
@@ -352,7 +361,7 @@ pub fn _check_file(
             yamaa_adapters::specification_report::Identity {
                 runtime: "python",
                 runtime_version: py.version(),
-                engine_version: yamaa_core::VERSION,
+                engine_version: yamaa_engine::host_values::VERSION,
                 example: "check",
                 specification,
                 base_directory: ".",
@@ -376,8 +385,8 @@ pub fn _check_project_metadata(
     language: &str,
 ) -> PyResult<Vec<crate::specification_result::IssueRow>> {
     let host = match language {
-        "python" => yamaa_core::project_function::Language::Python,
-        "r" => yamaa_core::project_function::Language::R,
+        "python" => yamaa_engine::host_values::Language::Python,
+        "r" => yamaa_engine::host_values::Language::R,
         _ => {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "invalid project language",

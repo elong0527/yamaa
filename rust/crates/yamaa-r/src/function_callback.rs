@@ -7,8 +7,8 @@ use yamaa_adapters::{
     },
     scalar_bytes,
 };
-use yamaa_core::{table::ValueRef, value::Value};
 use yamaa_engine::function_invocation::{Argument, FunctionPort, HostError};
+use yamaa_engine::host_values::{Value, ValueRef};
 
 /// Invoke an explicitly supplied R dispatcher after complete request admission.
 /// The package dispatcher owns the bound callback; labels are not artifact proof.
@@ -40,7 +40,7 @@ fn execute_dataset_functions(
     dispatchers: List,
 ) -> List {
     use yamaa_adapters::dataset_transport::{
-        DatasetTransportError as DatasetError, PreparedDataset, MAX_SOURCES,
+        DatasetTransportError as DatasetError, PreparedDataset,
     };
     let run = || {
         if request.len() > yamaa_adapters::scalar_transport::MAX_REQUEST_BYTES {
@@ -63,9 +63,7 @@ fn execute_dataset_functions(
             .iter()
             .map(|(_, value)| value.as_function().ok_or(DatasetError::FunctionBinding))
             .collect::<std::result::Result<Vec<_>, _>>()?;
-        if secondary.len() >= MAX_SOURCES {
-            return Err(DatasetError::RequestLimit);
-        }
+        yamaa_adapters::dataset_transport::admit_secondary_count(secondary.len())?;
         let buffers = secondary
             .iter()
             .map(|(_, value)| value.as_raw().ok_or(DatasetError::InvalidRequest))

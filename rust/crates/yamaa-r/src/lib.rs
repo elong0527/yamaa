@@ -222,7 +222,7 @@ fn execute_dataset(request: Raw, source: Raw) -> List {
 /// Keep secondary raw vectors rooted while the shared bridge copies their snapshots.
 #[extendr]
 fn execute_dataset_sources(request: Raw, source: Raw, secondary: List) -> List {
-    if secondary.len() >= yamaa_adapters::dataset_transport::MAX_SOURCES {
+    if yamaa_adapters::dataset_transport::admit_secondary_count(secondary.len()).is_err() {
         return list!(value = NULL, error = "too many secondary dataset sources");
     }
     let buffers: Option<Vec<Raw>> = secondary.iter().map(|(_, value)| value.as_raw()).collect();
