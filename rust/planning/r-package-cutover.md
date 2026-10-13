@@ -3,8 +3,8 @@
 This is the concrete R removal record for
 [#1993](https://github.com/elong0527/yamaa/issues/1993), alongside the public API
 contract in [#1991](https://github.com/elong0527/yamaa/issues/1991). The removal
-branch remains a draft until the [transition gates](transition.md) pass on the
-combined main revision. Preparing the deletion does not approve transition.
+branch prepares removal until the [transition gates](transition.md) pass on the
+combined main revision. Review readiness does not approve transition.
 
 ## Installation and source artifact
 
@@ -59,9 +59,16 @@ removal disposition, with no compatibility translation or fallback.
 
 The previous release source is pinned by tag `yamaa-py-0.3.0`, revision
 `845a91ff9ba4ab6599efbd79fafe1c4e1dd14255`. The measurement agent retained its exact
-repository source archive before this removal. A qualified prior R source-package
-asset and a successful whole-run rollback rehearsal remain required: the release
-currently has no package assets. The old `cdiscbuilder` package reports 0.1.0;
+repository source archive before this removal. No previous R release was
+published. Instead, the qualified installed pre-cutover R package at source
+`a1a9c2d216075f331ac108aa4d3638573f103cea` is retained from audited run
+38394553441. One exact archive passed fresh-library domain/check/Define and
+post-input-removal Save rehearsal on Linux, macOS and Windows in run
+38435902670 at preparation head
+`d909928c94f308550c7f584c12b6b42506c4c84c`. Draft retention release 411979803,
+tag `yamaa-r-reference-a1a9c2d2`, targets that exact source and remains
+unpublished pending asset retrieval, byte comparison and root review. A reviewed
+retrievable study pin remains required. The old `cdiscbuilder` package reports 0.1.0;
 its source snapshot must not be described as an existing qualified `yamaa` 0.3.0
 R artifact. Preserve the reference source and measured baseline until rollback,
 performance budgets and transition approval are recorded.

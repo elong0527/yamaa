@@ -109,12 +109,28 @@ wheel members except generated `RECORD` matched the retained archive bytes.
 Unchanged committed lookup, ordered aggregate and window CSV outputs passed;
 each prior result saved twice after its input/specification directory was removed.
 The retained prior `uv.lock`, exact dependency pins, receipts and output bytes
-are in the unpublished preparation kit. This is one Linux wheel tuple, not the
-complete rollback matrix or a full producer graph Save baseline.
+are in the unpublished preparation kit. The unchanged prior packaging backend
+also prepared an installable source distribution with byte-identical Python and
+Rust sources, manifests, canonical Cargo lock and toolchain. A second fresh
+Linux CPython 3.12.14 environment rebuilt that exact source distribution with
+locked Rust 1.90.0 and maturin 1.9.6. All 135 installed rebuilt-wheel members,
+the three committed outputs and six post-input-removal Saves passed again.
+These wheel and source proofs cover Linux CPython 3.12.14; other rollback
+tuples and a full producer graph Save baseline remain separate requirements.
 
 The R source-package rehearsal passed all three platforms with their retained
 pre-cutover source archives in run 38426887552 at preparation head 560c5bd3.
-Rehearsal of one canonical archive on all three platforms is separately recorded
-before preparing a durable single source asset. Durable retrievable asset pins,
-all required rollback tuples, B17 budgets and item 11 transition approval remain
-gates. Preparation kits stay unpublished until root review.
+Rehearsal of one identical canonical archive passed Linux, macOS and Windows in
+run 38435902670 at preparation head
+`d909928c94f308550c7f584c12b6b42506c4c84c`. Each retained proof compares the
+same 3,290,128 source bytes and verifies installed version 0.3.0 before study
+data. The original artifact identity remains run 38394553441, artifact
+11811851297 and source `a1a9c2d216075f331ac108aa4d3638573f103cea`.
+
+Authorized draft retention releases now exist at those exact source revisions:
+Python release 411980272, tag `yamaa-py-reference-845a91ff`, and R release
+411979803, tag `yamaa-r-reference-a1a9c2d2`. Their source assets and fresh-install
+receipts are prepared for authenticated retrieval and byte comparison; they are
+unpublished. Durable retrievable study pins, all required rollback tuples, B17
+budgets and item 11 transition approval remain gates. Publication requires root
+review of the concrete asset identities and receipts.
