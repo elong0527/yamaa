@@ -6,20 +6,16 @@
       "names": [
         "DefineError",
         "DomainError",
-        "DomainRun",
-        "DomainRunError",
         "__version__",
         "check",
         "define",
         "domain",
-        "generate_study_document",
         "read_odm",
-        "write_odm_parquet",
-        "yamaa_domain"
+        "write_odm_parquet"
       ],
-      "disposition": "replace",
-      "issue": "#1751",
-      "rationale": "Replace legacy domain/result entry points with domain/check and the specified result contract; migrate generate_study_document to define under #1758.",
+      "disposition": "retain_candidate",
+      "issue": "#1994",
+      "rationale": "Approved native domain/check/define and error APIs, installed package metadata, and retained pure ODM IO helpers; legacy root facade removed in the gated cutover draft.",
       "overrides": {
         "__version__": {
           "disposition": "retain_candidate",
