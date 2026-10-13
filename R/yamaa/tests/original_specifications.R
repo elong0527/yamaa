@@ -1241,7 +1241,12 @@ dir.create(file.path(directory,"absent"))
 stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(file.path(directory,"absent/output.csv")),charToRaw("ID\n-9223372036854775808\n9223372036854775807\n")))
 refused <- yamaa_domain("absent.yaml",environment="absent-environment.yaml")
 stopifnot(is.null(domain_observations(refused)))
-stopifnot(is.null(refused$output),identical(refused$issues$condition,"engine_rejected"),identical(refused$issues,yamaa_check("absent.yaml",environment="absent-environment.yaml")$issues))
+stopifnot(is.null(refused$output),identical(refused$issues$phase,"validation"),
+  identical(refused$issues$condition,"project_environment_missing"),
+  identical(refused$issues$requirement,"REQ-0694"),identical(refused$issues$spec_paths,list("environment")),
+  identical(refused$issues$context,paste0('{"cause":"missing","path":',
+    json_text(file.path(normalizePath(getwd(),winslash="/"),"absent-environment.yaml")),'}')),
+  identical(refused$issues,yamaa_check("absent.yaml",environment="absent-environment.yaml")$issues))
 stopifnot(inherits(tryCatch(yamaa_domain(NULL),error=identity),"error"))
 for(path in c(strrep("x",65537L),strrep("\u00e9",32769L))) {
   refused <- yamaa_domain(path)
@@ -2108,6 +2113,52 @@ local({
     unlink(directory,recursive=TRUE)
   }
   cat("case predicates, branch filters and unchanged original CSV truth passed without Python\n")
+})
+
+local({
+  # Historical private truth is retained separately from the normative correction.
+  source(file.path(root,"case-predicate-dispositions.R"),local=TRUE)
+  for (name in names(case_predicate_dispositions)) {
+    disposition <- case_predicate_dispositions[[name]]
+    stopifnot(identical(disposition$classification,"historical_private_reference_defect"),
+      identical(disposition$requirement,"REQ-0148"),
+      identical(rawfile(file.path(root,"case-predicate-history",name,"expected.csv")),
+        charToRaw(disposition$historical_csv)))
+  }
+  for (label in c("source-selection","source-filter-scope","source-filter-mixed")) {
+  source(file.path(root,paste0(label,"-truth.R")),local=TRUE)
+  for (name in names(source_selection_truth)) for (attempt in seq_len(2L)) {
+    truth <- source_selection_truth[[name]]
+    directory <- tempfile("yamaa-source-selection-");dir.create(directory)
+    file.copy(list.files(file.path(root,paste0(label,"-cases"),truth$directory),full.names=TRUE),directory)
+    entry <- file.path(directory,"spec.yaml")
+    check_issue_frame(yamaa_check(entry)$issues,truth$check_issues)
+    result <- yamaa_domain(entry)
+    check_issue_frame(result$issues,truth$issues)
+    report <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+    check_handler_ledger(report,truth$handlers)
+    expected_reads <- paste0('"source_reads":',truth$source_reads)
+    stopifnot(grepl(expected_reads,report,fixed=TRUE),grepl('"artifacts":[]',report,fixed=TRUE))
+    if (!is.null(truth$columns)) {
+      stopifnot(identical(names(result$output),names(truth$columns)))
+      for (column in names(truth$columns)) {
+        actual <- result$output[[column]]
+        if (truth$kinds[[column]] == "int") stopifnot(inherits(actual,"yamaa_int64_vector"))
+        else stopifnot(is.character(actual))
+        stopifnot(identical(is.na(actual),is.na(truth$columns[[column]])),
+          identical(as.character(actual),truth$columns[[column]]))
+      }
+      stopifnot(identical(result$save(),TRUE),
+        identical(rawfile(file.path(directory,"result.csv")),rawfile(file.path(directory,"expected.csv"))))
+      writeBin(charToRaw("changed after build"),file.path(directory,"input.csv"))
+      stopifnot(identical(result$save(),TRUE),
+        identical(rawfile(file.path(directory,"result.csv")),rawfile(file.path(directory,"expected.csv"))))
+    } else stopifnot(is.null(result$output),
+      inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"result.csv")))
+    unlink(directory,recursive=TRUE)
+  }
+  }
+  cat("independent source selection, key-phase ordering, full int64 cells and retained bytes passed without Python\n")
 })
 
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))

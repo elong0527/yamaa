@@ -23,6 +23,7 @@ class RepositoryCatalog(unittest.TestCase):
     def test_reference_consumers_cannot_reenter_installed_qualification(self):
         for source in (
             "from yamaa.io.project import ProjectResources",
+            "from yamaa.io.odm import reference_walker",
             "from yamaa import yamaa_domain",
             "import yamaa.expressions.numeric as parser",
             "def lazy():\n    from yamaa.models import TypedColumn",

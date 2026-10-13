@@ -10,6 +10,21 @@ use crate::{
 use std::sync::Arc;
 use yamaa_core::project_function::Language;
 
+/// Repository metadata preparation uses the public application's declaring-only
+/// resource policy. Explicit extra roots remain a separate private development
+/// capability; the repository consumer supplies none and never retries a root.
+pub fn repository_resources(
+    project_root: &str,
+    base_directory: &str,
+    extra_roots: &[String],
+) -> Result<Resources, crate::file_resources::Error> {
+    if extra_roots.is_empty() {
+        Resources::for_entry(base_directory)
+    } else {
+        Resources::new(project_root, base_directory, extra_roots)
+    }
+}
+
 pub enum Error {
     Configuration(crate::file_configuration::Error),
     Schema(crate::specification_source::Error),
@@ -318,10 +333,31 @@ pub fn select_with_resources(
     environment_schema: Arc<CapturedSchema>,
     limits: Limits,
 ) -> Result<Selected, SelectionError> {
-    let (resources, environment, entry) = capture_environment(
+    select_with_optional_resources(
         resources,
         entry,
         Some(environment),
+        host,
+        specification_schema,
+        environment_schema,
+        limits,
+    )
+}
+
+pub fn select_with_optional_resources(
+    resources: Resources,
+    entry: &str,
+    environment: Option<&str>,
+    host: Language,
+    specification_schema: Arc<CapturedSchema>,
+    environment_schema: Arc<CapturedSchema>,
+    limits: Limits,
+) -> Result<Selected, SelectionError> {
+    let has_environment = environment.is_some();
+    let (resources, environment, entry) = capture_environment(
+        resources,
+        entry,
+        environment,
         host,
         Arc::clone(&specification_schema),
         environment_schema,
@@ -330,7 +366,7 @@ pub fn select_with_resources(
     .map_err(SelectionError::Preparation)?;
     let entry = FileGraph::capture_admitted_entry(resources, entry, environment)
         .map_err(|error| SelectionError::Preparation(Error::Graph(error)))?;
-    yamaa_engine::build::select(entry, true, &mut Metadata { host })
+    yamaa_engine::build::select(entry, has_environment, &mut Metadata { host })
 }
 
 fn capture_environment(

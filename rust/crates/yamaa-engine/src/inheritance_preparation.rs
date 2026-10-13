@@ -55,20 +55,31 @@ pub enum Error<E> {
 pub struct FailureContext<E> {
     pub error: E,
     pub input: Option<Document>,
+    pub provenance: Vec<LayerProvenance>,
+    pub sources: Vec<String>,
 }
 fn normalization_context(
     error: NormalizationError,
     input: &Document,
+    provenance: &[LayerProvenance],
+    layers: &[Layer],
 ) -> Box<FailureContext<NormalizationError>> {
     let retained = matches!(&error, NormalizationError::Invalid(_)).then(|| input.clone());
     Box::new(FailureContext {
         error,
         input: retained,
+        provenance: provenance.to_vec(),
+        sources: layers
+            .iter()
+            .map(|layer| layer.source.identity.clone())
+            .collect(),
     })
 }
 fn dependency_context(
     error: InheritanceDependencyError,
     input: &Document,
+    provenance: &[LayerProvenance],
+    layers: &[Layer],
 ) -> Box<FailureContext<InheritanceDependencyError>> {
     use yamaa_core::schema::InheritanceReferenceError;
     let retained = matches!(
@@ -82,6 +93,11 @@ fn dependency_context(
     Box::new(FailureContext {
         error,
         input: retained,
+        provenance: provenance.to_vec(),
+        sources: layers
+            .iter()
+            .map(|layer| layer.source.identity.clone())
+            .collect(),
     })
 }
 
@@ -201,17 +217,45 @@ pub fn prepare<P: PathPort>(
         .map_err(Error::Composition)?;
     let expanded = schema
         .expand_named_windows(&composed.document, false, normalization)
-        .map_err(|error| Error::Normalize(normalization_context(error, &composed.document)))?;
+        .map_err(|error| {
+            Error::Normalize(normalization_context(
+                error,
+                &composed.document,
+                &composed.provenance,
+                &layers,
+            ))
+        })?;
     let expanded_before_pruning = expanded.references.clone();
     let pruned = schema
         .resolve_inheritance_dependencies(&expanded.document, normalization)
-        .map_err(|error| Error::Dependencies(dependency_context(error, &expanded.document)))?;
+        .map_err(|error| {
+            Error::Dependencies(dependency_context(
+                error,
+                &expanded.document,
+                &composed.provenance,
+                &layers,
+            ))
+        })?;
     let normalized = schema
         .normalize_resolved_document(&pruned.document, normalization)
-        .map_err(|error| Error::Normalize(normalization_context(error, &pruned.document)))?;
+        .map_err(|error| {
+            Error::Normalize(normalization_context(
+                error,
+                &pruned.document,
+                &composed.provenance,
+                &layers,
+            ))
+        })?;
     let expanded = schema
         .expand_named_windows(&normalized.document, true, normalization)
-        .map_err(|error| Error::Normalize(normalization_context(error, &normalized.document)))?;
+        .map_err(|error| {
+            Error::Normalize(normalization_context(
+                error,
+                &normalized.document,
+                &composed.provenance,
+                &layers,
+            ))
+        })?;
     let origins = expanded
         .origins
         .iter()
@@ -229,4 +273,51 @@ pub fn prepare<P: PathPort>(
         expanded_before_pruning,
         windows: expanded.references,
     })
+}
+
+/// Borrow original contributor identities for human attribution only. Diagnostic
+/// facts and portable public context remain unchanged. Ownership of both the
+/// composed path index and layer identities stays with the rejected preparation.
+pub fn diagnostic_origins<E>(error: &Error<E>) -> Vec<(&str, &str)> {
+    fn origins<'a, T>(
+        context: &'a FailureContext<T>,
+        findings: &'a [SchemaDiagnostic],
+    ) -> Vec<(&'a str, &'a str)> {
+        findings
+            .iter()
+            .filter_map(|finding| {
+                let contribution = context
+                    .provenance
+                    .iter()
+                    .filter(|origin| {
+                        finding.path == origin.path
+                            || finding
+                                .path
+                                .strip_prefix(&origin.path)
+                                .is_some_and(|suffix| suffix.starts_with(['.', '[']))
+                    })
+                    .max_by_key(|origin| origin.path.len())?;
+                Some((
+                    finding.path.as_str(),
+                    context.sources.get(contribution.layer)?.as_str(),
+                ))
+            })
+            .collect()
+    }
+    match error {
+        Error::Normalize(context) => match &context.error {
+            NormalizationError::Invalid(findings) => origins(context, findings),
+            _ => Vec::new(),
+        },
+        Error::Dependencies(context) => match &context.error {
+            InheritanceDependencyError::Normalization(NormalizationError::Invalid(findings))
+            | InheritanceDependencyError::Reference(
+                yamaa_core::schema::InheritanceReferenceError::Normalization(
+                    NormalizationError::Invalid(findings),
+                ),
+            ) => origins(context, findings),
+            _ => Vec::new(),
+        },
+        _ => Vec::new(),
+    }
 }

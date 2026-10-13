@@ -95,6 +95,16 @@ impl Node {
     pub fn projection(&self) -> &[String] {
         self.compiled.projection()
     }
+    /// Authored source metadata remains tied to this sealed graph node.
+    pub fn sources(&self) -> &[crate::specification::SourceDeclaration] {
+        self.compiled.sources()
+    }
+    pub fn source_interpretation(
+        &self,
+        index: usize,
+    ) -> Option<crate::specification::SourceInterpretation> {
+        self.compiled.source_interpretation(index)
+    }
     pub fn called_functions(&self) -> &[usize] {
         self.compiled.called_functions()
     }
@@ -129,6 +139,35 @@ impl PreparedGraph {
     }
     pub fn environment(&self) -> &ExecutionEnvironment {
         &self.environment
+    }
+    /// Header/type-only binding over the complete retained graph. This never
+    /// releases a node compilation owner or accepts data or execution ports.
+    pub fn check_source_schemas(
+        &self,
+        schemas: &[Vec<TableSchema>],
+        maximum: usize,
+    ) -> Result<Vec<(usize, crate::diagnostic::Diagnostic)>, MetadataBindingError> {
+        if schemas.len() != self.nodes.len()
+            || schemas
+                .iter()
+                .zip(&self.nodes)
+                .any(|(schemas, node)| schemas.len() != node.compiled.sources().len())
+        {
+            return Err(MetadataBindingError::Identity);
+        }
+        let mut diagnostics = Vec::new();
+        for (index, (schemas, node)) in schemas.iter().zip(&self.nodes).enumerate() {
+            let schemas = schemas.iter().collect::<Vec<_>>();
+            let findings = node
+                .compiled
+                .metadata_source_findings(&schemas, maximum.saturating_sub(diagnostics.len()))
+                .map_err(|error| MetadataBindingError::Binding { node: index, error })?;
+            if findings.len() > maximum.saturating_sub(diagnostics.len()) {
+                return Err(MetadataBindingError::Limit);
+            }
+            diagnostics.extend(findings.into_iter().map(|finding| (index, finding)));
+        }
+        Ok(diagnostics)
     }
     /// Static findings borrow the complete sealed closure in canonical node
     /// order. No standalone compiled node or execution plan is exposed.
@@ -173,6 +212,17 @@ impl PreparedGraph {
                 .collect(),
         )
     }
+}
+
+#[derive(Debug)]
+pub enum MetadataBindingError {
+    Identity,
+    Limit,
+    Projection,
+    Binding {
+        node: usize,
+        error: crate::specification::BindError,
+    },
 }
 
 /// Whole-closure compilation ownership for the application engine. Construction

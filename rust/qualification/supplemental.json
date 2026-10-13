@@ -2,6 +2,22 @@
   "version": "1",
   "contracts": [
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/diagnostic_literal_truth.json",
+      "family": "diagnostics",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/src/test_diagnostic_truth.rs"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/check_invalid_regex_truth.json",
+      "family": "diagnostics",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/src/specification_check.rs"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_reads.tsv",
       "family": "odm",
       "level": "component",
@@ -307,6 +323,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
+        "python/tests/native/test_core_vectors.py",
         "rust/crates/yamaa-core/tests/arithmetic.rs",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
@@ -324,6 +341,7 @@
       "family": "types",
       "level": "component",
       "consumers": [
+        "python/tests/native/test_core_conversion_vectors.py",
         "rust/crates/yamaa-core/tests/conversion.rs"
       ]
     },
@@ -332,6 +350,7 @@
       "family": "dependencies",
       "level": "component",
       "consumers": [
+        "python/tests/planning/test_dependencies.py",
         "rust/crates/yamaa-core/tests/dependency_analysis.rs"
       ]
     },
@@ -340,6 +359,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
+        "python/tests/native/test_core_evaluation_vectors.py",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
     },
@@ -348,6 +368,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
+        "python/tests/native/test_core_evaluation_vectors.py",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
     },
@@ -356,6 +377,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
+        "python/tests/native/test_core_numeric_literal_vectors.py",
         "rust/crates/yamaa-core/tests/numeric_compiler.rs"
       ]
     },
@@ -364,6 +386,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
+        "python/tests/native/test_core_evaluation_vectors.py",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
     },
@@ -372,6 +395,8 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
+        "python/tests/expressions/test_rounding_reference.py",
+        "python/tests/native/test_core_evaluation_vectors.py",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
     },
@@ -380,6 +405,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
+        "python/tests/native/test_core_evaluation_vectors.py",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
     },
@@ -388,6 +414,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
+        "python/tests/native/test_core_evaluation_vectors.py",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
     },
@@ -396,6 +423,7 @@
       "family": "predicate",
       "level": "component",
       "consumers": [
+        "python/tests/native/test_predicate_reference.py",
         "rust/crates/yamaa-core/tests/predicate.rs"
       ]
     },
@@ -404,6 +432,7 @@
       "family": "aggregates",
       "level": "component",
       "consumers": [
+        "python/tests/native/test_reduction_contract.py",
         "rust/crates/yamaa-core/tests/reduction.rs"
       ]
     },
@@ -420,6 +449,7 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
+        "python/tests/native/test_numeric_lifecycle_vectors.py",
         "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs"
       ]
     },
@@ -468,6 +498,7 @@
       "family": "specification",
       "level": "compile",
       "consumers": [
+        "python/tests/native/test_original_specification_truth.py",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
@@ -478,6 +509,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
+        "python/tests/native/test_original_specification_truth.py",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
@@ -487,6 +519,7 @@
       "family": "specification",
       "level": "compile",
       "consumers": [
+        "python/tests/native/test_original_specification_truth.py",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
@@ -497,6 +530,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
+        "python/tests/native/test_original_specification_truth.py",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
@@ -955,19 +989,47 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/diagnostic_literal_truth.json",
-      "family": "diagnostics",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_selection.json",
+      "family": "lookup",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/src/test_diagnostic_truth.rs"
+        "rust/crates/yamaa-adapters/tests/declarative_source_selection.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/check_invalid_regex_truth.json",
-      "family": "diagnostics",
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json",
+      "family": "lookup",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/src/specification_check.rs"
+        "rust/crates/yamaa-adapters/tests/declarative_source_selection.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_filter_mixed.json",
+      "family": "lookup",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_source_selection.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/case_predicate_dispositions.json",
+      "family": "predicate",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_case_predicates.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
       ]
     }
   ],
@@ -1033,7 +1095,7 @@
       "runtime": "python",
       "path": "rust/tests/installed_file_resources.py",
       "staged_path": "installed_file_resources.py",
-      "level": "shared_run"
+      "level": "compile"
     },
     {
       "id": "python/public-environment",
@@ -1141,18 +1203,18 @@
       "level": "shared_run"
     },
     {
-      "id": "python/retained-odm-helpers",
-      "runtime": "python",
-      "path": "rust/tests/installed_odm_helpers.py",
-      "staged_path": "installed_odm_helpers.py",
-      "level": "component"
-    },
-    {
       "id": "r/public-file-resources",
       "runtime": "r",
       "path": "R/yamaa/tests/public_file_resources.R",
       "staged_path": "public_file_resources.R",
       "level": "shared_run"
+    },
+    {
+      "id": "python/retained-odm-helpers",
+      "runtime": "python",
+      "path": "rust/tests/installed_odm_helpers.py",
+      "staged_path": "installed_odm_helpers.py",
+      "level": "component"
     }
   ],
   "support_files": [

@@ -20,9 +20,12 @@ import yaml
 # Editorial validators live in editorial.py; re-exported here so existing
 # `from validate_repository import ...` call sites keep working.
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # noqa: E402
-import _reference_checks  # noqa: E402
+import _native_parquet  # noqa: E402
+import _native_odm  # noqa: E402
+import _typed_fixtures  # noqa: E402
 import _native_csv  # noqa: E402
 import _native_regex  # noqa: E402
+import _native_specification  # noqa: E402
 from editorial import (  # noqa: E402
     ASCII_SOURCE_IGNORED_PARTS,
     ASCII_SOURCE_NAMES,
@@ -493,37 +496,39 @@ class PredicateSemanticIssue(str):
         return value
 
 
-# R004's closed vocabulary. `yaml/grammar/predicate.yaml` is its single
-# source, and validate_grammar_contracts fails when the two drift apart.
-# The parser itself is the runtime's: `yamaa.expressions.predicates` already
-# returns this validator's AST shape, so this file owns no second grammar.
-# The import is lazy (see the regex binding note above): importing the yamaa
-# package pulls in polars, which this module only needs when it actually
-# parses a predicate.
-PREDICATE_COMPARISON_OPERATORS = None
-PREDICATE_RESERVED_NAMES = None
-PredicateError = None
-parse_predicate = None
+# Independent closed-vocabulary truth used by grammar and naming controls.
+PREDICATE_COMPARISON_OPERATORS = ("=", "<>", "<", "<=", ">", ">=")
+PREDICATE_RESERVED_NAMES = frozenset({
+    "AND", "BETWEEN", "DATE", "DATETIME", "ESCAPE", "FALSE", "IN", "IS",
+    "LIKE", "NOT", "NULL", "OR", "TRUE",
+})
+
+
+class PredicateError(ValueError):
+    condition = "invalid_predicate"
+
+    def __init__(self, message, position, requirement="REQ-0188"):
+        self.position = position
+        self.requirement = requirement
+        super().__init__(f"{message} at character {position + 1}")
+
+
+def parse_predicate(text):
+    if not isinstance(text, str) or not text:
+        raise PredicateError("predicate must be a non-empty string", 0)
+    outcome = _typed_fixtures.observe("predicate", text)
+    if outcome["status"] == "parsed":
+        return outcome["ast"]
+    if outcome["status"] == "invalid":
+        raise PredicateError(
+            outcome["message"], outcome["position"]["character"],
+            outcome["requirement"],
+        )
+    raise RuntimeError(f"typed predicate fixture refused: {outcome!r}")
 
 
 def _ensure_predicate_binding():
-    """Import yamaa.expressions.predicates on first use, or exit when unavailable."""
-    global PREDICATE_COMPARISON_OPERATORS, PREDICATE_RESERVED_NAMES
-    global PredicateError, parse_predicate
-    if parse_predicate is None:
-        try:
-            (
-                comparison_operators, reserved_names, predicate_error, parse,
-            ) = _reference_checks.predicate_binding()
-        except ImportError as error:
-            raise SystemExit(
-                "validate_repository.py requires the yamaa package "
-                "(run: uv sync --project python --locked)"
-            ) from error
-        PREDICATE_COMPARISON_OPERATORS = comparison_operators
-        PREDICATE_RESERVED_NAMES = reserved_names
-        PredicateError = predicate_error
-        parse_predicate = parse
+    """The development fixture is resolved only when an assertion needs it."""
 
 
 def predicate_operand_type(operand, resolver, errors):
@@ -704,255 +709,26 @@ PROHIBITED_NUMERIC_KEYWORDS = {
 }
 
 
-def tokenize_numeric_expression(text):
-    """Tokenize the closed R010 scalar numeric language."""
-    tokens = []
-    index = 0
-    length = len(text)
-    while index < length:
-        char = text[index]
-        if char.isspace():
-            index += 1
-            continue
-
-        number = re.match(
-            r'[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?',
-            text[index:],
-        )
-        if number is not None:
-            value = number.group(0)
-            end = index + len(value)
-            tokens.append(('NUMBER', value, index, end))
-            index = end
-            continue
-
-        name = re.match(r'[A-Za-z_][A-Za-z0-9_]*', text[index:])
-        if name is not None:
-            value = name.group(0)
-            end = index + len(value)
-            if end < length and text[end] == '.':
-                suffix = re.match(
-                    r'[A-Za-z_][A-Za-z0-9_]*', text[end + 1:]
-                )
-                if suffix is None:
-                    raise NumericExpressionError(
-                        'invalid qualified identifier', index, end + 1
-                    )
-                value += '.' + suffix.group(0)
-                end += 1 + len(suffix.group(0))
-            construct = PROHIBITED_NUMERIC_KEYWORDS.get(value.upper())
-            if '.' not in value and construct is not None:
-                raise NumericExpressionError(
-                    f'{construct} construct is not permitted in a '
-                    'numeric expression',
-                    index,
-                    end,
-                    condition='prohibited_construct',
-                    context={'construct': construct},
-                )
-            tokens.append(('NAME', value, index, end))
-            index = end
-            continue
-
-        token_kinds = {
-            '+': 'PLUS',
-            '-': 'MINUS',
-            '*': 'STAR',
-            '/': 'SLASH',
-            '(': 'LPAREN',
-            ')': 'RPAREN',
-            ',': 'COMMA',
-        }
-        if char in token_kinds:
-            tokens.append((token_kinds[char], char, index, index + 1))
-            index += 1
-            continue
-
-        if char in "<>=!":
-            end = index + 1
-            if end < length and text[end] == '=':
-                end += 1
-            raise NumericExpressionError(
-                'comparison is not permitted in a numeric expression',
-                index,
-                end,
-                condition='prohibited_construct',
-                context={'construct': 'comparison'},
-            )
-        if char == "'":
-            end = index + 1
-            while end < length:
-                if text[end] != "'":
-                    end += 1
-                    continue
-                if end + 1 < length and text[end + 1] == "'":
-                    end += 2
-                    continue
-                end += 1
-                break
-            raise NumericExpressionError(
-                'string literals are not permitted in a numeric expression',
-                index,
-                end,
-                condition='prohibited_construct',
-                context={'construct': 'string'},
-            )
-        raise NumericExpressionError(
-            f"unexpected character {char!r}", index, index + 1
-        )
-
-    tokens.append(('EOF', '', length, length))
-    return tokens
-
-
-class NumericExpressionParser:
-    def __init__(self, text):
-        self.text = text
-        self.tokens = tokenize_numeric_expression(text)
-        self.index = 0
-
-    @property
-    def token(self):
-        return self.tokens[self.index]
-
-    def advance(self):
-        token = self.token
-        self.index += 1
-        return token
-
-    def require(self, kind, message):
-        if self.token[0] != kind:
-            raise NumericExpressionError(
-                message, self.token[2], self.token[3]
-            )
-        return self.advance()
-
-    def parse(self):
-        node = self.parse_expression()
-        if self.token[0] != 'EOF':
-            raise NumericExpressionError(
-                'unexpected trailing token', self.token[2], self.token[3]
-            )
-        return node
-
-    def parse_expression(self):
-        node = self.parse_term()
-        while self.token[0] in {'PLUS', 'MINUS'}:
-            operator = self.advance()
-            right = self.parse_term()
-            node = {
-                'kind': 'binary',
-                'operator': operator[1],
-                'left': node,
-                'right': right,
-                'operator_span': (operator[2], operator[3]),
-                'span': (node['span'][0], right['span'][1]),
-            }
-        return node
-
-    def parse_term(self):
-        node = self.parse_factor()
-        while self.token[0] in {'STAR', 'SLASH'}:
-            operator = self.advance()
-            right = self.parse_factor()
-            node = {
-                'kind': 'binary',
-                'operator': operator[1],
-                'left': node,
-                'right': right,
-                'operator_span': (operator[2], operator[3]),
-                'span': (node['span'][0], right['span'][1]),
-            }
-        return node
-
-    def parse_factor(self):
-        if self.token[0] in {'PLUS', 'MINUS'}:
-            operator = self.advance()
-            value = self.parse_primary()
-            return {
-                'kind': 'unary',
-                'operator': operator[1],
-                'value': value,
-                'operator_span': (operator[2], operator[3]),
-                'span': (operator[2], value['span'][1]),
-            }
-        return self.parse_primary()
-
-    def parse_primary(self):
-        token = self.token
-        if token[0] == 'NUMBER':
-            self.advance()
-            value_type = (
-                'float'
-                if '.' in token[1] or 'e' in token[1].lower()
-                else 'int'
-            )
-            return {
-                'kind': 'number',
-                'type': value_type,
-                'value': token[1],
-                'span': (token[2], token[3]),
-            }
-        if token[0] == 'NAME':
-            self.advance()
-            keyword = token[1].upper()
-            if self.token[0] != 'LPAREN':
-                if keyword == 'NULL':
-                    return {
-                        'kind': 'null',
-                        'span': (token[2], token[3]),
-                    }
-                if keyword in PROHIBITED_NUMERIC_KEYWORDS:
-                    construct = PROHIBITED_NUMERIC_KEYWORDS[keyword]
-                    raise NumericExpressionError(
-                        f'{construct} construct is not permitted in a '
-                        'numeric expression',
-                        token[2],
-                        token[3],
-                        condition='prohibited_construct',
-                        context={'construct': construct},
-                    )
-                return {
-                    'kind': 'identifier',
-                    'name': token[1],
-                    'span': (token[2], token[3]),
-                }
-
-            self.advance()
-            arguments = []
-            if self.token[0] != 'RPAREN':
-                arguments.append(self.parse_expression())
-                while self.token[0] == 'COMMA':
-                    self.advance()
-                    arguments.append(self.parse_expression())
-            close = self.require('RPAREN', "expected ')' to close function")
-            return {
-                'kind': 'call',
-                'name': token[1],
-                'arguments': arguments,
-                'name_span': (token[2], token[3]),
-                'span': (token[2], close[3]),
-            }
-        if token[0] == 'LPAREN':
-            open_token = self.advance()
-            node = self.parse_expression()
-            close = self.require('RPAREN', "expected ')' to close expression")
-            node = dict(node)
-            node['span'] = (open_token[2], close[3])
-            return node
-        raise NumericExpressionError(
-            'expected a number, identifier, function, NULL, or parenthesis',
-            token[2],
-            token[3],
-        )
+def _expression_fixture(contract, text, error_type):
+    if not isinstance(text, str) or not text:
+        raise error_type(f"{contract} expression must be a non-empty string", 0, 0)
+    outcome = _typed_fixtures.observe(contract, text)
+    if outcome["status"] == "parsed":
+        return _typed_fixtures.spans(outcome["ast"])
+    if outcome["status"] != "invalid":
+        raise RuntimeError(f"typed {contract} fixture refused: {outcome!r}")
+    context = outcome["context"]
+    start = outcome["position"]["character"]
+    end = start + len(context["function"]) if "function" in context else min(start + 1, len(text))
+    start, end = outcome.get("span", [start, end])
+    raise error_type(
+        outcome["condition"].replace("_", " "), start, end,
+        condition=outcome["condition"], context=context,
+    )
 
 
 def parse_numeric_expression(text):
-    if not isinstance(text, str) or not text:
-        raise NumericExpressionError(
-            'numeric expression must be a non-empty string', 0, 0
-        )
-    return NumericExpressionParser(text).parse()
+    return _expression_fixture("numeric", text, NumericExpressionError)
 
 
 class AggregateExpressionError(NumericExpressionError):
@@ -979,220 +755,8 @@ class AggregateExpressionError(NumericExpressionError):
 AGGREGATE_REDUCERS = {'SUM', 'COUNT', 'MIN', 'MAX', 'MEAN', 'ONLY'}
 
 
-def tokenize_aggregate_expression(text):
-    """Tokenize the closed R013 aggregate language."""
-    tokens = []
-    index = 0
-    length = len(text)
-    while index < length:
-        char = text[index]
-        if char.isspace():
-            index += 1
-            continue
-
-        number = re.match(
-            r'[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?',
-            text[index:],
-        )
-        if number is not None:
-            value = number.group(0)
-            end = index + len(value)
-            tokens.append(('NUMBER', value, index, end))
-            index = end
-            continue
-
-        name = re.match(r'[A-Za-z_][A-Za-z0-9_]*', text[index:])
-        if name is not None:
-            value = name.group(0)
-            end = index + len(value)
-            kind = 'NAME'
-            if end < length and text[end] == '.':
-                if end + 1 < length and text[end + 1] == '*':
-                    value += '.*'
-                    end += 2
-                    kind = 'QUALIFIED_STAR'
-                else:
-                    suffix = re.match(
-                        r'[A-Za-z_][A-Za-z0-9_]*', text[end + 1:]
-                    )
-                    if suffix is None:
-                        raise AggregateExpressionError(
-                            'invalid qualified identifier', index, end + 1
-                        )
-                    value += '.' + suffix.group(0)
-                    end += 1 + len(suffix.group(0))
-            construct = PROHIBITED_NUMERIC_KEYWORDS.get(value.upper())
-            if '.' not in value and construct is not None:
-                raise AggregateExpressionError(
-                    f'{construct} construct is not permitted in an '
-                    'aggregate expression',
-                    index,
-                    end,
-                    condition='prohibited_construct',
-                    context={'construct': construct},
-                )
-            tokens.append((kind, value, index, end))
-            index = end
-            continue
-
-        token_kinds = {
-            '+': 'PLUS',
-            '-': 'MINUS',
-            '*': 'STAR',
-            '/': 'SLASH',
-            '(': 'LPAREN',
-            ')': 'RPAREN',
-            ',': 'COMMA',
-        }
-        if char in token_kinds:
-            tokens.append((token_kinds[char], char, index, index + 1))
-            index += 1
-            continue
-        if char in '<>=!':
-            end = index + 1
-            if end < length and text[end] == '=':
-                end += 1
-            raise AggregateExpressionError(
-                'comparison is not permitted in an aggregate expression',
-                index,
-                end,
-                condition='prohibited_construct',
-                context={'construct': 'comparison'},
-            )
-        if char == "'":
-            end = index + 1
-            while end < length:
-                if text[end] != "'":
-                    end += 1
-                    continue
-                if end + 1 < length and text[end + 1] == "'":
-                    end += 2
-                    continue
-                end += 1
-                break
-            raise AggregateExpressionError(
-                'string literals are not permitted in an aggregate expression',
-                index,
-                end,
-                condition='prohibited_construct',
-                context={'construct': 'string'},
-            )
-        raise AggregateExpressionError(
-            f"unexpected character {char!r}", index, index + 1
-        )
-    tokens.append(('EOF', '', length, length))
-    return tokens
-
-
-class AggregateExpressionParser(NumericExpressionParser):
-    def __init__(self, text):
-        self.text = text
-        self.tokens = tokenize_aggregate_expression(text)
-        self.index = 0
-
-    def require(self, kind, message):
-        if self.token[0] != kind:
-            raise AggregateExpressionError(
-                message, self.token[2], self.token[3]
-            )
-        return self.advance()
-
-    def parse(self):
-        node = self.parse_expression()
-        if self.token[0] != 'EOF':
-            raise AggregateExpressionError(
-                'unexpected trailing token', self.token[2], self.token[3]
-            )
-        return node
-
-    def parse_primary(self):
-        token = self.token
-        if token[0] == 'NUMBER':
-            self.advance()
-            return {
-                'kind': 'number',
-                'type': (
-                    'float'
-                    if '.' in token[1] or 'e' in token[1].lower()
-                    else 'int'
-                ),
-                'value': token[1],
-                'span': (token[2], token[3]),
-            }
-        if token[0] == 'NAME':
-            self.advance()
-            keyword = token[1].upper()
-            if self.token[0] != 'LPAREN':
-                if keyword == 'NULL':
-                    return {'kind': 'null', 'span': (token[2], token[3])}
-                return {
-                    'kind': 'identifier',
-                    'name': token[1],
-                    'span': (token[2], token[3]),
-                }
-
-            self.advance()
-            if keyword in AGGREGATE_REDUCERS:
-                if self.token[0] == 'QUALIFIED_STAR':
-                    star = self.advance()
-                    argument = {
-                        'kind': 'qualified_star',
-                        'dataset': star[1][:-2],
-                        'span': (star[2], star[3]),
-                    }
-                else:
-                    argument = self.parse_expression()
-                close = self.require(
-                    'RPAREN', "expected ')' to close reducer"
-                )
-                return {
-                    'kind': 'reduction',
-                    'name': token[1],
-                    'argument': argument,
-                    'name_span': (token[2], token[3]),
-                    'span': (token[2], close[3]),
-                }
-
-            arguments = []
-            if self.token[0] != 'RPAREN':
-                arguments.append(self.parse_expression())
-                while self.token[0] == 'COMMA':
-                    self.advance()
-                    arguments.append(self.parse_expression())
-            close = self.require('RPAREN', "expected ')' to close function")
-            return {
-                'kind': 'call',
-                'name': token[1],
-                'arguments': arguments,
-                'name_span': (token[2], token[3]),
-                'span': (token[2], close[3]),
-            }
-        if token[0] == 'LPAREN':
-            open_token = self.advance()
-            node = dict(self.parse_expression())
-            close = self.require('RPAREN', "expected ')' to close expression")
-            node['span'] = (open_token[2], close[3])
-            return node
-        if token[0] == 'QUALIFIED_STAR':
-            raise AggregateExpressionError(
-                'qualified star is valid only as COUNT argument',
-                token[2],
-                token[3],
-            )
-        raise AggregateExpressionError(
-            'expected a number, identifier, reducer, function, NULL, or '
-            'parenthesis',
-            token[2],
-            token[3],
-        )
-
-
 def parse_aggregate_expression(text):
-    if not isinstance(text, str) or not text:
-        raise AggregateExpressionError(
-            'aggregate expression must be a non-empty string', 0, 0
-        )
-    return AggregateExpressionParser(text).parse()
+    return _expression_fixture("aggregate", text, AggregateExpressionError)
 
 
 def promote_numeric_types(types):
@@ -2970,80 +2534,23 @@ class StringTemplateError(ValueError):
 
 
 def parse_string_template(text):
-    """Parse R012 and return its literal text and placeholder parts.
-
-    A part is the unit the grammar scans: a `text` part carries the literal
-    value a brace pair already unescaped, and a `placeholder` part carries
-    the name it binds. Callers that only need the bindings use
-    string_template_placeholders.
-    """
     if not isinstance(text, str):
         raise StringTemplateError(
-            'string template must be a string', 0, 0, 'invalid_template'
+            "string template must be a string", 0, 0, "invalid_template"
         )
-    parts = []
-    literal = []
-    literal_start = 0
-
-    def flush(end):
-        if literal:
-            parts.append({
-                'kind': 'text',
-                'value': ''.join(literal),
-                'span': (literal_start, end),
-            })
-            literal.clear()
-
-    index = 0
-    while index < len(text):
-        if text.startswith('{{', index) or text.startswith('}}', index):
-            if not literal:
-                literal_start = index
-            literal.append(text[index])
-            index += 2
-            continue
-        if text[index] == '}':
-            raise StringTemplateError(
-                'unmatched closing brace',
-                index,
-                index + 1,
-                'unmatched_brace',
-            )
-        if text[index] != '{':
-            if not literal:
-                literal_start = index
-            literal.append(text[index])
-            index += 1
-            continue
-        end = text.find('}', index + 1)
-        if end < 0:
-            raise StringTemplateError(
-                'unmatched opening brace',
-                index,
-                len(text),
-                'unmatched_brace',
-            )
-        placeholder = text[index + 1:end]
-        if '{' in placeholder or re.fullmatch(
-            r'[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*',
-            placeholder,
-        ) is None:
-            raise StringTemplateError(
-                f"invalid placeholder {placeholder!r}",
-                index,
-                end + 1,
-                'invalid_placeholder',
-                placeholder,
-            )
-        flush(index)
-        parts.append({
-            'kind': 'placeholder',
-            'name': placeholder,
-            'span': (index + 1, end),
-        })
-        index = end + 1
-    flush(len(text))
-    return parts
+    outcome = _typed_fixtures.observe("string-template", text)
+    if outcome["status"] == "parsed":
+        return _typed_fixtures.spans(outcome["parts"])
+    if outcome["status"] != "invalid":
+        raise RuntimeError(f"typed template fixture refused: {outcome!r}")
+    facts = outcome["context"]
+    span = outcome["span"]
+    reason = facts["reason"]
+    placeholder = facts.get("placeholder")
+    raise StringTemplateError(
+        f"invalid placeholder {placeholder!r}" if placeholder is not None else "unmatched brace",
+        span["character_start"], span["character_end"], reason, placeholder,
+    )
 
 
 def string_template_placeholders(text):
@@ -3737,30 +3244,29 @@ def order_resolved_spec_fields(spec, env):
 
 
 def expand_spec_windows(spec, env, strict=True, provenance=None, label=""):
-    expand_named_windows, SpecificationError, SchemaBundle = (
-        _reference_checks.window_binding()
+    """Replay named-window fixture truth through the shipped typed schema."""
+    outcome = _typed_fixtures.observe(
+        "windows", yaml.safe_dump(spec, allow_unicode=False), strict=strict
     )
-
-    bundle = SchemaBundle(
-        version=env.get('version', '1.0'),
-        path=Path(env.get('root', '.')) / 'yaml' / 'schema.yaml',
-        classes=env.get('classes', {}),
-        aliases=env.get('aliases', {}),
-        registries=env.get('registries', {}),
-    )
-    try:
-        return expand_named_windows(
-            spec, bundle, strict=strict, provenance=provenance
-        ), []
-    except SpecificationError as error:
+    if outcome["status"] == "expanded":
+        if provenance is not None:
+            updates = dict(provenance)
+            for logical, definition in outcome["references"]:
+                prefix = f"windows.{definition}"
+                for source_path, origin in list(updates.items()):
+                    if source_path.startswith(prefix + "."):
+                        updates[logical + source_path[len(prefix):]] = origin
+            provenance.update(updates)
+        return outcome["document"], []
+    if outcome["status"] == "invalid":
         return spec, [
             validation_diagnostic(
-                f"{label}.{item.spec_paths[0]}" if label else item.spec_paths[0],
-                item.condition, item.condition,
-                context=item.context,
+                f"{label}.{item['path']}" if label else item['path'],
+                item['condition'], item['condition'], context=item['context'],
             )
-            for item in error.diagnostics
+            for item in outcome["diagnostics"]
         ]
+    raise RuntimeError(f"typed window fixture refused: {outcome!r}")
 
 
 def finalize_resolved_inheritance(spec, env, provenance=None, label=""):
@@ -4890,7 +4396,7 @@ def validate_spec_contracts(
                         names = []  # The CSV profile pass reports invalid bytes.
                 else:
                     parquet_source_fields, ParquetProfileFailure = (
-                        _reference_checks.parquet_binding()
+                        (_native_parquet.parquet_source_fields, _native_parquet.ParquetProfileFailure)
                     )
 
                     try:
@@ -5040,16 +4546,33 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
             except (OSError, UnicodeError, csv.Error):
                 header = None
 
+        if (
+            isinstance(source_path, str)
+            and spec_path is not None
+            and source_path.lower().endswith('.parquet')
+            and classify_written_project_path(source_path) is None
+            and rooted_project_segments(source_path) is None
+        ):
+            resolved = (sources or {}).get((dataset_id, 'path')) or (
+                spec_path.parent / source_path
+            )
+            parquet_source_fields, ParquetProfileFailure = (
+                (_native_parquet.parquet_source_fields, _native_parquet.ParquetProfileFailure)
+            )
+            try:
+                _, admitted = parquet_source_fields(Path(resolved).read_bytes())
+                fields.update(admitted)
+                header = [name for name, _kind in admitted]
+            except (OSError, ParquetProfileFailure):
+                # Full native source admission reports invalid profiles.
+                header = None
+
         if dataset_id in odm_datasets:
             # REQ-1266/REQ-1267: an ODM input exposes its schema fields, bound
             # without regard to case, as text; a vendor field is not read. A
             # header this check cannot read is taken to carry the schema,
             # which ingestion verifies against the file itself.
-            bound = (
-                bind_odm_fields(header).stored
-                if header is not None
-                else ODM_SCHEMA_FIELDS
-            )
+            bound = dict(_native_odm.observe(spec, spec_path, sources).get('catalog', {}).get(dataset_id, []))
             catalog[dataset_id] = {field: 'str' for field in bound}
             continue
 
@@ -5068,200 +4591,33 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
     return catalog
 
 
-# REQ-1265..REQ-1278's fixed ODM schema, its case-folding name binding, the
-# walk that finds an `odm` read, and the read's payload are the runtime's
-# own (`yamaa.odm.items`), so this file owns no second copy of the binding
-# rules. The import is lazy for the reason the predicate binding gives.
+# Independent partial ODM controls consume native declaration/header facts.
 ODM_SCHEMA_FIELDS = None
-bind_odm_fields = None
-iter_odm_payloads = None
-parse_odm_read = None
 
 
 def _ensure_odm_binding():
-    """Import yamaa.odm.items on first use, or exit when unavailable."""
-    global ODM_SCHEMA_FIELDS, bind_odm_fields, iter_odm_payloads, parse_odm_read
-    if parse_odm_read is None:
-        try:
-            schema_fields, bind_fields, iter_payloads, parse_read = (
-                _reference_checks.odm_binding()
-            )
-        except ImportError as error:
-            raise SystemExit(
-                "validate_repository.py requires the yamaa package "
-                "(run: uv sync --project python --locked)"
-            ) from error
-        ODM_SCHEMA_FIELDS = schema_fields
-        bind_odm_fields = bind_fields
-        iter_odm_payloads = iter_payloads
-        parse_odm_read = parse_read
-
-
-def odm_read_sites(spec):
-    """Return (path, location, row_index, column_name, read) for ODM reads."""
-    _ensure_odm_binding()
-    sites = []
-
-    def add(derivation, path, location, row=None, column_name=None):
-        for read_path, payload, derive in iter_odm_payloads(derivation, path):
-            read = parse_odm_read(payload)
-            if read is not None:
-                sites.append(
-                    (
-                        read_path,
-                        'derive' if derive else location,
-                        row,
-                        column_name,
-                        read,
-                    )
-                )
-
-    for column in spec.get('columns') or []:
-        if isinstance(column, dict) and 'derivation' in column:
-            add(
-                column['derivation'],
-                f"columns.{column.get('name')}.derivation",
-                'column',
-                column_name=column.get('name'),
-            )
-    for index, row in enumerate(spec.get('rows') or []):
-        if isinstance(row, dict) and isinstance(row.get('derivations'), dict):
-            for name, derivation in row['derivations'].items():
-                add(derivation, f"rows[{index}].derivations.{name}", 'row', index)
-    for index, intermediate in enumerate(spec.get('intermediates') or []):
-        if isinstance(intermediate, dict) and isinstance(
-            intermediate.get('derivations'), dict
-        ):
-            for name, derivation in intermediate['derivations'].items():
-                add(
-                    derivation,
-                    f"intermediates[{index}].derivations.{name}",
-                    'intermediate',
-                )
-    return sites
+    global ODM_SCHEMA_FIELDS
+    if ODM_SCHEMA_FIELDS is None:
+        ODM_SCHEMA_FIELDS = _native_odm.fields()
 
 
 def odm_inputs(spec):
-    """Return the declared inputs an `odm` read names (REQ-1266)."""
-    declared = spec.get('input')
-    if not isinstance(declared, dict):
-        return frozenset()
-    return frozenset(
-        read.dataset
-        for _, _, _, _, read in odm_read_sites(spec)
-        if read.dataset in declared
-    )
+    _ensure_odm_binding()
+    return _native_odm.inputs(_native_odm.observe(spec))
 
 
 def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
-    """Check every `odm` read and the ODM inputs it names (REQ-1265..1278)."""
-    errors = []
-    datasets = spec.get('input')
-    if not isinstance(datasets, dict):
-        return errors
-    rows = [row for row in spec.get('rows') or [] if isinstance(row, dict)]
-    only = next(iter(datasets)) if len(datasets) == 1 else None
-
-    def driver(row):
-        dataset = row.get('dataset')
-        return dataset if isinstance(dataset, str) else only
-
-    for path, location, row_index, column_name, read in odm_read_sites(spec):
-        dataset, item, selector = read.dataset, read.item, read.filter
-        if dataset not in datasets:
-            errors.append(validation_diagnostic(
-                f"{spec_label}.{path}.item",
-                'unknown_field',
-                f"{item!r} names no declared input",
-                context={'identifier': item},
-            ))
-            continue
-        # REQ-1270: only a row built from the ODM input has a scope.
-        if location in ('intermediate', 'derive'):
-            scoped = False
-        elif location == 'row':
-            scoped = row_index < len(rows) and driver(rows[row_index]) == dataset
-        elif rows:
-            scoped = all(
-                driver(row) == dataset
-                for row in rows
-                if column_name not in (row.get('derivations') or {})
-            )
-        else:
-            base = spec.get('base')
-            scoped = (base if isinstance(base, str) else only) == dataset
-        if not scoped:
-            errors.append(validation_diagnostic(
-                f"{spec_label}.{path}",
-                'invalid_odm_context',
-                f"no row this read evaluates for is built from {dataset!r}",
-                context={'dataset': dataset, 'location': location},
-            ))
-        # REQ-1271: a filter names only schema fields of the ODM input.
-        if selector is not None:
-            for name in sorted(predicate_identifier_names(selector)):
-                qualifier, _, field = name.partition('.')
-                if qualifier != dataset or field not in ODM_SCHEMA_FIELDS:
-                    errors.append(validation_diagnostic(
-                        f"{spec_label}.{path}.filter",
-                        'unknown_field',
-                        f"{name!r} is not a field of the ODM input {dataset!r}",
-                        context={'identifier': name, 'dataset': dataset},
-                    ))
-
-    for dataset in sorted(odm_inputs(spec)):
-        source = datasets[dataset]
-        declared = (
-            next((key for key in ('types', 'schema', 'ordinal') if key in source), None)
-            if isinstance(source, dict)
-            else None
+    """Retain the independent ODM partial controls through typed core facts."""
+    _ensure_odm_binding()
+    observation = _native_odm.observe(spec, spec_path, sources)
+    return [
+        validation_diagnostic(
+            f"{spec_label}.{path}", issue['condition'],
+            issue['condition'], context=issue['context'],
         )
-        if declared is not None:
-            # REQ-1268: an ODM input's types are its schema's.
-            errors.append(validation_diagnostic(
-                f"{spec_label}.input.{dataset}.{declared}",
-                'odm_schema_field_type',
-                f"an ODM input declares no {declared}",
-                context={'dataset': dataset, 'declared': declared},
-            ))
-            continue
-        written = source if isinstance(source, str) else (
-            source.get('path') if isinstance(source, dict) else None
-        )
-        if (
-            not isinstance(written, str)
-            or spec_path is None
-            or not written.lower().endswith('.csv')
-            or classify_written_project_path(written) is not None
-            or rooted_project_segments(written) is not None
-        ):
-            continue
-        resolved = (sources or {}).get((dataset, 'path')) or (
-            spec_path.parent / written
-        )
-        try:
-            with open(resolved, 'r', encoding='utf-8', newline='') as handle:
-                header = next(csv.reader(handle, strict=True), [])
-        except (OSError, UnicodeError, csv.Error):
-            continue
-        binding = bind_odm_fields(header)
-        missing = list(binding.missing)
-        if missing:
-            errors.append(validation_diagnostic(
-                f"{spec_label}.input.{dataset}.path",
-                'odm_schema_field_missing',
-                f"the ODM input lacks {', '.join(missing)}",
-                context={'dataset': dataset, 'fields': missing},
-            ))
-        for field, stored in binding.ambiguous.items():
-            stored = list(stored)
-            errors.append(validation_diagnostic(
-                f"{spec_label}.input.{dataset}.path",
-                'odm_schema_field_ambiguous',
-                f"{', '.join(map(repr, stored))} all name {field!r}",
-                context={'dataset': dataset, 'field': field, 'stored': stored},
-            ))
-    return errors
+        for issue in _native_odm.issues(observation)
+        for path in issue['spec_paths']
+    ]
 
 
 def iter_function_calls(value, path):
@@ -5363,39 +4719,27 @@ def validate_spec_functions_against(spec, spec_label, spec_path, schema_env,
                                     calls, column_types, environment_path,
                                     sources=None):
     """Shared Rust static admission; no installed function or study authority."""
-    import tempfile
-    import shutil
-    from yamaa._native import _check_project_metadata
-    root = spec_path.parents[1].parent
     try:
         source = yaml.load(environment_path.read_text(encoding='utf-8'), Loader=UniqueKeyLoader)
     except (OSError, UnicodeError, yaml.YAMLError) as exc:
         return [f"ERROR: {environment_path}: {exc}"]
     if not isinstance(source, dict):
         return [f"ERROR: {environment_path}: expected a mapping"]
-    with tempfile.TemporaryDirectory(prefix="yamaa-project-validation-") as temporary:
-        case = Path(temporary) / spec_path.parent.name
-        shutil.copytree(spec_path.parent, case)
-        # Reuse the one permitted packaging lock; never author benchmark locks.
-        destination = case / environment_path.relative_to(spec_path.parent)
-        language = source.get('language')
-        if language not in ('python', 'r'):
-            # Malformed authored language belongs to native schema diagnostics,
-            # rather than the bridge's host-selector argument conversion.
-            language = 'r' if environment_path.parent.name == 'r' else 'python'
-        if language == 'python' and source.get('lock') == 'uv.lock':
-            shutil.copyfile(root / 'python/uv.lock', destination.parent / 'uv.lock')
-        rows = _check_project_metadata(str(case / spec_path.name), str(destination), language)
-        errors = []
-        for phase, condition, requirement, paths, context in rows:
-            if condition == 'unsupported_feature':
-                continue  # Other contracts retain their independent validators.
-            facts = json.loads(context) if context else {}
-            for path in paths or [None]:
-                errors.append(validation_diagnostic(
-                    f"{spec_label}.{path}" if path is not None else str(environment_path),
-                    condition, condition, context=facts))
-        return errors
+    rows = _native_specification.validate(
+        spec, spec_path, environments=[environment_path],
+        schema_root=Path(schema_env.get('root', _native_specification.ROOT)),
+    )
+    errors = []
+    for phase, condition, requirement, paths, encoded in rows:
+        facts = json.loads(encoded) if encoded else {}
+        for path in paths or [None]:
+            finding = validation_diagnostic(
+                f"{spec_label}.{path}" if path is not None else str(environment_path),
+                condition, condition, context=facts)
+            finding.phase = phase
+            finding.requirement = requirement
+            errors.append(finding)
+    return errors
 
 
 #: Predicate operand type for a derived name the repository validator
@@ -8523,81 +7867,62 @@ def validate_spec_document(
     spec, spec_label, spec_path, env, spec_stack=None, project_root=None,
     snapshots=None,
 ):
-    """Validate one complete specification and its producer dependencies."""
+    """Native static/profile/header facts, without project execution or Save."""
     if not isinstance(spec, dict) or not spec:
-        return [
-            f"ERROR: {spec_label}: spec is empty or not a mapping"
-        ]
-
-    if project_root is None:
-        project_root = spec_path.parent
-    if snapshots is None:
-        snapshots = ProjectSnapshots()
-    spec, errors, provenance = prepare_spec_document(
-        spec, spec_label, spec_path, env
+        return [f"ERROR: {spec_label}: spec is empty or not a mapping"]
+    origins = {}
+    rows = _native_specification.validate(
+        spec, spec_path, project_root=project_root, origins=origins,
+        environments=project_environment_paths(spec_path),
+        schema_root=Path(env.get('root', _native_specification.ROOT)),
     )
-    if errors or not isinstance(spec, dict):
-        return errors
-
-    if 'schema_version' in spec:
-        spec_version = str(spec['schema_version'])
-        env_version = str(env.get('version', '1.0'))
-        if spec_version != env_version:
-            errors.append(
-                f"ERROR: {spec_label}: schema_version '{spec_version}' "
-                f"does not match bundle version '{env_version}'"
-            )
-
-    errors.extend(validate_type(spec, ['root_class'], env, spec_label))
-    errors.extend(validate_grouped_rows(spec, spec_label))
-    errors.extend(validate_spec_names(spec, spec_label))
-    sources = resolved_source_files(spec, spec_path, project_root, provenance)
-    errors.extend(
-        validate_retired_odm_item_references(
-            spec, spec_label, spec_path, env, sources
-        )
-    )
-    errors.extend(validate_column_labels(spec, spec_label))
-    errors.extend(
-        validate_spec_odm_reads(spec, spec_label, spec_path, sources)
-    )
-    errors.extend(
-        validate_spec_contracts(
-            spec, spec_label, spec_path, project_root, snapshots, provenance,
-            sources,
-        )
-    )
-    errors.extend(
-        validate_spec_predicates(spec, spec_label, spec_path, env, sources)
-    )
-    errors.extend(
-        validate_spec_numeric_expressions(
-            spec, spec_label, spec_path, env, sources
-        )
-    )
-    errors.extend(
-        validate_spec_static_semantics(
-            spec, spec_label, spec_path, env, sources
-        )
-    )
-    errors.extend(
-        validate_spec_functions(spec, spec_label, spec_path, env, sources)
-    )
-
-    next_stack = set(spec_stack or ())
-    next_stack.add(spec_path.resolve())
-    errors.extend(
-        validate_producing_specs(
-            spec, spec_label, spec_path, env, next_stack, project_root,
-            snapshots, provenance,
-        )
-    )
-    return [
-        inherited_error_provenance(
-            error, spec_label, provenance, spec, spec_path
-        )
-        for error in errors
-    ]
+    errors = []
+    for phase, condition, requirement, paths, encoded in rows:
+        if phase != 'validation':
+            # Ingest fixtures are independently proved by validate_csv_shapes.
+            continue
+        context = json.loads(encoded)
+        if condition in RESOURCE_PATH_MESSAGES and isinstance(context.get('path'), str):
+            message = (condition + ': ' + repr(context['path']) + ' '
+                + RESOURCE_PATH_MESSAGES[condition])
+        elif condition == 'schema_version_mismatch':
+            message = ('schema_version does not match bundle version: '
+                + encoded)
+        elif condition == 'missing_derivation':
+            message = 'column has no derivation: ' + encoded
+        elif condition == 'driver_unavailable':
+            message = 'base is required: ' + encoded
+        else:
+            message = condition + ': ' + encoded
+        sources = context.get('declaring_sources') or []
+        if isinstance(sources, str):
+            sources = [sources]
+        sources.extend([context[key] for key in ('source_identity', 'source')
+            if isinstance(context.get(key), str)])
+        contributed = next((source for source in sources
+            if source != str(spec_path.resolve())), None)
+        if contributed is not None:
+            message += f" (contributed by {contributed})"
+        for path in paths or ['']:
+            location = spec_label + ('.' + path if path else '')
+            attributed = origins.get(path)
+            displayed = message
+            if attributed is not None and attributed != str(spec_path.resolve()):
+                displayed += f" (contributed by {attributed})"
+            finding = validation_diagnostic(location, condition, displayed,
+                context=context)
+            finding.phase = phase
+            finding.requirement = requirement
+            errors.append(finding)
+    # Approved repository authoring policy; cross-field names are native facts.
+    authoring = spec
+    if 'parents' in spec:
+        # This existing authoring view is used only for editorial label policy;
+        # native diagnostics above own all semantic admission and binding.
+        authoring, _, _ = prepare_spec_document(spec, spec_label, spec_path, env)
+    if isinstance(authoring, dict):
+        errors.extend(validate_column_labels(authoring, spec_label))
+    return errors
 
 
 def validate_producer_output_contract(producer, path):
@@ -9448,12 +8773,8 @@ BOM_UTF8 = '\ufeff'
 CANONICAL_INT = re.compile(r'0|-?[1-9][0-9]*')
 
 
-# R020's csv profile text. The runtime's `yamaa.io.csv` owns the profile:
-# `scan_records` reads records of text-or-missing under the unified
-# missing rule, and `render_records` writes the exact quoting condition.
-# This file owns no second dialect.
-# The import is lazy (see the regex binding note above): importing the yamaa
-# package pulls in polars, which this module only needs for csv-profile checks.
+# Native public admission owns the complete R020 CSV profile. The lazy codec
+# reads already admitted text-or-missing records and renders quoting only.
 CsvProfileFailure = None
 render_records = None
 scan_records = None
@@ -11134,7 +10455,12 @@ def main():
     if warnings and args.warnings_as_errors:
         return 1
 
-    print("PASS: Repository looks clean.")
+    if _native_specification.DEFERRED_ENVIRONMENTS:
+        for environment in sorted(_native_specification.DEFERRED_ENVIRONMENTS):
+            print(f"DEFERRED: R semantic source/binding/runtime coverage for {environment}; required installed R-host CI owns this lane.")
+        print("PASS: Available-host repository checks are clean; R semantic coverage is deferred.")
+    else:
+        print("PASS: Repository looks clean.")
     return 0
 
 if __name__ == '__main__':
