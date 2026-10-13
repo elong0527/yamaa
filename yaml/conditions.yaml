@@ -143,6 +143,7 @@ conditions:
   rename_only_intermediate: {phases: [validation]}
   reserved_metadata_key: {phases: [validation]}
   resource_path_missing: {phases: [validation]}
+  resource_path_not_normalized: {phases: [validation]}
   resource_path_not_regular_file: {phases: [validation]}
   resource_path_not_relative: {phases: [validation]}
   resource_path_outside_project: {phases: [validation]}

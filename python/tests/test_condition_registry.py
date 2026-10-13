@@ -63,7 +63,31 @@ def _raised_conditions() -> set[str]:
                 f"{ast.dump(value)}"
             )
 
-        def add_assignment(target: ast.expr, value: ast.expr | None) -> None:
+        # Literal string returns of each function defined in this file, so
+        # a condition assigned from a local helper call (e.g.
+        # ``condition = classify_project_path(...)``) resolves to the names
+        # the helper can produce instead of evading the scan. Only helpers
+        # defined in the same file are resolved; propagation through
+        # attributes, subscripts, and ``Field(...)`` declarations is not a
+        # condition-producing path and stays unscanned, as before.
+        helper_returns: dict[str, set[str]] = {}
+        for definition in ast.walk(tree):
+            if isinstance(definition, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                returns = {
+                    node.value.value
+                    for node in ast.walk(definition)
+                    if isinstance(node, ast.Return)
+                    and isinstance(node.value, ast.Constant)
+                    and isinstance(node.value.value, str)
+                }
+                if returns:
+                    helper_returns[definition.name] = returns
+
+        def add_assignment(
+            target: ast.expr,
+            value: ast.expr | None,
+            helpers: dict[str, set[str]] | None = None,
+        ) -> None:
             # Tuple unpacking pairs each target with its own value, e.g.
             # ``condition, requirement = "unknown_field", "REQ-0103"``.
             if (
@@ -72,12 +96,21 @@ def _raised_conditions() -> set[str]:
                 and len(target.elts) == len(value.elts)
             ):
                 for sub_target, sub_value in zip(target.elts, value.elts, strict=True):
-                    add_assignment(sub_target, sub_value)
+                    add_assignment(sub_target, sub_value, helpers)
                 return
             if (isinstance(target, ast.Name) and target.id == "condition") or (
                 isinstance(target, ast.Attribute) and target.attr == "condition"
             ):
-                add_literal(value)
+                if isinstance(value, ast.Call):
+                    func = value.func
+                    helper = (
+                        func.attr
+                        if isinstance(func, ast.Attribute)
+                        else getattr(func, "id", "")
+                    )
+                    names.update((helpers or {}).get(helper, set()))
+                else:
+                    add_literal(value)
 
         # Literal assignments to ``condition`` / ``*.condition`` anywhere in
         # the file: class attributes, instance assignments such as
@@ -88,9 +121,9 @@ def _raised_conditions() -> set[str]:
         for assignment in ast.walk(tree):
             if isinstance(assignment, ast.Assign):
                 for target in assignment.targets:
-                    add_assignment(target, assignment.value)
+                    add_assignment(target, assignment.value, helper_returns)
             elif isinstance(assignment, ast.AnnAssign):
-                add_assignment(assignment.target, assignment.value)
+                add_assignment(assignment.target, assignment.value, helper_returns)
 
         for definition in ast.walk(tree):
             if isinstance(definition, ast.ClassDef):
