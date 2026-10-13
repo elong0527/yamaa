@@ -142,8 +142,15 @@ def collect(args):
         for name in ("artifact_path", "installation_evidence"):
             source = Path(record[name])
             shutil.copyfile(source, retained / source.name)
-        for origin in record["installed_origins"].values():
-            lifecycle.outside_checkout(origin, repository)
+        record["installed_origins"] = {
+            key: lifecycle.outside_checkout(value, repository)
+            for key, value in record["installed_origins"].items()
+        }
+        if args.host == "r":
+            for spec in record["collectors"].values():
+                spec["origin"] = lifecycle.outside_checkout(spec["origin"], repository)
+            record["clock_evidence"]["installed_library"] = lifecycle.outside_checkout(
+                record["clock_evidence"]["installed_library"], repository)
         shutil.copyfile(record["installed_origins"]["native"], retained / "installed-native-library.bin")
         lifecycle.write_json(retained / "artifact-byte-comparisons.json",
                              lifecycle.artifact_bytes(record, repository))
@@ -279,7 +286,8 @@ def collect(args):
         for case in plan["cases"] for child in case["children"]
         if child["accepted"] and "actual_callback_calls" in child
     ] or None
-    plan["accepted"] = all(case["accepted"] for case in plan["cases"])
+    plan["accepted"] = all(case["accepted"] for case in plan["cases"]) and (
+        not root_only or bool(plan["cases"]))
     lifecycle.write_json(output / "collection.json", plan)
     return plan
 

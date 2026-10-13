@@ -853,7 +853,7 @@ if (!requireNamespace("jsonlite", quietly=TRUE)) quit(status=77L)
 stopifnot(!("yamaa" %in% loadedNamespaces()))
 expressions <- parse(args[1])
 e <- new.env(parent=globalenv())
-wanted <- c("write_json", "binary64_number", "timed")
+wanted <- c("write_bytes", "write_json", "binary64_number", "timed")
 for (x in expressions) if (is.call(x) && identical(x[[1]], as.name("<-")) &&
                           is.symbol(x[[2]]) && as.character(x[[2]]) %in% wanted) eval(x,envir=e)
 pairs <- list(c(2540977198640091,2540977224087848),
