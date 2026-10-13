@@ -787,6 +787,10 @@ class Audit:
             )
             expected = committed_cohort.reports.read_report(retained)
             actual = committed_cohort.reports.read_report(directory / row["report"])
+            require(
+                actual.error is None,
+                "cohort actual complete report retains an infrastructure error",
+            )
             owner = next(
                 b for b in inventory["batches"] if b["runtime"] == row["runtime"]
             )
