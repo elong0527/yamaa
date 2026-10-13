@@ -99,7 +99,7 @@ impl ProjectCalls {
         calls: Vec<LocatedCall>,
         limits: Limits,
     ) -> Result<Self, Error> {
-        Self::admit_implementation(functions, calls, None, None, limits)
+        Self::admit_implementation(functions, calls, None, None, None, limits)
     }
     /// Reserve compiler-selected multiplicities after earlier complete static validation.
     pub fn admit_with_uses(
@@ -108,7 +108,7 @@ impl ProjectCalls {
         uses: &[usize],
         limits: Limits,
     ) -> Result<Self, Error> {
-        Self::admit_implementation(functions, calls, None, Some(uses), limits)
+        Self::admit_implementation(functions, calls, None, Some(uses), None, limits)
     }
     /// Transfer authored calls to another owned admission phase without cloning them.
     pub fn into_located_calls(self) -> Vec<LocatedCall> {
@@ -123,7 +123,7 @@ impl ProjectCalls {
         reference_types: &BTreeMap<&str, crate::value::ValueType>,
         limits: Limits,
     ) -> Result<Self, Error> {
-        Self::admit_implementation(functions, calls, Some(reference_types), None, limits)
+        Self::admit_implementation(functions, calls, Some(reference_types), None, None, limits)
     }
     /// Admit each authored call once while reserving all effective row-template
     /// copies. Zero uses still receives complete static validation, but does not
@@ -135,16 +135,44 @@ impl ProjectCalls {
         uses: &[usize],
         limits: Limits,
     ) -> Result<Self, Error> {
-        Self::admit_implementation(functions, calls, Some(reference_types), Some(uses), limits)
+        Self::admit_implementation(
+            functions,
+            calls,
+            Some(reference_types),
+            Some(uses),
+            None,
+            limits,
+        )
+    }
+    /// Record declarations bind reference types in their actual donor catalogue.
+    pub(crate) fn admit_contextual(
+        functions: &[Function],
+        calls: Vec<LocatedCall>,
+        types: &BTreeMap<&str, crate::value::ValueType>,
+        uses: &[usize],
+        contextual: &[bool],
+        limits: Limits,
+    ) -> Result<Self, Error> {
+        Self::admit_implementation(
+            functions,
+            calls,
+            Some(types),
+            Some(uses),
+            Some(contextual),
+            limits,
+        )
     }
     fn admit_implementation(
         functions: &[Function],
         calls: Vec<LocatedCall>,
         reference_types: Option<&BTreeMap<&str, crate::value::ValueType>>,
         uses: Option<&[usize]>,
+        contextual: Option<&[bool]>,
         limits: Limits,
     ) -> Result<Self, Error> {
-        if uses.is_some_and(|uses| uses.len() != calls.len()) {
+        if contextual.is_some_and(|contextual| contextual.len() != calls.len())
+            || uses.is_some_and(|uses| uses.len() != calls.len())
+        {
             return Err(Error::InvalidCallUses);
         }
         let use_count = |call: usize| uses.map_or(1, |uses| uses[call]);
@@ -364,6 +392,11 @@ impl ProjectCalls {
                     kind: Kind::UnknownFunction,
                 });
                 continue;
+            };
+            let reference_types = if contextual.is_some_and(|contextual| contextual[call]) {
+                None
+            } else {
+                reference_types
             };
             if let Some(types) = reference_types {
                 for (argument, item) in located.call.arguments.iter().enumerate() {

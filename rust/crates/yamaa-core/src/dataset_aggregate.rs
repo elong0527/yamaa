@@ -1,6 +1,7 @@
 //! Immutable aggregate relation and field bindings, admitted without study cells.
 use super::*;
 use crate::aggregate_compiler::CompiledAggregate;
+use crate::value::ColumnType;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AggregateSource {
@@ -98,6 +99,16 @@ pub struct BoundAggregate {
     phase: AggregatePhase,
     row_context: Option<AggregateRowContext>,
     operation_path: String,
+    range: Option<RelationRange>,
+    derivations: Vec<AggregateDerivation>,
+    derived_schema: Option<TableSchema>,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct AggregateDerivation {
+    pub assignment: Assignment,
+    pub kind: ColumnType,
+    pub handler: Option<crate::conversion::LiteralHandler>,
+    pub path: String,
 }
 impl BoundAggregate {
     pub fn new(
@@ -137,7 +148,30 @@ impl BoundAggregate {
             phase,
             row_context,
             operation_path: operation_path.into(),
+            range: None,
+            derivations: Vec::new(),
+            derived_schema: None,
         })
+    }
+    pub fn with_record_operations(
+        mut self,
+        range: Option<RelationRange>,
+        derivations: Vec<AggregateDerivation>,
+        derived_schema: Option<TableSchema>,
+    ) -> Self {
+        self.range = range;
+        self.derivations = derivations;
+        self.derived_schema = derived_schema;
+        self
+    }
+    pub fn range(&self) -> Option<&RelationRange> {
+        self.range.as_ref()
+    }
+    pub fn derivations(&self) -> &[AggregateDerivation] {
+        &self.derivations
+    }
+    pub fn derived_schema(&self) -> Option<&TableSchema> {
+        self.derived_schema.as_ref()
     }
     pub fn expression(&self) -> &CompiledAggregate {
         &self.expression
@@ -171,6 +205,7 @@ impl BoundAggregate {
         &self,
         primary: &TableSchema,
         secondary: &[SecondarySource],
+        intermediates: &[Intermediate],
         output: &TableSchema,
         available: &[bool],
         mode: &RowMode,
@@ -238,8 +273,87 @@ impl BoundAggregate {
                 return Err(PlanError::InvalidSource);
             }
         }
+        if let Some(range) = &self.range {
+            if !matches!(self.relation, AggregateRelation::Matched { .. }) {
+                return Err(PlanError::InvalidSource);
+            }
+            range
+                .validate_source(schema)
+                .map_err(|_| PlanError::InvalidSource)?;
+            if let CurrentRead::Output(column) = range.current().read {
+                if !available.get(column).copied().unwrap_or(false) {
+                    return Err(PlanError::UnavailableColumn);
+                }
+            }
+            let current_kind = match range.current().read {
+                CurrentRead::Output(column) => output.columns().get(column).map(|field| field.kind),
+                CurrentRead::Record { source: 0, column } => {
+                    primary.columns().get(column).map(|field| field.kind)
+                }
+                CurrentRead::Record { source, column } => secondary
+                    .get(source - 1)
+                    .and_then(|source| source.schema.columns().get(column))
+                    .map(|field| field.kind),
+                CurrentRead::Intermediate { index, column } => intermediates
+                    .get(index)
+                    .and_then(|item| item.source_schema(secondary))
+                    .and_then(|schema| schema.columns().get(column))
+                    .map(|field| field.kind),
+            }
+            .ok_or(PlanError::InvalidSource)?;
+            if range
+                .value_kind()
+                .is_some_and(|kind| kind != current_kind.into())
+            {
+                return Err(PlanError::InvalidSource);
+            }
+        }
+        let evaluation_schema = self.derived_schema.as_ref().unwrap_or(schema);
+        if self.derived_schema.is_some()
+            && !matches!(self.relation, AggregateRelation::Matched { .. })
+        {
+            return Err(PlanError::InvalidSource);
+        }
+        if let Some(derived) = &self.derived_schema {
+            if derived.columns().len() != schema.columns().len() + self.derivations.len()
+                || derived.columns()[..schema.columns().len()] != *schema.columns()
+            {
+                return Err(PlanError::InvalidSource);
+            }
+            let mut derived_output = output.columns().to_vec();
+            derived_output.extend(derived.columns()[schema.columns().len()..].iter().cloned());
+            let derived_output =
+                TableSchema::new(derived_output).map_err(|_| PlanError::InvalidColumns)?;
+            let mut complete = vec![false; derived_output.columns().len()];
+            complete[..output.columns().len()].copy_from_slice(available);
+            for (index, derivation) in self.derivations.iter().enumerate() {
+                if derivation.path.is_empty()
+                    || derivation
+                        .handler
+                        .as_ref()
+                        .is_some_and(|handler| handler.spec_path.is_empty())
+                {
+                    return Err(PlanError::EmptyPath);
+                }
+                if derivation.assignment.column != output.columns().len() + index
+                    || derivation.kind != derived.columns()[schema.columns().len() + index].kind
+                {
+                    return Err(PlanError::InvalidColumns);
+                }
+                validate_record_assignment(
+                    &derivation.assignment,
+                    &mut complete,
+                    schema,
+                    primary,
+                    secondary,
+                    intermediates,
+                    &derived_output,
+                )?;
+                complete[derivation.assignment.column] = true;
+            }
+        }
         for binding in &self.bindings {
-            if binding.column >= schema.columns().len() {
+            if binding.column >= evaluation_schema.columns().len() {
                 return Err(PlanError::InvalidSource);
             }
             if matches!(self.relation, AggregateRelation::Output { .. })

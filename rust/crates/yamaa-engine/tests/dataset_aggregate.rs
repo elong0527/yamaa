@@ -177,6 +177,118 @@ fn qualified_predicates_visit_only_matching_donor_records() {
 }
 
 #[test]
+fn correlated_sum_and_mean_keep_donor_order_through_cancellation_and_missing_values() {
+    for (values, sum, mean) in [
+        ([1e16, 1.0, -1e16], 0.0_f64, 0.0_f64),
+        ([1e16, -1e16, 1.0], 1.0_f64, 1.0_f64 / 3.0),
+    ] {
+        let primary = table(vec![vec![Value::Int(1), Value::Int(0)]]);
+        let donor = Table {
+            schema: TableSchema::new(vec![
+                Column {
+                    name: "ID".into(),
+                    kind: ColumnType::Int,
+                },
+                Column {
+                    name: "V".into(),
+                    kind: ColumnType::Float,
+                },
+            ])
+            .unwrap(),
+            rows: vec![
+                vec![Value::Int(1), Value::float(values[0])],
+                vec![Value::Int(2), Value::float(99.0)],
+                vec![Value::Int(1), Value::float(values[1])],
+                vec![Value::Int(1), Value::Missing],
+                vec![Value::Int(1), Value::float(values[2])],
+            ],
+            reads: Default::default(),
+            // This unrelated donor's value must never enter either reduction.
+            fail: Some((1, 1)),
+        };
+        let relation = AggregateRelation::Matched {
+            source: AggregateSource::Secondary(0),
+            keys: vec![IntermediateKey {
+                source_column: 0,
+                path: "aggregate.key.ID".into(),
+                value: MatchValue::Variable(MatchRead::Output {
+                    column: 0,
+                    identifier: "ID".into(),
+                }),
+            }],
+            group_by: vec![],
+        };
+        let output = TableSchema::new(vec![
+            Column {
+                name: "ID".into(),
+                kind: ColumnType::Int,
+            },
+            Column {
+                name: "SUM".into(),
+                kind: ColumnType::Float,
+            },
+            Column {
+                name: "MEAN".into(),
+                kind: ColumnType::Float,
+            },
+        ])
+        .unwrap();
+        let plan = DatasetPlan::new_with_sources(
+            primary.schema.clone(),
+            vec![SecondarySource {
+                name: "S".into(),
+                schema: donor.schema.clone(),
+            }],
+            output,
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![assignment(0, Expression::Source(0))],
+                filter: None,
+            }],
+            ["SUM(S.V)", "MEAN(S.V)"]
+                .iter()
+                .enumerate()
+                .map(|(index, expression)| {
+                    assignment(
+                        index + 1,
+                        aggregate(
+                            expression,
+                            relation.clone(),
+                            &[("S.V", 1)],
+                            AggregatePhase::Derivation,
+                            None,
+                        ),
+                    )
+                })
+                .collect(),
+            vec![0],
+            vec![],
+        )
+        .unwrap();
+        let result = plan
+            .execute_observed_sources(&primary, &[&donor], limits())
+            .result
+            .unwrap();
+        assert_eq!(result.dataset.rows().len(), 1);
+        assert_eq!(result.dataset.rows()[0][0], Value::Int(1));
+        for (column, expected) in [(1, sum), (2, mean)] {
+            let Value::Float(actual) = result.dataset.rows()[0][column] else {
+                panic!("floating reduction result");
+            };
+            assert_eq!(actual.get().to_bits(), expected.to_bits());
+        }
+        let value_reads = donor
+            .reads
+            .borrow()
+            .iter()
+            .copied()
+            .filter(|&(_, column)| column == 1)
+            .collect::<Vec<_>>();
+        assert_eq!(value_reads, [(0, 1), (2, 1), (3, 1), (4, 1)].repeat(2));
+    }
+}
+
+#[test]
 fn grouped_numeric_reducers_and_record_star_keep_order_and_empty_distinctions() {
     let source = table(vec![
         vec![Value::Int(1), Value::Int(3)],

@@ -9,6 +9,8 @@ use yamaa_core::{
     value::{ColumnType, Value, ValueType},
 };
 
+use super::project_support as specification_support;
+
 fn text(value: &str) -> V {
     V::Scalar(Value::Str(value.into()))
 }
@@ -258,6 +260,159 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         assert!(diagnostic.operand_route.is_none());
         reached.insert(diagnostic.code);
     }
+    reached.extend(derive_reached());
+    reached
+}
+
+fn derive_reached() -> BTreeSet<ConditionCode> {
+    use specification_support::Tree as T;
+    use yamaa_core::{
+        schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
+        specification::{PreflightFinding, PrepareError, PreparedSpecification},
+    };
+    let binding = |value| {
+        T::map(vec![
+            ("name", T::text("V")),
+            ("type", T::text("float")),
+            ("derivation", T::map(vec![("value", value)])),
+        ])
+    };
+    let specification = |bindings| {
+        specification_support::specification(vec![(
+            "RESULT",
+            "float",
+            T::map(vec![(
+                "aggregate",
+                T::map(vec![
+                    ("derive", T::List(bindings)),
+                    ("expr", T::text("SUM(V)")),
+                ]),
+            )]),
+        )])
+    };
+    let mut reached = BTreeSet::new();
+    for (bindings, code, condition, requirement) in [
+        (
+            vec![],
+            ConditionCode::AggregateDeriveDeclaration,
+            "invalid_derive_step",
+            "REQ-1189",
+        ),
+        (
+            vec![binding(T::map(vec![(
+                "literal",
+                T::Scalar(N::Integer("1".into())),
+            )]))],
+            ConditionCode::AggregateDeriveRelation,
+            "invalid_derive_step",
+            "REQ-1191",
+        ),
+        (
+            vec![binding(T::map(vec![(
+                "compute",
+                T::map(vec![("expr", T::text("W"))]),
+            )]))],
+            ConditionCode::AggregateDeriveVariable,
+            "unknown_derive_variable",
+            "REQ-1189",
+        ),
+    ] {
+        let document = specification(bindings);
+        let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&document) else {
+            panic!("invalid derive declaration was admitted");
+        };
+        let diagnostic = findings
+            .iter()
+            .find_map(|finding| match finding {
+                PreflightFinding::Scalar(diagnostic) if diagnostic.code == code => Some(diagnostic),
+                _ => None,
+            })
+            .expect("original compiler cause");
+        assert_eq!(
+            (
+                diagnostic.definition().phase,
+                diagnostic.definition().condition,
+                diagnostic.definition().requirement
+            ),
+            ("validation", condition, Some(requirement))
+        );
+        assert!(diagnostic.spec_paths[0].starts_with("columns.RESULT.derivation.aggregate"));
+        reached.insert(diagnostic.code);
+    }
+    let source = |name| T::map(vec![("source", T::map(vec![("variable", T::text(name))]))]);
+    let document = specification(vec![
+        binding(source("SRC.ID")),
+        T::map(vec![
+            ("name", T::text("C")),
+            ("type", T::text("int")),
+            ("derivation", T::map(vec![("value", source("CAP.ID"))])),
+        ]),
+    ]);
+    let root = document.document().root();
+    let mut nodes = document.document().nodes().to_vec();
+    assert_eq!(root, nodes.len() - 1);
+    let Some(N::Mapping(mut fields)) = nodes.pop() else {
+        unreachable!()
+    };
+    fn append(tree: T, nodes: &mut Vec<N>) -> usize {
+        let node = match tree {
+            T::Scalar(node) => node,
+            T::List(items) => {
+                N::Sequence(items.into_iter().map(|item| append(item, nodes)).collect())
+            }
+            T::Map(items) => N::Mapping(
+                items
+                    .into_iter()
+                    .map(|(key, value)| (append(T::text(&key), nodes), append(value, nodes)))
+                    .collect(),
+            ),
+        };
+        let index = nodes.len();
+        nodes.push(node);
+        index
+    }
+    let key = append(T::text("intermediates"), &mut nodes);
+    let value = append(
+        T::List(vec![T::map(vec![
+            ("id", T::text("CAP")),
+            ("dataset", T::text("SRC")),
+            ("key", T::map(vec![("ID", T::text("SRC.ID"))])),
+        ])]),
+        &mut nodes,
+    );
+    fields.push((key, value));
+    let root = nodes.len();
+    nodes.push(N::Mapping(fields));
+    let document = SpecificationDocument::admit(
+        Document::new(nodes, root, Default::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap();
+    let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&document) else {
+        panic!("derive read without keep was admitted");
+    };
+    let diagnostic = findings
+        .iter()
+        .find_map(|finding| match finding {
+            PreflightFinding::Scalar(diagnostic)
+                if diagnostic.code == ConditionCode::AggregateDeriveIntermediate =>
+            {
+                Some(diagnostic)
+            }
+            _ => None,
+        })
+        .expect("original named-intermediate cause");
+    assert_eq!(
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().requirement
+        ),
+        ("validation", "invalid_derive_step", Some("REQ-1242"))
+    );
+    assert_eq!(diagnostic.context["intermediate"], text("CAP"));
+    reached.insert(diagnostic.code);
     reached
 }
 

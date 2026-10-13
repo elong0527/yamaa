@@ -109,6 +109,7 @@ struct Activation {
     original: Rc<()>,
     unwind: Arc<()>,
     mode: Mode,
+    values: Vec<i64>,
 }
 impl Activation {
     fn payload(&self, interrupt: bool) -> Payload {
@@ -163,6 +164,7 @@ impl ActivationPort for Activation {
         else {
             panic!("an exact integer argument; missing cases are engine-short-circuited")
         };
+        self.values.push(*value);
         self.trace
             .borrow_mut()
             .push(if *value == 1 { "live" } else { "case" });
@@ -209,6 +211,7 @@ fn ports() -> (Activation, Study) {
             original: Rc::new(()),
             unwind: Arc::new(()),
             mode: Mode::Pass,
+            values: Vec::new(),
         },
         Study {
             trace,
@@ -324,6 +327,149 @@ fn every_build_reactivates_only_called_definitions_on_exact_cached_study_bytes()
         &once.into_iter().chain(once).collect::<Vec<_>>()
     );
     assert_eq!(study.capture_reads(), 1);
+}
+
+#[test]
+fn aggregate_derive_callbacks_activate_before_data_and_receive_each_donor_or_prior_binding() {
+    for grouped_rows in [false, true] {
+        for argument in ["SRC.ID", "BASE"] {
+            let rows = if grouped_rows {
+                "rows: [{id: all, group_by: [SRC.ID], derivations: {ID: SRC.ID}}]\n"
+            } else {
+                ""
+            };
+            let raw = format!(
+                "schema_version: '1.0'\ndomain: TEST\ninput: {{SRC: {{path: input.csv, types: {{ID: int}}}}}}\nkeys: [ID]\n{rows}columns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        derive:\n          - {{name: BASE, type: int, derivation: SRC.ID}}\n          - {{name: V, type: int, derivation: {{function: {{name: id, args: {{x: {argument}}}}}}}}}\n        expr: SUM(V)\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n"
+            );
+            let document = schemas::domain_schema()
+                .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
+                .unwrap();
+            let run = PreparedRun::prepare(document, environment())
+                .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
+            assert_eq!(run.compiled().called_functions(), [1]);
+            let (mut activation, mut study) = ports();
+            study.bytes = Arc::from(b"ID\n1\n1\n2\n".as_slice());
+            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            assert!(attempt.boundary.is_ok());
+            let trace = activation.trace.borrow();
+            assert_eq!(&trace[..4], &["lock", "bind", "case", "case"]);
+            assert!(trace.iter().position(|event| *event == "capture").unwrap() > 3);
+            assert_eq!(activation.values, [7, i64::MIN, 1, 1, 2]);
+            assert_eq!(
+                attempt
+                    .dataset
+                    .result
+                    .unwrap()
+                    .result
+                    .unwrap()
+                    .dataset
+                    .rows(),
+                &[
+                    vec![Value::Int(1), Value::Int(2)],
+                    vec![Value::Int(2), Value::Int(2)]
+                ]
+            );
+        }
+    }
+}
+
+#[test]
+fn aggregate_callback_reads_the_kept_current_row_instead_of_each_donor_record() {
+    let raw = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int, N: int}}}\nkeys: [ID]\nintermediates:\n  - {id: CAP, dataset: SRC, key: {ID: ID}, order_by: [SRC.N], keep: first}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        derive:\n          - {name: BASE, type: int, derivation: SRC.N}\n          - {name: V, type: int, derivation: {function: {name: id, args: {x: CAP.N}}}}\n        expr: SUM(V)\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
+    let document = schemas::domain_schema()
+        .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
+        .unwrap();
+    let run = PreparedRun::prepare(document, environment())
+        .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
+    let (mut activation, mut study) = ports();
+    study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
+    let attempt = run.execute_with_ports(&mut activation, &mut study);
+    assert_eq!(activation.values, [7, i64::MIN, 10, 10, 40]);
+    assert_eq!(
+        attempt
+            .dataset
+            .result
+            .unwrap()
+            .result
+            .unwrap()
+            .dataset
+            .rows(),
+        &[
+            vec![Value::Int(1), Value::Int(20)],
+            vec![Value::Int(2), Value::Int(40)]
+        ]
+    );
+    let document = schemas::domain_schema()
+        .prepare_standalone(source(
+            "study/domain.yaml",
+            raw.replace(", order_by: [SRC.N], keep: first", "")
+                .as_bytes(),
+        ))
+        .unwrap();
+    let Err(rejected) = PreparedRun::prepare(document, environment()) else {
+        panic!("kept scalar read required");
+    };
+    let issues = yamaa_adapters::project_check::rejected(&rejected).unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.condition == "invalid_derive_step"
+                && issue.requirement.as_deref() == Some("REQ-1242")),
+        "{issues:?}"
+    );
+}
+
+#[test]
+fn aggregate_callback_uses_original_current_source_types_when_donor_types_differ() {
+    let raw = "schema_version: '1.0'\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: str}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: {N: SRC.N}, order_by: [SRC.ID], keep: first}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        key: {ID: ID}\n        derive:\n          - {name: BASE, type: int, derivation: B.N}\n          - {name: V, type: int, derivation: {function: {name: id, args: {x: CAP.N}}}}\n        expr: SUM(V)\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n";
+    let document = schemas::domain_schema()
+        .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
+        .unwrap();
+    let run = PreparedRun::prepare(document, environment())
+        .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
+    let (mut activation, mut study) = ports();
+    study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
+    let attempt = run.execute_with_ports(&mut activation, &mut study);
+    assert!(
+        attempt
+            .dataset
+            .result
+            .as_ref()
+            .is_ok_and(|entered| entered.result.is_ok()),
+        "{:?}",
+        attempt
+            .dataset
+            .result
+            .as_ref()
+            .err()
+            .map(|error| format!("{error:?}"))
+            .or_else(|| attempt
+                .dataset
+                .result
+                .as_ref()
+                .ok()
+                .and_then(|entered| entered
+                    .result
+                    .as_ref()
+                    .err()
+                    .map(|error| format!("{error:?}"))))
+    );
+    assert_eq!(activation.values, [7, i64::MIN, 10, 10, 30, 30, 40]);
+    assert_eq!(
+        attempt
+            .dataset
+            .result
+            .unwrap()
+            .result
+            .unwrap()
+            .dataset
+            .rows(),
+        &[
+            vec![Value::Int(1), Value::Int(10), Value::Int(20)],
+            vec![Value::Int(1), Value::Int(30), Value::Int(60)],
+            vec![Value::Int(2), Value::Int(40), Value::Int(40)]
+        ]
+    );
 }
 
 #[test]

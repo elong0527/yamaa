@@ -79,6 +79,37 @@ pub fn bind(
         let input = match &item.input {
             Input::Literal(value) => Some(FunctionInput::Literal(value.clone())),
             Input::Reference(name) => {
+                if let Some(read) = catalog.selected_read(name).map_err(Error::Reference)? {
+                    match read {
+                        Err(finding) => findings.push(Finding {
+                            argument,
+                            kind: Kind::Output(finding),
+                        }),
+                        Ok((read, actual, edges)) => {
+                            dependencies.extend(edges);
+                            let parameter = plan
+                                .signature()
+                                .parameters()
+                                .iter()
+                                .find(|p| p.name == item.name)
+                                .ok_or(Error::InvalidAdmittedCall)?;
+                            if kind(actual) != parameter.kind {
+                                findings.push(Finding {
+                                    argument,
+                                    kind: Kind::ArgumentType {
+                                        expected: parameter.kind,
+                                        actual: kind(actual),
+                                    },
+                                });
+                            }
+                            arguments.push(FunctionArgument {
+                                name: item.name.clone(),
+                                input: FunctionInput::Read(read),
+                            });
+                        }
+                    }
+                    continue;
+                }
                 let start = findings.len();
                 if name.contains('.') {
                     findings.extend(

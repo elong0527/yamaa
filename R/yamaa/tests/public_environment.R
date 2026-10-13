@@ -338,3 +338,38 @@ qualify_submission_versions <- function() {
   }
 }
 qualify_submission_versions()
+
+qualify_aggregate_callback <- function() {
+  previous <- getwd()
+  on.exit(setwd(previous))
+  work <- tempfile("aggregate-callback-"); dir.create(work)
+  setwd(work); dir.create("r")
+  stopifnot(file.copy(file.path(root, "negative-function-contract", "r", c("environment.yaml", "renv.lock")), "r"))
+  spec <- paste(c(
+    "schema_version: '1.0'", "domain: TEST", "input:",
+    "  SRC: {path: input.csv, types: {ID: int, N: float}}",
+    "  B: {path: input.csv, types: {ID: int, N: str}}",
+    "base: SRC", "keys: [ID, N]", "intermediates:",
+    "  - {id: CAP, dataset: SRC, key: {N: SRC.N}, order_by: [SRC.ID], keep: first}",
+    "columns:", "  - {name: ID, type: int, derivation: SRC.ID}",
+    "  - {name: N, type: float, derivation: SRC.N}",
+    "  - name: VALUE", "    type: float", "    derivation:", "      aggregate:",
+    "        key: {ID: ID}", "        derive:",
+    "          - {name: BASE, type: float, derivation: B.N}",
+    "          - {name: V, type: float, derivation: {function: {name: project_value, args: {x: CAP.N}}}}",
+    "        expr: SUM(V)", "output: {path: output.csv, columns: [ID, N, VALUE]}"
+  ), collapse = "\n")
+  writeLines(spec, "spec.yaml"); writeLines(c("ID,N", "1,10", "1,30", "2,40"), "input.csv")
+  result <- yamaa_domain("spec.yaml", environment = "r/environment.yaml")
+  stopifnot(nrow(result$issues) == 0L,
+    identical(as.character(result$output$ID), c("1", "1", "2")),
+    identical(result$output$N, c(10, 30, 40)),
+    identical(result$output$VALUE, c(20, 60, 40)), result$save(), result$save(),
+    identical(rawToChar(rawfile("output.csv")), "ID,N,VALUE\n1,10,20\n1,30,60\n2,40,40\n"))
+  writeLines(sub(", order_by: [SRC.ID], keep: first", "", spec, fixed = TRUE), "spec.yaml")
+  unlink("input.csv")
+  issues <- yamaa_check("spec.yaml", environment = "r/environment.yaml")$issues
+  stopifnot(any(issues$condition == "invalid_derive_step" & issues$requirement == "REQ-1242"))
+  cat("public R aggregate callbacks preserve current-source types and kept record identity\n")
+}
+qualify_aggregate_callback()

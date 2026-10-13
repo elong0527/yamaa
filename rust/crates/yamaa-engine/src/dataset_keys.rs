@@ -87,6 +87,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
                     self_rows: &[],
                     intermediates: &mut intermediates::Run::default(),
                     output_rows: &[],
+                    aggregate_row: None,
                 },
             )?;
             probe.completed[assignment.column] = true;

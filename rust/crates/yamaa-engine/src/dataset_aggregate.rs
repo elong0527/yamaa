@@ -243,6 +243,27 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                     representative: None,
                 });
             }
+            let range_value = bound
+                .range()
+                .map(|range| {
+                    let assignment = Assignment {
+                        column: 0,
+                        expression: Expression::Literal(Value::Missing),
+                        path: range.path().into(),
+                    };
+                    relation_predicates::resolve_current(
+                        range.current(),
+                        range.path(),
+                        primary,
+                        candidate,
+                        plan,
+                        row,
+                        &assignment,
+                        relation_predicates::CurrentObservation::Operand,
+                        state,
+                    )
+                })
+                .transpose()?;
             let mut first = None;
             for source_row in 0..donor.row_count() {
                 let mut matches = true;
@@ -258,7 +279,16 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                 }
                 if matches {
                     first.get_or_insert(source_row);
-                    if filter(donor, bound, source_row, state)? {
+                    if filter(donor, bound, source_row, state)?
+                        && narrow(
+                            bound,
+                            range_value.as_ref(),
+                            donor,
+                            coordinate,
+                            source_row,
+                            state,
+                        )?
+                    {
                         members.push(source_row);
                     }
                 }
@@ -269,6 +299,31 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
             })
         }
     }
+}
+
+fn narrow<T: TableAccess + ?Sized>(
+    bound: &BoundAggregate,
+    value: Option<&Value>,
+    donor: &T,
+    coordinate: Coordinate,
+    source_row: usize,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Result<bool, Box<ExecutionError<T::Error>>> {
+    use yamaa_core::dataset::RelationRangeFailure;
+    let Some(range) = bound.range() else {
+        return Ok(true);
+    };
+    range
+        .allows(
+            ValueRef::from(value.expect("bound range value")),
+            |column| cell(donor, bound, coordinate, source_row, column, state.budget),
+        )
+        .map_err(|error| match error {
+            RelationRangeFailure::Access(error) => error,
+            RelationRangeFailure::Incomparable(types) => Box::new(
+                ExecutionError::ScalarDiagnostic(types.diagnostic_for(range.path(), None)),
+            ),
+        })
 }
 
 struct Resolver<'a, T: TableAccess + ?Sized> {
@@ -327,61 +382,112 @@ fn run<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
     } = select(
         bound, donor, coordinate, primary, candidate, plan, row, state,
     )?;
+    if let Some(schema) = bound.derived_schema() {
+        let values = derive_records(bound, donor, &members, primary, candidate, plan, row, state)?;
+        let enriched = Enriched {
+            donor,
+            members: &members,
+            values: &values,
+            schema,
+        };
+        return reduce_selected(
+            bound,
+            &enriched,
+            coordinate,
+            &members,
+            representative,
+            primary,
+            candidate,
+            plan,
+            row,
+            state,
+        );
+    }
+    reduce_selected(
+        bound,
+        donor,
+        coordinate,
+        &members,
+        representative,
+        primary,
+        candidate,
+        plan,
+        row,
+        state,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn reduce_selected<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
+    bound: &BoundAggregate,
+    donor: &T,
+    coordinate: Coordinate,
+    members: &[usize],
+    representative: Option<usize>,
+    primary: &P,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let mut reductions = Vec::new();
     reductions
         .try_reserve_exact(bound.expression().reductions().len())
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
     for reduction in bound.expression().reductions() {
-        let value = match &reduction.operand {
-            AggregateOperand::Records(_) => yamaa_core::reduction::count_records(members.len())
-                .map(Value::from)
-                .map_err(|_| Box::new(ExecutionError::Capacity))?,
-            AggregateOperand::Value(name) => {
-                let mut values = Vec::new();
-                values
-                    .try_reserve_exact(members.len())
-                    .map_err(|_| Box::new(ExecutionError::Allocation))?;
-                for &source_row in &members {
-                    values.push(cell(
-                        donor,
-                        bound,
-                        coordinate,
-                        source_row,
-                        bound.column(name),
-                        state.budget,
-                    )?);
+        let value = if members.is_empty() {
+            Value::Missing
+        } else {
+            match &reduction.operand {
+                AggregateOperand::Records(_) => yamaa_core::reduction::count_records(members.len())
+                    .map(Value::from)
+                    .map_err(|_| Box::new(ExecutionError::Capacity))?,
+                AggregateOperand::Value(name) => {
+                    let mut values = Vec::new();
+                    values
+                        .try_reserve_exact(members.len())
+                        .map_err(|_| Box::new(ExecutionError::Allocation))?;
+                    for &source_row in members {
+                        values.push(cell(
+                            donor,
+                            bound,
+                            coordinate,
+                            source_row,
+                            bound.column(name),
+                            state.budget,
+                        )?);
+                    }
+                    fold(
+                        bound, reduction, &values, primary, candidate, plan, row, state,
+                    )?
                 }
-                fold(
-                    bound, reduction, &values, primary, candidate, plan, row, state,
-                )?
-            }
-            AggregateOperand::Numeric(expression) => {
-                let mut values = Vec::new();
-                values
-                    .try_reserve_exact(members.len())
-                    .map_err(|_| Box::new(ExecutionError::Allocation))?;
-                for &source_row in &members {
-                    state.budget.work(1, expression.node_count())?;
-                    let result = expression.evaluate(&mut Resolver {
-                        bound,
-                        table: donor,
-                        coordinate,
-                        source_row: Some(source_row),
-                        reductions: &[],
-                        budget: state.budget,
-                    });
-                    values.push(numeric::project_result(
-                        result,
-                        candidate,
-                        plan,
-                        row,
-                        state.budget,
-                    )?);
+                AggregateOperand::Numeric(expression) => {
+                    let mut values = Vec::new();
+                    values
+                        .try_reserve_exact(members.len())
+                        .map_err(|_| Box::new(ExecutionError::Allocation))?;
+                    for &source_row in members {
+                        state.budget.work(1, expression.node_count())?;
+                        let result = expression.evaluate(&mut Resolver {
+                            bound,
+                            table: donor,
+                            coordinate,
+                            source_row: Some(source_row),
+                            reductions: &[],
+                            budget: state.budget,
+                        });
+                        values.push(numeric::project_result(
+                            result,
+                            candidate,
+                            plan,
+                            row,
+                            state.budget,
+                        )?);
+                    }
+                    let refs = values.iter().map(ValueRef::from).collect::<Vec<_>>();
+                    fold(
+                        bound, reduction, &refs, primary, candidate, plan, row, state,
+                    )?
                 }
-                let refs = values.iter().map(ValueRef::from).collect::<Vec<_>>();
-                fold(
-                    bound, reduction, &refs, primary, candidate, plan, row, state,
-                )?
             }
         };
         reductions.push(value);
@@ -543,4 +649,161 @@ fn fold<T: TableAccess + ?Sized>(
             }))
         }
     }
+}
+
+/// Keep the original donor records borrowed; retain only newly bound values.
+struct Enriched<'a, T: TableAccess + ?Sized> {
+    donor: &'a T,
+    members: &'a [usize],
+    values: &'a [Vec<Value>],
+    schema: &'a TableSchema,
+}
+impl<T: TableAccess + ?Sized> TableAccess for Enriched<'_, T> {
+    type Error = T::Error;
+    fn schema(&self) -> &TableSchema {
+        self.schema
+    }
+    fn row_count(&self) -> usize {
+        self.donor.row_count()
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<T::Error>> {
+        if column < self.donor.schema().columns().len() {
+            self.donor.cell(row, column)
+        } else {
+            self.members
+                .binary_search(&row)
+                .ok()
+                .and_then(|index| self.values.get(index))
+                .and_then(|record| record.get(column - self.donor.schema().columns().len()))
+                .map(ValueRef::from)
+                .ok_or(CellError::OutOfBounds { row, column })
+        }
+    }
+}
+#[allow(clippy::too_many_arguments)]
+fn derive_records<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
+    bound: &BoundAggregate,
+    donor: &T,
+    members: &[usize],
+    primary: &P,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Result<Vec<Vec<Value>>, Box<ExecutionError<T::Error>>> {
+    use crate::numeric_lifecycle::{recover_conversion, ConversionRecoveryError};
+    state.budget.work(
+        members.len(),
+        bound
+            .derivations()
+            .len()
+            .checked_add(candidate.values.len())
+            .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
+    )?;
+    let mut enriched = Vec::new();
+    enriched
+        .try_reserve_exact(members.len())
+        .map_err(|_| Box::new(ExecutionError::Allocation))?;
+    if members.is_empty() {
+        return Ok(enriched);
+    }
+    // Record derivations operate on donor fields while named reads match against
+    // the enclosing row. Restore nested evaluation context even when it fails.
+    let previous = state.aggregate_row.take();
+    for value in &candidate.values {
+        if let Value::Str(text) = value {
+            state.budget.scalar_text(text.len())?;
+        }
+    }
+    state.aggregate_row = Some(Candidate {
+        template: candidate.template,
+        selection_identity: candidate.selection_identity,
+        members: candidate.members.clone(),
+        values: candidate.values.clone(),
+        completed: candidate.completed.clone(),
+    });
+    let result = (|| {
+        for &source_row in members {
+            for value in &candidate.values {
+                if let Value::Str(text) = value {
+                    state.budget.scalar_text(text.len())?;
+                }
+            }
+            let mut record = Candidate {
+                template: candidate.template,
+                selection_identity: candidate.selection_identity,
+                members: vec![source_row],
+                values: candidate.values.clone(),
+                completed: candidate.completed.clone(),
+            };
+            record.values.resize(
+                candidate.values.len() + bound.derivations().len(),
+                Value::Missing,
+            );
+            record.completed.resize(record.values.len(), false);
+            for binding in bound.derivations() {
+                let value = evaluate_raw(
+                    donor,
+                    &binding.assignment,
+                    &record,
+                    plan,
+                    row,
+                    state.budget.limits(),
+                    state,
+                )?;
+                let converted = match convert(&value, binding.kind) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        if let Some(handler) = &binding.handler {
+                            if let Value::Str(text) = &handler.value {
+                                state.budget.scalar_text(text.len())?;
+                            }
+                        }
+                        match recover_conversion(
+                            binding.kind,
+                            &binding.path,
+                            error,
+                            binding.handler.as_ref(),
+                            state.handlers,
+                        ) {
+                            Ok(value) => value,
+                            Err(error) => match *error {
+                                ConversionRecoveryError::Accounting { error, .. } => {
+                                    return Err(Box::new(ExecutionError::HandlerAccounting(error)))
+                                }
+                                ConversionRecoveryError::Conversion { spec_path, error }
+                                | ConversionRecoveryError::HandlerConversion {
+                                    spec_path,
+                                    replacement: error,
+                                    ..
+                                } => {
+                                    return Err(Box::new(ExecutionError::Conversion {
+                                        path: spec_path,
+                                        output_row: row,
+                                        error,
+                                        identity: failure_identity(
+                                            candidate,
+                                            plan.keys(),
+                                            row,
+                                            state.budget,
+                                        )?,
+                                    }))
+                                }
+                            },
+                        }
+                    }
+                };
+                if let Value::Str(text) = &converted {
+                    state.budget.scalar_text(text.len())?;
+                }
+                record.values[binding.assignment.column] = converted;
+                record.completed[binding.assignment.column] = true;
+            }
+            enriched.push(record.values.split_off(candidate.values.len()));
+        }
+        Ok(enriched)
+    })();
+    state.aggregate_row = previous;
+    let _ = primary;
+    result
 }

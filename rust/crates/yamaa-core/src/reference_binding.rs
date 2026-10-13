@@ -95,7 +95,17 @@ pub struct Catalog {
     outputs: BTreeMap<String, (usize, ColumnType)>,
     datasets: BTreeMap<String, DatasetCatalog>,
     limits: Limits,
+    selected: BTreeMap<String, SelectedRelation>,
 }
+
+/// A kept relation used by a scalar callback, with its original key dependencies.
+#[derive(Debug)]
+pub(crate) struct SelectedRelation {
+    pub index: usize,
+    pub fields: BTreeMap<String, (usize, ColumnType)>,
+    pub dependencies: alloc::vec::Vec<usize>,
+}
+pub(crate) type SelectedRead<'a> = (crate::bound_expression::Read, ColumnType, &'a [usize]);
 
 #[derive(Debug)]
 struct DatasetCatalog {
@@ -117,6 +127,99 @@ fn limit(resource: &'static str, required: usize, allowed: usize) -> Result<(), 
 }
 
 impl Catalog {
+    pub(crate) fn with_selected(
+        mut self,
+        selected: alloc::vec::Vec<(String, SelectedRelation)>,
+    ) -> Result<Self, Error> {
+        limit(
+            "datasets",
+            self.datasets
+                .len()
+                .checked_add(selected.len())
+                .ok_or(Error::SizeOverflow)?,
+            self.limits.datasets,
+        )?;
+        let mut fields = self
+            .datasets
+            .values()
+            .map(|dataset| dataset.fields.len())
+            .sum::<usize>();
+        let mut bytes = self.outputs.keys().map(String::len).sum::<usize>();
+        for (name, dataset) in &self.datasets {
+            bytes = bytes.checked_add(name.len()).ok_or(Error::SizeOverflow)?;
+            for field in dataset.fields.keys() {
+                bytes = bytes.checked_add(field.len()).ok_or(Error::SizeOverflow)?;
+            }
+        }
+        for (name, relation) in selected {
+            if name.is_empty() {
+                return Err(Error::EmptyName);
+            }
+            if self.datasets.contains_key(&name) || self.selected.contains_key(&name) {
+                return Err(Error::DuplicateDataset);
+            }
+            fields = fields
+                .checked_add(relation.fields.len())
+                .and_then(|n| n.checked_add(relation.dependencies.len()))
+                .ok_or(Error::SizeOverflow)?;
+            limit("fields", fields, self.limits.fields)?;
+            bytes = bytes.checked_add(name.len()).ok_or(Error::SizeOverflow)?;
+            for field in relation.fields.keys() {
+                bytes = bytes.checked_add(field.len()).ok_or(Error::SizeOverflow)?;
+            }
+            limit("catalog_bytes", bytes, self.limits.catalog_bytes)?;
+            self.selected.insert(name, relation);
+        }
+        Ok(self)
+    }
+
+    pub(crate) fn selected_read(
+        &self,
+        name: &str,
+    ) -> Result<Option<Result<SelectedRead<'_>, Diagnostic>>, Error> {
+        limit("reference_bytes", name.len(), self.limits.reference_bytes)?;
+        let Some((owner, field)) = name.split_once('.') else {
+            return Ok(None);
+        };
+        let Some(relation) = self.selected.get(owner) else {
+            return Ok(None);
+        };
+        Ok(Some(
+            relation
+                .fields
+                .get(field)
+                .map(|&(column, kind)| {
+                    (
+                        crate::bound_expression::Read::Intermediate {
+                            index: relation.index,
+                            column,
+                        },
+                        kind,
+                        relation.dependencies.as_slice(),
+                    )
+                })
+                .ok_or(Diagnostic::UnknownField),
+        ))
+    }
+    /// Borrow a declared relation's fields in stored column order.
+    pub(crate) fn fields(&self, name: &str) -> Option<alloc::vec::Vec<Field<'_>>> {
+        let dataset = self.datasets.get(name)?;
+        let mut fields = dataset
+            .fields
+            .iter()
+            .map(|(name, (index, column_type))| {
+                (
+                    *index,
+                    Field {
+                        name,
+                        column_type: *column_type,
+                    },
+                )
+            })
+            .collect::<alloc::vec::Vec<_>>();
+        fields.sort_unstable_by_key(|(index, _)| *index);
+        Some(fields.into_iter().map(|(_, field)| field).collect())
+    }
     /// Read an exact output declaration without interpreting it as a source path.
     pub(crate) fn output_type(&self, name: &str) -> Option<ColumnType> {
         self.outputs.get(name).map(|&(_, kind)| kind)
@@ -187,6 +290,7 @@ impl Catalog {
             outputs: output_index,
             datasets: dataset_index,
             limits,
+            selected: BTreeMap::new(),
         })
     }
 

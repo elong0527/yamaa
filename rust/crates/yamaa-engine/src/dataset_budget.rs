@@ -15,6 +15,9 @@ impl Budget {
     pub(crate) fn work_cell_limit(&self) -> usize {
         self.limits.work_cells
     }
+    pub(crate) fn limits(&self) -> Limits {
+        self.limits
+    }
     /// Borrow the installed capacity policy without charging or changing counters.
     pub(crate) fn scalar_text_limit(&self) -> usize {
         self.limits.scalar_text_bytes

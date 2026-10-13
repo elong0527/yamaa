@@ -64,6 +64,8 @@ conditions:
   invalid_date_text: {phases: [impute, validation]}
   invalid_datetime_text: {phases: [impute]}
   invalid_declaration: {phases: [validation]}
+  # REQ-1189, REQ-1191 and REQ-1242
+  invalid_derive_step: {phases: [validation]}
   invalid_field_type: {phases: [validation]}
   invalid_function_argument: {phases: [derivation, validation]}
   invalid_function_result: {phases: [derivation]}
@@ -177,6 +179,8 @@ conditions:
   unknown_codelist: {phases: [validation]}
   unknown_document: {phases: [validation]}
   unknown_field: {phases: [validation]}
+  # REQ-1189
+  unknown_derive_variable: {phases: [validation]}
   unknown_intermediate_driver_type: {phases: [validation]}
   unknown_operation: {phases: [validation]}
   unknown_project_function: {phases: [validation]}

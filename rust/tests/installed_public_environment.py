@@ -732,6 +732,50 @@ class PublicEnvironment(unittest.TestCase):
         self.assertTrue(result.issues.is_empty(), result.issues)
         self.assertEqual(self.report(result)["activation"]["tests"], [])
 
+    def test_aggregate_callback_keeps_original_current_types_and_selected_record(self):
+        case = self.study("negative-function-contract")
+        spec = """schema_version: '1.0'
+domain: TEST
+input:
+  SRC: {path: input.csv, types: {ID: int, N: float}}
+  B: {path: input.csv, types: {ID: int, N: str}}
+base: SRC
+keys: [ID, N]
+intermediates:
+  - {id: CAP, dataset: SRC, key: {N: SRC.N}, order_by: [SRC.ID], keep: first}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - {name: N, type: float, derivation: SRC.N}
+  - name: VALUE
+    type: float
+    derivation:
+      aggregate:
+        key: {ID: ID}
+        derive:
+          - {name: BASE, type: float, derivation: B.N}
+          - {name: V, type: float, derivation: {function: {name: project_value, args: {x: CAP.N}}}}
+        expr: SUM(V)
+output: {path: output.csv, columns: [ID, N, VALUE]}
+"""
+        (case / "spec.yaml").write_text(spec)
+        (case / "input.csv").write_text("ID,N\n1,10\n1,30\n2,40\n")
+        result = yamaa.domain("spec.yaml", environment="python/environment.yaml")
+        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.output.rows(), [(1, 10.0, 20.0), (1, 30.0, 60.0), (2, 40.0, 40.0)])
+        observed = self.report(result)
+        self.assertEqual([row["function"] for row in observed["activation"]["bindings"]], ["project_value"])
+        self.assertTrue(result.save())
+        self.assertEqual((case / "output.csv").read_bytes(), b"ID,N,VALUE\n1,10,20\n1,30,60\n2,40,40\n")
+        self.assertTrue(result.save())
+        self.assertEqual(self.report(result)["activation"], observed["activation"])
+        (case / "spec.yaml").write_text(spec.replace(", order_by: [SRC.ID], keep: first", ""))
+        with (
+            patch.object(host, "verify_versions", side_effect=AssertionError("lock")),
+            patch.object(host, "resolve_callable", side_effect=AssertionError("code")),
+        ):
+            issues = yamaa.check("spec.yaml", environment="python/environment.yaml").issues.to_dicts()
+        self.assertTrue(any(row["condition"] == "invalid_derive_step" and row["requirement"] == "REQ-1242" for row in issues), issues)
+
 
 if __name__ == "__main__":
     unittest.main()
