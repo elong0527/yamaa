@@ -312,7 +312,12 @@ class PublicEnvironment(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="yamaa-public-environment-")
         self.addCleanup(self.temporary.cleanup)
-        self.directory = Path(self.temporary.name)
+        # One resolved directory identity for every call: hosts spell the
+        # same temp directory differently (the macOS /var symlink, Windows
+        # 8.3 short names), and a missing environment is reported with the
+        # caller's spelling, so chdir and expectations must share the
+        # resolved form.
+        self.directory = Path(self.temporary.name).resolve()
         self.previous = Path.cwd()
         self.addCleanup(os.chdir, self.previous)
 
