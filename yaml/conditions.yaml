@@ -177,10 +177,10 @@ conditions:
   unique_failed: {phases: [verification]}
   unknown_artifact_profile: {phases: [validation]}
   unknown_codelist: {phases: [validation]}
-  unknown_document: {phases: [validation]}
-  unknown_field: {phases: [validation]}
   # REQ-1189
   unknown_derive_variable: {phases: [validation]}
+  unknown_document: {phases: [validation]}
+  unknown_field: {phases: [validation]}
   unknown_intermediate_driver_type: {phases: [validation]}
   unknown_operation: {phases: [validation]}
   unknown_project_function: {phases: [validation]}
