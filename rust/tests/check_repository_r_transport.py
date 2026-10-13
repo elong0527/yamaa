@@ -38,7 +38,7 @@ with TemporaryDirectory(prefix="yamaa-real-r-validator-") as temporary:
         # The exact public Check program receives original declarations, with no
         # study source or callable invocation/publication authority.
         shutil.rmtree(case / "input")
-        specification = case / "spécification.yaml"
+        specification = case / "sp\u00e9cification.yaml"
         (case / "spec.yaml").rename(specification)
         rows = transport.rows(specification, environment, required=True)
         if name in positive:
@@ -81,7 +81,7 @@ with TemporaryDirectory(prefix="yamaa-real-r-validator-") as temporary:
                         "type": "str",
                         "label": "Text",
                         "derivation": {"literal": "x"},
-                        "verifications": [{"matches": {"pattern": "é("}}],
+                        "verifications": [{"matches": {"pattern": "\u00e9("}}],
                     },
                 ],
                 "output": {"path": "never.csv", "columns": ["ID", "TEXT"]},
@@ -100,6 +100,6 @@ with TemporaryDirectory(prefix="yamaa-real-r-validator-") as temporary:
         "REQ-0827",
         ["columns.TEXT.verifications[0].matches.pattern"],
     )
-    assert json.loads(context) == {"pattern": "é("}
+    assert json.loads(context) == {"pattern": "\u00e9("}
     assert not (work / "never.csv").exists()
     print("repository validator real-R UTF-8 context and array paths passed")
