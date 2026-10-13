@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     from yamaa.submission import generate_study_document
 
 _EXPORTS = {
+    "read_odm": ("yamaa._odm.readers", "read_odm"),
+    "write_odm_parquet": ("yamaa._odm.parquet", "write_odm_parquet"),
     "define": ("yamaa._define", "define"),
     "DefineError": ("yamaa._define", "DefineError"),
     "domain": ("yamaa._domain", "domain"),
@@ -22,7 +24,7 @@ _EXPORTS = {
 
 
 def __getattr__(name: str):
-    """Load a reference export only when that export is requested."""
+    """Load a requested facade or helper without importing unrelated implementations."""
     if name not in _EXPORTS:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module, attribute = _EXPORTS[name]
@@ -47,5 +49,7 @@ __all__ = [
     "define",
     "domain",
     "generate_study_document",
+    "read_odm",
+    "write_odm_parquet",
     "yamaa_domain",
 ]

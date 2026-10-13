@@ -350,6 +350,8 @@ jobs:
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_define.py" installed_public_define.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_environment.py" installed_public_environment.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_grammar.py" installed_public_grammar.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/installed_odm_helpers.py" installed_odm_helpers.py
+          cp "${GITHUB_WORKSPACE}/python/tests/odm/_odm_documents.py" odm_documents.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_public_producers.py" installed_public_producers.py
           cp "${GITHUB_WORKSPACE}/rust/tests/installed_verification_logs.py" installed_verification_logs.py
           cp "${GITHUB_WORKSPACE}/rust/tools/private_schema_requirements.py" private_schema_requirements.py
