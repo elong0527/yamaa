@@ -282,3 +282,30 @@ fn row_scalar_derivations_share_the_same_raw_contract() {
         b"ID,RESULT,MAXIMUM\na,[abc],3\n"
     );
 }
+
+#[test]
+fn row_contains_keeps_boolean_conversion_failure_and_refuses_every_save() {
+    for (pattern, expected) in [("z", false), ("a", true)] {
+        let source = format!(
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: RESULT, type: str}}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {{str_contains: {{source: SRC.TEXT, pattern: '{pattern}'}}}}\n"
+        );
+        let fixture = bespoke(&source, b"ID,TEXT\na,abc\n");
+        let mut result = fixture.run();
+        let issues = result.issues();
+        assert_eq!(issues.len(), 1);
+        let issue = issue_json(&issues[0]);
+        assert_eq!(issue["phase"], "convert");
+        assert_eq!(issue["condition"], "conversion_failed");
+        assert_eq!(issue["requirement"], "REQ-0013");
+        assert_eq!(issue["context"]["value"], serde_json::json!(expected));
+        assert!(result.output().is_none());
+        for _ in 0..2 {
+            assert!(result.save().is_err());
+            assert_eq!(
+                result.issues().iter().map(issue_json).collect::<Vec<_>>(),
+                vec![issue.clone()]
+            );
+            assert!(!fixture.0.join("output.csv").exists());
+        }
+    }
+}

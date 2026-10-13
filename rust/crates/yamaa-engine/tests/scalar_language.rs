@@ -190,3 +190,99 @@ fn equal_extremes_retain_the_first_dates_collected_precision() {
         assert_eq!(date.collected_precision(), DatePrecision::Month);
     }
 }
+
+#[test]
+fn equal_numeric_extremes_keep_first_present_signed_zero_and_collect_every_operand() {
+    let source = TableSchema::new(vec![
+        Column {
+            name: "ID".into(),
+            kind: ColumnType::Str,
+        },
+        Column {
+            name: "INTEGER".into(),
+            kind: ColumnType::Int,
+        },
+        Column {
+            name: "FLOAT".into(),
+            kind: ColumnType::Float,
+        },
+        Column {
+            name: "MISSING".into(),
+            kind: ColumnType::Float,
+        },
+    ])
+    .unwrap();
+    let output = TableSchema::new(vec![
+        Column {
+            name: "ID".into(),
+            kind: ColumnType::Str,
+        },
+        Column {
+            name: "RESULT".into(),
+            kind: ColumnType::Float,
+        },
+    ])
+    .unwrap();
+    for largest in [true, false] {
+        for (columns, expected) in [([3, 1, 2], 0.0_f64), ([3, 2, 1], -0.0_f64)] {
+            let table = Table {
+                schema: source.clone(),
+                values: vec![
+                    Value::Str("a".into()),
+                    Value::Int(0),
+                    Value::float(-0.0),
+                    Value::Missing,
+                ],
+                reads: RefCell::default(),
+            };
+            let operation = if largest { "greatest" } else { "least" };
+            let path = format!("columns.RESULT.derivation.{operation}");
+            let operands = columns
+                .into_iter()
+                .enumerate()
+                .map(|(index, column)| Assignment {
+                    column: 1,
+                    path: format!("{path}.sources[{index}]"),
+                    expression: Expression::Source(column),
+                })
+                .collect();
+            let plan = DatasetPlan::new(
+                source.clone(),
+                output.clone(),
+                vec![RowTemplate {
+                    mode: RowMode::Records,
+                    assignments: vec![
+                        Assignment {
+                            column: 0,
+                            path: "columns.ID.derivation".into(),
+                            expression: Expression::Source(0),
+                        },
+                        Assignment {
+                            column: 1,
+                            path,
+                            expression: Expression::Extreme { operands, largest },
+                        },
+                    ],
+                    filter: None,
+                }],
+                vec![],
+                vec![0],
+                vec![],
+            )
+            .unwrap();
+            let result = plan.execute_observed(&table, limits()).result.unwrap();
+            let Value::Float(value) = result.dataset.rows()[0][1] else {
+                panic!("float output")
+            };
+            assert_eq!(
+                value.get().to_bits(),
+                expected.to_bits(),
+                "{operation} {columns:?}"
+            );
+            assert_eq!(
+                *table.reads.borrow(),
+                [0, columns[0], columns[1], columns[2]]
+            );
+        }
+    }
+}
