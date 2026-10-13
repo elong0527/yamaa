@@ -21,6 +21,7 @@ import yaml
 # `from validate_repository import ...` call sites keep working.
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # noqa: E402
 import _reference_checks  # noqa: E402
+import _typed_fixtures  # noqa: E402
 import _native_csv  # noqa: E402
 import _native_regex  # noqa: E402
 from editorial import (  # noqa: E402
@@ -493,37 +494,39 @@ class PredicateSemanticIssue(str):
         return value
 
 
-# R004's closed vocabulary. `yaml/grammar/predicate.yaml` is its single
-# source, and validate_grammar_contracts fails when the two drift apart.
-# The parser itself is the runtime's: `yamaa.expressions.predicates` already
-# returns this validator's AST shape, so this file owns no second grammar.
-# The import is lazy (see the regex binding note above): importing the yamaa
-# package pulls in polars, which this module only needs when it actually
-# parses a predicate.
-PREDICATE_COMPARISON_OPERATORS = None
-PREDICATE_RESERVED_NAMES = None
-PredicateError = None
-parse_predicate = None
+# Independent closed-vocabulary truth used by grammar and naming controls.
+PREDICATE_COMPARISON_OPERATORS = ("=", "<>", "<", "<=", ">", ">=")
+PREDICATE_RESERVED_NAMES = frozenset({
+    "AND", "BETWEEN", "DATE", "DATETIME", "ESCAPE", "FALSE", "IN", "IS",
+    "LIKE", "NOT", "NULL", "OR", "TRUE",
+})
+
+
+class PredicateError(ValueError):
+    condition = "invalid_predicate"
+
+    def __init__(self, message, position, requirement="REQ-0188"):
+        self.position = position
+        self.requirement = requirement
+        super().__init__(f"{message} at character {position + 1}")
+
+
+def parse_predicate(text):
+    if not isinstance(text, str) or not text:
+        raise PredicateError("predicate must be a non-empty string", 0)
+    outcome = _typed_fixtures.observe("predicate", text)
+    if outcome["status"] == "parsed":
+        return outcome["ast"]
+    if outcome["status"] == "invalid":
+        raise PredicateError(
+            outcome["message"], outcome["position"]["character"],
+            outcome["requirement"],
+        )
+    raise RuntimeError(f"typed predicate fixture refused: {outcome!r}")
 
 
 def _ensure_predicate_binding():
-    """Import yamaa.expressions.predicates on first use, or exit when unavailable."""
-    global PREDICATE_COMPARISON_OPERATORS, PREDICATE_RESERVED_NAMES
-    global PredicateError, parse_predicate
-    if parse_predicate is None:
-        try:
-            (
-                comparison_operators, reserved_names, predicate_error, parse,
-            ) = _reference_checks.predicate_binding()
-        except ImportError as error:
-            raise SystemExit(
-                "validate_repository.py requires the yamaa package "
-                "(run: uv sync --project python --locked)"
-            ) from error
-        PREDICATE_COMPARISON_OPERATORS = comparison_operators
-        PREDICATE_RESERVED_NAMES = reserved_names
-        PredicateError = predicate_error
-        parse_predicate = parse
+    """The development fixture is resolved only when an assertion needs it."""
 
 
 def predicate_operand_type(operand, resolver, errors):
@@ -704,255 +707,26 @@ PROHIBITED_NUMERIC_KEYWORDS = {
 }
 
 
-def tokenize_numeric_expression(text):
-    """Tokenize the closed R010 scalar numeric language."""
-    tokens = []
-    index = 0
-    length = len(text)
-    while index < length:
-        char = text[index]
-        if char.isspace():
-            index += 1
-            continue
-
-        number = re.match(
-            r'[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?',
-            text[index:],
-        )
-        if number is not None:
-            value = number.group(0)
-            end = index + len(value)
-            tokens.append(('NUMBER', value, index, end))
-            index = end
-            continue
-
-        name = re.match(r'[A-Za-z_][A-Za-z0-9_]*', text[index:])
-        if name is not None:
-            value = name.group(0)
-            end = index + len(value)
-            if end < length and text[end] == '.':
-                suffix = re.match(
-                    r'[A-Za-z_][A-Za-z0-9_]*', text[end + 1:]
-                )
-                if suffix is None:
-                    raise NumericExpressionError(
-                        'invalid qualified identifier', index, end + 1
-                    )
-                value += '.' + suffix.group(0)
-                end += 1 + len(suffix.group(0))
-            construct = PROHIBITED_NUMERIC_KEYWORDS.get(value.upper())
-            if '.' not in value and construct is not None:
-                raise NumericExpressionError(
-                    f'{construct} construct is not permitted in a '
-                    'numeric expression',
-                    index,
-                    end,
-                    condition='prohibited_construct',
-                    context={'construct': construct},
-                )
-            tokens.append(('NAME', value, index, end))
-            index = end
-            continue
-
-        token_kinds = {
-            '+': 'PLUS',
-            '-': 'MINUS',
-            '*': 'STAR',
-            '/': 'SLASH',
-            '(': 'LPAREN',
-            ')': 'RPAREN',
-            ',': 'COMMA',
-        }
-        if char in token_kinds:
-            tokens.append((token_kinds[char], char, index, index + 1))
-            index += 1
-            continue
-
-        if char in "<>=!":
-            end = index + 1
-            if end < length and text[end] == '=':
-                end += 1
-            raise NumericExpressionError(
-                'comparison is not permitted in a numeric expression',
-                index,
-                end,
-                condition='prohibited_construct',
-                context={'construct': 'comparison'},
-            )
-        if char == "'":
-            end = index + 1
-            while end < length:
-                if text[end] != "'":
-                    end += 1
-                    continue
-                if end + 1 < length and text[end + 1] == "'":
-                    end += 2
-                    continue
-                end += 1
-                break
-            raise NumericExpressionError(
-                'string literals are not permitted in a numeric expression',
-                index,
-                end,
-                condition='prohibited_construct',
-                context={'construct': 'string'},
-            )
-        raise NumericExpressionError(
-            f"unexpected character {char!r}", index, index + 1
-        )
-
-    tokens.append(('EOF', '', length, length))
-    return tokens
-
-
-class NumericExpressionParser:
-    def __init__(self, text):
-        self.text = text
-        self.tokens = tokenize_numeric_expression(text)
-        self.index = 0
-
-    @property
-    def token(self):
-        return self.tokens[self.index]
-
-    def advance(self):
-        token = self.token
-        self.index += 1
-        return token
-
-    def require(self, kind, message):
-        if self.token[0] != kind:
-            raise NumericExpressionError(
-                message, self.token[2], self.token[3]
-            )
-        return self.advance()
-
-    def parse(self):
-        node = self.parse_expression()
-        if self.token[0] != 'EOF':
-            raise NumericExpressionError(
-                'unexpected trailing token', self.token[2], self.token[3]
-            )
-        return node
-
-    def parse_expression(self):
-        node = self.parse_term()
-        while self.token[0] in {'PLUS', 'MINUS'}:
-            operator = self.advance()
-            right = self.parse_term()
-            node = {
-                'kind': 'binary',
-                'operator': operator[1],
-                'left': node,
-                'right': right,
-                'operator_span': (operator[2], operator[3]),
-                'span': (node['span'][0], right['span'][1]),
-            }
-        return node
-
-    def parse_term(self):
-        node = self.parse_factor()
-        while self.token[0] in {'STAR', 'SLASH'}:
-            operator = self.advance()
-            right = self.parse_factor()
-            node = {
-                'kind': 'binary',
-                'operator': operator[1],
-                'left': node,
-                'right': right,
-                'operator_span': (operator[2], operator[3]),
-                'span': (node['span'][0], right['span'][1]),
-            }
-        return node
-
-    def parse_factor(self):
-        if self.token[0] in {'PLUS', 'MINUS'}:
-            operator = self.advance()
-            value = self.parse_primary()
-            return {
-                'kind': 'unary',
-                'operator': operator[1],
-                'value': value,
-                'operator_span': (operator[2], operator[3]),
-                'span': (operator[2], value['span'][1]),
-            }
-        return self.parse_primary()
-
-    def parse_primary(self):
-        token = self.token
-        if token[0] == 'NUMBER':
-            self.advance()
-            value_type = (
-                'float'
-                if '.' in token[1] or 'e' in token[1].lower()
-                else 'int'
-            )
-            return {
-                'kind': 'number',
-                'type': value_type,
-                'value': token[1],
-                'span': (token[2], token[3]),
-            }
-        if token[0] == 'NAME':
-            self.advance()
-            keyword = token[1].upper()
-            if self.token[0] != 'LPAREN':
-                if keyword == 'NULL':
-                    return {
-                        'kind': 'null',
-                        'span': (token[2], token[3]),
-                    }
-                if keyword in PROHIBITED_NUMERIC_KEYWORDS:
-                    construct = PROHIBITED_NUMERIC_KEYWORDS[keyword]
-                    raise NumericExpressionError(
-                        f'{construct} construct is not permitted in a '
-                        'numeric expression',
-                        token[2],
-                        token[3],
-                        condition='prohibited_construct',
-                        context={'construct': construct},
-                    )
-                return {
-                    'kind': 'identifier',
-                    'name': token[1],
-                    'span': (token[2], token[3]),
-                }
-
-            self.advance()
-            arguments = []
-            if self.token[0] != 'RPAREN':
-                arguments.append(self.parse_expression())
-                while self.token[0] == 'COMMA':
-                    self.advance()
-                    arguments.append(self.parse_expression())
-            close = self.require('RPAREN', "expected ')' to close function")
-            return {
-                'kind': 'call',
-                'name': token[1],
-                'arguments': arguments,
-                'name_span': (token[2], token[3]),
-                'span': (token[2], close[3]),
-            }
-        if token[0] == 'LPAREN':
-            open_token = self.advance()
-            node = self.parse_expression()
-            close = self.require('RPAREN', "expected ')' to close expression")
-            node = dict(node)
-            node['span'] = (open_token[2], close[3])
-            return node
-        raise NumericExpressionError(
-            'expected a number, identifier, function, NULL, or parenthesis',
-            token[2],
-            token[3],
-        )
+def _expression_fixture(contract, text, error_type):
+    if not isinstance(text, str) or not text:
+        raise error_type(f"{contract} expression must be a non-empty string", 0, 0)
+    outcome = _typed_fixtures.observe(contract, text)
+    if outcome["status"] == "parsed":
+        return _typed_fixtures.spans(outcome["ast"])
+    if outcome["status"] != "invalid":
+        raise RuntimeError(f"typed {contract} fixture refused: {outcome!r}")
+    context = outcome["context"]
+    start = outcome["position"]["character"]
+    end = start + len(context["function"]) if "function" in context else min(start + 1, len(text))
+    start, end = outcome.get("span", [start, end])
+    raise error_type(
+        outcome["condition"].replace("_", " "), start, end,
+        condition=outcome["condition"], context=context,
+    )
 
 
 def parse_numeric_expression(text):
-    if not isinstance(text, str) or not text:
-        raise NumericExpressionError(
-            'numeric expression must be a non-empty string', 0, 0
-        )
-    return NumericExpressionParser(text).parse()
+    return _expression_fixture("numeric", text, NumericExpressionError)
 
 
 class AggregateExpressionError(NumericExpressionError):
@@ -979,220 +753,8 @@ class AggregateExpressionError(NumericExpressionError):
 AGGREGATE_REDUCERS = {'SUM', 'COUNT', 'MIN', 'MAX', 'MEAN', 'ONLY'}
 
 
-def tokenize_aggregate_expression(text):
-    """Tokenize the closed R013 aggregate language."""
-    tokens = []
-    index = 0
-    length = len(text)
-    while index < length:
-        char = text[index]
-        if char.isspace():
-            index += 1
-            continue
-
-        number = re.match(
-            r'[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?',
-            text[index:],
-        )
-        if number is not None:
-            value = number.group(0)
-            end = index + len(value)
-            tokens.append(('NUMBER', value, index, end))
-            index = end
-            continue
-
-        name = re.match(r'[A-Za-z_][A-Za-z0-9_]*', text[index:])
-        if name is not None:
-            value = name.group(0)
-            end = index + len(value)
-            kind = 'NAME'
-            if end < length and text[end] == '.':
-                if end + 1 < length and text[end + 1] == '*':
-                    value += '.*'
-                    end += 2
-                    kind = 'QUALIFIED_STAR'
-                else:
-                    suffix = re.match(
-                        r'[A-Za-z_][A-Za-z0-9_]*', text[end + 1:]
-                    )
-                    if suffix is None:
-                        raise AggregateExpressionError(
-                            'invalid qualified identifier', index, end + 1
-                        )
-                    value += '.' + suffix.group(0)
-                    end += 1 + len(suffix.group(0))
-            construct = PROHIBITED_NUMERIC_KEYWORDS.get(value.upper())
-            if '.' not in value and construct is not None:
-                raise AggregateExpressionError(
-                    f'{construct} construct is not permitted in an '
-                    'aggregate expression',
-                    index,
-                    end,
-                    condition='prohibited_construct',
-                    context={'construct': construct},
-                )
-            tokens.append((kind, value, index, end))
-            index = end
-            continue
-
-        token_kinds = {
-            '+': 'PLUS',
-            '-': 'MINUS',
-            '*': 'STAR',
-            '/': 'SLASH',
-            '(': 'LPAREN',
-            ')': 'RPAREN',
-            ',': 'COMMA',
-        }
-        if char in token_kinds:
-            tokens.append((token_kinds[char], char, index, index + 1))
-            index += 1
-            continue
-        if char in '<>=!':
-            end = index + 1
-            if end < length and text[end] == '=':
-                end += 1
-            raise AggregateExpressionError(
-                'comparison is not permitted in an aggregate expression',
-                index,
-                end,
-                condition='prohibited_construct',
-                context={'construct': 'comparison'},
-            )
-        if char == "'":
-            end = index + 1
-            while end < length:
-                if text[end] != "'":
-                    end += 1
-                    continue
-                if end + 1 < length and text[end + 1] == "'":
-                    end += 2
-                    continue
-                end += 1
-                break
-            raise AggregateExpressionError(
-                'string literals are not permitted in an aggregate expression',
-                index,
-                end,
-                condition='prohibited_construct',
-                context={'construct': 'string'},
-            )
-        raise AggregateExpressionError(
-            f"unexpected character {char!r}", index, index + 1
-        )
-    tokens.append(('EOF', '', length, length))
-    return tokens
-
-
-class AggregateExpressionParser(NumericExpressionParser):
-    def __init__(self, text):
-        self.text = text
-        self.tokens = tokenize_aggregate_expression(text)
-        self.index = 0
-
-    def require(self, kind, message):
-        if self.token[0] != kind:
-            raise AggregateExpressionError(
-                message, self.token[2], self.token[3]
-            )
-        return self.advance()
-
-    def parse(self):
-        node = self.parse_expression()
-        if self.token[0] != 'EOF':
-            raise AggregateExpressionError(
-                'unexpected trailing token', self.token[2], self.token[3]
-            )
-        return node
-
-    def parse_primary(self):
-        token = self.token
-        if token[0] == 'NUMBER':
-            self.advance()
-            return {
-                'kind': 'number',
-                'type': (
-                    'float'
-                    if '.' in token[1] or 'e' in token[1].lower()
-                    else 'int'
-                ),
-                'value': token[1],
-                'span': (token[2], token[3]),
-            }
-        if token[0] == 'NAME':
-            self.advance()
-            keyword = token[1].upper()
-            if self.token[0] != 'LPAREN':
-                if keyword == 'NULL':
-                    return {'kind': 'null', 'span': (token[2], token[3])}
-                return {
-                    'kind': 'identifier',
-                    'name': token[1],
-                    'span': (token[2], token[3]),
-                }
-
-            self.advance()
-            if keyword in AGGREGATE_REDUCERS:
-                if self.token[0] == 'QUALIFIED_STAR':
-                    star = self.advance()
-                    argument = {
-                        'kind': 'qualified_star',
-                        'dataset': star[1][:-2],
-                        'span': (star[2], star[3]),
-                    }
-                else:
-                    argument = self.parse_expression()
-                close = self.require(
-                    'RPAREN', "expected ')' to close reducer"
-                )
-                return {
-                    'kind': 'reduction',
-                    'name': token[1],
-                    'argument': argument,
-                    'name_span': (token[2], token[3]),
-                    'span': (token[2], close[3]),
-                }
-
-            arguments = []
-            if self.token[0] != 'RPAREN':
-                arguments.append(self.parse_expression())
-                while self.token[0] == 'COMMA':
-                    self.advance()
-                    arguments.append(self.parse_expression())
-            close = self.require('RPAREN', "expected ')' to close function")
-            return {
-                'kind': 'call',
-                'name': token[1],
-                'arguments': arguments,
-                'name_span': (token[2], token[3]),
-                'span': (token[2], close[3]),
-            }
-        if token[0] == 'LPAREN':
-            open_token = self.advance()
-            node = dict(self.parse_expression())
-            close = self.require('RPAREN', "expected ')' to close expression")
-            node['span'] = (open_token[2], close[3])
-            return node
-        if token[0] == 'QUALIFIED_STAR':
-            raise AggregateExpressionError(
-                'qualified star is valid only as COUNT argument',
-                token[2],
-                token[3],
-            )
-        raise AggregateExpressionError(
-            'expected a number, identifier, reducer, function, NULL, or '
-            'parenthesis',
-            token[2],
-            token[3],
-        )
-
-
 def parse_aggregate_expression(text):
-    if not isinstance(text, str) or not text:
-        raise AggregateExpressionError(
-            'aggregate expression must be a non-empty string', 0, 0
-        )
-    return AggregateExpressionParser(text).parse()
+    return _expression_fixture("aggregate", text, AggregateExpressionError)
 
 
 def promote_numeric_types(types):
@@ -2970,80 +2532,23 @@ class StringTemplateError(ValueError):
 
 
 def parse_string_template(text):
-    """Parse R012 and return its literal text and placeholder parts.
-
-    A part is the unit the grammar scans: a `text` part carries the literal
-    value a brace pair already unescaped, and a `placeholder` part carries
-    the name it binds. Callers that only need the bindings use
-    string_template_placeholders.
-    """
     if not isinstance(text, str):
         raise StringTemplateError(
-            'string template must be a string', 0, 0, 'invalid_template'
+            "string template must be a string", 0, 0, "invalid_template"
         )
-    parts = []
-    literal = []
-    literal_start = 0
-
-    def flush(end):
-        if literal:
-            parts.append({
-                'kind': 'text',
-                'value': ''.join(literal),
-                'span': (literal_start, end),
-            })
-            literal.clear()
-
-    index = 0
-    while index < len(text):
-        if text.startswith('{{', index) or text.startswith('}}', index):
-            if not literal:
-                literal_start = index
-            literal.append(text[index])
-            index += 2
-            continue
-        if text[index] == '}':
-            raise StringTemplateError(
-                'unmatched closing brace',
-                index,
-                index + 1,
-                'unmatched_brace',
-            )
-        if text[index] != '{':
-            if not literal:
-                literal_start = index
-            literal.append(text[index])
-            index += 1
-            continue
-        end = text.find('}', index + 1)
-        if end < 0:
-            raise StringTemplateError(
-                'unmatched opening brace',
-                index,
-                len(text),
-                'unmatched_brace',
-            )
-        placeholder = text[index + 1:end]
-        if '{' in placeholder or re.fullmatch(
-            r'[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*',
-            placeholder,
-        ) is None:
-            raise StringTemplateError(
-                f"invalid placeholder {placeholder!r}",
-                index,
-                end + 1,
-                'invalid_placeholder',
-                placeholder,
-            )
-        flush(index)
-        parts.append({
-            'kind': 'placeholder',
-            'name': placeholder,
-            'span': (index + 1, end),
-        })
-        index = end + 1
-    flush(len(text))
-    return parts
+    outcome = _typed_fixtures.observe("string-template", text)
+    if outcome["status"] == "parsed":
+        return _typed_fixtures.spans(outcome["parts"])
+    if outcome["status"] != "invalid":
+        raise RuntimeError(f"typed template fixture refused: {outcome!r}")
+    facts = outcome["context"]
+    span = outcome["span"]
+    reason = facts["reason"]
+    placeholder = facts.get("placeholder")
+    raise StringTemplateError(
+        f"invalid placeholder {placeholder!r}" if placeholder is not None else "unmatched brace",
+        span["character_start"], span["character_end"], reason, placeholder,
+    )
 
 
 def string_template_placeholders(text):
@@ -3737,30 +3242,29 @@ def order_resolved_spec_fields(spec, env):
 
 
 def expand_spec_windows(spec, env, strict=True, provenance=None, label=""):
-    expand_named_windows, SpecificationError, SchemaBundle = (
-        _reference_checks.window_binding()
+    """Replay named-window fixture truth through the shipped typed schema."""
+    outcome = _typed_fixtures.observe(
+        "windows", yaml.safe_dump(spec, allow_unicode=False), strict=strict
     )
-
-    bundle = SchemaBundle(
-        version=env.get('version', '1.0'),
-        path=Path(env.get('root', '.')) / 'yaml' / 'schema.yaml',
-        classes=env.get('classes', {}),
-        aliases=env.get('aliases', {}),
-        registries=env.get('registries', {}),
-    )
-    try:
-        return expand_named_windows(
-            spec, bundle, strict=strict, provenance=provenance
-        ), []
-    except SpecificationError as error:
+    if outcome["status"] == "expanded":
+        if provenance is not None:
+            updates = dict(provenance)
+            for logical, definition in outcome["references"]:
+                prefix = f"windows.{definition}"
+                for source_path, origin in list(updates.items()):
+                    if source_path.startswith(prefix + "."):
+                        updates[logical + source_path[len(prefix):]] = origin
+            provenance.update(updates)
+        return outcome["document"], []
+    if outcome["status"] == "invalid":
         return spec, [
             validation_diagnostic(
-                f"{label}.{item.spec_paths[0]}" if label else item.spec_paths[0],
-                item.condition, item.condition,
-                context=item.context,
+                f"{label}.{item['path']}" if label else item['path'],
+                item['condition'], item['condition'], context=item['context'],
             )
-            for item in error.diagnostics
+            for item in outcome["diagnostics"]
         ]
+    raise RuntimeError(f"typed window fixture refused: {outcome!r}")
 
 
 def finalize_resolved_inheritance(spec, env, provenance=None, label=""):

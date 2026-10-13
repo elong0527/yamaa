@@ -7,25 +7,6 @@ moving imports here does not qualify semantic delegation to yamaa.check.
 """
 
 
-def predicate_binding():
-    from yamaa.expressions.predicates import (
-        COMPARISON_OPERATORS,
-        RESERVED_NAMES,
-        PredicateError,
-        parse_predicate,
-    )
-
-    return COMPARISON_OPERATORS, RESERVED_NAMES, PredicateError, parse_predicate
-
-
-def window_binding():
-    from yamaa.schema.windows import expand_named_windows
-    from yamaa.specification.diagnostics import SpecificationError
-    from yamaa.specification.schema import SchemaBundle
-
-    return expand_named_windows, SpecificationError, SchemaBundle
-
-
 def parquet_binding():
     from yamaa.io.parquet import ParquetProfileFailure, parquet_source_fields
 
