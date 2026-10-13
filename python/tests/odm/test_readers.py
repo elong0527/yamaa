@@ -87,6 +87,27 @@ def test_item_cannot_be_null_and_contain_a_value(tmp_path: Path) -> None:
         list(iter_odm_records(source))
 
 
+@pytest.mark.parametrize("annotation", ["<!-- split -->", "<?pi data?>"])
+def test_comment_or_pi_inside_value_does_not_truncate_it(
+    tmp_path: Path, annotation: str
+) -> None:
+    # Character data after a comment or processing instruction inside a
+    # <Value> child is that annotation's tail text; reading only the
+    # element's .text silently drops it from the supposedly lossless row.
+    source = tmp_path / "annotated-value.xml"
+    source.write_text(
+        ODM_20.replace(
+            '<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>',
+            f'<ItemData ItemOID="I.TEST"><Value>PD{annotation}-L1</Value></ItemData>',
+        ),
+        encoding="utf-8",
+    )
+
+    rows = list(iter_odm_records(source))
+
+    assert [row.value for row in rows] == ["PD-L1", ""]
+
+
 @pytest.mark.parametrize("annotation", ["<!-- c -->", "<?pi data?>"])
 def test_comment_or_pi_inside_item_data_is_ignored(
     tmp_path: Path, annotation: str
