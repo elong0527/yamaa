@@ -329,7 +329,8 @@ Excel:
 | Variable | Origin | Comment |
 |---|---|---|
 | TRTSDTM | Predecessor: ADSL.TRTSDTM | merge by STUDYID USUBJID |
-| TRTEMFL | Derived | Y if ASTDTM >= TRTSDTM, else blank |
+| TEENDDTM | Predecessor: ADSL.TEENDDTM | window end: last exposure + 30 days, precomputed in ADSL |
+| TRTEMFL | Derived | Y if onset is in [TRTSDTM, TEENDDTM]; Y if onset is missing and the subject was treated; else blank |
 
 ```yaml
 keys: [STUDYID, USUBJID, AESEQ]
@@ -339,11 +340,21 @@ columns:
     type: datetime
     derivation: ADSL.TRTSDTM         # <- no merge statement anywhere
 
+  - name: TEENDDTM
+    type: datetime
+    derivation: ADSL.TEENDDTM
+
   - name: TRTEMFL
     type: str
     derivation:
-      flag: "ASTDTM >= TRTSDTM"     # <- Y when true; a comparison with a
-                                    #    missing moment is unknown, never true
+      case:
+        - when: "TRTSDTM IS NULL"
+          then: {literal: null}
+        - when: "ASTDTM IS NULL"
+          then: {literal: "Y"}
+        - when: "ASTDTM >= TRTSDTM AND ASTDTM <= TEENDDTM"
+          then: {literal: "Y"}
+        - otherwise: {literal: null}
     verifications:
       allowed_values:
         values: [Y]
@@ -356,10 +367,15 @@ What changed:
   exist on the right side. So "merge by STUDYID USUBJID" is not written: it is
   a consequence of `keys`. Multiple matches fail by default; relaxing it
   requires explicit `order_by` and `keep`.
-- `flag` derives `Y` when the predicate holds and leaves the flag empty
-  otherwise. A comparison with a missing moment is unknown, never true -- so
-  "else blank" needs no statement, and the `allowed_values` check pins the
-  flag to the one value it may carry.
+- The flag is a `case`, not a bare `flag` predicate, because the Excel
+  comment's rule has two edges a single comparison gets wrong. The window
+  has an end (`TEENDDTM`): an onset after it is not treatment-emergent. And
+  a comparison with a missing moment is unknown, never true -- so a bare
+  `flag: "ASTDTM >= TRTSDTM"` would leave a missing onset blank, where this
+  study's convention flags it `Y` for a treated subject (a missing onset
+  cannot be ruled pre-treatment) and blank only for an untreated one. The
+  `case` states each branch, and the `allowed_values` check pins the flag
+  to the one value it may carry.
 
 ### More examples
 
