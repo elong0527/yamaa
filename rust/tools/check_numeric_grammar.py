@@ -1,24 +1,17 @@
-"""Replay authoritative numeric grammar cases and compare reference diagnostics.
+"""Replay independent numeric grammar truth without a reference parser.
 
-Expected syntax, shape, identifiers and vocabulary come from committed YAML,
-never generated fixtures. A separate deterministic differential sample compares
-positions and precedence against the current Python parser, without evaluating.
-Run with the locked Python project environment (PyYAML and yamaa are required).
+Deterministic former differential inputs remain robustness observations; their
+historical comparisons do not establish current semantic truth.
 """
 
 import random
-import subprocess
 from pathlib import Path
-
-from yamaa.expressions.numeric import NumericError, numeric_identifiers, parse_numeric
-
-import yaml
 
 WORKSPACE = Path(__file__).resolve().parents[1]
 
 
-def reference_shape(node):
-    """Render Python syntax in the contract's host-independent shape notation."""
+def syntax_shape(node):
+    """Render typed syntax in the contract's host-independent shape notation."""
     kind = node["kind"]
     if kind == "number":
         return f"({node['type']} {node['value']})"
@@ -28,16 +21,16 @@ def reference_shape(node):
         return f"(id {node['name']})"
     if kind == "unary":
         operator = "pos" if node["operator"] == "+" else "neg"
-        return f"({operator} {reference_shape(node['value'])})"
+        return f"({operator} {syntax_shape(node['value'])})"
     if kind == "binary":
         return (
-            f"({node['operator']} {reference_shape(node['left'])} "
-            f"{reference_shape(node['right'])})"
+            f"({node['operator']} {syntax_shape(node['left'])} "
+            f"{syntax_shape(node['right'])})"
         )
     if kind == "call":
-        arguments = " ".join(reference_shape(arg) for arg in node["arguments"])
+        arguments = " ".join(syntax_shape(arg) for arg in node["arguments"])
         return f"(call {node['name']} {arguments})"
-    raise AssertionError(f"unexpected reference node: {node!r}")
+    raise AssertionError(f"unexpected syntax node: {node!r}")
 
 
 def contract_cases(contract):
@@ -108,86 +101,11 @@ def differential_sources():
     return sources
 
 
-def run_probe(sources):
-    """Build once and replay all sources through the Rust line protocol."""
-    result = subprocess.run(
-        [
-            "cargo",
-            "run",
-            "--offline",
-            "--quiet",
-            "-p",
-            "yamaa-core",
-            "--example",
-            "numeric_grammar_probe",
-        ],
-        cwd=WORKSPACE,
-        input="".join(text.encode().hex() + "\n" for text in sources),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    rows = [line.split("\t") for line in result.stdout.splitlines()]
-    if len(rows) != len(sources):
-        raise AssertionError(
-            f"incomplete probe: {len(rows)} for {len(sources)} sources"
-        )
-    return rows
-
-
-def decoded(value):
-    """Decode a hex UTF-8 protocol field."""
-    return bytes.fromhex(value).decode()
-
-
-def compare_reference(text, actual):
-    """Compare exact shapes, identifier order, and zero-based error coordinates."""
-    try:
-        node = parse_numeric(text)
-    except NumericError as error:
-        expected = [
-            "reject",
-            error.condition,
-            error.requirement,
-            str(len(text[: error.position].encode())),
-            str(error.position),
-        ]
-    else:
-        expected = [
-            "accept",
-            reference_shape(node).encode().hex(),
-            ",".join(numeric_identifiers(node)).encode().hex(),
-        ]
-    if actual != expected:
-        raise AssertionError(f"{text!r}: Rust {actual!r}, Python {expected!r}")
-
-
 def main():
-    """Fail CI when the core differs from shared truth or reference diagnostics."""
-    contract = yaml.safe_load(
-        (WORKSPACE.parent / "yaml/grammar/numeric.yaml").read_text()
-    )
-    cases = contract_cases(contract)
-    sources = [case["text"] for case in cases] + differential_sources()
-    actual = run_probe(sources)
-    for case, row in zip(cases, actual, strict=False):
-        if row[0] != case["parse"]:
-            raise AssertionError(f"{case['id']}: {row!r}")
-        if row[0] == "reject":
-            if row[1] != case["condition"]:
-                raise AssertionError(f"{case['id']}: {row!r}")
-        else:
-            if "shape" in case and decoded(row[1]) != " ".join(case["shape"].split()):
-                raise AssertionError(f"{case['id']}: shape {decoded(row[1])!r}")
-            if "identifiers" in case:
-                names = decoded(row[2]).split(",") if row[2] else []
-                if sorted(names) != sorted(case["identifiers"]):
-                    raise AssertionError(f"{case['id']}: identifiers {names!r}")
-    for text, row in zip(sources, actual, strict=True):
-        compare_reference(text, row)
-    print(
-        f"Numeric grammar: {len(contract['cases'])} shared cases, {len(cases)} contract checks, {len(sources)} reference comparisons passed"
-    )
+    """Replay independent numeric truth with the retained typed syntax fixture."""
+    from check_numeric_syntax import main as check
+
+    check()
 
 
 if __name__ == "__main__":

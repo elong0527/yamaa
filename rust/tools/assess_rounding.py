@@ -1,8 +1,8 @@
-"""Characterize the Python reference against the independent REQ-0418 rule.
+"""Observe compiled rounding policies against the independent exact rational oracle.
 
-The oracle uses exact rational arithmetic on the promoted binary64 input and the
-specified decimal quantum. It does not call Python round, the reference helper,
-or a candidate Rust implementation. Agreement on this sample is not qualification.
+Both existing policies replay the unchanged boundary corpus with exact bit and
+input identities. Historical scalar assessment remains available for retained
+reporting controls; component success does not qualify installed hosts.
 """
 
 import argparse
@@ -122,7 +122,11 @@ def cases():
 
 
 def assess(samples, reference):
-    """Retain exact discrepancies and escaped exceptions without blessing reference truth."""
+    """Retain historical scalar discrepancies/exceptions for reporting controls.
+
+    Active qualification uses compiled_assessment; this callable never supplies
+    an independent oracle or current native qualification.
+    """
     observations = []
     mismatches = []
     seen = set()
@@ -168,14 +172,64 @@ def assess(samples, reference):
     }
 
 
+def compiled_assessment(samples, lines):
+    """Retain discrepancies while strictly binding each compiled policy observation."""
+    from check_rounding import POLICIES
+
+    if not samples or len(lines) != len(samples) * len(POLICIES):
+        raise ValueError("incomplete rounding assessment")
+    if len({case for case, _, _ in samples}) != len(samples):
+        raise ValueError("duplicate rounding case")
+    observations = []
+    for index, (case, value, digits) in enumerate(samples):
+        expected = rational_round(value, digits)
+        for offset, policy in enumerate(POLICIES):
+            fields = lines[index * len(POLICIES) + offset].split("\t")
+            if len(fields) != 5 or fields[:4] != [
+                case,
+                policy,
+                bits(value),
+                str(digits),
+            ]:
+                raise ValueError("rounding observation identity differs")
+            observations.append(
+                {
+                    "case": case,
+                    "policy": policy,
+                    "input": bits(value),
+                    "digits": str(digits),
+                    "rational": expected,
+                    "candidate": fields[4],
+                }
+            )
+    mismatches = [row for row in observations if row["candidate"] != row["rational"]]
+    return {
+        "schema_version": 2,
+        "corpus": "rounding-boundaries-v1",
+        "oracle": "exact binary64 input, exact decimal quantum and 2^-26 near-tie interval",
+        "consumer": "retained compiled rounding fixture",
+        "policies": list(POLICIES),
+        "qualification": "blocked-by-mismatches" if mismatches else "not-qualified",
+        "counts": {
+            "samples": len(samples),
+            "observations": len(observations),
+            "exact": len(observations) - len(mismatches),
+            "mismatches": len(mismatches),
+        },
+        "observations": observations,
+        "mismatches": mismatches,
+    }
+
+
 def main():
-    """Assess the existing scalar helper and save evidence separately from golden outputs."""
-    from yamaa.expressions.numeric import _round_half_away_from_zero_scalar
+    """Assess compiled policies with the existing independent rational oracle."""
+    from check_rounding import observe
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    report = assess(cases(), _round_half_away_from_zero_scalar)
+    samples = cases()
+    report = compiled_assessment(samples, observe(samples))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"Rounding: {report['counts']}; {report['qualification']}")

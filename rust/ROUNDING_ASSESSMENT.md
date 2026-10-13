@@ -1,5 +1,12 @@
 # Decimal rounding characterization
 
+The reference comparisons below are historical evidence. The active
+`tools/assess_rounding.py` now observes the compiled component under both
+`ReferenceSubset` and `PortableLibmV1` against the same unchanged 2,936-case
+rational oracle. Its 5,872 observations retain exact case, policy, input, digit
+and result identities; the retiring scalar helper is never imported. Component
+reports remain `not-qualified` when exact and do not qualify installed hosts.
+
 Status: Python and the Rust scalar compiler now follow the exact near-tie rule.
 Rust enables ROUND_HALF_AWAY_FROM_ZERO under both math policies. The initial assessment
 in #1623 did not change production behavior. Its evidence is retained below;
@@ -108,5 +115,6 @@ compiled evaluator and compares all 5,872 results (both math policies) exactly
 with the rational oracle. It validates case identities, policies and input bits
 before results, including positive zero and normalized missingness. Missing,
 extra or reordered outputs fail. Native CI runs this gate on all six OS/Python
-combinations, alongside the historical Python assessment reports. Probe results
+combinations, with native component assessment reports. The historical Python comparisons
+above are retained independently. Probe results
 never rewrite the oracle or shared fixture expectations.

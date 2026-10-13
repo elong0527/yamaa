@@ -138,14 +138,14 @@ def check(expected, actual, kind):
         assert actual["match"][extraction["group"]] == extraction["value"]
 
 
-def main():
-    """Probe the actual compiled core; do not write or repair expected truth."""
-    observations = cases()
+def replay(observations):
+    """Observe the existing compiled fixture without a reference implementation."""
     run = subprocess.run(
         [
             "cargo",
             "run",
             "--offline",
+            "--locked",
             "--quiet",
             "-p",
             "yamaa-adapters",
@@ -165,6 +165,13 @@ def main():
     # JSON permits U+0085/U+2028 inside strings; only LF delimits probe records.
     responses = [json.loads(line) for line in run.stdout.split("\n") if line]
     assert len(responses) == len(observations)
+    return responses
+
+
+def main():
+    """Probe the actual compiled core; do not write or repair expected truth."""
+    observations = cases()
+    responses = replay(observations)
     for (identifier, _, _, expected, kind), actual in zip(
         observations, responses, strict=True
     ):

@@ -1,5 +1,6 @@
 """Audit retained numerical decisions without generating or loosening goldens."""
 
+import builtins
 import json
 import os
 import sys
@@ -52,11 +53,8 @@ class TemporaryWorkspaceCleanup(unittest.TestCase):
         failure = RuntimeError("original witness failure")
         fake = ModuleType("yamaa")
         fake._native = ModuleType("yamaa._native")
-        reference = ModuleType("yamaa._reference_domain")
-        reference.yamaa_domain = lambda *args, **kwargs: None
         modules = {
             "yamaa": fake,
-            "yamaa._reference_domain": reference,
             "yaml": ModuleType("yaml"),
         }
 
@@ -98,21 +96,86 @@ class PublicNumericSuccessor(unittest.TestCase):
             raise unittest.SkipTest("installed native package is unavailable") from None
         if not hasattr(_native, "_CORE_VERSION"):
             raise unittest.SkipTest("probe-free installed package is unavailable")
-        cls.report = json.loads((TOOLS.parent / "qualification/math-decision-v1.json").read_text())
+        cls.report = json.loads(
+            (TOOLS.parent / "qualification/math-decision-v1.json").read_text()
+        )
+
+    def setUp(self):
+        original = builtins.__import__
+
+        def reject_reference(name, *args, **kwargs):
+            if name.startswith(
+                (
+                    "yamaa.expressions",
+                    "yamaa.runtime",
+                    "yamaa.planning",
+                    "yamaa.specification",
+                    "yamaa._reference",
+                )
+            ):
+                raise AssertionError("retiring semantic import: " + name)
+            return original(name, *args, **kwargs)
+
+        guard = patch("builtins.__import__", side_effect=reject_reference)
+        guard.start()
+        self.addCleanup(guard.stop)
+
+    def test_current_five_original_fixtures_use_exact_public_results(self):
+        evidence = assess_math_decision.fixture_evidence()
+        self.assertEqual(
+            {row["name"] for row in evidence},
+            {
+                "adam-adeg-derived-intervals",
+                "schema-numeric-functions",
+                "negative-log-zero",
+                "adam-adsl-bmi",
+                "adam-advs-percentiles",
+            },
+        )
+        for row in evidence:
+            with self.subTest(fixture=row["name"]):
+                if row["name"] == "negative-log-zero":
+                    self.assertTrue(row["exact_diagnostic"])
+                    self.assertEqual(row["native_artifacts"], [])
+                else:
+                    self.assertEqual(row["native_issues"], [])
+                    self.assertTrue(row["native_artifacts"])
+                    for artifact in row["native_artifacts"]:
+                        self.assertEqual(
+                            artifact["actual_hex"], artifact["expected_hex"]
+                        )
+                        self.assertTrue(artifact["exact"])
+
+    def test_public_downstream_preserves_both_frozen_exp_values_and_exact_effects(self):
+        expected = self.report["exp_one_downstream"]
+        actual = assess_math_decision.downstream(
+            [(row["policy_observation"], row["input_bits"]) for row in expected]
+        )
+        self.assertEqual(actual, expected)
 
     def test_all_frozen_numeric_values_and_language_failures_use_public_domain(self):
-        archived = {row["input"]["id"]: row["native"] for row in self.report["boundaries"]}
+        archived = {
+            row["input"]["id"]: row["native"] for row in self.report["boundaries"]
+        }
         for case in cases():
             with self.subTest(case=case["id"]):
                 actual = assess_math_decision.public_numeric(numeric_fixture(case))
-                self.assertEqual(assess_math_decision.outcome_bits(actual["outcome"]), assess_math_decision.outcome_bits(archived[case["id"]]["outcome"]))
+                self.assertEqual(
+                    assess_math_decision.outcome_bits(actual["outcome"]),
+                    assess_math_decision.outcome_bits(archived[case["id"]]["outcome"]),
+                )
 
     def test_integer_conversion_handlers_keep_exact_values_and_call_counts(self):
         for archived in self.report["integer_handlers"]:
             with self.subTest(case=archived["input"]["id"]):
-                actual = assess_math_decision.public_numeric(numeric_fixture(archived["input"], "int", True))
+                actual = assess_math_decision.public_numeric(
+                    numeric_fixture(archived["input"], "int", True)
+                )
                 self.assertEqual(actual["outcome"], archived["native"]["outcome"])
-                self.assertEqual([int(row["count"]) for row in actual["handler_counts"]], [int(row["count"]) for row in archived["native"]["handler_counts"]])
+                self.assertEqual(
+                    [int(row["count"]) for row in actual["handler_counts"]],
+                    [int(row["count"]) for row in archived["native"]["handler_counts"]],
+                )
 
 
 class MathDecisionEvidence(unittest.TestCase):
@@ -337,7 +400,9 @@ class MathDecisionEvidence(unittest.TestCase):
                     ],
                 )
 
-    def test_affected_artifacts_match_original_truth_and_blocker_is_not_a_pass(self):
+    def test_historical_artifacts_match_original_truth_and_archived_blocker_is_not_a_pass(
+        self,
+    ):
         fixtures = self.report["affected_fixtures"]
         self.assertEqual(
             {row["name"] for row in fixtures},

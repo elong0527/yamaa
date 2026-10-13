@@ -1,58 +1,51 @@
-"""Report reference behavior against independent regex truth without rewriting it.
+"""Observe compiled regex against unchanged independent truth.
 
-This is a migration assessment, not an engine qualification or approval gate.
-Known discrepancies remain visible; no fixture is generated from observations.
+The filename is retained for callers. This component assessment does not qualify
+installed hosts; historical reference comparisons are not rerun.
 """
 
-import csv
 import json
-from pathlib import Path
 
-from yamaa.regex import REGEX_CONTRACT_VERSION, RegexError, compile_pattern, full_match
-
-ROOT = Path(__file__).resolve().parents[1]
-TRUTH = ROOT / "crates/yamaa-adapters/tests/fixtures/regex_contract.tsv"
-
-
-def observe(pattern, subject):
-    """Capture public reference acceptance, captures and full-match behavior."""
-    try:
-        compiled = compile_pattern(pattern)
-        match = compiled.search(subject)
-        return {
-            "accepted": True,
-            "group_count": compiled.groups,
-            "full_match": full_match(pattern, subject),
-            "match": None if match is None else [match.group(0), *match.groups()],
-        }
-    except RegexError:
-        return {"accepted": False}
+from check_regex import cases, check, replay
 
 
 def assess():
-    """Compare authored expectations and return every observation, including mismatches."""
-    cases = []
-    with TRUTH.open(encoding="ascii", newline="") as stream:
-        for row in csv.DictReader(stream, delimiter="\t", quoting=csv.QUOTE_NONE):
-            pattern = json.loads(row["pattern"])
-            subject = json.loads(row["subject"])
-            expected = json.loads(row["expected"])
-            actual = observe(pattern, subject)
-            cases.append(
-                {
-                    "id": row["id"],
-                    "pattern": pattern,
-                    "subject": subject,
-                    "expected": expected,
-                    "reference": actual,
-                    "equal": actual == expected,
-                }
-            )
+    """Retain all 43 shared cases and 12 exact authored edge observations."""
+    observations = [
+        row
+        for row in cases()
+        if row[4] == "yaml" or not row[0].startswith(("scalar-", "count-"))
+    ]
+    evidence = []
+    for (identity, pattern, subject, expected, kind), actual in zip(
+        observations, replay(observations), strict=True
+    ):
+        try:
+            check(expected, actual, kind)
+        except (AssertionError, KeyError):
+            equal = False
+        else:
+            equal = True
+        evidence.append(
+            {
+                "id": identity,
+                "pattern": pattern,
+                "subject": subject,
+                "expected": expected,
+                "expectation_scope": "complete observation"
+                if kind == "exact"
+                else "shared regex contract fields",
+                "candidate": actual,
+                "equal": equal,
+            }
+        )
     return {
-        "contract_version": REGEX_CONTRACT_VERSION,
+        "contract_version": "2.0.0",
+        "consumer": "retained typed native regex fixture",
+        "historical_reference": "not rerun; archived comparisons remain historical",
         "qualification": "not-qualified",
-        "cases": cases,
-        "mismatches": sum(not case["equal"] for case in cases),
+        "cases": evidence,
+        "mismatches": sum(not row["equal"] for row in evidence),
     }
 
 

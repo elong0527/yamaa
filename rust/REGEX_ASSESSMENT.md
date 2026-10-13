@@ -1,6 +1,6 @@
 # Portable regex migration assessment
 
-The shared compiler cannot copy the current Python regex binding as its sole
+The shared compiler cannot copy the historical Python regex binding as its sole
 oracle. R022 contract 2.0.0 names ECMA-262 Unicode-pattern semantics, with the
 repository's explicit restrictions and normalization. The unchanged Python
 binding passes the 43 committed `yaml/conformance/regex.yaml` cases, but those
@@ -8,12 +8,11 @@ cases do not establish complete contract coverage.
 
 Twelve additional expectations in
 `crates/yamaa-adapters/tests/fixtures/regex_contract.tsv` were authored from
-`rules/operations/text.md` and the ECMA-262 pattern algorithms. Ten currently
-disagree with Python. Neither engine output generated these expectations;
+`rules/operations/text.md` and the ECMA-262 pattern algorithms. Ten disagreed in the retained Python assessment. Neither engine output generated these expectations;
 Node's Unicode-mode regex implementation was used only as a secondary check.
 The existing YAML vectors and benchmark goldens remain unchanged.
 
-| Case | Required observation | Existing Python observation |
+| Case | Required observation | Historical Python observation |
 | --- | --- | --- |
 | `^[\S]$` against U+FEFF | No match; U+FEFF is whitespace, including inside a class | Matches the character |
 | `^[\S]$` against U+0085 | Matches; U+0085 is outside the declared whitespace set | Agrees |
@@ -42,13 +41,17 @@ The repository's REQ-0798, REQ-0800, REQ-0802, REQ-0813, REQ-0815, REQ-0817,
 and REQ-0822 through REQ-0827 determine how these apply here. No new host dialect
 or changed contract version is being substituted.
 
-Run the read-only reference assessment from the locked Python environment:
+The historical comparison above remains retained evidence. The active assessor
+now observes the compiled native component against all 43 shared YAML cases and
+12 exact TSV edge cases, without importing the retiring Python binding:
+
 
 ```sh
 uv run --project python --locked python rust/tools/assess_regex_reference.py
 ```
 
-It reports every expected/observed value, an explicit mismatch count, and
+It reports every independent expectation and native observation, an explicit
+mismatch count, and
 `qualification: not-qualified`. A zero exit code means the report was produced;
 it does not mean regex parity passed. This assessment is not a CI waiver or a
 fixture writer. The shared Rust implementation must pass the independent cases;
