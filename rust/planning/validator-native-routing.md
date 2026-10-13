@@ -51,6 +51,15 @@ and pins repeated activation plus unchanged expected CSV bytes. The negative cas
 pins its complete issue table, missing-study ordering and Save refusal. Those
 mandatory R matrix witnesses own full R semantic acceptance.
 
+The mandatory R lanes also run `rust/tests/check_repository_r_transport.py`
+against the exact stdlib repository transport. It requires the real installed
+R SDK, package identities and declared locks, copies all five original cases
+outside the package, deletes study inputs, and checks the complete returned issue
+rows. The R program copies `result$issues` from the read-only Check facade; UTF-8
+JSON framing, array spec_paths and JSON-text context have separate controls.
+This lane fails when R or the SDK is absent; only ordinary available-host CLI
+work may defer it.
+
 The source, assertion and required-host inventories are deletion prerequisites
 for #1994. This change does not retire evaluator source or relax its qualification
 gates. The immutable static/style slices keep their separate exact-head evidence;
