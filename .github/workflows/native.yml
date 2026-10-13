@@ -562,6 +562,23 @@ jobs:
         env:
           R_LIBS: ${{ runner.temp }}/native-r-library
         run: |
+          Rscript --vanilla - <<'RS'
+          version <- "2.0.0"
+          archive <- paste0("jsonlite_", version, ".tar.gz")
+          urls <- c(paste0("https://cran.r-project.org/src/contrib/", archive),
+                    paste0("https://cran.r-project.org/src/contrib/Archive/jsonlite/", archive))
+          target <- tempfile(fileext = ".tar.gz")
+          downloaded <- FALSE
+          for (url in urls) {
+            downloaded <- tryCatch({
+              download.file(url, target, mode = "wb", quiet = TRUE) == 0L
+            }, error = function(error) FALSE)
+            if (downloaded) break
+          }
+          stopifnot(downloaded)
+          install.packages(target, repos = NULL, type = "source", lib = Sys.getenv("R_LIBS"))
+          stopifnot(as.character(utils::packageVersion("jsonlite")) == version)
+          RS
           cp "${GITHUB_WORKSPACE}/.github/scripts/yaml-validation/_r_check_transport.py" _r_check_transport.py
           cp "${GITHUB_WORKSPACE}/rust/tests/check_repository_r_transport.py" check_repository_r_transport.py
           python -I check_repository_r_transport.py
