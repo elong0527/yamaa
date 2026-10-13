@@ -67,7 +67,11 @@ post-input-removal Save rehearsal on Linux, macOS and Windows in run
 38435902670 at preparation head
 `d909928c94f308550c7f584c12b6b42506c4c84c`. Draft retention release 411979803,
 tag `yamaa-r-reference-a1a9c2d2`, targets that exact source and remains
-unpublished pending asset retrieval, byte comparison and root review. A reviewed
+unpublished. Hosted run 38450032850 retained source asset 637944247 and receipt
+bundle 637944307 after comparing the original audited artifact bytes, then
+authenticated and compared the uploaded bytes. The complete
+[asset receipt](../qualification/rollback-assets.json) records those identities.
+A reviewed
 retrievable study pin remains required. The old `cdiscbuilder` package reports 0.1.0;
 its source snapshot must not be described as an existing qualified `yamaa` 0.3.0
 R artifact. Preserve the reference source and measured baseline until rollback,

@@ -130,7 +130,14 @@ data. The original artifact identity remains run 38394553441, artifact
 Authorized draft retention releases now exist at those exact source revisions:
 Python release 411980272, tag `yamaa-py-reference-845a91ff`, and R release
 411979803, tag `yamaa-r-reference-a1a9c2d2`. Their source assets and fresh-install
-receipts are prepared for authenticated retrieval and byte comparison; they are
-unpublished. Durable retrievable study pins, all required rollback tuples, B17
+receipts are now retained. Run 38450032850 at
+`99b4fc28110bceaa346df7a93cf28138f12ec44f` uploaded the eleven reviewed assets
+and independently downloaded every asset through authenticated endpoints; all
+bytes matched. Before any upload, it also downloaded original R artifact
+11811851297 and matched the exact source archive, and compared every tracked
+prior Python archive entry's bytes, kind, symlink target and executable flag.
+The [asset receipt](../qualification/rollback-assets.json) pins the exact release,
+source and asset IDs without digests. R source asset 637944247 and prior Python
+sdist asset 637944563 remain unpublished. Durable reviewed study pins, all required rollback tuples, B17
 budgets and item 11 transition approval remain gates. Publication requires root
 review of the concrete asset identities and receipts.
