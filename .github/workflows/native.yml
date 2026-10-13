@@ -19,6 +19,8 @@ on:
       - '.github/scripts/ci/native_matrix.py'
       - '.github/scripts/ci/test_native_matrix.py'
   pull_request:
+    # A maintainer can request all installed hosts before merging a feature.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
       - 'rust/**'
       - '!rust/*.md'
@@ -71,6 +73,8 @@ jobs:
           python-version: '3.14'
       - name: Select Linux PR coverage or the full installed matrix
         id: coverage
+        env:
+          NATIVE_FULL_MATRIX: ${{ contains(github.event.pull_request.labels.*.name, 'native-full-matrix') }}
         run: python .github/scripts/ci/native_matrix.py plan
 
   # Main pushes check the shared Rust crates alongside installed qualification.

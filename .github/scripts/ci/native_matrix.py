@@ -17,13 +17,13 @@ PR_PLATFORM = "ubuntu-24.04"
 PR_PYTHONS = ("3.12", "3.14")
 
 
-def plan(event):
-    if event == "pull_request":
+def plan(event, *, full_pr=False):
+    if event == "pull_request" and not full_pr:
         # Keep PR feedback on Linux and exercise both supported Python endpoints.
         platforms = [PR_PLATFORM]
         pythons = PR_PYTHONS
         r_platforms = [PR_PLATFORM]
-    elif event in {"push", "workflow_dispatch"}:
+    elif event in {"pull_request", "push", "workflow_dispatch"}:
         platforms = list(PLATFORMS)
         pythons = PYTHONS
         r_platforms = list(R_PLATFORMS)
@@ -43,7 +43,7 @@ def plan(event):
         "r": {"os": r_platforms},
         "run-r": bool(r_platforms),
         "run-rust": event == "push",
-        "full": event in {"push", "workflow_dispatch"},
+        "full": event in {"push", "workflow_dispatch"} or full_pr,
         "compare-os": platforms[0],
     }
 
@@ -115,7 +115,10 @@ def main():
         ).strip()
         compare_cohorts(json.loads(os.environ["QUALIFICATION_MATRIX"]), root, revision)
         return
-    coverage = plan(os.environ["GITHUB_EVENT_NAME"])
+    coverage = plan(
+        os.environ["GITHUB_EVENT_NAME"],
+        full_pr=os.environ.get("NATIVE_FULL_MATRIX") == "true",
+    )
     with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
         for key, value in coverage.items():
             encoded = (
