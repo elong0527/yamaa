@@ -1743,7 +1743,7 @@ impl Rows {
                 )?;
             }
         }
-        for template in &self.templates {
+        for (index, template) in self.templates.iter().enumerate() {
             let groups = template
                 .groups
                 .as_ref()
@@ -1752,7 +1752,7 @@ impl Rows {
                 static_checks::predicate(
                     compiled,
                     expression,
-                    &format!("rows.{}.filter", template.id),
+                    &format!("rows[{index}].filter"),
                     findings,
                 )?;
             }
