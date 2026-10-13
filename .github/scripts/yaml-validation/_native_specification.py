@@ -12,6 +12,7 @@ from pathlib import Path
 
 import _native_csv
 import _native_parquet
+import _r_check_transport
 import yaml12
 from yamaa._native import _prepare_file_project
 
@@ -118,59 +119,16 @@ DEFERRED_ENVIRONMENTS = set()
 
 
 def r_static_rows(specification, environment):
-    """Only a real installed R runner can admit its authored environment lane."""
-    import shutil
-    import subprocess
-
-    runner = shutil.which("Rscript")
-    if runner is None:
-        DEFERRED_ENVIRONMENTS.add(str(environment))
-        return None
-    available = subprocess.run(
-        [
-            runner,
-            "--vanilla",
-            "-e",
-            (
-                'quit(status=if (requireNamespace("yamaa", quietly=TRUE) && '
-                'requireNamespace("jsonlite", quietly=TRUE)) 0L else 9L)'
-            ),
-        ],
-        capture_output=True,
-        check=False,
-    )
+    """Only the real installed R public Check facade supplies R issue rows."""
     authored = yaml.safe_load(Path(environment).read_bytes())
     lock = authored.get("lock") if isinstance(authored, dict) else None
-    if available.returncode != 0 or (
-        isinstance(lock, str) and not (Path(environment).parent / lock).is_file()
-    ):
-        # Qualification stages the real SDK lock and installed package. A bare
-        # R executable or absent benchmark lock supplies no real-host witness.
+    if isinstance(lock, str) and not (Path(environment).parent / lock).is_file():
         DEFERRED_ENVIRONMENTS.add(str(environment))
         return None
-    program = (
-        "args <- commandArgs(trailingOnly=TRUE); "
-        "issues <- yamaa::yamaa_check(args[[1]], environment=args[[2]]); "
-        "issues$spec_paths <- lapply(issues$spec_paths, I); "
-        'jsonlite::write_json(issues, stdout(), dataframe="rows", auto_unbox=TRUE, na="null")'
-    )
-    completed = subprocess.run(
-        [runner, "--vanilla", "-e", program, str(specification), str(environment)],
-        text=True,
-        capture_output=True,
-        check=True,
-    )
-    values = json.loads(completed.stdout)
-    return [
-        (
-            value["phase"],
-            value["condition"],
-            value["requirement"],
-            value["spec_paths"],
-            value["context"],
-        )
-        for value in values
-    ]
+    observed = _r_check_transport.rows(specification, environment)
+    if observed is None:
+        DEFERRED_ENVIRONMENTS.add(str(environment))
+    return observed
 
 
 def validate(
