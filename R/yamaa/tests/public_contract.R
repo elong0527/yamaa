@@ -182,17 +182,27 @@ run_contract <- function() {
   outer <- with_capabilities(capabilities$verify, resolve_reentrant,
     yamaa_domain(entry, environment))
   stopifnot(nrow(check_issues(outer)) == 0L, length(calls) >= 3L)
-  oversized <- structure(list(message = strrep("x", 65537L), call = NULL),
+  original_condition <- structure(list(message = "held output formatter failure", call = NULL),
     class = c("public_contract_error", "error", "condition"))
-  resolve_oversized <- function(call, parameters) {
-    list(0L, function(encoded) list(1L, oversized))
+  writeBin(charToRaw("ID,VALUE\n01,1.234\n"), file.path(project, "input", "source.csv"))
+  resolve_failed <- function(call, parameters) {
+    resolved <- capabilities$resolve(call, parameters)
+    if (resolved[[1L]] != 0L) return(resolved)
+    invoke <- resolved[[2L]]
+    list(0L, function(encoded) {
+      if (get(".scalar_unpack", namespace)(encoded[[1L]]) == 1.234) {
+        return(list(1L, original_condition))
+      }
+      invoke(encoded)
+    })
   }
-  failed <- with_capabilities(capabilities$verify, resolve_oversized,
-    yamaa_domain(entry, environment))
+  failed <- with_binding(".project_condition_details", function(condition) list(),
+    with_capabilities(capabilities$verify, resolve_failed,
+      yamaa_domain(entry, environment)))
   measured <- rawToChar(get(".domain_observations", namespace)(failed,
     include_measurements = TRUE))
   stopifnot(is.null(failed$output),
-    grepl('"code":"report_limit"', failed$issues$context, fixed = TRUE),
+    grepl('"code":"opaque_host"', failed$issues$context, fixed = TRUE),
     grepl('"outcome":"failed","phase":"output_preparation"', measured, fixed = TRUE),
     inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"))
   unlink(path(c("spec.yaml", "input.csv"))); gc()

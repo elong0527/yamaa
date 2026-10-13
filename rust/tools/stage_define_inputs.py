@@ -9,6 +9,7 @@ CASES = ("sdtm-dm-metadata", "sdtm-ae-coding", "sdtm-vs-epoch-from-subject-eleme
 
 def stage(destination: Path):
     destination.mkdir()
+    shutil.copytree(ROOT / "rust/tests/fixtures/submission-schemas", destination / "schemas")
     for name in CASES:
         original = ROOT / "benchmarks" / name
         target = destination / name

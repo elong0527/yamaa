@@ -197,7 +197,7 @@ fn shape_and_schema_policy_are_enforced() {
     let batch = RecordBatch::try_new_with_options(
         empty,
         vec![],
-        &RecordBatchOptions::new().with_row_count(Some(65_537)),
+        &RecordBatchOptions::new().with_row_count(Some(524_289)),
     )
     .unwrap();
     assert_eq!(table_snapshot(&stream(&batch)), Err(E::ShapeLimit));
