@@ -1,37 +1,27 @@
-"""Reconcile complete public-domain runs against the independent M1 protocol.
+"""Compare actual installed complete public reports with unchanged committed truth.
 
-This comparator executes no candidate engine. Installed public-entrypoint tests
-retain actual Rust reports after comparing all original run observations and
-saved bytes. The broad reference-assisted inventory remains separate.
+No reference evaluator or assisted inventory is imported or executed. Coverage v2
+identifies authored report truth by exact Git revision/path, separately from the
+actual installed host owners and their retained raw reports.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
-from yamaa.adapters.qualification import Batch, load_inventory, qualify
-
-COHORT = (
-    "adam-adlb-ordered-sum",
-    "schema-lookup",
-    "schema-window-functions",
-    "schema-inheritance",
-    "negative-zero-division",
-    "negative-integer-overflow",
-    "negative-formula-flag",
-    "negative-row-aggregate",
-    "negative-row-no-prior",
-    "negative-source-missing-field",
-    "negative-source-trivial-filter",
-    "schema-verification-log",
+_spec = importlib.util.spec_from_file_location(
+    "_cohort_evidence", Path(__file__).with_name("_cohort_evidence.py")
 )
-
-
-def read(path):
-    return json.loads(path.read_text(encoding="utf-8"))
+cohort = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(cohort)
+COHORT = cohort.COHORT
+ROOT = Path(__file__).resolve().parents[2]
+read = cohort.read
 
 
 def installed_evidence(directory, runtime, source_revision):
@@ -57,27 +47,59 @@ def installed_evidence(directory, runtime, source_revision):
             )
             if witness not in log:
                 raise ValueError("missing public R complete-run witness: " + name)
-    installation = record["installation"]
-    return record, Batch(
-        runtime=runtime,
-        backend="rust",
-        level="shared_run",
-        source_revision=source_revision,
-        host_package_version=installation["host_package_version"],
-        core_version=installation["core_version"],
-        binding_package_version=installation.get("binding_package_version"),
-        artifact_reference=evidence["artifact_reference"],
-        evidence=evidence["run"],
-        reports_dir=str((directory / "public-reports").resolve()),
+    return record, cohort.batch(record, runtime, "reports/" + runtime)
+
+
+def compare_owners(
+    fixtures, python_evidence, r_evidence, output, revision, checkout=ROOT
+):
+    python_record, python_batch = installed_evidence(
+        python_evidence, "python", revision
     )
-
-
-def retain_reports(batch, source, destination):
-    destination.mkdir()
+    r_record, r_batch = installed_evidence(r_evidence, "r", revision)
+    cohort.require_same_run(python_record, r_record)
+    output.mkdir(parents=True)
+    for runtime, directory in (("python", python_evidence), ("r", r_evidence)):
+        supplemental = directory / "supplemental" if runtime == "python" else directory
+        shutil.copyfile(
+            supplemental / "supplemental.json",
+            output / (runtime + "-installed-evidence.json"),
+        )
+    rows = []
     for name in COHORT:
-        filename = f"{name}.{batch.runtime}.{batch.backend}.json"
-        shutil.copyfile(source / filename, destination / filename)
-    return batch.model_copy(update={"reports_dir": str(destination.resolve())})
+        truth, truth_identity = cohort.retain_truth(checkout, output, name, revision)
+        for runtime, directory, owner in (
+            ("python", python_evidence, python_batch),
+            ("r", r_evidence, r_batch),
+        ):
+            filename = f"{name}.{runtime}.rust.json"
+            relative = f"reports/{runtime}/{filename}"
+            retained = output / relative
+            retained.parent.mkdir(parents=True, exist_ok=True)
+            source = directory / "public-reports" / filename
+            shutil.copyfile(source, retained)
+            if retained.read_bytes() != source.read_bytes():
+                raise ValueError("retaining actual complete report changed bytes")
+            actual = cohort.reports.read_report(retained)
+            if (
+                actual.example,
+                actual.runtime,
+                actual.backend,
+                actual.engine_version,
+            ) != (name, runtime, "rust", owner["core_version"]):
+                raise ValueError(
+                    "actual complete report identity/installed core differs"
+                )
+            verdicts = (
+                cohort.reports.compare_reports(truth, actual),
+                cohort.reports.compare_example(actual, fixtures / name),
+            )
+            rows.append(
+                cohort.coverage_row(name, runtime, truth_identity, relative, verdicts)
+            )
+    inventory = cohort.inventory(revision, COHORT, [python_batch, r_batch], rows)
+    cohort.write(output / "coverage.json", inventory)
+    return inventory
 
 
 def main(argv=None):
@@ -88,100 +110,22 @@ def main(argv=None):
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--source-revision", required=True)
     args = parser.parse_args(argv)
-    if args.output.exists():
-        parser.error("output must be a fresh evidence directory")
-    if args.output.resolve().is_relative_to(args.fixtures.resolve()):
-        parser.error("output must be outside the committed fixture tree")
-    manifest = load_inventory(args.fixtures)
-    python_record, python_batch = installed_evidence(
-        args.python_evidence, "python", args.source_revision
-    )
-    r_record, r_batch = installed_evidence(args.r_evidence, "r", args.source_revision)
-    # Runner kernel/image patch versions may differ between independent jobs.
-    if (
-        python_record["platform"].split("-", 1)[0]
-        != r_record["platform"].split("-", 1)[0]
+    if args.output.exists() or args.output.resolve().is_relative_to(
+        args.fixtures.resolve()
     ):
-        raise ValueError("Python and R complete-run evidence must share an OS family")
-    if python_batch.core_version != r_batch.core_version:
-        raise ValueError("Python and R complete-run evidence must share a core version")
-    if python_batch.evidence != r_batch.evidence:
-        raise ValueError("Python and R complete-run evidence must share an Actions run")
-    reference = Batch.model_validate_json(
-        (args.python_evidence / "python-batch.json").read_text()
+        parser.error("output must be fresh and outside the committed fixture tree")
+    if args.fixtures.resolve() != (ROOT / "benchmarks").resolve():
+        parser.error("complete-report truth requires the reviewed benchmark checkout")
+    actual = subprocess.check_output(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
+    ).strip()
+    if args.source_revision != actual:
+        parser.error("candidate source revision differs from the reviewed checkout")
+    result = compare_owners(
+        args.fixtures, args.python_evidence, args.r_evidence, args.output, actual
     )
-    if (
-        reference.runtime != "python"
-        or reference.backend != "python"
-        or reference.level != "reference_run"
-    ):
-        raise ValueError("independent reference batch is required")
-    if reference.source_revision != args.source_revision:
-        raise ValueError("stale independent reference batch")
-    args.output.mkdir(parents=True)
-    evidence_directories = [("python", args.python_evidence)]
-    if args.r_evidence is not None:
-        evidence_directories.append(("r", args.r_evidence))
-    for runtime, directory in evidence_directories:
-        supplemental = directory / "supplemental" if runtime == "python" else directory
-        shutil.copyfile(
-            supplemental / "supplemental.json",
-            args.output / (runtime + "-installed-evidence.json"),
-        )
-    fixtures = args.output / "fixtures"
-    fixtures.mkdir()
-    for name in COHORT:
-        shutil.copytree(args.fixtures / name, fixtures / name, symlinks=True)
-    (fixtures / "execution-manifest.yaml").write_text(
-        json.dumps(
-            {
-                "version": manifest.version,
-                "examples": {
-                    name: manifest.examples[name].model_dump(mode="json")
-                    for name in COHORT
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
-    batches = [
-        retain_reports(
-            reference,
-            args.python_evidence / "reports" / "python",
-            args.output / "reference-reports",
-        ),
-        retain_reports(
-            python_batch,
-            args.python_evidence / "public-reports",
-            args.output / "python-reports",
-        ),
-        retain_reports(
-            r_batch, args.r_evidence / "public-reports", args.output / "r-reports"
-        ),
-    ]
-    required_routes = [
-        ("python", "python", "reference_run"),
-        ("python", "rust", "shared_run"),
-        ("r", "rust", "shared_run"),
-    ]
-    required = tuple(
-        (name, runtime, backend, level)
-        for name in COHORT
-        for runtime, backend, level in required_routes
-    )
-    inventory = qualify(
-        fixtures,
-        args.source_revision,
-        tuple(batches),
-        required=required,
-    )
-    (args.output / "coverage.json").write_text(
-        inventory.model_dump_json(indent=2) + "\n", encoding="utf-8"
-    )
-    print(json.dumps(inventory.summary, indent=2))
-    for error in inventory.errors:
-        print(error)
-    return int(bool(inventory.errors))
+    print(json.dumps(result["summary"], indent=2))
+    return 0
 
 
 if __name__ == "__main__":
