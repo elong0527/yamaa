@@ -6,9 +6,6 @@ language families. This module must disappear before reference removal #1994;
 moving imports here does not qualify semantic delegation to yamaa.check.
 """
 
-import importlib.util
-from pathlib import Path
-
 
 def regex_binding():
     from yamaa.regex import (
@@ -55,34 +52,3 @@ def odm_binding():
     )
 
     return ODM_SCHEMA_FIELDS, bind_fields, iter_odm_payloads, parse_odm_read
-
-
-def csv_binding():
-    from yamaa.io.csv import (
-        CsvProfileFailure,
-        fixed_point,
-        render_records,
-        scan_records,
-    )
-    from yamaa.models import DateTimeValue, DateValue, convert_value
-
-    return (
-        CsvProfileFailure,
-        fixed_point,
-        render_records,
-        scan_records,
-        DateTimeValue,
-        DateValue,
-        convert_value,
-    )
-
-
-def source_profile_binding():
-    # Keep the existing standalone loader: CSV fixture checks do not require
-    # loading the host package and its runtime dependencies. Its reference
-    # file authority is now explicit here rather than hidden in the validator.
-    path = Path(__file__).resolve().parents[3] / 'python/src/yamaa/io/csv.py'
-    spec = importlib.util.spec_from_file_location('yamaa_io_csv', path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
