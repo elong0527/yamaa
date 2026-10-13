@@ -200,12 +200,12 @@ def test_native_original_input_descriptor_and_capture_keep_inherited_anchor(tmp_
     prepared = file_owner(tmp_path)
     assert prepared.preparation_status() == "ready", prepared.check_issues()
     reads = prepared.capture_reads()
-    identity = str(tmp_path / "spec.yaml")
+    identity = (tmp_path / "spec.yaml").as_posix()
     assert prepared.input_metadata() == [
         (
             identity,
             "SOURCE",
-            str(tmp_path / "parent/base.yaml"),
+            (tmp_path / "parent/base.yaml").as_posix(),
             "../data/source.csv",
             "csv",
         )
@@ -285,7 +285,9 @@ def test_declaring_only_capture_preserves_allowed_parent_and_absolute_paths(
     target = tmp_path / "data.csv"
     target.write_bytes(payload)
     document = specification()
-    document["input"]["SOURCE"]["path"] = str(target) if absolute else "../data.csv"
+    document["input"]["SOURCE"]["path"] = (
+        target.as_posix() if absolute else "../data.csv"
+    )
     (directory / "spec.yaml").write_text(yaml.safe_dump(document))
     prepared = file_owner(directory)
     assert prepared.check_issues() == []
@@ -304,7 +306,7 @@ def test_rejected_normalization_retains_contributor_without_public_context_chang
     entry.write_text("schema_version: '1.0'\nparents: parent.yaml\n")
     prepared = file_owner(tmp_path)
     assert prepared.preparation_status() == "preparation_failure"
-    assert prepared.diagnostic_origins() == [("columns.ID.type", str(parent))]
+    assert prepared.diagnostic_origins() == [("columns.ID.type", parent.as_posix())]
     rows = prepared.check_issues()
     assert len(rows) == 1
     assert json.loads(rows[0][4]) == {"class": "column_class", "field": "type"}
@@ -312,7 +314,7 @@ def test_rejected_normalization_retains_contributor_without_public_context_chang
 
     public = yamaa.check(entry)
     assert public.issues["context"].to_list() == [rows[0][4]]
-    assert prepared.diagnostic_origins() == [("columns.ID.type", str(parent))]
+    assert prepared.diagnostic_origins() == [("columns.ID.type", parent.as_posix())]
 
 
 def test_producer_metadata_uses_native_contract_without_reading_unpublished_output(
@@ -330,7 +332,7 @@ def test_producer_metadata_uses_native_contract_without_reading_unpublished_outp
     assert prepared.preparation_status() == "ready", prepared.check_issues()
     reads = prepared.capture_reads()
     assert prepared.check_issues() == []
-    identity = str(tmp_path / "leaf.yaml")
+    identity = (tmp_path / "leaf.yaml").as_posix()
     assert prepared.input_metadata() == [
         (identity, "SOURCE", identity, "absent.csv", "csv")
     ]
@@ -369,7 +371,9 @@ def test_producer_published_schema_alone_owns_consumer_ordinal_collision(
     prepared = file_owner(tmp_path)
     assert prepared.check_issues() == []
     before = prepared.capture_reads()
-    rows = prepared.check_source_metadata([(str(tmp_path / "leaf.yaml"), *fields()[0])])
+    rows = prepared.check_source_metadata(
+        [((tmp_path / "leaf.yaml").as_posix(), *fields()[0])]
+    )
     assert prepared.capture_reads() == before
     assert not (tmp_path / "leaf.csv").exists()
     if ordinal == "POSITION":
