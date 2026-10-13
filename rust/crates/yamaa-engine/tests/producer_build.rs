@@ -1329,3 +1329,101 @@ fn alias_cells_and_codec_storage_and_work_are_reserved_before_decoded_table_owne
         }
     }
 }
+
+#[test]
+fn actual_graph_has_one_work_ceiling_and_input_slot_reservations_at_exact_boundaries() {
+    // Each admitted one-row node costs six key-construction units, three
+    // function/value units and two output-key scans: eleven per entered node.
+    let prepared = prepared();
+    for (work, rows, accepted) in [(22, 3, true), (21, 3, false), (22, 2, false)] {
+        let mut ports = Ports::new();
+        let mut attempt = Attempt::default();
+        let mut limits = build::Limits::default();
+        limits.execution.work_cells = work;
+        limits.execution.source_rows = rows;
+        prepared.build_into(ports.borrow(), limits, &mut attempt);
+        assert_eq!(attempt.outcome.is_ok(), accepted);
+        assert_eq!(ports.study.reads, 1);
+        let trace = ports.activation.trace.borrow();
+        assert_eq!(
+            &trace[..7],
+            [
+                "lock",
+                "bind:beta",
+                "bind:alpha",
+                "invoke:beta:7",
+                "invoke:beta:-9223372036854775808",
+                "invoke:alpha:7",
+                "invoke:alpha:-9223372036854775808"
+            ]
+        );
+        if rows == 2 {
+            assert_eq!(attempt.nodes.len(), 1);
+            assert_eq!(attempt.nodes[0].node, 1);
+            assert!(matches!(
+                attempt.nodes[0]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .as_ref()
+                    .map_err(|e| &**e),
+                Err(ExecutionError::Capacity)
+            ));
+            assert_eq!(ports.decoder.cells.get(), 0);
+            assert!(!trace.iter().any(|e| e == "invoke:beta:1"
+                || e == "invoke:alpha:1"
+                || e.starts_with("encode:")));
+        } else {
+            assert_eq!(attempt.nodes.len(), 2);
+            assert!(attempt.nodes[0]
+                .dataset
+                .result
+                .as_ref()
+                .unwrap()
+                .result
+                .is_ok());
+            assert!(attempt.nodes[0]
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .is_some());
+            for source in &attempt.nodes[1].dataset.sources {
+                assert_eq!(source.read.snapshots_created, Some(0));
+            }
+            assert!(trace.iter().any(|e| e == "invoke:beta:1"));
+            assert!(trace.iter().any(|e| e == "invoke:alpha:1"));
+            if work == 21 {
+                assert!(matches!(
+                    attempt.nodes[1]
+                        .dataset
+                        .result
+                        .as_ref()
+                        .unwrap()
+                        .result
+                        .as_ref()
+                        .map_err(|e| &**e),
+                    Err(ExecutionError::Limit {
+                        resource: yamaa_engine::dataset::Resource::WorkCells,
+                        limit: 21,
+                        required: Some(22)
+                    })
+                ));
+                assert!(!trace.iter().any(|e| e == "encode:FIRST"));
+            } else {
+                assert!(attempt.nodes[1]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .is_ok());
+                assert!(trace.iter().any(|e| e == "encode:FIRST"));
+            }
+        }
+    }
+}

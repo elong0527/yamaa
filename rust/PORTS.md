@@ -611,3 +611,25 @@ stop subsequent effects. This service does not add a root-byte reread: the
 existing native entry-base verification remains the policy. Physical codecs,
 authored producer origins, reporting/publication and compatibility component
 entry points remain their separate boundaries.
+
+The shared-work prototype gives entered producer datasets one non-cloneable
+`execution_work::WorkBudget` with the existing whole-graph WorkCells ceiling.
+Each fresh runtime starts its work counter at the previous actual admitted
+amount. Every returned success or failure commits that counter; a refused charge
+never counts a visit which did not occur. Before entering derivation, the owner
+reserves its remaining ceiling, so an unwind cannot grant that work again. The
+original error or unwind payload is neither inspected nor replaced. Metadata
+and source-cardinality admission precede this reservation. Predicate work shares
+the same cumulative counter; resolutions, regex work, text and identities retain
+their existing per-node policies. The ordinary standalone APIs keep fresh scopes.
+
+Source rows are reserved before activation using admitted input slots:
+`floor(total_rows * node_input_slots / all_input_slots)`. The implementation uses
+checked quotient/remainder arithmetic, and the sum of reservations cannot exceed
+the existing total. Source aliases still consume their declared row/cell ingress;
+no study value or capture effect selects the weights. All other node quotas and
+whole-graph byte/cell/publication ceilings remain unchanged. This prototype
+changes how the bounded work and row allowances are allocated; it raises no
+ceiling and grants no publication authority. Existing expression/derived cache
+charges remain untouched, and their separately unqualified retained-schema/text
+scope is not accepted by this prototype.

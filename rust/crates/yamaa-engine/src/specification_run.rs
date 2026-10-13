@@ -343,6 +343,38 @@ pub fn execute_with_functions_into<P: SourcePort, D: SourceDecoder>(
     limits: Limits,
     attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
 ) {
+    execute_functions_scoped(prepared, port, decoder, functions, limits, attempt, None);
+}
+/// Keep one graph-wide WorkCells owner while every source and binding gate stays
+/// in its original order. Only an actually entered dataset spends this owner.
+pub fn execute_with_functions_and_work_into<P: SourcePort, D: SourceDecoder>(
+    prepared: &PreparedSpecification,
+    port: &mut P,
+    decoder: &mut D,
+    functions: &mut dyn dataset::FunctionPort<Error = <D::Table as TableAccess>::Error>,
+    limits: Limits,
+    attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+    work: &crate::execution_work::WorkBudget,
+) {
+    execute_functions_scoped(
+        prepared,
+        port,
+        decoder,
+        functions,
+        limits,
+        attempt,
+        Some(work),
+    );
+}
+fn execute_functions_scoped<P: SourcePort, D: SourceDecoder>(
+    prepared: &PreparedSpecification,
+    port: &mut P,
+    decoder: &mut D,
+    functions: &mut dyn dataset::FunctionPort<Error = <D::Table as TableAccess>::Error>,
+    limits: Limits,
+    attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+    work: Option<&crate::execution_work::WorkBudget>,
+) {
     *attempt = CapturedAttempt::new(prepared.source());
     attempt.sources.clear();
     if let Some(calls) = prepared.project_calls() {
@@ -519,6 +551,10 @@ pub fn execute_with_functions_into<P: SourcePort, D: SourceDecoder>(
                 as &dyn TableAccess<Error = <D::Table as TableAccess>::Error>
         })
         .collect::<Vec<_>>();
-    attempt.result =
-        Ok(plan.execute_observed_functions(primary, &secondary, functions, limits.execution));
+    attempt.result = Ok(match work {
+        Some(work) => {
+            plan.execute_with_work_budget(primary, &secondary, functions, limits.execution, work)
+        }
+        None => plan.execute_observed_functions(primary, &secondary, functions, limits.execution),
+    });
 }
