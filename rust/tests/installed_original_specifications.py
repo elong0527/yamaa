@@ -2575,7 +2575,8 @@ columns:
     def test_public_source_selection_preserves_authored_types_effect_order_and_save_bytes(self):
         import polars as pl
         import yamaa
-        cases = [(name, case, ROOT / (label + "-cases") / name)
+        cases = [(name, case, ROOT / (label + "-cases") /
+                  json.loads((ROOT / (label + "-case-paths.json")).read_text())[name])
                  for label in ("source-selection", "source-filter-scope", "source-filter-mixed")
                  for name, case in json.loads((ROOT / (label + "-truth.json")).read_text())["cases"].items()]
 
