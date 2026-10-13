@@ -231,6 +231,53 @@ fn charge(
 }
 
 impl Document {
+    /// Prove a layout edit preserves decoded values, including scalar kinds.
+    /// Mapping declaration order may change; sequence order remains significant.
+    /// A bounded comparison refuses work beyond the decoded edge budget.
+    pub fn same_style_value(&self, other: &Self, maximum: usize) -> bool {
+        let mut pending = vec![(self.root, other.root)];
+        let mut used = 0usize;
+        while let Some((left, right)) = pending.pop() {
+            used += 1;
+            if used > maximum {
+                return false;
+            }
+            match (&self.nodes[left], &other.nodes[right]) {
+                (DocumentNode::Sequence(a), DocumentNode::Sequence(b)) => {
+                    if a.len() != b.len() {
+                        return false;
+                    }
+                    pending.extend(a.iter().copied().zip(b.iter().copied()));
+                }
+                (DocumentNode::Mapping(a), DocumentNode::Mapping(b)) => {
+                    if a.len() != b.len() {
+                        return false;
+                    }
+                    for (key, value) in a {
+                        let mut found = None;
+                        for (candidate, item) in b {
+                            used += 1;
+                            if used > maximum {
+                                return false;
+                            }
+                            if self.nodes[*key] == other.nodes[*candidate] {
+                                found = Some(*item);
+                                break;
+                            }
+                        }
+                        let Some(item) = found else {
+                            return false;
+                        };
+                        pending.push((*value, item));
+                    }
+                }
+                (a, b) if a == b => {}
+                _ => return false,
+            }
+        }
+        true
+    }
+
     /// Validate every occurrence and reject sharing, cycles, duplicate keys and unreachable data.
     pub fn new(
         nodes: Vec<DocumentNode>,

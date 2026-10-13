@@ -10,7 +10,6 @@ pub mod dataset_transport;
 pub mod dependency_transport;
 mod function_signature;
 pub mod function_transport;
-pub mod inheritance_transport;
 pub mod numeric_transport;
 mod predicate_transport;
 pub mod reference_transport;
@@ -39,6 +38,7 @@ pub mod regex_transport;
 pub mod predicate_syntax;
 mod schema_diagnostic_kinds;
 pub mod schema_transport;
+pub mod style_values;
 pub mod yaml_decode;
 mod yaml_source;
 pub mod yaml_transport;
@@ -137,3 +137,6 @@ mod project_diagnostic_projection;
 mod file_inventory;
 
 pub mod host_limits;
+
+#[cfg(test)]
+mod test_diagnostic_truth;

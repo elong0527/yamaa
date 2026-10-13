@@ -95,7 +95,7 @@ def _worsening_rows(tmp_path, track, ae=None, fa=None):
     }
     if track != "yamaa":
         return _run(tmp_path, name, track, changes)["adae.csv"]
-    from yamaa import yamaa_domain
+    from yamaa import domain
 
     study = tmp_path / "study"
     shutil.copytree(ROOT / "benchmarks" / name, study)
@@ -105,7 +105,7 @@ def _worsening_rows(tmp_path, track, ae=None, fa=None):
             writer = csv.DictWriter(stream, fieldnames=header)
             writer.writeheader()
             writer.writerows(rows)
-    result = yamaa_domain(study / "spec.yaml").output
+    result = domain(study / "spec.yaml").output
     result.write_csv(study / "actual.csv", datetime_format="%Y-%m-%dT%H:%M:%S")
     return _read(study / "actual.csv")[1]
 

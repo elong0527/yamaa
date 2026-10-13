@@ -353,20 +353,10 @@
       "rationale": "Remove public semantic implementation and extension surfaces after replacement qualification; preserve reference baseline until transition."
     },
     "python/src/yamaa/style/__init__.py": {
-      "names": [
-        "FINDINGS",
-        "LINE_WIDTH",
-        "StyleFinding",
-        "check_file",
-        "discover_schema_root",
-        "field_orders",
-        "fix_file",
-        "is_specification",
-        "specification_files"
-      ],
-      "disposition": "decision_required",
-      "issue": "#1742",
-      "rationale": "Decide retained standalone IO/ODM/authoring helpers individually; #1751 does not establish an exact compatibility mapping for this whole module."
+      "names": [],
+      "disposition": "remove_public",
+      "issue": "#2002",
+      "rationale": "Retain python -m yamaa.style with private host policy and shared native edit proof; retire importable style extension APIs."
     },
     "python/src/yamaa/submission/__init__.py": {
       "names": [
@@ -527,6 +517,7 @@
         "_prepare_inherited_specification",
         "_prepare_specification",
         "_profile_dataset_functions",
+        "_style_same_value",
         "_temporal_result",
         "analyze_aggregate",
         "analyze_column_dependencies",
@@ -719,7 +710,6 @@
         "specification_source",
         "table_round_trip",
         "table_snapshot",
-        "traverse_inheritance",
         "utf8_bytes",
         "utf8_scalar",
         "yamaa_check",

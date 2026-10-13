@@ -523,6 +523,48 @@ def test_bounds_beyond_days_is_rejected_rather_than_reinterpreted(
     assert condition.condition.context["permitted"] == ["exclusive"]
 
 
+@pytest.mark.parametrize(
+    ("operation", "payload", "values", "field"),
+    [
+        (
+            "date_diff",
+            {"start": "S", "end": "E", "unit": "day", "bounds": ["inclusive"]},
+            {"S": date("2025-01-01"), "E": date("2025-01-11")},
+            "bounds",
+        ),
+        (
+            "date_impute",
+            {
+                "source": "S",
+                "month": 6,
+                "day": 15,
+                "minimum_source_precision": ["year"],
+            },
+            {"S": "2025-01"},
+            "minimum_source_precision",
+        ),
+        (
+            "datetime_impute",
+            {"source": "S", "time": ["first"]},
+            {"S": "2025-01"},
+            "time",
+        ),
+    ],
+)
+def test_a_list_valued_enum_field_is_refused_rather_than_crashing(
+    operation: str,
+    payload: dict[str, object],
+    values: dict[str, object],
+    field: str,
+) -> None:
+    # A list is unhashable, so a bare set-membership check raises TypeError
+    # instead of answering the closed value_not_permitted condition.
+    condition = _condition(operation, payload, values)
+
+    assert condition.condition.condition == "value_not_permitted"
+    assert condition.condition.context["field"] == field
+
+
 def test_a_missing_endpoint_needs_no_guarding_predicate() -> None:
     assert (
         _value(

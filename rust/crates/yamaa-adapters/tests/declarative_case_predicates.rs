@@ -148,6 +148,64 @@ fn filtered_case_source_is_shared_by_columns_and_record_rows() {
         assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), expected);
     }
 }
+
+#[test]
+fn qualified_case_predicate_and_full_pattern_capture_execute_in_each_expression_position() {
+    let expression = "{case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: '(?<=prefix:)([A-Z]+)(?=$)', group: 1}}}, {otherwise: {literal: none}}]}";
+    let prefix = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n";
+    for (position, tail) in [
+        ("column-case", format!("  - {{name: VALUE, type: str, derivation: {expression}}}\n")),
+        ("record-default-case", format!("  - {{name: VALUE, type: str, derivation: {expression}}}\nrows: [{{id: records, dataset: SRC, derivations: {{}}}}]\n")),
+        ("record-local-case", format!("  - {{name: VALUE, type: str}}\nrows: [{{id: records, dataset: SRC, derivations: {{VALUE: {expression}}}}}]\n")),
+        ("grouped-local-case", format!("  - {{name: VALUE, type: str}}\nrows: [{{id: groups, dataset: SRC, group_by: [SRC.ID, SRC.V, SRC.TEXT], derivations: {{VALUE: {expression}}}}}]\n")),
+    ] {
+        let fixture = Fixture::new();
+        fs::write(fixture.0.join("input.csv"), "ID,V,TEXT\na,1,prefix:ONE\nb,0,prefix:TWO\n").unwrap();
+        let mut result = fixture.run(&format!("{prefix}{tail}")).unwrap();
+        assert!(result.issues().is_empty(), "{position}: {:?}", result.issues());
+        assert!(result.save().unwrap(), "{position}");
+        assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), b"ID,VALUE\na,ONE\nb,none\n", "{position}");
+    }
+}
+
+#[test]
+fn verification_predicate_and_literals_check_completed_column_case_and_row_outputs() {
+    let prefix = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    verifications:\n      - allowed_values: {values: [0, 1.0]}\n      - range: {min: 0.0, max: 1.5}\n";
+    let expression = "{case: [{when: 'SRC.V > 0', then: {literal: 1}}, {otherwise: {literal: 0}}]}";
+    for tail in [
+        format!("    derivation: {expression}\n"),
+        format!("rows: [{{id: records, dataset: SRC, derivations: {{VALUE: {expression}}}}}]\n"),
+        format!("rows: [{{id: groups, dataset: SRC, group_by: [SRC.ID, SRC.V], derivations: {{VALUE: {expression}}}}}]\n"),
+    ] {
+        for predicate in ["VALUE >= 0", "VALUE =", "7"] {
+            let fixture = Fixture::new();
+            fs::write(fixture.0.join("input.csv"), "ID,V\na,1\nb,0\n").unwrap();
+            let declaration = if predicate == "7" { "7".into() } else { format!("'{predicate}'") };
+            let built = fixture.run(&format!("{prefix}{tail}verifications: [{{assert: {{require: {declaration}}}}}]\n"));
+            if predicate == "7" {
+                let Err(issues) = built else { panic!("non-text public predicate was admitted") };
+                assert_eq!(issues[0].condition, "invalid_field_type");
+                assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0287"));
+                assert_eq!(issues[0].spec_paths, ["verifications[0].assert.require"]);
+                assert!(!fixture.0.join("result.csv").exists());
+                continue;
+            }
+            let mut result = built.unwrap();
+            if predicate == "VALUE >= 0" {
+                assert!(result.issues().is_empty(), "{:?}", result.issues());
+                assert!(result.save().unwrap());
+                assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), b"ID,VALUE\na,1\nb,0\n");
+            } else {
+                let issue = &result.issues()[0];
+                assert_eq!(issue.condition, "invalid_predicate");
+                assert_eq!(issue.spec_paths, ["verifications[0].assert.require"]);
+                assert!(result.output().is_none());
+                assert!(result.save().is_err());
+                assert!(!fixture.0.join("result.csv").exists());
+            }
+        }
+    }
+}
 #[test]
 fn unchanged_original_case_and_filtered_source_truth_passes_in_full() {
     let benchmarks = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");

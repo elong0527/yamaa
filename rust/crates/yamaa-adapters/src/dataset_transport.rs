@@ -1536,7 +1536,7 @@ mod codelist_protocol_tests {
         assert_eq!(envelope["protocol"], "dataset/1");
         assert_eq!(
             envelope["outcome"]["verifications"][0]["requirement"],
-            "REQ-0376"
+            crate::test_diagnostic_truth::value("verification-all")["requirement"]
         );
         assert_eq!(
             envelope["outcome"]["verifications"][0]["offending_rows"][0]["keys"][0],

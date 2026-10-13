@@ -201,3 +201,6 @@ def _prepare_file_project(
     environment_modules: list[tuple[str, bytes]],
     environment_entry: int,
 ) -> _ProjectSpecification: ...
+
+# Retained private style edit proof, without exposing a parser result.
+def _style_same_value(before: bytes, after: bytes) -> bool: ...
