@@ -44,7 +44,7 @@
       ],
       "handlers": []
     },
-    "column-group-key-first-available": {
+    "column-group-key-first": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {first_available: {sources: [{variable: SRC.ID, filter: 'SRC.V > 0'}, SRC.ID]}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
@@ -80,7 +80,7 @@
       ],
       "handlers": []
     },
-    "row-group-key-unreached-branch": {
+    "row-group-key-unreached": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}, {name: VALUE, type: str}]\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations:\n      VALUE: {case: [{when: 'FALSE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: {literal: unused}}]}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
@@ -116,7 +116,7 @@
       ],
       "handlers": []
     },
-    "group-key-prohibition-before-filter-grammar": {
+    "group-key-prohibition-first": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, filter: 'SRC.V >'}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
@@ -152,7 +152,7 @@
       ],
       "handlers": []
     },
-    "group-key-shared-across-templates": {
+    "group-key-shared-templates": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, filter: 'TRUE'}}}\nrows:\n  - {id: first, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n  - {id: second, dataset: SRC, group_by: [SRC.ID, SRC.V], derivations: {}}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
@@ -188,7 +188,7 @@
       ],
       "handlers": []
     },
-    "grouped-nonkey-remains-unavailable": {
+    "grouped-nonkey-unavailable": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.V, filter: 'TRUE'}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n"
@@ -213,7 +213,7 @@
       ],
       "handlers": []
     },
-    "resource-failure-precedes-group-bind": {
+    "resource-failure-group-bind": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: {literal: unused}}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
       "inputs": {},
       "issues": [
@@ -351,7 +351,7 @@
         ]
       }
     },
-    "group-key-keep-is-redundant": {
+    "group-key-keep-redundant": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, order_by: [SRC.V], keep: last}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\na,2\nb,3\n"
@@ -392,7 +392,7 @@
         ]
       }
     },
-    "secondary-record-filter-over-grouped-driver": {
+    "record-filter-over-driver": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: SRC\ninput:\n  SRC: {path: input.csv, types: {V: int}}\n  D: {path: donor.csv, types: {SEQ: int, USE: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: D.V, filter: 'D.USE = 1', order_by: [D.SEQ], keep: first}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\nb,\n",
