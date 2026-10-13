@@ -91,17 +91,23 @@
         "_ProjectResult.study_snapshot",
         "_ProjectSpecification",
         "_ProjectSpecification.build",
+        "_ProjectSpecification.capture_input_metadata",
         "_ProjectSpecification.capture_reads",
+        "_ProjectSpecification.check_issues",
+        "_ProjectSpecification.check_source_metadata",
+        "_ProjectSpecification.diagnostic_origins",
+        "_ProjectSpecification.input_metadata",
         "_ProjectSpecification.preparation_status",
         "_Specification",
         "_Specification.build",
         "_Specification.check_issues",
+        "_Specification.check_source_metadata",
         "_Specification.execute_csv",
         "_Specification.failure_report",
+        "_Specification.input_metadata",
         "_Specification.report",
         "_Specification.source",
         "_check_file",
-        "_check_project_metadata",
         "_define_file",
         "_domain_file",
         "_prepare_document",
@@ -219,10 +225,6 @@
           "disposition": "internal",
           "rationale": "Private candidate project service with explicit schemas and retained attempts; not a qualified public environment API or release promise."
         },
-        "_check_project_metadata": {
-          "disposition": "internal",
-          "rationale": "Static shared admission of either host for repository validation; grants no activation authority."
-        },
         "_DomainResult.project_failures": {
           "disposition": "internal",
           "rationale": "Retained original host payload qualification independent of formatting."
@@ -230,6 +232,34 @@
         "_DomainResult.log": {
           "disposition": "internal",
           "rationale": "Private owned native log view used by the public result facade; no independent publication or host semantic authority."
+        },
+        "_Specification.check_source_metadata": {
+          "disposition": "internal",
+          "rationale": "Production repository-validator fixture binding diagnostics over the exact held specification and bounded closed source name/type carriers. The engine owns source metadata admission and binding; no activation, cell read, tree, parser, plan, evaluator or Save authority is exposed."
+        },
+        "_ProjectSpecification.check_source_metadata": {
+          "disposition": "internal",
+          "rationale": "Production repository-validator fixture binding diagnostics over the exact held specification and bounded closed source name/type carriers. The engine owns source metadata admission and binding; no activation, cell read, tree, parser, plan, evaluator or Save authority is exposed."
+        },
+        "_Specification.input_metadata": {
+          "disposition": "internal",
+          "rationale": "Bounded original-declaration source descriptors over the held specification, without source bytes or inspection, parsing, execution or publication authority."
+        },
+        "_ProjectSpecification.diagnostic_origins": {
+          "disposition": "internal",
+          "rationale": "Bounded contributor path/source identities from held native normalization rejection or ready static findings for repository human diagnostic attribution; no source recapture, semantic tree or portable context modification."
+        },
+        "_ProjectSpecification.input_metadata": {
+          "disposition": "internal",
+          "rationale": "Bounded external-source descriptors over the unified held ordinary, plain or producer capability. Producer contracts remain native; descriptors preserve node and original declaring identities without execution or source reads."
+        },
+        "_ProjectSpecification.capture_input_metadata": {
+          "disposition": "internal",
+          "rationale": "Explicit index-only source-byte capture through the exact held native resource scope. Shared slot/byte ceilings, original anchors, symlink refusal and immutable snapshot policy apply before IO; no arbitrary path, callback, activation or Save authority is accepted."
+        },
+        "_ProjectSpecification.check_issues": {
+          "disposition": "internal",
+          "rationale": "Portable existing static issues from the exact unified held capability or original retained preparation refusal. No source read, recapture or execution occurs."
         }
       }
     },

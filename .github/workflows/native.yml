@@ -202,7 +202,7 @@ jobs:
           name: rounding-assessment-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/rounding-assessment.json
           if-no-files-found: error
-      - name: Preserve regex reference discrepancies
+      - name: Preserve native regex assessment and historical disposition
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: regex-native-${{ matrix.os }}-${{ matrix.python }}
@@ -314,7 +314,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install build tools
         run: |
-          python -m pip install uv==0.11.6 py-yaml12==0.2.0
+          python -m pip install uv==0.11.6
           if [ "${{ matrix.form }}" = source ]; then
             rustup toolchain install 1.90.0 --profile minimal
           fi
@@ -336,8 +336,6 @@ jobs:
         run: |
           echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
           uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/table-requirements.txt"
-      - name: Install the grammar fixture codec
-        run: python -m pip install py-yaml12==0.2.0
       - name: Stage installed checks outside checkout
         working-directory: ${{ runner.temp }}
         run: |
@@ -557,6 +555,32 @@ jobs:
             --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
             --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.3.0.tar.gz" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Require repository validator real-R public Check transport
+        if: ${{ always() && steps.r_install.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/native-r-library
+        run: |
+          Rscript --vanilla - <<'RS'
+          version <- "2.0.0"
+          archive <- paste0("jsonlite_", version, ".tar.gz")
+          urls <- c(paste0("https://cran.r-project.org/src/contrib/", archive),
+                    paste0("https://cran.r-project.org/src/contrib/Archive/jsonlite/", archive))
+          target <- tempfile(fileext = ".tar.gz")
+          downloaded <- FALSE
+          for (url in urls) {
+            downloaded <- tryCatch({
+              download.file(url, target, mode = "wb", quiet = TRUE) == 0L
+            }, error = function(error) FALSE)
+            if (downloaded) break
+          }
+          stopifnot(downloaded)
+          install.packages(target, repos = NULL, type = "source", lib = Sys.getenv("R_LIBS"))
+          stopifnot(as.character(utils::packageVersion("jsonlite")) == version)
+          RS
+          cp "${GITHUB_WORKSPACE}/.github/scripts/yaml-validation/_r_check_transport.py" _r_check_transport.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/check_repository_r_transport.py" check_repository_r_transport.py
+          python -I check_repository_r_transport.py
       - name: Check R source package outside checkout
         id: r_package_check
         working-directory: ${{ runner.temp }}
@@ -681,9 +705,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python -m pip install uv==0.11.6
-          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/audit-requirements.txt"
-          python -m pip install --no-deps -r "${RUNNER_TEMP}/audit-requirements.txt"
           python rust/tools/audit_native_run.py --run-id "${GITHUB_RUN_ID}" \
             --repository "${GITHUB_REPOSITORY}" --output "${RUNNER_TEMP}/native-run-audit" --check
       - name: Show the evidence record
@@ -698,4 +719,66 @@ jobs:
         with:
           name: native-run-audit
           path: ${{ runner.temp }}/native-run-audit
+          if-no-files-found: error
+
+  # Branch dispatches check changed components independently of installed qualification.
+  numeric_tool_obligations:
+    needs: plan
+    if: needs.plan.outputs.full == 'true' && github.ref != 'refs/heads/main'
+    name: native-numeric-tools (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || 35 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+    steps:
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: rust
+          shared-key: native-numeric-tools-${{ matrix.os }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install locked toolchain and package tools
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal
+          python -m pip install uv==0.11.6
+      - name: Preserve original spans, parser precedence and numerical policy truth
+        working-directory: rust
+        run: cargo test --locked -p yamaa-core --test numeric_parser --test aggregate_parser --test predicate_parser --test rounding --test regex
+      - name: Replay independent truth and retain historical coverage disposition
+        working-directory: rust
+        run: |
+          set -e
+          uv run --project ../python --locked --no-editable python tools/check_numeric_grammar.py
+          uv run --project ../python --locked --no-editable python tools/check_aggregate_grammar.py
+          uv run --project ../python --locked --no-editable python tools/check_numeric_syntax.py
+          uv run --project ../python --locked --no-editable python tools/check_predicate_syntax.py
+          uv run --project ../python --locked --no-editable python tools/check_regex.py
+          uv run --project ../python --locked --no-editable python tools/check_rounding.py
+          uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-native-assessment.json"
+          uv run --project ../python --locked --no-editable python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
+          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_native_numeric_tools.py -v
+          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_predicate_syntax_encoding.py -v
+          uv run --project ../python --locked --no-editable --group benchmark python -m unittest discover -s tests -p test_math_decision.py -v
+          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_rounding_assessment.py -v
+          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_rounding_check.py -v
+      - name: Retain component evidence without claiming installed matrix qualification
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-numeric-tools-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/regex-native-assessment.json
+            ${{ runner.temp }}/rounding-assessment.json
           if-no-files-found: error

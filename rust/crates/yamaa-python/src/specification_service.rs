@@ -15,6 +15,15 @@ pub struct Specification {
 }
 #[pymethods]
 impl Specification {
+    fn input_metadata(&self) -> PyResult<Vec<crate::source_metadata::InputRow>> {
+        crate::source_metadata::inputs(&self.inner)
+    }
+    fn check_source_metadata(
+        &self,
+        sources: &Bound<'_, PyList>,
+    ) -> PyResult<Vec<crate::specification_result::IssueRow>> {
+        crate::source_metadata::rows(&self.inner, sources)
+    }
     fn check_issue_rows(&self) -> PyResult<Vec<crate::specification_result::IssueRow>> {
         yamaa_adapters::specification_check::issue_rows(&self.inner)
             .map(|issues| crate::specification_result::issue_rows(&issues))

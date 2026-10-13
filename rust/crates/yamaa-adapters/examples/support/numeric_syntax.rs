@@ -1,5 +1,7 @@
 //! Private typed parser observations for independent differential fixtures.
 use serde_json::{json, Value};
+#[path = "syntax_spans.rs"]
+mod spans;
 use yamaa_core::{
     numeric::{BinaryOperator, UnaryOperator},
     numeric_parser::{
@@ -7,6 +9,55 @@ use yamaa_core::{
         ParsedNumeric,
     },
 };
+pub fn observe_with_spans(expression: &str) -> Value {
+    let mut outcome = observe(expression);
+    if let Ok(parsed) = parse_numeric(expression, ParseLimits::default()) {
+        annotate(&parsed, parsed.root(), &mut outcome["outcome"]["ast"]);
+    } else if let Err(ParseError::Grammar {
+        failure: GrammarFailure::ProhibitedFunction { name, .. },
+        ..
+    }) = parse_numeric(expression, ParseLimits::default())
+    {
+        outcome["outcome"]["span"] = spans::span(expression, name);
+    }
+    outcome
+}
+
+fn annotate(parsed: &ParsedNumeric, id: usize, value: &mut Value) {
+    let node = &parsed.nodes()[id];
+    let expression = parsed.expression();
+    match &node.kind {
+        ParsedKind::Unary { operand, .. } => {
+            annotate(parsed, *operand, &mut value["value"]);
+            value["operator_span"] = spans::operator(
+                expression,
+                node.span.start,
+                parsed.nodes()[*operand].span.start,
+            );
+        }
+        ParsedKind::Binary { left, right, .. } => {
+            annotate(parsed, *left, &mut value["left"]);
+            annotate(parsed, *right, &mut value["right"]);
+            value["operator_span"] = spans::operator(
+                expression,
+                parsed.nodes()[*left].span.end,
+                parsed.nodes()[*right].span.start,
+            );
+        }
+        ParsedKind::Call {
+            name, arguments, ..
+        } => {
+            value["name"] = json!(&expression[name.start..name.end]);
+            value["name_span"] = spans::span(expression, *name);
+            for (index, child) in arguments.iter().enumerate() {
+                annotate(parsed, *child, &mut value["arguments"][index]);
+            }
+        }
+        ParsedKind::Group { operand } => annotate(parsed, *operand, value),
+        _ => {}
+    }
+    value["span"] = spans::span(expression, node.span);
+}
 pub fn observe(expression: &str) -> Value {
     let outcome = match parse_numeric(expression, ParseLimits::default()) {
         Ok(parsed) => json!({"status":"parsed", "ast": ast(&parsed, parsed.root()),
