@@ -210,7 +210,7 @@ local({
   unpack <- get(".scalar_unpack", asNamespace("yamaa"))
   for (value in list(yamaa:::int64("-9223372036854775808"),
                     yamaa:::int64("9223372036854775807"),
-                    yamaa:::utf8_bytes(as.raw(c(97L, 0L, 98L))),
+                    yamaa:::utf8_scalar(as.raw(c(97L, 0L, 98L))),
                     structure(0, class = "Date"),
                     structure(0, class = c("POSIXct", "POSIXt"), tzone = "UTC"))) {
     stopifnot(identical(unpack(pack(value)), value))
