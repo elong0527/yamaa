@@ -36,6 +36,46 @@ def _raised_conditions() -> set[str]:
             )
             if parameter.arg == "condition"
         }
+
+        def add_literal(value: ast.expr | None) -> None:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                names.add(value.value)
+
+        for definition in ast.walk(tree):
+            if isinstance(definition, ast.ClassDef):
+                for statement in definition.body:
+                    if isinstance(statement, ast.Assign):
+                        targets = statement.targets
+                        value = statement.value
+                    elif isinstance(statement, ast.AnnAssign):
+                        targets = [statement.target]
+                        value = statement.value
+                    else:
+                        continue
+                    if any(
+                        isinstance(target, ast.Name) and target.id == "condition"
+                        for target in targets
+                    ):
+                        add_literal(value)
+            if isinstance(definition, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                parameters = [
+                    *definition.args.posonlyargs,
+                    *definition.args.args,
+                ]
+                defaults = [
+                    *([None] * (len(parameters) - len(definition.args.defaults))),
+                    *definition.args.defaults,
+                ]
+                for parameter, default in zip(parameters, defaults, strict=True):
+                    if parameter.arg == "condition":
+                        add_literal(default)
+                for parameter, default in zip(
+                    definition.args.kwonlyargs,
+                    definition.args.kw_defaults,
+                    strict=True,
+                ):
+                    if parameter.arg == "condition":
+                        add_literal(default)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
