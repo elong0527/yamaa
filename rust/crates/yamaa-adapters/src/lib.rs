@@ -136,3 +136,6 @@ mod project_diagnostic_projection;
 mod file_inventory;
 
 pub mod host_limits;
+
+#[cfg(test)]
+mod test_diagnostic_truth;

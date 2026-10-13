@@ -55,8 +55,14 @@ mod tests {
         let finding = failure(&error, 4096).ok().unwrap();
         let value = serde_json::to_value(finding).unwrap();
         assert_eq!(value["phase"], "derivation");
-        assert_eq!(value["condition"], "multiple_values_per_key");
-        assert_eq!(value["requirement"], "REQ-0075");
+        assert_eq!(
+            value["condition"],
+            crate::test_diagnostic_truth::value("multiplicity")["condition"]
+        );
+        assert_eq!(
+            value["requirement"],
+            crate::test_diagnostic_truth::value("multiplicity")["requirement"]
+        );
         assert_eq!(
             value["context"]["value_count"],
             serde_json::json!({"integer":usize::MAX.to_string()})
