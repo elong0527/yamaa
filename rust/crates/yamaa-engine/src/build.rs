@@ -8,6 +8,27 @@ pub struct Request<'a> {
     pub environment: Option<&'a str>,
 }
 
+/// An absent environment has no declarations, captures, lock or activation
+/// requirements. It does not manufacture a source file or discovery location.
+pub fn without_environment(
+    host: crate::host_values::Language,
+) -> yamaa_core::project_environment::ExecutionEnvironment {
+    use yamaa_core::project_environment::{Draft, Environment};
+    Environment::admit(
+        host,
+        Draft {
+            language: None,
+            lock: None,
+            functions: None,
+            codelists: alloc::vec::Vec::new(),
+            has_study: false,
+            submissions: alloc::vec::Vec::new(),
+        },
+    )
+    .expect("empty environment admission")
+    .into_execution()
+}
+
 /// Native quota and snapshot observations; these methods neither decode nor
 /// activate code, read study data, or publish artifacts.
 pub trait MetadataAdmissionPort {
@@ -128,4 +149,113 @@ pub fn select_entry<P: MetadataAdmissionPort>(
     port.verify_metadata()
         .map_err(|(identity, error)| SelectionFailure::Snapshot { identity, error })?;
     Ok(EntrySelection { producer })
+}
+
+/// Complete metadata capabilities. Construction and compilation accept no study
+/// or publication authority; the engine selects a route from the held entry.
+pub enum Prepared<S, P, G> {
+    Plain(S),
+    Ordinary(P),
+    Producer(G),
+}
+
+pub trait PreparationPort {
+    type Entry;
+    type Plain;
+    type Project;
+    type Producer;
+    type Failure;
+
+    /// Capture the optional environment and original entry through one resource
+    /// reader. Root limits precede environment IO; absence captures nothing.
+    fn capture(&mut self, request: Request<'_>) -> Result<Self::Entry, Self::Failure>;
+    fn selection(entry: &Self::Entry) -> &EntrySelection;
+    fn plain(&mut self, entry: Self::Entry) -> Result<Self::Plain, Self::Failure>;
+    fn project(&mut self, entry: Self::Entry) -> Result<Self::Project, Self::Failure>;
+    fn producer(&mut self, entry: Self::Entry) -> Result<Self::Producer, Self::Failure>;
+}
+
+pub type Preparation<P> = Result<
+    Prepared<
+        <P as PreparationPort>::Plain,
+        <P as PreparationPort>::Project,
+        <P as PreparationPort>::Producer,
+    >,
+    <P as PreparationPort>::Failure,
+>;
+
+pub fn prepare<P: PreparationPort>(request: Request<'_>, port: &mut P) -> Preparation<P> {
+    let explicit_environment = request.environment.is_some();
+    let entry = port.capture(request)?;
+    select(entry, explicit_environment, port)
+}
+
+/// Resource-owning callers use the same sealed selection without reopening the
+/// entry or reconstructing a request from captured canonical identities.
+pub fn select<P: PreparationPort>(
+    entry: P::Entry,
+    explicit_environment: bool,
+    port: &mut P,
+) -> Preparation<P> {
+    if P::selection(&entry).is_producer() {
+        port.producer(entry).map(Prepared::Producer)
+    } else if explicit_environment {
+        port.project(entry).map(Prepared::Ordinary)
+    } else {
+        port.plain(entry).map(Prepared::Plain)
+    }
+}
+
+/// Host ports move checked capabilities into their existing engine execution,
+/// output and report services. Original host failures remain owned by the result.
+/// A build never accepts a publisher: publication uses only a completed result's
+/// explicit Save capability.
+pub trait Ports {
+    type Plain;
+    type Project;
+    type Producer;
+    type CheckResult;
+    type BuildResult;
+    type Failure;
+
+    fn prepare(&mut self, request: Request<'_>) -> PreparedRequest<Self>;
+    fn check_plain(&mut self, prepared: Self::Plain) -> Result<Self::CheckResult, Self::Failure>;
+    fn check_project(
+        &mut self,
+        prepared: Self::Project,
+    ) -> Result<Self::CheckResult, Self::Failure>;
+    fn check_producer(
+        &mut self,
+        prepared: Self::Producer,
+    ) -> Result<Self::CheckResult, Self::Failure>;
+    fn build_plain(&mut self, prepared: Self::Plain) -> Result<Self::BuildResult, Self::Failure>;
+    fn build_project(
+        &mut self,
+        prepared: Self::Project,
+    ) -> Result<Self::BuildResult, Self::Failure>;
+    fn build_producer(
+        &mut self,
+        prepared: Self::Producer,
+    ) -> Result<Self::BuildResult, Self::Failure>;
+}
+
+pub type PreparedRequest<P> = Result<
+    Prepared<<P as Ports>::Plain, <P as Ports>::Project, <P as Ports>::Producer>,
+    <P as Ports>::Failure,
+>;
+
+pub fn check<P: Ports>(request: Request<'_>, port: &mut P) -> Result<P::CheckResult, P::Failure> {
+    match port.prepare(request)? {
+        Prepared::Plain(prepared) => port.check_plain(prepared),
+        Prepared::Ordinary(prepared) => port.check_project(prepared),
+        Prepared::Producer(prepared) => port.check_producer(prepared),
+    }
+}
+
+pub fn domain<P: Ports>(request: Request<'_>, port: &mut P) -> Result<P::BuildResult, P::Failure> {
+    match port.prepare(request)? {
+        Prepared::Plain(prepared) => port.build_plain(prepared),
+        Prepared::Ordinary(prepared) => port.build_project(prepared),
+        Prepared::Producer(prepared) => port.build_producer(prepared),
+    }
 }

@@ -109,10 +109,13 @@ fn function(run: &dyn ActivationView, selected: usize) -> Result<(&Function, &st
         .captures()
         .iter()
         .find(|capture| matches!(&capture.origin, Origin::Function(held) if held == name))
-        .map_or_else(
-            || run.captured_environment().root().source().identity.as_str(),
-            |capture| capture.document.source().identity.as_str(),
-        );
+        .map(|capture| capture.document.source().identity.as_str())
+        .or_else(|| {
+            run.captured_environment()
+                .root_optional()
+                .map(|root| root.source().identity.as_str())
+        })
+        .ok_or(Error::InvalidObservation)?;
     Ok((function, source))
 }
 
