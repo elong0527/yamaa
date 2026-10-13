@@ -35,6 +35,16 @@ pub fn observe(source: &str, headers: &[Vec<String>]) -> Value {
         run.compiled().sources().len(),
         "authored header count"
     );
+    let odm_inputs = run
+        .compiled()
+        .sources()
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| {
+            run.compiled().source_interpretation(*index) == Some(SourceInterpretation::Odm)
+        })
+        .map(|(_, source)| source.name.as_str())
+        .collect::<Vec<_>>();
     let mut issues = Vec::new();
     let mut schemas = Vec::new();
     let mut catalog = serde_json::Map::new();
@@ -82,7 +92,7 @@ pub fn observe(source: &str, headers: &[Vec<String>]) -> Value {
         );
     }
     if !issues.is_empty() {
-        return json!({"status":"metadata_refusal", "issues":issues, "fields":odm_source::FIELDS, "catalog":catalog});
+        return json!({"status":"metadata_refusal", "issues":issues, "fields":odm_source::FIELDS, "catalog":catalog, "odm_inputs":odm_inputs});
     }
     let references = schemas.iter().collect::<Vec<_>>();
     let binding = match run.compiled().bind_sources(&references) {
@@ -91,5 +101,5 @@ pub fn observe(source: &str, headers: &[Vec<String>]) -> Value {
             json!({"status":"binding_refusal", "issues":specification_diagnostics::findings(&Error::Bind(error),Some(run.source()))})
         }
     };
-    json!({"status":"prepared", "fields":odm_source::FIELDS, "catalog":catalog, "binding":binding})
+    json!({"status":"prepared", "fields":odm_source::FIELDS, "catalog":catalog, "odm_inputs":odm_inputs, "binding":binding})
 }

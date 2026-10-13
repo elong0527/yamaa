@@ -194,8 +194,24 @@ impl Flag {
 pub fn flag_condition_diagnostic<E>(
     error: &predicate::EvaluationError<E>,
 ) -> Option<crate::diagnostic::Diagnostic> {
+    use predicate::ErrorKind;
+    let ErrorKind::Condition(cause) = &error.kind else {
+        return None;
+    };
+    Some(type_condition_diagnostic(
+        &error.spec_path,
+        cause,
+        &error.route,
+    ))
+}
+
+pub(super) fn type_condition_diagnostic(
+    path: &str,
+    cause: &predicate::Condition,
+    route: &[predicate::Route],
+) -> crate::diagnostic::Diagnostic {
     use crate::diagnostic::{ConditionCode as C, Context, ContextValue as V, Diagnostic};
-    use predicate::{Condition, ErrorKind};
+    use predicate::Condition;
     fn text(s: &str) -> V {
         V::Scalar(Value::Str(s.into()))
     }
@@ -210,9 +226,6 @@ pub fn flag_condition_diagnostic<E>(
             DateTime => "datetime",
         }
     }
-    let ErrorKind::Condition(cause) = &error.kind else {
-        return None;
-    };
     let mut context = Context::new();
     let code = match cause {
         Condition::UnknownField { identifier } => {
@@ -234,11 +247,11 @@ pub fn flag_condition_diagnostic<E>(
             C::PredicateInvalidEscape
         }
     };
-    Some(Diagnostic {
+    Diagnostic {
         code,
-        spec_paths: vec![error.spec_path.clone()],
+        spec_paths: vec![path.into()],
         context,
         source_span: None,
-        operand_route: Some(error.route.iter().map(|r| format!("{r:?}")).collect()),
-    })
+        operand_route: Some(route.iter().map(|r| format!("{r:?}")).collect()),
+    }
 }

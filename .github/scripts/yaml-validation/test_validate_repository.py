@@ -1,6 +1,7 @@
 import ast
 import copy
 import importlib.util
+import json
 import math
 import os
 import shutil
@@ -36,6 +37,19 @@ EXECUTION_SPEC = importlib.util.spec_from_file_location(
 assert EXECUTION_SPEC is not None and EXECUTION_SPEC.loader is not None
 EXECUTION_CHECK = importlib.util.module_from_spec(EXECUTION_SPEC)
 EXECUTION_SPEC.loader.exec_module(EXECUTION_CHECK)
+
+
+def typed_schema_control(specification, label, _path, environment, *_args, **_kwargs):
+    """Isolate original custom-schema truth from whole-spec version admission."""
+    schema = {'version': environment.get('version', '1.0'),
+        **environment['classes']}
+    observation = VALIDATOR._typed_fixtures.observe('schema',
+        json.dumps([yaml.safe_dump(schema), json.dumps(specification)]))
+    return [VALIDATOR.validation_diagnostic(
+        label + ('.' + path if path else ''), row['condition'],
+        row['condition'] + ': ' + json.dumps(row['context']),
+        context=row['context'])
+        for row in observation['issues'] for path in row['spec_paths']]
 
 
 RULE_PATH = Path(__file__).parent / 'check_rule_metadata.py'
@@ -2242,7 +2256,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
             case.mkdir(parents=True)
             environment = case / 'environment.yaml'
             environment.write_text(yaml.safe_dump(original))
-            with patch('yamaa._native._check_project_metadata') as native:
+            with patch.object(VALIDATOR._native_specification, 'validate') as native:
                 self.assertEqual(VALIDATOR.validate_examples_environment_documents(root, schema), [])
                 for value in ('', 1, [], None):
                     original['sdtm']['source_system_version'] = value
@@ -2264,7 +2278,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
                 'columns': [{'name': 'STUDYID', 'type': 'str',
                     'submission': {'core': 'Req', 'role': 'Identifier'}}],
             }
-            with patch('yamaa._native._check_project_metadata') as native:
+            with patch.object(VALIDATOR._native_specification, 'validate') as native:
                 errors = VALIDATOR.validate_spec_functions(
                     specification, 'submission.spec', case / 'spec.yaml', {})
             self.assertEqual(errors, [])
@@ -2278,7 +2292,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
             (case / 'spec.yaml').write_text('schema_version: "1.0"\n')
             specification = {'intermediates': [{'id': 'derived',
                 'derivations': {'value': {'function': {'name': 'missing'}}}}]}
-            with patch('yamaa._native._check_project_metadata', return_value=[
+            with patch.object(VALIDATOR._native_specification, 'validate', return_value=[
                 ('validation', 'unknown_function', 'REQ-0675',
                     ['intermediates[0].derivations.value'], '{"function":"missing"}'),
             ]) as native:
@@ -2308,7 +2322,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
                 case.mkdir(parents=True)
                 environment = case / 'environment.yaml'
                 environment.write_bytes(content)
-                with patch('yamaa._native._check_project_metadata') as native:
+                with patch.object(VALIDATOR._native_specification, 'validate') as native:
                     errors = VALIDATOR.validate_spec_functions_against(
                         {}, 'project.spec', case / 'spec.yaml', {}, [], {}, environment)
                 self.assertEqual(len(errors), 1)
@@ -2322,7 +2336,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
             (case / 'spec.yaml').write_text('schema_version: "1.0"\n')
             environment = case / 'environment.yaml'
             environment.write_text('language: r\n')
-            with patch('yamaa._native._check_project_metadata', return_value=[
+            with patch.object(VALIDATOR._native_specification, 'validate', return_value=[
                 ('validation', 'engine_rejected', None, [], '{"stage":"environment","code":"invalid_packaging_lock"}'),
             ]):
                 errors = VALIDATOR.validate_spec_functions_against(
@@ -3642,9 +3656,9 @@ class TestSpecNames(unittest.TestCase):
                 root = TOOL_PATH.parents[3]
                 env, env_errors = VALIDATOR.build_schema_env(root)
                 self.assertEqual(env_errors, [])
-                errors = VALIDATOR.validate_spec_document(
-                    spec, 'example/spec.yaml', root / 'example' / 'spec.yaml', env
-                )
+                errors = typed_schema_control(spec, 'example/spec.yaml', None, {
+                    'classes': {'root_class': [{'output': {'type': 'output_class'}}],
+                    'output_class': [{'columns': {'type': 'list[str]'}}]}})
 
                 diagnostics = [
                     error for error in errors
@@ -4284,7 +4298,7 @@ columns:
             for ordinal in ('AGE', 'OriginalPosition'):
                 with self.subTest(profile=profile, ordinal=ordinal):
                     self.write_producer_spec(self.VALID_PRODUCER_SPEC.replace(
-                        'path: dm.csv', f'path: dm.{profile}'
+                        'path: dm.csv', f'path: absent.{profile}'
                     ))
                     source = {
                         'path': f'input/absent.{profile}',
@@ -4434,11 +4448,16 @@ fields: {STUDYID: string, AGE: integer}
 '''
         )
 
+        original = yaml.safe_load((self.input_dir / 'dm.schema.yaml').read_text())
+        partial = typed_schema_control(original, 'producer', None, {
+            'classes': {'root_class': [{'schema_version': {'type': 'str', 'required': True}}]}})
         message = "\n".join(self.validate())
+        self.assertIn('schema_version_mismatch', message)
+        message = "\n".join(partial)
 
-        self.assertIn("missing required field 'schema_version'", message)
-        self.assertIn("unknown field 'version'", message)
-        self.assertIn("unknown field 'fields'", message)
+        self.assertIn("missing_required_field", message)
+        self.assertIn("producer.version: unknown_field", message)
+        self.assertIn("producer.fields: unknown_field", message)
 
     def test_rejects_metadata_only_contract(self):
         self.write_producer_spec(
@@ -4488,7 +4507,7 @@ columns:
 domain: {domain}
 input:
   LOOP:
-    path: dm.csv
+    path: out.csv
     schema: {link}
 base: LOOP
 keys: [STUDYID]
@@ -4513,7 +4532,7 @@ columns:
 
         message = "\n".join(self.validate())
 
-        self.assertIn("producer workflow dependency cycle", message)
+        self.assertIn("producer_workflow_cycle", message)
 
     def test_reports_a_missing_parent_relative_producer_source(self):
         self.write_producer_spec(
@@ -5704,7 +5723,7 @@ class TestDatasetPathExamples(unittest.TestCase):
 
 
 class TestReferenceDependencyBoundary(unittest.TestCase):
-    """#2002 keeps every removable semantic import in one explicit module."""
+    """#2002 rejects reference fallback across every retained tool module."""
 
     @staticmethod
     def forbidden_imports(source):
@@ -5720,8 +5739,9 @@ class TestReferenceDependencyBoundary(unittest.TestCase):
                 continue
             forbidden.extend(
                 name for name in names
-                if name.startswith('yamaa.')
-                and name not in {'yamaa._native', 'yamaa.check', 'yamaa.domain'}
+                if (name.startswith('yamaa_reference') or (
+                    name.startswith('yamaa.')
+                    and name not in {'yamaa._native', 'yamaa.check', 'yamaa.domain'}))
             )
         return forbidden
 
@@ -5736,22 +5756,32 @@ class TestReferenceDependencyBoundary(unittest.TestCase):
             isinstance(call, ast.Attribute)
             and call.attr == 'spec_from_file_location'
             for call in calls
-        ), 'reference source-file loading belongs only in _reference_checks.py')
+        ), 'the validator cannot load retired reference source files')
+        entry = next(node for node in ast.parse(source).body
+            if isinstance(node, ast.FunctionDef) and node.name == 'validate_spec_document')
+        semantic = [node.func.id for node in ast.walk(entry)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and (node.func.id.startswith('validate_spec_')
+                or node.func.id in {'validate_source_ordinal', 'validate_static_semantics',
+                    'validate_numeric_expression_ast', 'validate_predicate_ast'})]
+        self.assertEqual(semantic, [], 'production admission cannot fall back to partial controls')
+        native_source = TOOL_PATH.with_name('_native_specification.py').read_text()
+        self.assertNotIn('_check_project_metadata', native_source)
+        self.assertNotIn('.build(', native_source)
+        self.assertNotIn('.save(', native_source)
 
     def test_csv_fixture_admission_uses_only_the_retained_public_native_surface(self):
         source = TOOL_PATH.with_name('_native_csv.py').read_text(encoding='utf-8')
         self.assertEqual(self.forbidden_imports(source), [])
-        boundary = TOOL_PATH.with_name('_reference_checks.py').read_text(encoding='utf-8')
-        self.assertNotIn('yamaa.io.csv', boundary)
-        self.assertNotIn('yamaa.models', boundary)
-        self.assertNotIn('spec_from_file_location', boundary)
+        self.assertNotIn('yamaa.io.csv', source)
+        self.assertNotIn('yamaa.models', source)
+        self.assertNotIn('spec_from_file_location', source)
 
     def test_regex_fixture_admission_uses_only_public_native_specifications(self):
         source = TOOL_PATH.with_name('_native_regex.py').read_text(encoding='utf-8')
         self.assertEqual(self.forbidden_imports(source), [])
         self.assertNotIn('.save(', source)
-        boundary = TOOL_PATH.with_name('_reference_checks.py').read_text(encoding='utf-8')
-        self.assertNotIn('yamaa.regex', boundary)
+        self.assertNotIn('yamaa.regex', source)
 
     def test_guard_rejects_direct_aliased_and_from_package_imports(self):
         for source in (
@@ -5760,6 +5790,7 @@ class TestReferenceDependencyBoundary(unittest.TestCase):
             'from yamaa.io.csv import scan_records as scan',
             'from yamaa import schema',
             'from yamaa.odm.items import parse_odm_read',
+            'import yamaa_reference as evaluator',
         ):
             with self.subTest(source=source):
                 self.assertTrue(self.forbidden_imports(source))
@@ -5772,21 +5803,19 @@ class TestReferenceDependencyBoundary(unittest.TestCase):
         ), [])
 
     def test_boundary_has_no_dependency_back_on_the_validator(self):
-        path = TOOL_PATH.with_name('_reference_checks.py')
-        source = path.read_text(encoding='utf-8')
-        imports = [
-            node for node in ast.walk(ast.parse(source))
-            if isinstance(node, (ast.Import, ast.ImportFrom))
-        ]
-        names = [
-            name
-            for node in imports
-            for name in (
-                [alias.name for alias in node.names]
-                if isinstance(node, ast.Import) else [node.module]
-            )
-        ]
-        self.assertNotIn('validate_repository', names)
+        self.assertFalse(TOOL_PATH.with_name('_reference_checks.py').exists())
+        for path in TOOL_PATH.parent.glob('_native_*.py'):
+            source = path.read_text(encoding='utf-8')
+            with self.subTest(module=path.name):
+                self.assertEqual(self.forbidden_imports(source), [])
+                imports = [node for node in ast.walk(ast.parse(source))
+                    if isinstance(node, (ast.Import, ast.ImportFrom))]
+                names = [name for node in imports for name in (
+                    [alias.name for alias in node.names] if isinstance(node, ast.Import)
+                    else [node.module])]
+                self.assertNotIn('validate_repository', names)
+                self.assertNotIn('spec_from_file_location', source)
+                self.assertNotIn('yamaa_reference', source)
 
 
 class TestValidatorCLI(unittest.TestCase):
@@ -6336,7 +6365,8 @@ bad_field: "what"
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('bad_field', result.stdout)
 
-    def test_multiple_spec_variants_are_discovered_and_validated(self):
+    @patch.object(VALIDATOR, "validate_spec_document", side_effect=typed_schema_control)
+    def test_multiple_spec_variants_are_discovered_and_validated(self, _native):
         ex_dir = self.root_dir / 'benchmarks' / 'variant-example'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
@@ -6599,7 +6629,8 @@ bad_field: "what"
         self.assertIn('2.0', '\n'.join(errors))
         self.assertIn('1.0', '\n'.join(errors))
 
-    def test_negative_spec_rejects_unrelated_structural_errors(self):
+    @patch.object(VALIDATOR, "validate_spec_document", side_effect=typed_schema_control)
+    def test_negative_spec_rejects_unrelated_structural_errors(self, _native):
         ex_dir = self.root_dir / 'benchmarks' / 'negative-unrelated'
         (ex_dir / 'expected').mkdir(parents=True)
         (ex_dir / 'spec.yaml').write_text(
@@ -6628,7 +6659,8 @@ bad_field: "what"
         self.assertTrue(errors)
         self.assertIn('bad_root_field', '\n'.join(errors))
 
-    def test_negative_spec_allows_declared_structural_failure(self):
+    @patch.object(VALIDATOR, "validate_spec_document", side_effect=typed_schema_control)
+    def test_negative_spec_allows_declared_structural_failure(self, _native):
         ex_dir = self.root_dir / 'benchmarks' / 'negative-declared'
         (ex_dir / 'expected').mkdir(parents=True)
         (ex_dir / 'spec.yaml').write_text(
@@ -6656,7 +6688,8 @@ bad_field: "what"
         errors = VALIDATOR.validate_examples_structure(self.root_dir, env)
         self.assertEqual(errors, [])
 
-    def test_negative_path_matches_list_item(self):
+    @patch.object(VALIDATOR, "validate_spec_document", side_effect=typed_schema_control)
+    def test_negative_path_matches_list_item(self, _native):
         ex_dir = self.root_dir / 'benchmarks' / 'negative-list-path'
         (ex_dir / 'expected').mkdir(parents=True)
         (ex_dir / 'spec.yaml').write_text('keys: [wrong]\n')
@@ -7586,7 +7619,8 @@ class TestRowPhaseDatasetReads(unittest.TestCase):
         # identifier; the value must be bound to a column first.
         self.assertTrue(
             any(
-                "qualified_identifier" in message and "rows[0]" in message
+                "unknown_field" in message and "rows[0]" in message
+                and message.context == {"drivers": ["MAIN"], "identifier": "AUX.H"}
                 for message in errors
             ),
             errors,

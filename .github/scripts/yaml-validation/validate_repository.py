@@ -20,10 +20,12 @@ import yaml
 # Editorial validators live in editorial.py; re-exported here so existing
 # `from validate_repository import ...` call sites keep working.
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # noqa: E402
-import _reference_checks  # noqa: E402
+import _native_parquet  # noqa: E402
+import _native_odm  # noqa: E402
 import _typed_fixtures  # noqa: E402
 import _native_csv  # noqa: E402
 import _native_regex  # noqa: E402
+import _native_specification  # noqa: E402
 from editorial import (  # noqa: E402
     ASCII_SOURCE_IGNORED_PARTS,
     ASCII_SOURCE_NAMES,
@@ -4394,7 +4396,7 @@ def validate_spec_contracts(
                         names = []  # The CSV profile pass reports invalid bytes.
                 else:
                     parquet_source_fields, ParquetProfileFailure = (
-                        _reference_checks.parquet_binding()
+                        (_native_parquet.parquet_source_fields, _native_parquet.ParquetProfileFailure)
                     )
 
                     try:
@@ -4544,16 +4546,33 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
             except (OSError, UnicodeError, csv.Error):
                 header = None
 
+        if (
+            isinstance(source_path, str)
+            and spec_path is not None
+            and source_path.lower().endswith('.parquet')
+            and classify_written_project_path(source_path) is None
+            and rooted_project_segments(source_path) is None
+        ):
+            resolved = (sources or {}).get((dataset_id, 'path')) or (
+                spec_path.parent / source_path
+            )
+            parquet_source_fields, ParquetProfileFailure = (
+                (_native_parquet.parquet_source_fields, _native_parquet.ParquetProfileFailure)
+            )
+            try:
+                _, admitted = parquet_source_fields(Path(resolved).read_bytes())
+                fields.update(admitted)
+                header = [name for name, _kind in admitted]
+            except (OSError, ParquetProfileFailure):
+                # Full native source admission reports invalid profiles.
+                header = None
+
         if dataset_id in odm_datasets:
             # REQ-1266/REQ-1267: an ODM input exposes its schema fields, bound
             # without regard to case, as text; a vendor field is not read. A
             # header this check cannot read is taken to carry the schema,
             # which ingestion verifies against the file itself.
-            bound = (
-                bind_odm_fields(header).stored
-                if header is not None
-                else ODM_SCHEMA_FIELDS
-            )
+            bound = dict(_native_odm.observe(spec, spec_path, sources).get('catalog', {}).get(dataset_id, []))
             catalog[dataset_id] = {field: 'str' for field in bound}
             continue
 
@@ -4572,200 +4591,33 @@ def dataset_type_catalog(spec, spec_path, env=None, sources=None):
     return catalog
 
 
-# REQ-1265..REQ-1278's fixed ODM schema, its case-folding name binding, the
-# walk that finds an `odm` read, and the read's payload are the runtime's
-# own (`yamaa.odm.items`), so this file owns no second copy of the binding
-# rules. The import is lazy for the reason the predicate binding gives.
+# Independent partial ODM controls consume native declaration/header facts.
 ODM_SCHEMA_FIELDS = None
-bind_odm_fields = None
-iter_odm_payloads = None
-parse_odm_read = None
 
 
 def _ensure_odm_binding():
-    """Import yamaa.odm.items on first use, or exit when unavailable."""
-    global ODM_SCHEMA_FIELDS, bind_odm_fields, iter_odm_payloads, parse_odm_read
-    if parse_odm_read is None:
-        try:
-            schema_fields, bind_fields, iter_payloads, parse_read = (
-                _reference_checks.odm_binding()
-            )
-        except ImportError as error:
-            raise SystemExit(
-                "validate_repository.py requires the yamaa package "
-                "(run: uv sync --project python --locked)"
-            ) from error
-        ODM_SCHEMA_FIELDS = schema_fields
-        bind_odm_fields = bind_fields
-        iter_odm_payloads = iter_payloads
-        parse_odm_read = parse_read
-
-
-def odm_read_sites(spec):
-    """Return (path, location, row_index, column_name, read) for ODM reads."""
-    _ensure_odm_binding()
-    sites = []
-
-    def add(derivation, path, location, row=None, column_name=None):
-        for read_path, payload, derive in iter_odm_payloads(derivation, path):
-            read = parse_odm_read(payload)
-            if read is not None:
-                sites.append(
-                    (
-                        read_path,
-                        'derive' if derive else location,
-                        row,
-                        column_name,
-                        read,
-                    )
-                )
-
-    for column in spec.get('columns') or []:
-        if isinstance(column, dict) and 'derivation' in column:
-            add(
-                column['derivation'],
-                f"columns.{column.get('name')}.derivation",
-                'column',
-                column_name=column.get('name'),
-            )
-    for index, row in enumerate(spec.get('rows') or []):
-        if isinstance(row, dict) and isinstance(row.get('derivations'), dict):
-            for name, derivation in row['derivations'].items():
-                add(derivation, f"rows[{index}].derivations.{name}", 'row', index)
-    for index, intermediate in enumerate(spec.get('intermediates') or []):
-        if isinstance(intermediate, dict) and isinstance(
-            intermediate.get('derivations'), dict
-        ):
-            for name, derivation in intermediate['derivations'].items():
-                add(
-                    derivation,
-                    f"intermediates[{index}].derivations.{name}",
-                    'intermediate',
-                )
-    return sites
+    global ODM_SCHEMA_FIELDS
+    if ODM_SCHEMA_FIELDS is None:
+        ODM_SCHEMA_FIELDS = _native_odm.fields()
 
 
 def odm_inputs(spec):
-    """Return the declared inputs an `odm` read names (REQ-1266)."""
-    declared = spec.get('input')
-    if not isinstance(declared, dict):
-        return frozenset()
-    return frozenset(
-        read.dataset
-        for _, _, _, _, read in odm_read_sites(spec)
-        if read.dataset in declared
-    )
+    _ensure_odm_binding()
+    return _native_odm.inputs(_native_odm.observe(spec))
 
 
 def validate_spec_odm_reads(spec, spec_label, spec_path, sources=None):
-    """Check every `odm` read and the ODM inputs it names (REQ-1265..1278)."""
-    errors = []
-    datasets = spec.get('input')
-    if not isinstance(datasets, dict):
-        return errors
-    rows = [row for row in spec.get('rows') or [] if isinstance(row, dict)]
-    only = next(iter(datasets)) if len(datasets) == 1 else None
-
-    def driver(row):
-        dataset = row.get('dataset')
-        return dataset if isinstance(dataset, str) else only
-
-    for path, location, row_index, column_name, read in odm_read_sites(spec):
-        dataset, item, selector = read.dataset, read.item, read.filter
-        if dataset not in datasets:
-            errors.append(validation_diagnostic(
-                f"{spec_label}.{path}.item",
-                'unknown_field',
-                f"{item!r} names no declared input",
-                context={'identifier': item},
-            ))
-            continue
-        # REQ-1270: only a row built from the ODM input has a scope.
-        if location in ('intermediate', 'derive'):
-            scoped = False
-        elif location == 'row':
-            scoped = row_index < len(rows) and driver(rows[row_index]) == dataset
-        elif rows:
-            scoped = all(
-                driver(row) == dataset
-                for row in rows
-                if column_name not in (row.get('derivations') or {})
-            )
-        else:
-            base = spec.get('base')
-            scoped = (base if isinstance(base, str) else only) == dataset
-        if not scoped:
-            errors.append(validation_diagnostic(
-                f"{spec_label}.{path}",
-                'invalid_odm_context',
-                f"no row this read evaluates for is built from {dataset!r}",
-                context={'dataset': dataset, 'location': location},
-            ))
-        # REQ-1271: a filter names only schema fields of the ODM input.
-        if selector is not None:
-            for name in sorted(predicate_identifier_names(selector)):
-                qualifier, _, field = name.partition('.')
-                if qualifier != dataset or field not in ODM_SCHEMA_FIELDS:
-                    errors.append(validation_diagnostic(
-                        f"{spec_label}.{path}.filter",
-                        'unknown_field',
-                        f"{name!r} is not a field of the ODM input {dataset!r}",
-                        context={'identifier': name, 'dataset': dataset},
-                    ))
-
-    for dataset in sorted(odm_inputs(spec)):
-        source = datasets[dataset]
-        declared = (
-            next((key for key in ('types', 'schema', 'ordinal') if key in source), None)
-            if isinstance(source, dict)
-            else None
+    """Retain the independent ODM partial controls through typed core facts."""
+    _ensure_odm_binding()
+    observation = _native_odm.observe(spec, spec_path, sources)
+    return [
+        validation_diagnostic(
+            f"{spec_label}.{path}", issue['condition'],
+            issue['condition'], context=issue['context'],
         )
-        if declared is not None:
-            # REQ-1268: an ODM input's types are its schema's.
-            errors.append(validation_diagnostic(
-                f"{spec_label}.input.{dataset}.{declared}",
-                'odm_schema_field_type',
-                f"an ODM input declares no {declared}",
-                context={'dataset': dataset, 'declared': declared},
-            ))
-            continue
-        written = source if isinstance(source, str) else (
-            source.get('path') if isinstance(source, dict) else None
-        )
-        if (
-            not isinstance(written, str)
-            or spec_path is None
-            or not written.lower().endswith('.csv')
-            or classify_written_project_path(written) is not None
-            or rooted_project_segments(written) is not None
-        ):
-            continue
-        resolved = (sources or {}).get((dataset, 'path')) or (
-            spec_path.parent / written
-        )
-        try:
-            with open(resolved, 'r', encoding='utf-8', newline='') as handle:
-                header = next(csv.reader(handle, strict=True), [])
-        except (OSError, UnicodeError, csv.Error):
-            continue
-        binding = bind_odm_fields(header)
-        missing = list(binding.missing)
-        if missing:
-            errors.append(validation_diagnostic(
-                f"{spec_label}.input.{dataset}.path",
-                'odm_schema_field_missing',
-                f"the ODM input lacks {', '.join(missing)}",
-                context={'dataset': dataset, 'fields': missing},
-            ))
-        for field, stored in binding.ambiguous.items():
-            stored = list(stored)
-            errors.append(validation_diagnostic(
-                f"{spec_label}.input.{dataset}.path",
-                'odm_schema_field_ambiguous',
-                f"{', '.join(map(repr, stored))} all name {field!r}",
-                context={'dataset': dataset, 'field': field, 'stored': stored},
-            ))
-    return errors
+        for issue in _native_odm.issues(observation)
+        for path in issue['spec_paths']
+    ]
 
 
 def iter_function_calls(value, path):
@@ -4867,39 +4719,27 @@ def validate_spec_functions_against(spec, spec_label, spec_path, schema_env,
                                     calls, column_types, environment_path,
                                     sources=None):
     """Shared Rust static admission; no installed function or study authority."""
-    import tempfile
-    import shutil
-    from yamaa._native import _check_project_metadata
-    root = spec_path.parents[1].parent
     try:
         source = yaml.load(environment_path.read_text(encoding='utf-8'), Loader=UniqueKeyLoader)
     except (OSError, UnicodeError, yaml.YAMLError) as exc:
         return [f"ERROR: {environment_path}: {exc}"]
     if not isinstance(source, dict):
         return [f"ERROR: {environment_path}: expected a mapping"]
-    with tempfile.TemporaryDirectory(prefix="yamaa-project-validation-") as temporary:
-        case = Path(temporary) / spec_path.parent.name
-        shutil.copytree(spec_path.parent, case)
-        # Reuse the one permitted packaging lock; never author benchmark locks.
-        destination = case / environment_path.relative_to(spec_path.parent)
-        language = source.get('language')
-        if language not in ('python', 'r'):
-            # Malformed authored language belongs to native schema diagnostics,
-            # rather than the bridge's host-selector argument conversion.
-            language = 'r' if environment_path.parent.name == 'r' else 'python'
-        if language == 'python' and source.get('lock') == 'uv.lock':
-            shutil.copyfile(root / 'python/uv.lock', destination.parent / 'uv.lock')
-        rows = _check_project_metadata(str(case / spec_path.name), str(destination), language)
-        errors = []
-        for phase, condition, requirement, paths, context in rows:
-            if condition == 'unsupported_feature':
-                continue  # Other contracts retain their independent validators.
-            facts = json.loads(context) if context else {}
-            for path in paths or [None]:
-                errors.append(validation_diagnostic(
-                    f"{spec_label}.{path}" if path is not None else str(environment_path),
-                    condition, condition, context=facts))
-        return errors
+    rows = _native_specification.validate(
+        spec, spec_path, environments=[environment_path],
+        schema_root=Path(schema_env.get('root', _native_specification.ROOT)),
+    )
+    errors = []
+    for phase, condition, requirement, paths, encoded in rows:
+        facts = json.loads(encoded) if encoded else {}
+        for path in paths or [None]:
+            finding = validation_diagnostic(
+                f"{spec_label}.{path}" if path is not None else str(environment_path),
+                condition, condition, context=facts)
+            finding.phase = phase
+            finding.requirement = requirement
+            errors.append(finding)
+    return errors
 
 
 #: Predicate operand type for a derived name the repository validator
@@ -8027,81 +7867,62 @@ def validate_spec_document(
     spec, spec_label, spec_path, env, spec_stack=None, project_root=None,
     snapshots=None,
 ):
-    """Validate one complete specification and its producer dependencies."""
+    """Native static/profile/header facts, without project execution or Save."""
     if not isinstance(spec, dict) or not spec:
-        return [
-            f"ERROR: {spec_label}: spec is empty or not a mapping"
-        ]
-
-    if project_root is None:
-        project_root = spec_path.parent
-    if snapshots is None:
-        snapshots = ProjectSnapshots()
-    spec, errors, provenance = prepare_spec_document(
-        spec, spec_label, spec_path, env
+        return [f"ERROR: {spec_label}: spec is empty or not a mapping"]
+    origins = {}
+    rows = _native_specification.validate(
+        spec, spec_path, project_root=project_root, origins=origins,
+        environments=project_environment_paths(spec_path),
+        schema_root=Path(env.get('root', _native_specification.ROOT)),
     )
-    if errors or not isinstance(spec, dict):
-        return errors
-
-    if 'schema_version' in spec:
-        spec_version = str(spec['schema_version'])
-        env_version = str(env.get('version', '1.0'))
-        if spec_version != env_version:
-            errors.append(
-                f"ERROR: {spec_label}: schema_version '{spec_version}' "
-                f"does not match bundle version '{env_version}'"
-            )
-
-    errors.extend(validate_type(spec, ['root_class'], env, spec_label))
-    errors.extend(validate_grouped_rows(spec, spec_label))
-    errors.extend(validate_spec_names(spec, spec_label))
-    sources = resolved_source_files(spec, spec_path, project_root, provenance)
-    errors.extend(
-        validate_retired_odm_item_references(
-            spec, spec_label, spec_path, env, sources
-        )
-    )
-    errors.extend(validate_column_labels(spec, spec_label))
-    errors.extend(
-        validate_spec_odm_reads(spec, spec_label, spec_path, sources)
-    )
-    errors.extend(
-        validate_spec_contracts(
-            spec, spec_label, spec_path, project_root, snapshots, provenance,
-            sources,
-        )
-    )
-    errors.extend(
-        validate_spec_predicates(spec, spec_label, spec_path, env, sources)
-    )
-    errors.extend(
-        validate_spec_numeric_expressions(
-            spec, spec_label, spec_path, env, sources
-        )
-    )
-    errors.extend(
-        validate_spec_static_semantics(
-            spec, spec_label, spec_path, env, sources
-        )
-    )
-    errors.extend(
-        validate_spec_functions(spec, spec_label, spec_path, env, sources)
-    )
-
-    next_stack = set(spec_stack or ())
-    next_stack.add(spec_path.resolve())
-    errors.extend(
-        validate_producing_specs(
-            spec, spec_label, spec_path, env, next_stack, project_root,
-            snapshots, provenance,
-        )
-    )
-    return [
-        inherited_error_provenance(
-            error, spec_label, provenance, spec, spec_path
-        )
-        for error in errors
-    ]
+    errors = []
+    for phase, condition, requirement, paths, encoded in rows:
+        if phase != 'validation':
+            # Ingest fixtures are independently proved by validate_csv_shapes.
+            continue
+        context = json.loads(encoded)
+        if condition in RESOURCE_PATH_MESSAGES and isinstance(context.get('path'), str):
+            message = (condition + ': ' + repr(context['path']) + ' '
+                + RESOURCE_PATH_MESSAGES[condition])
+        elif condition == 'schema_version_mismatch':
+            message = ('schema_version does not match bundle version: '
+                + encoded)
+        elif condition == 'missing_derivation':
+            message = 'column has no derivation: ' + encoded
+        elif condition == 'driver_unavailable':
+            message = 'base is required: ' + encoded
+        else:
+            message = condition + ': ' + encoded
+        sources = context.get('declaring_sources') or []
+        if isinstance(sources, str):
+            sources = [sources]
+        sources.extend([context[key] for key in ('source_identity', 'source')
+            if isinstance(context.get(key), str)])
+        contributed = next((source for source in sources
+            if source != str(spec_path.resolve())), None)
+        if contributed is not None:
+            message += f" (contributed by {contributed})"
+        for path in paths or ['']:
+            location = spec_label + ('.' + path if path else '')
+            attributed = origins.get(path)
+            displayed = message
+            if attributed is not None and attributed != str(spec_path.resolve()):
+                displayed += f" (contributed by {attributed})"
+            finding = validation_diagnostic(location, condition, displayed,
+                context=context)
+            finding.phase = phase
+            finding.requirement = requirement
+            errors.append(finding)
+    # Approved repository authoring policy; cross-field names are native facts.
+    authoring = spec
+    if 'parents' in spec:
+        # This existing authoring view is used only for editorial label policy;
+        # native diagnostics above own all semantic admission and binding.
+        authoring, _, _ = prepare_spec_document(spec, spec_label, spec_path, env)
+    if isinstance(authoring, dict):
+        errors.extend(validate_column_labels(authoring, spec_label))
+    return errors
 
 
 def validate_producer_output_contract(producer, path):
@@ -8952,12 +8773,8 @@ BOM_UTF8 = '\ufeff'
 CANONICAL_INT = re.compile(r'0|-?[1-9][0-9]*')
 
 
-# R020's csv profile text. The runtime's `yamaa.io.csv` owns the profile:
-# `scan_records` reads records of text-or-missing under the unified
-# missing rule, and `render_records` writes the exact quoting condition.
-# This file owns no second dialect.
-# The import is lazy (see the regex binding note above): importing the yamaa
-# package pulls in polars, which this module only needs for csv-profile checks.
+# Native public admission owns the complete R020 CSV profile. The lazy codec
+# reads already admitted text-or-missing records and renders quoting only.
 CsvProfileFailure = None
 render_records = None
 scan_records = None
@@ -10638,7 +10455,12 @@ def main():
     if warnings and args.warnings_as_errors:
         return 1
 
-    print("PASS: Repository looks clean.")
+    if _native_specification.DEFERRED_ENVIRONMENTS:
+        for environment in sorted(_native_specification.DEFERRED_ENVIRONMENTS):
+            print(f"DEFERRED: R semantic source/binding/runtime coverage for {environment}; required installed R-host CI owns this lane.")
+        print("PASS: Available-host repository checks are clean; R semantic coverage is deferred.")
+    else:
+        print("PASS: Repository looks clean.")
     return 0
 
 if __name__ == '__main__':

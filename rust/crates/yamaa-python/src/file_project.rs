@@ -5,10 +5,7 @@ use pyo3::{
     types::{PyBytes, PyList, PyString},
 };
 use std::sync::{Arc, Mutex, MutexGuard};
-use yamaa_adapters::{
-    file_resources::Resources,
-    file_workflow::{self, Selected, SelectionError},
-};
+use yamaa_adapters::file_workflow::{self, Selected, SelectionError};
 use yamaa_engine::host_values::Language;
 
 type NativeAttempt = yamaa_adapters::project_run::Attempt<
@@ -56,6 +53,14 @@ impl Specification {
         yamaa_adapters::source_metadata::selected_inputs(owner)
             .map(crate::source_metadata::input_rows)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.message()))
+    }
+    fn diagnostic_origins(&self) -> PyResult<Vec<(String, String)>> {
+        let state = self.get()?;
+        match &*state {
+            Ok(_) => Ok(Vec::new()),
+            Err(error) => yamaa_adapters::source_metadata::rejected_origins(error)
+                .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.message())),
+        }
     }
     fn capture_input_metadata<'py>(
         &self,
@@ -256,7 +261,7 @@ pub fn _prepare_file_project(
         environment_entry,
         "environment_class",
     )?;
-    let resources = Resources::new(project_root, base_directory, &roots)
+    let resources = file_workflow::repository_resources(project_root, base_directory, &roots)
         .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.message()))?;
     let inner = file_workflow::select_with_optional_resources(
         resources,

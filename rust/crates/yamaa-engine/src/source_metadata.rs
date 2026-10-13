@@ -179,27 +179,10 @@ pub fn check(
         Ok(schemas) => schemas,
         Err(diagnostics) => return Ok(diagnostics),
     };
-    let mut diagnostics = Vec::new();
     let schemas = logical.iter().collect::<Vec<_>>();
-    match prepared.bind_sources(&schemas) {
-        Ok(_) => Ok(Vec::new()),
-        Err(BindError::Invalid(findings)) => {
-            if findings.len() > limits.findings {
-                return Err(Error::Limit);
-            }
-            for finding in findings {
-                let projected = finding
-                    .diagnostics(prepared.source())
-                    .ok_or(Error::Projection)?;
-                if projected.len() > limits.findings.saturating_sub(diagnostics.len()) {
-                    return Err(Error::Limit);
-                }
-                diagnostics.extend(projected);
-            }
-            Ok(diagnostics)
-        }
-        Err(error) => Err(Error::Binding(error)),
-    }
+    prepared
+        .metadata_source_findings(&schemas, limits.findings)
+        .map_err(Error::Binding)
 }
 
 fn normalize(
@@ -380,18 +363,42 @@ pub fn graph_check(
                 .find(|p| p.dataset() == declaration.name)
             {
                 let fields = producer.contract().fields();
-                complete.push(
-                    TableSchema::new(
-                        fields
-                            .iter()
-                            .map(|field| Column {
-                                name: field.name.clone(),
-                                kind: field.kind,
-                            })
-                            .collect(),
-                    )
-                    .map_err(Error::Schema)?,
-                );
+                let schema = TableSchema::new(
+                    fields
+                        .iter()
+                        .map(|field| Column {
+                            name: field.name.clone(),
+                            kind: field.kind,
+                        })
+                        .collect(),
+                )
+                .map_err(Error::Schema)?;
+                // Producer contracts carry their native logical kinds. Apply
+                // the consumer's ordinal to that held published schema without
+                // reading an unpublished artifact or rerunning CSV typing.
+                match crate::source_ingestion::ordinal(
+                    declaration,
+                    &schema,
+                    0,
+                    crate::source_ingestion::Limits {
+                        columns: limits.columns,
+                        cells: 0,
+                    },
+                ) {
+                    Ok(Some(ordinal)) => complete.push(ordinal.schema().clone()),
+                    Ok(None) => complete.push(schema),
+                    Err(finding) => diagnostics.push((
+                        index,
+                        finding
+                            .finding(
+                                &declaration.name,
+                                declaration.ordinal.as_deref().ok_or(Error::Projection)?,
+                            )
+                            .ok_or(Error::Projection)?
+                            .diagnostic()
+                            .map_err(|_| Error::Projection)?,
+                    )),
+                }
             } else {
                 let actual = external.get(next).ok_or(Error::SourceIdentity)?;
                 next += 1;

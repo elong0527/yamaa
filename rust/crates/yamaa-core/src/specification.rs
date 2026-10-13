@@ -2247,3 +2247,6 @@ fn output_profile(path: &str) -> Option<&'static str> {
         None
     }
 }
+
+#[path = "specification_metadata.rs"]
+mod metadata;

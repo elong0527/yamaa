@@ -10,6 +10,21 @@ use crate::{
 use std::sync::Arc;
 use yamaa_core::project_function::Language;
 
+/// Repository metadata preparation uses the public application's declaring-only
+/// resource policy. Explicit extra roots remain a separate private development
+/// capability; the repository consumer supplies none and never retries a root.
+pub fn repository_resources(
+    project_root: &str,
+    base_directory: &str,
+    extra_roots: &[String],
+) -> Result<Resources, crate::file_resources::Error> {
+    if extra_roots.is_empty() {
+        Resources::for_entry(base_directory)
+    } else {
+        Resources::new(project_root, base_directory, extra_roots)
+    }
+}
+
 pub enum Error {
     Configuration(crate::file_configuration::Error),
     Schema(crate::specification_source::Error),

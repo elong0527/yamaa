@@ -237,6 +237,7 @@ def test_native_capture_keeps_missing_and_symlink_refusals(tmp_path):
         ("resource_path_missing", "REQ-0785", ["input.SOURCE.path"])
     ]
     assert prepared.capture_reads() == reads
+
     (tmp_path / "real.csv").write_bytes(b"ID,VALUE\nA,1\n")
     try:
         (tmp_path / "absent.csv").symlink_to(tmp_path / "real.csv")
@@ -248,6 +249,70 @@ def test_native_capture_keeps_missing_and_symlink_refusals(tmp_path):
         ("resource_path_symlink", "REQ-0783", ["input.SOURCE.path"])
     ]
     assert prepared.capture_reads() == reads
+
+
+def test_inherited_missing_source_never_retries_a_readable_entry_relative_file(
+    tmp_path,
+):
+    (tmp_path / "parent").mkdir()
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input/data.csv").write_bytes(b"ID,VALUE\nwrong,1\n")
+    document = specification()
+    document["input"]["SOURCE"]["path"] = "input/data.csv"
+    (tmp_path / "parent/base.yaml").write_text(yaml.safe_dump(document))
+    (tmp_path / "spec.yaml").write_text(
+        "schema_version: '1.0'\nparents: parent/base.yaml\n"
+    )
+    prepared = file_owner(tmp_path)
+    assert prepared.check_issues() == []
+    reads = prepared.capture_reads()
+    value, issues = prepared.capture_input_metadata(0, 1024)
+    assert value is None
+    assert [(row[1], row[2], row[3]) for row in issues] == [
+        ("resource_path_missing", "REQ-0785", ["input.SOURCE.path"])
+    ]
+    assert json.loads(issues[0][4]) == {"dataset": "SOURCE", "path": "input/data.csv"}
+    assert prepared.capture_reads() == reads
+
+
+@pytest.mark.parametrize("absolute", [False, True])
+def test_declaring_only_capture_preserves_allowed_parent_and_absolute_paths(
+    tmp_path, absolute
+):
+    directory = tmp_path / "entry"
+    directory.mkdir()
+    payload = b"ID,VALUE\noriginal,1\n"
+    target = tmp_path / "data.csv"
+    target.write_bytes(payload)
+    document = specification()
+    document["input"]["SOURCE"]["path"] = str(target) if absolute else "../data.csv"
+    (directory / "spec.yaml").write_text(yaml.safe_dump(document))
+    prepared = file_owner(directory)
+    assert prepared.check_issues() == []
+    assert prepared.capture_input_metadata(0, 1024) == (payload, [])
+    assert not (directory / "out.csv").exists()
+
+
+def test_rejected_normalization_retains_contributor_without_public_context_change(
+    tmp_path,
+):
+    document = specification()
+    del document["columns"][0]["type"]
+    parent = tmp_path / "parent.yaml"
+    parent.write_text(yaml.safe_dump(document))
+    entry = tmp_path / "spec.yaml"
+    entry.write_text("schema_version: '1.0'\nparents: parent.yaml\n")
+    prepared = file_owner(tmp_path)
+    assert prepared.preparation_status() == "preparation_failure"
+    assert prepared.diagnostic_origins() == [("columns.ID.type", str(parent))]
+    rows = prepared.check_issues()
+    assert len(rows) == 1
+    assert json.loads(rows[0][4]) == {"class": "column_class", "field": "type"}
+    import yamaa
+
+    public = yamaa.check(entry)
+    assert public.issues["context"].to_list() == [rows[0][4]]
+    assert prepared.diagnostic_origins() == [("columns.ID.type", str(parent))]
 
 
 def test_producer_metadata_uses_native_contract_without_reading_unpublished_output(
@@ -285,3 +350,113 @@ def test_producer_metadata_uses_native_contract_without_reading_unpublished_outp
     assert prepared.capture_reads() == reads
     with pytest.raises(ValueError, match="ordinary project build capability"):
         prepared.build()
+
+
+@pytest.mark.parametrize("ordinal", ["VALUE", "POSITION"])
+def test_producer_published_schema_alone_owns_consumer_ordinal_collision(
+    tmp_path, ordinal
+):
+    leaf = specification()
+    leaf["output"]["path"] = "leaf.csv"
+    (tmp_path / "leaf.yaml").write_text(yaml.safe_dump(leaf))
+    document = specification()
+    document["input"] = {
+        "PRODUCED": {"path": "leaf.csv", "schema": "leaf.yaml", "ordinal": ordinal}
+    }
+    for column in document["columns"]:
+        column["derivation"] = column["derivation"].replace("SOURCE.", "PRODUCED.")
+    (tmp_path / "spec.yaml").write_text(yaml.safe_dump(document))
+    prepared = file_owner(tmp_path)
+    assert prepared.check_issues() == []
+    before = prepared.capture_reads()
+    rows = prepared.check_source_metadata([(str(tmp_path / "leaf.yaml"), *fields()[0])])
+    assert prepared.capture_reads() == before
+    assert not (tmp_path / "leaf.csv").exists()
+    if ordinal == "POSITION":
+        assert rows == []
+    else:
+        assert len(rows) == 1
+        phase, condition, requirement, paths, context = rows[0]
+        assert (phase, condition, requirement, paths) == (
+            "validation",
+            "ordinal_field_collision",
+            "REQ-1294",
+            ["input.PRODUCED.ordinal"],
+        )
+        assert json.loads(context) == {"dataset": "PRODUCED", "field": "VALUE"}
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "negative-output-transport",
+        "negative-review-date-text",
+        "negative-sum-non-numeric",
+        "negative-keys-internal",
+        "negative-order-repeated",
+        "negative-order-unknown-column",
+        "negative-adlb-computed-param",
+        "negative-lookup-mismatched",
+        "negative-lookup-unknown-key",
+    ],
+)
+def test_original_declaration_and_type_truth_needs_no_cells_or_activation(fixture):
+    directory = ROOT / "benchmarks" / fixture
+    original = yaml.safe_load((directory / "spec.yaml").read_text())
+    truth = yaml.safe_load((directory / "expected/error.yaml").read_text())
+    prepared = owner(original)
+    # Existing public static Check and original Build checkpoints are unchanged.
+    assert json.loads(prepared.check_issues()) == []
+    import csv
+
+    metadata = []
+    for dataset, source in original["input"].items():
+        path = source if isinstance(source, str) else source["path"]
+        with (directory / path).open(newline="") as stream:
+            names = next(csv.reader(stream))
+        metadata.append((dataset, [(name, "str") for name in names]))
+    rows = prepared.check_source_metadata(metadata)
+    assert len(rows) == 1
+    phase, condition, requirement, paths, context = rows[0]
+    assert (phase, condition, requirement, paths) == (
+        truth["phase"],
+        truth["condition"],
+        truth["requirement"],
+        truth["spec_paths"],
+    )
+    observed = json.loads(context)
+    assert {key: observed[key] for key in truth["context"]} == truth["context"]
+    if fixture == "negative-sum-non-numeric":
+        assert observed == {
+            "actual": "str",
+            "expected": "numeric",
+            "expr": "SUM(ASEV)",
+            "reducer": "SUM",
+            "source": "ASEV",
+        }
+    if fixture == "negative-review-date-text":
+        assert observed == {"left_type": "date", "right_type": "str"}
+
+
+def test_known_operand_type_success_does_not_claim_runtime_value_success():
+    original = yaml.safe_load(
+        (ROOT / "benchmarks/negative-sum-non-numeric/spec.yaml").read_text()
+    )
+    original["columns"][3]["type"] = "float"
+    prepared = owner(original)
+    assert (
+        prepared.check_source_metadata(
+            [
+                (
+                    "AE",
+                    [
+                        (name, "str")
+                        for name in ("STUDYID", "USUBJID", "AESEQ", "AESEV")
+                    ],
+                )
+            ]
+        )
+        == []
+    )
+    # The original severity words still cannot be converted to float at runtime.
+    # The metadata witness has never obtained those authored source values.

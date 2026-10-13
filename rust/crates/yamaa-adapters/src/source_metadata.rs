@@ -178,12 +178,14 @@ pub fn graph_check(
         .into_iter()
         .map(|(index, mut finding)| {
             let identity = metadata.nodes()[index].identity();
-            finding.context.insert(
-                "source_identity".into(),
-                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
-                    identity.into(),
-                )),
-            );
+            if index != metadata.root() {
+                finding.context.insert(
+                    "source_identity".into(),
+                    yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                        identity.into(),
+                    )),
+                );
+            }
             finding
         })
         .collect();
@@ -257,6 +259,56 @@ pub fn selected_reads(selected: &crate::file_workflow::Selected) -> usize {
         Prepared::Ordinary(owner) => owner.capture_reads(),
         Prepared::Producer(owner) => owner.capture_reads(),
     }
+}
+
+/// Human attribution over the original held normalization provenance. This
+/// borrows only diagnostic paths/source identities and never captures a file.
+pub fn rejected_origins(
+    error: &crate::file_workflow::SelectionError,
+) -> Result<Vec<(String, String)>, Error> {
+    use crate::{file_graph, file_preparation, file_workflow};
+    let preparation = match error {
+        file_workflow::SelectionError::Preparation(file_workflow::Error::Admission(error)) => {
+            match error.error() {
+                file_graph::Error::Document(file_preparation::Error::Preparation(error)) => {
+                    Some(error)
+                }
+                _ => None,
+            }
+        }
+        file_workflow::SelectionError::Preparation(file_workflow::Error::Graph(error)) => {
+            match error.error() {
+                file_graph::Error::Document(file_preparation::Error::Preparation(error)) => {
+                    Some(error)
+                }
+                _ => None,
+            }
+        }
+        file_workflow::SelectionError::Plain(error) => match error.error() {
+            file_preparation::Error::Preparation(error) => Some(error),
+            _ => None,
+        },
+        _ => None,
+    };
+    let Some(crate::specification_source::InheritanceError::Preparation { error, .. }) =
+        preparation
+    else {
+        return Ok(Vec::new());
+    };
+    let origins = yamaa_engine::inheritance_preparation::diagnostic_origins(error);
+    if origins.is_empty() {
+        return Ok(Vec::new());
+    }
+    let limits = Limits::default();
+    let mut budget = Budget::new(origins.len(), limits).map_err(Error::Application)?;
+    for (path, source) in &origins {
+        budget.text(path.len()).map_err(Error::Application)?;
+        budget.text(source.len()).map_err(Error::Application)?;
+    }
+    Ok(origins
+        .into_iter()
+        .map(|(path, source)| (path.into(), source.into()))
+        .collect())
 }
 
 pub fn selected_issues(selected: &crate::file_workflow::Selected) -> Result<Vec<Issue>, Error> {

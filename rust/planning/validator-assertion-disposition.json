@@ -1,0 +1,3214 @@
+{
+  "version": 1,
+  "preserved_control_revision": "aa9e60d0901dedeaf02e996e8d472f0304b4dfe3",
+  "original_named_control_count": 420,
+  "retained_named_control_count": 420,
+  "original_named_controls": [
+    "TestAggregateDeriveStep.test_accepts_derive_bindings_as_reducer_inputs",
+    "TestAggregateDeriveStep.test_accepts_enum_strings_inside_binding_derivation",
+    "TestAggregateDeriveStep.test_accepts_keep_declared_intermediate_read",
+    "TestAggregateDeriveStep.test_rejects_derive_step_naming_two_relations",
+    "TestAggregateDeriveStep.test_rejects_duplicate_binding_names",
+    "TestAggregateDeriveStep.test_rejects_filter_naming_other_relation",
+    "TestAggregateDeriveStep.test_rejects_forward_binding_reference",
+    "TestAggregateDeriveStep.test_rejects_intermediate_read_without_keep",
+    "TestAggregateDeriveStep.test_rejects_missing_binding_name",
+    "TestAggregateDeriveStep.test_rejects_qualified_reference_alongside_bindings",
+    "TestAggregateDeriveStep.test_rejects_self_reference",
+    "TestAggregateDeriveStep.test_rejects_two_dataset_relations_with_keep_intermediate",
+    "TestAggregateDeriveStep.test_rejects_unknown_binding_reference",
+    "TestAggregateDeriveStep.test_rejects_unknown_derive_variable_in_expression",
+    "TestAggregateDeriveStep.test_rejects_wrong_temporal_input_inside_binding",
+    "TestAggregateDeriveStep.test_validates_binding_derivation_input_types",
+    "TestAggregateExpressionLanguage.test_enforces_grain_context_and_numeric_reducer_inputs",
+    "TestAggregateExpressionLanguage.test_parses_reducers_functions_and_count_star",
+    "TestAggregateExpressionLanguage.test_rejects_invalid_grammar_constructs_and_functions",
+    "TestAggregateExpressionLanguage.test_rejects_nested_reductions_and_mixed_relations",
+    "TestAggregateExpressionLanguage.test_validates_row_relative_range_bounds_and_types",
+    "TestClosedGrammarContracts.test_a_condition_that_drifts_from_this_parser_is_reported",
+    "TestClosedGrammarContracts.test_a_continuation_aligns_under_its_definition_or_its_bar",
+    "TestClosedGrammarContracts.test_a_missing_grammar_fails_validation",
+    "TestClosedGrammarContracts.test_a_production_may_not_name_an_undefined_symbol",
+    "TestClosedGrammarContracts.test_a_reducer_list_that_drifts_from_this_parser_is_reported",
+    "TestClosedGrammarContracts.test_a_reserved_list_that_drifts_from_this_parser_is_reported",
+    "TestClosedGrammarContracts.test_a_rule_block_that_drifts_from_its_grammar_is_reported",
+    "TestClosedGrammarContracts.test_a_shape_that_drifts_from_this_parser_is_reported",
+    "TestClosedGrammarContracts.test_a_text_this_parser_accepts_cannot_be_recorded_as_rejected",
+    "TestClosedGrammarContracts.test_a_vocabulary_that_drifts_from_this_parser_is_reported",
+    "TestClosedGrammarContracts.test_an_identifier_set_that_drifts_from_this_parser_is_reported",
+    "TestClosedGrammarContracts.test_an_import_must_name_a_contract_that_defines_it",
+    "TestClosedGrammarContracts.test_every_contract_replays_against_this_validator",
+    "TestClosedGrammarContracts.test_every_rule_that_owns_a_grammar_has_a_contract",
+    "TestClosedGrammarContracts.test_replay_requires_a_case_for_every_named_category",
+    "TestClosedGrammarContracts.test_the_r_runner_reads_the_same_contracts",
+    "TestConditionRegistry.test_repository_registry_passes",
+    "TestConditionRegistry.test_unregistered_condition_is_rejected",
+    "TestConditionRegistry.test_wrong_phase_condition_is_rejected",
+    "TestCorrelatedLookupFilters.test_grouped_correlation_requires_a_group_key",
+    "TestCorrelatedLookupFilters.test_only_current_driver_can_correlate",
+    "TestCsvProfile.test_an_unrepresentable_tie_rounds_on_the_exact_value",
+    "TestCsvProfile.test_artifact_check_accepts_a_conforming_artifact",
+    "TestCsvProfile.test_artifact_check_reports_bytes_and_values",
+    "TestCsvProfile.test_bare_and_quoted_empty_are_both_missing",
+    "TestCsvProfile.test_byte_order_mark_is_rejected",
+    "TestCsvProfile.test_carriage_return_terminator_is_rejected",
+    "TestCsvProfile.test_decimals_needs_a_csv_artifact_path",
+    "TestCsvProfile.test_declared_precision_fixes_the_written_width",
+    "TestCsvProfile.test_exact_ties_round_away_from_zero",
+    "TestCsvProfile.test_extreme_precision_and_magnitude_do_not_raise",
+    "TestCsvProfile.test_float_text_is_positional_and_never_exponential",
+    "TestCsvProfile.test_float_text_omits_a_trailing_zero_decimal",
+    "TestCsvProfile.test_needless_quoting_does_not_render_back",
+    "TestCsvProfile.test_non_canonical_int_text_is_reported",
+    "TestCsvProfile.test_quoted_field_carries_delimiter_quote_and_newline",
+    "TestCsvProfile.test_temporal_text_follows_the_r016_grammar",
+    "TestCsvProfile.test_unknown_extension_names_no_profile",
+    "TestCsvProfile.test_unterminated_final_record_is_rejected",
+    "TestCsvProfile.test_unterminated_quote_is_rejected",
+    "TestCsvProfile.test_zero_row_artifact_is_the_header_alone",
+    "TestDatasetPathExamples.test_each_current_example_reports_its_declared_condition",
+    "TestDatasetPathExamples.test_historical_paths_use_declaring_location_without_containment",
+    "TestDateImputeSchema.test_accepts_integer_and_month_position_day",
+    "TestDateImputeSchema.test_accepts_month_minimum_source_precision",
+    "TestDateImputeSchema.test_accepts_not_before_bound",
+    "TestDateImputeSchema.test_rejects_unknown_date_impute_field",
+    "TestDateImputeSchema.test_rejects_unknown_day_position",
+    "TestDateImputeSchema.test_rejects_unknown_minimum_source_precision",
+    "TestDeclaredSourceCondition.test_a_declared_condition_no_fixture_reports_fails",
+    "TestDeclaredSourceCondition.test_a_different_condition_than_declared_fails",
+    "TestDeclaredSourceCondition.test_an_undeclared_malformed_fixture_still_fails",
+    "TestDeclaredSourceCondition.test_declared_condition_excuses_its_own_fixture",
+    "TestDeclaredValidationErrors.test_accepts_a_reported_condition",
+    "TestDeclaredValidationErrors.test_ignores_a_condition_the_validator_does_not_decide",
+    "TestDeclaredValidationErrors.test_rejects_a_condition_the_validator_did_not_report",
+    "TestDeclaredValidationErrors.test_rejects_a_fixture_that_no_longer_fails",
+    "TestExecutionManifestGate.test_bad_blocked_by_shapes_are_rejected",
+    "TestExecutionManifestGate.test_duplicate_keys_are_rejected",
+    "TestExecutionManifestGate.test_executable_without_runtimes_is_rejected",
+    "TestExecutionManifestGate.test_missing_and_stale_entries_are_rejected",
+    "TestExecutionManifestGate.test_missing_mistyped_and_unsupported_versions_are_rejected",
+    "TestExecutionManifestGate.test_non_mapping_root_is_a_clean_error",
+    "TestExecutionManifestGate.test_reference_retirement_requires_an_issue_and_executable_python_entry",
+    "TestExecutionManifestGate.test_unknown_status_is_rejected",
+    "TestExecutionManifestGate.test_valid_minimal_manifest_passes",
+    "TestFlagPredicates.test_both_spellings_check_the_condition_at_its_field",
+    "TestFlagPredicates.test_both_spellings_name_their_dependencies",
+    "TestFlagPredicates.test_both_spellings_resolve_their_identifiers",
+    "TestGroupedRows.test_accepts_driver_qualified_group_variables",
+    "TestGroupedRows.test_rejects_duplicate_group_variable",
+    "TestGroupedRows.test_rejects_empty_group",
+    "TestGroupedRows.test_rejects_unqualified_or_wrong_driver_variable",
+    "TestIntermediateDerivedFilterValidation.test_derived_name_keeps_its_inferred_type",
+    "TestIntermediateDerivedFilterValidation.test_derived_name_resolves_in_filter",
+    "TestIntermediateDerivedFilterValidation.test_downstream_predicate_checks_derived_type",
+    "TestIntermediateDerivedFilterValidation.test_downstream_predicate_reads_intermediate_derived_name",
+    "TestIntermediateDerivedFilterValidation.test_unknown_derived_name_still_fails",
+    "TestIntermediateDerivedFilterValidation.test_untypable_derivation_is_known_but_unchecked",
+    "TestKeyColumnOrder.test_accepts_a_missing_key_column",
+    "TestKeyColumnOrder.test_accepts_ordered_key_columns",
+    "TestKeyColumnOrder.test_rejects_a_swapped_declaration",
+    "TestKeyColumnOrder.test_rejects_a_swapped_golden_header",
+    "TestNamedWindows.test_expands_full_references_without_mutating_authoring",
+    "TestNamedWindows.test_inheritance_replaces_definitions_before_dependency_pruning",
+    "TestNamedWindows.test_reference_mapping_is_rejected_by_schema",
+    "TestNamedWindows.test_unknown_reference_keeps_structured_diagnostic",
+    "TestNamedWindows.test_unused_malformed_definition_is_not_discarded",
+    "TestNativeTemporalFixtureAdmission.test_tagged_function_literals_keep_calendar_and_collected_precision_truth",
+    "TestNumericExpressionLanguage.test_accepts_the_complete_function_vocabulary",
+    "TestNumericExpressionLanguage.test_dependency_collection_uses_the_parsed_ast",
+    "TestNumericExpressionLanguage.test_does_not_execute_runtime_failure_conditions",
+    "TestNumericExpressionLanguage.test_parses_precedence_and_infers_promoted_type",
+    "TestNumericExpressionLanguage.test_rejects_prohibited_function_argument_counts",
+    "TestNumericExpressionLanguage.test_rejects_unknown_qualified_and_non_numeric_identifiers",
+    "TestNumericExpressionLanguage.test_reports_prohibited_construct_and_function_with_spans",
+    "TestOdmReads.test_accepts_a_read_over_a_header_in_any_case",
+    "TestOdmReads.test_an_overridden_column_read_needs_no_odm_scope",
+    "TestOdmReads.test_rejects_a_filter_naming_a_vendor_field",
+    "TestOdmReads.test_rejects_a_header_without_a_schema_field",
+    "TestOdmReads.test_rejects_a_read_in_an_intermediate",
+    "TestOdmReads.test_rejects_declared_types",
+    "TestOdmReads.test_the_catalog_exposes_schema_fields_only",
+    "TestPredicateLanguage.test_allows_an_escaped_escape_at_the_end_of_like_pattern",
+    "TestPredicateLanguage.test_an_ungrouped_row_filter_reads_derived_columns_and_lookups",
+    "TestPredicateLanguage.test_an_ungrouped_row_filter_rejects_a_window_derived_column",
+    "TestPredicateLanguage.test_an_ungrouped_row_filter_rejects_a_window_derived_lookup_match",
+    "TestPredicateLanguage.test_parses_precedence_compounds_and_all_literal_types",
+    "TestPredicateLanguage.test_rejects_syntax_outside_the_closed_grammar",
+    "TestPredicateLanguage.test_rejects_unknown_and_incompatible_operands",
+    "TestPredicateLanguage.test_validates_a_grouped_row_count_filter",
+    "TestPredicateLanguage.test_validates_predicate_sites_in_a_specification",
+    "TestPredicateLanguage.test_validates_the_predicate_a_source_filter_declares",
+    "TestPreviousNonMissingSchema.test_accepts_closed_window_inputs",
+    "TestPreviousNonMissingSchema.test_accepts_window_filter",
+    "TestPreviousNonMissingSchema.test_allows_one_partition_by_omission",
+    "TestPreviousNonMissingSchema.test_rejects_missing_source",
+    "TestProducingSpecs.test_absent_artifact_ordinal_checks_the_producer_output_contract",
+    "TestProducingSpecs.test_accepts_complete_producing_spec",
+    "TestProducingSpecs.test_internal_producer_column_does_not_shadow_generated_ordinal",
+    "TestProducingSpecs.test_ordinal_collision_uses_the_resolved_producer_contract",
+    "TestProducingSpecs.test_rejects_empty_producer_artifact",
+    "TestProducingSpecs.test_rejects_inline_types_with_producing_spec",
+    "TestProducingSpecs.test_rejects_legacy_field_map",
+    "TestProducingSpecs.test_rejects_metadata_only_contract",
+    "TestProducingSpecs.test_rejects_missing_producer_input",
+    "TestProducingSpecs.test_rejects_missing_producing_spec",
+    "TestProducingSpecs.test_rejects_producer_dependency_cycle",
+    "TestProducingSpecs.test_rejects_producer_version_mismatch",
+    "TestProducingSpecs.test_rejects_reordered_producer_output",
+    "TestProducingSpecs.test_rejects_unlabeled_producer_output",
+    "TestProducingSpecs.test_reports_a_missing_parent_relative_producer_source",
+    "TestProjectFunctionEnvironment.test_authoritative_versionless_environment_and_call_shapes",
+    "TestProjectFunctionEnvironment.test_intermediate_function_calls_retain_native_static_admission",
+    "TestProjectFunctionEnvironment.test_invalid_authored_language_reaches_native_schema_diagnostics",
+    "TestProjectFunctionEnvironment.test_malformed_environment_is_reported_without_entering_native_check",
+    "TestProjectFunctionEnvironment.test_metadata_only_specification_does_not_enter_domain_function_bridge",
+    "TestProjectFunctionEnvironment.test_original_function_studies_use_explicit_equivalent_environments",
+    "TestProjectFunctionEnvironment.test_pathless_native_rejections_are_reported_at_the_environment",
+    "TestProjectFunctionEnvironment.test_submission_environment_schema_is_checked_without_domain_or_data_reads",
+    "TestProjectResourceBoundary.test_absolute_dot_segments_normalize_before_walking",
+    "TestProjectResourceBoundary.test_accepts_absolute_paths_outside_the_declaring_directory",
+    "TestProjectResourceBoundary.test_accepts_nested_in_project_file",
+    "TestProjectResourceBoundary.test_accepts_parent_relative_paths_without_configuration",
+    "TestProjectResourceBoundary.test_accepts_the_caller_selected_declaring_directory_alias",
+    "TestProjectResourceBoundary.test_error_names_the_written_path_and_no_host_path",
+    "TestProjectResourceBoundary.test_missing_declaring_file_path_never_retries_the_entry_directory",
+    "TestProjectResourceBoundary.test_missing_parent_relative_paths_are_missing_without_containment",
+    "TestProjectResourceBoundary.test_parent_steps_at_filesystem_root_stay_at_root",
+    "TestProjectResourceBoundary.test_rejects_declared_directory_aliases_outside_the_selected_anchor",
+    "TestProjectResourceBoundary.test_rejects_directory",
+    "TestProjectResourceBoundary.test_rejects_fifo",
+    "TestProjectResourceBoundary.test_rejects_file_used_as_a_directory_component",
+    "TestProjectResourceBoundary.test_rejects_missing_file",
+    "TestProjectResourceBoundary.test_rejects_socket",
+    "TestProjectResourceBoundary.test_rejects_symlink_escaping_the_project",
+    "TestProjectResourceBoundary.test_rejects_symlinked_directory_component",
+    "TestProjectResourceBoundary.test_rejects_symlinked_file_inside_the_project",
+    "TestProjectResourceBoundary.test_rejects_unnormalized_written_forms",
+    "TestProjectResourceBoundary.test_rejects_uri_schemes",
+    "TestProjectResourceBoundary.test_repeated_declarations_share_one_snapshot",
+    "TestProjectResourceBoundary.test_replaced_content_fails_after_validation",
+    "TestProjectResourceBoundary.test_rooted_and_relative_spellings_reach_one_file",
+    "TestProjectResourceBoundary.test_traversal_within_root_resolves",
+    "TestProjectResourceBoundaryInSpecs.test_accepts_a_nested_in_project_source",
+    "TestProjectResourceBoundaryInSpecs.test_accepts_absolute_source_outside_the_declaring_directory",
+    "TestProjectResourceBoundaryInSpecs.test_accepts_one_file_declared_under_two_identifiers",
+    "TestProjectResourceBoundaryInSpecs.test_accepts_parent_relative_source_from_the_declaring_file",
+    "TestProjectResourceBoundaryInSpecs.test_legacy_project_root_argument_cannot_redirect_declaring_file_paths",
+    "TestProjectResourceBoundaryInSpecs.test_reports_a_symlinked_source",
+    "TestProjectResourceBoundaryInSpecs.test_reports_each_rejection_at_the_declaring_field",
+    "TestProjectResourceBoundaryInSpecs.test_type_catalog_does_not_read_a_rejected_path",
+    "TestReferenceDependencyBoundary.test_boundary_has_no_dependency_back_on_the_validator",
+    "TestReferenceDependencyBoundary.test_csv_fixture_admission_uses_only_the_retained_public_native_surface",
+    "TestReferenceDependencyBoundary.test_guard_rejects_direct_aliased_and_from_package_imports",
+    "TestReferenceDependencyBoundary.test_public_check_and_native_metadata_imports_are_allowed",
+    "TestReferenceDependencyBoundary.test_regex_fixture_admission_uses_only_public_native_specifications",
+    "TestReferenceDependencyBoundary.test_validator_has_no_reference_import_or_source_loader",
+    "TestRegularExpressionContract.test_a_parenthesis_in_a_class_declares_no_group",
+    "TestRegularExpressionContract.test_a_supplementary_scalar_is_one_character",
+    "TestRegularExpressionContract.test_accepts_contract_syntax_beyond_the_host_library",
+    "TestRegularExpressionContract.test_anchoring_adds_no_capture_group",
+    "TestRegularExpressionContract.test_both_conditions_are_registered_to_this_rule",
+    "TestRegularExpressionContract.test_character_classes_do_not_widen_to_unicode",
+    "TestRegularExpressionContract.test_counts_capturing_groups_by_opening_parenthesis",
+    "TestRegularExpressionContract.test_descriptor_pattern_constraint_uses_the_portable_binding",
+    "TestRegularExpressionContract.test_descriptor_pattern_the_contract_rejects_fails_validation",
+    "TestRegularExpressionContract.test_dollar_does_not_match_before_a_trailing_line_feed",
+    "TestRegularExpressionContract.test_every_fixture_pattern_survives_anchoring",
+    "TestRegularExpressionContract.test_extract_distinguishes_no_match_from_an_unentered_group",
+    "TestRegularExpressionContract.test_extract_reads_a_group_by_scalar_not_by_byte",
+    "TestRegularExpressionContract.test_extract_rejects_a_group_the_pattern_does_not_declare",
+    "TestRegularExpressionContract.test_extract_returns_the_empty_string_for_an_empty_match",
+    "TestRegularExpressionContract.test_matches_pattern_the_contract_accepts_validates",
+    "TestRegularExpressionContract.test_matches_pattern_the_contract_rejects_fails_validation",
+    "TestRegularExpressionContract.test_matching_applies_no_normalization",
+    "TestRegularExpressionContract.test_missing_binding_fails_rather_than_falling_back",
+    "TestRegularExpressionContract.test_missing_fixture_file_fails_validation",
+    "TestRegularExpressionContract.test_rejects_syntax_outside_the_portable_contract",
+    "TestRegularExpressionContract.test_replay_reports_a_pattern_the_binding_does_not_reject",
+    "TestRegularExpressionContract.test_replay_reports_an_outcome_that_drifted_from_the_binding",
+    "TestRegularExpressionContract.test_replay_requires_a_case_for_every_named_category",
+    "TestRegularExpressionContract.test_shared_fixtures_replay_against_the_portable_binding",
+    "TestRegularExpressionContract.test_str_extract_group_inside_the_pattern_validates",
+    "TestRegularExpressionContract.test_str_extract_group_outside_the_pattern_fails_validation",
+    "TestRegularExpressionContract.test_the_pattern_keyword_is_a_full_match_and_matches_searches",
+    "TestRegularExpressionContract.test_the_replay_reads_through_public_native_specifications",
+    "TestRegularExpressionContract.test_the_validator_names_the_contract_it_replays",
+    "TestRetiredOdmItemReferences.test_accepts_a_source_filter_over_item_oid",
+    "TestRetiredOdmItemReferences.test_rejects_an_item_hidden_in_the_variable_name",
+    "TestRetiredOdmItemReferences.test_rejects_an_item_inside_a_case_branch",
+    "TestRetiredOdmItemReferences.test_the_check_carries_no_exemption",
+    "TestRetiredOdmItemReferences.test_the_migrated_specifications_carry_no_retired_reference",
+    "TestRetiredProjectConfiguration.test_old_root_configuration_does_not_participate_in_resolution",
+    "TestRowPhaseDatasetReads.test_accepts_a_row_source_to_another_dataset",
+    "TestRowPhaseDatasetReads.test_rejects_a_cross_dataset_identifier_in_a_row_formula",
+    "TestRowPhaseDatasetReads.test_rejects_an_unknown_field_in_a_row_source",
+    "TestRuleMetadata.test_requires_normative_rule_and_index_status",
+    "TestSourceOrdinal.test_catalog_exposes_an_opt_in_integer",
+    "TestSourceOrdinal.test_rejects_a_type_for_the_generated_field",
+    "TestSourceOrdinal.test_rejects_an_ordinal_on_a_fixed_schema_odm_input",
+    "TestSourceOrdinal.test_rejects_collision_with_a_header_only_source",
+    "TestSourceOrdinal.test_rejects_parquet_collision",
+    "TestSourceProfile.test_an_empty_file_has_no_header",
+    "TestSourceProfile.test_both_terminators_deliver_the_same_records",
+    "TestSourceProfile.test_byte_order_mark_and_ill_formed_bytes_are_reported",
+    "TestSourceProfile.test_carriage_return_outside_a_terminator_is_rejected",
+    "TestSourceProfile.test_final_record_may_omit_its_terminator",
+    "TestSourceProfile.test_header_alone_is_a_source_with_no_records",
+    "TestSourceProfile.test_header_and_width_conditions_are_reported",
+    "TestSourceProfile.test_malformed_quoting_is_rejected_with_coordinates",
+    "TestSourceProfile.test_missing_and_empty_reach_r014_as_missing",
+    "TestSourceProfile.test_nothing_is_trimmed",
+    "TestSourceProfile.test_quoted_field_carries_delimiter_quote_and_newline",
+    "TestSourceProfileDiagnostics.test_a_unicode_fixture_keeps_its_exemption_when_shouted",
+    "TestSourceProfileDiagnostics.test_an_uppercase_extension_is_scanned",
+    "TestSourceProfileDiagnostics.test_coordinates_count_a_quoted_field_as_one_field",
+    "TestSourceProfileDiagnostics.test_ill_formed_bytes_report_their_own_record_and_field",
+    "TestSourceProfileDiagnostics.test_the_validation_condition_is_not_asked_of_a_fixture",
+    "TestSpecContracts.test_a_row_may_override_an_odm_column_derivation",
+    "TestSpecContracts.test_accepts_absent_artifact_its_producer_writes",
+    "TestSpecContracts.test_accepts_grouped_row_count",
+    "TestSpecContracts.test_accepts_grouped_row_count_without_id_but_rejects_bad_columns",
+    "TestSpecContracts.test_accepts_missing_base_with_one_dataset",
+    "TestSpecContracts.test_accepts_parquet_as_a_source_profile",
+    "TestSpecContracts.test_default_driver_dataset_prefers_base",
+    "TestSpecContracts.test_rejects_a_source_extension_that_names_no_profile",
+    "TestSpecContracts.test_rejects_duplicate_row_count_verification_id",
+    "TestSpecContracts.test_rejects_inline_types_for_a_parquet_source",
+    "TestSpecContracts.test_rejects_lookup_pairing_and_verification_constraints",
+    "TestSpecContracts.test_rejects_missing_base_and_incomplete_column_coverage",
+    "TestSpecContracts.test_rejects_missing_source_and_type_for_absent_csv_field",
+    "TestSpecContracts.test_row_count_fraction_bounds",
+    "TestSpecContracts.test_short_unique_still_checks_declared_columns",
+    "TestSpecContracts.test_warning_verification_requires_a_warning_log",
+    "TestSpecNames.test_accepts_intermediate_row_driver",
+    "TestSpecNames.test_accepts_output_order_by_over_declared_columns",
+    "TestSpecNames.test_accepts_resolved_unique_names",
+    "TestSpecNames.test_an_internal_key_names_only_its_key_entry",
+    "TestSpecNames.test_rejects_a_colliding_or_unknown_verification_log_path",
+    "TestSpecNames.test_rejects_a_colliding_or_unknown_warning_log_path",
+    "TestSpecNames.test_rejects_dataset_and_lookup_namespace_errors",
+    "TestSpecNames.test_rejects_duplicate_and_unresolved_columns",
+    "TestSpecNames.test_rejects_empty_keys",
+    "TestSpecNames.test_rejects_non_scalar_output_columns_without_crashing",
+    "TestSpecNames.test_rejects_unknown_and_repeated_output_order_terms",
+    "TestSpecificationInheritance.test_accepts_an_absolute_parent_path",
+    "TestSpecificationInheritance.test_bare_case_result_normalizes_to_source",
+    "TestSpecificationInheritance.test_bare_string_derivation_normalizes_to_source",
+    "TestSpecificationInheritance.test_entry_inherits_output_where_its_layer_names",
+    "TestSpecificationInheritance.test_final_error_names_the_contributing_parent_file",
+    "TestSpecificationInheritance.test_inherited_input_absent_beside_its_layer_never_retries_the_entry",
+    "TestSpecificationInheritance.test_merges_each_keyed_collection_at_the_member_boundary",
+    "TestSpecificationInheritance.test_output_order_by_keeps_an_internal_column_live",
+    "TestSpecificationInheritance.test_rejects_a_chain_no_layer_gives_output",
+    "TestSpecificationInheritance.test_rejects_clearing_required_or_absent_fields",
+    "TestSpecificationInheritance.test_rejects_duplicate_member_within_one_layer",
+    "TestSpecificationInheritance.test_rejects_inheritance_cycle",
+    "TestSpecificationInheritance.test_rejects_layer_version_mismatch",
+    "TestSpecificationInheritance.test_rejects_missing_parent",
+    "TestSpecificationInheritance.test_rejects_parent_url",
+    "TestSpecificationInheritance.test_resolved_column_requires_a_label",
+    "TestSpecificationInheritance.test_resolves_shallow_diamond_and_minimal_ordered_spec",
+    "TestStableRequirementReferences.test_duplicate_requirement_ids_fail_including_suffixes",
+    "TestStableRequirementReferences.test_foreign_requirement_cannot_satisfy_a_citation",
+    "TestStableRequirementReferences.test_numbered_forward_reference_keeps_old_citation_valid",
+    "TestStableRequirementReferences.test_reordering_preserves_integer_and_suffix_citations",
+    "TestStableRequirementReferences.test_rule_without_requirement_ids_fails",
+    "TestStableRequirementReferences.test_topics_cannot_follow_errors_and_rationale",
+    "TestStableRequirementReferences.test_unresolved_and_malformed_citations_fail",
+    "TestStaticSemanticContracts.test_dependency_cycle_reports_each_participating_derivation",
+    "TestStaticSemanticContracts.test_flag_false_value_requires_missing",
+    "TestStaticSemanticContracts.test_forward_reference_reports_the_later_column",
+    "TestStaticSemanticContracts.test_forward_reference_skips_edges_inside_a_cycle",
+    "TestStaticSemanticContracts.test_intermediate_equality_key_types",
+    "TestStaticSemanticContracts.test_intermediate_range_types",
+    "TestStaticSemanticContracts.test_mapping_extreme_window_and_cut_contracts",
+    "TestStaticSemanticContracts.test_only_a_null_no_match_beside_id_and_dataset_is_a_rename",
+    "TestStaticSemanticContracts.test_rejects_unknown_direct_operation_inputs",
+    "TestStaticSemanticContracts.test_self_intermediate_excludes_column_phase_columns",
+    "TestStaticSemanticContracts.test_self_intermediate_reads_hoisted_template_columns",
+    "TestStaticSemanticContracts.test_self_intermediate_reads_row_local_column_defaults",
+    "TestStaticSemanticContracts.test_self_intermediate_rejects_declared_self_input",
+    "TestStaticSemanticContracts.test_self_intermediate_requires_row_templates",
+    "TestStaticSemanticContracts.test_self_intermediate_resolves_output_columns",
+    "TestStaticSemanticContracts.test_temporal_literal_ranges_and_input_types",
+    "TestStaticSemanticContracts.test_window_order_by_forbidden_on_baseline_flag",
+    "TestStaticSemanticContracts.test_window_order_by_required",
+    "TestStringTemplateLanguage.test_a_scan_unescapes_brace_pairs_into_literal_text",
+    "TestStringTemplateLanguage.test_parses_placeholders_and_escaped_braces",
+    "TestStringTemplateLanguage.test_rejects_operators_empty_and_unmatched_braces",
+    "TestStringTemplateLanguage.test_resolves_placeholder_names_and_types",
+    "TestSuiteSourceCoverage.test_a_crlf_source_is_read_as_its_lf_twin",
+    "TestSuiteSourceCoverage.test_a_suite_source_reads_both_blanks_as_missing",
+    "TestTextSourceBoundary.test_escapes_a_surrogate_mapping_key_in_value_diagnostics",
+    "TestTextSourceBoundary.test_preserves_only_named_third_party_unicode_data_and_notices",
+    "TestTextSourceBoundary.test_rejects_a_decoded_surrogate",
+    "TestTextSourceBoundary.test_rejects_ill_formed_utf8_data",
+    "TestTextSourceBoundary.test_rejects_non_ascii_csv_outside_fixture_directories",
+    "TestTextSourceBoundary.test_rejects_non_ascii_source_but_allows_unicode_csv_data",
+    "TestToDateSchema.test_accepts_source_variable_shape",
+    "TestToDateSchema.test_rejects_missing_source_and_unknown_fields",
+    "TestTypeValidation.test_alias_min_length_constraint",
+    "TestTypeValidation.test_alias_pattern_constraint",
+    "TestTypeValidation.test_alias_size_constraint",
+    "TestTypeValidation.test_alias_values_constraint",
+    "TestTypeValidation.test_bare_list_and_dict_types",
+    "TestTypeValidation.test_descriptor_rejects_constraint_on_wrong_type",
+    "TestTypeValidation.test_descriptor_rejects_default_on_required_field",
+    "TestTypeValidation.test_int_rejects_string",
+    "TestTypeValidation.test_nested_dict_type_expression",
+    "TestTypeValidation.test_registry_value_requires_exactly_one_operation",
+    "TestTypeValidation.test_size_accepts_bare_list_and_dict_types",
+    "TestTypeValidation.test_union_prefers_a_matching_outer_type_constraint_error",
+    "TestValidationManifest.test_blocked_fixture_fails_when_every_path_is_implemented",
+    "TestValidationManifest.test_closed_blocking_issue_is_rejected",
+    "TestValidationManifest.test_implemented_fixture_requires_every_declared_path",
+    "TestValidationManifest.test_load_blockers_includes_execution_manifest",
+    "TestValidationManifest.test_manifest_rejects_missing_and_stale_fixtures",
+    "TestValidationManifest.test_repository_manifest_is_complete_and_registered",
+    "TestValidationManifest.test_unrelated_diagnostic_is_not_suppressed",
+    "TestValidatorCLI.test_a_define_document_field_outside_its_class_is_reported",
+    "TestValidatorCLI.test_cli_help",
+    "TestValidatorCLI.test_cli_missing_schema_fails",
+    "TestValidatorCLI.test_csv_golden_no_spec_declares_is_still_rejected",
+    "TestValidatorCLI.test_csv_golden_of_a_sibling_producer_is_accepted",
+    "TestValidatorCLI.test_csv_header_mismatch",
+    "TestValidatorCLI.test_csv_header_uses_output_columns",
+    "TestValidatorCLI.test_csv_shape_rejects_duplicate_header_and_short_row",
+    "TestValidatorCLI.test_define_documents_are_validated_against_their_own_class",
+    "TestValidatorCLI.test_documentation_missing_readme",
+    "TestValidatorCLI.test_documentation_negative_missing_how_to_fix",
+    "TestValidatorCLI.test_duplicate_schema_declaration_fails",
+    "TestValidatorCLI.test_empty_spec_is_rejected",
+    "TestValidatorCLI.test_example_index_link_must_match_directory",
+    "TestValidatorCLI.test_example_index_missing",
+    "TestValidatorCLI.test_example_index_stale",
+    "TestValidatorCLI.test_example_layout_positive_has_error",
+    "TestValidatorCLI.test_expected_error_contract_rejects_bad_phase_and_path",
+    "TestValidatorCLI.test_integration_full_corpus",
+    "TestValidatorCLI.test_invalid_descriptor_keyword_fails",
+    "TestValidatorCLI.test_layout_rejects_base_spec_mixed_with_variants",
+    "TestValidatorCLI.test_layout_skips_missing_how_to_fix_check",
+    "TestValidatorCLI.test_layout_skips_missing_readme_presence_check",
+    "TestValidatorCLI.test_malformed_class_entry_fails_actionably",
+    "TestValidatorCLI.test_multiple_spec_variants_are_discovered_and_validated",
+    "TestValidatorCLI.test_negative_path_matches_list_item",
+    "TestValidatorCLI.test_negative_spec_allows_declared_structural_failure",
+    "TestValidatorCLI.test_negative_spec_rejects_unrelated_structural_errors",
+    "TestValidatorCLI.test_parented_spec_files_are_levels_not_entries",
+    "TestValidatorCLI.test_readme_combined_badge_line_is_exempt_from_line_width",
+    "TestValidatorCLI.test_readme_contract_rejects_schema_vocabulary_and_extra_section",
+    "TestValidatorCLI.test_readme_dashboard_badge_accepts_lifecycle_badge",
+    "TestValidatorCLI.test_readme_dashboard_badge_must_follow_the_title",
+    "TestValidatorCLI.test_registry_name_is_not_a_schema_type",
+    "TestValidatorCLI.test_schema_bundle_version_is_not_hardcoded",
+    "TestValidatorCLI.test_schema_column_types_are_not_schema_builtins",
+    "TestValidatorCLI.test_schema_fields_from_expands_and_rejects_duplicates",
+    "TestValidatorCLI.test_schema_include_cannot_escape_yaml_directory",
+    "TestValidatorCLI.test_schema_include_cycle",
+    "TestValidatorCLI.test_schema_include_name_must_follow_convention",
+    "TestValidatorCLI.test_schema_include_rejects_symlink_inside_yaml_directory",
+    "TestValidatorCLI.test_schema_include_requires_mapping_root",
+    "TestValidatorCLI.test_schema_linked_spec_files_are_producers_not_entries",
+    "TestValidatorCLI.test_schema_registry_reference_must_resolve",
+    "TestValidatorCLI.test_schema_shared_include_is_not_a_cycle",
+    "TestValidatorCLI.test_schema_unknown_type",
+    "TestValidatorCLI.test_schema_version_mismatch",
+    "TestValidatorCLI.test_spec_schema_version_must_match_bundle",
+    "TestValidatorCLI.test_spec_structural_unknown_field",
+    "TestValidatorCLI.test_yaml_duplicate_keys",
+    "TestValidatorCLI.test_yaml_syntax_error",
+    "TestYamlLoader.test_aliases_are_rejected",
+    "TestYamlLoader.test_explicit_tags_are_rejected",
+    "TestYamlLoader.test_merge_keys_are_rejected",
+    "TestYamlLoader.test_merge_keys_report_the_intended_reason",
+    "TestYamlLoader.test_non_finite_yaml_floats_normalize_to_missing",
+    "TestYamlLoader.test_yaml_12_boolean_resolution",
+    "TestYamlLoader.test_yaml_12_core_scalar_resolution"
+  ],
+  "explicit_native_or_host_successors": [
+    {
+      "control": "TestClosedGrammarContracts.test_the_r_runner_reads_the_same_contracts",
+      "disposition": "Retained original authored assertions through direct typed grammar/window fixture observations; production semantic admission uses the held native owner."
+    },
+    {
+      "control": "TestProducingSpecs.test_absent_artifact_ordinal_checks_the_producer_output_contract",
+      "disposition": "Preserved exact ordinal condition/path/context and absent artifact assertion. Native-valid authored producer output path now matches the consumer path so the independent ordinal fact is reached without producer execution."
+    },
+    {
+      "control": "TestProducingSpecs.test_rejects_legacy_field_map",
+      "disposition": "Preserved all three structural assertions through the test-only typed schema fixture, and separately pinned whole preparation schema_version_mismatch precedence."
+    },
+    {
+      "control": "TestProducingSpecs.test_rejects_producer_dependency_cycle",
+      "disposition": "Preserved the cycle assertion with native-valid matching paths and canonical producer_workflow_cycle diagnostic; original partial path mismatch otherwise precedes cycle admission."
+    },
+    {
+      "control": "TestProjectFunctionEnvironment.test_intermediate_function_calls_retain_native_static_admission",
+      "disposition": "Preserved transport/no-call/pathless/malformed-source assertions over the actual-host native route; removed the language-override probe. Five authored R semantics have separate typed and mandatory installed R witnesses."
+    },
+    {
+      "control": "TestProjectFunctionEnvironment.test_malformed_environment_is_reported_without_entering_native_check",
+      "disposition": "Preserved transport/no-call/pathless/malformed-source assertions over the actual-host native route; removed the language-override probe. Five authored R semantics have separate typed and mandatory installed R witnesses."
+    },
+    {
+      "control": "TestProjectFunctionEnvironment.test_metadata_only_specification_does_not_enter_domain_function_bridge",
+      "disposition": "Preserved transport/no-call/pathless/malformed-source assertions over the actual-host native route; removed the language-override probe. Five authored R semantics have separate typed and mandatory installed R witnesses."
+    },
+    {
+      "control": "TestProjectFunctionEnvironment.test_pathless_native_rejections_are_reported_at_the_environment",
+      "disposition": "Preserved transport/no-call/pathless/malformed-source assertions over the actual-host native route; removed the language-override probe. Five authored R semantics have separate typed and mandatory installed R witnesses."
+    },
+    {
+      "control": "TestProjectFunctionEnvironment.test_submission_environment_schema_is_checked_without_domain_or_data_reads",
+      "disposition": "Preserved transport/no-call/pathless/malformed-source assertions over the actual-host native route; removed the language-override probe. Five authored R semantics have separate typed and mandatory installed R witnesses."
+    },
+    {
+      "control": "TestReferenceDependencyBoundary.test_boundary_has_no_dependency_back_on_the_validator",
+      "disposition": "Strengthened the original reference boundary assertion to deny all retired imports/loaders and production partial-helper fallback."
+    },
+    {
+      "control": "TestReferenceDependencyBoundary.test_csv_fixture_admission_uses_only_the_retained_public_native_surface",
+      "disposition": "Strengthened the original reference boundary assertion to deny all retired imports/loaders and production partial-helper fallback."
+    },
+    {
+      "control": "TestReferenceDependencyBoundary.test_guard_rejects_direct_aliased_and_from_package_imports",
+      "disposition": "Strengthened the original reference boundary assertion to deny all retired imports/loaders and production partial-helper fallback."
+    },
+    {
+      "control": "TestReferenceDependencyBoundary.test_regex_fixture_admission_uses_only_public_native_specifications",
+      "disposition": "Strengthened the original reference boundary assertion to deny all retired imports/loaders and production partial-helper fallback."
+    },
+    {
+      "control": "TestReferenceDependencyBoundary.test_validator_has_no_reference_import_or_source_loader",
+      "disposition": "Strengthened the original reference boundary assertion to deny all retired imports/loaders and production partial-helper fallback."
+    },
+    {
+      "control": "TestRowPhaseDatasetReads.test_rejects_a_cross_dataset_identifier_in_a_row_formula",
+      "disposition": "Preserved row cross-driver refusal at the original physical path using canonical native unknown_field and exact drivers/identifier context instead of legacy prose qualified_identifier."
+    },
+    {
+      "control": "TestSpecNames.test_rejects_non_scalar_output_columns_without_crashing",
+      "disposition": "Preserved the original custom/partial structural assertion through the direct typed schema fixture; this partial class proof does not bypass whole installed specification version admission."
+    },
+    {
+      "control": "TestValidatorCLI.test_multiple_spec_variants_are_discovered_and_validated",
+      "disposition": "Preserved the original custom/partial structural assertion through the direct typed schema fixture; this partial class proof does not bypass whole installed specification version admission."
+    },
+    {
+      "control": "TestValidatorCLI.test_negative_path_matches_list_item",
+      "disposition": "Preserved the original custom/partial structural assertion through the direct typed schema fixture; this partial class proof does not bypass whole installed specification version admission."
+    },
+    {
+      "control": "TestValidatorCLI.test_negative_spec_allows_declared_structural_failure",
+      "disposition": "Preserved the original custom/partial structural assertion through the direct typed schema fixture; this partial class proof does not bypass whole installed specification version admission."
+    },
+    {
+      "control": "TestValidatorCLI.test_negative_spec_rejects_unrelated_structural_errors",
+      "disposition": "Preserved the original custom/partial structural assertion through the direct typed schema fixture; this partial class proof does not bypass whole installed specification version admission."
+    }
+  ],
+  "non_function_fixture_disposition": {
+    "original_non_function_controls": 79,
+    "active": 77,
+    "historical": 2,
+    "failed": [],
+    "controls": [
+      {
+        "fixture": "negative-source-ordinal-collision",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "ordinal_field_collision",
+          "spec_paths": [
+            "input.SOURCE.ordinal"
+          ],
+          "requirement": "REQ-1294",
+          "context": {
+            "dataset": "SOURCE",
+            "field": "SourceOrdinal"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "ordinal_field_collision",
+            "requirement": "REQ-1294",
+            "spec_paths": [
+              "input.SOURCE.ordinal"
+            ],
+            "context": {
+              "dataset": "SOURCE",
+              "field": "SourceOrdinal"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-unknown-window",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "unknown_window",
+          "spec_paths": [
+            "columns.VISITSEQ.derivation.row_number.window"
+          ],
+          "requirement": "REQ-1253",
+          "context": {
+            "window": "VISITS_ORDER"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "unknown_window",
+            "requirement": "REQ-1253",
+            "spec_paths": [
+              "columns.VISITSEQ.derivation.row_number.window"
+            ],
+            "context": {
+              "window": "VISITS_ORDER"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-output-transport",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "unknown_artifact_profile",
+          "spec_paths": [
+            "output.path"
+          ],
+          "requirement": "REQ-0760",
+          "context": {
+            "path": "adsl.xpt",
+            "permitted": [
+              ".csv",
+              ".parquet"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "unknown_artifact_profile",
+            "requirement": "REQ-0760",
+            "spec_paths": [
+              "output.path"
+            ],
+            "context": {
+              "path": "adsl.xpt",
+              "permitted": [
+                ".csv",
+                ".parquet"
+              ]
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-review-arithmetic",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_predicate",
+          "spec_paths": [
+            "columns.REVIEWFL.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0188",
+          "context": {
+            "predicate": "ASTDT <= TRTEDT + 30"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_predicate",
+            "requirement": "REQ-0188",
+            "spec_paths": [
+              "columns.REVIEWFL.derivation.flag.condition"
+            ],
+            "context": {
+              "position": 16,
+              "predicate": "ASTDT <= TRTEDT + 30"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-review-date-text",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "spec_paths": [
+            "columns.REVIEWFL.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0190",
+          "context": {
+            "left_type": "date",
+            "right_type": "str"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-0190",
+            "spec_paths": [
+              "columns.REVIEWFL.derivation.flag.condition"
+            ],
+            "context": {
+              "left_type": "date",
+              "right_type": "str"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-review-unknown-date",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "spec_paths": [
+            "columns.REVIEWFL.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0189",
+          "context": {
+            "identifier": "UNKNOWNDT"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "unknown_field",
+            "requirement": "REQ-0189",
+            "spec_paths": [
+              "columns.REVIEWFL.derivation.flag.condition"
+            ],
+            "context": {
+              "identifier": "UNKNOWNDT"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-flag-payload",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "spec_paths": [
+            "columns.ELDFL.derivation.flag"
+          ],
+          "requirement": "REQ-0287",
+          "context": {
+            "expected": "predicate",
+            "actual": "int"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_field_type",
+            "requirement": "REQ-0287",
+            "spec_paths": [
+              "columns.ELDFL.derivation.flag"
+            ],
+            "context": {
+              "actual": "int",
+              "expected": "predicate"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-flag-condition",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_predicate",
+          "spec_paths": [
+            "columns.ELDFL.derivation.flag.condition"
+          ],
+          "requirement": "REQ-0188",
+          "context": {
+            "predicate": "AGE >> 65",
+            "position": 5
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_predicate",
+            "requirement": "REQ-0188",
+            "spec_paths": [
+              "columns.ELDFL.derivation.flag.condition"
+            ],
+            "context": {
+              "position": 5,
+              "predicate": "AGE >> 65"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-flag-missing-value",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "missing_value_required",
+          "spec_paths": [
+            "columns.ELDFL.derivation.flag.missing"
+          ],
+          "requirement": "REQ-1258",
+          "context": {
+            "false_value": "N"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "missing_value_required",
+            "requirement": "REQ-1258",
+            "spec_paths": [
+              "columns.ELDFL.derivation.flag.missing"
+            ],
+            "context": {
+              "false_value": "N"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-dose-intensity",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "aggregate_identifier_not_grouped",
+          "spec_paths": [
+            "columns.RDI.derivation.aggregate.expr"
+          ],
+          "requirement": "REQ-0503",
+          "context": {
+            "dataset": "EX",
+            "identifier": "EX.EXPLDOS"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "aggregate_identifier_not_grouped",
+            "requirement": "REQ-0503",
+            "spec_paths": [
+              "columns.RDI.derivation.aggregate.expr"
+            ],
+            "context": {
+              "dataset": "EX",
+              "expr": "100 * SUM(EX.EXDOSE) / EX.EXPLDOS",
+              "identifier": "EX.EXPLDOS"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-adlb-computed-param",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "dependency_cycle",
+          "spec_paths": [
+            "columns.ALTVAL.derivation.aggregate",
+            "columns.AVAL.derivation.case"
+          ],
+          "requirement": "REQ-0072",
+          "context": {
+            "cycle": [
+              "ALTVAL",
+              "AVAL",
+              "ALTVAL"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "dependency_cycle",
+            "requirement": "REQ-0072",
+            "spec_paths": [
+              "columns.ALTVAL.derivation.aggregate",
+              "columns.AVAL.derivation.case"
+            ],
+            "context": {
+              "cycle": [
+                "ALTVAL",
+                "AVAL",
+                "ALTVAL"
+              ]
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-cyclic-parent",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "inheritance_cycle",
+          "spec_paths": [
+            "parents"
+          ],
+          "requirement": "REQ-0655",
+          "context": {
+            "reason": "parent_chain_returns_to_entry"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "inheritance_cycle",
+            "requirement": "REQ-0655",
+            "spec_paths": [
+              "parents"
+            ],
+            "context": {
+              "cycle": [
+                "/workspace/yamaa-validator/benchmarks/negative-cyclic-parent/spec.yaml",
+                "/workspace/yamaa-validator/benchmarks/negative-cyclic-parent/layers/parent.yaml",
+                "/workspace/yamaa-validator/benchmarks/negative-cyclic-parent/spec.yaml"
+              ],
+              "reason": "parent_chain_returns_to_entry",
+              "source": "/workspace/yamaa-validator/benchmarks/negative-cyclic-parent/layers/parent.yaml"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-property-clear",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_clear",
+          "spec_paths": [
+            "columns.USUBJID.type"
+          ],
+          "requirement": "REQ-0660",
+          "context": {
+            "field": "type"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_clear",
+            "requirement": "REQ-0660",
+            "spec_paths": [
+              "columns.USUBJID.type"
+            ],
+            "context": {
+              "entry": "/workspace/yamaa-validator/benchmarks/negative-property-clear/spec.yaml",
+              "field": "type",
+              "source": "/workspace/yamaa-validator/benchmarks/negative-property-clear/spec.yaml"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-version-mismatch",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "schema_version_mismatch",
+          "spec_paths": [
+            "parents"
+          ],
+          "requirement": "REQ-0656",
+          "context": {
+            "entry_version": "1.0",
+            "parent_version": "2.0"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "schema_version_mismatch",
+            "requirement": "REQ-0656",
+            "spec_paths": [
+              "parents"
+            ],
+            "context": {
+              "entry": "/workspace/yamaa-validator/benchmarks/negative-version-mismatch/spec.yaml",
+              "entry_version": "1.0",
+              "parent_version": "2.0",
+              "source": "/workspace/yamaa-validator/benchmarks/negative-version-mismatch/layers/parent.yaml"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-redefined-date",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "redundant_field_type",
+          "spec_paths": [
+            "input.DM.types.RANDDT"
+          ],
+          "requirement": "REQ-0523",
+          "context": {
+            "dataset": "DM",
+            "field": "RANDDT",
+            "type": "date"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "redundant_field_type",
+            "requirement": "REQ-0523",
+            "spec_paths": [
+              "input.DM.types.RANDDT"
+            ],
+            "context": {
+              "dataset": "DM",
+              "entry": "/workspace/yamaa-validator/benchmarks/negative-redefined-date/spec.yaml",
+              "field": "RANDDT",
+              "source": "/workspace/yamaa-validator/benchmarks/negative-redefined-date/spec.yaml",
+              "type": "date"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-remote-parent",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_parent_path",
+          "spec_paths": [
+            "parents"
+          ],
+          "requirement": "REQ-0653",
+          "context": {
+            "reason": "remote_reference"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_parent_path",
+            "requirement": "REQ-0653",
+            "spec_paths": [
+              "parents"
+            ],
+            "context": {
+              "parent": "https://example.test/organization.yaml",
+              "reason": "remote_reference",
+              "source": "/workspace/yamaa-validator/benchmarks/negative-remote-parent/spec.yaml"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-subject-reference",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_string_template",
+          "spec_paths": [
+            "columns.SUBJREF.derivation.str_template"
+          ],
+          "requirement": "REQ-0461",
+          "context": {
+            "reason": "invalid_placeholder",
+            "placeholder": "SITEID + ':' + SUBJID"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_string_template",
+            "requirement": "REQ-0461",
+            "spec_paths": [
+              "columns.SUBJREF.derivation.str_template"
+            ],
+            "context": {
+              "placeholder": "SITEID + ':' + SUBJID",
+              "reason": "invalid_placeholder"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-ambiguous-type",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "spec_paths": [
+            "columns.AVAL.type"
+          ],
+          "requirement": "REQ-0012",
+          "context": {
+            "value": "number",
+            "permitted": [
+              "str",
+              "int",
+              "float",
+              "date",
+              "datetime"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "requirement": "REQ-0012",
+            "spec_paths": [
+              "columns.AVAL.type"
+            ],
+            "context": {
+              "permitted": [
+                "str",
+                "int",
+                "float",
+                "date",
+                "datetime"
+              ],
+              "value": "number"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-first-available-self",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "dependency_cycle",
+          "spec_paths": [
+            "columns.SEVAL.derivation.first_available"
+          ],
+          "requirement": "REQ-0072",
+          "context": {
+            "cycle": [
+              "SEVAL",
+              "SEVAL"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "dependency_cycle",
+            "requirement": "REQ-0072",
+            "spec_paths": [
+              "columns.SEVAL.derivation.first_available"
+            ],
+            "context": {
+              "cycle": [
+                "SEVAL",
+                "SEVAL"
+              ]
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-forward-reference",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "forward_reference",
+          "spec_paths": [
+            "columns.AVALDOUBLED.derivation.compute"
+          ],
+          "requirement": "REQ-0071",
+          "context": {
+            "column": "AVALDOUBLED",
+            "dependency": "AVAL"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "forward_reference",
+            "requirement": "REQ-0071",
+            "spec_paths": [
+              "columns.AVALDOUBLED.derivation.compute"
+            ],
+            "context": {
+              "column": "AVALDOUBLED",
+              "dependency": "AVAL"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-row-aggregate",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "prohibited_function",
+          "spec_paths": [
+            "columns.AVALTOT.derivation.compute.expr"
+          ],
+          "requirement": "REQ-0440",
+          "context": {
+            "expr": "SUM(AVAL)",
+            "function": "SUM"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "prohibited_function",
+            "requirement": "REQ-0440",
+            "spec_paths": [
+              "columns.AVALTOT.derivation.compute.expr"
+            ],
+            "context": {
+              "expr": "SUM(AVAL)",
+              "function": "SUM"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-row-aggregate-keys",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_aggregate_context",
+          "spec_paths": [
+            "rows[0].derivations.RACECOUNT.aggregate.key"
+          ],
+          "requirement": "REQ-0142",
+          "context": {
+            "expr": "COUNT(ODM.*)",
+            "reason": "a grouped row aggregate reads its own group and declares no key pairs"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_aggregate_context",
+            "requirement": "REQ-0142",
+            "spec_paths": [
+              "rows[0].derivations.RACECOUNT.aggregate.key"
+            ],
+            "context": {
+              "expr": "COUNT(ODM.*)",
+              "reason": "a grouped row aggregate reads its own group and declares no key pairs"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-formula-flag",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "spec_paths": [
+            "columns.HIFL.derivation.compute.expr"
+          ],
+          "requirement": "REQ-0441",
+          "context": {
+            "expr": "AVAL > ANRHI",
+            "construct": "comparison"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "prohibited_construct",
+            "requirement": "REQ-0441",
+            "spec_paths": [
+              "columns.HIFL.derivation.compute.expr"
+            ],
+            "context": {
+              "construct": "comparison",
+              "expr": "AVAL > ANRHI"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-direct-dose-read",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "qualified_identifier",
+          "spec_paths": [
+            "columns.DOSEDBL.derivation.compute.expr"
+          ],
+          "requirement": "REQ-0442",
+          "context": {
+            "expr": "EX.EXDOSE * 2",
+            "identifier": "EX.EXDOSE"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "qualified_identifier",
+            "requirement": "REQ-0442",
+            "spec_paths": [
+              "columns.DOSEDBL.derivation.compute.expr"
+            ],
+            "context": {
+              "expr": "EX.EXDOSE * 2",
+              "identifier": "EX.EXDOSE"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-cut-coded",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "spec_paths": [
+            "columns.AGEGRP.derivation.cut.source"
+          ],
+          "requirement": "REQ-0306",
+          "context": {
+            "source": "DM.SEX",
+            "expected": "numeric",
+            "actual": "str"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-0306",
+            "spec_paths": [
+              "columns.AGEGRP.derivation.cut.source"
+            ],
+            "context": {
+              "actual": "str",
+              "expected": "numeric",
+              "source": "DM.SEX"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-path-absolute",
+        "disposition": "historical_path_policy_excluded",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "resource_path_not_relative",
+          "spec_paths": [
+            "input.LBREF.path"
+          ],
+          "requirement": "REQ-0781",
+          "context": {
+            "dataset": "LBREF",
+            "path": "/shared/reference/lbref.csv"
+          }
+        }
+      },
+      {
+        "fixture": "negative-path-directory",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "resource_path_not_regular_file",
+          "spec_paths": [
+            "input.LBREF.path"
+          ],
+          "requirement": "REQ-0785",
+          "context": {
+            "dataset": "LBREF",
+            "path": "input/lbref"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "resource_path_not_regular_file",
+            "requirement": "REQ-0785",
+            "spec_paths": [
+              "input.LBREF.path"
+            ],
+            "context": {
+              "dataset": "LBREF",
+              "path": "input/lbref"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-path-missing",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "resource_path_missing",
+          "spec_paths": [
+            "input.LBREF.path"
+          ],
+          "requirement": "REQ-0785",
+          "context": {
+            "dataset": "LBREF",
+            "path": "input/lbref.csv"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "resource_path_missing",
+            "requirement": "REQ-0785",
+            "spec_paths": [
+              "input.LBREF.path"
+            ],
+            "context": {
+              "dataset": "LBREF",
+              "path": "input/lbref.csv"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-path-parent-escape",
+        "disposition": "historical_path_policy_excluded",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "resource_path_outside_project",
+          "spec_paths": [
+            "input.LBREF.path"
+          ],
+          "requirement": "REQ-0784",
+          "context": {
+            "dataset": "LBREF",
+            "path": "../reference/lbref.csv"
+          }
+        }
+      },
+      {
+        "fixture": "negative-path-symlink",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "resource_path_symlink",
+          "spec_paths": [
+            "input.LBREF.path"
+          ],
+          "requirement": "REQ-0783",
+          "context": {
+            "dataset": "LBREF",
+            "path": "input/lbref.csv"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "resource_path_symlink",
+            "requirement": "REQ-0783",
+            "spec_paths": [
+              "input.LBREF.path"
+            ],
+            "context": {
+              "dataset": "LBREF",
+              "path": "input/lbref.csv"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-path-url",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "resource_path_uri_scheme",
+          "spec_paths": [
+            "input.LBREF.path"
+          ],
+          "requirement": "REQ-0775",
+          "context": {
+            "dataset": "LBREF",
+            "path": "https://reference.example.org/limits/lbref.csv"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "resource_path_uri_scheme",
+            "requirement": "REQ-0775",
+            "spec_paths": [
+              "input.LBREF.path"
+            ],
+            "context": {
+              "dataset": "LBREF",
+              "path": "https://reference.example.org/limits/lbref.csv"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-impute-bad-month",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "month_out_of_range",
+          "spec_paths": [
+            "columns.ASTDT.derivation.date_impute.month"
+          ],
+          "requirement": "REQ-0608",
+          "context": {
+            "month": 15
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "month_out_of_range",
+            "requirement": "REQ-0608",
+            "spec_paths": [
+              "columns.ASTDT.derivation.date_impute.month"
+            ],
+            "context": {
+              "month": 15
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-impute-missing-month",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "month_required",
+          "spec_paths": [
+            "columns.ASTDT.derivation.date_impute.month"
+          ],
+          "requirement": "REQ-0592",
+          "context": {
+            "minimum_source_precision": "year"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "month_required",
+            "requirement": "REQ-0592",
+            "spec_paths": [
+              "columns.ASTDT.derivation.date_impute.month"
+            ],
+            "context": {
+              "minimum_source_precision": "year"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-impute-unreachable-month",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "month_not_permitted",
+          "spec_paths": [
+            "columns.ASTDT.derivation.date_impute.month"
+          ],
+          "requirement": "REQ-0592",
+          "context": {
+            "month": 6
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "month_not_permitted",
+            "requirement": "REQ-0592",
+            "spec_paths": [
+              "columns.ASTDT.derivation.date_impute.month"
+            ],
+            "context": {
+              "month": 6
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-impute-day-rule",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "spec_paths": [
+            "columns.ASTDT.derivation.date_impute.day"
+          ],
+          "requirement": "REQ-0609",
+          "context": {
+            "value": "mid",
+            "permitted": [
+              "first",
+              "last"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "requirement": "REQ-0609",
+            "spec_paths": [
+              "columns.ASTDT.derivation.date_impute.day"
+            ],
+            "context": {
+              "permitted": [
+                "first",
+                "last"
+              ],
+              "value": "mid"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-date-diff-units",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "spec_paths": [
+            "columns.TRTDURM.derivation.date_diff.bounds"
+          ],
+          "requirement": "REQ-0613",
+          "context": {
+            "value": "inclusive",
+            "permitted": [
+              "exclusive"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "requirement": "REQ-0613",
+            "spec_paths": [
+              "columns.TRTDURM.derivation.date_diff.bounds"
+            ],
+            "context": {
+              "permitted": [
+                "exclusive"
+              ],
+              "value": "inclusive"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-date-diff-endpoints",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "spec_paths": [
+            "columns.SURVDD.derivation.date_diff.start"
+          ],
+          "requirement": "REQ-0606",
+          "context": {
+            "source": "RFSTDTM",
+            "expected": "date",
+            "actual": "datetime"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-0606",
+            "spec_paths": [
+              "columns.SURVDD.derivation.date_diff.start"
+            ],
+            "context": {
+              "actual": "datetime",
+              "expected": "date",
+              "source": "RFSTDTM"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-greatest-mixed",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "incomparable_sources",
+          "spec_paths": [
+            "columns.LSTALVDT.derivation.greatest"
+          ],
+          "requirement": "REQ-0324",
+          "context": {
+            "sources": [
+              "DTHDT",
+              "LSTVSDY"
+            ],
+            "types": [
+              "date",
+              "int"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "incomparable_sources",
+            "requirement": "REQ-0324",
+            "spec_paths": [
+              "columns.LSTALVDT.derivation.greatest"
+            ],
+            "context": {
+              "sources": [
+                "DTHDT",
+                "LSTVSDY"
+              ],
+              "types": [
+                "date",
+                "int"
+              ]
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-least-mixed",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "incomparable_sources",
+          "spec_paths": [
+            "columns.FSTALVDT.derivation.least"
+          ],
+          "requirement": "REQ-0324",
+          "context": {
+            "sources": [
+              "DTHDT",
+              "LSTVSDY"
+            ],
+            "types": [
+              "date",
+              "int"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "incomparable_sources",
+            "requirement": "REQ-0324",
+            "spec_paths": [
+              "columns.FSTALVDT.derivation.least"
+            ],
+            "context": {
+              "sources": [
+                "DTHDT",
+                "LSTVSDY"
+              ],
+              "types": [
+                "date",
+                "int"
+              ]
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-literal-structure",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "spec_paths": [
+            "columns.AGEGRP.derivation.case[0].then.literal"
+          ],
+          "requirement": "REQ-0287",
+          "context": {
+            "expected": "literal_value",
+            "actual": "mapping"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_field_type",
+            "requirement": "REQ-0287",
+            "spec_paths": [
+              "columns.AGEGRP.derivation.case[0].then.literal"
+            ],
+            "context": {
+              "actual": "mapping",
+              "expected": "literal_value"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-keys-internal",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "internal_column_in_keys",
+          "spec_paths": [
+            "keys[2]"
+          ],
+          "requirement": "REQ-0220",
+          "context": {
+            "column": "SITEID"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "internal_column_in_keys",
+            "requirement": "REQ-0220",
+            "spec_paths": [
+              "keys[2]"
+            ],
+            "context": {
+              "column": "SITEID"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-keys-missing",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "key_dependency",
+          "spec_paths": [
+            "columns.AVISIT.derivation"
+          ],
+          "requirement": "REQ-0074",
+          "context": {
+            "column": "AVISIT",
+            "dependency": "ADY"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "key_dependency",
+            "requirement": "REQ-0074",
+            "spec_paths": [
+              "columns.AVISIT.derivation"
+            ],
+            "context": {
+              "column": "AVISIT",
+              "dependency": "ADY"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-mapping-case-collision",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "ambiguous_dictionary",
+          "spec_paths": [
+            "columns.SMOKEFL.derivation.mapping.dict"
+          ],
+          "requirement": "REQ-0714",
+          "context": {
+            "folded_key": "Y",
+            "entries": [
+              "Y",
+              "y"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "ambiguous_dictionary",
+            "requirement": "REQ-0714",
+            "spec_paths": [
+              "columns.SMOKEFL.derivation.mapping.dict"
+            ],
+            "context": {
+              "entries": [
+                "Y",
+                "y"
+              ],
+              "folded_key": "Y"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-matches-bad-pattern",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_regex",
+          "spec_paths": [
+            "columns.SEX.verifications[0].matches.pattern"
+          ],
+          "requirement": "REQ-0827",
+          "context": {
+            "pattern": "(?P<code>[MFU])"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_regex",
+            "requirement": "REQ-0827",
+            "spec_paths": [
+              "columns.SEX.verifications[0].matches.pattern"
+            ],
+            "context": {
+              "pattern": "(?P<code>[MFU])"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-order-repeated",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "duplicate_order_term",
+          "spec_paths": [
+            "output.order_by[2]"
+          ],
+          "requirement": "REQ-0224",
+          "context": {
+            "column": "USUBJID"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "duplicate_order_term",
+            "requirement": "REQ-0224",
+            "spec_paths": [
+              "output.order_by[2]"
+            ],
+            "context": {
+              "column": "USUBJID"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-order-unknown-column",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "undeclared_column",
+          "spec_paths": [
+            "output.order_by[1]"
+          ],
+          "requirement": "REQ-0224",
+          "context": {
+            "column": "VISITNUM"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "undeclared_column",
+            "requirement": "REQ-0224",
+            "spec_paths": [
+              "output.order_by[1]"
+            ],
+            "context": {
+              "column": "VISITNUM"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-lookup-id-collision",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "duplicate_identifier",
+          "spec_paths": [
+            "intermediates[0].id",
+            "input.EX"
+          ],
+          "requirement": "REQ-0113",
+          "context": {
+            "identifier": "EX"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "duplicate_identifier",
+            "requirement": "REQ-0113",
+            "spec_paths": [
+              "intermediates[0].id",
+              "input.EX"
+            ],
+            "context": {
+              "identifier": "EX"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-lookup-bad-range",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "incomparable_range_types",
+          "spec_paths": [
+            "intermediates[0].between"
+          ],
+          "requirement": "REQ-0121",
+          "context": {
+            "intermediate": "EPOCHDEF",
+            "value_type": "date",
+            "lower_type": "int",
+            "upper_type": "int"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "incomparable_range_types",
+            "requirement": "REQ-0121",
+            "spec_paths": [
+              "intermediates[0].between"
+            ],
+            "context": {
+              "intermediate": "EPOCHDEF",
+              "lower_type": "int",
+              "upper_type": "int",
+              "value_type": "date"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-lookup-unordered",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "unpaired_fields",
+          "spec_paths": [
+            "intermediates[0]"
+          ],
+          "requirement": "REQ-0119",
+          "context": {
+            "intermediate": "DOSING",
+            "declared": [
+              "order_by"
+            ],
+            "missing": [
+              "keep"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "unpaired_fields",
+            "requirement": "REQ-0119",
+            "spec_paths": [
+              "intermediates[0]"
+            ],
+            "context": {
+              "declared": [
+                "order_by"
+              ],
+              "intermediate": "DOSING",
+              "missing": [
+                "keep"
+              ]
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-lookup-mismatched",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "spec_paths": [
+            "intermediates[0].key"
+          ],
+          "requirement": "REQ-0117",
+          "context": {
+            "identifier": "UNIT",
+            "intermediate": "REFRANGE"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "unknown_field",
+            "requirement": "REQ-0117",
+            "spec_paths": [
+              "intermediates[0].key"
+            ],
+            "context": {
+              "identifier": "UNIT",
+              "intermediate": "REFRANGE"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-lookup-unknown-key",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "no_applicable_keys",
+          "spec_paths": [
+            "intermediates[0]"
+          ],
+          "requirement": "REQ-0153",
+          "context": {
+            "dataset": "LBRANGE",
+            "keys": [
+              "STUDYID",
+              "USUBJID",
+              "LBSEQ"
+            ],
+            "hint": "declare the `key` explicitly"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "no_applicable_keys",
+            "requirement": "REQ-0153",
+            "spec_paths": [
+              "intermediates[0]"
+            ],
+            "context": {
+              "dataset": "LBRANGE",
+              "hint": "declare the `key` explicitly",
+              "keys": [
+                "STUDYID",
+                "USUBJID",
+                "LBSEQ"
+              ]
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-lookup-rename-intermediate",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "rename_only_intermediate",
+          "spec_paths": [
+            "intermediates[0]"
+          ],
+          "requirement": "REQ-1248",
+          "context": {
+            "intermediate": "CODED",
+            "dataset": "CODING"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "rename_only_intermediate",
+            "requirement": "REQ-1248",
+            "spec_paths": [
+              "intermediates[0]"
+            ],
+            "context": {
+              "dataset": "CODING",
+              "intermediate": "CODED"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-previous-fixed",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "spec_paths": [
+            "columns.PRIORBP.derivation.previous_non_missing.source"
+          ],
+          "requirement": "REQ-0287",
+          "context": {
+            "expected": "variable",
+            "actual": "mapping"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_field_type",
+            "requirement": "REQ-0287",
+            "spec_paths": [
+              "columns.PRIORBP.derivation.previous_non_missing.source"
+            ],
+            "context": {
+              "actual": "mapping",
+              "expected": "variable"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-rank-bad-method",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "spec_paths": [
+            "columns.SEVRANK.derivation.rank.method"
+          ],
+          "requirement": "REQ-0287",
+          "context": {
+            "expected": "str",
+            "actual": "mapping"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_field_type",
+            "requirement": "REQ-0287",
+            "spec_paths": [
+              "columns.SEVRANK.derivation.rank.method"
+            ],
+            "context": {
+              "actual": "mapping",
+              "expected": "str"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-round-half-away-from-zero-non-numeric-source",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "spec_paths": [
+            "columns.RNDVAL.derivation.round_half_away_from_zero.source"
+          ],
+          "requirement": "REQ-0418",
+          "context": {
+            "source": "SEX",
+            "expected": "numeric",
+            "actual": "str"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-0418",
+            "spec_paths": [
+              "columns.RNDVAL.derivation.round_half_away_from_zero.source"
+            ],
+            "context": {
+              "actual": "str",
+              "expected": "numeric",
+              "source": "SEX"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-row-number-filter",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "spec_paths": [
+            "columns.VISITSEQ.derivation.row_number.window.filter"
+          ],
+          "requirement": "REQ-0287",
+          "context": {
+            "expected": "predicate",
+            "actual": "int"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_field_type",
+            "requirement": "REQ-0287",
+            "spec_paths": [
+              "columns.VISITSEQ.derivation.row_number.window.filter"
+            ],
+            "context": {
+              "actual": "int",
+              "expected": "predicate"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-row-value-self",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "dependency_cycle",
+          "spec_paths": [
+            "columns.AVALF.derivation.first_available",
+            "columns.PRIORF.derivation.row_value"
+          ],
+          "requirement": "REQ-0072",
+          "context": {
+            "cycle": [
+              "AVALF",
+              "PRIORF",
+              "AVALF"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "dependency_cycle",
+            "requirement": "REQ-0072",
+            "spec_paths": [
+              "columns.AVALF.derivation.first_available",
+              "columns.PRIORF.derivation.row_value"
+            ],
+            "context": {
+              "cycle": [
+                "AVALF",
+                "PRIORF",
+                "AVALF"
+              ]
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-row-no-prior",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "zero_offset",
+          "spec_paths": [
+            "columns.PREVAL.derivation.row_value.offset"
+          ],
+          "requirement": "REQ-0328",
+          "context": {
+            "offset": 0
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "zero_offset",
+            "requirement": "REQ-0328",
+            "spec_paths": [
+              "columns.PREVAL.derivation.row_value.offset"
+            ],
+            "context": {
+              "offset": 0
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-source-self-reference",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "duplicate_identifier",
+          "spec_paths": [
+            "input.ADLB",
+            "domain"
+          ],
+          "requirement": "REQ-0080",
+          "context": {
+            "identifier": "ADLB"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "duplicate_identifier",
+            "requirement": "REQ-0080",
+            "spec_paths": [
+              "input.ADLB",
+              "domain"
+            ],
+            "context": {
+              "identifier": "ADLB"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-source-missing-field",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "spec_paths": [
+            "columns.AGE.derivation.source.filter"
+          ],
+          "requirement": "REQ-0132",
+          "context": {
+            "identifier": "USUBJID",
+            "dataset": "ODM"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "unknown_field",
+            "requirement": "REQ-0132",
+            "spec_paths": [
+              "columns.AGE.derivation.source.filter"
+            ],
+            "context": {
+              "dataset": "ODM",
+              "identifier": "USUBJID"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-source-trivial-filter",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "spec_paths": [
+            "columns.ACTARM.derivation.source.filter"
+          ],
+          "requirement": "REQ-0148",
+          "context": {
+            "identifier": "ARM"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "prohibited_construct",
+            "requirement": "REQ-0148",
+            "spec_paths": [
+              "columns.ACTARM.derivation.source.filter"
+            ],
+            "context": {
+              "identifier": "ARM"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-source-undeclared-field",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "spec_paths": [
+            "columns.AGE.derivation.source"
+          ],
+          "requirement": "REQ-0103",
+          "context": {
+            "identifier": "DM.AGEYRS"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "unknown_field",
+            "requirement": "REQ-0103",
+            "spec_paths": [
+              "columns.AGE.derivation.source"
+            ],
+            "context": {
+              "identifier": "DM.AGEYRS"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-source-unknown-format",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "source_profile_unknown",
+          "spec_paths": [
+            "input.DM.path"
+          ],
+          "requirement": "REQ-0852",
+          "context": {
+            "dataset": "DM",
+            "path": "input/dm.txt"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "source_profile_unknown",
+            "requirement": "REQ-0852",
+            "spec_paths": [
+              "input.DM.path"
+            ],
+            "context": {
+              "dataset": "DM",
+              "path": "input/dm.txt"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-str-uncaptured-group",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "regex_group_out_of_range",
+          "spec_paths": [
+            "columns.SITEID.derivation.str_extract.group"
+          ],
+          "requirement": "REQ-0816",
+          "context": {
+            "group": 2,
+            "group_count": 1,
+            "pattern": "^CATH-([^-]+)-[0-9]{4}$"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "regex_group_out_of_range",
+            "requirement": "REQ-0816",
+            "spec_paths": [
+              "columns.SITEID.derivation.str_extract.group"
+            ],
+            "context": {
+              "group": 2,
+              "group_count": 1,
+              "pattern": "^CATH-([^-]+)-[0-9]{4}$"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-str-contains-invalid-regex",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_predicate",
+          "spec_paths": [
+            "columns.AESEV.derivation.case[0].when"
+          ],
+          "requirement": "REQ-1244",
+          "context": {
+            "position": 24,
+            "predicate": "str_contains(AE.AETERM, 'SEVERE[')"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_predicate",
+            "requirement": "REQ-1244",
+            "spec_paths": [
+              "columns.AESEV.derivation.case[0].when"
+            ],
+            "context": {
+              "position": 24,
+              "predicate": "str_contains(AE.AETERM, 'SEVERE[')"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-str-case-number",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "spec_paths": [
+            "columns.SITE.derivation.str_case.source"
+          ],
+          "requirement": "REQ-0308",
+          "context": {
+            "source": "SITENUM",
+            "expected": "str",
+            "actual": "int"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-0308",
+            "spec_paths": [
+              "columns.SITE.derivation.str_case.source"
+            ],
+            "context": {
+              "actual": "int",
+              "expected": "str",
+              "source": "SITENUM"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-str-case-unknown",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "spec_paths": [
+            "columns.SITE.derivation.str_case.to"
+          ],
+          "requirement": "REQ-0287",
+          "context": {
+            "value": "capitalize",
+            "permitted": [
+              "upper",
+              "lower",
+              "sentence",
+              "title"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "requirement": "REQ-0287",
+            "spec_paths": [
+              "columns.SITE.derivation.str_case.to"
+            ],
+            "context": {
+              "permitted": [
+                "upper",
+                "lower",
+                "sentence",
+                "title"
+              ],
+              "value": "capitalize"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-str-pad-width",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "spec_paths": [
+            "columns.IDVARVAL.derivation.str_pad.width"
+          ],
+          "requirement": "REQ-0287",
+          "context": {
+            "expected": "int",
+            "actual": "str"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_field_type",
+            "requirement": "REQ-0287",
+            "spec_paths": [
+              "columns.IDVARVAL.derivation.str_pad.width"
+            ],
+            "context": {
+              "actual": "str",
+              "expected": "int"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-study-day-datetime",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "spec_paths": [
+            "columns.DTHDY.derivation.study_day.date"
+          ],
+          "requirement": "REQ-0606",
+          "context": {
+            "source": "DTHDTM",
+            "expected": "date",
+            "actual": "datetime"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-0606",
+            "spec_paths": [
+              "columns.DTHDY.derivation.study_day.date"
+            ],
+            "context": {
+              "actual": "datetime",
+              "expected": "date",
+              "source": "DTHDTM"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-sum-non-numeric",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "spec_paths": [
+            "columns.SEVTOT.derivation.aggregate.expr"
+          ],
+          "requirement": "REQ-0510",
+          "context": {
+            "source": "ASEV",
+            "expected": "numeric",
+            "actual": "str"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-0510",
+            "spec_paths": [
+              "columns.SEVTOT.derivation.aggregate.expr"
+            ],
+            "context": {
+              "actual": "str",
+              "expected": "numeric",
+              "expr": "SUM(ASEV)",
+              "reducer": "SUM",
+              "source": "ASEV"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-date-conversion",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "spec_paths": [
+            "columns.ASTDT2.derivation.to_date.source"
+          ],
+          "requirement": "REQ-0607",
+          "context": {
+            "source": "ASTDT",
+            "expected": "datetime, ISO date text, or ISO 8601 datetime text",
+            "actual": "date"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-0607",
+            "spec_paths": [
+              "columns.ASTDT2.derivation.to_date.source"
+            ],
+            "context": {
+              "actual": "date",
+              "expected": "datetime, ISO date text, or ISO 8601 datetime text",
+              "source": "ASTDT"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-epoch-day-non-date",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "spec_paths": [
+            "columns.EXSTDY.derivation.to_epoch_day.source"
+          ],
+          "requirement": "REQ-0606",
+          "context": {
+            "source": "EX.EXSTDT",
+            "expected": "date",
+            "actual": "str"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "requirement": "REQ-0606",
+            "spec_paths": [
+              "columns.EXSTDY.derivation.to_epoch_day.source"
+            ],
+            "context": {
+              "actual": "str",
+              "expected": "date",
+              "source": "EX.EXSTDT"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-types-unknown-field",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "spec_paths": [
+            "input.EX.types.EXDOSEN"
+          ],
+          "requirement": "REQ-0532",
+          "context": {
+            "dataset": "EX",
+            "field": "EXDOSEN"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "unknown_field",
+            "requirement": "REQ-0532",
+            "spec_paths": [
+              "input.EX.types.EXDOSEN"
+            ],
+            "context": {
+              "dataset": "EX",
+              "field": "EXDOSEN"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-variable-nested",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_field_type",
+          "spec_paths": [
+            "columns.COUNTRY.derivation.str_case.source"
+          ],
+          "requirement": "REQ-0287",
+          "context": {
+            "expected": "variable",
+            "actual": "mapping"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_field_type",
+            "requirement": "REQ-0287",
+            "spec_paths": [
+              "columns.COUNTRY.derivation.str_case.source"
+            ],
+            "context": {
+              "actual": "mapping",
+              "expected": "variable"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-locf-no-order",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "window_order_by_required",
+          "spec_paths": [
+            "columns.AVAL.derivation.locf.window"
+          ],
+          "requirement": "REQ-0340",
+          "context": {
+            "operation": "locf"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "window_order_by_required",
+            "requirement": "REQ-0340",
+            "spec_paths": [
+              "columns.AVAL.derivation.locf.window"
+            ],
+            "context": {
+              "operation": "locf"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-odm-context",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "invalid_odm_context",
+          "spec_paths": [
+            "columns.SEX.derivation.odm"
+          ],
+          "requirement": "REQ-1277",
+          "context": {
+            "dataset": "ODM",
+            "location": "column"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "invalid_odm_context",
+            "requirement": "REQ-1277",
+            "spec_paths": [
+              "columns.SEX.derivation.odm"
+            ],
+            "context": {
+              "dataset": "ODM",
+              "location": "column"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-odm-schema-ambiguous",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "odm_schema_field_ambiguous",
+          "spec_paths": [
+            "input.ODM.path"
+          ],
+          "requirement": "REQ-1275",
+          "context": {
+            "dataset": "ODM",
+            "field": "Value",
+            "stored": [
+              "Value",
+              "VALUE"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "odm_schema_field_ambiguous",
+            "requirement": "REQ-1275",
+            "spec_paths": [
+              "input.ODM.path"
+            ],
+            "context": {
+              "dataset": "ODM",
+              "field": "Value",
+              "stored": [
+                "Value",
+                "VALUE"
+              ]
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-odm-schema-missing",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "odm_schema_field_missing",
+          "spec_paths": [
+            "input.ODM.path"
+          ],
+          "requirement": "REQ-1275",
+          "context": {
+            "dataset": "ODM",
+            "fields": [
+              "FormOID",
+              "FormRepeatKey"
+            ]
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "odm_schema_field_missing",
+            "requirement": "REQ-1275",
+            "spec_paths": [
+              "input.ODM.path"
+            ],
+            "context": {
+              "dataset": "ODM",
+              "fields": [
+                "FormOID",
+                "FormRepeatKey"
+              ]
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      },
+      {
+        "fixture": "negative-odm-schema-type",
+        "disposition": "native_original_declaration_and_header_facts",
+        "original_truth": {
+          "phase": "validation",
+          "condition": "odm_schema_field_type",
+          "spec_paths": [
+            "input.ODM.types"
+          ],
+          "requirement": "REQ-1275",
+          "context": {
+            "dataset": "ODM",
+            "declared": "types"
+          }
+        },
+        "native_issues": [
+          {
+            "phase": "validation",
+            "condition": "odm_schema_field_type",
+            "requirement": "REQ-1275",
+            "spec_paths": [
+              "input.ODM.types"
+            ],
+            "context": {
+              "dataset": "ODM",
+              "declared": "types"
+            }
+          }
+        ],
+        "original_declared_context_matches": true,
+        "passed": true
+      }
+    ]
+  },
+  "r_host_deferrals": [
+    {
+      "environment": "benchmarks/schema-functions/r/environment.yaml",
+      "local_scope": "R source/binding/runtime semantics deferred when a real installed R SDK and real declared lock are unavailable; structural authoring checks remain explicit. Typed metadata proof is separate from activation/value acceptance.",
+      "typed_witness": "rust/crates/yamaa-adapters/tests/validator_r_declarations.rs::schema_functions_r_declared_calls_are_statically_admitted",
+      "mandatory_installed_runner": "R/yamaa/tests/public_environment.R",
+      "runner_case": "schema-functions",
+      "public_assertions": [
+        "public Check zero issues",
+        "Domain twice: lock verified and all function cases passed",
+        "no artifact before explicit Save",
+        "byte-for-byte original expected CSV and repeated activation"
+      ],
+      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification"
+    },
+    {
+      "environment": "benchmarks/schema-non-finite/r/environment.yaml",
+      "local_scope": "R source/binding/runtime semantics deferred when a real installed R SDK and real declared lock are unavailable; structural authoring checks remain explicit. Typed metadata proof is separate from activation/value acceptance.",
+      "typed_witness": "rust/crates/yamaa-adapters/tests/validator_r_declarations.rs::schema_non_finite_r_declared_calls_are_statically_admitted",
+      "mandatory_installed_runner": "R/yamaa/tests/public_environment.R",
+      "runner_case": "schema-non-finite",
+      "public_assertions": [
+        "public Check zero issues",
+        "Domain twice: lock verified and all function cases passed",
+        "no artifact before explicit Save",
+        "byte-for-byte original expected CSV and repeated activation"
+      ],
+      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification"
+    },
+    {
+      "environment": "benchmarks/adam-adsl-bmi/r/environment.yaml",
+      "local_scope": "R source/binding/runtime semantics deferred when a real installed R SDK and real declared lock are unavailable; structural authoring checks remain explicit. Typed metadata proof is separate from activation/value acceptance.",
+      "typed_witness": "rust/crates/yamaa-adapters/tests/validator_r_declarations.rs::adam_adsl_bmi_r_declared_calls_are_statically_admitted",
+      "mandatory_installed_runner": "R/yamaa/tests/public_environment.R",
+      "runner_case": "adam-adsl-bmi",
+      "public_assertions": [
+        "public Check zero issues",
+        "Domain twice: lock verified and all function cases passed",
+        "no artifact before explicit Save",
+        "byte-for-byte original expected CSV and repeated activation"
+      ],
+      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification"
+    },
+    {
+      "environment": "benchmarks/adam-advs-percentiles/r/environment.yaml",
+      "local_scope": "R source/binding/runtime semantics deferred when a real installed R SDK and real declared lock are unavailable; structural authoring checks remain explicit. Typed metadata proof is separate from activation/value acceptance.",
+      "typed_witness": "rust/crates/yamaa-adapters/tests/validator_r_declarations.rs::adam_advs_percentiles_r_declared_calls_are_statically_admitted",
+      "mandatory_installed_runner": "R/yamaa/tests/public_environment.R",
+      "runner_case": "adam-advs-percentiles",
+      "public_assertions": [
+        "public Check zero issues",
+        "Domain twice: lock verified and all function cases passed",
+        "no artifact before explicit Save",
+        "byte-for-byte original expected CSV and repeated activation"
+      ],
+      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification"
+    },
+    {
+      "environment": "benchmarks/negative-function-contract/r/environment.yaml",
+      "local_scope": "R source/binding/runtime semantics deferred when a real installed R SDK and real declared lock are unavailable; structural authoring checks remain explicit. Typed metadata proof is separate from activation/value acceptance.",
+      "typed_witness": "rust/crates/yamaa-adapters/tests/validator_r_declarations.rs::negative_function_contract_r_preserves_the_exact_static_issue",
+      "mandatory_installed_runner": "R/yamaa/tests/public_environment.R",
+      "runner_case": "negative-function-contract",
+      "public_assertions": [
+        "public Check and Domain after deleting input: validation/invalid_function_argument/REQ-0700, columns.RESULT.derivation.function.args, exact argument=x/cause=missing_required_argument/function=project_value context",
+        "NULL output and Save refusal",
+        "valid static call remains clean with no study input"
+      ],
+      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification"
+    }
+  ],
+  "truth_policy": "No committed benchmark or grammar expected truth is modified. All originally declared phase/condition/requirement/path/context facts match. The audit records complete native contexts, including any additional native facts; no subset observation implies execution or full value acceptance."
+}

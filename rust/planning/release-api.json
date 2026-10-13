@@ -463,6 +463,7 @@
         "_ProjectSpecification.capture_reads",
         "_ProjectSpecification.check_issues",
         "_ProjectSpecification.check_source_metadata",
+        "_ProjectSpecification.diagnostic_origins",
         "_ProjectSpecification.input_metadata",
         "_ProjectSpecification.preparation_status",
         "_Specification",
@@ -616,6 +617,10 @@
         "_Specification.input_metadata": {
           "disposition": "internal",
           "rationale": "Bounded original-declaration source descriptors over the held specification, without source bytes or inspection, parsing, execution or publication authority."
+        },
+        "_ProjectSpecification.diagnostic_origins": {
+          "disposition": "internal",
+          "rationale": "Bounded contributor path/source identities from held native normalization rejection for repository human diagnostic attribution; no source recapture, semantic tree or portable context modification."
         },
         "_ProjectSpecification.input_metadata": {
           "disposition": "internal",

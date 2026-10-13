@@ -2024,3 +2024,6 @@ impl DatasetPlan {
 #[cfg(test)]
 #[path = "dataset_donor_admission.rs"]
 mod donor_admission_tests;
+
+#[path = "dataset_metadata_types.rs"]
+mod metadata_types;

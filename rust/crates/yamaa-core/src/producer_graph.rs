@@ -158,24 +158,14 @@ impl PreparedGraph {
         let mut diagnostics = Vec::new();
         for (index, (schemas, node)) in schemas.iter().zip(&self.nodes).enumerate() {
             let schemas = schemas.iter().collect::<Vec<_>>();
-            match node.compiled.bind_sources(&schemas) {
-                Ok(_) => {}
-                Err(crate::specification::BindError::Invalid(findings)) => {
-                    if findings.len() > maximum.saturating_sub(diagnostics.len()) {
-                        return Err(MetadataBindingError::Limit);
-                    }
-                    for finding in findings {
-                        let projected = finding
-                            .diagnostics(node.compiled.source())
-                            .ok_or(MetadataBindingError::Projection)?;
-                        if projected.len() > maximum.saturating_sub(diagnostics.len()) {
-                            return Err(MetadataBindingError::Limit);
-                        }
-                        diagnostics.extend(projected.into_iter().map(|finding| (index, finding)));
-                    }
-                }
-                Err(error) => return Err(MetadataBindingError::Binding { node: index, error }),
+            let findings = node
+                .compiled
+                .metadata_source_findings(&schemas, maximum.saturating_sub(diagnostics.len()))
+                .map_err(|error| MetadataBindingError::Binding { node: index, error })?;
+            if findings.len() > maximum.saturating_sub(diagnostics.len()) {
+                return Err(MetadataBindingError::Limit);
             }
+            diagnostics.extend(findings.into_iter().map(|finding| (index, finding)));
         }
         Ok(diagnostics)
     }
