@@ -59,6 +59,17 @@ impl PreparedRun {
         document: PreparedDocument,
         environment: OwnedEnvironment,
     ) -> Result<Self, Box<RejectedRun>> {
+        Self::prepare_with_profile_inspection(document, environment, |_, _, _| None)
+    }
+    pub(crate) fn prepare_with_profile_inspection(
+        document: PreparedDocument,
+        environment: OwnedEnvironment,
+        mut inspect: impl FnMut(
+            &PreparedDocument,
+            &str,
+            &str,
+        ) -> Option<(yamaa_core::resource::ResourceFailure, String)>,
+    ) -> Result<Self, Box<RejectedRun>> {
         let (environment, captured) = environment.into_parts();
         match project_domain::check_owned(document.compilation_model(), environment) {
             Ok(checked) => Ok(Self {
@@ -66,11 +77,17 @@ impl PreparedRun {
                 captured,
                 checked,
             }),
-            Err(rejection) => Err(Box::new(RejectedRun {
-                document,
-                captured,
-                rejection,
-            })),
+            Err(mut rejection) => {
+                rejection.error = yamaa_engine::source_profile_inspection::refine(
+                    rejection.error,
+                    |dataset, path| inspect(&document, dataset, path),
+                );
+                Err(Box::new(RejectedRun {
+                    document,
+                    captured,
+                    rejection,
+                }))
+            }
         }
     }
     pub fn document(&self) -> &PreparedDocument {

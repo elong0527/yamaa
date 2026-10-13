@@ -13,6 +13,7 @@ import csv
 import datetime as dt
 import json
 import re
+import shutil
 import struct
 from pathlib import Path
 
@@ -139,6 +140,10 @@ def emit_plan(fixtures, output):
         raise ValueError("plan output must be a fresh directory")
     payload = plan(fixtures)
     write_json(output / "plan.json", payload)
+    # Base R cannot inspect symbolic links on Windows. Stage native inputs with
+    # Python's symlink-aware copy, then let R rename each case without copying
+    # through its target. Independent expected truth never enters this tree.
+    stage_r_inputs(fixtures, output / "r-inputs", payload)
     for runtime in ("python", "r"):
         with (output / f"{runtime}.tsv").open(
             "w", encoding="utf-8", newline=""
@@ -158,6 +163,21 @@ def emit_plan(fixtures, output):
                         ]
                     )
     print(f"planned {len(payload['examples'])} benchmarks for Python and R")
+
+
+def stage_r_inputs(fixtures, output, payload):
+    if output.exists():
+        raise ValueError("R input staging must be a fresh directory")
+    output.mkdir(parents=True)
+    for example in payload["examples"]:
+        if example["excluded"]:
+            continue
+        shutil.copytree(
+            fixtures / example["name"],
+            output / example["name"],
+            symlinks=True,
+            ignore=shutil.ignore_patterns("expected", "run.py", "run.R", "README.md"),
+        )
 
 
 def load_yaml(path):

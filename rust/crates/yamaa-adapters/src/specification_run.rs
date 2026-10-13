@@ -50,7 +50,22 @@ pub struct PreparedRun {
 impl PreparedRun {
     /// Entire vocabulary admission precedes obtaining a study-data snapshot.
     pub fn prepare(document: PreparedDocument) -> Result<Self, Error> {
-        let checked = domain::check(document.compilation_model()).map_err(Error::Prepare)?;
+        Self::prepare_with_profile_inspection(document, |_, _, _| None)
+    }
+    pub(crate) fn prepare_with_profile_inspection(
+        document: PreparedDocument,
+        mut inspect: impl FnMut(
+            &PreparedDocument,
+            &str,
+            &str,
+        ) -> Option<(yamaa_core::resource::ResourceFailure, String)>,
+    ) -> Result<Self, Error> {
+        let checked = domain::check(document.compilation_model()).map_err(|error| {
+            Error::Prepare(yamaa_engine::source_profile_inspection::refine(
+                error,
+                |dataset, path| inspect(&document, dataset, path),
+            ))
+        })?;
         Ok(Self { document, checked })
     }
     pub fn document(&self) -> &PreparedDocument {

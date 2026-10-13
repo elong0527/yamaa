@@ -81,6 +81,29 @@ impl Drop for Study {
 const DOMAIN: &str = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
 
 #[test]
+fn project_preparation_rejects_unknown_suffix_directory_before_activation() {
+    let study = Study::new();
+    fs::create_dir(study.0.join("entry/input.unknown")).unwrap();
+    study.write(
+        "entry/domain.yaml",
+        &DOMAIN.replace("input.csv", "input.unknown"),
+    );
+    let Err(Error::Compile(run)) = study.prepare(study.0.to_str().unwrap(), &[]) else {
+        panic!("directory finding")
+    };
+    let yamaa_core::specification::PrepareError::Invalid(findings) = &run.rejection.error else {
+        panic!("invalid findings")
+    };
+    let issue = findings[0].diagnostic();
+    assert_eq!(
+        issue.definition().condition,
+        "resource_path_not_regular_file"
+    );
+    assert_eq!(issue.spec_paths, ["input.SRC.path"]);
+    assert!(!study.0.join("entry/output.csv").exists());
+}
+
+#[test]
 fn public_preparation_accepts_native_absolute_environment_paths_without_study_reads() {
     let study = Study::new();
     study.write("yamaa-project.yaml", "version: '1.0'\ndata_roots: []\n");
