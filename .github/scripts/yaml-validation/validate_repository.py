@@ -22,6 +22,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # noqa: E402
 import _reference_checks  # noqa: E402
 import _native_csv  # noqa: E402
+import _native_regex  # noqa: E402
 from editorial import (  # noqa: E402
     ASCII_SOURCE_IGNORED_PARTS,
     ASCII_SOURCE_NAMES,
@@ -69,13 +70,8 @@ __all__ = [
 ]
 
 
-# R022 regular expressions. Every pattern the language admits -- a schema
-# `pattern` descriptor, `str_extract.pattern`, and a `matches` verification --
-# is read through the portable R022 contract: the rule text plus the shared
-# conformance fixtures. This validator replays them through the same Python
-# binding the package ships (`yamaa.regex` over the standard library), so
-# repository validation is not a second dialect. No other regular-expression
-# library reads a pattern of the language.
+# R022 pattern decisions and matches come from installed native specifications.
+# The generated source belongs to each fixture and builds are never saved.
 REGEX_CONTRACT = 'regex'
 REGEX_CONTRACT_VERSION = '2.0.0'
 
@@ -113,7 +109,7 @@ def regex_contract_requirement():
     """Name the contract and binding R022 pins, for a failure to report."""
     return (
         f"portable contract {REGEX_CONTRACT_VERSION} "
-        "(the yamaa.regex binding over the standard library)"
+        "(the installed native yamaa.check and yamaa.domain services)"
     )
 
 
@@ -126,7 +122,10 @@ def require_regex_binding():
             (
                 binding_error, binding_group_count,
                 binding_compile, binding_full_match,
-            ) = _reference_checks.regex_binding()
+            ) = (
+                _native_regex.RegexError, _native_regex.capture_group_count,
+                _native_regex.compile_pattern, _native_regex.full_match,
+            )
         except ImportError:
             _portable_binding = False
         else:

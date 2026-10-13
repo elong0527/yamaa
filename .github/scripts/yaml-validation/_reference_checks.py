@@ -7,17 +7,6 @@ moving imports here does not qualify semantic delegation to yamaa.check.
 """
 
 
-def regex_binding():
-    from yamaa.regex import (
-        RegexError,
-        capture_group_count,
-        compile_pattern,
-        full_match,
-    )
-
-    return RegexError, capture_group_count, compile_pattern, full_match
-
-
 def predicate_binding():
     from yamaa.expressions.predicates import (
         COMPARISON_OPERATORS,
