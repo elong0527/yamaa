@@ -14,6 +14,7 @@ mod function_callback;
 mod project_activation;
 #[cfg(any(unix, windows))]
 mod project_result;
+mod source_metadata;
 mod specification_inheritance;
 mod specification_result;
 mod specification_service;
@@ -35,10 +36,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     module.add_function(wrap_pyfunction!(domain_entry::_domain_file, module)?)?;
     module.add_function(wrap_pyfunction!(domain_entry::_check_file, module)?)?;
-    module.add_function(wrap_pyfunction!(
-        domain_entry::_check_project_metadata,
-        module
-    )?)?;
     #[cfg(any(unix, windows))]
     {
         module.add_class::<file_specification::Specification>()?;

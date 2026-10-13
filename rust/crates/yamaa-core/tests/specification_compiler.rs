@@ -994,7 +994,7 @@ fn nested_source_options_keep_authored_handlers_and_selection_after_binding() {
 }
 
 #[test]
-fn unqualified_key_source_options_retain_the_planning_diagnostic() {
+fn unqualified_key_source_absence_is_an_admitted_key_expression() {
     use Tree::*;
     let document = operation_document(
         "source",
@@ -1004,26 +1004,24 @@ fn unqualified_key_source_options_retain_the_planning_diagnostic() {
         ]),
         "input.csv",
     );
-    let source = document.document();
-    let mut nodes = source.nodes().to_vec();
-    let N::Sequence(keys) = &nodes[source.field(source.root(), "keys").unwrap()] else {
+    let raw = document.document();
+    let mut nodes = raw.nodes().to_vec();
+    let N::Sequence(keys) = &nodes[raw.field(raw.root(), "keys").unwrap()] else {
         panic!("key sequence");
     };
     let key = keys[0];
     nodes[key] = N::Text("VALUE".into());
     let document = SpecificationDocument::admit(
-        Document::new(nodes, source.root(), DocumentLimits::default()).unwrap(),
+        Document::new(nodes, raw.root(), DocumentLimits::default()).unwrap(),
         &mut ValidationBudget::new(Default::default()),
     )
     .unwrap()
     .unwrap();
-    let Err(PrepareError::Unsupported(findings)) = PreparedSpecification::prepare(&document) else {
-        panic!("key source options must fail at planning");
-    };
-    assert!(findings.iter().any(|finding| {
-        finding.operation == "filtered_key_source"
-            && finding.path == "columns.VALUE.derivation.source"
-    }));
+    let prepared = PreparedSpecification::prepare(&document).unwrap();
+    let plan = prepared.bind(&source()).unwrap();
+    assert!(matches!(&plan.templates()[0].assignments[0].expression,
+        Expression::SourceBinding { source, absent: Some(Value::Int(7)), variable_absent: true, .. }
+        if matches!(source.expression, Expression::Literal(Value::Missing))));
 }
 
 #[test]

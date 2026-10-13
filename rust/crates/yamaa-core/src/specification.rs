@@ -1325,11 +1325,6 @@ impl PreparedSpecification {
                         &mut extra,
                         &intermediates,
                     )?;
-                    if keys.contains(&column)
-                        && (source.has_filter() || source.has_selection() || source.has_absent())
-                    {
-                        reject(&mut extra, "filtered_key_source", path.clone());
-                    }
                     Some(Operation::Source(alloc::boxed::Box::new(source)))
                 }
                 "mapping" | "cut" => Some(Operation::MappingCut(alloc::boxed::Box::new(
@@ -1343,9 +1338,6 @@ impl PreparedSpecification {
                         &mut extra,
                         &intermediates,
                     )?;
-                    if keys.contains(&column) {
-                        reject(&mut extra, "selection_key_source", path.clone());
-                    }
                     Some(Operation::FirstAvailable(alloc::boxed::Box::new(selection)))
                 }
                 "row_number"
@@ -2247,3 +2239,6 @@ fn output_profile(path: &str) -> Option<&'static str> {
         None
     }
 }
+
+#[path = "specification_metadata.rs"]
+mod metadata;

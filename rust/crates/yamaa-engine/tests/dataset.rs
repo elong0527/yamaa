@@ -2935,7 +2935,7 @@ fn collected_values_preserve_exact_identity_and_first_representation() {
         }
     }
 }
-/// Typed admission cannot expose first-record reads or incomplete keys in key-grain execution.
+/// Typed admission rejects incomplete key sets and collection-only reducers in key phase.
 #[test]
 fn key_grain_rejects_incomplete_or_wrong_phase_assignments() {
     let source = schema(&[("id", ColumnType::Int)]);
@@ -2945,7 +2945,18 @@ fn key_grain_rejects_incomplete_or_wrong_phase_assignments() {
             vec![],
             vec![assign(0, Expression::Source(0)), assign(1, collect(0))],
         ),
-        (vec![assign(0, collect(0))], vec![assign(1, collect(0))]),
+        (
+            vec![assign(
+                0,
+                Expression::Reduce {
+                    column: 0,
+                    reducer: NumericReducer::Sum,
+                    text: "SUM(SRC.id)".into(),
+                    identifier: Some("SRC.id".into()),
+                },
+            )],
+            vec![assign(1, collect(0))],
+        ),
         (
             vec![
                 assign(0, Expression::Source(0)),
@@ -6840,6 +6851,7 @@ fn first_available_expression_owns_collection_failure_without_fallback() {
                 }),
                 absent: Some(Value::Int(9)),
                 variable_absent: absent_variable,
+                selection_declared: false,
                 variable: if absent_variable {
                     "UNDECLARED"
                 } else {

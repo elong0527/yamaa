@@ -639,6 +639,12 @@ impl PreparedDocument {
         match self.inheritance() {
             None => Some(&self.source.identity),
             Some(inherited) => {
+                // Native findings use final physical collection indices;
+                // composition retains the literal admitted member identity.
+                // This is a representation mapping over the held model, never
+                // a source/path lookup or a split of an authored identity.
+                let logical = self.indexed_diagnostic_path(path)?;
+                let path = logical.as_deref().unwrap_or(path);
                 let origin = inherited
                     .provenance()
                     .iter()
@@ -652,6 +658,37 @@ impl PreparedDocument {
                 Some(&inherited.layers().get(origin.layer)?.source.identity)
             }
         }
+    }
+
+    fn indexed_diagnostic_path(&self, path: &str) -> Option<Option<String>> {
+        let Some((collection, remaining)) = path.split_once('[') else {
+            return Some(None);
+        };
+        let identity = match collection {
+            "rows" | "intermediates" => "id",
+            "columns" => "name",
+            _ => return Some(None),
+        };
+        let (written_index, suffix) = remaining.split_once(']')?;
+        if written_index.is_empty()
+            || !written_index.bytes().all(|byte| byte.is_ascii_digit())
+            || written_index.len() > 1 && written_index.starts_with('0')
+            || !suffix.is_empty() && !suffix.starts_with(['.', '['])
+        {
+            return None;
+        }
+        let index = written_index.parse::<usize>().ok()?;
+        let document = self.model().document();
+        let members = document.field(document.root(), collection)?;
+        let yamaa_core::schema::DocumentNode::Sequence(members) = &document.nodes()[members] else {
+            return None;
+        };
+        let member = *members.get(index)?;
+        let identity = document.field(member, identity)?;
+        let yamaa_core::schema::DocumentNode::Text(identity) = &document.nodes()[identity] else {
+            return None;
+        };
+        Some(Some(format!("{collection}.{identity}{suffix}")))
     }
 
     /// Resolve an input's authored path against held source provenance. Composition

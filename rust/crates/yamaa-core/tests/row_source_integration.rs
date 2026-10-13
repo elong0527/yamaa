@@ -37,6 +37,7 @@ fn wrapped(column: usize, expression: Expression) -> Expression {
                     source: Box::new(assignment(column, expression)),
                     absent: None,
                     variable_absent: false,
+                    selection_declared: false,
                     variable: "SOURCE.ID".into(),
                     path: "row.source".into(),
                 },
