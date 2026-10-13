@@ -1,7 +1,7 @@
 //! Format observed bounded standalone runs and publish through explicit host authority.
 //! Classified resource findings retain observations; opaque host failures stay opaque.
 use crate::{
-    scalar_transport::ScalarValue,
+    report_scalar::ScalarValue,
     specification_diagnostics,
     specification_run::{CapturedAttempt, PortError},
     specification_run_view::RunView,
@@ -71,9 +71,7 @@ pub(crate) fn condition(run: &dyn RunView, value: &Value) -> Result<Value, Error
         .get("context")
         .and_then(Value::as_object)
         .ok_or(Error::InvalidObservation)?
-        .iter()
-        .map(|(name, v)| Ok((name.clone(), plain(v)?)))
-        .collect::<Result<Map<_, _>, Error>>()?;
+        .clone();
     if let Some(identity) = value.get("identity").filter(|v| !v.is_null()) {
         let keys = identity
             .get("keys")
@@ -111,9 +109,11 @@ pub(crate) fn condition(run: &dyn RunView, value: &Value) -> Result<Value, Error
         }
         context.insert("keys".into(), json!([keys]));
     }
-    Ok(
-        json!({"phase":diagnostic["phase"],"condition":diagnostic["condition"],"requirement":diagnostic["requirement"],"spec_paths":diagnostic["spec_paths"],"context":context}),
-    )
+    let mut diagnostic = diagnostic.clone();
+    diagnostic["context"] = context.into();
+    crate::issue_rows::Issue::from_diagnostic(diagnostic)
+        .and_then(|issue| issue.report_value())
+        .map_err(|_| Error::InvalidObservation)
 }
 /// A classified capture failure terminates the request sequence. Reject malformed
 /// observations rather than attaching a resource finding to an unrelated failure.
@@ -648,12 +648,12 @@ pub(crate) fn prepare_result(
     let table = prepared
         .artifact()
         .map(|artifact| {
-            crate::table_transport::encode_projected_dataset(
+            crate::ipc_table::encode_projected_dataset(
                 &execution.ok_or(Error::InvalidObservation)?.dataset,
                 artifact.projection(),
             )
             .map_err(|e| match e {
-                crate::table_transport::TableTransportError::OutputLimit => Error::OutputLimit,
+                crate::ipc_table::TableError::OutputLimit => Error::OutputLimit,
                 _ => Error::InvalidObservation,
             })
         })

@@ -1,3 +1,8 @@
+> The component endpoint descriptions below are historical development evidence.
+> Installed JSON request protocols and probe exports were retired under #1990;
+> see [SUPPLEMENTAL.md](SUPPLEMENTAL.md) for their typed/public successors.
+> Public qualification uses domain/check/define in both installed hosts.
+
 # Shared native engine bootstrap
 
 This is the shared engine prototype for [#1585](https://github.com/elong0527/yamaa/issues/1585).
@@ -212,9 +217,11 @@ or falls back to the retained reference implementation.
 
 R installs as `yamaa`. Its archive embeds the shared workspace through
 `tools/stage_r_package.py`; stage `R/yamaa` before building the template. Installed
-runtime tests need no repository, Cargo or Python. The legacy `cdiscbuilder`
-sources remain only for migration assessment until the full release surface
-qualifies. [Governed verification logs](VERIFICATION_LOGS.md) now use retained
+runtime tests need no repository, Cargo or Python. The first release channel is
+a qualified GitHub source asset; R installation requires Rust 1.90.0/Cargo and
+platform build tools. Shared grammar vectors now run through the typed core and
+installed public R facade; the former `cdiscbuilder` evaluator retires only after
+the transition gates pass. [Governed verification logs](VERIFICATION_LOGS.md) now use retained
 native check records and explicit ordered Save. Broader language, API and full
 benchmark qualification remain open.
 

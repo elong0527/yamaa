@@ -52,6 +52,14 @@ class PublicContract(unittest.TestCase):
             self.assertTrue(row["condition"])
         return frame
 
+    def test_component_endpoints_are_absent_from_the_installed_binding(self):
+        from yamaa import _native
+        for name in ('engine_info', 'analyze_aggregate', 'analyze_numeric', 'analyze_predicate', 'analyze_dependencies', 'analyze_column_dependencies', 'analyze_references', 'reference_capabilities', 'dataset_capabilities', 'scalar_round_trip', 'evaluate_numeric', 'evaluate_regex', 'table_round_trip', 'table_snapshot', 'execute_dataset', 'execute_dataset_sources', 'execute_dataset_functions', 'invoke_function', 'interpret_schema', 'decode_yaml', '_compile_schema', '_Schema', '_compile_reference_catalog', '_ReferenceCatalog', '_profile_dataset_functions'):
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(_native, name))
+        self.assertIsInstance(_native._CORE_VERSION, str)
+        self.assertTrue(_native._CORE_VERSION)
+
     def test_signatures_argument_types_and_removed_options(self):
         for function in (yamaa.domain, yamaa.check):
             parameters = inspect.signature(function).parameters

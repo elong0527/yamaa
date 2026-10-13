@@ -12,7 +12,7 @@ pub(crate) mod platform {
         rc::{Rc, Weak},
     };
     use yamaa_adapters::{
-        function_transport::CallbackError,
+        callback::CallbackError,
         project_function_diagnostics::HostDetails,
         project_report::{self, Classified},
         specification_report::BuildResult,

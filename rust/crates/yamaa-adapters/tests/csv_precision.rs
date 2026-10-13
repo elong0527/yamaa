@@ -1,3 +1,5 @@
+#[path = "support/ipc_snapshot.rs"]
+mod ipc_snapshot;
 use std::{convert::Infallible, sync::Arc};
 use yamaa_adapters::{
     specification_report::{self, Error, Identity},
@@ -75,8 +77,7 @@ fn whole_result_keeps_unrounded_derivation_and_prepares_exact_saved_bytes_once()
     let attempt = run.execute_with_port(&mut study);
     let table = attempt.result.as_ref().unwrap().table.as_ref().unwrap();
     let snapshot: serde_json::Value =
-        serde_json::from_str(&yamaa_adapters::table_transport::table_snapshot(table).unwrap())
-            .unwrap();
+        serde_json::from_str(&ipc_snapshot::table_snapshot(table).unwrap()).unwrap();
     assert_eq!(
         snapshot["rows"][1][1],
         serde_json::json!({"float": "3ff3be76c8b43958"})

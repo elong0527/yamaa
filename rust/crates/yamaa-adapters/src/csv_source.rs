@@ -1,5 +1,5 @@
 //! CSV physical-table boundary; pure profile admission is owned by core.
-pub use yamaa_core::csv_source::{parse, CsvSource, Error, Field, Limits, ProfileCause};
+pub use yamaa_engine::source_decode::{parse, CsvSource, Error, Field, Limits, ProfileCause};
 
 /// Profile failures and Arrow/resource failures remain distinct to the compiler.
 #[derive(Debug)]

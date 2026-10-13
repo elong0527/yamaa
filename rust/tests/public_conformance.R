@@ -82,7 +82,7 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     stop("public runner requires an installed package outside the fixture checkout")
   write_json(file.path(output, "run.json"), list(protocol="public-conformance/1", runtime="r",
     runtime_version=as.character(getRversion()), host_package_version=as.character(packageVersion("yamaa")),
-    engine_version=engine_info()$core_version, source_revision=args[[4L]],
+    engine_version=yamaa:::.core_version(), source_revision=args[[4L]],
     platform=R.version$platform, package_form=Sys.getenv("PUBLIC_CONFORMANCE_PACKAGE_FORM", "installed"),
     evidence=paste0(Sys.getenv("GITHUB_SERVER_URL"), "/", Sys.getenv("GITHUB_REPOSITORY"), "/actions/runs/", Sys.getenv("GITHUB_RUN_ID")),
     table_encoding="str:utf8-hex,float:ieee754-be,int:decimal,date:epoch-days,datetime:epoch-seconds"))

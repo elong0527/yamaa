@@ -217,10 +217,9 @@ fn held(path: &str, table: core::LogTable, limits: PreparationLimits) -> Result<
         )
     };
     let observation = json!({"name":name,"profile":profile,"columns":table.schema().columns().iter().map(|c|&c.name).collect::<Vec<_>>(),"types":table.schema().columns().iter().map(|c|crate::specification_diagnostics::type_name(c.kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":rows,"byte_length":bytes.len(),"content":content});
-    crate::table_transport::bounded_json(&observation, limits.observation_bytes)
+    crate::ipc_table::bounded_json(&observation, limits.observation_bytes)
         .map_err(|_| Error::OutputLimit)?;
-    let logical =
-        crate::table_transport::encode_log_table(&table).map_err(|_| Error::OutputLimit)?;
+    let logical = crate::ipc_table::encode_log_table(&table).map_err(|_| Error::OutputLimit)?;
     let table = PublicTable::decode(&logical).map_err(|_| Error::InvalidObservation)?;
     let ipc = table.ipc().map_err(|_| Error::OutputLimit)?;
     Ok(HeldLog {

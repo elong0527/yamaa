@@ -138,7 +138,7 @@ print(json.dumps({
     "runtime_version": platform.python_version(),
     "host_package_version": metadata.version("yamaa"),
     "binding_package_version": metadata.version("yamaa"),
-    "core_version": yamaa_native.engine_info()["core_version"],
+    "core_version": yamaa_native._CORE_VERSION,
     "package_location": str(Path(yamaa_native.__file__).resolve()),
 }))
 """
@@ -150,7 +150,7 @@ print(json.dumps({
     code = """
 suppressPackageStartupMessages(library(yamaa))
 writeLines(c(as.character(getRversion()), as.character(packageVersion("yamaa")),
-             engine_info()$core_version, normalizePath(find.package("yamaa"))))
+             yamaa:::.core_version(), normalizePath(find.package("yamaa"))))
 """
     # Windows Rscript can fail while forwarding multiline -e expressions.
     # A real script uses the same public calls as the installed R suites.
