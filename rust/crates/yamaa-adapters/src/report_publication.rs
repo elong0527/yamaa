@@ -3,8 +3,9 @@
 use crate::{report_projection::Budget, report_storage::StoredReport, specification_report::Error};
 use serde_json::{json, Value};
 
-const CODES: [&str; 9] = [
+const CODES: [&str; 10] = [
     "publication_incomplete",
+    "producer_publication_incomplete",
     "producer_publication_nodes",
     "producer_publication_paths",
     "producer_publication_bytes",
@@ -173,5 +174,60 @@ mod tests {
             candidate["publication"]["error"],
             json!({"stage":"publication","code":publication_code,"node":0,"field":"verification_log","path":"é\n\"out.csv"})
         );
+    }
+    #[test]
+    fn every_owned_actual_code_and_location_finishes_without_allocation_or_refusal() {
+        let locations = [
+            Location {
+                key: 0,
+                node: 0,
+                field: Some("verification_log"),
+                path: Some("first.csv"),
+            },
+            Location {
+                key: 1,
+                node: 1,
+                field: Some("path"),
+                path: Some("last.csv"),
+            },
+        ];
+        let codes = CODES.into_iter().chain(std::iter::once(
+            yamaa_core::diagnostic::ConditionCode::OutputPublicationFailed
+                .definition()
+                .condition,
+        ));
+        for code in codes {
+            for key in [None, Some(0), Some(1)] {
+                for logged in [false, true] {
+                    let mut candidate = report();
+                    let mut budget = Budget::new(16_777_216);
+                    let mut prepared =
+                        Prepared::new(&mut candidate, &locations, logged, 16_777_216, &mut budget)
+                            .unwrap();
+                    let code_pointer = prepared
+                        .errors
+                        .iter()
+                        .find(|(at, condition, _)| *at == key && *condition == code)
+                        .unwrap()
+                        .2["code"]
+                        .as_str()
+                        .unwrap()
+                        .as_ptr();
+                    prepared.finish(&mut candidate, false, code, key);
+                    assert_eq!(candidate["publication"]["error"]["code"], code);
+                    assert_eq!(
+                        candidate["publication"]["error"]["code"]
+                            .as_str()
+                            .unwrap()
+                            .as_ptr(),
+                        code_pointer
+                    );
+                    assert_eq!(
+                        candidate["publication"]["error"]["node"],
+                        key.map_or(Value::Null, |value| json!(value))
+                    );
+                }
+            }
+        }
     }
 }
