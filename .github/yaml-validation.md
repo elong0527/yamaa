@@ -184,10 +184,13 @@ uv run --project python --no-sync python .github/scripts/yaml-validation/validat
 
 By default, the script infers the repository root relative to its own path.
 
-The R side of the shared grammar vectors needs only R and the `yaml` package:
+Shared grammar replay needs Rust 1.90.0 and `py-yaml12==0.2.0` for the typed
+core check. The R command uses the installed staged `yamaa` source package and
+its unchanged authored grammar fixtures:
 
 ```bash
-Rscript R/cdiscbuilder/inst/conformance/grammar_conformance.R
+python rust/tools/check_shared_grammar.py
+Rscript --vanilla R/yamaa/tests/public_grammar.R
 ```
 
 Specification style is a separate step. The

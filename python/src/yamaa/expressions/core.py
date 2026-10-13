@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Literal, Protocol, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, JsonValue
 
 from yamaa.expressions.text import ascii_upper
 from yamaa.models.values import (
@@ -41,10 +41,16 @@ class ResolvedValue(_FrozenModel):
 
 
 class AbsentValue(_FrozenModel):
-    """A variable or ODM item is absent from the current context."""
+    """A variable or ODM item is absent from the current context.
+
+    The name carries no minimum length: an empty name is absent like any
+    other undeclared name, and requiring a non-empty one made every
+    resolver that reports absence raise a validation error for it instead
+    of returning this result, escaping evaluation as a raw crash.
+    """
 
     status: Literal["absent"] = "absent"
-    variable: str = Field(min_length=1)
+    variable: str
 
 
 class FailedResolution(_FrozenModel):
