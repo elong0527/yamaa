@@ -54,6 +54,7 @@ conditions:
   incomparable_range_types: {phases: [validation]}
   incomparable_sources: {phases: [validation]}
   incompatible_input_type: {phases: [validation]}
+  incomplete_output_row: {phases: [derivation]}
   inheritance_cycle: {phases: [validation]}
   integer_overflow: {phases: [derivation, parse]}
   internal_column_in_keys: {phases: [validation]}
@@ -124,6 +125,7 @@ conditions:
   pattern_mismatch: {phases: [validation]}
   phase_boundary: {phases: [validation]}
   producer_contract_mismatch: {phases: [validation]}
+  producer_not_completed: {phases: [validation]}
   producer_output_path_mismatch: {phases: [validation]}
   producer_workflow_cycle: {phases: [validation]}
   prohibited_construct: {phases: [validation]}
@@ -141,11 +143,13 @@ conditions:
   rename_only_intermediate: {phases: [validation]}
   reserved_metadata_key: {phases: [validation]}
   resource_path_missing: {phases: [validation]}
+  resource_path_not_normalized: {phases: [validation]}
   resource_path_not_regular_file: {phases: [validation]}
   resource_path_not_relative: {phases: [validation]}
   resource_path_outside_project: {phases: [validation]}
   resource_path_symlink: {phases: [validation]}
   resource_path_uri_scheme: {phases: [validation]}
+  row_count_changed: {phases: [derivation]}
   row_count_failed: {phases: [verification]}
   runner_language_mismatch: {phases: [validation]}
   runtime_artifact_mismatch: {phases: [validation]}
