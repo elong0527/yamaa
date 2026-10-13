@@ -301,16 +301,15 @@ unlink(work,recursive=TRUE)
 stopifnot(any(vapply(preparation(failed),function(item) identical(item$bytes,charToRaw("schema_version: [\n")),logical(1))))
 cat("R public metadata and early raw rejections retain original evidence without fallback\n")
 
-# 16,384 rows x 64 eight-byte columns fill the 8 MiB IPC allowance;
-# framing exceeds the copy cap while execution remains admitted.
+# Text stays below the execution allowance, while IPC offsets and numeric
+# columns take the public copy beyond its 8 MiB byte cap.
 work <- study()
-extra <- paste0(vapply(0:61,function(index) paste0("  - {name: EXTRA",index,
-  ", type: float, label: Extra value, derivation: {literal: 1.234}}\n"),character(1)),collapse="")
-names <- paste(c("ID","VALUE",paste0("EXTRA",0:61)),collapse=", ")
+extra <- paste0('  - {name: PAYLOAD, type: str, label: Payload, derivation: {literal: "',
+  strrep("x",2048),'"}}\n')
 text <- sub("output: {path:",paste0(extra,"output: {path:"),consumer,fixed=TRUE)
-text <- sub("columns: [ID, VALUE], decimals: 2",paste0("columns: [",names,"], decimals: 2"),text,fixed=TRUE)
+text <- sub("columns: [ID, VALUE], decimals: 2","columns: [ID, VALUE, PAYLOAD], decimals: 2",text,fixed=TRUE)
 write(work,"consumer/root.yaml",text)
-write(work,"raw/raw.csv",paste0("ID,VALUE\n",paste0(1:16384,",1.234\n",collapse="")))
+write(work,"raw/raw.csv",paste0("ID,VALUE\n",paste0(1:4095,",1.234\n",collapse="")))
 result <- build(work)
 refusal <- function(result) reply(.Call(private("wrap__domain_projection_failure"),handle(result)))
 stopifnot(isTRUE(evidence(result)$accepted),is.null(result$output),
