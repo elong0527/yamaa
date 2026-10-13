@@ -152,7 +152,7 @@ fn draft() -> Draft {
 }
 #[test]
 fn independent_complete_eighteen_record_environment_report_preserves_every_field_and_order() {
-    assert_eq!(support::reached().len(), 8);
+    assert_eq!(support::reached().len(), 9);
     let draft = support::draft();
     let doc = root_document(&[], &[false]);
     let findings = project_environment::validate(Language::Python, &draft);
