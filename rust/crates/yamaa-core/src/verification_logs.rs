@@ -316,7 +316,14 @@ pub fn build(
         if record.path.is_empty()
             || record.check.is_empty()
             || record.requirement.is_empty()
-            || !paths.insert(record.path.as_str())
+            || !(paths.insert(record.path.as_str())
+                || record.check == "allowed_values"
+                    && Some(record.requirement.as_str())
+                        == crate::diagnostic::ConditionCode::VerificationCodelistFailed
+                            .definition()
+                            .requirement
+                    && record.path.starts_with("columns.")
+                    && record.path.ends_with(".submission.codelist"))
         {
             return Err(Error::InvalidRecord);
         }

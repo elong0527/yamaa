@@ -39,6 +39,7 @@ pub(crate) fn observations(
             failed_count: record.failed_count,
             output_rows: record.output_rows,
             offending_rows: &record.offending_rows,
+            inventory: record.inventory.as_deref(),
             codelist: record
                 .codelist
                 .as_ref()

@@ -79,39 +79,53 @@ fn extensible_catalogue_does_not_replace_the_ordinary_allowed_values_check() {
     );
 }
 #[test]
-fn explicit_catalogue_does_not_open_other_submission_or_reserved_metadata_routes() {
+fn submission_claims_are_admitted_and_reserved_metadata_has_a_registered_cause() {
     for rows in [false, true] {
-        let doc = spec("SEX", "str", None, rows, None);
-        assert!(matches!(
-            PreparedSpecification::prepare(&doc),
-            Err(PrepareError::Unsupported(_))
-        ));
-        for extra in ["role", "metadata"] {
-            assert!(matches!(
-                PreparedSpecification::prepare_with_environment(
-                    &spec("SEX", "str", None, rows, Some(extra)),
-                    &environment(false)
-                ),
-                Err(PrepareError::Unsupported(_))
-            ));
-        }
+        assert!(PreparedSpecification::prepare(&spec("SEX", "str", None, rows, None)).is_ok());
+        assert!(PreparedSpecification::prepare_with_environment(
+            &spec("SEX", "str", None, rows, Some("role")),
+            &environment(false)
+        )
+        .is_ok());
+        let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare_with_environment(
+            &spec("SEX", "str", None, rows, Some("metadata")),
+            &environment(false),
+        ) else {
+            panic!("reserved column metadata")
+        };
+        let diagnostics = findings
+            .iter()
+            .map(|finding| finding.diagnostic())
+            .collect::<Vec<_>>();
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(
+            diagnostics[0].code,
+            yamaa_core::diagnostic::ConditionCode::SubmissionReservedMetadata
+        );
+        assert_eq!(
+            diagnostics[0].spec_paths,
+            ["columns.CODE.metadata.codelist"]
+        );
     }
 }
 #[test]
 fn root_metadata_rejects_the_governed_has_no_data_key() {
     let doc = spec("SEX", "str", None, false, Some("root_metadata"));
-    let Err(PrepareError::Unsupported(features)) =
+    let Err(PrepareError::Invalid(findings)) =
         PreparedSpecification::prepare_with_environment(&doc, &environment(false))
     else {
         panic!("root metadata.has_no_data must be rejected");
     };
+    let diagnostics = findings
+        .iter()
+        .map(|finding| finding.diagnostic())
+        .collect::<Vec<_>>();
+    assert_eq!(diagnostics.len(), 1);
     assert_eq!(
-        features
-            .iter()
-            .map(|feature| (feature.operation.as_str(), feature.path.as_str()))
-            .collect::<Vec<_>>(),
-        [("reserved_metadata_key", "metadata.has_no_data")],
+        diagnostics[0].code,
+        yamaa_core::diagnostic::ConditionCode::SubmissionReservedMetadata
     );
+    assert_eq!(diagnostics[0].spec_paths, ["metadata.has_no_data"]);
 }
 #[test]
 fn compiler_terminology_quota_refuses_the_entire_environment_plan() {

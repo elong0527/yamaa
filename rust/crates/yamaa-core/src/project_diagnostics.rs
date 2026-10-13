@@ -51,6 +51,8 @@ pub enum Fact<'a> {
     Boolean(bool),
     Integer(i64),
     Unsigned(usize),
+    /// A sealed canonical integer bound, kept exact beyond the machine range.
+    Bound(&'a crate::dataset::RowCountBound),
     Null,
     Sequence(Vec<Fact<'a>>),
     Object(Context<'a>),

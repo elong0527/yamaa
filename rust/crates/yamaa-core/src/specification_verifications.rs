@@ -140,6 +140,23 @@ fn operation(d: &Document, id: usize) -> Result<(&str, usize), PrepareError> {
     Ok((text(d, name)?, payload))
 }
 impl Verifications {
+    pub(super) fn append_metadata(&mut self, verification: Verification) {
+        // Ordinary explicit/implicit column checks precede terminology hooks.
+        let index = self
+            .checks
+            .iter()
+            .position(|verification| {
+                matches!(
+                    verification.check,
+                    crate::dataset::Check::Codelist { .. }
+                        | crate::dataset::Check::ValueCodelists { .. }
+                        | crate::dataset::Check::Inventory { .. }
+                )
+            })
+            .unwrap_or(self.checks.len());
+        self.checks.insert(index, verification);
+        self.identities.insert(index, None);
+    }
     pub(super) fn append_codelist(&mut self, verification: Verification) {
         self.checks.push(verification);
         self.identities.push(None);

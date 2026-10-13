@@ -22,6 +22,9 @@ pub(crate) fn fact(value: Fact<'_>) -> Json {
         Fact::Boolean(value) => json!(value),
         Fact::Integer(value) => json!(value),
         Fact::Unsigned(value) => json!(value),
+        Fact::Bound(value) => {
+            Json::Number(value.decimal().parse().expect("sealed canonical integer"))
+        }
         Fact::Null => Json::Null,
         Fact::Sequence(values) => Json::Array(values.into_iter().map(fact).collect()),
         Fact::Object(values) => Json::Object(

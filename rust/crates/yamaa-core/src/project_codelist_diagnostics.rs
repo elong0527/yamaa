@@ -32,6 +32,7 @@ pub struct CheckObservation<'a, R> {
     pub output_rows: usize,
     pub offending_rows: &'a [R],
     pub codelist: Option<CodelistObservation<'a>>,
+    pub inventory: Option<&'a [Value]>,
 }
 struct Budget(usize);
 impl Budget {
@@ -78,15 +79,17 @@ pub fn diagnostics<'a, R: RowObservation>(
         budget.text(record.path)?;
         let check = compiled.column_check(record.path);
         let Some(observation) = record.codelist else {
-            if matches!(check, Some(Check::Codelist { .. }))
-                || record.code == ConditionCode::VerificationCodelistFailed
+            if matches!(
+                check,
+                Some(Check::Codelist { .. } | Check::ValueCodelists { .. })
+            ) || record.code == ConditionCode::VerificationCodelistFailed
             {
                 return Err(Error::InvalidObservation);
             }
             continue;
         };
         budget.text(observation.id)?;
-        let Some(Check::Codelist { id, .. }) = check else {
+        let Some((id, _)) = check.and_then(|check| check.codelist(observation.id)) else {
             return Err(Error::InvalidObservation);
         };
         if record.offending_rows.len() > 65_536 || observation.values.len() > 65_536 {
@@ -98,7 +101,7 @@ pub fn diagnostics<'a, R: RowObservation>(
             || record.failed_count != record.offending_rows.len()
             || record.failed_count > record.evaluated_count
             || record.failed_count > record.output_rows
-            || !paths.insert(record.path)
+            || !paths.insert((record.path, observation.id))
         {
             return Err(Error::InvalidObservation);
         }
@@ -141,7 +144,10 @@ pub fn diagnostics<'a, R: RowObservation>(
         let column = compiled
             .verification_target(record.path)
             .ok_or(Error::InvalidObservation)?;
-        let Some(Check::Codelist { id, .. }) = compiled.column_check(record.path) else {
+        let Some((id, _)) = compiled
+            .column_check(record.path)
+            .and_then(|check| check.codelist(observation.id))
+        else {
             return Err(Error::Projection);
         };
         let keys = record

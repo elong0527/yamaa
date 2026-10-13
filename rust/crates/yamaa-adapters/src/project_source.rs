@@ -30,17 +30,34 @@ pub struct OwnedEnvironment {
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
     environment: yamaa_core::project_environment::ExecutionEnvironment,
+    inventory_documents: Vec<crate::specification_source::PreparedDocument>,
+    inventory_captured: bool,
 }
 /// Captured origins and exact bytes move separately from the engine's execution
 /// capability. This contains no replacement definitions or activation state.
 #[derive(Debug)]
 pub struct CapturedEnvironment {
+    inventory_documents: Vec<crate::specification_source::PreparedDocument>,
+    inventory_captured: bool,
     origins: SourceOrigins,
     root: CapturedDocument,
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
 }
 impl CapturedEnvironment {
+    pub fn inventory_documents(&self) -> &[crate::specification_source::PreparedDocument] {
+        &self.inventory_documents
+    }
+    pub(crate) fn inventory_captured(&self) -> bool {
+        self.inventory_captured
+    }
+    pub(crate) fn attach_inventory(
+        &mut self,
+        documents: Vec<crate::specification_source::PreparedDocument>,
+    ) {
+        self.inventory_documents = documents;
+        self.inventory_captured = true;
+    }
     pub fn origins(&self) -> &SourceOrigins {
         &self.origins
     }
@@ -62,10 +79,25 @@ impl PreparedEnvironment {
             captures: self.captures,
             lock: self.lock,
             environment: self.environment.into_execution(),
+            inventory_documents: Vec::new(),
+            inventory_captured: false,
         }
     }
 }
 impl OwnedEnvironment {
+    pub(crate) fn inventory_captured(&self) -> bool {
+        self.inventory_captured
+    }
+    pub(crate) fn attach_inventory(
+        &mut self,
+        captured: yamaa_engine::submission_inventory::Captured<
+            crate::specification_source::PreparedDocument,
+        >,
+    ) {
+        self.environment.attach_inventory(captured.inventory);
+        self.inventory_documents = captured.specifications;
+        self.inventory_captured = true;
+    }
     /// Transfer both checked metadata and provenance without copying or reading.
     pub fn into_parts(
         self,
@@ -76,6 +108,8 @@ impl OwnedEnvironment {
         (
             self.environment,
             CapturedEnvironment {
+                inventory_documents: self.inventory_documents,
+                inventory_captured: self.inventory_captured,
                 origins: self.origins,
                 root: self.root,
                 captures: self.captures,

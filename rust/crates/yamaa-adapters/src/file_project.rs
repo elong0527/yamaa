@@ -99,12 +99,20 @@ impl FileProject {
         specification_schema: Arc<CapturedSchema>,
         environment_schema: Arc<CapturedSchema>,
     ) -> Result<Self, Error> {
-        let environment =
+        let mut environment =
             capture_environment(&mut resources, environment, host, environment_schema)?;
         let document = file_preparation::prepare_document(
             &mut resources,
             specification,
-            Some(specification_schema),
+            Some(Arc::clone(&specification_schema)),
+        )
+        .map_err(Error::Document)?;
+        crate::file_inventory::prepare(
+            &mut resources,
+            &specification_schema,
+            &mut environment,
+            yamaa_core::submission_inventory::requested(document.model().document()),
+            &document.source().identity,
         )
         .map_err(Error::Document)?;
         let run = PreparedRun::prepare(document, environment).map_err(Error::Compile)?;

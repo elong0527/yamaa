@@ -168,6 +168,7 @@ pub struct CheckRecord {
     pub offending_rows: Vec<RowIdentity>,
     /// Full offending values survive discarded output, under identity quotas.
     pub codelist: Option<CodelistObservation>,
+    pub inventory: Option<Vec<Value>>,
 }
 
 impl CheckRecord {
@@ -1380,6 +1381,8 @@ impl Executor<'_> {
                     failed_count: missing.len(),
                     output_rows: dataset.rows.len(),
                     codelist: None,
+                    inventory: None,
+
                     offending_rows: identities(&dataset, self.plan.keys(), missing, &mut budget)?,
                 });
             }
@@ -1405,6 +1408,8 @@ impl Executor<'_> {
                 failed_count: duplicates.len(),
                 output_rows: dataset.rows.len(),
                 codelist: None,
+                inventory: None,
+
                 offending_rows: identities(&dataset, self.plan.keys(), duplicates, &mut budget)?,
             });
         }
@@ -1417,8 +1422,12 @@ impl Executor<'_> {
                 Check::NotMissing
                 | Check::AllowedValues(_)
                 | Check::Codelist { .. }
+                | Check::ValueCodelists { .. }
+                | Check::Inventory { .. }
+                | Check::ValueMaxLength { .. }
                 | Check::Range { .. }
                 | Check::MaxLength(_)
+                | Check::WideMaxLength(_)
                 | Check::Matches(_) => unreachable!("column-only check is rejected at admission"),
                 Check::InvalidDiagnostic(diagnostic) => {
                     return Err(Box::new(ExecutionError::VerificationDiagnostic {
@@ -1469,6 +1478,8 @@ impl Executor<'_> {
                         failed_count: repeated.len(),
                         output_rows: dataset.rows.len(),
                         codelist: None,
+                        inventory: None,
+
                         offending_rows: identities(
                             &dataset,
                             self.plan.keys(),
@@ -1497,6 +1508,8 @@ impl Executor<'_> {
                         failed_count: offending_rows.len(),
                         output_rows: dataset.rows.len(),
                         codelist: None,
+                        inventory: None,
+
                         offending_rows,
                     }
                 }
@@ -1513,6 +1526,8 @@ impl Executor<'_> {
                         failed_count: usize::from(failed),
                         output_rows: dataset.rows.len(),
                         codelist: None,
+                        inventory: None,
+
                         offending_rows: Vec::new(),
                     }
                 }
@@ -1554,6 +1569,15 @@ impl Executor<'_> {
                 .iter()
                 .find(|group| group.column == *next)
             {
+                // A value-level binding reads the final discriminator. A later
+                // discriminator delays the declared check prefix until its value
+                // is complete; it never silently selects from a partial row.
+                if group.checks.iter().any(|verification| {
+                    matches!(&verification.check, Check::ValueCodelists { discriminator, .. }
+                        if !completed[*discriminator]) || matches!(&verification.check, Check::Inventory { scope: Some(scope), .. } if !completed[scope.discriminator]) || matches!(&verification.check, Check::ValueMaxLength { discriminator, .. } if !completed[*discriminator])
+                }) {
+                    return Ok(());
+                }
                 let start = records.len();
                 for verification in &group.checks {
                     match &verification.check {
@@ -1574,48 +1598,197 @@ impl Executor<'_> {
                         Check::NotMissing
                         | Check::AllowedValues(_)
                         | Check::Codelist { .. }
+                        | Check::ValueCodelists { .. }
+                        | Check::Inventory { .. }
+                        | Check::ValueMaxLength { .. }
                         | Check::Range { .. }
                         | Check::MaxLength(_)
+                        | Check::WideMaxLength(_)
                         | Check::Matches(_) => {
-                            let width = match &verification.check {
-                                Check::AllowedValues(accepted) => accepted.len(),
-                                Check::Codelist { values, .. } => values.len().max(1),
-                                Check::Range { .. } => 2,
-                                _ => 1,
+                            let bindings = match &verification.check {
+                                Check::ValueCodelists { bindings, .. } => {
+                                    bindings.iter().map(Some).collect::<Vec<_>>()
+                                }
+                                _ => vec![None],
                             };
-                            budget.work(candidates.len(), width)?;
-                            if matches!(verification.check, Check::MaxLength(_)) {
-                                for row in candidates {
-                                    if let Value::Str(text) = &row.values[group.column] {
-                                        budget.scalar_text(text.len())?;
+                            for binding in bindings {
+                                if let (Check::ValueCodelists { overrides, .. }, Some(binding)) =
+                                    (&verification.check, binding)
+                                {
+                                    let width = overrides
+                                        .iter()
+                                        .chain(&binding.codes)
+                                        .try_fold(1usize, |width, code| {
+                                            width.checked_add(code.len().max(1))
+                                        })
+                                        .ok_or_else(|| {
+                                            Box::new(ExecutionError::Limit {
+                                                resource: Resource::WorkCells,
+                                                limit: budget.work_cell_limit(),
+                                                required: None,
+                                            })
+                                        })?;
+                                    budget.work(candidates.len(), width)?;
+                                }
+                                if let Check::Inventory {
+                                    scope: Some(scope), ..
+                                } = &verification.check
+                                {
+                                    let width = scope
+                                        .overrides
+                                        .iter()
+                                        .try_fold(1usize, |width, (code, _)| {
+                                            width.checked_add(code.len().max(1))
+                                        })
+                                        .ok_or_else(|| {
+                                            Box::new(ExecutionError::Limit {
+                                                resource: Resource::WorkCells,
+                                                limit: budget.work_cell_limit(),
+                                                required: None,
+                                            })
+                                        })?;
+                                    budget.work(candidates.len(), width)?;
+                                }
+                                if let Check::ValueMaxLength { codes, .. } = &verification.check {
+                                    let width = codes
+                                        .iter()
+                                        .try_fold(1usize, |width, code| {
+                                            width.checked_add(code.len().max(1))
+                                        })
+                                        .ok_or_else(|| {
+                                            Box::new(ExecutionError::Limit {
+                                                resource: Resource::WorkCells,
+                                                limit: budget.work_cell_limit(),
+                                                required: None,
+                                            })
+                                        })?;
+                                    budget.work(candidates.len(), width)?;
+                                }
+                                let positions = candidates
+                                    .iter()
+                                    .enumerate()
+                                    .filter_map(|(index, candidate)| {
+                                        let selected = match (&verification.check, binding) {
+                                            (
+                                                Check::ValueCodelists {
+                                                    discriminator,
+                                                    overrides,
+                                                    ..
+                                                },
+                                                Some(binding),
+                                            ) => {
+                                                let code = match &candidate.values[*discriminator] {
+                                                    Value::Str(code) => Some(code.as_str()),
+                                                    _ => None,
+                                                };
+                                                code.is_some_and(|code| {
+                                                    binding.codes.iter().any(|c| c == code)
+                                                }) || binding.default
+                                                    && !code.is_some_and(|code| {
+                                                        overrides.iter().any(|c| c == code)
+                                                    })
+                                            }
+                                            (
+                                                Check::Inventory {
+                                                    scope: Some(scope), ..
+                                                },
+                                                _,
+                                            ) => match &candidate.values[scope.discriminator] {
+                                                Value::Str(code) => scope
+                                                    .overrides
+                                                    .iter()
+                                                    .find(|(value, _)| value == code)
+                                                    .map_or(scope.default, |(_, enabled)| *enabled),
+                                                _ => scope.default,
+                                            },
+                                            (Check::ValueMaxLength { discriminator, codes, include, .. }, _) => {
+                                                let matches = matches!(&candidate.values[*discriminator], Value::Str(code) if codes.contains(code));
+                                                matches == *include
+                                            },
+                                            _ => true,
+                                        };
+                                        selected.then_some(index)
+                                    })
+                                    .collect::<Vec<_>>();
+                                let width = if let Some(binding) = binding {
+                                    binding.values.len().max(1)
+                                } else {
+                                    match &verification.check {
+                                        Check::AllowedValues(accepted)
+                                        | Check::Inventory {
+                                            values: accepted, ..
+                                        } => accepted.len().max(1),
+                                        Check::Codelist { values, .. } => values.len().max(1),
+                                        Check::Range { .. } => 2,
+                                        Check::WideMaxLength(bound)
+                                        | Check::ValueMaxLength { max: bound, .. } => {
+                                            bound.decimal().len().min(usize::BITS as usize).max(1)
+                                        }
+                                        _ => 1,
+                                    }
+                                };
+                                budget.work(candidates.len(), width)?;
+                                if matches!(
+                                    verification.check,
+                                    Check::MaxLength(_)
+                                        | Check::WideMaxLength(_)
+                                        | Check::ValueMaxLength { .. }
+                                ) {
+                                    for row in candidates {
+                                        if let Value::Str(text) = &row.values[group.column] {
+                                            budget.scalar_text(text.len())?;
+                                        }
                                     }
                                 }
-                            }
-                            let values = candidates.iter().map(|row| &row.values[group.column]);
-                            let offending = if let Check::Matches(pattern) = &verification.check {
-                                yamaa_core::dataset_checks::matches_offenders(
-                                    pattern,
-                                    values,
-                                    Default::default(),
-                                    budget.predicate(),
-                                )
-                                .map_err(|error| Box::new(predicate_limit(error)))?
-                            } else {
-                                yamaa_core::dataset_checks::column_offenders(
-                                    &verification.check,
-                                    values,
-                                )
-                            };
-                            let code = yamaa_core::dataset_checks::column_code(&verification.check)
-                                .expect("admitted column check");
-                            let codelist =
-                                if let Check::Codelist { id, .. } = &verification.check {
+                                let values = positions
+                                    .iter()
+                                    .map(|&position| &candidates[position].values[group.column]);
+                                let offending = if let Some(binding) = binding {
+                                    values
+                                        .enumerate()
+                                        .filter_map(|(position, value)| {
+                                            (!yamaa_core::dataset_checks::codelist_accepts(
+                                                &binding.values,
+                                                value,
+                                            ))
+                                            .then_some(position)
+                                        })
+                                        .collect()
+                                } else if let Check::Matches(pattern) = &verification.check {
+                                    yamaa_core::dataset_checks::matches_offenders(
+                                        pattern,
+                                        values,
+                                        Default::default(),
+                                        budget.predicate(),
+                                    )
+                                    .map_err(|error| Box::new(predicate_limit(error)))?
+                                } else {
+                                    yamaa_core::dataset_checks::column_offenders(
+                                        &verification.check,
+                                        values,
+                                    )
+                                };
+                                let offending = offending
+                                    .into_iter()
+                                    .map(|index| positions[index])
+                                    .collect::<Vec<_>>();
+                                let code =
+                                    yamaa_core::dataset_checks::column_code(&verification.check)
+                                        .expect("admitted column check");
+                                let identifier = binding.map(|binding| binding.id.as_str()).or({
+                                    if let Check::Codelist { id, .. } = &verification.check {
+                                        Some(id.as_str())
+                                    } else {
+                                        None
+                                    }
+                                });
+                                let codelist = if let Some(id) = identifier {
                                     budget.scalar_text(id.len())?;
                                     budget.identity(offending.iter().map(|&position| {
                                         &candidates[position].values[group.column]
                                     }))?;
                                     Some(CodelistObservation {
-                                        id: id.clone(),
+                                        id: id.into(),
                                         values: offending
                                             .iter()
                                             .map(|&position| {
@@ -1626,27 +1799,47 @@ impl Executor<'_> {
                                 } else {
                                     None
                                 };
-                            let mut offending_rows = Vec::new();
-                            for position in offending {
-                                offending_rows.push(
-                                    failure_identity(
-                                        &candidates[position],
-                                        self.plan.keys(),
-                                        position,
-                                        budget,
-                                    )?
-                                    .expect("all keys are complete before column checks"),
-                                );
+                                let inventory =
+                                    if matches!(verification.check, Check::Inventory { .. }) {
+                                        budget.identity(offending.iter().map(|&position| {
+                                            &candidates[position].values[group.column]
+                                        }))?;
+                                        Some(
+                                            offending
+                                                .iter()
+                                                .map(|&position| {
+                                                    candidates[position].values[group.column]
+                                                        .clone()
+                                                })
+                                                .collect(),
+                                        )
+                                    } else {
+                                        None
+                                    };
+                                let mut offending_rows = Vec::new();
+                                for position in offending {
+                                    offending_rows.push(
+                                        failure_identity(
+                                            &candidates[position],
+                                            self.plan.keys(),
+                                            position,
+                                            budget,
+                                        )?
+                                        .expect("all keys are complete before column checks"),
+                                    );
+                                }
+                                records.push(CheckRecord {
+                                    path: verification.path.clone(),
+                                    code,
+                                    evaluated_count: positions.len(),
+                                    failed_count: offending_rows.len(),
+                                    output_rows: candidates.len(),
+                                    codelist,
+                                    inventory,
+
+                                    offending_rows,
+                                });
                             }
-                            records.push(CheckRecord {
-                                path: verification.path.clone(),
-                                code,
-                                evaluated_count: candidates.len(),
-                                failed_count: offending_rows.len(),
-                                output_rows: candidates.len(),
-                                codelist,
-                                offending_rows,
-                            });
                         }
                         _ => unreachable!("column check vocabulary is admitted in core"),
                     }

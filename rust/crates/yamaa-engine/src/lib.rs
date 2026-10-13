@@ -66,3 +66,5 @@ pub mod project_codelist_diagnostics;
 pub mod verification_diagnostics;
 
 pub mod define;
+
+pub mod submission_inventory;

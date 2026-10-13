@@ -74,7 +74,7 @@ writeLines(c(readtext(env), "codelists:", "  - codelists:", "      - id: IDENTIF
 invisible(file.copy(file.path(root, name, "r/renv.lock"), lock, overwrite = TRUE))
 invisible(file.copy(file.path(root, name, "input"), case, recursive = TRUE))
 text <- readtext(file.path(root, name, "spec.yaml"))
-text <- sub("label: Identifier", "label: Identifier\n    submission: {codelist: IDENTIFIERS}", text, fixed = TRUE)
+text <- sub("label: Identifier", "label: Identifier\n    submission: {codelist: IDENTIFIERS, origin: {type: Assigned}}", text, fixed = TRUE)
 text <- sub("args: {}", "args: {x: SOURCE.VALUE}", text, fixed = TRUE)
 writeLines(text, "spec.yaml")
 stopifnot(nrow(yamaa_check("spec.yaml", environment = env)$issues) == 0L)
@@ -283,7 +283,7 @@ for (name in c("entry", "environment", "terminology", "outputs")) dir.create(nam
 writeLines("[ignored configuration", "yamaa-project.yaml")
 writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
   "input: {SRC: {path: data.csv, types: {ID: str}}}",
-  "columns: [{name: ID, type: str, derivation: SRC.ID, submission: {codelist: IDENTIFIERS}}]",
+  "columns: [{name: ID, type: str, derivation: SRC.ID, submission: {codelist: IDENTIFIERS, origin: {type: Assigned}}}]",
   "output: {path: ../outputs/ids.csv, columns: [ID]}"), "entry/spec.yaml")
 writeLines(c("ID", "01"), "entry/data.csv")
 terminology <- "codelists: [{id: IDENTIFIERS, name: Identifiers, items: [{value: '01'}]}]"

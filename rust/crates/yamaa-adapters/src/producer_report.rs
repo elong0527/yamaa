@@ -88,6 +88,14 @@ fn records(
                 }
             }
         }
+        if let Some(values) = &record.inventory {
+            budget.entries(values.len())?;
+            for value in values {
+                for _ in 0..8 {
+                    budget.scalar(value)?;
+                }
+            }
+        }
         if let Some(codelist) = &record.codelist {
             budget.text(&codelist.id)?;
             budget.entries(codelist.values.len())?;

@@ -47,7 +47,10 @@ pub fn spec(
     rows: bool,
     extra: Option<&str>,
 ) -> SpecificationDocument {
-    let mut submission = vec![("codelist", t(identifier))];
+    let mut submission = vec![
+        ("codelist", t(identifier)),
+        ("origin", m(vec![("type", t("Assigned"))])),
+    ];
     if extra == Some("role") {
         submission.push(("role", t("Result")));
     }

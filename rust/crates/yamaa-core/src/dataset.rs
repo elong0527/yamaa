@@ -309,12 +309,32 @@ pub enum Check {
         id: String,
         values: Vec<Value>,
     },
+    /// Several inherited/value-level bindings share one declaration path.
+    /// Selection uses the completed discriminator, never a donor row or template.
+    ValueCodelists {
+        discriminator: usize,
+        overrides: Vec<String>,
+        bindings: Vec<ValueCodelist>,
+    },
+    Inventory {
+        values: Vec<Value>,
+        scope: Option<InventoryScope>,
+    },
+    /// Effective per-value metadata length, selected by its completed owner.
+    ValueMaxLength {
+        max: RowCountBound,
+        discriminator: usize,
+        codes: Vec<String>,
+        include: bool,
+    },
     Range {
         min: Option<Value>,
         max: Option<Value>,
     },
     /// Unicode scalar count, rather than encoded bytes or grapheme clusters.
     MaxLength(usize),
+    /// An exact authored maximum that is wider than the machine count.
+    WideMaxLength(RowCountBound),
     /// Search the portable pattern as written over each present string.
     Matches(crate::regex::Pattern),
     /// A core-owned declaration finding deferred until dataset verification.
@@ -345,7 +365,32 @@ pub enum Check {
     },
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct InventoryScope {
+    pub discriminator: usize,
+    pub default: bool,
+    pub overrides: Vec<(String, bool)>,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct ValueCodelist {
+    pub id: String,
+    pub values: Vec<Value>,
+    pub codes: Vec<String>,
+    pub default: bool,
+}
+
 impl Check {
+    /// Resolve a retained terminology observation against its admitted binding.
+    pub fn codelist(&self, identifier: &str) -> Option<(&str, &[Value])> {
+        match self {
+            Self::Codelist { id, values } if id == identifier => Some((id, values)),
+            Self::ValueCodelists { bindings, .. } => bindings
+                .iter()
+                .find(|binding| binding.id == identifier)
+                .map(|binding| (binding.id.as_str(), binding.values.as_slice())),
+            _ => None,
+        }
+    }
     /// Shared mathematical count comparison for legacy probes and specifications.
     pub fn row_count_accepts(&self, count: usize) -> Option<bool> {
         use core::cmp::Ordering;
@@ -1271,8 +1316,12 @@ impl DatasetPlan {
                 Check::NotMissing
                 | Check::AllowedValues(_)
                 | Check::Codelist { .. }
+                | Check::ValueCodelists { .. }
+                | Check::Inventory { .. }
+                | Check::ValueMaxLength { .. }
                 | Check::Range { .. }
                 | Check::MaxLength(_)
+                | Check::WideMaxLength(_)
                 | Check::Matches(_) => return Err(PlanError::InvalidColumns),
                 Check::InvalidDiagnostic(_) => {}
                 Check::InvalidDeclaration { .. } => {}
@@ -1411,8 +1460,12 @@ impl DatasetPlan {
                     Check::NotMissing
                         | Check::AllowedValues(_)
                         | Check::Codelist { .. }
+                        | Check::ValueCodelists { .. }
+                        | Check::Inventory { .. }
+                        | Check::ValueMaxLength { .. }
                         | Check::Range { .. }
                         | Check::MaxLength(_)
+                        | Check::WideMaxLength(_)
                         | Check::Matches(_)
                         | Check::InvalidDeclaration { .. }
                         | Check::InvalidDiagnostic(_)
@@ -1423,6 +1476,80 @@ impl DatasetPlan {
                     &verification.check,
                     self.output.columns()[group.column].kind,
                 )?;
+                if let Check::ValueMaxLength {
+                    discriminator,
+                    codes,
+                    ..
+                } = &verification.check
+                {
+                    if self
+                        .output
+                        .columns()
+                        .get(*discriminator)
+                        .is_none_or(|column| column.kind != crate::value::ColumnType::Str)
+                        || codes.is_empty()
+                        || codes
+                            .iter()
+                            .enumerate()
+                            .any(|(index, code)| codes[..index].contains(code))
+                    {
+                        return Err(PlanError::InvalidColumns);
+                    }
+                }
+                if let Check::Inventory {
+                    scope: Some(scope), ..
+                } = &verification.check
+                {
+                    if self
+                        .output
+                        .columns()
+                        .get(scope.discriminator)
+                        .is_none_or(|column| column.kind != crate::value::ColumnType::Str)
+                        || scope
+                            .overrides
+                            .iter()
+                            .enumerate()
+                            .any(|(index, (code, _))| {
+                                scope.overrides[..index]
+                                    .iter()
+                                    .any(|(prior, _)| prior == code)
+                            })
+                    {
+                        return Err(PlanError::InvalidColumns);
+                    }
+                }
+                if let Check::ValueCodelists {
+                    discriminator,
+                    overrides,
+                    bindings,
+                } = &verification.check
+                {
+                    if self
+                        .output
+                        .columns()
+                        .get(*discriminator)
+                        .is_none_or(|column| column.kind != crate::value::ColumnType::Str)
+                        || overrides.is_empty()
+                        || overrides
+                            .iter()
+                            .enumerate()
+                            .any(|(index, code)| overrides[..index].contains(code))
+                        || bindings.iter().filter(|binding| binding.default).count() > 1
+                        || bindings.iter().enumerate().any(|(index, binding)| {
+                            binding.codes.iter().enumerate().any(|(code_index, code)| {
+                                binding.codes[..code_index].contains(code)
+                                    || bindings[..index]
+                                        .iter()
+                                        .any(|prior| prior.codes.contains(code))
+                            })
+                        })
+                        || bindings.iter().any(|binding| {
+                            binding.codes.iter().any(|code| !overrides.contains(code))
+                        })
+                    {
+                        return Err(PlanError::InvalidColumns);
+                    }
+                }
             }
         }
         self.column_verifications = groups;

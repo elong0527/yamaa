@@ -38,6 +38,7 @@ fn record<'a>(rows: &'a [Row], values: &'a [Value]) -> CheckObservation<'a, Row>
         output_rows: 2,
         offending_rows: rows,
         codelist: Some(CodelistObservation { id: "SEX", values }),
+        inventory: None,
     }
 }
 #[test]

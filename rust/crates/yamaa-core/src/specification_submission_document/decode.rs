@@ -147,32 +147,9 @@ impl Budget {
         Ok(())
     }
 }
-const DATASET: &[F] = &[
-    F::HasNoData,
-    F::Label,
-    F::Class,
-    F::Subclass,
-    F::Structure,
-    F::Repeating,
-    F::ReferenceData,
-    F::Domain,
-    F::Comment,
-];
+const DATASET: &[F] = DATASET_METADATA_FIELDS;
 const COLUMN: &[F] = &[F::Name, F::Type, F::Label, F::Submission];
-const SUBMISSION: &[F] = &[
-    F::Core,
-    F::Mandatory,
-    F::Role,
-    F::DataType,
-    F::Length,
-    F::SignificantDigits,
-    F::DisplayFormat,
-    F::Codelist,
-    F::InventoryVocabulary,
-    F::Origin,
-    F::Method,
-    F::Comment,
-];
+const SUBMISSION: &[F] = COLUMN_METADATA_FIELDS;
 const ORIGIN: &[F] = &[F::Type, F::Source, F::Description, F::Documents];
 const METHOD: &[F] = &[
     F::Name,

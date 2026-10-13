@@ -189,6 +189,15 @@ impl Resources {
     /// Environment and graph metadata may continue one already admitted scope.
     /// Its policy and spent capacities remain fixed; a second stage cannot
     /// replace the limits or reset work charged by earlier captures and aliases.
+    /// Preserve an active caller policy; establish a default scope only when a
+    /// direct metadata use case has not already admitted one.
+    pub(crate) fn ensure_metadata_scope(&mut self, limits: MetadataLimits) -> Result<(), Error> {
+        if self.metadata.is_some() {
+            Ok(())
+        } else {
+            self.admit_metadata_budget(limits)
+        }
+    }
     pub(crate) fn ensure_metadata_budget(&mut self, limits: MetadataLimits) -> Result<(), Error> {
         match &self.metadata {
             Some(budget) if budget.limits == limits => Ok(()),
