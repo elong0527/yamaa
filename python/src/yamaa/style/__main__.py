@@ -14,12 +14,13 @@ from pathlib import Path
 import yaml
 
 from yamaa.style import (
-    FINDINGS,
-    check_file,
-    discover_schema_root,
-    field_orders,
-    fix_file,
-    specification_files,
+    _FINDINGS as FINDINGS,
+)
+from yamaa.style import (
+    _check_file,
+    _field_orders,
+    _fix_file,
+    _specification_files,
 )
 
 
@@ -40,11 +41,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--select", help="comma-separated findings to report")
     parser.add_argument("--ignore", help="comma-separated findings to skip")
-    parser.add_argument(
-        "--schema-root",
-        type=Path,
-        help="schema bundle directory (default: the one the engine finds)",
-    )
     arguments = parser.parse_args(argv)
 
     select = _names(arguments.select)
@@ -54,14 +50,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(f"unknown style finding: {', '.join(unknown)}")
     chosen = (select if select is not None else set(FINDINGS)) - ignore
 
-    try:
-        root = arguments.schema_root or discover_schema_root(arguments.paths[0])
-        orders = field_orders(root)
-    except (OSError, ValueError) as error:
-        print(f"error: {error}", file=sys.stderr)
-        return 2
-
-    files = specification_files(arguments.paths, orders["root_class"])
+    orders = _field_orders()
+    files = _specification_files(arguments.paths, orders["root_class"])
     failed = False
     remaining = 0
     affected = 0
@@ -69,10 +59,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     for path in files:
         try:
             if arguments.fix:
-                changed, findings = fix_file(path, select=chosen, orders=orders)
+                changed, findings = _fix_file(path, select=chosen, orders=orders)
                 fixed += changed
             else:
-                findings = check_file(path, select=chosen, orders=orders)
+                findings = _check_file(path, select=chosen, orders=orders)
         except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
             reason = str(error).splitlines()[0] if str(error) else type(error).__name__
             print(f"{path}: cannot read specification: {reason}", file=sys.stderr)

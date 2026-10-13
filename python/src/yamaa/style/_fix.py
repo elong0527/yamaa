@@ -15,8 +15,7 @@ from dataclasses import dataclass
 
 import yaml
 
-from yamaa.specification._yaml import read_yaml_bytes
-from yamaa.specification.diagnostics import SpecificationError
+from yamaa._native import _style_same_value
 from yamaa.style._checks import (
     LINE_WIDTH,
     Departure,
@@ -33,23 +32,12 @@ from yamaa.style._document import Document, last_line, parse, walk
 # little room, so the wrapped list steps in from its key instead.
 _ALIGN_LIMIT = 40
 _MAX_EDITS = 1000
-_PROOF_SOURCE = "<style fix>"
 
 
 @dataclass(frozen=True, slots=True)
 class _Edit:
     key: tuple[str, ...]
     apply: Callable[[], str | None]
-
-
-def _typed(value: object) -> object:
-    """A comparable form that keeps `1`, `1.0`, and `true` apart."""
-    if isinstance(value, dict):
-        members = [(_typed(key), _typed(item)) for key, item in value.items()]
-        return ("map", tuple(sorted(members, key=repr)))
-    if isinstance(value, list):
-        return ("seq", tuple(_typed(item) for item in value))
-    return (type(value).__name__, value)
 
 
 def _comments(text: str) -> Counter[str]:
@@ -62,12 +50,9 @@ def proved(before: str, after: str) -> bool:
     Both texts go through the engine's own specification reader, so an edit
     is judged by exactly the value a run would read.
     """
-    try:
-        old = read_yaml_bytes(before.encode("utf-8"), _PROOF_SOURCE)
-        new = read_yaml_bytes(after.encode("utf-8"), _PROOF_SOURCE)
-    except SpecificationError:
-        return False
-    return _typed(old) == _typed(new) and _comments(before) == _comments(after)
+    return _style_same_value(before.encode("utf-8"), after.encode("utf-8")) and (
+        _comments(before) == _comments(after)
+    )
 
 
 def _join(lines: Sequence[str]) -> str:
