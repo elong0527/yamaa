@@ -1,0 +1,84 @@
+{
+  "multiplicity": {
+    "condition": "multiple_values_per_key",
+    "requirement": "REQ-0075"
+  },
+  "verification-all": {
+    "requirement": "REQ-0376"
+  },
+  "implementation-rejection": {
+    "condition": "engine_rejected"
+  },
+  "overflow-context": {
+    "phase": "derivation",
+    "condition": "integer_overflow",
+    "requirement": null,
+    "spec_paths": [
+      "columns.\u00e9\ud83d\ude42.derivation"
+    ],
+    "context": {
+      "minimum": -9223372036854775808,
+      "maximum": 9223372036854775807,
+      "values": [
+        null,
+        "\u00e9\ud83d\ude42",
+        true
+      ]
+    }
+  },
+  "unknown-input-field": {
+    "phase": "validation",
+    "condition": "unknown_field",
+    "requirement": "REQ-0103",
+    "spec_paths": [
+      "input.SRC"
+    ],
+    "context": {}
+  },
+  "producer-header": {
+    "phase": "validation",
+    "condition": "producer_contract_mismatch",
+    "requirement": "REQ-0535",
+    "spec_paths": [
+      "input.P.schema",
+      "input.P.path"
+    ],
+    "context": {
+      "dataset": "P",
+      "expected": [
+        "ID",
+        "VALUE"
+      ],
+      "actual": [
+        "VALUE",
+        "ID"
+      ],
+      "missing": [],
+      "extra": [],
+      "reordered": true
+    }
+  },
+  "publication": {
+    "requirement": "REQ-0764"
+  },
+  "yaml-byte": {
+    "condition": "non_ascii_source",
+    "spec_paths": [
+      "$"
+    ],
+    "context": {
+      "line": 1,
+      "column": 4
+    }
+  },
+  "yaml-surrogate": {
+    "condition": "invalid_text",
+    "spec_paths": [
+      "$.x"
+    ],
+    "context": {
+      "code_point": "U+D800",
+      "offset": 1
+    }
+  }
+}

@@ -314,7 +314,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install build tools
         run: |
-          python -m pip install uv==0.11.6
+          python -m pip install uv==0.11.6 py-yaml12==0.2.0
           if [ "${{ matrix.form }}" = source ]; then
             rustup toolchain install 1.90.0 --profile minimal
           fi
@@ -336,6 +336,8 @@ jobs:
         run: |
           echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
           uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/table-requirements.txt"
+      - name: Install the grammar fixture codec
+        run: python -m pip install py-yaml12==0.2.0
       - name: Stage installed checks outside checkout
         working-directory: ${{ runner.temp }}
         run: |
@@ -548,6 +550,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_define.R" public_define.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_contract.R" public_contract.R
           cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_grammar.R" public_grammar.R
+          cp "${GITHUB_WORKSPACE}/R/yamaa/tests/public_file_resources.R" public_file_resources.R
           YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/rust/tools/supplemental_inventory.py" \
             --root "${GITHUB_WORKSPACE}" --catalog "${GITHUB_WORKSPACE}/rust/qualification/supplemental.json" \
             --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
@@ -678,6 +681,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          python -m pip install uv==0.11.6
+          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/audit-requirements.txt"
+          python -m pip install --no-deps -r "${RUNNER_TEMP}/audit-requirements.txt"
           python rust/tools/audit_native_run.py --run-id "${GITHUB_RUN_ID}" \
             --repository "${GITHUB_REPOSITORY}" --output "${RUNNER_TEMP}/native-run-audit" --check
       - name: Show the evidence record

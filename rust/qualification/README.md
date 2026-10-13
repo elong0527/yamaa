@@ -51,6 +51,36 @@ historical assisted gaps, manifest, expected artifacts and broad inventory are
 retained unchanged; an assisted mismatch is never relabeled as a shared pass.
 
 
+## Complete public report comparisons
+
+The retained M1 cohort compares actual installed public owners with unchanged
+committed complete-report truth. `qualify_public_cohort.py` covers all twelve
+original cases, including source and derived tables, exact scalar observations,
+ordered nodes/diagnostics/verification/callback/resource ledgers and artifacts.
+`qualify_producer_cohort.py` retains each actual producer owner before Save and
+after two Saves, its source/artifact provenance, exact publication prefix and
+saved CSV/Parquet bytes. It compares complete observations with
+`producer-cohort/shared-producer-parquet/reference.json`; CSV bytes are exact
+and Parquet content is compared logically with an independent reader.
+
+The tools use a private report/comparison module under `rust/tools`. They import
+no yamaa package, reference evaluator or assisted qualification inventory.
+`complete-public-cohort/2` records two actual installed `shared_run` routes per
+case, Python and R. Each row separately identifies
+`committed-authored-report-truth` by its exact Git revision/path and retains
+the original truth bytes. Stored truth is never presented as a fresh
+`reference_run` or a newly installed package. The audit checks all case/host
+tuples, actual owner metadata, exact-source truth bytes, complete reports and
+producer held Save bytes again. Older v1 audit artifacts remain readable as
+historical evidence.
+
+Mutation controls in `test_committed_cohort.py` and `test_producer_cohort.py`
+reject missing fields, changed values/types/exact float bits, reordered or
+missing observations/logs/callbacks, wrong truth/source/path tuples, incomplete
+producer owners and corrupted saved artifacts. The authored fixture reports and
+benchmark expected outputs are unchanged. Local replay of prior evidence tests
+the comparator; renewed hosted qualification remains necessary for a new head.
+
 ## Corpus-wide public conformance
 
 `rust/tools/public_conformance.py` plans all benchmark entries from literal

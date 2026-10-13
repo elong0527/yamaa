@@ -1,5 +1,10 @@
 //! Lazy source eligibility and named record selection within one dataset attempt.
 use super::*;
+#[cfg(test)]
+#[path = "dataset_choice_cache_tests.rs"]
+mod cache_tests;
+#[path = "dataset_key_index.rs"]
+mod key_index;
 #[path = "dataset_match_values.rs"]
 pub(super) mod match_values;
 use alloc::{collections::BTreeMap, rc::Rc};
@@ -11,10 +16,24 @@ enum Choice {
     Absent,
 }
 
+fn choice_search_work<E>(entries: usize, bounded: bool) -> Result<usize, Box<ExecutionError<E>>> {
+    if bounded {
+        // The typed tuple's comparison can visit its identity tag, identity value
+        // and intermediate index. The tree itself admits no source value/text.
+        Ok(key_index::search_work(entries) * 3)
+    } else {
+        entries
+            .checked_add(1)
+            .ok_or_else(|| Box::new(ExecutionError::Capacity))
+    }
+}
+
 /// Fresh for every attempt, with no entries for unused intermediate declarations.
 #[derive(Default)]
 pub(super) struct Run {
     eligible: BTreeMap<usize, Vec<usize>>,
+    string_indexes: BTreeMap<usize, key_index::StringIndex>,
+    indexed_cells: usize,
     choices: BTreeMap<(SelectionIdentity, usize), Choice>,
     materialized: BTreeMap<(usize, Option<SelectionIdentity>), Rc<Dataset>>,
 }
@@ -562,18 +581,15 @@ fn read_with_observations<T: TableAccess + ?Sized>(
     if candidate.selection_identity == SelectionIdentity::Probe {
         return Err(Box::new(ExecutionError::SchemaMismatch));
     }
-    // A linear comparison bound admits tree lookups before inspecting retained keys.
+    let item = &plan.intermediates()[index];
+    // Materialized and expression contexts retain their existing admission
+    // until aggregate retained-schema/text bounds are separately qualified.
+    let bounded_choice = item.derivations.is_none() && !item.has_expression_keys();
     state.budget.work(
-        state
-            .intermediates
-            .choices
-            .len()
-            .checked_add(1)
-            .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
+        choice_search_work(state.intermediates.choices.len(), bounded_choice)?,
         1,
     )?;
     let cache_key = (candidate.selection_identity, index);
-    let item = &plan.intermediates()[index];
     let prepared = materialize(
         index,
         assignment,
@@ -678,82 +694,126 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                 .iter()
                 .any(|(_, value)| matches!(value, Value::Missing))
         {
-            // First count every matching record without reading order or donor fields.
-            let mut matching = Vec::new();
-            state.budget.work(eligible_len, 1)?;
-            matching
-                .try_reserve_exact(eligible_len)
-                .map_err(|_| Box::new(ExecutionError::Allocation))?;
-            for position in 0..eligible_len {
-                let source_row = state.intermediates.eligible[&index][position];
-                let mut matches = true;
-                for (column, expected) in &keys {
-                    let value = cell(table, item, source_row, *column, state.budget)?;
-                    if yamaa_core::value::compare_present_refs(value, ValueRef::from(expected))
-                        != Ok(core::cmp::Ordering::Equal)
-                    {
-                        matches = false;
-                        break;
-                    }
+            let mut scanned = Vec::new();
+            // Small relations retain their existing scan and observation profile;
+            // the index pays off only for repeated reads of a sizable relation.
+            let indexed_key = if eligible_len >= key_index::MINIMUM_ROWS
+                && item.keys.len() == 1
+                && !item.has_expression_keys()
+                && !item.source.is_self()
+                && item.range.is_none()
+                && item.derivations.is_none()
+                && item
+                    .filter
+                    .as_ref()
+                    .is_none_or(|filter| !filter.correlated())
+                && (state.intermediates.string_indexes.contains_key(&index)
+                    || state
+                        .intermediates
+                        .indexed_cells
+                        .checked_add(eligible_len)
+                        .is_some_and(|cells| cells <= state.budget.limits().key_cells))
+            {
+                match &keys[0].1 {
+                    Value::Str(key) => Some(key.as_str()),
+                    _ => None,
                 }
-                if matches {
-                    if let Some(filter) = item.filter.as_ref().filter(|filter| filter.correlated())
-                    {
-                        let owner = match &item.source {
-                            IntermediateSource::Input(index) => {
-                                relation_predicates::DonorOwner::Secondary(*index)
-                            }
-                            IntermediateSource::Primary { .. } => {
-                                relation_predicates::DonorOwner::Primary
-                            }
-                            IntermediateSource::SelfRows { .. } => {
-                                relation_predicates::DonorOwner::Completed
-                            }
-                        };
-                        if relation_predicates::evaluate(
-                            filter,
-                            relation_predicates::Donor {
-                                table,
-                                row: source_row,
-                                owner,
-                            },
-                            primary,
-                            candidate,
-                            plan,
-                            row,
-                            assignment,
-                            state,
-                        )? != yamaa_core::predicate::Truth::True
+            } else {
+                None
+            };
+            let matching = if let Some(key) = indexed_key {
+                if !state.intermediates.string_indexes.contains_key(&index) {
+                    let indexed = key_index::StringIndex::build(
+                        table,
+                        item,
+                        &state.intermediates.eligible[&index],
+                        keys[0].0,
+                        state.budget,
+                    )?;
+                    state.intermediates.indexed_cells += eligible_len;
+                    state.intermediates.string_indexes.insert(index, indexed);
+                }
+                state.intermediates.string_indexes[&index].matching(key, state.budget)?
+            } else {
+                // First count every matching record without reading order or donor fields.
+                let matching = &mut scanned;
+                state.budget.work(eligible_len, 1)?;
+                matching
+                    .try_reserve_exact(eligible_len)
+                    .map_err(|_| Box::new(ExecutionError::Allocation))?;
+                for position in 0..eligible_len {
+                    let source_row = state.intermediates.eligible[&index][position];
+                    let mut matches = true;
+                    for (column, expected) in &keys {
+                        let value = cell(table, item, source_row, *column, state.budget)?;
+                        if yamaa_core::value::compare_present_refs(value, ValueRef::from(expected))
+                            != Ok(core::cmp::Ordering::Equal)
                         {
-                            continue;
+                            matches = false;
+                            break;
                         }
                     }
-                    if let (Some(range), Some(value)) = (&item.range, &range_value) {
-                        state.budget.work(1, 2)?;
-                        let allowed = range
-                            .allows(ValueRef::from(value), |column| {
-                                cell(table, item, source_row, column, state.budget)
-                            })
-                            .map_err(|failure| match failure {
-                                RelationRangeFailure::Access(error) => error,
-                                RelationRangeFailure::Incomparable(types) => {
-                                    Box::new(ExecutionError::ScalarDiagnostic(
-                                        types.diagnostic(range.path(), &item.identifier),
-                                    ))
+                    if matches {
+                        if let Some(filter) =
+                            item.filter.as_ref().filter(|filter| filter.correlated())
+                        {
+                            let owner = match &item.source {
+                                IntermediateSource::Input(index) => {
+                                    relation_predicates::DonorOwner::Secondary(*index)
                                 }
-                            })?;
-                        if !allowed {
-                            continue;
+                                IntermediateSource::Primary { .. } => {
+                                    relation_predicates::DonorOwner::Primary
+                                }
+                                IntermediateSource::SelfRows { .. } => {
+                                    relation_predicates::DonorOwner::Completed
+                                }
+                            };
+                            if relation_predicates::evaluate(
+                                filter,
+                                relation_predicates::Donor {
+                                    table,
+                                    row: source_row,
+                                    owner,
+                                },
+                                primary,
+                                candidate,
+                                plan,
+                                row,
+                                assignment,
+                                state,
+                            )? != yamaa_core::predicate::Truth::True
+                            {
+                                continue;
+                            }
                         }
+                        if let (Some(range), Some(value)) = (&item.range, &range_value) {
+                            state.budget.work(1, 2)?;
+                            let allowed = range
+                                .allows(ValueRef::from(value), |column| {
+                                    cell(table, item, source_row, column, state.budget)
+                                })
+                                .map_err(|failure| match failure {
+                                    RelationRangeFailure::Access(error) => error,
+                                    RelationRangeFailure::Incomparable(types) => {
+                                        Box::new(ExecutionError::ScalarDiagnostic(
+                                            types.diagnostic(range.path(), &item.identifier),
+                                        ))
+                                    }
+                                })?;
+                            if !allowed {
+                                continue;
+                            }
+                        }
+                        matching.push(source_row);
                     }
-                    matching.push(source_row);
                 }
-            }
+                scanned.as_slice()
+            };
             count = matching.len();
             selected = matching.first().copied();
             if count > 1 {
                 if let Some(selection) = &item.selection {
-                    selected = Some(select(table, item, &matching, selection, state.budget)?);
+                    selected = Some(select(table, item, matching, selection, state.budget)?);
                 } else {
                     return Err(Box::new(ExecutionError::MultipleMatches {
                         path: item.path.clone(),
@@ -783,14 +843,14 @@ fn read_with_observations<T: TableAccess + ?Sized>(
             }));
         };
         state.budget.work(
-            state
-                .intermediates
-                .choices
-                .len()
-                .checked_add(1)
-                .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
+            choice_search_work(state.intermediates.choices.len(), bounded_choice)?,
             1,
         )?;
+        if bounded_choice {
+            // One fixed typed identity, item index and selected choice are retained.
+            // Existing entries and source key/value text are never copied here.
+            state.budget.work(1, 3)?;
+        }
         state.intermediates.choices.insert(cache_key, choice);
         choice
     };

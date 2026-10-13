@@ -14,6 +14,79 @@ use yamaa_adapters::{
 use yamaa_core::project_function::Language;
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
+#[test]
+fn unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry(
+) {
+    let study = Study::new();
+    let entry = study.path("root.yaml");
+    let environment = study.path("missing-environment.yaml");
+    for entry_bytes in [None, Some("[invalid entry that must not be read")] {
+        if let Some(bytes) = entry_bytes {
+            study.write("root.yaml", bytes);
+        }
+        let file_workflow::SelectionError::Preparation(Error::Environment(owner)) =
+            file_workflow::select(&entry, &environment, Language::Python)
+                .err()
+                .unwrap()
+        else {
+            panic!("original unavailable environment owner")
+        };
+        assert!(matches!(
+            owner.error(),
+            yamaa_adapters::file_project::Error::Resource(
+                yamaa_adapters::file_resources::Error::Missing
+            )
+        ));
+        assert_eq!(owner.capture_reads(), 0);
+        assert_eq!(owner.captured_sources().count(), 0);
+        let rejection = Error::Environment(owner);
+        let rows = producer_check::rejected(&rejection, Language::Python).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].condition, "project_environment_missing");
+        assert_eq!(rows[0].requirement.as_deref(), Some("REQ-0694"));
+        assert_eq!(rows[0].spec_paths, ["environment"]);
+        assert_eq!(
+            rows[0].context,
+            serde_json::json!({"cause":"missing", "path":environment}).to_string()
+        );
+        assert!(matches!(
+            producer_check::rejected_with_limit(&rejection, Language::Python, 1),
+            Err(producer_check::Error::Projection(_))
+        ));
+        let Error::Environment(owner) = &rejection else {
+            unreachable!()
+        };
+        assert_eq!(owner.capture_reads(), 0);
+        assert_eq!(owner.captured_sources().count(), 0);
+    }
+    fs::remove_file(study.0.join("root.yaml")).unwrap();
+    let environment = study.path("environment.yaml");
+    study.write(
+        "environment.yaml",
+        "schema_version: '1.0'\nlanguage: python\n",
+    );
+    let file_workflow::SelectionError::Preparation(Error::Graph(owner)) =
+        file_workflow::select(&entry, &environment, Language::Python)
+            .err()
+            .unwrap()
+    else {
+        panic!("valid environment precedes missing entry")
+    };
+    assert!(matches!(
+        owner.error(),
+        yamaa_adapters::file_graph::Error::Document(
+            yamaa_adapters::file_preparation::Error::Resource(
+                yamaa_adapters::file_resources::Error::Missing
+            )
+        )
+    ));
+    assert_eq!(owner.capture_reads(), 1);
+    let sources = owner.captured_sources().collect::<Vec<_>>();
+    assert_eq!(sources.len(), 1);
+    assert_eq!(sources[0].0, environment);
+    assert_eq!(sources[0].1, b"schema_version: '1.0'\nlanguage: python\n");
+    assert!(!study.0.join("input.csv").exists());
+}
 struct Study(PathBuf);
 impl Study {
     fn new() -> Self {
