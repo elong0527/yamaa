@@ -5625,6 +5625,63 @@ mod dataset_functions {
         assert_eq!(*source.reads.borrow(), reads);
     }
 
+    #[test]
+    fn typed_execution_exits_close_actual_success_and_each_failed_stage_before_finished() {
+        use yamaa_engine::application_observer::Outcome;
+        use yamaa_engine::dataset::{ExecutionEvent, ExecutionPhase::*};
+        for failure in [
+            None,
+            Some(Admission),
+            Some(Derivation),
+            Some(OutputKeys),
+            Some(Verification),
+        ] {
+            let mut source = source(vec![vec![Value::Int(1), Value::Int(10), Value::Int(20)]]);
+            let plan = record_plan(
+                &source,
+                schema(&[("ID", ColumnType::Int)]),
+                vec![assign(0, Expression::Source(0))],
+                vec![verification(Check::RowCount {
+                    min: None,
+                    max: Some(if failure == Some(Verification) { 0 } else { 1 }),
+                })],
+            );
+            match failure {
+                Some(Admission) => source.schema = schema(&[("OTHER", ColumnType::Int)]),
+                Some(Derivation) => source.fail = Some((0, 0)),
+                Some(OutputKeys) => source.rows[0][0] = Value::Missing,
+                _ => (),
+            }
+            let mut events = Vec::new();
+            let attempt = plan.execute_with_execution_observer(
+                &source,
+                &[],
+                &mut callbacks(),
+                limits(),
+                &mut |event| events.push(event),
+            );
+            assert_eq!(attempt.result.is_ok(), failure.is_none());
+            let mut expected = Vec::new();
+            for phase in [Admission, Derivation, OutputKeys, Verification] {
+                expected.push(ExecutionEvent::Phase(phase));
+                expected.push(ExecutionEvent::Exit {
+                    phase,
+                    outcome: if failure == Some(phase) {
+                        Outcome::Failed
+                    } else {
+                        Outcome::Succeeded
+                    },
+                });
+                if failure == Some(phase) {
+                    break;
+                }
+            }
+            expected.push(ExecutionEvent::Phase(Finished));
+            assert_eq!(events, expected);
+            assert_eq!(source.reads.borrow().is_empty(), failure == Some(Admission));
+        }
+    }
+
     /// Every returned failure closes the reached phase without inventing later work.
     #[test]
     fn phase_observation_finishes_at_the_actual_failure_boundary() {

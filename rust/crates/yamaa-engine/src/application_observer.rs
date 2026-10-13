@@ -18,6 +18,7 @@ use yamaa_core::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Phase {
     Preparation,
+    Build,
     Activation,
     Input,
     Dataset(ExecutionPhase),
@@ -29,6 +30,21 @@ pub enum Phase {
 pub enum CallStage {
     Activation,
     Dataset(ExecutionPhase),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Outcome {
+    Succeeded,
+    Failed,
+}
+impl Outcome {
+    pub fn from_result<T, E>(result: &Result<T, E>) -> Self {
+        if result.is_ok() {
+            Self::Succeeded
+        } else {
+            Self::Failed
+        }
+    }
 }
 
 /// The actual graph node, borrowed only for the observer call. Ordinary requests
@@ -48,6 +64,16 @@ pub enum Event<'a> {
     FunctionCall {
         node: Option<Node<'a>>,
         stage: CallStage,
+    },
+    Exit {
+        node: Option<Node<'a>>,
+        phase: Phase,
+        outcome: Outcome,
+    },
+    FunctionReturn {
+        node: Option<Node<'a>>,
+        stage: CallStage,
+        outcome: Outcome,
     },
 }
 
@@ -88,6 +114,13 @@ impl<'a> Scope<'a> {
             phase,
         });
     }
+    pub fn exit(self, phase: Phase, outcome: Outcome) {
+        self.observer.observe(Event::Exit {
+            node: self.node,
+            phase,
+            outcome,
+        });
+    }
     pub(crate) fn activation<P: ActivationPort>(self, port: &mut P) -> Activation<'_, 'a, P> {
         Activation { port, scope: self }
     }
@@ -122,7 +155,13 @@ impl<E> FunctionPort for Functions<'_, '_, E> {
             node: self.scope.node,
             stage: CallStage::Dataset(self.phase.get()),
         });
-        self.port.call(slot, arguments)
+        let result = self.port.call(slot, arguments);
+        self.scope.observer.observe(Event::FunctionReturn {
+            node: self.scope.node,
+            stage: CallStage::Dataset(self.phase.get()),
+            outcome: Outcome::from_result(&result),
+        });
+        result
     }
 }
 
@@ -160,6 +199,12 @@ impl<P: ActivationPort> ActivationPort for Activation<'_, '_, P> {
             node: self.scope.node,
             stage: CallStage::Activation,
         });
-        self.port.invoke(handle, arguments)
+        let result = self.port.invoke(handle, arguments);
+        self.scope.observer.observe(Event::FunctionReturn {
+            node: self.scope.node,
+            stage: CallStage::Activation,
+            outcome: Outcome::from_result(&result),
+        });
+        result
     }
 }

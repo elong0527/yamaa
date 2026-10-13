@@ -22,10 +22,18 @@ use yamaa_engine::{
 #[derive(Debug, PartialEq)]
 struct Payload(Rc<()>);
 type Trace = Rc<RefCell<Vec<&'static str>>>;
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Stage {
     Phase(yamaa_engine::application_observer::Phase),
     Call(yamaa_engine::application_observer::CallStage),
+    Exit(
+        yamaa_engine::application_observer::Phase,
+        yamaa_engine::application_observer::Outcome,
+    ),
+    Return(
+        yamaa_engine::application_observer::CallStage,
+        yamaa_engine::application_observer::Outcome,
+    ),
 }
 #[derive(Default)]
 struct Stages(RefCell<Vec<Stage>>);
@@ -40,6 +48,22 @@ impl yamaa_engine::application_observer::Observer for Stages {
             Event::FunctionCall { node, stage } => {
                 assert_eq!(node, None);
                 Stage::Call(stage)
+            }
+            Event::Exit {
+                node,
+                phase,
+                outcome,
+            } => {
+                assert_eq!(node, None);
+                Stage::Exit(phase, outcome)
+            }
+            Event::FunctionReturn {
+                node,
+                stage,
+                outcome,
+            } => {
+                assert_eq!(node, None);
+                Stage::Return(stage, outcome)
             }
         });
     }
@@ -235,7 +259,7 @@ fn checked_calls_execute_through_shared_capture_and_repeat_on_held_snapshots() {
 }
 #[test]
 fn observer_counts_actual_calls_and_preserves_signature_short_circuit_and_original_failure() {
-    use yamaa_engine::application_observer::{CallStage, Phase, Scope};
+    use yamaa_engine::application_observer::{CallStage, Outcome, Phase, Scope};
     use yamaa_engine::dataset::ExecutionPhase;
     for mode in ["normal", "missing", "signature", "raised"] {
         let spec = specification(vec![(
@@ -274,7 +298,12 @@ fn observer_counts_actual_calls_and_preserves_signature_short_circuit_and_origin
             &mut attempt,
             Scope::new(&observer),
         );
-        let stages = observer.0.borrow();
+        let all_stages = observer.0.borrow();
+        let stages = all_stages
+            .iter()
+            .filter(|event| matches!(event, Stage::Phase(_) | Stage::Call(_)))
+            .cloned()
+            .collect::<Vec<_>>();
         let observed_calls = stages
             .iter()
             .filter(|event| matches!(event, Stage::Call(_)))
@@ -292,7 +321,14 @@ fn observer_counts_actual_calls_and_preserves_signature_short_circuit_and_origin
             usize::from(matches!(mode, "normal" | "raised"))
         );
         if mode == "signature" {
-            assert_eq!(*stages, [Stage::Phase(Phase::Input)]);
+            assert_eq!(stages, [Stage::Phase(Phase::Input)]);
+            assert_eq!(
+                *all_stages,
+                [
+                    Stage::Phase(Phase::Input),
+                    Stage::Exit(Phase::Input, Outcome::Failed)
+                ]
+            );
             assert!(trace.borrow().is_empty());
             assert_eq!(source.reads, 0);
             assert!(matches!(
@@ -310,6 +346,17 @@ fn observer_counts_actual_calls_and_preserves_signature_short_circuit_and_origin
             ]
         );
         if mode == "raised" {
+            assert!(all_stages.contains(&Stage::Return(
+                CallStage::Dataset(ExecutionPhase::Derivation),
+                Outcome::Failed
+            )));
+            assert_eq!(
+                &all_stages[all_stages.len() - 2..],
+                [
+                    Stage::Exit(Phase::Dataset(ExecutionPhase::Derivation), Outcome::Failed),
+                    Stage::Phase(Phase::Dataset(ExecutionPhase::Finished))
+                ]
+            );
             assert_eq!(
                 stages[3],
                 Stage::Call(CallStage::Dataset(ExecutionPhase::Derivation))
@@ -333,6 +380,35 @@ fn observer_counts_actual_calls_and_preserves_signature_short_circuit_and_origin
             };
             assert!(Rc::ptr_eq(&marker, &original));
         } else {
+            assert_eq!(
+                all_stages
+                    .iter()
+                    .filter_map(|event| if let Stage::Exit(phase, outcome) = event {
+                        Some((*phase, *outcome))
+                    } else {
+                        None
+                    })
+                    .collect::<Vec<_>>(),
+                [
+                    (Phase::Input, Outcome::Succeeded),
+                    (
+                        Phase::Dataset(ExecutionPhase::Admission),
+                        Outcome::Succeeded
+                    ),
+                    (
+                        Phase::Dataset(ExecutionPhase::Derivation),
+                        Outcome::Succeeded
+                    ),
+                    (
+                        Phase::Dataset(ExecutionPhase::OutputKeys),
+                        Outcome::Succeeded
+                    ),
+                    (
+                        Phase::Dataset(ExecutionPhase::Verification),
+                        Outcome::Succeeded
+                    ),
+                ]
+            );
             assert_eq!(
                 attempt.result.unwrap().result.unwrap().dataset.rows(),
                 &[vec![

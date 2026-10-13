@@ -25,7 +25,7 @@ impl Fake {
                 .any(|event| matches!(*event, "plain build" | "project build" | "graph build"))
                 || matches!(event, "plain build" | "project build" | "graph build")
             {
-                Phase::Input
+                Phase::Build
             } else {
                 Phase::Preparation
             };
@@ -160,14 +160,34 @@ fn request(environment: bool) -> Request<'static> {
 
 #[test]
 fn observed_request_brackets_actual_metadata_before_every_route_and_keeps_original_failure() {
-    use yamaa_engine::application_observer::{Event, Observer, Phase, Scope};
-    struct Stages(Rc<RefCell<Vec<Phase>>>);
+    use yamaa_engine::application_observer::{Event, Observer, Outcome, Phase, Scope};
+    #[derive(Debug, PartialEq)]
+    enum Observed {
+        Entry(Phase),
+        Exit(Phase, Outcome),
+    }
+    struct Stages {
+        phases: Rc<RefCell<Vec<Phase>>>,
+        events: RefCell<Vec<Observed>>,
+    }
     impl Observer for Stages {
         fn observe(&self, event: Event<'_>) {
+            if let Event::Exit {
+                node: None,
+                phase,
+                outcome,
+            } = event
+            {
+                self.events
+                    .borrow_mut()
+                    .push(Observed::Exit(phase, outcome));
+                return;
+            }
             let Event::Phase { node: None, phase } = event else {
                 panic!("this request spy invokes no real function port")
             };
-            self.0.borrow_mut().push(phase);
+            self.phases.borrow_mut().push(phase);
+            self.events.borrow_mut().push(Observed::Entry(phase));
         }
     }
     for producer in [false, true] {
@@ -175,7 +195,10 @@ fn observed_request_brackets_actual_metadata_before_every_route_and_keeps_origin
             for failure in [None, Some("entry"), Some("study capture")] {
                 let marker = Rc::new(());
                 let phases = Rc::new(RefCell::new(vec![]));
-                let observer = Stages(Rc::clone(&phases));
+                let observer = Stages {
+                    phases: Rc::clone(&phases),
+                    events: RefCell::new(vec![]),
+                };
                 let mut port = Fake {
                     producer,
                     failure: failure.map(|stage| (stage, Original(Rc::clone(&marker)))),
@@ -200,9 +223,36 @@ fn observed_request_brackets_actual_metadata_before_every_route_and_keeps_origin
                 let expected = if failure == Some("entry") {
                     vec![Phase::Preparation, Phase::Finished]
                 } else {
-                    vec![Phase::Preparation, Phase::Input, Phase::Finished]
+                    vec![Phase::Preparation, Phase::Build, Phase::Finished]
                 };
                 assert_eq!(*phases.borrow(), expected);
+                let events = observer.events.borrow();
+                let mut expected = vec![
+                    Observed::Entry(Phase::Preparation),
+                    Observed::Exit(
+                        Phase::Preparation,
+                        if failure == Some("entry") {
+                            Outcome::Failed
+                        } else {
+                            Outcome::Succeeded
+                        },
+                    ),
+                ];
+                if failure != Some("entry") {
+                    expected.extend([
+                        Observed::Entry(Phase::Build),
+                        Observed::Exit(
+                            Phase::Build,
+                            if failure.is_none() {
+                                Outcome::Succeeded
+                            } else {
+                                Outcome::Failed
+                            },
+                        ),
+                    ]);
+                }
+                expected.push(Observed::Entry(Phase::Finished));
+                assert_eq!(*events, expected);
             }
         }
     }

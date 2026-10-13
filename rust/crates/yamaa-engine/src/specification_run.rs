@@ -366,6 +366,37 @@ pub fn execute_with_observer_into<P: SourcePort, D: SourceDecoder>(
     scope: crate::application_observer::Scope<'_>,
 ) {
     scope.phase(crate::application_observer::Phase::Input);
+    let input_finished = core::cell::Cell::new(false);
+    execute_inner_with_observer_into(
+        prepared,
+        port,
+        decoder,
+        functions,
+        limits,
+        attempt,
+        (scope, &input_finished),
+    );
+    if !input_finished.get() {
+        let outcome = match &attempt.result {
+            Ok(execution) => crate::application_observer::Outcome::from_result(&execution.result),
+            Err(_) => crate::application_observer::Outcome::Failed,
+        };
+        scope.exit(crate::application_observer::Phase::Input, outcome);
+    }
+}
+
+fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
+    prepared: &PreparedSpecification,
+    port: &mut P,
+    decoder: &mut D,
+    functions: &mut dyn dataset::FunctionPort<Error = <D::Table as TableAccess>::Error>,
+    limits: Limits,
+    attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+    (scope, input_finished): (
+        crate::application_observer::Scope<'_>,
+        &core::cell::Cell<bool>,
+    ),
+) {
     *attempt = CapturedAttempt::new(prepared.source());
     attempt.sources.clear();
     if let Some(calls) = prepared.project_calls() {
@@ -544,14 +575,24 @@ pub fn execute_with_observer_into<P: SourcePort, D: SourceDecoder>(
         .collect::<Vec<_>>();
     let phase = core::cell::Cell::new(dataset::ExecutionPhase::Admission);
     let mut functions = scope.functions(functions, &phase);
-    attempt.result = Ok(plan.execute_with_phase_observer(
+    input_finished.set(true);
+    scope.exit(
+        crate::application_observer::Phase::Input,
+        crate::application_observer::Outcome::Succeeded,
+    );
+    attempt.result = Ok(plan.execute_with_execution_observer(
         primary,
         &secondary,
         &mut functions,
         limits.execution,
-        &mut |current| {
-            phase.set(current);
-            scope.phase(crate::application_observer::Phase::Dataset(current));
+        &mut |event| match event {
+            dataset::ExecutionEvent::Phase(current) => {
+                phase.set(current);
+                scope.phase(crate::application_observer::Phase::Dataset(current));
+            }
+            dataset::ExecutionEvent::Exit { phase, outcome } => {
+                scope.exit(crate::application_observer::Phase::Dataset(phase), outcome)
+            }
         },
     ));
 }

@@ -394,7 +394,7 @@ type Attempt = build::BuildAttempt<Activation, Study, Decoder, Report, Codec>;
 mod application_observations {
     use super::*;
     use yamaa_engine::{
-        application_observer::{CallStage, Event, Observer, Phase, Scope},
+        application_observer::{CallStage, Event, Observer, Outcome, Phase, Scope},
         dataset::ExecutionPhase,
     };
     type NodeCoordinate = Option<(usize, String)>;
@@ -402,6 +402,8 @@ mod application_observations {
     enum Seen {
         Phase(NodeCoordinate, Phase),
         Call(NodeCoordinate, CallStage),
+        Exit(NodeCoordinate, Phase, Outcome),
+        Return(NodeCoordinate, CallStage, Outcome),
     }
     struct Recorder {
         trace: Trace,
@@ -414,11 +416,23 @@ mod application_observations {
                 Event::FunctionCall { node, stage } => {
                     (node, Seen::Call(None, stage), "observe:call")
                 }
+                Event::Exit {
+                    node,
+                    phase,
+                    outcome,
+                } => (node, Seen::Exit(None, phase, outcome), "observe:exit"),
+                Event::FunctionReturn {
+                    node,
+                    stage,
+                    outcome,
+                } => (node, Seen::Return(None, stage, outcome), "observe:return"),
             };
             let node = node.map(|node| (node.index, node.identity.to_owned()));
             let seen = match seen {
                 Seen::Phase(_, phase) => Seen::Phase(node, phase),
                 Seen::Call(_, stage) => Seen::Call(node, stage),
+                Seen::Exit(_, phase, outcome) => Seen::Exit(node, phase, outcome),
+                Seen::Return(_, stage, outcome) => Seen::Return(node, stage, outcome),
             };
             self.events.borrow_mut().push(seen);
             self.trace.borrow_mut().push(marker.into());
@@ -553,6 +567,28 @@ mod application_observations {
             expected_phases.push((Some((index, identity.into())), Phase::Output));
         }
         assert_eq!(phases, expected_phases);
+        assert_eq!(
+            events
+                .iter()
+                .filter_map(|event| if let Seen::Return(node, stage, outcome) = event {
+                    Some((node.clone(), *stage, *outcome))
+                } else {
+                    None
+                })
+                .collect::<Vec<_>>(),
+            calls(&events)
+                .into_iter()
+                .map(|(node, stage)| (node, stage, Outcome::Succeeded))
+                .collect::<Vec<_>>()
+        );
+        assert!(events
+            .iter()
+            .filter_map(|event| if let Seen::Exit(_, _, outcome) = event {
+                Some(outcome)
+            } else {
+                None
+            })
+            .all(|outcome| *outcome == Outcome::Succeeded));
         assert_immediately_before_actual_calls(&ports);
     }
     #[test]
@@ -583,7 +619,13 @@ mod application_observations {
                 Mode::Lock => {
                     assert!(result.unwrap().is_err());
                     assert!(calls.is_empty());
-                    assert_eq!(*events, [Seen::Phase(None, Phase::Activation)]);
+                    assert_eq!(
+                        *events,
+                        [
+                            Seen::Phase(None, Phase::Activation),
+                            Seen::Exit(None, Phase::Activation, Outcome::Failed)
+                        ]
+                    );
                     assert!(attempt.nodes.is_empty());
                 }
                 Mode::CaseInterrupt => {
@@ -594,10 +636,29 @@ mod application_observations {
                     );
                     assert!(attempt.nodes.is_empty());
                     assert_eq!(ports.study.reads, 0);
+                    assert_eq!(
+                        events.last(),
+                        Some(&Seen::Exit(None, Phase::Activation, Outcome::Failed))
+                    );
+                    assert!(events.contains(&Seen::Return(
+                        None,
+                        CallStage::Activation,
+                        Outcome::Failed
+                    )));
                 }
                 Mode::Producer => {
                     assert!(result.unwrap().is_err());
                     assert_eq!(calls.len(), 5);
+                    assert!(events.contains(&Seen::Return(
+                        Some((1, "/p".into())),
+                        CallStage::Dataset(ExecutionPhase::Derivation),
+                        Outcome::Failed
+                    )));
+                    assert!(events.contains(&Seen::Exit(
+                        Some((1, "/p".into())),
+                        Phase::Dataset(ExecutionPhase::Derivation),
+                        Outcome::Failed
+                    )));
                     assert_eq!(
                         calls.last(),
                         Some(&(
@@ -634,6 +695,13 @@ mod application_observations {
                     ));
                     assert_eq!(calls.len(), 5);
                     assert_eq!(
+                        events
+                            .iter()
+                            .filter(|event| matches!(event, Seen::Return(..)))
+                            .count(),
+                        4
+                    );
+                    assert_eq!(
                         events.last(),
                         Some(&Seen::Call(
                             Some((1, "/p".into())),
@@ -647,6 +715,85 @@ mod application_observations {
                 }
                 _ => unreachable!(),
             }
+        }
+    }
+
+    #[test]
+    fn source_and_output_exits_use_actual_refusals_and_leave_unwound_output_unmatched() {
+        for failure in ["source", "report", "unwind"] {
+            let mut ports = Ports::new();
+            ports.report.diagnostics = true;
+            let original = Arc::new(());
+            match failure {
+                "source" => ports.study.failure = true,
+                "report" => ports.report.diagnostic_failure = true,
+                "unwind" => ports.report.diagnostic_unwind = Some(Arc::clone(&original)),
+                _ => unreachable!(),
+            }
+            let observer = recorder(&ports);
+            let mut attempt = Attempt::default();
+            let build = prepared();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                build.build_publication_with_observer_into(
+                    ports.borrow(),
+                    Default::default(),
+                    &mut attempt,
+                    Scope::new(&observer),
+                )
+            }));
+            let events = observer.events.borrow();
+            match failure {
+                "source" => {
+                    assert!(result.unwrap().is_err());
+                    assert!(events.contains(&Seen::Exit(
+                        Some((1, "/p".into())),
+                        Phase::Input,
+                        Outcome::Failed
+                    )));
+                    assert!(!events
+                        .iter()
+                        .any(|event| matches!(event, Seen::Phase(_, Phase::Dataset(_)))));
+                    assert!(matches!(
+                        attempt.nodes[0].dataset.result,
+                        Err(PortError::Capture(CaptureError::External(
+                            "original source refusal"
+                        )))
+                    ));
+                }
+                "report" => {
+                    assert!(result.unwrap().is_err());
+                    assert_eq!(
+                        events.last(),
+                        Some(&Seen::Exit(
+                            Some((1, "/p".into())),
+                            Phase::Output,
+                            Outcome::Failed
+                        ))
+                    );
+                    assert!(matches!(
+                        attempt.nodes[0].output,
+                        Err(CompleteError::Report("original diagnostic refusal"))
+                    ));
+                }
+                "unwind" => {
+                    let Err(payload) = result else {
+                        panic!("original report unwind")
+                    };
+                    assert!(Arc::ptr_eq(
+                        payload.downcast_ref::<Arc<()>>().unwrap(),
+                        &original
+                    ));
+                    assert_eq!(
+                        events.last(),
+                        Some(&Seen::Phase(Some((1, "/p".into())), Phase::Output))
+                    );
+                    assert!(!events
+                        .iter()
+                        .any(|event| matches!(event, Seen::Exit(_, Phase::Output, _))));
+                }
+                _ => unreachable!(),
+            }
+            assert_immediately_before_actual_calls(&ports);
         }
     }
 }

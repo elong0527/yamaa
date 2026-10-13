@@ -291,18 +291,22 @@ pub fn domain_with_observer<P: Ports>(
     port: &mut P,
     scope: crate::application_observer::Scope<'_>,
 ) -> Result<P::BuildResult, P::Failure> {
-    use crate::application_observer::Phase;
+    use crate::application_observer::{Outcome, Phase};
     scope.phase(Phase::Preparation);
-    let result = match port.prepare(request) {
+    let prepared = port.prepare(request);
+    scope.exit(Phase::Preparation, Outcome::from_result(&prepared));
+    let result = match prepared {
         Ok(prepared) => {
             // Close actual metadata preparation before entering the selected
             // runtime port, including older ports without detailed events.
-            scope.phase(Phase::Input);
-            match prepared {
+            scope.phase(Phase::Build);
+            let result = match prepared {
                 Prepared::Plain(prepared) => port.build_plain_with_observer(prepared, scope),
                 Prepared::Ordinary(prepared) => port.build_project_with_observer(prepared, scope),
                 Prepared::Producer(prepared) => port.build_producer_with_observer(prepared, scope),
-            }
+            };
+            scope.exit(Phase::Build, Outcome::from_result(&result));
+            result
         }
         Err(error) => Err(error),
     };

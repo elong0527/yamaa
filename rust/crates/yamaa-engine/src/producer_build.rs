@@ -329,14 +329,19 @@ impl PreparedBuild {
             Vec::new()
         } else {
             scope.phase(crate::application_observer::Phase::Activation);
-            match project_activation::activate_references_observed(
+            let result = project_activation::activate_references_observed(
                 environment.language().expect("admitted called language"),
                 environment.lock().expect("admitted called lock"),
                 &selected,
                 &mut scope.activation(ports.activation),
                 limits.activation,
                 &mut attempt.activation,
-            ) {
+            );
+            scope.exit(
+                crate::application_observer::Phase::Activation,
+                crate::application_observer::Outcome::from_result(&result),
+            );
+            match result {
                 Ok(functions) => functions,
                 Err(error) => {
                     attempt.outcome = Err(Failure::Activation(error));
@@ -418,56 +423,64 @@ impl PreparedBuild {
                 node_scope,
             );
             node_scope.phase(crate::application_observer::Phase::Output);
-            let diagnostics = ports.report.prepare_diagnostics(
-                node,
-                &entered.dataset,
-                output_left,
-                limits.report_bytes / count,
-            );
-            match diagnostics {
-                Ok(bytes) if bytes <= output_left => output_left -= bytes,
-                Ok(_) => {
-                    entered.output = Err(output::CompleteError::OutputLimit);
+            let output_result = (|| {
+                let diagnostics = ports.report.prepare_diagnostics(
+                    node,
+                    &entered.dataset,
+                    output_left,
+                    limits.report_bytes / count,
+                );
+                match diagnostics {
+                    Ok(bytes) if bytes <= output_left => output_left -= bytes,
+                    Ok(_) => {
+                        entered.output = Err(output::CompleteError::OutputLimit);
+                        attempt.outcome = Err(Failure::Node { node: index });
+                        return Err("producer_build_failed");
+                    }
+                    Err(error) => {
+                        entered.output = Err(output::CompleteError::Report(error));
+                        attempt.outcome = Err(Failure::Node { node: index });
+                        return Err("producer_build_failed");
+                    }
+                }
+                let execution = entered
+                    .dataset
+                    .result
+                    .as_ref()
+                    .ok()
+                    .and_then(|execution| execution.result.as_ref().ok());
+                let Some(execution) = execution else {
                     attempt.outcome = Err(Failure::Node { node: index });
                     return Err("producer_build_failed");
-                }
-                Err(error) => {
-                    entered.output = Err(output::CompleteError::Report(error));
+                };
+                let prepared = prepare_output(
+                    node,
+                    plan,
+                    &entered.dataset,
+                    execution,
+                    (output_left, limits.report_bytes / count),
+                    ports.report,
+                    ports.codec,
+                );
+                entered.output = prepared.map(Some);
+                let artifact = entered
+                    .output
+                    .as_ref()
+                    .ok()
+                    .and_then(Option::as_ref)
+                    .and_then(PreparedOutput::artifact);
+                let Some(artifact) = artifact else {
                     attempt.outcome = Err(Failure::Node { node: index });
                     return Err("producer_build_failed");
-                }
-            }
-            let execution = entered
-                .dataset
-                .result
-                .as_ref()
-                .ok()
-                .and_then(|execution| execution.result.as_ref().ok());
-            let Some(execution) = execution else {
-                attempt.outcome = Err(Failure::Node { node: index });
-                return Err("producer_build_failed");
-            };
-            let prepared = prepare_output(
-                node,
-                plan,
-                &entered.dataset,
-                execution,
-                (output_left, limits.report_bytes / count),
-                ports.report,
-                ports.codec,
+                };
+                output_left -= artifact.bytes().len(); // output::prepare enforced remaining quota.
+                Ok(())
+            })();
+            node_scope.exit(
+                crate::application_observer::Phase::Output,
+                crate::application_observer::Outcome::from_result(&output_result),
             );
-            entered.output = prepared.map(Some);
-            let artifact = entered
-                .output
-                .as_ref()
-                .ok()
-                .and_then(Option::as_ref)
-                .and_then(PreparedOutput::artifact);
-            let Some(artifact) = artifact else {
-                attempt.outcome = Err(Failure::Node { node: index });
-                return Err("producer_build_failed");
-            };
-            output_left -= artifact.bytes().len(); // output::prepare enforced remaining quota.
+            output_result?;
         }
         attempt.outcome = Ok(());
         crate::producer_publication::PreparedPublication::from_actual(

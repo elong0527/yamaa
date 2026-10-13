@@ -304,7 +304,12 @@ where
             &functions,
             &mut scope.activation(activation),
         ),
-    }?;
+    };
+    scope.exit(
+        crate::application_observer::Phase::Activation,
+        crate::application_observer::Outcome::from_result(&activated),
+    );
+    let activated = activated?;
     let mut bindings = Bindings::new(&activated, activation);
     checked.build_with_observer_into(source, decoder, &mut bindings, limits, attempt, scope);
     Ok(())
