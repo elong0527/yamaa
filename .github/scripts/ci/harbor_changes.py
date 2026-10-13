@@ -30,7 +30,7 @@ def select_benchmarks(event, paths, available):
         elif len(parts) >= 4 and parts[:2] == ("evaluations", "harbor"):
             if parts[2] in {"prompts", "solutions"}:
                 selected.add(parts[3])
-            elif not path.endswith(".md"):
+            elif not path.endswith(".md") or parts[-1].startswith("system-"):
                 shared.add(path)
         elif path in SHARED_FILES or (
             path.startswith("evaluations/harbor/")
