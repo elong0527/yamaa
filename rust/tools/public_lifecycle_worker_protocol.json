@@ -31,7 +31,7 @@
     "python": "yamaa.domain(entry)",
     "r": "yamaa_domain(entry)"
   },
-  "first_explicit_native_call": "first public Build after resolving/importing the public facade; engine_info AFTER Build",
+  "first_explicit_native_call": "first public Build after resolving/importing the facade; compiled core metadata is read after Build; no engine_info probe",
   "initialization_limits": "Package import may load the native library; shipped-schema and OS filesystem caches are uncontrolled. The controller does not time process startup.",
   "controller_dependencies": [
     "Python standard library",
