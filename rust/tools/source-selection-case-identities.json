@@ -1,0 +1,17 @@
+{
+  "classification": "owner-approved case identity shortening; no authored obligation changed",
+  "original_head": "ee6f5767e5ccbf206aa38791a743182d44e95955",
+  "owner_correction": "bc5912e660fe9e8ac6f681d99e46b7e8d89198cf",
+  "fixture": "rust/crates/yamaa-adapters/tests/fixtures/source_selection.json",
+  "renamed_cases": {
+    "key-first-available-earlier-key": "key-first-available-earlier",
+    "secondary-filtered-key-first-available": "secondary-filtered-key-first",
+    "named-key-candidates-and-column-choice": "named-key-candidates-choice",
+    "all-key-conversions-before-nonkey-effects": "all-key-conv-before-nonkey",
+    "filtered-key-missing-reaches-output-gate": "filtered-key-missing-gate",
+    "resource-failure-precedes-unpaired-build": "resource-failure-first",
+    "key-nonkey-dependency-stays-forbidden": "key-nonkey-dep-forbidden"
+  },
+  "retained_obligations": "Every complete case object compares equal after the explicit ID mapping: specification strings, input bytes, typed cells/order, CSV bytes, complete findings, handlers and ordered source reads. No expected value is regenerated.",
+  "staging": "Short ordinal directories and an explicit current case-ID mapping remain authoritative for portable R source package paths."
+}

@@ -29,9 +29,8 @@ def verify(samples, lines):
     return index
 
 
-def main():
-    """Run actual compiled release evaluation under both policies, without tolerance."""
-    samples = cases()
+def observe(samples):
+    """Replay both compiled policies with exact input identities."""
     result = subprocess.run(
         [
             "cargo",
@@ -53,7 +52,13 @@ def main():
         capture_output=True,
         check=True,
     )
-    count = verify(samples, result.stdout.splitlines())
+    return result.stdout.splitlines()
+
+
+def main():
+    """Run actual compiled release evaluation under both policies, without tolerance."""
+    samples = cases()
+    count = verify(samples, observe(samples))
     print(
         f"Exact compiled rounding: {count} results match the rational oracle across both policies"
     )
