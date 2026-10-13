@@ -31,6 +31,40 @@ pub struct FileSpecification {
     run: PreparedRun,
     resources: Resources,
 }
+/// A plain compilation refusal still owns the original native snapshots.
+pub struct RejectedPlain {
+    error: Error,
+    entry: String,
+    resources: Resources,
+}
+impl std::fmt::Debug for RejectedPlain {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RejectedPlain")
+            .field("error", &self.error)
+            .field("entry", &self.entry)
+            .field("capture_reads", &self.capture_reads())
+            .finish_non_exhaustive()
+    }
+}
+impl RejectedPlain {
+    pub fn error(&self) -> &Error {
+        &self.error
+    }
+    pub fn entry(&self) -> &str {
+        &self.entry
+    }
+    pub fn capture_reads(&self) -> usize {
+        self.resources.capture_reads()
+    }
+    pub fn retained_sources(
+        &self,
+        aliases: usize,
+        text: usize,
+    ) -> Result<crate::file_resources::RetainedSources, crate::file_resources::RetentionFailure>
+    {
+        self.resources.retain_sources(aliases, text)
+    }
+}
 impl FileSpecification {
     pub fn prepare(mut resources: Resources, written: &str) -> Result<Self, Error> {
         let document = prepare_document(&mut resources, written, None)?;
@@ -46,6 +80,36 @@ impl FileSpecification {
             )));
         }
         Ok(Self { run, resources })
+    }
+    pub(crate) fn from_workflow(
+        entry: crate::file_graph::CapturedEntry,
+    ) -> Result<Self, Box<RejectedPlain>> {
+        let (mut resources, entry, document, _) = entry.into_ordinary_parts();
+        let result =
+            PreparedRun::prepare_with_profile_inspection(document, |document, dataset, path| {
+                crate::source_profile_inspection::inspect(document, &resources, dataset, path)
+            })
+            .and_then(|run| {
+                let findings = crate::verification_logs::location_findings(&resources, &run);
+                if findings.is_empty() {
+                    Ok(run)
+                } else {
+                    Err(crate::specification_run::Error::Prepare(
+                        yamaa_core::specification::PrepareError::Invalid(findings),
+                    ))
+                }
+            });
+        match result {
+            Ok(run) => {
+                resources.finish_metadata_budget();
+                Ok(Self { run, resources })
+            }
+            Err(error) => Err(Box::new(RejectedPlain {
+                error: Error::Compile(error),
+                entry,
+                resources,
+            })),
+        }
     }
     pub fn run(&self) -> &PreparedRun {
         &self.run

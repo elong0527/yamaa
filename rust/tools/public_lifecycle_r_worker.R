@@ -108,7 +108,6 @@ issues <- function(value) {
        }))
 }
 metadata <- function() {
-  info <- get("engine_info", asNamespace("yamaa"))() # Private metadata follows Build.
   collectors <- lapply(names(request$provenance$collectors), function(name) {
     list(version = as.character(utils::packageVersion(name)),
          origin = normalizePath(find.package(name), winslash = "/", mustWork = TRUE))
@@ -117,7 +116,8 @@ metadata <- function() {
   list(host = "r", runtime_version = as.character(getRversion()),
        report_runtime_version = as.character(getRversion()),
        package_version = as.character(utils::packageVersion("yamaa")),
-       engine_version = info$core_version,
+       engine_version = if (exists(".core_version", asNamespace("yamaa"), inherits = FALSE)) get(".core_version", asNamespace("yamaa"))() else NULL,
+       engine_version_availability = "compiled metadata accessor when available; source build attestation retained",
        installed_origins = list(package = normalizePath(find.package("yamaa"), winslash = "/", mustWork = TRUE),
                                 native = normalizePath(getLoadedDLLs()[["yamaa"]][["path"]], winslash = "/", mustWork = TRUE)),
        system = unname(Sys.info()[["sysname"]]), machine = unname(Sys.info()[["machine"]]),

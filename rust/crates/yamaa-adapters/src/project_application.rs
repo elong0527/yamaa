@@ -163,6 +163,21 @@ fn workflow_issues(error: &crate::file_workflow::Error, host: Language) -> Failu
 /// projection is complete and bounded; no feature dispatch depends on failure.
 pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Language) -> Failure {
     match error {
+        crate::file_workflow::SelectionError::Plain(error) => match error.error() {
+            crate::file_preparation::Error::Resource(error) => {
+                file_application::resource_failure("prepare", error)
+            }
+            crate::file_preparation::Error::Preparation(error) => {
+                crate::specification_diagnostics::inheritance_failure_ref(error)
+                    .map(file_application::preparation_failure)
+                    .unwrap_or_else(|_| refused("prepare"))
+            }
+            crate::file_preparation::Error::Compile(error) => {
+                file_application::preparation_failure(crate::specification_diagnostics::failure(
+                    error, None,
+                ))
+            }
+        },
         crate::file_workflow::SelectionError::Preparation(error) => workflow_issues(error, host),
         crate::file_workflow::SelectionError::Ordinary(error) => match &error.run().rejection.error
         {

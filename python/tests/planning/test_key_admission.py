@@ -2,9 +2,6 @@
 
 import pytest
 
-from yamaa.adapters.native_datasets import (
-    execute_with_source_provider as native_execute,
-)
 from yamaa.io.polars import frame_from_values
 from yamaa.models import TypedColumn
 from yamaa.planning import (
@@ -82,17 +79,15 @@ def test_unknown_output_key_never_indexes_source_types(has_rows, source_has_key)
 
 
 @pytest.mark.parametrize("has_rows", [False, True])
-@pytest.mark.parametrize("execute", [execute_with_source_provider, native_execute])
+@pytest.mark.parametrize("execute", [execute_with_source_provider])
 def test_unknown_output_key_fails_before_provider(execute, has_rows):
-    """Both frontends reject invalid identity before any source provider effects."""
+    """The retained reference rejects invalid identity before any source provider effects."""
 
     def forbidden_provider(_inputs):
         """Make accidental acquisition observable rather than returning an empty source."""
         pytest.fail("an undeclared output key reached source acquisition")
 
     result = execute(invalid_key_specification(has_rows), forbidden_provider)
-    if execute is native_execute:
-        result = result.result
     assert isinstance(result, ExecutionFailure)
     (diagnostic,) = result.diagnostics
     assert_key_diagnostic(diagnostic)

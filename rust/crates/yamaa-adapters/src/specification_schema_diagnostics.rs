@@ -15,10 +15,6 @@ impl Budget {
     fn charge(&mut self, bytes: usize) -> Result<(), Error> {
         self.0.charge(bytes)
     }
-    fn text(&mut self, text: &str) -> Result<Value, Error> {
-        self.0.text(text)?;
-        Ok(json!(text))
-    }
 }
 fn value(value: V<'_>) -> Value {
     match value {
@@ -65,80 +61,36 @@ pub(super) fn schema_findings_with_budget(
 ) -> Result<Vec<Value>, Error> {
     let report =
         admit_schema_diagnostics(schema, document, findings, source_context, &mut budget.0)?;
-    Ok(report.iter().map(|finding| {
-        let context = finding.context.map(|(name, field)| (name.into(), value(field))).collect::<Map<_, _>>();
-        json!({"phase":finding.phase, "condition":finding.condition, "requirement":finding.requirement,
-            "spec_paths":[finding.path], "context":context})
-    }).collect())
+    Ok(report
+        .iter()
+        .map(|finding| {
+            let context = finding
+                .context
+                .map(|(name, field)| (name.into(), value(field)))
+                .collect::<Map<_, _>>();
+            crate::issue_rows::report(
+                finding.phase,
+                finding.condition,
+                finding.requirement,
+                vec![finding.path.to_owned()],
+                context.into(),
+            )
+        })
+        .collect())
 }
 
-/// Convert already-rendered traversal/dependency findings with literal context.
-/// Schema-node/descriptor references must use schema_findings with their held arena.
-pub(super) fn literal_outcome(mut outcome: Value) -> Result<Value, Error> {
-    if outcome["status"] != "invalid" {
-        return Ok(outcome);
-    }
-    let mut budget = Budget::new();
-    let Value::Array(findings) = outcome["diagnostics"].take() else {
-        return Err(Error::InvalidContext);
-    };
-    let mut records = Vec::new();
-    for mut finding in findings {
-        budget.charge(128)?;
-        let condition = budget.text(finding["condition"].as_str().ok_or(Error::InvalidContext)?)?;
-        let path = budget.text(finding["path"].as_str().ok_or(Error::InvalidContext)?)?;
-        let requirement = match &finding["requirement"] {
-            Value::Null => Value::Null,
-            Value::String(text) => budget.text(text)?,
-            _ => return Err(Error::InvalidContext),
-        };
-        let Value::Array(context) = finding["context"].take() else {
-            return Err(Error::InvalidContext);
-        };
-        let mut resolved = Map::new();
-        for item in context {
-            let name = item["name"].as_str().ok_or(Error::InvalidContext)?;
-            budget.text(name)?;
-            let reference = &item["value"];
-            let value = match reference["kind"].as_str() {
-                Some("text") => {
-                    budget.text(reference["value"].as_str().ok_or(Error::InvalidContext)?)?
-                }
-                Some("count") => {
-                    budget.charge(20)?;
-                    json!(reference["value"].as_u64().ok_or(Error::InvalidContext)?)
-                }
-                Some("null") => Value::Null,
-                Some("text_list") => {
-                    let values = reference["value"].as_array().ok_or(Error::InvalidContext)?;
-                    budget.charge(values.len().saturating_add(2))?;
-                    Value::Array(
-                        values
-                            .iter()
-                            .map(|v| budget.text(v.as_str().ok_or(Error::InvalidContext)?))
-                            .collect::<Result<_, _>>()?,
-                    )
-                }
-                _ => return Err(Error::InvalidContext),
-            };
-            if resolved.insert(name.into(), value).is_some() {
-                return Err(Error::InvalidContext);
-            }
+/// Admit already projected core findings in the same five-field diagnostic shape.
+pub(super) fn literal_outcome(outcome: Value) -> Result<Value, Error> {
+    if outcome["status"] == "invalid" {
+        let findings = outcome["diagnostics"]
+            .as_array()
+            .ok_or(Error::InvalidContext)?;
+        for finding in findings {
+            crate::issue_rows::Issue::from_diagnostic(finding.clone())
+                .map_err(|_| Error::InvalidContext)?;
         }
-        for name in ["source", "entry", "parent"] {
-            if let Some(value) = outcome.get(name) {
-                budget.text(name)?;
-                let value = match value {
-                    Value::Null => Value::Null,
-                    Value::String(text) => budget.text(text)?,
-                    _ => return Err(Error::InvalidContext),
-                };
-                if resolved.insert(name.into(), value).is_some() {
-                    return Err(Error::InvalidContext);
-                }
-            }
-        }
-        records.push(json!({"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":[path],"context":resolved}));
+        let mut budget = Budget::new();
+        budget.charge(outcome.to_string().len())?;
     }
-    Ok(json!({"status":"invalid","diagnostics":records}))
+    Ok(outcome)
 }

@@ -68,7 +68,9 @@ pub(crate) fn prepare(
     if !requested || environment.inventory_captured() {
         return Ok(());
     }
-    let root = environment.root();
+    let Some(root) = environment.root_optional() else {
+        return Ok(());
+    };
     let captured = capture(resources, schema, root)?;
     // Metadata inheritance selects its own codec entry. Restore the admitted
     // domain owner before ordinary source paths acquire data-read authority.
@@ -89,7 +91,9 @@ pub(crate) fn prepare_parts(
     if !requested || provenance.inventory_captured() {
         return Ok(());
     }
-    let root = provenance.root();
+    let Some(root) = provenance.root_optional() else {
+        return Ok(());
+    };
     let captured = capture(resources, schema, root)?;
     // Metadata inheritance selects its own codec entry. Restore the admitted
     // domain owner before ordinary source paths acquire data-read authority.

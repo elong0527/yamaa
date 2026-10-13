@@ -26,7 +26,7 @@ pub struct PreparedEnvironment {
 #[derive(Debug)]
 pub struct OwnedEnvironment {
     origins: SourceOrigins,
-    root: CapturedDocument,
+    root: Option<CapturedDocument>,
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
     environment: yamaa_core::project_environment::ExecutionEnvironment,
@@ -40,7 +40,7 @@ pub struct CapturedEnvironment {
     inventory_documents: Vec<crate::specification_source::PreparedDocument>,
     inventory_captured: bool,
     origins: SourceOrigins,
-    root: CapturedDocument,
+    root: Option<CapturedDocument>,
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
 }
@@ -62,7 +62,10 @@ impl CapturedEnvironment {
         &self.origins
     }
     pub fn root(&self) -> &CapturedDocument {
-        &self.root
+        self.root.as_ref().expect("explicit environment source")
+    }
+    pub fn root_optional(&self) -> Option<&CapturedDocument> {
+        self.root.as_ref()
     }
     pub fn captures(&self) -> &[DocumentCapture] {
         &self.captures
@@ -75,7 +78,7 @@ impl PreparedEnvironment {
     pub fn into_owned(self) -> OwnedEnvironment {
         OwnedEnvironment {
             origins: self.origins,
-            root: self.root,
+            root: Some(self.root),
             captures: self.captures,
             lock: self.lock,
             environment: self.environment.into_execution(),
@@ -85,6 +88,20 @@ impl PreparedEnvironment {
     }
 }
 impl OwnedEnvironment {
+    pub(crate) fn without_environment(host: Language) -> Self {
+        Self {
+            origins: SourceOrigins {
+                functions: Vec::new(),
+                codelists: Vec::new(),
+            },
+            root: None,
+            captures: Vec::new(),
+            lock: None,
+            environment: yamaa_engine::build::without_environment(host),
+            inventory_documents: Vec::new(),
+            inventory_captured: false,
+        }
+    }
     pub(crate) fn inventory_captured(&self) -> bool {
         self.inventory_captured
     }
@@ -121,7 +138,10 @@ impl OwnedEnvironment {
         &self.origins
     }
     pub fn root(&self) -> &CapturedDocument {
-        &self.root
+        self.root.as_ref().expect("explicit environment source")
+    }
+    pub fn root_optional(&self) -> Option<&CapturedDocument> {
+        self.root.as_ref()
     }
     pub fn captures(&self) -> &[DocumentCapture] {
         &self.captures

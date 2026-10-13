@@ -1,5 +1,5 @@
 //! Owned public columns; temporal precision stays in the internal execution table.
-use crate::table_transport::{self, TableTransportError as Error};
+use crate::ipc_table::{self, TableError as Error};
 use arrow_array::{
     ArrayRef, Date32Array, Float64Array, Int64Array, RecordBatch, StringArray, TimestampSecondArray,
 };
@@ -35,7 +35,7 @@ impl PublicTable {
         self.rows
     }
     pub fn decode(input: &[u8]) -> Result<Self, Error> {
-        let table = table_transport::decode_snapshot(input)?;
+        let table = ipc_table::decode_snapshot(input)?;
         let mut columns = Vec::new();
         for (index, column) in table.schema().columns().iter().enumerate() {
             macro_rules! collect {
@@ -96,7 +96,7 @@ impl PublicTable {
         struct Bytes(Vec<u8>);
         impl Write for Bytes {
             fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-                if self.0.len().saturating_add(bytes.len()) > table_transport::MAX_INPUT_BYTES {
+                if self.0.len().saturating_add(bytes.len()) > ipc_table::MAX_INPUT_BYTES {
                     return Err(io::Error::other("public table byte limit"));
                 }
                 self.0.extend_from_slice(bytes);

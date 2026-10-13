@@ -88,6 +88,35 @@ def violations(metadata):
     return errors
 
 
+def adapter_source_violations(source, identity):
+    """Resolve imported core names sufficiently to guard semantic parser/compiler calls."""
+    errors = []
+    # Reviewed codec/admission adapters may name core values and diagnostics;
+    # semantic compilation, parsing and validation must enter through the engine.
+    semantic = r"(?:compile|parse|validate|analyze)(?:_[A-Za-z0-9_]+)?"
+    imports = re.findall(r"\b(?:pub\s+)?use\s+yamaa_core\s*::([\s\S]*?);", source)
+    core_names = {"yamaa_core"}
+    semantic_names = set()
+    for tree in imports:
+        for name, alias in re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?", tree):
+            if name == "as":
+                continue
+            core_names.add(alias or name)
+            if re.fullmatch(semantic, name):
+                semantic_names.add(alias or name)
+    for name in core_names:
+        if re.search(r"\b" + re.escape(name) + r"\s*::(?:\s*[A-Za-z_][A-Za-z0-9_]*\s*::)*\s*" + semantic + r"\s*\(", source):
+            errors.append(f"{identity}: adapter semantic calls must delegate to the engine")
+            break
+    if any(re.search(r"\b"+re.escape(name)+r"\s*\(",source) for name in semantic_names):
+        errors.append(f"{identity}: imported core semantic calls must delegate to the engine")
+    if re.search(r"\.\s*(?:validate_header|validate_output|validate_document|validate_descriptor|validate_types|parse_query_types|compile_bundle)\s*\(", source):
+        errors.append(f"{identity}: adapter semantic methods must delegate to the engine")
+    if re.search(r'\b(?:pub\s+)?mod\s+[A-Za-z_]+_transport\s*;',source):
+        errors.append(f"{identity}: retired component request protocols must not return")
+    return errors
+
+
 def source_violations(workspace):
     errors = []
     for crate in ("yamaa-python", "yamaa-r"):
@@ -99,6 +128,8 @@ def source_violations(workspace):
                 errors.append(f"{path}: host capacity policy belongs in adapters")
             if re.search(r"\.is_(?:finite|nan|infinite)\s*\(", source):
                 errors.append(f"{path}: scalar normalization belongs in core")
+    for path in sorted((workspace / "crates/yamaa-adapters/src").rglob("*.rs")):
+        errors.extend(adapter_source_violations(path.read_text(encoding="utf-8"), path))
     return errors
 
 
