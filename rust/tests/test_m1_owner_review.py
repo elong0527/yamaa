@@ -131,7 +131,11 @@ class ProducerOwnerReview(unittest.TestCase):
             for path in ("before.json", "after-1/report.json", "after-2/report.json")
         ]
         originals = [cohort.read(path) for path in paths]
-        for field, value in (("engine_version", "wrong-core"), ("runtime", "r")):
+        for field, value in (
+            ("engine_version", "wrong-core"),
+            ("runtime", "r"),
+            ("runtime_version", "3.14.9"),
+        ):
             with self.subTest(field=field):
                 for path, original in zip(paths, originals, strict=True):
                     changed = copy.deepcopy(original)
@@ -144,7 +148,7 @@ class ProducerOwnerReview(unittest.TestCase):
                             + "renv.lock"
                         )
                     cohort.write(path, changed)
-                with self.assertRaisesRegex(ValueError, "host|core|owner"):
+                with self.assertRaisesRegex(ValueError, "host|core|owner|version"):
                     self.check_audit(audit, inventory)
         for path, original in zip(paths, originals, strict=True):
             cohort.write(path, original)
@@ -180,6 +184,51 @@ class ProducerOwnerReview(unittest.TestCase):
         cohort.write(path, raw)
         with self.assertRaisesRegex(ValueError, "error|report|identity"):
             self.check_audit(audit, inventory, False)
+
+    def test_qualifier_binds_complete_public_reports_to_installed_runtime_version(self):
+        self.fixture.compare()
+        shutil.rmtree(self.fixture.output)
+        path = (
+            self.fixture.evidence
+            / "python/public-reports/schema-lookup.python.rust.json"
+        )
+        raw = cohort.read(path)
+        raw["runtime_version"] = "3.14.9"
+        cohort.write(path, raw)
+        with self.assertRaisesRegex(ValueError, "runtime|report|owner|version"):
+            self.fixture.compare()
+
+    def test_audit_binds_complete_public_reports_to_installed_runtime_version(self):
+        audit, inventory = self.prepared_audit(False)
+        path = self.fixture.output / "reports/python/schema-lookup.python.rust.json"
+        raw = cohort.read(path)
+        raw["runtime_version"] = "3.14.9"
+        cohort.write(path, raw)
+        with self.assertRaisesRegex(ValueError, "runtime|report|owner|version"):
+            self.check_audit(audit, inventory, False)
+
+    def test_qualifier_binds_raw_producer_reports_to_installed_runtime_version(self):
+        self.fixture.compare(True)
+        owner = self.source_owner()
+        for relative in ("before.json", "after-1/report.json", "after-2/report.json"):
+            path = owner / relative
+            raw = cohort.read(path)
+            raw["runtime_version"] = "3.14.9"
+            cohort.write(path, raw)
+        record = cohort.read(
+            self.fixture.evidence / "python/supplemental/supplemental.json"
+        )
+        expected = cohort.reports.read_report(
+            controls.ROOT / cohort.TRUTH_PATHS[producer.NAME]
+        )
+        with self.assertRaisesRegex(ValueError, "runtime|report|owner|version"):
+            producer.retain_owner(
+                self.fixture.evidence / "python",
+                "python",
+                record,
+                expected,
+                self.fixture.directory / "changed-runtime",
+            )
 
 
 if __name__ == "__main__":
