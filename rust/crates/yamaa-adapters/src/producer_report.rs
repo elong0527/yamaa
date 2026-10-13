@@ -513,7 +513,9 @@ fn activation_prefix<E>(attempt: &NativeAttempt<E>, budget: &mut Budget) -> Resu
     // A source identity is copied for every observed binding/case. Admit its
     // complete retained origin scan before the existing prefix formatter grows.
     for _ in 0..lookups {
-        budget.text(&held.environment().root().source().identity)?;
+        if let Some(root) = held.environment().root_optional() {
+            budget.text(&root.source().identity)?;
+        }
         for capture in held.environment().captures() {
             budget.text(&capture.document.source().identity)?;
         }
@@ -967,11 +969,13 @@ pub fn attempt_report_classified<'a, E>(
     let activation_findings = facts.activation(attempt, &mut budget)?;
     let environment = attempt.provenance.environment();
     budget.entries(8)?;
-    budget.text(&environment.root().source().identity)?;
+    if let Some(root) = environment.root_optional() {
+        budget.text(&root.source().identity)?;
+    }
     if let Some(lock) = environment.lock() {
         budget.text(&lock.source.identity)?;
     }
-    let environment = json!({"source":environment.root().source().identity,"lock_source":environment.lock().map(|lock| &lock.source.identity)});
+    let environment = json!({"source":environment.root_optional().map(|root| &root.source().identity),"lock_source":environment.lock().map(|lock| &lock.source.identity)});
     let mut result = json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,"entry":attempt.provenance.entry(),"outcome":if attempt.accepted() {"success"} else {"failure"},"activation":activation,"environment":environment,"nodes":[],"artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],"tables":[],"verifications":[],"callbacks":[],"source_reads":[],"error":null});
     let mut portable = attempt.boundary.is_ok()
         && attempt.resources.is_ok()
