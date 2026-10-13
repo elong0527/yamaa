@@ -9,7 +9,7 @@ use yamaa_adapters::{
     file_project::{self, FileProject},
     file_resources::Resources,
 };
-use yamaa_core::project_function::Language;
+use yamaa_engine::host_values::Language;
 
 type NativeAttempt = yamaa_adapters::project_run::Attempt<
     yamaa_adapters::file_resources::Error,
@@ -170,7 +170,7 @@ pub fn _prepare_file_project(
     if data_roots.len() >= 64
         || [project_root, base_directory, entry, environment]
             .iter()
-            .any(|text| text.len() > 65536)
+            .any(|text| text.len() > yamaa_adapters::host_limits::IDENTITY_BYTES)
     {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "project path or root limit",
@@ -180,7 +180,7 @@ pub fn _prepare_file_project(
         .iter()
         .map(|value| {
             let text = value.cast::<PyString>()?.to_str()?;
-            if text.len() > 65536 {
+            if text.len() > yamaa_adapters::host_limits::IDENTITY_BYTES {
                 return Err(pyo3::exceptions::PyValueError::new_err(
                     "project root byte limit",
                 ));

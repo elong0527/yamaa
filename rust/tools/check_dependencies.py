@@ -1,6 +1,7 @@
 """Reject dependencies that cross the workspace's architecture boundaries."""
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -33,13 +34,12 @@ ALLOWED = {
         "windows-sys",
     },
     "yamaa-python": {
-        "yamaa-core",
         "yamaa-engine",
         "yamaa-adapters",
         "pyo3",
         "pyo3-build-config",
     },
-    "yamaa-r": {"yamaa-core", "yamaa-engine", "yamaa-adapters", "extendr-api"},
+    "yamaa-r": {"yamaa-engine", "yamaa-adapters", "extendr-api"},
 }
 
 
@@ -88,6 +88,20 @@ def violations(metadata):
     return errors
 
 
+def source_violations(workspace):
+    errors = []
+    for crate in ("yamaa-python", "yamaa-r"):
+        for path in sorted((workspace / "crates" / crate / "src").rglob("*.rs")):
+            source = path.read_text(encoding="utf-8")
+            if re.search(r"\byamaa_core\s*::", source):
+                errors.append(f"{path}: bindings must use application port types")
+            if re.search(r"\b(?:65_?536|16_777_216|67_108_864)\b", source):
+                errors.append(f"{path}: host capacity policy belongs in adapters")
+            if re.search(r"\.is_(?:finite|nan|infinite)\s*\(", source):
+                errors.append(f"{path}: scalar normalization belongs in core")
+    return errors
+
+
 def main():
     metadata = json.loads(
         subprocess.check_output(
@@ -96,7 +110,7 @@ def main():
             text=True,
         )
     )
-    errors = violations(metadata)
+    errors = violations(metadata) + source_violations(WORKSPACE)
     if errors:
         raise SystemExit("\n".join(errors))
     print("Rust dependency boundaries passed")

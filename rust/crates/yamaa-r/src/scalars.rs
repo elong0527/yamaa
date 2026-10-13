@@ -39,6 +39,17 @@ fn scalar_exact_double(tag: i32, payload: Raw) -> List {
 }
 /// Apply a selected scalar operator to two independently admitted byte payloads.
 #[extendr]
+fn scalar_operator_code(name: Raw, unary: bool) -> List {
+    let code = std::str::from_utf8(name.as_slice())
+        .ok()
+        .and_then(|name| scalar_bytes::operator_code(name, unary));
+    match code {
+        Some(code) => list!(value = code, error = NULL),
+        None => list!(value = NULL, error = "unsupported scalar operator"),
+    }
+}
+
+#[extendr]
 fn scalar_operator(
     code: i32,
     left_tag: i32,
@@ -63,5 +74,6 @@ extendr_module! {
     mod scalars;
     fn scalar_bytes;
     fn scalar_exact_double;
+    fn scalar_operator_code;
     fn scalar_operator;
 }

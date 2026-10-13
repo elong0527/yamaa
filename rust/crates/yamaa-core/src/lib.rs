@@ -95,3 +95,5 @@ pub mod project_codelist_diagnostics;
 pub mod verification_diagnostics;
 
 pub mod yaml_diagnostics;
+
+pub mod scalar_operator;
