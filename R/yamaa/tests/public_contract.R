@@ -182,6 +182,19 @@ run_contract <- function() {
   outer <- with_capabilities(capabilities$verify, resolve_reentrant,
     yamaa_domain(entry, environment))
   stopifnot(nrow(check_issues(outer)) == 0L, length(calls) >= 3L)
+  oversized <- structure(list(message = strrep("x", 65537L), call = NULL),
+    class = c("public_contract_error", "error", "condition"))
+  resolve_oversized <- function(call, parameters) {
+    list(0L, function(encoded) list(1L, oversized))
+  }
+  failed <- with_capabilities(capabilities$verify, resolve_oversized,
+    yamaa_domain(entry, environment))
+  measured <- rawToChar(get(".domain_observations", namespace)(failed,
+    include_measurements = TRUE))
+  stopifnot(is.null(failed$output),
+    grepl('"code":"report_limit"', failed$issues$context, fixed = TRUE),
+    grepl('"outcome":"failed","phase":"output_preparation"', measured, fixed = TRUE),
+    inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"))
   unlink(path(c("spec.yaml", "input.csv"))); gc()
   stopifnot(identical(as.character(calls[[1L]]$output$VALUE), truth))
 

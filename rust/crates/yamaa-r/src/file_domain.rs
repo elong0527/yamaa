@@ -138,7 +138,7 @@ impl RuntimePort for Runtime<'_> {
         });
         let fields = self.fields().map(str::to_owned);
         scope.phase(Phase::Output);
-        let converted: std::result::Result<State, String> = {
+        let (state, outcome) = {
             let formatted = crate::project_result::platform::format(
                 Rc::clone(&attempt),
                 &fields,
@@ -148,19 +148,17 @@ impl RuntimePort for Runtime<'_> {
                 Some(result) => file_application::Domain::from_project(result, &project),
                 None => Err(file_application::rejected("build", formatted.refusal)),
             };
-            let mut state = self.plain_result(result);
-            state.project = Some(attempt);
-            Ok(state)
-        };
-        scope.exit(
-            Phase::Output,
-            if converted.is_ok() {
+            let outcome = if result.is_ok() {
                 Outcome::Succeeded
             } else {
                 Outcome::Failed
-            },
-        );
-        converted
+            };
+            let mut state = self.plain_result(result);
+            state.project = Some(attempt);
+            (state, outcome)
+        };
+        scope.exit(Phase::Output, outcome);
+        Ok(state)
     }
     fn producer(
         &mut self,

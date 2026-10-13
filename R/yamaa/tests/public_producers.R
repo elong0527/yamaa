@@ -302,13 +302,18 @@ stopifnot(any(vapply(preparation(failed),function(item) identical(item$bytes,cha
 cat("R public metadata and early raw rejections retain original evidence without fallback\n")
 
 work <- study()
+write(work,"producer/layers/base.yaml",sub("name: ID, type: int","name: ID, type: str",
+  sub("ID: int","ID: str",producer,fixed=TRUE),fixed=TRUE))
 extra <- paste0(vapply(0:58,function(index) paste0("  - {name: EXTRA",index,
-  ", type: float, label: Extra value, derivation: {literal: 1.234}}\n"),character(1)),collapse="")
+  ", type: str, label: Extra value, derivation: {literal: null}}\n"),character(1)),collapse="")
 names <- paste(c("ID","VALUE",paste0("EXTRA",0:58)),collapse=", ")
 text <- sub("output: {path:",paste0(extra,"output: {path:"),consumer,fixed=TRUE)
+text <- sub("name: ID, type: int","name: ID, type: str",text,fixed=TRUE)
 text <- sub("columns: [ID, VALUE], decimals: 2",paste0("columns: [",names,"], decimals: 2"),text,fixed=TRUE)
 write(work,"consumer/root.yaml",text)
-write(work,"raw/raw.csv",paste0("ID,VALUE\n",paste0(1:100,",1.234\n",collapse="")))
+# Three public-copy passes over 23,000 rows and 63 owned columns visit
+# 4,347,000 cells, exceeding the independent 4,194,304-cell allowance.
+write(work,"raw/raw.csv",paste0("ID,VALUE\n",paste0(1:23000,",1.234\n",collapse="")))
 result <- build(work)
 refusal <- function(result) reply(.Call(private("wrap__domain_projection_failure"),handle(result)))
 stopifnot(isTRUE(evidence(result)$accepted),is.null(result$output),
