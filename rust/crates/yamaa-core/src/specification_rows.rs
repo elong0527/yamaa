@@ -1719,3 +1719,29 @@ impl Rows {
         .map_err(BindError::InvalidPlan)
     }
 }
+
+impl Rows {
+    pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+        for declaration in &self.columns {
+            if let RowOperation::Shared(branch) = &declaration.operation {
+                static_checks::branch(branch, findings)?;
+            }
+        }
+        for template in &self.templates {
+            if let Some((expression, compiled)) = &template.filter {
+                static_checks::predicate(
+                    compiled,
+                    expression,
+                    &format!("rows.{}.filter", template.id),
+                    findings,
+                )?;
+            }
+            for declaration in &template.declarations {
+                if let RowOperation::Shared(branch) = &declaration.operation {
+                    static_checks::branch(branch, findings)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
