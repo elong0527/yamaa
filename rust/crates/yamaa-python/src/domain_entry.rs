@@ -262,33 +262,3 @@ pub fn _check_file(
         crate::specification_result::issue_rows(&unavailable())
     }
 }
-
-/// Repository qualification may statically inspect either host's metadata.
-/// This grants no activation or callable-resolution authority.
-#[pyfunction]
-pub fn _check_project_metadata(
-    specification: &str,
-    environment: &str,
-    language: &str,
-) -> PyResult<Vec<crate::specification_result::IssueRow>> {
-    let host = match language {
-        "python" => yamaa_engine::host_values::Language::Python,
-        "r" => yamaa_engine::host_values::Language::R,
-        _ => {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "invalid project language",
-            ))
-        }
-    };
-    #[cfg(any(unix, windows))]
-    {
-        Ok(crate::specification_result::issue_rows(
-            &yamaa_adapters::project_application::check(specification, environment, host),
-        ))
-    }
-    #[cfg(not(any(unix, windows)))]
-    {
-        let _ = (specification, environment, host);
-        Ok(crate::specification_result::issue_rows(&unavailable()))
-    }
-}

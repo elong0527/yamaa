@@ -355,8 +355,10 @@ pub enum ExecutionError<E> {
 /// A selection identity is distinct from source coordinates and diagnostic row position.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum SelectionIdentity {
-    /// Key probes cannot read named selections in an admitted plan.
+    /// Destination-free donor preparation cannot read named selections.
     Probe,
+    /// One physical driving record while its ordered output keys are derived.
+    KeyCandidate(usize),
     Candidate(usize),
 }
 /// Keep source provenance per candidate for the later whole-column phase.
@@ -1241,7 +1243,24 @@ impl Executor<'_> {
         )?;
         let mut next_selection_identity = 0usize;
         if matches!(self.plan.templates()[0].mode, RowMode::Keys) {
-            candidates = key_grain::construct(self, table, limits, &mut budget, handlers)?;
+            candidates = key_grain::construct(
+                self,
+                table,
+                limits,
+                &mut EvaluationState {
+                    primary: &primary,
+                    functions,
+                    secondary,
+                    self_rows: &[],
+                    budget: &mut budget,
+                    handlers,
+                    intermediates: &mut intermediate_run,
+                    output_rows: &[],
+                    output_offset: 0,
+                    windows: &mut windows::Cache::default(),
+                    aggregate_row: None,
+                },
+            )?;
         } else {
             for (template_index, template) in self.plan.templates().iter().enumerate() {
                 let named = if let RowMode::IntermediateDriver { index, .. } = &template.mode {

@@ -5,13 +5,17 @@
       "path": "rust/crates/yamaa-adapters/tests/fixtures/diagnostic_literal_truth.json",
       "family": "diagnostics",
       "level": "component",
-      "consumers": ["rust/crates/yamaa-adapters/src/test_diagnostic_truth.rs"]
+      "consumers": [
+        "rust/crates/yamaa-adapters/src/test_diagnostic_truth.rs"
+      ]
     },
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/check_invalid_regex_truth.json",
       "family": "diagnostics",
       "level": "component",
-      "consumers": ["rust/crates/yamaa-adapters/src/specification_check.rs"]
+      "consumers": [
+        "rust/crates/yamaa-adapters/src/specification_check.rs"
+      ]
     },
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/odm_reads.tsv",
@@ -696,6 +700,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/public_file_resources.R",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_file_resources.py",
         "rust/tests/installed_original_specifications.py",
@@ -708,6 +713,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/public_file_resources.R",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_file_resources.py",
         "rust/tests/installed_original_specifications.py",
@@ -991,6 +997,50 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_selection.json",
+      "family": "lookup",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_source_selection.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json",
+      "family": "lookup",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_source_selection.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/source_filter_mixed.json",
+      "family": "lookup",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_source_selection.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/case_predicate_dispositions.json",
+      "family": "predicate",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/declarative_case_predicates.rs",
+        "rust/tools/stage_specification_inputs.py",
+        "rust/tests/installed_original_specifications.py",
+        "R/yamaa/tests/original_specifications.R"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/completed_lookup_assertions.json",
       "family": "completed selected-record assertion scope and eager ordering",
       "level": "component",
@@ -1064,7 +1114,7 @@
       "runtime": "python",
       "path": "rust/tests/installed_file_resources.py",
       "staged_path": "installed_file_resources.py",
-      "level": "compile"
+      "level": "shared_run"
     },
     {
       "id": "python/public-environment",
@@ -1169,6 +1219,13 @@
       "runtime": "r",
       "path": "R/yamaa/tests/public_grammar.R",
       "staged_path": "public_grammar.R",
+      "level": "shared_run"
+    },
+    {
+      "id": "r/public-file-resources",
+      "runtime": "r",
+      "path": "R/yamaa/tests/public_file_resources.R",
+      "staged_path": "public_file_resources.R",
       "level": "shared_run"
     }
   ],

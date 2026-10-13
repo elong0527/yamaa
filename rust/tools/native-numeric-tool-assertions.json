@@ -1,0 +1,191 @@
+{
+  "scope": "Active native qualification imports no retiring yamaa reference families; frozen comparison evidence stays explicitly historical.",
+  "expected_truth_policy": "No benchmark, grammar, numeric, regex or frozen assessment expectation is regenerated or modified.",
+  "tools": [
+    {
+      "path": "rust/tools/check_numeric_grammar.py",
+      "old_independent_checks": 136,
+      "old_differential_observations": 2444,
+      "obligations": [
+        "grammar acceptance",
+        "normalized tree shape",
+        "closed function vocabulary and arity",
+        "reserved constructs and qualified identifiers",
+        "written number spelling",
+        "identifier occurrence order",
+        "UTF-8 byte and Unicode character coordinates",
+        "lexical/closing-syntax/function validation precedence"
+      ],
+      "successors": [
+        "yaml/grammar/numeric.yaml",
+        "rust/tools/stage_grammar_inputs.py",
+        "rust/crates/yamaa-core/examples/grammar_contract.rs",
+        "rust/crates/yamaa-core/tests/numeric_parser.rs",
+        "rust/crates/yamaa-core/tests/numeric_compiler.rs",
+        "rust/crates/yamaa-adapters/examples/numeric_syntax_fixture.rs",
+        "rust/tests/installed_public_grammar.py"
+      ],
+      "differential_disposition": "Retain deterministic inputs as typed robustness observations. Their old complete-reference comparison remains historical; new observations are not passing semantic truth without independent assertions."
+    },
+    {
+      "path": "rust/tools/check_numeric_syntax.py",
+      "old_independent_checks": 136,
+      "old_differential_observations": 2444,
+      "obligations": [
+        "complete numeric AST fields",
+        "exact literal text",
+        "identifier order",
+        "full diagnostic condition/requirement/context",
+        "both error coordinates",
+        "nested association and grouping elision"
+      ],
+      "successors": [
+        "rust/crates/yamaa-adapters/examples/numeric_syntax_fixture.rs",
+        "rust/crates/yamaa-core/tests/numeric_parser.rs",
+        "rust/crates/yamaa-core/tests/numeric_compiler.rs",
+        "rust/crates/yamaa-core/tests/diagnostic/grammar.rs",
+        "rust/tests/installed_original_specifications.py"
+      ],
+      "addition": "Independent literal complete-AST/diagnostic assertions using the retained typed fixture serializers; no parser or evaluator is added."
+    },
+    {
+      "path": "rust/tools/check_aggregate_grammar.py",
+      "old_independent_checks": 166,
+      "old_differential_observations": 3180,
+      "obligations": [
+        "all imported numeric grammar obligations",
+        "reducer vocabulary and arity",
+        "star dataset order",
+        "ungrouped identifier order",
+        "exact reducer source text and spans",
+        "nested-reducer and closure precedence",
+        "aggregate-specific requirement/context"
+      ],
+      "successors": [
+        "yaml/grammar/aggregate.yaml",
+        "rust/crates/yamaa-core/examples/grammar_contract.rs",
+        "rust/crates/yamaa-core/tests/aggregate_parser.rs",
+        "rust/crates/yamaa-core/tests/aggregate_compiler.rs",
+        "rust/crates/yamaa-adapters/examples/aggregate_syntax_fixture.rs",
+        "rust/crates/yamaa-adapters/tests/aggregate_record_operations.rs",
+        "rust/tests/installed_public_grammar.py"
+      ]
+    },
+    {
+      "path": "rust/tools/check_predicate_syntax.py",
+      "old_independent_checks": 72,
+      "old_differential_observations": 1088,
+      "obligations": [
+        "boolean/comparison association",
+        "full operand/call AST fields and character positions",
+        "identifier order",
+        "literal spelling and temporal admission",
+        "escaped/NUL/non-ASCII strings",
+        "three explicit ESCAPE requirement corrections",
+        "six normative int64-carrier refusals and error-order precedence",
+        "LF-only JSON framing independent of ANSI host encoding"
+      ],
+      "successors": [
+        "yaml/grammar/predicate.yaml",
+        "rust/crates/yamaa-core/tests/predicate_parser.rs",
+        "rust/crates/yamaa-core/tests/predicate_compiler.rs",
+        "rust/crates/yamaa-adapters/examples/predicate_syntax_fixture.rs",
+        "rust/tests/test_predicate_syntax_encoding.py",
+        "rust/crates/yamaa-adapters/tests/predicate_diagnostics.rs",
+        "rust/tests/installed_public_grammar.py",
+        "rust/tests/installed_original_specifications.py"
+      ]
+    },
+    {
+      "path": "rust/tools/assess_regex_reference.py",
+      "old_independent_checks": 12,
+      "obligations": [
+        "acceptance versus policy refusal",
+        "capture count",
+        "nullable capture clearing",
+        "search and full-match distinction",
+        "exact capture strings",
+        "forward/named/back references",
+        "fixed lookbehind",
+        "empty classes and identity-escape rejection",
+        "Unicode and NUL decoding"
+      ],
+      "successors": [
+        "rust/crates/yamaa-adapters/tests/fixtures/regex_contract.tsv",
+        "rust/tools/check_regex.py",
+        "rust/crates/yamaa-adapters/examples/regex_probe.rs",
+        "rust/crates/yamaa-core/tests/regex.rs",
+        "rust/tests/installed_regex.py",
+        "rust/tests/installed_original_specifications.py"
+      ],
+      "disposition": "Observe the existing typed compiled regex fixture against unchanged committed expectations; preserve the old reference discrepancy report as historical rather than rerun the retiring implementation.",
+      "new_independent_checks": {
+        "shared_yaml": 43,
+        "exact_tsv_edges": 12
+      }
+    },
+    {
+      "path": "rust/tools/assess_rounding.py",
+      "old_cases": 2936,
+      "obligations": [
+        "exact promoted binary64 input",
+        "exact decimal quantum",
+        "inclusive 2^-26 near-tie interval",
+        "positive zero and sign symmetry",
+        "subnormal/overflow/missing outcomes",
+        "full i64 digit range",
+        "both ReferenceSubset and PortableLibmV1 policies",
+        "case/input/policy identity and exact output bits"
+      ],
+      "successors": [
+        "rust/tools/assess_rounding.py rational_round/cases",
+        "rust/tools/check_rounding.py",
+        "rust/crates/yamaa-core/examples/rounding_probe.rs",
+        "rust/crates/yamaa-core/tests/rounding.rs",
+        "rust/tests/test_rounding_assessment.py",
+        "rust/tests/test_rounding_check.py",
+        "rust/crates/yamaa-adapters/tests/declarative_rounding.rs",
+        "rust/tests/installed_original_specifications.py"
+      ],
+      "disposition": "Keep the existing independent rational oracle and corpus; active assessment observes compiled policy outputs rather than the retiring private scalar helper."
+    },
+    {
+      "path": "rust/tools/assess_math_decision.py",
+      "old_frozen_boundaries": 58,
+      "old_frozen_integer_handler_controls": 2,
+      "old_historical_hosts": 9,
+      "old_observations_per_historical_report": 30033,
+      "obligations": [
+        "original integer promotion input and bits",
+        "complete language refusals",
+        "independent accuracy certificates and exclusions",
+        "exact historical bit differences",
+        "handler values/counts",
+        "downstream predicate/verification/rounding/CSV effects",
+        "five unchanged original fixtures",
+        "restore cwd before temporary-directory cleanup on success and original exceptions"
+      ],
+      "successors": [
+        "rust/qualification/math-decision-v1.json",
+        "rust/tools/math_decision_corpus.py",
+        "rust/tools/math_certificates.py",
+        "rust/tools/assess_math_decision.py public_numeric/downstream",
+        "rust/tests/test_math_decision.py",
+        "rust/tools/public_conformance.py"
+      ],
+      "disposition": "Read and validate frozen historical lifecycle observations instead of importing or monkeypatching the retired evaluator. Replay current fixtures through public domain and compare unchanged complete expected bytes/findings. Historical frontend blockers remain historical, not current qualifications."
+    }
+  ],
+  "active_gate_limits": [
+    "Typed component/grammar evidence does not claim installed host qualification",
+    "Robustness observations do not claim independent semantic truth",
+    "Historical comparisons are never regenerated from the candidate"
+  ],
+  "inventory_correction": "The prior owner map conflated 43 shared YAML regex cases with 12 TSV edge cases. Active successor retains all 55; the retiring regex assessor observed the 12 TSV rows.",
+  "new_complete_syntax_controls": {
+    "numeric": 8,
+    "aggregate": 6,
+    "predicate": 11
+  },
+  "focused_gate": ".github/workflows/native-numeric-tools.yml"
+}

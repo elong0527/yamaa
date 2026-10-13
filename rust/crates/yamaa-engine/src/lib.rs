@@ -32,6 +32,7 @@ pub mod test_support;
 pub mod table_reduction;
 
 pub mod source_ingestion;
+pub mod source_metadata;
 pub mod source_profile_inspection;
 pub mod specification;
 pub mod specification_output;

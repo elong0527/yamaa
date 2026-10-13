@@ -16,9 +16,6 @@ class _DomainResult:
 def _domain_file(
     specification: str, environment: str | None = None
 ) -> _DomainResult: ...
-def _check_project_metadata(
-    specification: str, environment: str, language: str
-) -> list[tuple]: ...
 def _check_file(
     specification: str, environment: str | None = None
 ) -> list[tuple[str, str, str | None, list[str], str]]: ...
@@ -28,6 +25,15 @@ def _temporal_result(kind: object, fields: object, precision: object) -> object:
 
 # Internal bounded original-YAML compiler. Source capture remains explicit host IO.
 class _Specification:
+    def input_metadata(
+        self,
+    ) -> list[tuple[str, str, str, str, Literal["csv", "parquet"]]]: ...
+    def check_source_metadata(
+        self,
+        sources: list[
+            tuple[str, list[tuple[str, str]]] | tuple[str, str, list[tuple[str, str]]]
+        ],
+    ) -> list[tuple[str, str, str | None, list[str], str]]: ...
     def check_issues(self) -> str: ...
     def build(
         self,
@@ -115,6 +121,20 @@ def _define_file(
 ) -> _DefineResult: ...
 
 class _ProjectSpecification:
+    def diagnostic_origins(self) -> list[tuple[str, str]]: ...
+    def input_metadata(
+        self,
+    ) -> list[tuple[str, str, str, str, Literal["csv", "parquet"]]]: ...
+    def capture_input_metadata(
+        self, index: int, maximum: int
+    ) -> tuple[bytes | None, list[tuple[str, str, str | None, list[str], str]]]: ...
+    def check_issues(self) -> list[tuple[str, str, str | None, list[str], str]]: ...
+    def check_source_metadata(
+        self,
+        sources: list[
+            tuple[str, list[tuple[str, str]]] | tuple[str, str, list[tuple[str, str]]]
+        ],
+    ) -> list[tuple[str, str, str | None, list[str], str]]: ...
     def preparation_status(self) -> str: ...
     def capture_reads(self) -> int: ...
     def build(self) -> _ProjectAttempt: ...
@@ -146,7 +166,7 @@ def _prepare_file_project(
     project_root: str,
     base_directory: str,
     entry: str,
-    environment: str,
+    environment: str | None,
     data_roots: list[str],
     specification_modules: list[tuple[str, bytes]],
     specification_entry: int,

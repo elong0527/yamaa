@@ -1,0 +1,143 @@
+{
+  "authorship": "Independent mixed grouped and record-template controls. REQ-0086 admits a shared group key when every grouped template includes it; ungrouped templates already provide a scalar physical-record field. The row schema permits both templates on one driver.",
+  "requirements": [
+    "REQ-0086",
+    "REQ-0107",
+    "REQ-0132",
+    "REQ-0148"
+  ],
+  "cases": {
+    "mixed-shared-group-key-filter": {
+      "inputs": {
+        "input.csv": "ID,SEQ\na,1\na,2\nb,3\n"
+      },
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": [],
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SECTION, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: result.csv, columns: [ID, SECTION, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.SEQ > 0'}}}, {otherwise: {literal: unused}}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {SECTION: {literal: grouped}, SEQ: {literal: 0}}}\n  - {id: records, dataset: SRC, derivations: {SECTION: {literal: record}, SEQ: SRC.SEQ}}\n",
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.case[0].then.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.case[0].then.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ]
+    },
+    "mixed-group-key-redundant-keep": {
+      "inputs": {
+        "input.csv": "ID,SEQ\na,1\na,2\nb,3\n"
+      },
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": [
+        {
+          "spec_path": "columns.VALUE.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": 0
+        }
+      ],
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SECTION, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: result.csv, columns: [ID, SECTION, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, order_by: [SRC.SEQ], keep: last}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {SECTION: {literal: grouped}, SEQ: {literal: 0}}}\n  - {id: records, dataset: SRC, derivations: {SECTION: {literal: record}, SEQ: SRC.SEQ}}\n",
+      "issues": [],
+      "check_issues": [],
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "SECTION",
+            "str"
+          ],
+          [
+            "SEQ",
+            "int"
+          ],
+          [
+            "VALUE",
+            "str"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "grouped",
+            "0",
+            "a"
+          ],
+          [
+            "b",
+            "grouped",
+            "0",
+            "b"
+          ],
+          [
+            "a",
+            "record",
+            "1",
+            "a"
+          ],
+          [
+            "a",
+            "record",
+            "2",
+            "a"
+          ],
+          [
+            "b",
+            "record",
+            "3",
+            "b"
+          ]
+        ]
+      },
+      "csv": "ID,SECTION,SEQ,VALUE\na,grouped,0,a\nb,grouped,0,b\na,record,1,a\na,record,2,a\nb,record,3,b\n"
+    },
+    "mixed-nongrouped-field-is-unavailable": {
+      "inputs": {
+        "input.csv": "ID,SEQ\na,1\na,2\nb,3\n"
+      },
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": [],
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SECTION, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: result.csv, columns: [ID, SECTION, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.SEQ, filter: 'TRUE'}}}, {otherwise: {literal: unused}}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {SECTION: {literal: grouped}, SEQ: {literal: 0}}}\n  - {id: records, dataset: SRC, derivations: {SECTION: {literal: record}, SEQ: SRC.SEQ}}\n",
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "ungrouped_driver_field",
+          "requirement": "REQ-0107",
+          "spec_paths": [
+            "columns.VALUE.derivation.case[0].then.source"
+          ],
+          "context": {
+            "identifier": "SRC.SEQ",
+            "dataset": "SRC"
+          }
+        }
+      ],
+      "check_issues": []
+    }
+  }
+}
