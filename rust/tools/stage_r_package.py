@@ -1,20 +1,12 @@
 """Stage a standalone R source package without maintaining duplicate Rust code."""
 
 import argparse
-import csv
-import json
 import importlib.util
 import shutil
 from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[1]
 REPOSITORY = WORKSPACE.parent
-
-_requirement_spec = importlib.util.spec_from_file_location(
-    "private_schema_requirements", Path(__file__).with_name("private_schema_requirements.py"))
-_requirement_module = importlib.util.module_from_spec(_requirement_spec)
-_requirement_spec.loader.exec_module(_requirement_module)
-reconciled_schema_requirements = _requirement_module.reconciled_schema_requirements
 
 
 def stage(destination: Path):
@@ -44,69 +36,6 @@ def stage(destination: Path):
         shutil.copy2(original, target)
     resources = destination / "inst"
     resources.mkdir(exist_ok=True)
-    for fixture in (
-        "aggregate_syntax.tsv",
-        "numeric_syntax.tsv",
-        "predicate_syntax.tsv",
-        "schema_transport.tsv",
-        "schema_model.tsv",
-        "schema_windows.tsv",
-        "schema_composition.tsv",
-        "schema_layer_admission.tsv",
-        "schema_inheritance_dependencies.tsv",
-        "inheritance_traversal.tsv",
-        "inheritance_sources.tsv",
-        "yaml_transport.tsv",
-        "regex_transport.tsv",
-        "scalar_transport.tsv",
-        "numeric_transport.tsv",
-        "reference_binding.tsv",
-        "reference_scope.tsv",
-        "reference_intermediate.tsv",
-        "reference_keys.tsv",
-        "reference_match_values.tsv",
-        "reference_relations.tsv",
-    ):
-        shutil.copy2(
-            WORKSPACE / "crates/yamaa-adapters/tests/fixtures" / fixture,
-            resources / fixture,
-        )
-    # Keep original captured resources byte-identical; stage separate citation-only expectations.
-    for fixture in ("schema_transport.tsv", "schema_model.tsv", "schema_windows.tsv",
-                    "schema_composition.tsv", "schema_layer_admission.tsv",
-                    "schema_inheritance_dependencies.tsv"):
-        with (resources / fixture).open(encoding="utf-8", newline="") as stream:
-            reader = csv.DictReader(stream, delimiter="\t")
-            fields, rows = reader.fieldnames, list(reader)
-        with (resources / ("normative-" + fixture)).open("w", encoding="utf-8", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=fields, delimiter="\t", quoting=csv.QUOTE_NONE,
-                                    quotechar=None, lineterminator="\n")
-            writer.writeheader()
-            for row in rows:
-                row["expected"] = json.dumps(reconciled_schema_requirements(
-                    json.loads(row["expected"]), resolved_output=False),
-                    sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-                writer.writerow(row)
-    shutil.copytree(
-        WORKSPACE / "crates/yamaa-adapters/tests/fixtures/tables",
-        resources / "tables",
-    )
-    shutil.copytree(
-        WORKSPACE / "crates/yamaa-adapters/tests/fixtures/datasets",
-        resources / "datasets",
-    )
-    shutil.copy2(
-        WORKSPACE / "crates/yamaa-engine/tests/fixtures/function_invocation.tsv",
-        resources / "function_invocation.tsv",
-    )
-    shutil.copy2(
-        WORKSPACE / "crates/yamaa-core/tests/fixtures/dependency_analysis.tsv",
-        resources / "dependency_analysis.tsv",
-    )
-    shutil.copy2(
-        WORKSPACE / "crates/yamaa-core/tests/fixtures/column_dependencies.tsv",
-        resources / "column_dependencies.tsv",
-    )
     helper_spec = importlib.util.spec_from_file_location(
         "stage_specification_inputs",
         Path(__file__).with_name("stage_specification_inputs.py"),
