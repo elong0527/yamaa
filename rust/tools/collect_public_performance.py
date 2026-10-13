@@ -156,6 +156,10 @@ def collect(args):
                     harness / lifecycle.WORKERS[args.host], child / "request.json"), child)
                 observation["peak_rss"] = process["peak_rss"]
                 response = lifecycle.read_json(child / "response.json")
+                if response.get("pid") != process["pid"]:
+                    observation["unqualified_launcher_peak_rss"] = observation["peak_rss"]
+                    observation["peak_rss"] = None
+                    raise ValueError("worker PID differs from measured process; child RSS unavailable")
                 # Preserve failures before admission. Reached reports are already
                 # retained by the worker, even when a view/Save subsequently fails.
                 validator = validate_reference if args.evaluator == "python-reference" else scalable.validate
