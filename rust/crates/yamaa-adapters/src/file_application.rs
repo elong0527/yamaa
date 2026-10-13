@@ -425,6 +425,27 @@ pub trait RuntimePort {
         &mut self,
         prepared: Box<crate::file_graph::FileGraph>,
     ) -> Result<Self::Result, Self::Error>;
+    fn plain_with_observer(
+        &mut self,
+        prepared: FileSpecification,
+        _scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<Self::Result, Self::Error> {
+        self.plain(prepared)
+    }
+    fn project_with_observer(
+        &mut self,
+        prepared: Box<crate::file_project::FileProject>,
+        _scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<Self::Result, Self::Error> {
+        self.project(prepared)
+    }
+    fn producer_with_observer(
+        &mut self,
+        prepared: Box<crate::file_graph::FileGraph>,
+        _scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<Self::Result, Self::Error> {
+        self.producer(prepared)
+    }
 }
 pub enum ApplicationError<E> {
     Preparation(crate::file_workflow::SelectionError),
@@ -475,35 +496,86 @@ impl<R: RuntimePort> yamaa_engine::build::Ports for Application<R> {
             .producer(prepared)
             .map_err(ApplicationError::Runtime)
     }
+    fn build_plain_with_observer(
+        &mut self,
+        prepared: FileSpecification,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<R::Result, Self::Failure> {
+        self.runtime
+            .plain_with_observer(prepared, scope)
+            .map_err(ApplicationError::Runtime)
+    }
+    fn build_project_with_observer(
+        &mut self,
+        prepared: Self::Project,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<R::Result, Self::Failure> {
+        self.runtime
+            .project_with_observer(prepared, scope)
+            .map_err(ApplicationError::Runtime)
+    }
+    fn build_producer_with_observer(
+        &mut self,
+        prepared: Self::Producer,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<R::Result, Self::Failure> {
+        self.runtime
+            .producer_with_observer(prepared, scope)
+            .map_err(ApplicationError::Runtime)
+    }
 }
 impl RuntimePort for Native<'_> {
     type Result = Domain;
     type Error = Failure;
-    fn plain(&mut self, mut prepared: FileSpecification) -> Result<Domain, Failure> {
-        let attempt = prepared.build();
+    fn plain(&mut self, prepared: FileSpecification) -> Result<Domain, Failure> {
+        self.plain_with_observer(
+            prepared,
+            yamaa_engine::application_observer::Scope::new(
+                &yamaa_engine::application_observer::Noop,
+            ),
+        )
+    }
+    fn plain_with_observer(
+        &mut self,
+        mut prepared: FileSpecification,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Result<Domain, Failure> {
+        let attempt = prepared.build_with_observer(scope);
         if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
             return Err(resource_failure("capture", error));
         }
-        let result = specification_report::build_result(
-            prepared.run(),
-            &attempt,
-            Identity {
-                runtime: self.identity.runtime,
-                runtime_version: self.identity.runtime_version,
-                engine_version: self.identity.engine_version,
-                example: self.identity.example,
-                specification: self.identity.specification,
-                base_directory: self.identity.base_directory,
-            },
-        )
-        .map_err(|_| rejected("build", "result_projection"))?;
-        Domain::from_build(result, |field| {
-            if field == "path" {
-                prepared.publication_target()
+        scope.phase(yamaa_engine::application_observer::Phase::Output);
+        let converted = (|| {
+            let result = specification_report::build_result(
+                prepared.run(),
+                &attempt,
+                Identity {
+                    runtime: self.identity.runtime,
+                    runtime_version: self.identity.runtime_version,
+                    engine_version: self.identity.engine_version,
+                    example: self.identity.example,
+                    specification: self.identity.specification,
+                    base_directory: self.identity.base_directory,
+                },
+            )
+            .map_err(|_| rejected("build", "result_projection"))?;
+            Domain::from_build(result, |field| {
+                if field == "path" {
+                    prepared.publication_target()
+                } else {
+                    prepared.publication_field_target(field)
+                }
+            })
+        })();
+        scope.exit(
+            yamaa_engine::application_observer::Phase::Output,
+            if converted.is_ok() {
+                yamaa_engine::application_observer::Outcome::Succeeded
             } else {
-                prepared.publication_field_target(field)
-            }
-        })
+                yamaa_engine::application_observer::Outcome::Failed
+            },
+        );
+        converted
     }
     fn project(&mut self, _: Box<crate::file_project::FileProject>) -> Result<Domain, Failure> {
         Err(unsupported("environment", Some("environment")))
@@ -516,6 +588,13 @@ impl RuntimePort for Native<'_> {
 /// Convert an already checked plain capability without recapturing metadata.
 pub fn plain(prepared: FileSpecification, identity: Identity<'_>) -> Result<Domain, Failure> {
     Native { identity }.plain(prepared)
+}
+pub fn plain_with_observer(
+    prepared: FileSpecification,
+    identity: Identity<'_>,
+    scope: yamaa_engine::application_observer::Scope<'_>,
+) -> Result<Domain, Failure> {
+    Native { identity }.plain_with_observer(prepared, scope)
 }
 fn native(identity: Identity<'_>) -> Application<Native<'_>> {
     Application {
@@ -569,6 +648,13 @@ mod tests {
         built_with(false, false)
     }
     fn built_with(fatal: bool, nested: bool) -> (Study, Domain) {
+        built_observed(fatal, nested, None)
+    }
+    fn built_observed(
+        fatal: bool,
+        nested: bool,
+        measurements: Option<&crate::application_measurements::Measurements>,
+    ) -> (Study, Domain) {
         let root = std::env::temp_dir().join(format!(
             "yamaa-save-log-attempt-{}-{}",
             std::process::id(),
@@ -591,21 +677,48 @@ mod tests {
         }
         fs::write(root.join("spec.yaml"), specification).unwrap();
         let entry = root.join("spec.yaml").to_str().unwrap().to_owned();
-        let result = domain(
-            Request {
-                specification: &entry,
-                environment: None,
-            },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "logs",
-                specification: &entry,
-                base_directory: ".",
-            },
-        )
-        .unwrap();
+        let identity = || Identity {
+            runtime: "test",
+            runtime_version: "test",
+            engine_version: yamaa_core::VERSION,
+            example: "logs",
+            specification: &entry,
+            base_directory: ".",
+        };
+        let request = || Request {
+            specification: &entry,
+            environment: None,
+        };
+        let ordinary = domain(request(), identity()).unwrap();
+        let result = if let Some(measurements) = measurements {
+            let mut application = native(identity());
+            let observed = domain_entry::domain_with_observer(
+                request(),
+                &mut application,
+                yamaa_engine::application_observer::Scope::new(measurements),
+            )
+            .unwrap_or_else(|_| panic!("observed fixture failed"));
+            measurements.complete(observed.output().is_some());
+            assert_eq!(observed.observations_json(), ordinary.observations_json());
+            assert_eq!(observed.output(), ordinary.output());
+            assert_eq!(observed.verification_log(), ordinary.verification_log());
+            assert_eq!(observed.warning_log(), ordinary.warning_log());
+            assert_eq!(
+                observed
+                    .issues()
+                    .iter()
+                    .map(|issue| (&issue.condition, &issue.context))
+                    .collect::<Vec<_>>(),
+                ordinary
+                    .issues()
+                    .iter()
+                    .map(|issue| (&issue.condition, &issue.context))
+                    .collect::<Vec<_>>()
+            );
+            observed
+        } else {
+            ordinary
+        };
         fs::remove_file(root.join("input/dm.csv")).unwrap();
         fs::remove_file(root.join("spec.yaml")).unwrap();
         (Study(root), result)
@@ -618,6 +731,84 @@ mod tests {
         }
     }
     impl std::error::Error for Marker {}
+    #[test]
+    fn actual_observed_owner_preserves_report_log_bytes_original_save_failure_and_retry() {
+        use crate::application_measurements::Measurements;
+        let measurements = Measurements::new();
+        let (study, mut result) = built_observed(false, false, Some(&measurements));
+        let original = result.observations_json();
+        let evidence = measurements.evidence();
+        assert_eq!(evidence["admitted"], true);
+        assert_eq!(evidence["build_accepted"], true);
+        for phase in [
+            "preparation",
+            "build_service",
+            "input",
+            "execution_admission",
+            "execution_derivation",
+            "output_keys",
+            "verification",
+            "output_preparation",
+        ] {
+            assert!(
+                evidence["stages"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|stage| stage["phase"] == phase && stage["outcome"] == "succeeded"),
+                "missing actual stage {phase}: {evidence}"
+            );
+        }
+        assert_eq!(
+            serde_json::from_str::<Value>(&measurements.envelope(Some(original.clone()))).unwrap()
+                ["report"],
+            result.observations()
+        );
+        let marker = Arc::new(());
+        measurements.save_entered();
+        assert!(!result
+            .save_with(16_777_216, |_, _, _| Err(
+                crate::file_publication::Error::Io(std::io::Error::other(Marker(Arc::clone(
+                    &marker
+                ))))
+            ))
+            .unwrap());
+        measurements.save_completed("refused");
+        let Some(crate::file_publication::Error::Io(error)) = &result.publication_attempt.failure
+        else {
+            panic!("original error was lost")
+        };
+        assert!(Arc::ptr_eq(
+            &error.get_ref().unwrap().downcast_ref::<Marker>().unwrap().0,
+            &marker
+        ));
+        assert_eq!(result.observations_json(), original);
+        for _ in 0..2 {
+            measurements.save_entered();
+            assert!(result.save().unwrap());
+            measurements.save_completed("succeeded");
+        }
+        let after = measurements.evidence();
+        assert_eq!(after["stages"], evidence["stages"]);
+        assert_eq!(after["function_calls"], evidence["function_calls"]);
+        assert_eq!(after["admitted"], true);
+        assert_eq!(after["save_attempts"], 3);
+        assert_eq!(after["saves"][0]["outcome"], "refused");
+        assert_eq!(after["saves"][2]["outcome"], "succeeded");
+        assert_eq!(
+            result.observations()["artifacts"].as_array().unwrap().len(),
+            3
+        );
+        assert!(study.0.join("adsl.csv").exists());
+        let failed = Measurements::new();
+        let (_, mut result) = built_observed(true, false, Some(&failed));
+        assert_eq!(failed.evidence()["admitted"], true);
+        assert_eq!(failed.evidence()["build_accepted"], false);
+        failed.save_entered();
+        assert!(result.save().is_err());
+        failed.save_completed("failed");
+        assert_eq!(failed.evidence()["saves"][0]["outcome"], "failed");
+    }
     #[test]
     fn actual_late_failures_retain_original_error_entered_prefix_and_retry() {
         for fail_at in 0..3 {

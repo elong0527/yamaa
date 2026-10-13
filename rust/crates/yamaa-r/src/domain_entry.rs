@@ -9,6 +9,8 @@ use std::{
 use yamaa_adapters::issue_rows::Issue;
 
 pub(crate) struct State {
+    pub(crate) measurements:
+        Option<std::sync::Arc<yamaa_adapters::application_measurements::Measurements>>,
     #[cfg(any(unix, windows))]
     pub(crate) result: Option<yamaa_adapters::file_application::Domain>,
     #[cfg(any(unix, windows))]
@@ -93,20 +95,25 @@ fn domain_file(
                 host: yamaa_engine::host_values::Language::R,
                 runtime,
             };
-            let state = match yamaa_engine::domain_entry::domain(
+            let measurements =
+                std::sync::Arc::new(yamaa_adapters::application_measurements::Measurements::new());
+            let mut state = match yamaa_engine::domain_entry::domain_with_observer(
                 yamaa_engine::domain_entry::Request {
                     specification,
                     environment,
                 },
                 &mut ports,
+                yamaa_engine::application_observer::Scope::new(measurements.as_ref()),
             ) {
                 Ok(state) => state,
                 Err(yamaa_adapters::file_application::ApplicationError::Runtime(error)) => {
-                    return Err(error)
+                    measurements.complete(false);
+                    return Err(error);
                 }
                 Err(yamaa_adapters::file_application::ApplicationError::Preparation(error)) => {
                     State {
                         producer: None,
+                        measurements: None,
                         result: None,
                         project: None,
                         issues: yamaa_adapters::project_application::selection_failure(
@@ -116,12 +123,23 @@ fn domain_file(
                     }
                 }
             };
+            let accepted = state
+                .result
+                .as_ref()
+                .is_some_and(|result| result.output().is_some())
+                || state
+                    .producer
+                    .as_ref()
+                    .is_some_and(|result| result.accepted());
+            measurements.complete(accepted);
+            state.measurements = Some(measurements);
             store(state)
         }
         #[cfg(not(any(unix, windows)))]
         {
             let _ = (specification, environment, version, capabilities);
             store(State {
+                measurements: None,
                 issues: unavailable(),
             })
         }
@@ -205,26 +223,35 @@ fn domain_output(handle: Robj) -> List {
     })
 }
 #[extendr]
-fn domain_observations(handle: Robj) -> List {
+fn domain_observations(handle: Robj, include_measurements: bool) -> List {
     boundary(|| {
         let state = resolve(&handle)?;
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        #[cfg(any(unix, windows))]
-        if let Some(result) = &state.result {
-            return Ok(Raw::from_bytes(result.observations_json().as_bytes()).into_robj());
-        }
-        #[cfg(any(unix, windows))]
-        if let Some(value) = state
-            .producer
-            .as_ref()
-            .and_then(|result| result.observations())
-        {
-            return Ok(Raw::from_bytes(value.as_bytes()).into_robj());
-        }
-        let _ = state;
-        Ok(NULL.into_robj())
+        let observed: Option<String> = (|| {
+            #[cfg(any(unix, windows))]
+            if let Some(result) = &state.result {
+                return Some(result.observations_json());
+            }
+            #[cfg(any(unix, windows))]
+            if let Some(value) = state
+                .producer
+                .as_ref()
+                .and_then(|result| result.observations())
+            {
+                return Some(value);
+            }
+            None
+        })();
+        let observed = match (include_measurements, state.measurements.as_ref()) {
+            (true, Some(measurements)) => Some(measurements.envelope(observed)),
+            _ => observed,
+        };
+        Ok(observed.map_or_else(
+            || NULL.into_robj(),
+            |value| Raw::from_bytes(value.as_bytes()).into_robj(),
+        ))
     })
 }
 #[extendr]
@@ -261,9 +288,21 @@ fn domain_save(handle: Robj) -> List {
         let mut state = state
             .try_borrow_mut()
             .map_err(|_| "domain result already borrowed")?;
+        let measurements = state.measurements.as_ref().map(std::sync::Arc::clone);
+        if let Some(measurements) = &measurements {
+            measurements.save_entered();
+        }
         #[cfg(any(unix, windows))]
         if let Some(result) = &mut state.result {
-            return Ok(match result.save() {
+            let returned = result.save();
+            if let Some(measurements) = &measurements {
+                measurements.save_completed(match &returned {
+                    Ok(true) => "succeeded",
+                    Ok(false) => "refused",
+                    Err(_) => "failed",
+                });
+            }
+            return Ok(match returned {
                 Ok(saved) => list!(saved = saved, failed = false),
                 Err(_) => list!(saved = false, failed = true),
             }
@@ -271,11 +310,22 @@ fn domain_save(handle: Robj) -> List {
         }
         #[cfg(any(unix, windows))]
         if let Some(result) = &mut state.producer {
-            return Ok(match result.save() {
+            let returned = result.save();
+            if let Some(measurements) = &measurements {
+                measurements.save_completed(match &returned {
+                    Ok(true) => "succeeded",
+                    Ok(false) => "refused",
+                    Err(_) => "failed",
+                });
+            }
+            return Ok(match returned {
                 Ok(saved) => list!(saved = saved, failed = false),
                 Err(_) => list!(saved = false, failed = true),
             }
             .into_robj());
+        }
+        if let Some(measurements) = &measurements {
+            measurements.save_completed("failed");
         }
         let _ = &mut state;
         Ok(list!(saved = false, failed = true).into_robj())

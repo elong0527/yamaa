@@ -120,19 +120,33 @@ impl PreparedRun {
         activation: &mut A,
         source: &mut P,
     ) -> Attempt<P::Error, A::Error> {
+        self.execute_with_observer(
+            activation,
+            source,
+            yamaa_engine::application_observer::Scope::new(
+                &yamaa_engine::application_observer::Noop,
+            ),
+        )
+    }
+    pub fn execute_with_observer<A: ActivationPort, P: SourcePort>(
+        &self,
+        activation: &mut A,
+        source: &mut P,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> Attempt<P::Error, A::Error> {
         let mut attempt = Attempt {
             boundary: Ok(()),
             activation: Observations::default(),
             dataset: CapturedAttempt::new(self.compiled().source()),
         };
         attempt.boundary = match catch_unwind(AssertUnwindSafe(|| {
-            self.checked.build_observed_into(
+            self.checked.build_with_observer_into(
                 activation,
                 source,
                 &mut Decoder::<A::Error>::default(),
                 crate::specification_run::limits(),
-                &mut attempt.dataset,
-                &mut attempt.activation,
+                (&mut attempt.dataset, &mut attempt.activation),
+                scope,
             )
         })) {
             Ok(result) => result.map_err(BoundaryFailure::Activation),

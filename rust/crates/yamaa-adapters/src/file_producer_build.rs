@@ -229,9 +229,25 @@ impl FileBuild {
         id: crate::specification_report::Identity<'_>,
         limits: Limits,
     ) -> OwnedAttempt<A::Error> {
+        self.build_owned_reported_with_observer(
+            activation,
+            id,
+            limits,
+            yamaa_engine::application_observer::Scope::new(
+                &yamaa_engine::application_observer::Noop,
+            ),
+        )
+    }
+    pub fn build_owned_reported_with_observer<A: ActivationPort>(
+        &mut self,
+        activation: &mut A,
+        id: crate::specification_report::Identity<'_>,
+        limits: Limits,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> OwnedAttempt<A::Error> {
         let provenance = Arc::clone(&self.provenance);
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
-        let (attempt, publication) = self.build_actual(activation, &mut report, limits);
+        let (attempt, publication) = self.build_actual(activation, &mut report, limits, scope);
         let logs: Arc<[crate::producer_report::NodeLogs]> = report.take_logs().into();
         let logged = self
             .provenance
@@ -287,13 +303,22 @@ impl FileBuild {
         report: &mut R,
         limits: Limits,
     ) -> Attempt<A::Error, R::Report, R::Error> {
-        self.build_actual(activation, report, limits).0
+        self.build_actual(
+            activation,
+            report,
+            limits,
+            yamaa_engine::application_observer::Scope::new(
+                &yamaa_engine::application_observer::Noop,
+            ),
+        )
+        .0
     }
     fn build_actual<A: ActivationPort, R: ReportPort>(
         &mut self,
         activation: &mut A,
         report: &mut R,
         limits: Limits,
+        scope: yamaa_engine::application_observer::Scope<'_>,
     ) -> ActualBuild<A::Error, R::Report, R::Error> {
         let mut attempt = Attempt {
             provenance: Arc::clone(&self.provenance),
@@ -325,7 +350,7 @@ impl FileBuild {
         attempt.boundary = match ready {
             Err(error) => Err(error),
             Ok(()) => match catch_unwind(AssertUnwindSafe(|| {
-                publication = self.provenance.build.build_publication_into(
+                publication = self.provenance.build.build_publication_with_observer_into(
                     engine::Ports {
                         activation,
                         study: &mut Study {
@@ -337,6 +362,7 @@ impl FileBuild {
                     },
                     limits.engine,
                     &mut attempt.graph,
+                    scope,
                 );
             })) {
                 Ok(()) => Ok(()),

@@ -99,10 +99,28 @@ impl PreparedRun {
     /// Delegate capture and execution order to the engine. Preserve observations
     /// outside the panic fence; reporting never captures or decodes a source again.
     pub fn execute_with_port<P: SourcePort>(&self, port: &mut P) -> CapturedAttempt<P::Error> {
+        self.execute_with_observer(
+            port,
+            yamaa_engine::application_observer::Scope::new(
+                &yamaa_engine::application_observer::Noop,
+            ),
+        )
+    }
+    pub fn execute_with_observer<P: SourcePort>(
+        &self,
+        port: &mut P,
+        scope: yamaa_engine::application_observer::Scope<'_>,
+    ) -> CapturedAttempt<P::Error> {
         let mut attempt = application::CapturedAttempt::new(self.source());
         let guarded = catch_unwind(AssertUnwindSafe(|| {
-            self.checked
-                .build_into(port, &mut SourceDecoder, limits(), &mut attempt);
+            self.checked.build_with_observer_into(
+                port,
+                &mut SourceDecoder,
+                &mut yamaa_engine::function_invocation::NoFunctions::new(),
+                limits(),
+                &mut attempt,
+                scope,
+            );
         }));
         let result = if guarded.is_err() {
             Err(PortError::Run(Error::Execution(

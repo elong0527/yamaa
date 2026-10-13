@@ -4,6 +4,7 @@
 #[allow(unsafe_code)]
 mod windows_file;
 
+pub mod application_measurements;
 pub mod column_dependency_transport;
 pub mod dataset_profile;
 pub mod dataset_transport;
