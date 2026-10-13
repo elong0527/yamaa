@@ -2053,7 +2053,7 @@ impl DatasetPlan {
 #[path = "dataset_donor_admission.rs"]
 mod donor_admission_tests;
 
-#[path = "dataset_verification_predicate.rs"]
-mod verification_predicates;
 #[path = "dataset_metadata_types.rs"]
 mod metadata_types;
+#[path = "dataset_verification_predicate.rs"]
+mod verification_predicates;
