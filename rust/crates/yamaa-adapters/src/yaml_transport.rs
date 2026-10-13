@@ -213,11 +213,11 @@ mod tests {
         for (source, expected) in [
             (
                 b"x: \xff".as_slice(),
-                json!({"condition":"non_ascii_source","spec_paths":["$"],"context":{"line":1,"column":4}}),
+                crate::test_diagnostic_truth::value("yaml-byte"),
             ),
             (
                 br#"x: "a\uD800""#.as_slice(),
-                json!({"condition":"invalid_text","spec_paths":["$.x"],"context":{"code_point":"U+D800","offset":1}}),
+                crate::test_diagnostic_truth::value("yaml-surrogate"),
             ),
         ] {
             let response: Value =

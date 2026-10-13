@@ -1149,9 +1149,7 @@ mod tests {
         assert!(decoded_finding(&mut Budget::new(65536), &mut findings, &source, &error).unwrap());
         assert_eq!(
             findings,
-            vec![
-                json!({"phase":"validation","condition":"producer_contract_mismatch","requirement":"REQ-0535","spec_paths":["input.P.schema","input.P.path"],"context":{"dataset":"P","expected":["ID","VALUE"],"actual":["VALUE","ID"],"missing":[],"extra":[],"reordered":true}})
-            ]
+            vec![crate::test_diagnostic_truth::value("producer-header")]
         );
         assert!(
             matches!(&error, yamaa_engine::producer_build::DecodeError::Metadata(held) if held.spec_paths == ["input.P.schema", "input.P.path"])

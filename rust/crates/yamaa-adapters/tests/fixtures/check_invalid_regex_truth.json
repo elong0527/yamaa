@@ -1,0 +1,1 @@
+[{"condition":"invalid_regex","context":"{\"pattern\":\"é(\"}","phase":"validation","requirement":"REQ-0827","spec_paths":["columns.V.verifications[0].matches.pattern"]}]
