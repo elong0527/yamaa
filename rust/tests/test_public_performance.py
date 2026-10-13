@@ -1,12 +1,13 @@
 """Independent admission controls for a source-built legacy baseline."""
 
 import copy
+import gzip
 import importlib.util
 import json
 import sys
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest import mock
 
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
@@ -14,6 +15,34 @@ with mock.patch.object(sys, "path", [str(TOOLS), *sys.path]):
     SPEC = importlib.util.spec_from_file_location("public_performance", TOOLS / "collect_public_performance.py")
     collector = importlib.util.module_from_spec(SPEC)
     SPEC.loader.exec_module(collector)
+
+
+class ReportComparison(unittest.TestCase):
+    def test_windows_paths_and_utf8_match_in_plain_and_compressed_reports(self):
+        ordinary_work = PureWindowsPath(r"C:\evidence\ordinary\work-0")
+        observer_work = PureWindowsPath(r"C:\evidence\observer\work-0")
+
+        def report(work):
+            return {"work": str(work), "nodes": [{"specification": work.as_posix() + "/spec.yaml"}],
+                    "rows": [["\u00e9", 1, None]], "accepted": True}
+
+        with tempfile.TemporaryDirectory() as directory:
+            for suffix in ("", ".gz"):
+                with self.subTest(suffix=suffix):
+                    ordinary = Path(directory) / ("ordinary.json" + suffix)
+                    observer = Path(directory) / ("observer.json" + suffix)
+                    ordinary_bytes = json.dumps(report(ordinary_work), ensure_ascii=True).encode("utf-8")
+                    observer_value = report(observer_work)
+                    observer_bytes = json.dumps(observer_value, ensure_ascii=False, indent=2).encode("utf-8")
+                    encode = gzip.compress if suffix else lambda value: value
+                    ordinary.write_bytes(encode(ordinary_bytes))
+                    observer.write_bytes(encode(observer_bytes))
+                    self.assertEqual(collector.normalized_report(ordinary, ordinary_work),
+                                     collector.normalized_report(observer, observer_work))
+                    observer_value["rows"][0][1] = 2
+                    observer.write_bytes(encode(json.dumps(observer_value).encode("utf-8")))
+                    self.assertNotEqual(collector.normalized_report(ordinary, ordinary_work),
+                                        collector.normalized_report(observer, observer_work))
 
 
 class ReferenceAdmission(unittest.TestCase):

@@ -20,7 +20,7 @@ def evidence():
 
 class ActualEvidence(unittest.TestCase):
     def test_large_report_raw_bytes_and_original_uint64_are_retained_separately(self):
-        report=json.dumps({"tables":[{"rows":["é"*600000]}],"nested":{"measurements":{"original":True}}},ensure_ascii=False,separators=(",",":"))
+        report=json.dumps({"tables":[{"rows":["\u00e9"*600000]}],"nested":{"measurements":{"original":True}}},ensure_ascii=False,separators=(",",":"))
         original=evidence()
         envelope=phases.PREFIX+report+phases.DELIMITER+json.dumps(original,separators=(",",":"))+"}"
         with tempfile.TemporaryDirectory() as directory:
