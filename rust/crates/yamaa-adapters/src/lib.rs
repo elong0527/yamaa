@@ -112,5 +112,14 @@ mod file_inventory;
 
 pub mod host_limits;
 
+pub mod callback;
+pub mod dataset_result;
+mod dataset_snapshot;
+mod execution_diagnostics;
+pub mod ipc_table;
+mod report_scalar;
+mod schema_outcomes;
+mod yaml_diagnostics;
+
 #[cfg(test)]
 mod test_diagnostic_truth;
