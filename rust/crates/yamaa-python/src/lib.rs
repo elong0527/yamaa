@@ -76,5 +76,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
         specification_inheritance::_prepare_inherited_specification,
         module
     )?)?;
+    module.add_function(wrap_pyfunction!(style::_style_same_value, module)?)?;
     Ok(())
 }

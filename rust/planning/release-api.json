@@ -476,6 +476,7 @@
         "_prepare_file_project",
         "_prepare_inherited_specification",
         "_prepare_specification",
+        "_style_same_value",
         "_temporal_result"
       ],
       "disposition": "internal",
