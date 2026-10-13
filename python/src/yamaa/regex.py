@@ -50,6 +50,15 @@ _WHITESPACE_COMPLEMENT_IN_CLASS: Final = (
 # REQ-0824: `.` matches every scalar except these four line terminators.
 _DOT_REPLACEMENT: Final = "[^\\r\\n\\u2028\\u2029]"
 
+# The contract closes a character class at the first `]` (as ECMA-262 and
+# the Rust consumer's parser do), so `[]` is an empty class that matches no
+# scalar and `[^]` is its negation, matching every scalar. The host library
+# instead reads a `]` in that position as a literal class member and never
+# closes the class, so both are spelled over the full scalar range, which
+# the host parses as the class the contract already closed.
+_EMPTY_CLASS: Final = "[^\\x00-\\U0010ffff]"
+_ANY_SCALAR_CLASS: Final = "[\\x00-\\U0010ffff]"
+
 # Escapes the contract admits after a backslash besides the translations
 # above: the single-scalar classes and anchors, and the control escapes.
 # Hex, code point, punctuation, and backreference escapes are checked
@@ -386,6 +395,16 @@ def _normalize(pattern: str) -> str:
             index += 1
             continue
         if character == "[":
+            if pattern.startswith("]", index + 1):
+                output.append(_EMPTY_CLASS)
+                last_atom = True
+                index += 2
+                continue
+            if pattern.startswith("^]", index + 1):
+                output.append(_ANY_SCALAR_CLASS)
+                last_atom = True
+                index += 3
+                continue
             in_class = True
             output.append(character)
             last_atom = False

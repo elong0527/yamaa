@@ -34,6 +34,7 @@ from yamaa.regex import (
     compile_pattern,
     full_match,
     regex_extract,
+    search,
 )
 from yamaa.specification.models import Column
 from yamaa.verification import DeclarationError, check_column
@@ -286,6 +287,39 @@ def test_a_variable_length_lookbehind_alternation_is_malformed(
     assert compile_error.value.condition == "invalid_regex"
     assert compile_error.value.requirement == "REQ-0827"
     assert compile_error.value.pattern == pattern
+
+
+@pytest.mark.parametrize(
+    ("pattern", "subject", "expected"),
+    [
+        # The contract closes a class at the first `]`: `[]` matches no
+        # scalar and `[^]` matches every scalar, including line
+        # terminators and supplementary scalars (the Rust consumer's
+        # fixtures record both spellings as accepted).
+        ("[]", "x", False),
+        ("[^]", "\n", True),
+        ("[^]", "\U0001d400", True),
+        ("[]a", "a", False),
+        ("[]a", "xa", False),
+        ("[^]a", "xa", True),
+        ("[^]a", "\na", True),
+        ("[].", "]", False),
+        ("[]$]+", "$$", False),
+        ("x[]y", "xy", False),
+        ("(a|[])b", "ab", True),
+        ("(a|[])b", "b", False),
+        ("[^]{2}", "a\n", True),
+    ],
+)
+def test_an_empty_class_closes_at_the_first_close_bracket(
+    pattern: str, subject: str, expected: bool
+) -> None:
+    # The host library reads a `]` right after `[` or `[^` as a literal
+    # class member, so it either rejects these patterns as unterminated
+    # or parses the following text as more class members. The portable
+    # contract's empty classes must reach the host in a spelling it
+    # parses as the class the contract already closed.
+    assert search(pattern, subject) is expected
 
 
 def test_a_group_the_match_did_not_enter_is_missing_rather_than_no_match() -> None:
