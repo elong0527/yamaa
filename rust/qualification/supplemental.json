@@ -696,6 +696,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/public_file_resources.R",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_file_resources.py",
         "rust/tests/installed_original_specifications.py",
@@ -708,6 +709,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/public_file_resources.R",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_file_resources.py",
         "rust/tests/installed_original_specifications.py",
@@ -1053,7 +1055,7 @@
       "runtime": "python",
       "path": "rust/tests/installed_file_resources.py",
       "staged_path": "installed_file_resources.py",
-      "level": "compile"
+      "level": "shared_run"
     },
     {
       "id": "python/public-environment",
@@ -1158,6 +1160,13 @@
       "runtime": "r",
       "path": "R/yamaa/tests/public_grammar.R",
       "staged_path": "public_grammar.R",
+      "level": "shared_run"
+    },
+    {
+      "id": "r/public-file-resources",
+      "runtime": "r",
+      "path": "R/yamaa/tests/public_file_resources.R",
+      "staged_path": "public_file_resources.R",
       "level": "shared_run"
     }
   ],
