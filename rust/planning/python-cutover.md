@@ -56,3 +56,39 @@ then runs API/dependency guards, repository validation and the full installed
 matrix. A still-live import, unported assertion or failed public comparison
 stops that slice. Deletion commits stay separate from the helper port and
 from the R rollback rehearsal, so reviewers can retain or restore one family.
+
+## Retained R source and fresh-environment rehearsal
+
+The successful audited native run
+[38394553441](https://github.com/elong0527/yamaa/actions/runs/38394553441)
+at `a1a9c2d216075f331ac108aa4d3638573f103cea` supplied qualified installed
+pre-cutover R source packages, version 0.3.0. They are not published R
+releases; the previous Python tag supplied no R release asset.
+
+| Platform artifact | Exact GitHub Actions artifact ID |
+| --- | --- |
+| `native-r-ubuntu-24.04/yamaa_0.3.0.tar.gz` | 11811851297 |
+| `native-r-macos-15/yamaa_0.3.0.tar.gz` | 11812627529 |
+| `native-r-windows-latest/yamaa_0.3.0.tar.gz` | 11812047748 |
+
+All three archives were retrieved independently through the GitHub connector
+and compare byte-for-byte with the retained audit copies. Receipts identify
+the source revision, run/attempt, artifact, version and byte count without
+content digests. The Actions artifacts expire on 2027-01-11; a durable
+retrievable source asset remains a release gate under #1999.
+
+The explicit `rollback_r=true` dispatch mode in `r.yml` downloads those exact
+artifact IDs and verifies their successful run and source identity before
+installation. It installs the old archive in an empty library with its
+required Rust 1.90.0/R 4.6.1 toolchain, using Rtools45/GNU on Windows. A new
+R process verifies the installed package path/version before creating study
+data. It then replays authored domain/check fixtures with full-range integer
+and leading-zero text, removes the input/specification before held Save,
+compares exact CSV bytes, and replays fixed-time Define against the prior
+archive's previously qualified goldens. A sentinel candidate output must
+remain unchanged throughout. Source bytes, identities, installed versions,
+logs and saved replay outputs are retained as evidence.
+
+The rehearsal is pending until all three hosted jobs pass. It proves a fresh
+source-archive restore; it does not claim an existing `renv.lock` release pin,
+durable publication, performance acceptance or transition approval.
