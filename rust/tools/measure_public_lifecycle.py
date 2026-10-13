@@ -536,11 +536,12 @@ def actual_origins(observed, declared, repository):
         "host",
         "runtime_version",
         "package_version",
-        "engine_version",
         "system",
     ):
         if observed[field] != declared[field]:
             raise ValueError(f"actual installed identity differs: {field}")
+    if observed.get("engine_version") is not None and observed["engine_version"] != declared["engine_version"]:
+        raise ValueError("actual installed core version differs from build attestation")
     roots = checkout_roots(repository)
     origins = {
         key: outside_checkout(value, repository, roots)

@@ -10,7 +10,7 @@ import check_predicate_syntax
 
 
 class PredicateSyntaxEncodingTests(unittest.TestCase):
-    """Exercise the actual Rust transport without requiring the reference package."""
+    """Exercise the typed Rust parser fixture without requiring the reference package."""
 
     def test_probe_with_ansi_default(self):
         """Raw non-ASCII AST strings retain exact scalars and original character sites."""
@@ -23,7 +23,6 @@ class PredicateSyntaxEncodingTests(unittest.TestCase):
             self.assertEqual(
                 response,
                 {
-                    "protocol": "predicate-syntax/1",
                     "outcome": {
                         "status": "parsed",
                         "identifiers": [],

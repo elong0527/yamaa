@@ -6,7 +6,7 @@ use pyo3::{
     types::{PyBytes, PyDict, PyList, PyString, PyTuple},
 };
 use yamaa_adapters::{
-    function_transport::CallbackError,
+    callback::CallbackError,
     project_lock::{Finding, Reason},
 };
 use yamaa_engine::host_values::{
@@ -65,10 +65,7 @@ impl Error {
                     }
                     CallbackError::Boundary(error) => facts.set_item(
                         "internal",
-                        matches!(
-                            error,
-                            yamaa_adapters::function_transport::FunctionTransportError::Internal
-                        ),
+                        matches!(error, yamaa_adapters::callback::BoundaryError::Internal),
                     )?,
                 }
             }

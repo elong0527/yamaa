@@ -141,41 +141,27 @@ fn original_temporal_static_failures_keep_complete_independent_diagnostics_befor
 }
 
 fn expected_yaml(bytes: &[u8]) -> serde_json::Value {
-    let reply: serde_json::Value =
-        serde_json::from_str(&yamaa_adapters::yaml_transport::decode_yaml_bytes(bytes).unwrap())
-            .unwrap();
-    let tree = &reply["outcome"]["document"];
-    fn node(tree: &serde_json::Value, index: usize) -> serde_json::Value {
-        let value = &tree["nodes"][index];
-        match value["kind"].as_str().unwrap() {
-            "text" => value["value"].clone(),
-            "null" => serde_json::Value::Null,
-            "sequence" => value["items"]
-                .as_array()
-                .unwrap()
+    use yamaa_core::schema::{Document, DocumentNode as N};
+    fn node(document: &Document, index: usize) -> serde_json::Value {
+        match &document.nodes()[index] {
+            N::Text(text) => serde_json::json!(text),
+            N::Null => serde_json::Value::Null,
+            N::Sequence(items) => items.iter().map(|id| node(document, *id)).collect(),
+            N::Mapping(entries) => entries
                 .iter()
-                .map(|id| node(tree, id.as_u64().unwrap() as usize))
-                .collect(),
-            "mapping" => value["entries"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|entry| {
-                    let pair = entry.as_array().unwrap();
+                .map(|(key, value)| {
                     (
-                        node(tree, pair[0].as_u64().unwrap() as usize)
-                            .as_str()
-                            .unwrap()
-                            .to_owned(),
-                        node(tree, pair[1].as_u64().unwrap() as usize),
+                        node(document, *key).as_str().unwrap().to_owned(),
+                        node(document, *value),
                     )
                 })
-                .collect::<serde_json::Map<String, serde_json::Value>>()
+                .collect::<serde_json::Map<_, _>>()
                 .into(),
-            other => panic!("unexpected independent diagnostic scalar: {other}"),
+            other => panic!("unexpected independent diagnostic scalar: {other:?}"),
         }
     }
-    node(tree, tree["root"].as_u64().unwrap() as usize)
+    let decoded = yamaa_adapters::yaml_decode::decode_yaml(bytes, Default::default()).unwrap();
+    node(&decoded.document, decoded.document.root())
 }
 
 #[test]

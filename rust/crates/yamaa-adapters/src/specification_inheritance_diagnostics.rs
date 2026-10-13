@@ -1,7 +1,7 @@
 //! Resolve shared inherited findings while preserving opaque host failures.
 use super::{capture_failure, captured_schema};
 use crate::{
-    schema_transport::errors,
+    schema_outcomes as errors,
     specification_source::{InheritanceError, SourceFailure},
 };
 use serde_json::{json, Value};
@@ -139,10 +139,8 @@ fn dictionary_failure_ref<'a, T>(
             let crate::specification_source::Error::Decode { error, .. } = error else {
                 return Ok(capture_failure(error));
             };
-            if let Some(mut rows) = crate::yaml_transport::semantic_diagnostics(error) {
+            if let Some(mut rows) = crate::yaml_diagnostics::semantic_diagnostics(error) {
                 for row in &mut rows {
-                    row["phase"] = json!("validation");
-                    row["requirement"] = Value::Null;
                     if matches!(error, crate::yaml_decode::DecodeFailure::NonAscii(_)) {
                         row["context"]["path"] = json!(reference.written());
                     }
@@ -170,7 +168,7 @@ fn dictionary_failure_ref<'a, T>(
             json!({"status":"rejected","stage":"dictionary","code":"declaring_origin"})
         }
     };
-    Ok(crate::yaml_transport::encode_outcome("specification/prototype",outcome,16_777_216)
+    Ok(crate::yaml_diagnostics::encode_outcome("specification/prototype",outcome,16_777_216)
         .unwrap_or_else(|_|json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"dictionary","code":"response_limit"}}).to_string()))
 }
 
@@ -263,7 +261,7 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
         ),
     };
     Ok(
-        crate::yaml_transport::encode_outcome("specification/prototype", outcome, 16_777_216)
+        crate::yaml_diagnostics::encode_outcome("specification/prototype", outcome, 16_777_216)
             .unwrap_or_else(|_| {
                 json!({"protocol":"specification/prototype","outcome":rejected("response_limit")})
                     .to_string()
@@ -334,7 +332,7 @@ pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
         }
     };
     Ok(
-        crate::yaml_transport::encode_outcome("specification/prototype", outcome, 16_777_216)
+        crate::yaml_diagnostics::encode_outcome("specification/prototype", outcome, 16_777_216)
             .unwrap_or_else(|_| {
                 json!({"protocol":"specification/prototype","outcome":rejected("response_limit")})
                     .to_string()

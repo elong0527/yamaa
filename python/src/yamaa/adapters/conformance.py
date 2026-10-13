@@ -518,7 +518,7 @@ def execute_example(
     *,
     schema_root: str | Path,
     output_dir: str | Path,
-    backend: Literal["python", "rust"] = "python",
+    backend: Literal["python"] = "python",
 ) -> ExampleReport:
     """Run one example and report what the engine observed doing it.
 
@@ -531,8 +531,8 @@ def execute_example(
     example, so a run cannot overwrite the fixture it is being judged
     against.
     """
-    if backend not in {"python", "rust"}:
-        raise ConformanceError("backend must be python or rust")
+    if backend != "python":
+        raise ConformanceError("the retained reference runner supports backend python")
     example_path = Path(example).resolve()
     entry = entry_specification(example_path)
 
@@ -540,12 +540,6 @@ def execute_example(
     destination.mkdir(parents=True, exist_ok=True)
     observer = RunObservations(entry)
     try:
-        if backend == "rust":
-            from yamaa.adapters.native_conformance import execute_native_example
-
-            return execute_native_example(
-                example_path.name, entry, Path(schema_root).resolve(), destination
-            )
         return _execute(
             example_path.name,
             entry,
@@ -971,7 +965,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument("examples", nargs="+", help="example directory names")
-    parser.add_argument("--backend", choices=("python", "rust"), default="python")
+    parser.add_argument("--backend", choices=("python",), default="python")
     parser.add_argument(
         "--run-dir",
         required=True,

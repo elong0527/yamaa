@@ -26,7 +26,7 @@
   result$value
 }
 .file_specification_build <- function(handle,example,specification="spec.yaml",base_directory=".") {
-  metadata <- lapply(list(as.character(getRversion()),engine_info()$core_version,
+  metadata <- lapply(list(as.character(getRversion()),.core_version(),
       example,specification,base_directory),.specification_text_bytes,maximum=4096)
   result <- .Call(wrap__file_specification_build,handle,metadata)
   if (!is.null(result$error)) stop(result$error,call.=FALSE)

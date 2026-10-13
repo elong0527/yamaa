@@ -33,18 +33,21 @@ extraction. Numeric rounding policy changes are outside this cleanup.
 
 ## R compatibility
 
-`R/cdiscbuilder` currently exposes legacy `create_sdtm_datasets`, `process_domain`,
-`build_adam_dataset`, `topological_sort`, ODM parsing, submission validation, and
-clinical helper functions listed in `NAMESPACE`. Retain these exports during
-preparation. Do not reinterpret legacy `key`/`data_dependency` specifications as
-the current schema. Before retiring an export, provide a tested exact translation
-or a documented deprecation and replacement.
+The approved R surface is `yamaa_domain`, `yamaa_check`, `yamaa_define`,
+package version metadata and lossless public result representations. The old
+`cdiscbuilder` SQL/semantic evaluator, clinical helper functions, submission
+extension APIs and `parse_odm_to_long_df` retire at qualified cutover. They are
+not translated into the current schema's public surface. The preceding legacy
+inventory is historical; [maintainer decisions](../rust/planning/maintainer-decisions.md)
+and [the transition plan](../rust/planning/transition.md) govern the release.
 
-R grammar-vector tests prove parser agreement only. The execution manifest at
-the initial assessment declares all 315 examples for Python only. Neither issue
-closure nor an R package test pass establishes current-schema R execution parity.
-The future R facade must preserve full-range i64 and missingness; ordinary R
-numeric vectors are not an adequate default interchange contract.
+The shared grammar documents now replay directly through typed Rust APIs,
+preserving exact shapes, identifier collection and closed vocabulary boundaries.
+Installed R public grammar checks run from the staged source package, and public
+benchmark conformance compares retained outputs with independent committed truth
+on every supported R platform. These are separate evidence levels: parser replay
+alone does not establish domain execution parity. Public integer and NUL-text
+vectors retain their approved lossless representations.
 
 ## Migration checks
 
