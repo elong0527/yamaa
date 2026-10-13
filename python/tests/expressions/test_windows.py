@@ -419,6 +419,10 @@ def test_an_unhashable_method_is_refused_rather_than_crashing(
     )
 
     assert condition.condition.condition == "value_not_permitted"
+    assert condition.condition.requirement == "REQ-0322"
+    assert condition.condition.path_suffix is None
+    assert condition.condition.context["field"] == "method"
+    assert condition.condition.context["value"] == str(method)
 
 
 @pytest.mark.parametrize(
