@@ -982,17 +982,12 @@ cat("actual jsonlite authored binary64 transport PASS\\n")
                 domains.append(result)
                 return result
 
-            def info():
-                self.assertEqual(calls[-1], "build")
-                calls.append("metadata")
-                return {"core_version": "test"}
-
             candidate = types.ModuleType("yamaa")
             candidate.__file__ = str(root / "installed" / "__init__.py")
             candidate.__version__ = "test"
             candidate.domain = domain
             candidate._native = types.SimpleNamespace(
-                __file__=str(root / "installed" / "native.so"), engine_info=info
+                __file__=str(root / "installed" / "native.so"), _CORE_VERSION="test"
             )
             polars = types.ModuleType("polars")
             polars.String, polars.Int64, polars.Float64, polars.Date = (
