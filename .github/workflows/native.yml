@@ -336,6 +336,8 @@ jobs:
         run: |
           echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
           uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/table-requirements.txt"
+      - name: Install the grammar fixture codec
+        run: python -m pip install py-yaml12==0.2.0
       - name: Stage installed checks outside checkout
         working-directory: ${{ runner.temp }}
         run: |
