@@ -6,11 +6,14 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 pub(super) const MINIMUM_ROWS: usize = 128;
 
 #[derive(Default)]
-pub(super) struct StringIndex(BTreeMap<String, Vec<usize>>);
+pub(super) struct StringIndex(pub(super) BTreeMap<String, Vec<usize>>);
 
-/// Rust's B-tree has at most eleven keys per node and at least six children
-/// per non-root internal node. Twelve comparisons per conservatively rounded
-/// level also covers the root and unsuccessful searches. No content is hashed.
+/// Rust 1.90 alloc's btree/node.rs fixes B=6, CAPACITY=11, and minimum
+/// non-root occupancy at five keys/six edges. search.rs scans at most eleven
+/// keys per visited node. At least 2*6^(h-1)-1 entries support height h;
+/// 1+ceil(log6(max(entries,1))) conservatively bounds visited levels. Twelve
+/// comparisons per rounded level covers root and unsuccessful searches.
+/// Callers separately charge their key's maximum scalar comparison width.
 pub(super) fn search_work(mut entries: usize) -> usize {
     let mut levels = 1;
     while entries > 1 {
