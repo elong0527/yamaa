@@ -364,19 +364,6 @@
       "issue": "#2002",
       "rationale": "Retain python -m yamaa.style with private host policy and shared native edit proof; retire importable style extension APIs."
     },
-    "python/src/yamaa/submission/__init__.py": {
-      "names": [
-        "ComposedStudy",
-        "compose_study",
-        "generate_study_document",
-        "load_study_document",
-        "render_define_xml",
-        "validate_define_xml"
-      ],
-      "disposition": "replace",
-      "issue": "#1758",
-      "rationale": "Replace public study-document and rendering helpers with define after the three submission benchmarks and exact artifact contracts qualify."
-    },
     "python/src/yamaa/verification/__init__.py": {
       "names": [
         "DeclarationError",
@@ -400,16 +387,6 @@
       "disposition": "remove_public",
       "issue": "#1751",
       "rationale": "Remove public semantic implementation and extension surfaces after replacement qualification; preserve reference baseline until transition."
-    },
-    "python/src/yamaa/_reference_domain.py": {
-      "names": [
-        "DomainRun",
-        "DomainRunError",
-        "yamaa_domain"
-      ],
-      "disposition": "internal",
-      "issue": "#1751",
-      "rationale": "Private retained reference implementation used only by unqualified legacy and reference-assessment consumers; public domain/check never fall back to it."
     },
     "python/src/yamaa/_domain.py": {
       "disposition": "retain_candidate",
