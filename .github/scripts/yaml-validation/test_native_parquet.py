@@ -2,10 +2,14 @@
 
 import datetime
 import io
+import json
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import _native_parquet as native
+import _native_specification as specification
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -17,6 +21,44 @@ def encoded(table):
 
 
 class NativeParquet(unittest.TestCase):
+    def test_complete_repository_route_preserves_the_original_source_identity(self):
+        content = encoded(
+            pa.table({"ID": ["one"], "BAD": pa.array([2], pa.int32())})
+        )
+        # The standalone codec fixture owns its own authored identities.
+        self.assertEqual(native.source_issue(content), (
+            "source_field_type_unsupported", "REQ-1040",
+            {"dataset": "SOURCE", "path": "source.parquet", "field": "BAD",
+                "stored_type": "int32"},
+        ))
+        with TemporaryDirectory(prefix="yamaa-declared-parquet-") as temporary:
+            root = Path(temporary)
+            (root / "received").mkdir()
+            written = "received/authored.parquet"
+            (root / written).write_bytes(content)
+            entry = root / "spec.yaml"
+            entry.write_text(json.dumps({
+                "schema_version": "1.0", "domain": "PROFILE", "keys": ["ID"],
+                "input": {"PATIENTS": {"path": written}},
+                "columns": [{"name": "ID", "type": "str", "label": "Identifier",
+                    "derivation": "PATIENTS.ID"}],
+                "output": {"path": "never.csv", "columns": ["ID"]},
+            }), encoding="ascii")
+            with patch.object(native.pq, "ParquetFile",
+                side_effect=AssertionError("metadata before native profile admission")):
+                [(phase, condition, requirement, paths, context)] = (
+                    specification.issue_rows(entry)
+                )
+            self.assertEqual((phase, condition, requirement, paths), (
+                "validation", "source_field_type_unsupported", "REQ-1040",
+                ["input.PATIENTS.path"],
+            ))
+            self.assertEqual(json.loads(context), {
+                "dataset": "PATIENTS", "path": written, "field": "BAD",
+                "stored_type": "int32",
+            })
+            self.assertFalse((root / "never.csv").exists())
+
     def test_admitted_metadata_preserves_all_carriers_order_and_header_only_fields(
         self,
     ):

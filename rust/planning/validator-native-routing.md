@@ -4,7 +4,8 @@ The repository's complete specification pass now prepares the original authored
 files through the installed native unified engine capability. Static declaration
 issues are native Check findings. Explicit source slots retain their original
 declaring file, resource policy and immutable byte snapshots. CSV and Parquet
-profile admission uses callback-free owned public fixtures; Python reads physical
+profile admission uses callback-free owned public fixtures; their native refusal
+context retains the original declared dataset/path identities. Python reads physical
 header carriers only after native admission. Native header/type binding retains
 the complete ordinary or producer owner and emits portable diagnostic facts.
 
