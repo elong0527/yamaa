@@ -6,12 +6,26 @@ import shutil
 import sys
 from pathlib import Path
 
-_spec = importlib.util.spec_from_file_location(
-    "_public_reports", Path(__file__).with_name("_public_reports.py")
-)
-reports = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = reports
-_spec.loader.exec_module(reports)
+
+class _ReportReader:
+    """Load comparison libraries only when complete report evidence is read."""
+
+    def __init__(self):
+        self._module = None
+
+    def __getattr__(self, name):
+        if self._module is None:
+            spec = importlib.util.spec_from_file_location(
+                "_public_reports", Path(__file__).with_name("_public_reports.py")
+            )
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            self._module = module
+        return getattr(self._module, name)
+
+
+reports = _ReportReader()
 
 COHORT = (
     "adam-adlb-ordered-sum",
