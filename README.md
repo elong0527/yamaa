@@ -110,7 +110,7 @@ result$save()
 
 Source installation requires R 4.6.1, Rust 1.90.0/Cargo and platform build tools.
 The candidate tarball is not yet a qualified release asset. To build it from this
-checkout, follow [the R package guide](R/yamaa/README.md). CRAN and r-universe
+checkout, follow [the R package guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md). CRAN and r-universe
 publication are later distribution work.
 
 ## Where to go next
