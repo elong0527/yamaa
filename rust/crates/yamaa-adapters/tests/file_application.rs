@@ -66,9 +66,12 @@ fn environment_and_invalid_source_profile_precede_entry_and_study_reads() {
         identity(&path),
     );
     assert_eq!(issues.len(), 1);
-    assert_eq!(issues[0].condition, "unsupported_operation");
-    assert_eq!(issues[0].context, "{\"operation\":\"environment\"}");
-    assert_eq!(issues[0].spec_paths, ["environment"]);
+    assert_eq!(issues[0].condition, "engine_rejected");
+    assert_eq!(
+        issues[0].context,
+        "{\"code\":\"resource_missing\",\"stage\":\"environment\"}"
+    );
+    assert!(issues[0].spec_paths.is_empty());
     assert_eq!(issues[0].requirement, None);
     fs::write(
         study.0.join("spec.yaml"),
