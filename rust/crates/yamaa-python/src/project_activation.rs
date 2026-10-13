@@ -9,11 +9,8 @@ use yamaa_adapters::{
     function_transport::CallbackError,
     project_lock::{Finding, Reason},
 };
-use yamaa_core::{
-    function_signature::{LogicalSignature, ProjectFunctionIdentity},
-    project_environment::{LockKind, LockReference},
-    project_function::Language,
-    value::Value,
+use yamaa_engine::host_values::{
+    Language, LockKind, LockReference, LogicalSignature, ProjectFunctionIdentity, Value,
 };
 use yamaa_engine::{
     function_invocation::{Argument, HostError},
@@ -115,8 +112,8 @@ impl ActivationPort for Port<'_, '_> {
     ) -> Result<(), Error> {
         if language != Language::Python
             || lock.kind != LockKind::Uv
-            || self.lock.len() > 16_777_216
-            || functions.len() > 1024
+            || self.lock.len() > yamaa_adapters::host_limits::REPLY_BYTES
+            || functions.len() > yamaa_adapters::host_limits::FUNCTIONS
         {
             return Err(Error::Protocol);
         }
@@ -129,12 +126,12 @@ impl ActivationPort for Port<'_, '_> {
             .call1((PyBytes::new(self.py, self.lock), calls))
             .map_err(Error::Host)?;
         let rows = reply.cast::<PyTuple>().map_err(|_| Error::Protocol)?;
-        if rows.len() > 2_049 {
+        if rows.len() > yamaa_adapters::host_limits::VERSION_FINDINGS {
             return Err(Error::Protocol);
         }
         let mut findings = Vec::with_capacity(rows.len());
-        let mut remaining_text = 16_777_216;
-        let mut remaining_versions: usize = 65_536;
+        let mut remaining_text = yamaa_adapters::host_limits::REPLY_BYTES;
+        let mut remaining_versions: usize = yamaa_adapters::host_limits::RECORDS;
         for row in rows {
             let expected = row.getattr("expected").map_err(Error::Host)?;
             let expected = expected.cast::<PyTuple>().map_err(|_| Error::Protocol)?;

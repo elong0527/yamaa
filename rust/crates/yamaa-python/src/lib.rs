@@ -179,11 +179,9 @@ fn execute_dataset_sources<'py>(
     source: &[u8],
     secondary: &Bound<'py, pyo3::types::PyList>,
 ) -> PyResult<(Option<Bound<'py, pyo3::types::PyBytes>>, String)> {
-    if secondary.len() >= yamaa_adapters::dataset_transport::MAX_SOURCES {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "too many secondary dataset sources",
-        ));
-    }
+    yamaa_adapters::dataset_transport::admit_secondary_count(secondary.len()).map_err(|_| {
+        pyo3::exceptions::PyValueError::new_err("too many secondary dataset sources")
+    })?;
     let buffers = secondary
         .iter()
         .map(|value| value.cast_into::<pyo3::types::PyBytes>())

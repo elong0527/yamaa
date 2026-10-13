@@ -134,3 +134,5 @@ pub mod project_check;
 mod project_diagnostic_projection;
 
 mod file_inventory;
+
+pub mod host_limits;

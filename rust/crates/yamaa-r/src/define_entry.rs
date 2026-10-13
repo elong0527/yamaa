@@ -70,7 +70,7 @@ fn define_file(environment: Raw, standard: Raw, created: Robj, installed: Raw) -
                 standard,
                 created,
                 installed,
-                yamaa_core::project_function::Language::R,
+                yamaa_engine::host_values::Language::R,
             ))
         }
         #[cfg(not(any(unix, windows)))]

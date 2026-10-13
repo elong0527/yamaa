@@ -69,11 +69,10 @@ fn environment(value: &Robj) -> std::result::Result<Option<Raw>, String> {
 }
 #[cfg(not(any(unix, windows)))]
 fn unavailable() -> Vec<Issue> {
-    vec![Issue::from_core(yamaa_core::application_issue::unsupported(
-        "native_file_transport",
-        None,
-    ))
-    .expect("application issue")]
+    vec![
+        Issue::from_core(yamaa_engine::host_values::unavailable_file_transport())
+            .expect("application issue"),
+    ]
 }
 #[extendr]
 fn domain_file(
@@ -111,7 +110,7 @@ fn domain_file(
                 let selected = match yamaa_adapters::file_workflow::select(
                     specification,
                     environment,
-                    yamaa_core::project_function::Language::R,
+                    yamaa_engine::host_values::Language::R,
                 ) {
                     Ok(selected) => selected,
                     Err(error) => {
@@ -121,7 +120,7 @@ fn domain_file(
                             project: None,
                             issues: yamaa_adapters::project_application::selection_failure(
                                 &error,
-                                yamaa_core::project_function::Language::R,
+                                yamaa_engine::host_values::Language::R,
                             ),
                             _preparation: Some(error),
                         })
@@ -131,8 +130,17 @@ fn domain_file(
                     yamaa_adapters::file_workflow::Selected::Ordinary(project) => project,
                     yamaa_adapters::file_workflow::Selected::Producer(graph) => {
                         let mut build = graph.into_build();
-                        let fields = [version, yamaa_core::VERSION, "domain", specification, "."];
-                        if fields.iter().any(|text| text.len() > 65536) {
+                        let fields = [
+                            version,
+                            yamaa_engine::host_values::VERSION,
+                            "domain",
+                            specification,
+                            ".",
+                        ];
+                        if fields
+                            .iter()
+                            .any(|text| text.len() > yamaa_adapters::host_limits::IDENTITY_BYTES)
+                        {
                             return Err("producer identity byte limit".into());
                         }
                         let producer = crate::file_producer::platform::build_selected(
@@ -164,8 +172,14 @@ fn domain_file(
                     inner,
                     run: project.retained_run(),
                 });
-                let fields =
-                    [version, yamaa_core::VERSION, "domain", specification, "."].map(str::to_owned);
+                let fields = [
+                    version,
+                    yamaa_engine::host_values::VERSION,
+                    "domain",
+                    specification,
+                    ".",
+                ]
+                .map(str::to_owned);
                 let formatted = crate::project_result::platform::format(
                     Rc::clone(&attempt),
                     &fields,
@@ -205,7 +219,7 @@ fn domain_file(
                 yamaa_adapters::specification_report::Identity {
                     runtime: "r",
                     runtime_version: version,
-                    engine_version: yamaa_core::VERSION,
+                    engine_version: yamaa_engine::host_values::VERSION,
                     example: "domain",
                     specification,
                     base_directory: ".",
@@ -250,7 +264,7 @@ fn check_file(specification: Raw, environment_path: Robj, version: Raw) -> List 
                 return crate::issue_frame::frame(&yamaa_adapters::project_application::check(
                     specification,
                     environment,
-                    yamaa_core::project_function::Language::R,
+                    yamaa_engine::host_values::Language::R,
                 ));
             }
             let issues = yamaa_adapters::file_application::check(
@@ -261,7 +275,7 @@ fn check_file(specification: Raw, environment_path: Robj, version: Raw) -> List 
                 yamaa_adapters::specification_report::Identity {
                     runtime: "r",
                     runtime_version: version,
-                    engine_version: yamaa_core::VERSION,
+                    engine_version: yamaa_engine::host_values::VERSION,
                     example: "check",
                     specification,
                     base_directory: ".",
@@ -451,9 +465,12 @@ fn domain_preparation_sources(handle: Robj) -> List {
         #[cfg(any(unix, windows))]
         if let Some(error) = &state._preparation {
             let sources = error
-                .retained_sources(65_536, 16_777_216)
+                .retained_sources(
+                    yamaa_adapters::host_limits::RECORDS,
+                    yamaa_adapters::host_limits::REPLY_BYTES,
+                )
                 .map_err(|_| "source evidence limit; original preparation remains retained")?;
-            let mut remaining = 67_108_864usize;
+            let mut remaining = yamaa_adapters::host_limits::SOURCE_BYTES;
             for (_, bytes) in &sources {
                 remaining = remaining
                     .checked_sub(bytes.len())

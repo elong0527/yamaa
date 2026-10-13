@@ -66,7 +66,11 @@ impl InheritancePort for Port {
         written: &str,
     ) -> std::result::Result<Source, SourceError<String>> {
         available((|| {
-            let result = self.ask("canonicalize", list!(raw(declaring), raw(written)), 65_536)?;
+            let result = self.ask(
+                "canonicalize",
+                list!(raw(declaring), raw(written)),
+                yamaa_adapters::host_limits::IDENTITY_BYTES,
+            )?;
             if result.is_null() {
                 return Ok(None);
             }
@@ -75,8 +79,14 @@ impl InheritancePort for Port {
                 .filter(|v| v.len() == 2)
                 .ok_or("invalid inheritance identity")?;
             Ok(Some(Source {
-                identity: text(&result.elt(0).map_err(|_| "missing identity")?, 65_536)?,
-                display_path: text(&result.elt(1).map_err(|_| "missing display path")?, 65_536)?,
+                identity: text(
+                    &result.elt(0).map_err(|_| "missing identity")?,
+                    yamaa_adapters::host_limits::IDENTITY_BYTES,
+                )?,
+                display_path: text(
+                    &result.elt(1).map_err(|_| "missing display path")?,
+                    yamaa_adapters::host_limits::IDENTITY_BYTES,
+                )?,
             }))
         })())
     }

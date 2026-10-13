@@ -24,7 +24,7 @@ pub(super) mod platform {
         }
     }
     fn text(bytes: &Raw) -> std::result::Result<String, String> {
-        if bytes.len() > 65_536 {
+        if bytes.len() > yamaa_adapters::host_limits::RECORDS {
             return Err("publication path byte limit".into());
         }
         std::str::from_utf8(bytes.as_slice())
@@ -78,7 +78,7 @@ pub(super) mod platform {
         path: Raw,
         content: Raw,
     ) -> std::result::Result<Robj, String> {
-        if content.len() > 67_108_864 {
+        if content.len() > yamaa_adapters::host_limits::SOURCE_BYTES {
             return Err("publication byte or path limit".into());
         }
         let id = address(&handle)?;

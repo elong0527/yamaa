@@ -12,7 +12,24 @@ mod conversion;
 mod intermediates;
 #[path = "dataset_relation_predicate.rs"]
 mod relation_predicates;
-pub use yamaa_core::dataset::*;
+pub use yamaa_core::dataset::{
+    AggregateBinding, AggregateBindingError, AggregateDerivation, AggregatePhase,
+    AggregateRelation, AggregateRowContext, AggregateSource, Assignment, BoundAggregate,
+    BoundFunction, BoundNumeric, BoundOdm, BoundProjectFunction, CalendarUnit, CaseBranch, Check,
+    ColumnVerifications, ContextWindow, ContextualMatch, ConversionHandler, CountBoundError,
+    CurrentField, CurrentRead, DatasetPlan, DateBounds, DayDeclaration, DayRule, Expression,
+    FirstAvailable, Flag, FlagBinding, FlagError, FlagRead, FunctionArgument, FunctionInput,
+    Imputation, ImputationKind, ImputationStep, Intermediate, IntermediateDerivations,
+    IntermediateKey, IntermediateSource, IntermediateUnique, InvalidDigits, InvalidTemporal,
+    InventoryScope, JoinedRead, Keep, Lookup, MatchKey, MatchRead, MatchValue, OdmRead, OdmScope,
+    OdmTemplateScope, OrderTerm, PartialDate, PlanError, RecordMatchKey, RelationField,
+    RelationFieldOrigin, RelationPredicate, RelationRange, RelationRangeBound, RelationRangeError,
+    RelationRangeFailure, RelationRangeTypes, RelationShape, RelationShapeError,
+    RelationShapeLimits, Rounding, RowCount, RowCountBound, RowLookup, RowMatchKey, RowMode,
+    RowTemplate, SecondarySource, SelectionRead, SelectionSource, SourceSchemas, SourceSelection,
+    StringCase, StringExtract, StringPad, StringTemplate, Temporal, TemporalKind, TimeRule,
+    ValueCodelist, Verification, VerificationSeverity, Window, WindowKind,
+};
 #[path = "dataset_case_predicate.rs"]
 mod case_predicates;
 #[path = "dataset_flag.rs"]
