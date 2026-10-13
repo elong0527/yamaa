@@ -1,7 +1,7 @@
 {
   "protocol": "public-conformance-ratchet/1",
-  "source_revision": "9b52b1f0ed841b499c578f63916eda8f1e7f6b02",
-  "evidence": "https://github.com/elong0527/yamaa/actions/runs/38379046837",
+  "source_revision": "a1a9c2d216075f331ac108aa4d3638573f103cea",
+  "evidence": "https://github.com/elong0527/yamaa/actions/runs/38394553441",
   "run_attempt": 1,
   "benchmarks": 318,
   "python": [
@@ -10,6 +10,7 @@
     "adam-adae-onset-emergence",
     "adam-adae-partial-dates",
     "adam-adae-post-index",
+    "adam-adae-prior-serious-event",
     "adam-adae-protocol-review",
     "adam-adae-query-flags",
     "adam-adae-review-order",
@@ -19,6 +20,7 @@
     "adam-adae-severity-override",
     "adam-adae-severity-rank",
     "adam-adae-text-cleanup",
+    "adam-adae-worsening-emergence",
     "adam-adae-worst-severity",
     "adam-adce-worst-toxicity",
     "adam-adcm-atc-classes",
@@ -30,6 +32,7 @@
     "adam-adfa-fever",
     "adam-adlb-bds",
     "adam-adlb-closest-visit",
+    "adam-adlb-end-of-treatment",
     "adam-adlb-lymphocytes",
     "adam-adlb-mean",
     "adam-adlb-ordered-sum",
@@ -72,6 +75,7 @@
     "adam-adtte-first-ae",
     "adam-adtte-os",
     "adam-adtte-pfs",
+    "adam-adtte-pro-deterioration",
     "adam-advs-bmi",
     "adam-advs-bsa",
     "adam-advs-carryforward",
@@ -131,6 +135,8 @@
     "negative-locf-no-order",
     "negative-log-zero",
     "negative-lookup-bad-range",
+    "negative-lookup-duplicate-intermediate",
+    "negative-lookup-id-collision",
     "negative-lookup-mismatched",
     "negative-lookup-missing-sex",
     "negative-lookup-rename-intermediate",
@@ -230,6 +236,9 @@
     "schema-lifecycle",
     "schema-lookup",
     "schema-lookup-filters",
+    "schema-lookup-intermediate-correlated-derive",
+    "schema-lookup-intermediate-derived-filter",
+    "schema-lookup-intermediate-unique",
     "schema-non-finite",
     "schema-numeric-functions",
     "schema-odm-column-override",
@@ -255,12 +264,15 @@
     "schema-text-mapping-unmapped",
     "schema-verification-log",
     "schema-window-functions",
+    "schema-window-intermediate-rank",
     "sdtm-ae-coding",
+    "sdtm-ae-meddra-hierarchy",
     "sdtm-ae-odm-repeated",
     "sdtm-ae-partial-dates",
     "sdtm-ae-seriousness",
     "sdtm-cm-collected-medications",
     "sdtm-cm-odm-repeated",
+    "sdtm-cm-whodrug-coding",
     "sdtm-dm-age",
     "sdtm-dm-arms",
     "sdtm-dm-basic",
@@ -272,7 +284,9 @@
     "sdtm-ds-sequence",
     "sdtm-ec-collected-exposure",
     "sdtm-ex-combination",
+    "sdtm-ex-from-ec",
     "sdtm-ex-intervals",
+    "sdtm-fa-event-findings",
     "sdtm-fa-odm-multitest",
     "sdtm-fa-reactogenicity-diary",
     "sdtm-lb-character-results",
@@ -280,12 +294,14 @@
     "sdtm-lb-findings",
     "sdtm-lb-grading",
     "sdtm-lb-lab-specific-ranges",
+    "sdtm-lb-last-observation-before-exposure",
     "sdtm-lb-metadata",
     "sdtm-lb-multiform",
     "sdtm-lb-ranges",
     "sdtm-mh-ongoing-conditions",
     "sdtm-mh-prespecified-conditions",
     "sdtm-pr-procedures",
+    "sdtm-qs-questionnaire-items",
     "sdtm-relrec-dataset-level",
     "sdtm-relrec-links",
     "sdtm-rs-timepoint-response",
@@ -295,7 +311,9 @@
     "sdtm-sv-subject-visits",
     "sdtm-tr-tumor-measurements",
     "sdtm-tu-tumor-identification",
+    "sdtm-vs-collected-form",
     "sdtm-vs-epoch-from-subject-elements",
+    "sdtm-vs-planned-time-points",
     "sdtm-vs-replicates",
     "sdtm-vs-study-day",
     "sdtm-vs-units"
@@ -306,6 +324,7 @@
     "adam-adae-onset-emergence",
     "adam-adae-partial-dates",
     "adam-adae-post-index",
+    "adam-adae-prior-serious-event",
     "adam-adae-protocol-review",
     "adam-adae-query-flags",
     "adam-adae-review-order",
@@ -315,6 +334,7 @@
     "adam-adae-severity-override",
     "adam-adae-severity-rank",
     "adam-adae-text-cleanup",
+    "adam-adae-worsening-emergence",
     "adam-adae-worst-severity",
     "adam-adce-worst-toxicity",
     "adam-adcm-atc-classes",
@@ -326,6 +346,7 @@
     "adam-adfa-fever",
     "adam-adlb-bds",
     "adam-adlb-closest-visit",
+    "adam-adlb-end-of-treatment",
     "adam-adlb-lymphocytes",
     "adam-adlb-mean",
     "adam-adlb-ordered-sum",
@@ -368,6 +389,7 @@
     "adam-adtte-first-ae",
     "adam-adtte-os",
     "adam-adtte-pfs",
+    "adam-adtte-pro-deterioration",
     "adam-advs-bmi",
     "adam-advs-bsa",
     "adam-advs-carryforward",
@@ -427,6 +449,8 @@
     "negative-locf-no-order",
     "negative-log-zero",
     "negative-lookup-bad-range",
+    "negative-lookup-duplicate-intermediate",
+    "negative-lookup-id-collision",
     "negative-lookup-mismatched",
     "negative-lookup-missing-sex",
     "negative-lookup-rename-intermediate",
@@ -525,6 +549,9 @@
     "schema-lifecycle",
     "schema-lookup",
     "schema-lookup-filters",
+    "schema-lookup-intermediate-correlated-derive",
+    "schema-lookup-intermediate-derived-filter",
+    "schema-lookup-intermediate-unique",
     "schema-non-finite",
     "schema-numeric-functions",
     "schema-odm-column-override",
@@ -550,12 +577,15 @@
     "schema-text-mapping-unmapped",
     "schema-verification-log",
     "schema-window-functions",
+    "schema-window-intermediate-rank",
     "sdtm-ae-coding",
+    "sdtm-ae-meddra-hierarchy",
     "sdtm-ae-odm-repeated",
     "sdtm-ae-partial-dates",
     "sdtm-ae-seriousness",
     "sdtm-cm-collected-medications",
     "sdtm-cm-odm-repeated",
+    "sdtm-cm-whodrug-coding",
     "sdtm-dm-age",
     "sdtm-dm-arms",
     "sdtm-dm-basic",
@@ -567,7 +597,9 @@
     "sdtm-ds-sequence",
     "sdtm-ec-collected-exposure",
     "sdtm-ex-combination",
+    "sdtm-ex-from-ec",
     "sdtm-ex-intervals",
+    "sdtm-fa-event-findings",
     "sdtm-fa-odm-multitest",
     "sdtm-fa-reactogenicity-diary",
     "sdtm-lb-character-results",
@@ -575,12 +607,14 @@
     "sdtm-lb-findings",
     "sdtm-lb-grading",
     "sdtm-lb-lab-specific-ranges",
+    "sdtm-lb-last-observation-before-exposure",
     "sdtm-lb-metadata",
     "sdtm-lb-multiform",
     "sdtm-lb-ranges",
     "sdtm-mh-ongoing-conditions",
     "sdtm-mh-prespecified-conditions",
     "sdtm-pr-procedures",
+    "sdtm-qs-questionnaire-items",
     "sdtm-relrec-dataset-level",
     "sdtm-relrec-links",
     "sdtm-rs-timepoint-response",
@@ -590,7 +624,9 @@
     "sdtm-sv-subject-visits",
     "sdtm-tr-tumor-measurements",
     "sdtm-tu-tumor-identification",
+    "sdtm-vs-collected-form",
     "sdtm-vs-epoch-from-subject-elements",
+    "sdtm-vs-planned-time-points",
     "sdtm-vs-replicates",
     "sdtm-vs-study-day",
     "sdtm-vs-units"
@@ -599,9 +635,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.12-wheel",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -609,9 +645,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.12-source",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -619,9 +655,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.13-wheel",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -629,9 +665,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.13-source",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -639,9 +675,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.14-wheel",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -649,9 +685,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.14-source",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -659,9 +695,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.12-wheel",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -669,9 +705,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.12-source",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -679,9 +715,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.13-wheel",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -689,9 +725,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.13-source",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -699,9 +735,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.14-wheel",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -709,9 +745,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.14-source",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -719,9 +755,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.12-wheel",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -729,9 +765,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.12-source",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -739,9 +775,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.13-wheel",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -749,9 +785,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.13-source",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -759,9 +795,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.14-wheel",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -769,9 +805,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.14-source",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -779,9 +815,9 @@
     {
       "artifact": "public-conformance-r-ubuntu-24.04",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -789,9 +825,9 @@
     {
       "artifact": "public-conformance-r-macos-15",
       "summary": {
-        "pass": 294,
+        "pass": 312,
         "mismatch": 1,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
@@ -799,9 +835,9 @@
     {
       "artifact": "public-conformance-r-windows-latest",
       "summary": {
-        "pass": 293,
+        "pass": 311,
         "mismatch": 2,
-        "unsupported": 21,
+        "unsupported": 3,
         "error": 0,
         "excluded": 2
       }
