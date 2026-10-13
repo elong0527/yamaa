@@ -17,6 +17,7 @@ pub(super) struct Declaration {
     order: Vec<(String, bool, bool)>,
     keep: Option<crate::dataset::Keep>,
     absent: Option<Value>,
+    declaration_finding: Option<Diagnostic>,
 }
 #[derive(Clone, Debug)]
 struct Filter {
@@ -62,6 +63,58 @@ impl SourceFinding {
     }
 }
 impl Declaration {
+    /// A declared grouped key is already one scalar in both row and column phase.
+    /// Group scope is declaration metadata and grants no study-source authority.
+    pub fn reject_group_key_filter(
+        &self,
+        path: &str,
+        driver: &str,
+        phase: crate::reference_scope::Phase<'_>,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        if self.filter.is_none() || self.declaration_finding.is_some() {
+            return false;
+        }
+        let scalar = self.is_group_key(driver, phase);
+        if scalar {
+            findings.push(BindFinding::Source(SourceFinding::new(
+                C::SourceFilterSingleValue,
+                &format!("{path}.filter"),
+                &[("identifier", &self.variable)],
+            )));
+        }
+        scalar
+    }
+
+    pub fn is_group_key(&self, driver: &str, phase: crate::reference_scope::Phase<'_>) -> bool {
+        let Some((dataset, _)) = self.variable.split_once('.') else {
+            return false;
+        };
+        match phase {
+            crate::reference_scope::Phase::Row { group_by } => {
+                dataset == driver
+                    && group_by.is_some_and(|group| group.contains(&self.variable.as_str()))
+            }
+            crate::reference_scope::Phase::Column { groups } => {
+                let mut relevant = false;
+                let shared = groups
+                    .iter()
+                    .filter(|group| {
+                        group.iter().any(|field| {
+                            field
+                                .split_once('.')
+                                .is_some_and(|(owner, _)| owner == dataset)
+                        })
+                    })
+                    .all(|group| {
+                        relevant = true;
+                        group.contains(&self.variable.as_str())
+                    });
+                relevant && shared
+            }
+        }
+    }
+
     pub fn prepare(
         d: &Document,
         payload: usize,
@@ -76,6 +129,7 @@ impl Declaration {
                 order: Vec::new(),
                 keep: None,
                 absent: None,
+                declaration_finding: None,
             });
         }
         for &(name, _) in mapping(d, payload)? {
@@ -159,14 +213,38 @@ impl Declaration {
                 order.push((name.into(), descending, nulls_first));
             }
         }
-        if keep.is_some()
-            && (intermediates.reference(&variable).is_some() || !variable.contains('.'))
-        {
-            reject(extra, "single_value_source_selection", path.into());
-        }
-        if order.is_empty() != keep.is_none() {
-            reject(extra, "source_selection", path.into());
-        }
+        let declaration_finding = (order.is_empty() != keep.is_none()).then(|| {
+            let (declared, missing) = if keep.is_some() {
+                ("keep", "order_by")
+            } else {
+                ("order_by", "keep")
+            };
+            Diagnostic {
+                code: C::SourceSelectionUnpaired,
+                spec_paths: vec![path.into()],
+                context: [
+                    (
+                        "operation".into(),
+                        ContextValue::Scalar(Value::Str("source".into())),
+                    ),
+                    (
+                        "declared".into(),
+                        ContextValue::Sequence(vec![ContextValue::Scalar(Value::Str(
+                            declared.into(),
+                        ))]),
+                    ),
+                    (
+                        "missing".into(),
+                        ContextValue::Sequence(vec![ContextValue::Scalar(Value::Str(
+                            missing.into(),
+                        ))]),
+                    ),
+                ]
+                .into(),
+                source_span: None,
+                operand_route: None,
+            }
+        });
         let absent = d
             .field(payload, "absent")
             .map(|id| literal(d, id, &format!("{path}.absent")))
@@ -177,6 +255,7 @@ impl Declaration {
             order,
             keep,
             absent,
+            declaration_finding,
         })
     }
     /// Scope checks precede source field resolution. Every occurrence is admitted,
@@ -368,12 +447,6 @@ impl Declaration {
             .map(Some)
             .map_err(BindError::InvalidPredicateBinding)
     }
-    pub fn has_selection(&self) -> bool {
-        self.keep.is_some()
-    }
-    pub fn has_absent(&self) -> bool {
-        self.absent.is_some()
-    }
     pub fn bind_selection(
         &self,
         path: &str,
@@ -402,9 +475,6 @@ impl Declaration {
         }
         Some(crate::dataset::SourceSelection { order_by, keep })
     }
-    pub fn has_filter(&self) -> bool {
-        self.filter.is_some()
-    }
     fn wrap(
         &self,
         expression: Expression,
@@ -421,6 +491,7 @@ impl Declaration {
                 }),
                 absent: self.absent.clone(),
                 variable_absent,
+                selection_declared: self.keep.is_some(),
                 variable: self.variable.clone(),
                 path: path.into(),
             }
@@ -485,6 +556,10 @@ pub(super) fn bind(
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
+    if let Some(finding) = &declaration.declaration_finding {
+        findings.push(BindFinding::Source(SourceFinding(finding.clone())));
+        return Ok(None);
+    }
     let name = &declaration.variable;
     let mut variable_absent = false;
     let expression = if let Some((index, field)) = prepared.intermediates.reference(name) {
@@ -657,7 +732,7 @@ pub(super) fn bind(
             let selection = declaration.bind_selection(path, dataset, driver, findings);
             let fields = catalog.bind(name).map_err(BindError::Catalog)?;
             if let Some(reference_binding::Binding::Dataset { field, .. }) = fields {
-                if prepared.keys.contains(&column) {
+                if prepared.keys.contains(&column) && filter.is_none() && selection.is_none() {
                     Some(Expression::Source(field))
                 } else {
                     Some(Expression::Collect {
@@ -971,6 +1046,10 @@ impl Declaration {
         path: &str,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(), BindError> {
+        if let Some(finding) = &self.declaration_finding {
+            findings.push(BindFinding::Source(SourceFinding(finding.clone())));
+            return Ok(());
+        }
         if let Some(filter) = &self.filter {
             if let Some(compiled) = &filter.compiled {
                 static_checks::predicate(

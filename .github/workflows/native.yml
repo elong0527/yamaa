@@ -553,6 +553,32 @@ jobs:
             --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
             --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.3.0.tar.gz" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Require repository validator real-R public Check transport
+        if: ${{ always() && steps.r_install.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/native-r-library
+        run: |
+          Rscript --vanilla - <<'RS'
+          version <- "2.0.0"
+          archive <- paste0("jsonlite_", version, ".tar.gz")
+          urls <- c(paste0("https://cran.r-project.org/src/contrib/", archive),
+                    paste0("https://cran.r-project.org/src/contrib/Archive/jsonlite/", archive))
+          target <- tempfile(fileext = ".tar.gz")
+          downloaded <- FALSE
+          for (url in urls) {
+            downloaded <- tryCatch({
+              download.file(url, target, mode = "wb", quiet = TRUE) == 0L
+            }, error = function(error) FALSE)
+            if (downloaded) break
+          }
+          stopifnot(downloaded)
+          install.packages(target, repos = NULL, type = "source", lib = Sys.getenv("R_LIBS"))
+          stopifnot(as.character(utils::packageVersion("jsonlite")) == version)
+          RS
+          cp "${GITHUB_WORKSPACE}/.github/scripts/yaml-validation/_r_check_transport.py" _r_check_transport.py
+          cp "${GITHUB_WORKSPACE}/rust/tests/check_repository_r_transport.py" check_repository_r_transport.py
+          python -I check_repository_r_transport.py
       - name: Check R source package outside checkout
         id: r_package_check
         working-directory: ${{ runner.temp }}
@@ -677,9 +703,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python -m pip install uv==0.11.6
-          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/audit-requirements.txt"
-          python -m pip install --no-deps -r "${RUNNER_TEMP}/audit-requirements.txt"
           python rust/tools/audit_native_run.py --run-id "${GITHUB_RUN_ID}" \
             --repository "${GITHUB_REPOSITORY}" --output "${RUNNER_TEMP}/native-run-audit" --check
       - name: Show the evidence record

@@ -135,12 +135,26 @@ pub fn compare_present(left: &Value, right: &Value) -> Result<Ordering, Comparis
     compare_present_refs(left.into(), right.into())
 }
 
+/// Present operand kinds share one comparison contract with metadata proofs.
+pub(crate) fn comparable_types(left: ValueType, right: ValueType) -> bool {
+    use ValueType::*;
+    matches!(
+        (left, right),
+        (Str, Str) | (Date, Date) | (DateTime, DateTime) | (Int | Float, Int | Float)
+    )
+}
+
 /// Borrow immutable cells for exact matching without retaining donor text.
 pub fn compare_present_refs(
     left: crate::table::ValueRef<'_>,
     right: crate::table::ValueRef<'_>,
 ) -> Result<Ordering, ComparisonError> {
     use crate::table::ValueRef as Value;
+    if let (Some(left), Some(right)) = (left.value_type(), right.value_type()) {
+        if !comparable_types(left, right) {
+            return Err(ComparisonError::IncompatibleTypes);
+        }
+    }
     match (left, right) {
         (Value::Missing, _) | (_, Value::Missing) => Err(ComparisonError::MissingOperand),
         (Value::Int(a), Value::Int(b)) => Ok(a.cmp(&b)),

@@ -1,9 +1,26 @@
 use yamaa_core::{
+    numeric_parser::SourceSpan,
     text_template::{
         AdmissionError, MaterializeError, Part, StringTemplate, MAX_DECLARATION_BYTES,
     },
     value::Value,
 };
+#[test]
+fn deferred_syntax_refusals_retain_original_utf8_spans() {
+    for (text, start, end) in [("é{", 2, 3), ("é}", 2, 3), ("é{A + B}", 2, 9)] {
+        let parsed = StringTemplate::new(text.into(), "path".into(), None).unwrap();
+        assert_eq!(
+            parsed.syntax_failure_span(),
+            Some(SourceSpan { start, end })
+        );
+        assert!(parsed.declaration_diagnostic().is_some());
+        assert!(parsed.parts().is_empty());
+        assert!(parsed.identifiers().is_empty());
+    }
+    let parsed = StringTemplate::new("é{{}}{A}".into(), "path".into(), None).unwrap();
+    assert_eq!(parsed.syntax_failure_span(), None);
+    assert!(parsed.declaration_diagnostic().is_none());
+}
 #[test]
 fn literal_escapes_unique_bindings_and_ordered_occurrences_are_exact() {
     let op = StringTemplate::new(
