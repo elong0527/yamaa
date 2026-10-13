@@ -103,7 +103,7 @@ native refusal, with an explicit unavailable-control record when the host cannot
 create one.
 
 Private capture-stage partial reports and cached-source accounting still consume
-all eight `source_capture.tsv` rows in typed `specification_run` tests and the
+all eight `source-capture.tsv` rows in typed `specification_run` tests and the
 installed original-specification suite. The native engine's reused-build tests
 pin inspection/capture ordering. Typed `file_resources` tests pin exact shared
 snapshot ownership, byte ceilings, cached-content changes and unchanged capture
