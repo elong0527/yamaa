@@ -485,6 +485,128 @@ mod application_observations {
         );
     }
     #[test]
+    fn cumulative_work_entry_retains_actual_node_exits_calls_and_global_refusal() {
+        for (ceiling, accepted) in [(22, true), (21, false)] {
+            let mut ports = Ports::new();
+            let observer = recorder(&ports);
+            let mut attempt = Attempt::default();
+            let mut limits = build::Limits::default();
+            limits.execution.work_cells = ceiling;
+            limits.execution.source_rows = 3;
+            let result = prepared().build_publication_with_observer_into(
+                ports.borrow(),
+                limits,
+                &mut attempt,
+                Scope::new(&observer),
+            );
+            assert_eq!(result.is_ok(), accepted);
+            assert_eq!(attempt.outcome.is_ok(), accepted);
+            assert_immediately_before_actual_calls(&ports);
+            let events = observer.events.borrow();
+            assert_eq!(
+                calls(&events),
+                [
+                    (None, CallStage::Activation),
+                    (None, CallStage::Activation),
+                    (None, CallStage::Activation),
+                    (None, CallStage::Activation),
+                    (
+                        Some((1, "/p".into())),
+                        CallStage::Dataset(ExecutionPhase::Derivation)
+                    ),
+                    (
+                        Some((0, "/root".into())),
+                        CallStage::Dataset(ExecutionPhase::Derivation)
+                    )
+                ]
+            );
+            for node in [(1, "/p"), (0, "/root")] {
+                let identity = Some((node.0, node.1.into()));
+                assert!(events.contains(&Seen::Exit(
+                    identity.clone(),
+                    Phase::Input,
+                    Outcome::Succeeded
+                )));
+                assert!(events.contains(&Seen::Exit(
+                    identity.clone(),
+                    Phase::Dataset(ExecutionPhase::Admission),
+                    Outcome::Succeeded
+                )));
+                assert!(events.contains(&Seen::Exit(
+                    identity,
+                    Phase::Dataset(ExecutionPhase::Derivation),
+                    Outcome::Succeeded
+                )));
+            }
+            let root = Some((0, "/root".into()));
+            if accepted {
+                assert!(!events.iter().any(|e| matches!(e, Seen::Refusal(..))));
+                assert!(events.contains(&Seen::Exit(
+                    root,
+                    Phase::Dataset(ExecutionPhase::Verification),
+                    Outcome::Succeeded
+                )));
+            } else {
+                let refusal = Seen::Refusal(
+                    root.clone(),
+                    Phase::Dataset(ExecutionPhase::OutputKeys),
+                    yamaa_engine::application_observer::Refusal {
+                        resource: yamaa_engine::dataset::Resource::WorkCells,
+                        limit: 21,
+                        required: Some(22),
+                    },
+                );
+                let index = events
+                    .iter()
+                    .position(|e| *e == refusal)
+                    .expect("classified global work refusal absent");
+                assert_eq!(
+                    events[index + 1],
+                    Seen::Exit(
+                        root.clone(),
+                        Phase::Dataset(ExecutionPhase::OutputKeys),
+                        Outcome::Failed
+                    )
+                );
+                assert_eq!(
+                    events[index + 2],
+                    Seen::Phase(root.clone(), Phase::Dataset(ExecutionPhase::Finished))
+                );
+                assert!(!events.iter().any(|e| matches!(
+                    e,
+                    Seen::Phase(Some((0, _)), Phase::Dataset(ExecutionPhase::Verification))
+                )));
+                assert_eq!(
+                    events.last(),
+                    Some(&Seen::Exit(root, Phase::Output, Outcome::Failed))
+                );
+                assert!(attempt.nodes[0]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .is_ok());
+                assert!(matches!(
+                    attempt.nodes[1]
+                        .dataset
+                        .result
+                        .as_ref()
+                        .unwrap()
+                        .result
+                        .as_ref()
+                        .map_err(|e| &**e),
+                    Err(ExecutionError::Limit {
+                        resource: yamaa_engine::dataset::Resource::WorkCells,
+                        limit: 21,
+                        required: Some(22)
+                    })
+                ));
+            }
+        }
+    }
+
+    #[test]
     fn observer_preserves_alias_graph_truth_and_counts_only_real_activation_and_node_calls() {
         let build = prepared();
         let mut ordinary = Ports::new();
@@ -1744,6 +1866,104 @@ fn alias_cells_and_codec_storage_and_work_are_reserved_before_decoded_table_owne
             ));
         } else {
             assert_eq!(attempt.nodes.len(), 1);
+        }
+    }
+}
+
+#[test]
+fn actual_graph_has_one_work_ceiling_and_input_slot_reservations_at_exact_boundaries() {
+    // Each admitted one-row node costs six key-construction units, three
+    // function/value units and two output-key scans: eleven per entered node.
+    let prepared = prepared();
+    for (work, rows, accepted) in [(22, 3, true), (21, 3, false), (22, 2, false)] {
+        let mut ports = Ports::new();
+        let mut attempt = Attempt::default();
+        let mut limits = build::Limits::default();
+        limits.execution.work_cells = work;
+        limits.execution.source_rows = rows;
+        prepared.build_into(ports.borrow(), limits, &mut attempt);
+        assert_eq!(attempt.outcome.is_ok(), accepted);
+        assert_eq!(ports.study.reads, 1);
+        let trace = ports.activation.trace.borrow();
+        assert_eq!(
+            &trace[..7],
+            [
+                "lock",
+                "bind:beta",
+                "bind:alpha",
+                "invoke:beta:7",
+                "invoke:beta:-9223372036854775808",
+                "invoke:alpha:7",
+                "invoke:alpha:-9223372036854775808"
+            ]
+        );
+        if rows == 2 {
+            assert_eq!(attempt.nodes.len(), 1);
+            assert_eq!(attempt.nodes[0].node, 1);
+            assert!(matches!(
+                attempt.nodes[0]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .as_ref()
+                    .map_err(|e| &**e),
+                Err(ExecutionError::Capacity)
+            ));
+            assert_eq!(ports.decoder.cells.get(), 0);
+            assert!(!trace.iter().any(|e| e == "invoke:beta:1"
+                || e == "invoke:alpha:1"
+                || e.starts_with("encode:")));
+        } else {
+            assert_eq!(attempt.nodes.len(), 2);
+            assert!(attempt.nodes[0]
+                .dataset
+                .result
+                .as_ref()
+                .unwrap()
+                .result
+                .is_ok());
+            assert!(attempt.nodes[0]
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .is_some());
+            for source in &attempt.nodes[1].dataset.sources {
+                assert_eq!(source.read.snapshots_created, Some(0));
+            }
+            assert!(trace.iter().any(|e| e == "invoke:beta:1"));
+            assert!(trace.iter().any(|e| e == "invoke:alpha:1"));
+            if work == 21 {
+                assert!(matches!(
+                    attempt.nodes[1]
+                        .dataset
+                        .result
+                        .as_ref()
+                        .unwrap()
+                        .result
+                        .as_ref()
+                        .map_err(|e| &**e),
+                    Err(ExecutionError::Limit {
+                        resource: yamaa_engine::dataset::Resource::WorkCells,
+                        limit: 21,
+                        required: Some(22)
+                    })
+                ));
+                assert!(!trace.iter().any(|e| e == "encode:FIRST"));
+            } else {
+                assert!(attempt.nodes[1]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .is_ok());
+                assert!(trace.iter().any(|e| e == "encode:FIRST"));
+            }
         }
     }
 }

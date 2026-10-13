@@ -109,8 +109,9 @@ pub struct Ports<'a, A, P, D, R, C> {
     pub codec: &'a mut C,
 }
 
-/// Execution/cell/text capacities reserve a conservative equal share per node
-/// before host entry. Byte reads and serialized output share cumulative budgets;
+/// Source rows reserve a share weighted by admitted input slots before host
+/// entry; WorkCells has one actual cumulative owner across entered datasets.
+/// Other cell/text capacities keep an equal share per node. Byte reads and serialized output share cumulative budgets;
 /// alias re-ingestion consumes read/work budget while borrowing the same Arc.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -314,6 +315,23 @@ impl PreparedBuild {
                 return Err("producer_build_failed");
             }
         };
+        let source_rows = match plans
+            .iter()
+            .map(|plan| {
+                row_allowance(
+                    limits.execution.source_rows,
+                    plan.sources().len(),
+                    source_count,
+                )
+            })
+            .collect::<Option<Vec<_>>>()
+        {
+            Some(rows) => rows,
+            None => {
+                attempt.outcome = Err(Failure::Limit("producer_source_rows"));
+                return Err("producer_build_failed");
+            }
+        };
         // Every declared source, including aliases, reserves a codec share. This
         // conservative reservation bounds all retained/staged decoded ownership
         // without deriving an identity or trusting post-allocation size checks.
@@ -368,6 +386,7 @@ impl PreparedBuild {
         let mut output_left = limits.output_bytes;
         let routing_left = Cell::new(limits.routing_work);
         let e = limits.execution;
+        let execution_work = crate::execution_work::WorkBudget::new(e.work_cells);
         let node_limits = run::Limits {
             source_bytes: limits.source_bytes,
             source_cells: limits.source_cells,
@@ -387,6 +406,13 @@ impl PreparedBuild {
             let node = &graph.nodes()[index];
             let node_scope = scope.for_node(index, node.identity());
             let plan = plans[index];
+            let node_limits = run::Limits {
+                execution: dataset::Limits {
+                    source_rows: source_rows[index],
+                    ..node_limits.execution
+                },
+                ..node_limits
+            };
             attempt.nodes.push(NodeAttempt {
                 node: index,
                 dataset: CapturedAttempt::new(plan.source()),
@@ -406,7 +432,7 @@ impl PreparedBuild {
             let mut functions =
                 Bindings::projected(&activated, node.activation_slots(), calls, ports.activation)
                     .expect("complete graph projections preflighted before sources");
-            run::execute_with_observer_into(
+            run::execute_with_observer_and_work_into(
                 plan,
                 &mut sources,
                 &mut NodeDecoder {
@@ -421,6 +447,7 @@ impl PreparedBuild {
                 node_limits,
                 &mut entered.dataset,
                 node_scope,
+                &execution_work,
             );
             node_scope.phase(crate::application_observer::Phase::Output);
             let output_result = (|| {
@@ -716,4 +743,39 @@ fn charge_routing(remaining: &Cell<usize>) -> Result<(), &'static str> {
             .ok_or("producer_routing_work")?,
     );
     Ok(())
+}
+
+// floor(total * slots / all), without overflowing the otherwise bounded product.
+// All reservations sum to at most total; no source effects select the weights.
+fn row_allowance(total: usize, slots: usize, all: usize) -> Option<usize> {
+    if all == 0 || slots == 0 || slots > all {
+        return None;
+    }
+    (total / all)
+        .checked_mul(slots)?
+        .checked_add((total % all).checked_mul(slots)? / all)
+}
+#[cfg(test)]
+mod row_allowance_tests {
+    use super::row_allowance;
+    #[test]
+    fn input_slots_bound_the_total_and_preserve_the_wider_root() {
+        let total = 1_048_576;
+        let allocations = [1, 1, 1, 1, 1, 2].map(|slots| row_allowance(total, slots, 7).unwrap());
+        assert_eq!(
+            allocations,
+            [149_796, 149_796, 149_796, 149_796, 149_796, 299_593]
+        );
+        assert_eq!(allocations.iter().sum::<usize>(), 1_048_573);
+        for total in [0, 1, 6, 7, 700_000, usize::MAX] {
+            let leaf = row_allowance(total, 1, 7).unwrap();
+            let root = row_allowance(total, 2, 7).unwrap();
+            assert!(leaf.checked_mul(5).unwrap().checked_add(root).unwrap() <= total);
+        }
+        assert_eq!(row_allowance(700_000, 2, 7), Some(200_000));
+        assert_eq!(row_allowance(699_999, 2, 7), Some(199_999));
+        assert_eq!(row_allowance(total, 0, 7), None);
+        assert_eq!(row_allowance(total, 8, 7), None);
+        assert_eq!(row_allowance(total, 1, 0), None);
+    }
 }
