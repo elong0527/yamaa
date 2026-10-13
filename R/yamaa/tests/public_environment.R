@@ -29,11 +29,8 @@ qualify_unavailable_environment_root <- function() {
       stopifnot(identical(lapply(checked$issues, identity), expected),
         identical(lapply(failed$issues, identity), expected), is.null(failed$output),
         inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"))
-      captured <- observations(failed)
-      stopifnot(grepl('"lock":"not_requested"', captured, fixed = TRUE),
-        grepl('"source_reads":[]', captured, fixed = TRUE),
-        grepl('"bindings":[]', captured, fixed = TRUE),
-        grepl('"callbacks":[]', captured, fixed = TRUE))
+      # Preparation refused before a native attempt/report exists.
+      stopifnot(is.null(observations_native(failed)))
     }
   }
   unlink("spec.yaml")
@@ -42,7 +39,7 @@ qualify_unavailable_environment_root <- function() {
   stopifnot(identical(checked$issues$condition, "engine_rejected"),
     identical(checked$issues$context, '{"code":"resource_missing","stage":"prepare"}'),
     identical(sort(list.files()), "environment.yaml"))
-  cat("public R missing supplied environments retain exact REQ-0694 issues before entry/data/activation\n")
+  cat("public R missing supplied environments retain exact REQ-0694 issues before entry preparation\n")
 }
 qualify_unavailable_environment_root()
 
