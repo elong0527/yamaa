@@ -78,6 +78,7 @@ jobs:
       # REQ-1280: every benchmark specification follows the style contract.
       - name: Check specification style
         run: |
+          uv run --project python --no-sync python rust/tools/generate_style_orders.py
           uv run --project python --no-sync python -m yamaa.style benchmarks/*/spec*.yaml
 
       - name: Check execution manifest

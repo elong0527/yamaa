@@ -1,0 +1,64 @@
+{
+  "root_class": [
+    "schema_version",
+    "parents",
+    "domain",
+    "keys",
+    "input",
+    "base",
+    "filter",
+    "output",
+    "windows",
+    "intermediates",
+    "columns",
+    "rows",
+    "verifications",
+    "submission",
+    "metadata"
+  ],
+  "dataset_class": [
+    "path",
+    "types",
+    "schema",
+    "empty_string",
+    "ordinal"
+  ],
+  "output_class": [
+    "path",
+    "decimals",
+    "columns",
+    "warning_log",
+    "verification_log",
+    "order_by"
+  ],
+  "intermediate_class": [
+    "id",
+    "dataset",
+    "key",
+    "between",
+    "filter",
+    "order_by",
+    "keep",
+    "columns",
+    "no_match",
+    "derivations",
+    "verifications"
+  ],
+  "column_class": [
+    "name",
+    "type",
+    "label",
+    "derivation",
+    "verifications",
+    "submission",
+    "metadata"
+  ],
+  "row_class": [
+    "id",
+    "dataset",
+    "group_by",
+    "filter",
+    "derivations",
+    "submission"
+  ]
+}
