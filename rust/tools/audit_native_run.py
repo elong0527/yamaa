@@ -828,9 +828,19 @@ class Audit:
                 require(
                     "publication" not in before, "Build contains a publication attempt"
                 )
+                projected_before = project_report(before, case)
+                require(
+                    (
+                        projected_before.runtime,
+                        projected_before.backend,
+                        projected_before.engine_version,
+                    )
+                    == (runtime, "rust", record["installation"]["core_version"]),
+                    "producer raw report installed host/core differs",
+                )
                 require(
                     committed_cohort.reports.compare_reports(
-                        expected, project_report(before, case)
+                        expected, projected_before
                     ).passed,
                     "producer complete Build report differs",
                 )
@@ -839,19 +849,21 @@ class Audit:
                     saved = owner / f"after-{attempt}"
                     after = read(saved / "report.json")
                     require(
-                        after.pop("publication")
-                        == {
-                            "status": "success",
-                            "error": None,
-                            "entered": [
-                                {"node": 1, "published": True},
-                                {"node": 0, "published": True},
-                            ],
-                        },
+                        committed_cohort.exact_json(
+                            after.pop("publication"),
+                            {
+                                "status": "success",
+                                "error": None,
+                                "entered": [
+                                    {"node": 1, "published": True},
+                                    {"node": 0, "published": True},
+                                ],
+                            },
+                        ),
                         "producer publication prefix differs",
                     )
                     require(
-                        after == before,
+                        committed_cohort.exact_json(after, before),
                         "Save changed complete producer execution evidence",
                     )
                     projected = project_report(after, case)
