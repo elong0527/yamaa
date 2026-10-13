@@ -2576,7 +2576,7 @@ columns:
         import polars as pl
         import yamaa
         cases = [(name, case, ROOT / (label + "-cases") / name)
-                 for label in ("source-selection", "source-filter-scope")
+                 for label in ("source-selection", "source-filter-scope", "source-filter-mixed")
                  for name, case in json.loads((ROOT / (label + "-truth.json")).read_text())["cases"].items()]
 
         def issues(frame):
