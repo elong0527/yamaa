@@ -63,7 +63,7 @@ on all required Python wheel/source and R source platforms, including Windows R.
 
 ## Component endpoint retirement
 
-#1990 removes every installed prototype endpoint and request protocol. The 25
+#1990 removes every installed prototype endpoint and request protocol. The 26
 remaining installed suites qualify public domain/check/define and retained typed
 lifecycle ports. Python `_CORE_VERSION` and R's private `.core_version()` expose
 compiled package metadata without the former capabilities/installation probe.

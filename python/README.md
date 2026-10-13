@@ -61,14 +61,15 @@ on the repository's current working directory.
 ## ODM helpers
 
 ```python
-from yamaa.odm import iter_odm_records, read_odm, write_odm_parquet
+from yamaa import read_odm, write_odm_parquet
 
 frame = read_odm("input.xml")
 result = write_odm_parquet("input.xml", "clinical-items.parquet")
 ```
 
-See the [ODM helper documentation](src/yamaa/odm/README.md) for the fixed schema
-and supported XML layouts.
+See the [ODM helper documentation](src/yamaa/_odm/README.md) for the fixed schema
+and supported XML layouts. Their private implementation depends only on XML,
+data-frame and Parquet libraries; it does not import the reference evaluator.
 
 ## Submission documents
 

@@ -1,5 +1,9 @@
-"""Errors raised by the ODM helpers."""
+"""Temporary private reference compatibility; retired at qualified cutover."""
+
+from importlib import import_module
 
 
-class ODMError(ValueError):
-    """The input cannot be represented by the supported ODM row schema."""
+def __getattr__(name):
+    if name not in ("ODMError",):
+        raise AttributeError(name)
+    return getattr(import_module("yamaa._odm.errors"), name)
