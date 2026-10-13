@@ -1,7 +1,7 @@
 {
   "protocol": "public-conformance-ratchet/1",
-  "source_revision": "a1a9c2d216075f331ac108aa4d3638573f103cea",
-  "evidence": "https://github.com/elong0527/yamaa/actions/runs/38394553441",
+  "source_revision": "2ba10418607933f92597f7c00ac363a3113a49db",
+  "evidence": "https://github.com/elong0527/yamaa/actions/runs/38416920074",
   "run_attempt": 1,
   "benchmarks": 318,
   "python": [
@@ -66,6 +66,7 @@
     "adam-adsl-flag-chain",
     "adam-adsl-investigator-comment",
     "adam-adsl-new-therapy",
+    "adam-adsl-randomization",
     "adam-adsl-rescue-med",
     "adam-adsl-site-parse",
     "adam-adsl-treatment",
@@ -168,6 +169,7 @@
     "negative-output-transport",
     "negative-overlapping-windows",
     "negative-paired-dates",
+    "negative-path-directory",
     "negative-path-missing",
     "negative-path-symlink",
     "negative-path-url",
@@ -177,6 +179,7 @@
     "negative-property-clear",
     "negative-query-overflow",
     "negative-rank-bad-method",
+    "negative-redefined-date",
     "negative-remote-parent",
     "negative-review-arithmetic",
     "negative-review-date-text",
@@ -279,6 +282,7 @@
     "sdtm-dm-dates",
     "sdtm-dm-death",
     "sdtm-dm-metadata",
+    "sdtm-dm-race-ethnicity",
     "sdtm-ds-multi-form-disposition",
     "sdtm-ds-reasons",
     "sdtm-ds-sequence",
@@ -380,6 +384,7 @@
     "adam-adsl-flag-chain",
     "adam-adsl-investigator-comment",
     "adam-adsl-new-therapy",
+    "adam-adsl-randomization",
     "adam-adsl-rescue-med",
     "adam-adsl-site-parse",
     "adam-adsl-treatment",
@@ -482,7 +487,9 @@
     "negative-output-transport",
     "negative-overlapping-windows",
     "negative-paired-dates",
+    "negative-path-directory",
     "negative-path-missing",
+    "negative-path-symlink",
     "negative-path-url",
     "negative-pr-after-cr",
     "negative-precision-bad-source",
@@ -490,6 +497,7 @@
     "negative-property-clear",
     "negative-query-overflow",
     "negative-rank-bad-method",
+    "negative-redefined-date",
     "negative-remote-parent",
     "negative-review-arithmetic",
     "negative-review-date-text",
@@ -592,6 +600,7 @@
     "sdtm-dm-dates",
     "sdtm-dm-death",
     "sdtm-dm-metadata",
+    "sdtm-dm-race-ethnicity",
     "sdtm-ds-multi-form-disposition",
     "sdtm-ds-reasons",
     "sdtm-ds-sequence",
@@ -635,9 +644,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.12-wheel",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -645,9 +654,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.12-source",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -655,9 +664,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.13-wheel",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -665,9 +674,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.13-source",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -675,9 +684,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.14-wheel",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -685,9 +694,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.14-source",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -695,9 +704,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.12-wheel",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -705,9 +714,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.12-source",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -715,9 +724,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.13-wheel",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -725,9 +734,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.13-source",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -735,9 +744,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.14-wheel",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -745,9 +754,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.14-source",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -755,9 +764,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.12-wheel",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -765,9 +774,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.12-source",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -775,9 +784,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.13-wheel",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -785,9 +794,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.13-source",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -795,9 +804,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.14-wheel",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -805,9 +814,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.14-source",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -815,9 +824,9 @@
     {
       "artifact": "public-conformance-r-ubuntu-24.04",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -825,9 +834,9 @@
     {
       "artifact": "public-conformance-r-macos-15",
       "summary": {
-        "pass": 312,
-        "mismatch": 1,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }
@@ -835,9 +844,9 @@
     {
       "artifact": "public-conformance-r-windows-latest",
       "summary": {
-        "pass": 311,
-        "mismatch": 2,
-        "unsupported": 3,
+        "pass": 316,
+        "mismatch": 0,
+        "unsupported": 0,
         "error": 0,
         "excluded": 2
       }

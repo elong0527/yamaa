@@ -1,37 +1,39 @@
 # yamaa Rust migration status
 
 Assessed 2026-10-13 against main
-`da6d40378d1a54f028252e14ef1e6c6003607fee`. The implementation and acceptance
+`0df4554fdf431133fd35c2f843ac0ff247eb9c3b`. The implementation and acceptance
 owner is [#1969](https://github.com/elong0527/yamaa/issues/1969). This snapshot
 records merged behavior and remaining gates; it is not release approval.
 Earlier narrative remains in [the archive](archive/migration-status-before-work-packages.md).
 
 ## Verified public coverage
 
-The last completed full main audit inspected here is
+The last completed full main audit inspected here remains
 [run 38394553441](https://github.com/elong0527/yamaa/actions/runs/38394553441),
 source `a1a9c2d216075f331ac108aa4d3638573f103cea`. Its retained audit passes all
-97 evidence checks. Every saved public inventory was also independently replayed
-against the unchanged committed expected outputs before advancing the ratchet.
+97 evidence checks. The newer complete installed dispatch
+[run 38416920074](https://github.com/elong0527/yamaa/actions/runs/38416920074),
+source `2ba10418607933f92597f7c00ac363a3113a49db`, qualifies the unified-engine
+candidate. All 21 saved public inventories were independently replayed against
+unchanged committed expected outputs before advancing the ratchet below.
 
 | Installed routes | Pass | Mismatch | Unsupported | Error | Historical exclusions |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| All 18 Python interpreter/platform/form routes | 312 | 1 | 3 | 0 | 2 |
-| R Linux and macOS source packages | 312 | 1 | 3 | 0 | 2 |
-| R Windows source package | 311 | 2 | 3 | 0 | 2 |
+| All 18 Python interpreter/platform/form routes | 316 | 0 | 0 | 0 | 2 |
+| All three R source-package routes | 316 | 0 | 0 | 0 | 2 |
 
-The ratchet is the intersection: **312 Python and 311 R benchmarks out of 318**.
-No previous passing case is removed. A successful inventory job or complete audit
-means that evidence was retained and its existing ratchet passed; it does not
-turn the remaining report-only refusals into whole-corpus qualification.
+The ratchet is the intersection: **316 Python and 316 R benchmarks out of 318**.
+Every active case passes; the two approved historical path exclusions remain
+explicit. No previous passing case is removed. This is complete installed corpus
+evidence for the candidate revision. Its deferred shared Rust and numerical
+checks and the final combined-main audit remain separate acceptance gates.
 
-The three unsupported cases are `adam-adsl-randomization`,
-`negative-redefined-date` and `sdtm-dm-race-ethnicity`. They require producer-linked
-input schemas through a public build without an explicit environment. Every
-route's `negative-path-directory` still reports source-profile validation before
-the expected resource-kind diagnostic. Windows R additionally loses the symbolic
-link while staging `negative-path-symlink`; its successful output is a mismatch.
-These cases remain active and their expected output remains unchanged.
+The candidate now admits producer-linked input schemas without an explicit
+environment for `adam-adsl-randomization`, `negative-redefined-date` and
+`sdtm-dm-race-ethnicity`. The merged resource-kind priority and Windows R staging
+changes (#2090) preserve the directory and real-symlink diagnostic truth. The
+two newly qualified positive runners use the public `domain` API. None of these
+changes modifies expected outputs.
 
 ## Merged implementation
 
@@ -41,6 +43,10 @@ Define-XML/Dataset-JSON, numerical policy, declaring-file paths and bounded coho
 have merged implementation. Later work added mapping/cut, input options and
 ordering, aggregates, scalar text/extremes, ODM, row derivations, submission
 metadata and correlated intermediate derivations with eager verification.
+Binding-to-core dependencies and duplicated binding policy are removed (#2085),
+and the R JSON inheritance callback is replaced by a typed engine outcome
+(#2086). Correlated-intermediate acceptance (#1979) is closed with its full-matrix
+truth and ratchet evidence.
 
 The first release still requires CPython 3.12-3.14 wheel and independent source
 rebuilds on Linux x86_64, macOS arm64 and Windows x64, plus R 4.6.1 source builds
@@ -58,10 +64,10 @@ the deferred Rust and numerical evidence. See [CI instructions](../../.github/ci
 
 | Scope | Open owners and concrete remaining gate |
 | --- | --- |
-| Language acceptance | #1979, #1980 and #2005: verify their complete declared scope and finish both-host ratchet acceptance. The remaining producer-schema route belongs with #1987. |
+| Language acceptance | #1980: finish additional authored scalar/key source forms and the reviewed grouped-filter disposition (#2101/#2103). #2005: finish declared predicate-site acceptance. Candidate public corpus coverage is complete. |
 | Diagnostic ownership | #1984: empty the remaining adapter/binding literal allowlist while preserving independent diagnostic truth. Core/engine ownership and normative null decisions have landed. |
-| Binding and orchestration ownership | #1989: remove binding-to-core dependencies, duplicate policy and scalar semantics; then #1987: one engine entry point for ordinary, environment and producer builds/checks with every port and failure-order test. |
-| Callback/probe cleanup | #1988: replace the live R inheritance/1 callback; #1990: port unique probe assertions and retire obsolete exports, JSON protocols and assisted consumers. Diagnostic context remains JSON text. |
+| Binding and orchestration ownership | #1989 implementation is merged; renew combined-main acceptance. #1987's unified ordinary/environment/producer candidate passes the full installed dispatch. Qualify its supplied-environment diagnostic follow-up and final composition before closure. |
+| Callback/probe cleanup | The R inheritance/1 callback is retired; #1988's remaining transports and #1990's unique assertions, obsolete exports and assisted consumers are addressed by the probe-removal candidate. Its cohort/audit replacement must reject malformed evidence. Diagnostic context remains JSON text. |
 | Public surface and R package | #1991: complete the approved installed surface and deliberate removals; #1993: finish R/yamaa installation guidance, grammar replay and cdiscbuilder retirement. |
 | Repository tooling | #2002: replace the temporary _reference_checks boundary and duplicate semantic checks with installed shared-engine checks; preserve structural validation and style/ODM-reader tooling. |
 | Release evidence | #1996: final combined-main evidence, complete public corpus, Windows R resource behavior and locked package membership after the remaining changes. |
@@ -72,7 +78,8 @@ The maintainer delegated implementation decisions in
 [maintainer-decisions.md](maintainer-decisions.md); no additional confirmation is
 needed to continue independent implementation. Evidence-dependent budgets and
 transition approval remain pending. The reference evaluator, assisted inventory,
-probe exports and R/cdiscbuilder are still present and are not release-complete.
+component probe exports and R/cdiscbuilder remain in main. Their removal
+candidates are not release approval.
 
 Keep the assisted inventory frozen until its qualified public/typed replacements
 permit retirement. Existing per-slice qualification ledgers remain historical.
