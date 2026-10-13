@@ -5719,7 +5719,7 @@ class TestReferenceDependencyBoundary(unittest.TestCase):
             forbidden.extend(
                 name for name in names
                 if name.startswith('yamaa.')
-                and name not in {'yamaa._native', 'yamaa.check'}
+                and name not in {'yamaa._native', 'yamaa.check', 'yamaa.domain'}
             )
         return forbidden
 
@@ -5735,6 +5735,14 @@ class TestReferenceDependencyBoundary(unittest.TestCase):
             and call.attr == 'spec_from_file_location'
             for call in calls
         ), 'reference source-file loading belongs only in _reference_checks.py')
+
+    def test_csv_fixture_admission_uses_only_the_retained_public_native_surface(self):
+        source = TOOL_PATH.with_name('_native_csv.py').read_text(encoding='utf-8')
+        self.assertEqual(self.forbidden_imports(source), [])
+        boundary = TOOL_PATH.with_name('_reference_checks.py').read_text(encoding='utf-8')
+        self.assertNotIn('yamaa.io.csv', boundary)
+        self.assertNotIn('yamaa.models', boundary)
+        self.assertNotIn('spec_from_file_location', boundary)
 
     def test_guard_rejects_direct_aliased_and_from_package_imports(self):
         for source in (
@@ -6950,6 +6958,24 @@ class TestCsvProfile(unittest.TestCase):
                 path, 'ex/adsl.csv', {'output': {}, 'columns': []}
             )
         self.assertTrue(any('byte-order mark' in error for error in errors), errors)
+
+
+class TestNativeTemporalFixtureAdmission(unittest.TestCase):
+    def test_tagged_function_literals_keep_calendar_and_collected_precision_truth(self):
+        for kind, text, expected in (
+            ('date', '2025-01-15', True),
+            ('date', '2025-02-30', False),
+            ('datetime', '2025-01-15T03:04', True),
+            ('datetime', '2025-01-15T03:04:05', True),
+            ('datetime', '2025-01-15T03:04:60', False),
+            ('datetime', '2025-02-30T03:04', False),
+        ):
+            with self.subTest(kind=kind, text=text):
+                self.assertIs(VALIDATOR.valid_temporal_literal(kind, text), expected)
+                self.assertEqual(
+                    VALIDATOR.function_value_type({kind: text}),
+                    kind if expected else '<invalid>',
+                )
 
 
 class TestSourceProfile(unittest.TestCase):
