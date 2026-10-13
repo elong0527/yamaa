@@ -101,7 +101,11 @@ mod tests {
             })
             .unwrap();
         let run = PreparedRun::prepare(document).unwrap();
-        let expected = r#"[{"condition":"invalid_regex","context":"{\"pattern\":\"é(\"}","phase":"validation","requirement":"REQ-0827","spec_paths":["columns.V.verifications[0].matches.pattern"]}]"#;
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/check_invalid_regex_truth.json"
+        ))
+        .unwrap();
+        let expected = serde_json::to_string(&expected).unwrap();
         assert_eq!(issues(&run).unwrap(), expected);
         assert_eq!(encode(&run, expected.len()).unwrap(), expected);
         assert_eq!(encode(&run, expected.len() - 1), Err(Error::Limit));

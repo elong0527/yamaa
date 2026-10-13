@@ -964,3 +964,23 @@ pub(super) fn bind_catalog_join(
         },
     ))))
 }
+
+impl Declaration {
+    pub(super) fn check_findings(
+        &self,
+        path: &str,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        if let Some(filter) = &self.filter {
+            if let Some(compiled) = &filter.compiled {
+                static_checks::predicate(
+                    compiled,
+                    &filter.expression,
+                    &format!("{path}.filter"),
+                    findings,
+                )?;
+            }
+        }
+        Ok(())
+    }
+}

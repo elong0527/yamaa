@@ -1004,7 +1004,13 @@ mod log_tests {
             let normative = result
                 .issues()
                 .iter()
-                .filter(|issue| issue.requirement.as_deref() == Some("REQ-0764"))
+                .filter(|issue| {
+                    issue.requirement.as_deref()
+                        == Some(
+                            crate::test_diagnostic_truth::text("publication", "requirement")
+                                .as_str(),
+                        )
+                })
                 .collect::<Vec<_>>();
             if unwind {
                 assert!(
@@ -1167,7 +1173,10 @@ mod log_tests {
         assert!(!result
             .issues()
             .iter()
-            .any(|issue| issue.requirement.as_deref() == Some("REQ-0764")));
+            .any(|issue| issue.requirement.as_deref()
+                == Some(
+                    crate::test_diagnostic_truth::text("publication", "requirement").as_str()
+                )));
         fs::create_dir(study.0.join("generated")).unwrap();
         assert!(result.save().unwrap());
     }
@@ -1259,7 +1268,10 @@ mod log_tests {
             assert!(!result
                 .issues()
                 .iter()
-                .any(|issue| issue.requirement.as_deref() == Some("REQ-0764")));
+                .any(|issue| issue.requirement.as_deref()
+                    == Some(
+                        crate::test_diagnostic_truth::text("publication", "requirement").as_str()
+                    )));
             assert_eq!(execution(result.observations().clone()), before);
         }
         assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);

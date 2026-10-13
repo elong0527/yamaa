@@ -138,12 +138,8 @@ mod tests {
 
     #[test]
     fn context_retains_full_integer_range_unicode_and_nested_values() {
-        let issue = Issue::from_diagnostic(json!({
-            "phase":"derivation", "condition":"integer_overflow", "requirement":null,
-            "spec_paths":["columns.é🙂.derivation"],
-            "context":{"minimum":i64::MIN,"maximum":i64::MAX,"values":[null,"é🙂",true]}
-        }))
-        .unwrap();
+        let issue = Issue::from_diagnostic(crate::test_diagnostic_truth::value("overflow-context"))
+            .unwrap();
         assert_eq!(
             issue.context,
             r#"{"maximum":9223372036854775807,"minimum":-9223372036854775808,"values":[null,"é🙂",true]}"#
@@ -164,7 +160,7 @@ mod tests {
 
     #[test]
     fn malformed_diagnostics_cannot_silently_become_partial_issue_rows() {
-        let valid = json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["input.SRC"],"context":{}});
+        let valid = crate::test_diagnostic_truth::value("unknown-input-field");
         for field in ["phase", "condition", "requirement", "spec_paths", "context"] {
             let mut missing = valid.clone();
             missing.as_object_mut().unwrap().remove(field);

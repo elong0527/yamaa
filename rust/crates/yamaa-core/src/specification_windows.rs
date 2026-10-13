@@ -386,3 +386,34 @@ impl Declaration {
         }))
     }
 }
+
+impl Declaration {
+    pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+        if matches!(self.kind, Kind::RowValue { offset: 0, .. }) {
+            findings.push(BindFinding::Window(WindowFinding::ZeroOffset {
+                path: format!("{}.offset", self.path),
+            }));
+        }
+        let baseline = matches!(self.kind, Kind::BaselineFlag { .. });
+        if self.order.is_empty() != baseline {
+            findings.push(BindFinding::Window(WindowFinding::Order {
+                path: format!(
+                    "{}.window{}",
+                    self.path,
+                    if baseline { ".order_by" } else { "" }
+                ),
+                operation: self.operation.clone(),
+                forbidden: baseline,
+            }));
+        }
+        if let Some((expression, compiled)) = &self.filter {
+            static_checks::predicate(
+                compiled,
+                expression,
+                &format!("{}.window.filter", self.path),
+                findings,
+            )?;
+        }
+        Ok(())
+    }
+}
