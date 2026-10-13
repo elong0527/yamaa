@@ -65,7 +65,7 @@ fn doc(
             fields.push(("dataset", Text(driver)));
         }
         if grouped {
-            fields.push(("group_by", List(vec![Text("SRC.ID")])));
+            fields.push(("group_by", List(vec![Text("SRC.ID"), Text("SRC.K")])));
         }
         rows.push(Map(fields));
     }
@@ -226,7 +226,7 @@ fn unknown_and_omitted_drivers_keep_model_preflight_and_exact_typed_context() {
     }
 }
 #[test]
-fn foreign_driver_defaults_require_completed_keys_and_grouped_named_reads_keep_pending_boundary() {
+fn foreign_driver_defaults_require_completed_keys_and_grouped_named_reads_bind() {
     let prepared =
         PreparedSpecification::prepare(&doc(false, [Some("SRC"), Some("DONOR")], false, "P.V"))
             .unwrap();
@@ -253,18 +253,22 @@ fn foreign_driver_defaults_require_completed_keys_and_grouped_named_reads_keep_p
             vec![yamaa_core::diagnostic::ContextValue::Scalar(Value::Str("ID".into())); 2]
         )
     );
-    let Err(PrepareError::Unsupported(features)) =
+    let prepared =
         PreparedSpecification::prepare(&doc(false, [Some("SRC"), Some("SRC")], true, "P.V"))
-    else {
-        panic!("grouped gate")
-    };
-    assert_eq!(
-        (features[0].operation.as_str(), features[0].path.as_str()),
-        (
-            "grouped_intermediate_source",
-            "rows[0].derivations.ROWV.source"
-        )
-    );
+            .unwrap();
+    let src = schema(&[("ID", T::Str), ("K", T::Str)]);
+    let donor = schema(&[("K", T::Str), ("V", T::Str)]);
+    let plan = prepared.bind_sources(&[&src, &donor]).unwrap();
+    for template in plan.templates() {
+        assert_eq!(template.mode, RowMode::Groups(vec![0, 1]));
+        assert!(matches!(
+            template.assignments[2].expression,
+            Expression::Intermediate {
+                index: 0,
+                column: 1
+            }
+        ));
+    }
 }
 #[test]
 fn unknown_named_field_retains_full_lookup_cause_at_authored_read_boundary() {
@@ -322,7 +326,7 @@ fn whole_source_metadata_admission_precedes_schema_copy_even_without_source_rows
     ));
 }
 #[test]
-fn typed_record_plan_rejects_uncompleted_matching_outputs_and_grouped_reads() {
+fn typed_record_plan_requires_completed_keys_and_admits_grouped_named_reads() {
     let src = schema(&[("ID", T::Str)]);
     let donor = schema(&[("K", T::Str), ("V", T::Str)]);
     let output = schema(&[("ID", T::Str), ("V", T::Str)]);
@@ -344,7 +348,7 @@ fn typed_record_plan_rejects_uncompleted_matching_outputs_and_grouped_reads() {
                     expression: Expression::Source(0),
                 },
             ],
-            PlanError::InvalidLookup,
+            Some(PlanError::InvalidLookup),
         ),
         (
             RowMode::Groups(vec![0]),
@@ -363,7 +367,7 @@ fn typed_record_plan_rejects_uncompleted_matching_outputs_and_grouped_reads() {
                     },
                 },
             ],
-            PlanError::InvalidIntermediate,
+            None,
         ),
     ] {
         let result = DatasetPlan::new_with_intermediates(
@@ -389,6 +393,9 @@ fn typed_record_plan_rejects_uncompleted_matching_outputs_and_grouped_reads() {
                 filter: None,
                 selection: None,
                 no_match: Some(Value::Missing),
+                unique: Vec::new(),
+                derivations: None,
+                pending_schema: None,
 
                 range: None,
                 columns: None,
@@ -403,7 +410,14 @@ fn typed_record_plan_rejects_uncompleted_matching_outputs_and_grouped_reads() {
             vec![0],
             vec![],
         );
-        assert_eq!(result.unwrap_err(), expected);
+        if let Some(expected) = expected {
+            assert_eq!(result.unwrap_err(), expected);
+        } else {
+            assert_eq!(
+                result.unwrap().templates()[0].mode,
+                RowMode::Groups(vec![0])
+            );
+        }
     }
 }
 
@@ -433,6 +447,9 @@ fn secondary_row_drivers_share_output_matching_without_reusing_primary_record_co
                 filter: None,
                 selection: None,
                 no_match: Some(Value::Missing),
+                unique: Vec::new(),
+                derivations: None,
+                pending_schema: None,
 
                 range: None,
                 columns: None,
@@ -477,4 +494,77 @@ fn secondary_row_drivers_share_output_matching_without_reusing_primary_record_co
         }),
         Err(PlanError::InvalidIntermediate)
     );
+}
+
+#[test]
+fn contextual_match_metadata_cannot_survive_an_executable_typed_read() {
+    let source = schema(&[("ID", T::Str)]);
+    let donor = schema(&[("K", T::Str), ("V", T::Str)]);
+    let output = schema(&[("ID", T::Str), ("V", T::Str)]);
+    for used in [false, true] {
+        let result = DatasetPlan::new_with_intermediates(
+            SourceSchemas {
+                primary: source.clone(),
+                secondary: vec![SecondarySource {
+                    name: "DONOR".into(),
+                    schema: donor.clone(),
+                }],
+            },
+            vec![Intermediate {
+                identifier: "P".into(),
+                path: "intermediates[0]".into(),
+                source: yamaa_core::dataset::IntermediateSource::Input(0),
+                keys: vec![IntermediateKey {
+                    source_column: 0,
+                    path: "intermediates[0].key".into(),
+                    value: MatchValue::Contextual(yamaa_core::dataset::ContextualMatch::Variable(
+                        "FUTURE.FIELD".into(),
+                    )),
+                }],
+                filter: None,
+                selection: None,
+                range: None,
+                columns: None,
+                no_match: None,
+                unique: vec![],
+                derivations: None,
+                pending_schema: None,
+            }],
+            output.clone(),
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                filter: None,
+                assignments: vec![
+                    Assignment {
+                        column: 0,
+                        path: "rows[0].derivations.ID.source".into(),
+                        expression: Expression::Source(0),
+                    },
+                    Assignment {
+                        column: 1,
+                        path: "rows[0].derivations.V.source".into(),
+                        expression: if used {
+                            Expression::Intermediate {
+                                index: 0,
+                                column: 1,
+                            }
+                        } else {
+                            Expression::Literal(Value::Missing)
+                        },
+                    },
+                ],
+            }],
+            vec![],
+            vec![0],
+            vec![],
+        );
+        if used {
+            assert_eq!(result.unwrap_err(), PlanError::InvalidIntermediate);
+        } else {
+            assert!(matches!(
+                result.unwrap().intermediates()[0].keys[0].value,
+                MatchValue::Contextual(_)
+            ));
+        }
+    }
 }

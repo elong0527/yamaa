@@ -330,7 +330,11 @@ pub(super) fn bind_operand(
     secondary: &[SecondarySource],
     items: &[Option<Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
-    if named.reference(reference).is_some() {
+    if named.reference(reference).is_some()
+        && reference
+            .split_once('.')
+            .is_none_or(|(owner, _)| owner != driver)
+    {
         row_intermediates::bind(
             reference, path, named, secondary, items, output, catalog, available, edges, findings,
         )

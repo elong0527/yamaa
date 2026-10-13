@@ -112,6 +112,9 @@ fn completed_grouped_and_stored_driver_templates_add_no_study_reads() {
             keep: Keep::Last,
         }),
         no_match: None,
+        unique: Vec::new(),
+        derivations: None,
+        pending_schema: None,
 
         range: None,
         columns: None,

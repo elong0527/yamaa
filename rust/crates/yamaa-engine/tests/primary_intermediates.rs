@@ -85,6 +85,9 @@ fn fixture(failure: Option<(usize, usize)>) -> (Table, Table, DatasetPlan) {
         filter: None,
         selection: None,
         no_match: None,
+        unique: Vec::new(),
+        derivations: None,
+        pending_schema: None,
 
         range: None,
         columns: None,

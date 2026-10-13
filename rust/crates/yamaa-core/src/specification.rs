@@ -20,6 +20,8 @@ use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 mod binding_diagnostics;
 #[path = "specification_intermediate_admission.rs"]
 mod intermediate_admission;
+#[path = "specification_intermediate_derivations.rs"]
+mod intermediate_derivations;
 #[path = "specification_intermediate_range.rs"]
 mod intermediate_range;
 #[path = "specification_intermediate_sources.rs"]
@@ -1241,8 +1243,16 @@ impl PreparedSpecification {
                     .collect(),
             ));
         }
-        let intermediates =
-            intermediates::Declarations::prepare(d, &sources, driver_index, limits, &mut extra)?;
+        let intermediates = intermediates::Declarations::prepare(
+            d,
+            &sources,
+            driver_index,
+            limits,
+            project.as_ref(),
+            &extraction,
+            &templates,
+            &mut extra,
+        )?;
         if has_rows {
             if !extra.is_empty() {
                 return Err(PrepareError::Unsupported(extra));
@@ -1260,7 +1270,8 @@ impl PreparedSpecification {
             )?;
             let project = match project {
                 Some(project) => {
-                    let uses = rows.call_uses(&project.calls)?;
+                    let mut uses = rows.call_uses(&project.calls)?;
+                    intermediates.add_call_uses(&mut uses)?;
                     Some(functions::select_rows(project, functions, &uses)?)
                 }
                 None => None,
@@ -1649,6 +1660,7 @@ impl PreparedSpecification {
                 &self.output,
                 &self.keys,
                 Some(&rows.self_columns()),
+                self.project_calls.as_ref(),
                 &mut findings,
             )?;
             return rows
@@ -1708,6 +1720,7 @@ impl PreparedSpecification {
             &self.output,
             &self.keys,
             None,
+            self.project_calls.as_ref(),
             &mut findings,
         )?;
         let catalog = row_drivers::extend_catalog(

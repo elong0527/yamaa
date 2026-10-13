@@ -1,5 +1,7 @@
 //! Pure dataset declarations and admission. No study data or host effects.
 use super::*;
+use crate::value::ColumnType;
+use alloc::string::ToString;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecordMatchKey {
     pub source_column: usize,
@@ -11,6 +13,72 @@ pub struct RecordMatchKey {
 pub struct SourceSchemas {
     pub primary: TableSchema,
     pub secondary: Vec<SecondarySource>,
+}
+
+/// Eager equality checks over the complete filtered donor relation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IntermediateUnique {
+    pub path: String,
+    pub columns: Vec<usize>,
+    pub identity: Option<String>,
+}
+impl IntermediateUnique {
+    pub fn diagnostic(
+        &self,
+        item: &Intermediate,
+        schema: &TableSchema,
+        dataset: &str,
+        duplicate_count: usize,
+    ) -> crate::diagnostic::Diagnostic {
+        use crate::diagnostic::{ConditionCode, ContextValue, Diagnostic};
+        let mut context = alloc::collections::BTreeMap::from([
+            (
+                "intermediate".into(),
+                ContextValue::Scalar(Value::Str(item.identifier.clone())),
+            ),
+            (
+                "dataset".into(),
+                ContextValue::Scalar(Value::Str(dataset.into())),
+            ),
+            (
+                "columns".into(),
+                ContextValue::Sequence(
+                    self.columns
+                        .iter()
+                        .map(|&column| {
+                            ContextValue::Scalar(Value::Str(schema.columns()[column].name.clone()))
+                        })
+                        .collect(),
+                ),
+            ),
+            (
+                "duplicate_count".into(),
+                ContextValue::Integer(duplicate_count.to_string()),
+            ),
+        ]);
+        if let Some(identity) = &self.identity {
+            context.insert(
+                "verification_id".into(),
+                ContextValue::Scalar(Value::Str(identity.clone())),
+            );
+        }
+        Diagnostic {
+            code: ConditionCode::IntermediateDuplicateRecords,
+            spec_paths: vec![self.path.clone()],
+            context,
+            source_span: None,
+            operand_route: None,
+        }
+    }
+}
+
+/// A donor plan evaluates raw values in declaration order before filter/key/order.
+#[derive(Clone, Debug, PartialEq)]
+pub struct IntermediateDerivations {
+    pub plan: alloc::rc::Rc<DatasetPlan>,
+    pub current: Vec<CurrentField>,
+    pub stored_columns: usize,
+    pub driver_kinds: Vec<Option<ColumnType>>,
 }
 
 /// A named secondary record selector with literal absence handling.
@@ -27,6 +95,10 @@ pub struct Intermediate {
     pub columns: Option<Vec<usize>>,
     /// `Some(Missing)` handles absence; `None` leaves it as a join condition.
     pub no_match: Option<Value>,
+    pub unique: Vec<IntermediateUnique>,
+    pub derivations: Option<IntermediateDerivations>,
+    /// Retained compilation metadata for a rejected augmentation; never executable.
+    pub pending_schema: Option<TableSchema>,
 }
 
 impl Intermediate {
@@ -35,13 +107,28 @@ impl Intermediate {
             .iter()
             .flat_map(|filter| filter.current())
             .chain(self.range.iter().map(|range| range.current()))
+            .chain(
+                self.derivations
+                    .iter()
+                    .flat_map(|derived| derived.current.iter()),
+            )
     }
     pub fn admits_column(&self, column: usize) -> bool {
-        self.source.admits_column(column)
+        (self
+            .pending_schema
+            .as_ref()
+            .is_some_and(|schema| column < schema.columns().len())
+            || self.admits_donor_column(column))
             && self
                 .columns
                 .as_ref()
                 .is_none_or(|columns| columns.contains(&column))
+    }
+    pub(crate) fn admits_donor_column(&self, column: usize) -> bool {
+        self.source.admits_column(column)
+            || self.derivations.as_ref().is_some_and(|derived| {
+                column >= derived.stored_columns && column < derived.plan.output().columns().len()
+            })
     }
     pub fn output_dependencies(&self) -> impl Iterator<Item = usize> + '_ {
         self.keys
@@ -117,7 +204,8 @@ pub(super) fn validate(
     output: &TableSchema,
 ) -> Result<(), PlanError> {
     for (index, item) in items.iter().enumerate() {
-        if item.identifier.is_empty()
+        if item.pending_schema.is_some()
+            || item.identifier.is_empty()
             || item.path.is_empty()
             || items[..index]
                 .iter()
@@ -131,9 +219,10 @@ pub(super) fn validate(
         if matches!(&item.source,IntermediateSource::SelfRows {columns,..} if columns.is_empty()) {
             return Err(PlanError::InvalidIntermediate);
         }
-        match_values::validate(
+        match_values::validate_declaration(
             &item.keys,
             primary,
+            sources,
             donor,
             output,
             &vec![true; output.columns().len()],
@@ -146,7 +235,7 @@ pub(super) fn validate(
         if item.columns.as_ref().is_some_and(|columns| {
             columns.iter().enumerate().any(|(position, &column)| {
                 column >= width
-                    || !item.source.admits_column(column)
+                    || !item.admits_donor_column(column)
                     || columns[..position].contains(&column)
             })
         }) {
@@ -182,7 +271,7 @@ pub(super) fn validate(
             if [range.lower(), range.upper()]
                 .into_iter()
                 .flatten()
-                .any(|bound| !item.source.admits_column(bound.column))
+                .any(|bound| !item.admits_donor_column(bound.column))
             {
                 return Err(PlanError::InvalidIntermediate);
             }
@@ -201,11 +290,30 @@ pub(super) fn validate(
             {
                 return Err(PlanError::InvalidIntermediate);
             }
-            if item.keys.iter().any(|key| !item.source.admits_column(key.source_column))
-                || item.filter.as_ref().is_some_and(|filter| filter.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !item.source.admits_column(column))))
-                || item.selection.as_ref().is_some_and(|selection| selection.order_by.iter().any(|term| !item.source.admits_column(term.column))) {
+            if item.keys.iter().any(|key| !item.admits_donor_column(key.source_column))
+                || item.filter.as_ref().is_some_and(|filter| filter.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !item.admits_donor_column(column))))
+                || item.selection.as_ref().is_some_and(|selection| selection.order_by.iter().any(|term| !item.admits_donor_column(term.column))) {
                 return Err(PlanError::InvalidIntermediate);
             }
+        }
+        for check in &item.unique {
+            if check.path.is_empty()
+                || check.columns.is_empty()
+                || check
+                    .columns
+                    .iter()
+                    .any(|&column| column >= width || !item.admits_donor_column(column))
+            {
+                return Err(PlanError::InvalidIntermediate);
+            }
+        }
+        if !item.unique.is_empty()
+            && item
+                .filter
+                .as_ref()
+                .is_some_and(RelationPredicate::correlated)
+        {
+            return Err(PlanError::InvalidIntermediate);
         }
         if let Some(filter) = &item.filter {
             filter.validate(width, primary, sources, output, items, index)?;
@@ -234,7 +342,7 @@ pub(super) fn validate_read(
     if column >= source.columns().len() || !item.admits_column(column) {
         return Err(PlanError::InvalidIntermediate);
     }
-    match_values::validate(&item.keys, primary, source, output, available)
+    match_values::validate(&item.keys, primary, sources, source, output, available)
 }
 
 /// Direct scalar selections use only admitted complete records or completed keys.
@@ -248,10 +356,17 @@ pub(super) fn validate_context_read(
     output: &TableSchema,
     mode: &RowMode,
 ) -> Result<(), PlanError> {
-    if !matches!(mode, RowMode::Records | RowMode::Keys) && !item.source.is_self() {
+    if item.keys.iter().filter_map(|key| key.value.read()).any(|read| matches!(read, MatchRead::SecondaryRecord { source, .. } if source + 1 != mode.source_index())) {
         return Err(PlanError::InvalidIntermediate);
     }
-    if let RowMode::Groups(keys) = mode {
+    if !matches!(
+        mode.local_mode(),
+        RowMode::Records | RowMode::Keys | RowMode::Groups(_)
+    ) && !item.source.is_self()
+    {
+        return Err(PlanError::InvalidIntermediate);
+    }
+    if let RowMode::Groups(keys) = mode.local_mode() {
         if item
             .keys
             .iter()

@@ -68,27 +68,7 @@ fn complete_independent_record_contexts_and_unchanged_original() {
             },
             identity,
         );
-        let expected = if name == "adam-adlb-end-of-treatment" {
-            // Keep the historical capture intact. The remaining native gates are
-            // intermediate verifications and derivations; same-input scope is admitted.
-            let mut gates = reference["eot_native_gates"].as_array().unwrap().clone();
-            assert_eq!(gates.len(), 5);
-            assert_eq!(
-                gates.pop().unwrap(),
-                serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["columns.EOTFL.derivation.flag"],"context":{"operation":"flag"}})
-            );
-            assert_eq!(
-                gates.pop().unwrap(),
-                serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["columns.ENDPOINT.derivation.source"],"context":{"operation":"secondary_source_expression"}})
-            );
-            assert_eq!(
-                gates.pop().unwrap(),
-                serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["intermediates[1]"],"context":{"operation":"intermediate_scope"}})
-            );
-            gates
-        } else {
-            case["findings"].as_array().unwrap().clone()
-        };
+        let expected = case["findings"].as_array().unwrap().clone();
         let mut result = match built {
             Ok(result) => result,
             Err(issues) => {
@@ -107,15 +87,16 @@ fn complete_independent_record_contexts_and_unchanged_original() {
                 .unwrap_or_else(|| serde_json::json!([])),
             "{name} complete handler ledger"
         );
-        if name == "adam-adlb-end-of-treatment" {
-            assert_eq!(
-                result.issues().iter().map(issue_json).collect::<Vec<_>>(),
-                expected.as_slice()
-            );
-        } else if let Some(csv) = case.get("csv") {
+        if let Some(csv) = case.get("csv") {
+            // The committed artifact remains the oracle; an older rendered
+            // reference capture uses redundant .0 on whole binary64 values.
+            let csv = case.get("expected_csv").unwrap_or(csv);
             assert!(result.issues().is_empty(), "{name}: {:?}", result.issues());
             assert!(result.save().unwrap());
-            let output = if name == "adam-adlb-supplb-padded-key" {
+            let output = if matches!(
+                name.as_str(),
+                "adam-adlb-supplb-padded-key" | "adam-adlb-end-of-treatment"
+            ) {
                 "adlb.csv"
             } else {
                 "result.csv"
@@ -125,9 +106,6 @@ fn complete_independent_record_contexts_and_unchanged_original() {
                 csv.as_str().unwrap().as_bytes(),
                 "{name}"
             );
-            if let Some(expected) = case.get("expected_csv") {
-                assert_eq!(csv, expected, "unchanged golden");
-            }
         } else {
             assert!(result.output().is_none(), "{name}");
             assert_eq!(

@@ -157,6 +157,34 @@ fn retain_result<E>(value: Value, budget: &mut Budget) -> Result<Value, Box<Exec
 }
 
 /// Check every nested invocation before table methods, including unselected branches.
+/// Admit each retained donor plan once before the first study-table observation.
+pub(super) fn admit_plan<E>(
+    plan: &DatasetPlan,
+    functions: &dyn FunctionPort<Error = E>,
+) -> Result<(), Box<ExecutionError<E>>> {
+    let mut pending = vec![plan];
+    let mut seen = alloc::collections::BTreeSet::new();
+    while let Some(plan) = pending.pop() {
+        if !seen.insert(plan as *const DatasetPlan) {
+            continue;
+        }
+        for assignment in plan
+            .templates()
+            .iter()
+            .flat_map(|template| &template.assignments)
+            .chain(plan.columns())
+        {
+            admit(&assignment.expression, functions)?;
+        }
+        for item in plan.intermediates() {
+            if let Some(derived) = &item.derivations {
+                pending.push(&derived.plan);
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn admit<E>(
     expression: &Expression,
     functions: &dyn FunctionPort<Error = E>,

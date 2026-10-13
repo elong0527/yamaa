@@ -403,11 +403,13 @@ pub(super) fn bind_row(
             let before = findings.len();
             let mut bindings = Vec::new();
             for identifier in compiled.identifiers() {
-                if identifier.split_once('.').is_some_and(|(dataset, _)| {
-                    named.reference(identifier).is_none()
-                        && (matches!(phase, Phase::Column { .. })
-                            || catalog.joined(dataset).is_some())
-                }) {
+                if !catalog.record_derivation()
+                    && identifier.split_once('.').is_some_and(|(dataset, _)| {
+                        named.reference(identifier).is_none()
+                            && (matches!(phase, Phase::Column { .. })
+                                || catalog.joined(dataset).is_some())
+                    })
+                {
                     match phase {
                         Phase::Column { .. } => {
                             findings.push(BindFinding::QualifiedNumericReference {

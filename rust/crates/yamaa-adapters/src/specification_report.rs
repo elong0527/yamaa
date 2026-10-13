@@ -195,7 +195,18 @@ pub fn failure<E>(
                     if let Some((phase, completed)) = &response.failed_verifications {
                         verifications.extend(check_observations(run, completed, *phase, &id)?.0);
                     }
-                    vec![condition(run, &value["outcome"])?]
+                    if response.intermediate_diagnostics.is_empty() {
+                        vec![condition(run, &value["outcome"])?]
+                    } else {
+                        response
+                            .intermediate_diagnostics
+                            .iter()
+                            .map(|diagnostic| {
+                                specification_diagnostics::portable_diagnostic(diagnostic.clone())
+                                    .ok_or(Error::InvalidObservation)
+                            })
+                            .collect::<Result<Vec<_>, _>>()?
+                    }
                 }
                 Some("failure") => {
                     let (phase, completed) = response

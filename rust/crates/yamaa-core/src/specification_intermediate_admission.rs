@@ -1,14 +1,17 @@
 //! Source-independent intermediate admission and owned applicable-key inference.
 use super::*;
+use crate::value::Value;
 use crate::{diagnostic::ConditionCode as C, key_relation::Inference, value::ColumnType};
 
 /// Declaration failures precede source access and key-type binding.
 pub(super) fn declaration_findings(
     d: &Document,
     items: &[usize],
+    sources: &[SourceDeclaration],
 ) -> Result<Vec<PreflightFinding>, PrepareError> {
     let mut findings = Vec::new();
     let mut bytes = 0usize;
+    let mut identifiers = BTreeMap::<&str, String>::new();
     for (index, &item) in items.iter().enumerate() {
         let path = format!("intermediates[{index}]");
         let name = text(d, field(d, item, "id")?)?;
@@ -23,6 +26,27 @@ pub(super) fn declaration_findings(
                 .ok_or(PrepareError::Limit("intermediate_findings"))?;
             Ok(())
         };
+        if let Some(previous) = identifiers.get(name).cloned().or_else(|| {
+            sources
+                .iter()
+                .find(|source| source.name == name)
+                .map(|_| format!("input.{name}"))
+        }) {
+            admit_finding()?;
+            findings.push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
+                code: C::IntermediateIdentifierCollision,
+                spec_paths: vec![format!("{path}.id"), previous],
+                context: [(
+                    "identifier".into(),
+                    crate::diagnostic::ContextValue::Scalar(Value::Str(name.into())),
+                )]
+                .into(),
+                source_span: None,
+                operand_route: None,
+            }));
+        } else {
+            identifiers.insert(name, format!("{path}.id"));
+        }
         let changes_relation = [
             "key",
             "between",

@@ -122,6 +122,33 @@ pub(super) fn admit_reads<'a>(
             let Some(item) = items.get(index).and_then(Option::as_ref) else {
                 return;
             };
+            for key in &item.keys {
+                if let crate::dataset::MatchValue::Contextual(declaration) = &key.value {
+                    findings.push(BindFinding::Lookup(LookupFinding::reference(
+                        &key.path,
+                        declaration.identifier(),
+                        Some(&item.identifier),
+                        ReferenceCause::OutputKey,
+                        None,
+                    )));
+                }
+                if let Some(crate::dataset::MatchRead::SecondaryRecord {
+                    source: owner,
+                    identifier,
+                    ..
+                }) = key.value.read()
+                {
+                    if owner + 1 != source {
+                        findings.push(BindFinding::Lookup(LookupFinding::reference(
+                            &key.path,
+                            identifier,
+                            Some(&item.identifier),
+                            ReferenceCause::OutputKey,
+                            None,
+                        )));
+                    }
+                }
+            }
             let Some(filter) = &item.filter else {
                 return;
             };

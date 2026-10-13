@@ -380,6 +380,9 @@ impl Intermediate {
                 .transpose()?
                 .map(Into::into),
             selection: self.selection.map(SourceSelection::prepare).transpose()?,
+            unique: Vec::new(),
+            derivations: None,
+            pending_schema: None,
             no_match: self
                 .no_match
                 .map(|value| value.into_core().map_err(|_| Error::InvalidScalar))
@@ -524,6 +527,7 @@ pub struct DatasetResponse {
     // reconstructing execution success from JSON or decoding its own IPC output.
     pub(crate) execution: Option<dataset::Execution>,
     pub(crate) retained_verifications: Vec<dataset::CheckRecord>,
+    pub(crate) intermediate_diagnostics: Vec<yamaa_core::diagnostic::Diagnostic>,
     // Preserve the typed completed failure ledger for core report projection;
     // the existing standalone dataset wire remains unchanged.
     pub(crate) failed_verifications: Option<(
@@ -1152,6 +1156,13 @@ fn semantic_failure<E>(
             partition: None,
             verifications: None,
         },
+        ExecutionError::IntermediateVerifications(diagnostics) => Outcome::Condition {
+            diagnostic: Box::new(diagnostics.first().ok_or(Error::Internal)?.clone().into()),
+            identity: None,
+            matched_key: None,
+            partition: None,
+            verifications: None,
+        },
         ExecutionError::ScalarDiagnostic(diagnostic) => Outcome::Condition {
             diagnostic: Box::new(diagnostic.clone().into()),
             identity: None,
@@ -1392,6 +1403,13 @@ fn response_with_policy(
     if legacy {
         legacy_records(&attempt.retained_verifications)?;
     }
+    let intermediate_diagnostics = match &attempt.result {
+        Err(error) => match error.as_ref() {
+            ExecutionError::IntermediateVerifications(diagnostics) => diagnostics.clone(),
+            _ => Vec::new(),
+        },
+        _ => Vec::new(),
+    };
     let (table, outcome, execution, failed_verifications) = match attempt.result {
         Ok(result) => {
             if legacy {
@@ -1440,6 +1458,7 @@ fn response_with_policy(
         outcome,
         execution,
         retained_verifications: attempt.retained_verifications,
+        intermediate_diagnostics,
         failed_verifications,
     })
 }

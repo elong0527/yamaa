@@ -39,6 +39,9 @@ fn item(identifier: &str, current: CurrentRead) -> Intermediate {
         selection: None,
         columns: Some(vec![2]),
         no_match: Some(Value::Missing),
+        unique: Vec::new(),
+        derivations: None,
+        pending_schema: None,
         range: Some(
             RelationRange::new(
                 format!("intermediates.{identifier}.between"),

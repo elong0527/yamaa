@@ -113,6 +113,9 @@ fn fixture(
         selection: None,
         columns: Some(vec![3]),
         no_match: Some(Value::Missing),
+        unique: Vec::new(),
+        derivations: None,
+        pending_schema: None,
         range: Some(
             RelationRange::new(
                 "intermediates[0].between".into(),

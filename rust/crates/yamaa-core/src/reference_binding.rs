@@ -95,6 +95,7 @@ pub enum Diagnostic {
 /// An immutable, owned catalog safe to reuse independently of source buffers.
 #[derive(Debug)]
 pub struct Catalog {
+    record_derivation: bool,
     outputs: BTreeMap<String, (usize, ColumnType)>,
     datasets: BTreeMap<String, DatasetCatalog>,
     limits: Limits,
@@ -139,6 +140,14 @@ fn limit(resource: &'static str, required: usize, allowed: usize) -> Result<(), 
 }
 
 impl Catalog {
+    /// Donor compilers explicitly admit current-record fields before using scalar expressions.
+    pub(crate) fn with_record_derivation(mut self) -> Self {
+        self.record_derivation = true;
+        self
+    }
+    pub(crate) fn record_derivation(&self) -> bool {
+        self.record_derivation
+    }
     pub(crate) fn with_selected(
         mut self,
         selected: alloc::vec::Vec<(String, SelectedRelation)>,
@@ -212,6 +221,30 @@ impl Catalog {
                 })
                 .ok_or(Diagnostic::UnknownField),
         ))
+    }
+    /// Stored and augmented donor fields obey the current declaration's order.
+    pub(crate) fn restrict_record_fields(&mut self, available: &[usize]) {
+        let width = self.outputs.len();
+        for dataset in self
+            .datasets
+            .values_mut()
+            .filter(|dataset| dataset.index == 0)
+        {
+            dataset
+                .fields
+                .retain(|_, (field, _)| *field >= width || available.contains(field));
+        }
+    }
+    pub(crate) fn complete_record_field(&mut self, field: usize, column: &crate::table::Column) {
+        for dataset in self
+            .datasets
+            .values_mut()
+            .filter(|dataset| dataset.index == 0)
+        {
+            dataset
+                .fields
+                .insert(column.name.clone(), (field, column.kind));
+        }
     }
     pub(crate) fn joined(&self, name: &str) -> Option<&JoinedRelation> {
         self.joined.get(name)
@@ -407,6 +440,7 @@ impl Catalog {
             }
         }
         Ok(Self {
+            record_derivation: false,
             outputs: output_index,
             datasets: dataset_index,
             limits,

@@ -171,6 +171,9 @@ fn plan(src: &Table, donor: &Table, same_record: bool, target: T, absence: bool)
             filter: None,
             selection: None,
             no_match: absence.then_some(Value::Missing),
+            unique: Vec::new(),
+            derivations: None,
+            pending_schema: None,
 
             range: None,
             columns: None,

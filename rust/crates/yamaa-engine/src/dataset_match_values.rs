@@ -51,7 +51,19 @@ fn resolve_one<T: TableAccess + ?Sized>(
             }
             Ok(value.clone())
         }
-        MatchRead::Record { column, identifier } => {
+        MatchRead::Record { column, identifier }
+        | MatchRead::SecondaryRecord {
+            column, identifier, ..
+        } => {
+            if let MatchRead::SecondaryRecord { source, .. } = read {
+                let current = candidate
+                    .template
+                    .and_then(|index| plan.templates().get(index))
+                    .map_or(0, |template| template.mode.source_index());
+                if source + 1 != current {
+                    return Err(Box::new(ExecutionError::SchemaMismatch));
+                }
+            }
             state.budget.work(candidate.members.len(), 1)?;
             key_grain::collect_bound(
                 primary,
@@ -133,7 +145,11 @@ pub(crate) fn ordinary<'a, T: TableAccess + ?Sized>(
             let MatchValue::Variable(read) = &key.value else {
                 unreachable!("ordinary selector contains variables only");
             };
-            if matches!(read, MatchRead::Record { .. }) == record {
+            if matches!(
+                read,
+                MatchRead::Record { .. } | MatchRead::SecondaryRecord { .. }
+            ) == record
+            {
                 keys.push((
                     key.source_column,
                     resolve_one(read, &item, candidate, plan, row, primary, state)?,
@@ -161,6 +177,7 @@ pub(crate) fn evaluate<'a, E>(
     for key in item.keys {
         state.budget.work(1, 1)?;
         let value = match &key.value {
+            MatchValue::Contextual(_) => return Err(Box::new(ExecutionError::SchemaMismatch)),
             MatchValue::Variable(read) | MatchValue::Source(read) => {
                 clone_value(current.value(read), state.budget)?
             }

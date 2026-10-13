@@ -4683,6 +4683,9 @@ fn named_item() -> yamaa_engine::dataset::Intermediate {
             keep: Keep::Last,
         }),
         no_match: Some(Value::Missing),
+        unique: Vec::new(),
+        derivations: None,
+        pending_schema: None,
 
         range: None,
         columns: None,
@@ -7448,6 +7451,9 @@ fn filtered_intermediate_grouping_charges_only_eligible_key_cells() {
         no_match: None,
         range: None,
         columns: None,
+        unique: Vec::new(),
+        derivations: None,
+        pending_schema: None,
     };
     let plan = DatasetPlan::new_with_intermediates(
         SourceSchemas {

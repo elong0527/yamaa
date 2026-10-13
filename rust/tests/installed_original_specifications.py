@@ -2089,15 +2089,8 @@ columns:
                         self.assertEqual(expected, case["findings"])
                         self.assertEqual((current / "expected.csv").read_bytes(), case["csv"].encode())
                     if name == "adam-adlb-end-of-treatment":
-                        gates = list(reference["eot_native_gates"])
-                        self.assertEqual(len(gates), 5)
-                        self.assertEqual(gates.pop(), {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
-                            "spec_paths":["columns.EOTFL.derivation.flag"], "context":{"operation":"flag"}})
-                        self.assertEqual(gates.pop(), {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
-                            "spec_paths":["columns.ENDPOINT.derivation.source"], "context":{"operation":"secondary_source_expression"}})
-                        self.assertEqual(gates.pop(), {"phase":"planning", "condition":"unsupported_operation", "requirement":None,
-                            "spec_paths":["intermediates[1]"], "context":{"operation":"intermediate_scope"}})
-                        self.assertEqual(expected, gates)
+                        self.assertEqual(expected, case["findings"])
+                        self.assertEqual((current / "expected.csv").read_bytes(), case["expected_csv"].encode())
                     result = yamaa.domain(entry)
                     self.assertEqual(issues(result), expected)
                     observations = result._native.observations()
@@ -2108,7 +2101,12 @@ columns:
                     if not expected:
                         self.assertIsNotNone(result.output)
                         expected_csv = (current / "expected.csv").read_bytes()
-                        self.assertEqual(result.output.write_csv().encode(), expected_csv)
+                        if name == "adam-adlb-end-of-treatment":
+                            expected_columns = case["expected_csv"].splitlines()[0].split(",")
+                            self.assertEqual(result.output.columns, expected_columns)
+                            self.assertEqual(result.output.rows(), [tuple(row[column] for column in expected_columns) for row in case["rows"]])
+                        else:
+                            self.assertEqual(result.output.write_csv().encode(), expected_csv)
                         self.assertTrue(result.save())
                         self.assertEqual(output.read_bytes(), expected_csv)
                         self.assertTrue(result.save())

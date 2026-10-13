@@ -815,5 +815,43 @@ output: {{path: output.csv, columns: [ID, VALUE]}}
             self.assertEqual(self.report(result)["activation"], activation)
 
 
+    def test_intermediate_callbacks_read_prior_values_and_selected_donor_types(self):
+        case = self.study("negative-function-contract")
+        (case / "a.csv").write_text("ID,N\n1,10\n1,30\n2,40\n")
+        (case / "b.csv").write_text("ID,N\n1,one\n2,two\n")
+        (case / "spec.yaml").write_text("""schema_version: '1.0'
+domain: TEST
+input:
+  SRC: {path: a.csv, types: {ID: int, N: float}}
+  B: {path: b.csv, types: {ID: int, N: str}}
+base: SRC
+keys: [ID, N]
+intermediates:
+  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}
+  - id: DON
+    dataset: B
+    key: [ID]
+    order_by: [B.ID]
+    keep: first
+    derivations:
+      BASE: CAP.N
+      VALUE: {function: {name: project_value, args: {x: BASE}}}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - {name: N, type: float, derivation: SRC.N}
+  - {name: VALUE, type: float, derivation: DON.VALUE}
+output: {path: output.csv, columns: [ID, N, VALUE]}
+""")
+        result = yamaa.domain("spec.yaml", environment="python/environment.yaml")
+        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.output.rows(), [(1, 10.0, 10.0), (1, 30.0, 10.0), (2, 40.0, 40.0)])
+        activation = self.report(result)["activation"]
+        self.assertEqual([row["function"] for row in activation["bindings"]], ["project_value"])
+        self.assertTrue(result.save())
+        self.assertEqual((case / "output.csv").read_bytes(), b"ID,N,VALUE\n1,10,10\n1,30,10\n2,40,40\n")
+        self.assertTrue(result.save())
+        self.assertEqual(self.report(result)["activation"], activation)
+
+
 if __name__ == "__main__":
     unittest.main()

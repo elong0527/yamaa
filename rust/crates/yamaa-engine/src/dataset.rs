@@ -217,6 +217,7 @@ struct AttemptObservations {
 pub enum ExecutionError<E> {
     /// A pure scalar operation's already classified cause and original field path.
     ScalarDiagnostic(yamaa_core::diagnostic::Diagnostic),
+    IntermediateVerifications(Vec<yamaa_core::diagnostic::Diagnostic>),
     SemanticDiagnostic {
         diagnostic: yamaa_core::diagnostic::Diagnostic,
         identity: Option<RowIdentity>,
@@ -1180,15 +1181,7 @@ impl Executor<'_> {
             handlers,
             verifications: records,
         } = observations;
-        for assignment in self
-            .plan
-            .templates()
-            .iter()
-            .flat_map(|template| &template.assignments)
-            .chain(self.plan.columns())
-        {
-            functions::admit(&assignment.expression, functions)?;
-        }
+        functions::admit_plan(self.plan, functions)?;
         if table.schema() != self.plan.source()
             || secondary.len() != self.plan.secondary().len()
             || secondary
@@ -1211,23 +1204,63 @@ impl Executor<'_> {
         let mut budget = Budget::new(limits);
         let mut intermediate_run = intermediates::Run::default();
         let mut candidates: Vec<Candidate> = Vec::new();
+        intermediates::verify(
+            self,
+            false,
+            limits,
+            &mut EvaluationState {
+                primary: &primary,
+                functions,
+                secondary,
+                self_rows: &[],
+                budget: &mut budget,
+                handlers,
+                intermediates: &mut intermediate_run,
+                output_rows: &[],
+                output_offset: 0,
+                windows: &mut windows::Cache::default(),
+                aggregate_row: None,
+            },
+        )?;
         let mut next_selection_identity = 0usize;
         if matches!(self.plan.templates()[0].mode, RowMode::Keys) {
             candidates = key_grain::construct(self, table, limits, &mut budget, handlers)?;
         } else {
             for (template_index, template) in self.plan.templates().iter().enumerate() {
-                let table =
-                    row_drivers::Driver::new(table, secondary, template.mode.source_index());
-                let table = &table;
-                let eligible = if let RowMode::IntermediateDriver { index, .. } = &template.mode {
-                    Some(intermediates::driver_records(
-                        table,
-                        &self.plan.intermediates()[*index],
-                        &mut budget,
+                let named = if let RowMode::IntermediateDriver { index, .. } = &template.mode {
+                    Some(intermediates::driver(
+                        *index,
+                        self,
+                        limits,
+                        &mut EvaluationState {
+                            primary: &primary,
+                            functions,
+                            secondary,
+                            self_rows: &candidates,
+                            budget: &mut budget,
+                            handlers,
+                            intermediates: &mut intermediate_run,
+                            output_rows: &[],
+                            output_offset: 0,
+                            windows: &mut windows::Cache::default(),
+                            aggregate_row: None,
+                        },
                     )?)
                 } else {
                     None
                 };
+                let data = named
+                    .as_ref()
+                    .and_then(|relation| relation.materialized.as_ref())
+                    .map(|data| intermediates::Data::<T::Error>::new(data));
+                let stored =
+                    row_drivers::Driver::new(table, secondary, template.mode.source_index());
+                let table = if let Some(data) = &data {
+                    row_drivers::Driver::Secondary(data)
+                } else {
+                    stored
+                };
+                let table = &table;
                 let first = candidates.len();
                 let deferred = yamaa_core::dataset::window_stages(
                     &template.assignments,
@@ -1241,21 +1274,25 @@ impl Executor<'_> {
                     RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
                     RowMode::Records => {
                         // Admit the known cardinality before materializing record memberships.
-                        let rows = eligible.as_ref().map_or(table.row_count(), Vec::len);
+                        let rows = named
+                            .as_ref()
+                            .map_or(table.row_count(), |relation| relation.eligible.len());
                         self.check_capacity(candidates.len(), rows, limits)?;
-                        if let Some(rows) = &eligible {
-                            rows.iter().map(|&row| vec![row]).collect()
+                        if let Some(relation) = &named {
+                            relation.eligible.iter().map(|&row| vec![row]).collect()
                         } else {
                             (0..table.row_count()).map(|row| vec![row]).collect()
                         }
                     }
                     RowMode::Groups(keys) => {
                         budget.work(
-                            eligible.as_ref().map_or(table.row_count(), Vec::len),
+                            named
+                                .as_ref()
+                                .map_or(table.row_count(), |relation| relation.eligible.len()),
                             keys.len(),
                         )?;
-                        if let Some(rows) = &eligible {
-                            intermediates::driver_groups(table, rows, keys, limits)?
+                        if let Some(relation) = &named {
+                            intermediates::driver_groups(table, &relation.eligible, keys, limits)?
                         } else {
                             partition(table, keys, limits.source_rows, limits.key_cells)
                                 .map_err(|error| Box::new(ExecutionError::Grouping(error)))?
@@ -1303,9 +1340,9 @@ impl Executor<'_> {
                                 handlers,
                                 intermediates: &mut intermediate_run,
                                 output_rows: &[],
-                                aggregate_row: None,
                                 output_offset: 0,
                                 windows: &mut windows::Cache::default(),
+                                aggregate_row: None,
                             },
                         )?;
                         candidate.completed[assignment.column] = true;
@@ -1340,9 +1377,9 @@ impl Executor<'_> {
                                     handlers,
                                     intermediates: &mut intermediate_run,
                                     output_rows: &[],
-                                    aggregate_row: None,
                                     output_offset: 0,
                                     windows: &mut windows::Cache::default(),
+                                    aggregate_row: None,
                                 },
                             )?
                         } else {
@@ -1385,12 +1422,30 @@ impl Executor<'_> {
                         handlers,
                         intermediates: &mut intermediate_run,
                         output_rows: &[],
-                        aggregate_row: None,
                         output_offset: 0,
                         windows: &mut windows::Cache::default(),
+                        aggregate_row: None,
                     },
                 )?;
                 intermediate_run.publish_self(self, &mut budget)?;
+                intermediates::verify(
+                    self,
+                    true,
+                    limits,
+                    &mut EvaluationState {
+                        primary: &primary,
+                        functions,
+                        secondary,
+                        self_rows: &candidates,
+                        budget: &mut budget,
+                        handlers,
+                        intermediates: &mut intermediate_run,
+                        output_rows: &[],
+                        output_offset: 0,
+                        windows: &mut windows::Cache::default(),
+                        aggregate_row: None,
+                    },
+                )?;
             }
         }
         let mut completed = vec![false; self.plan.output().columns().len()];

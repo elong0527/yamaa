@@ -34,6 +34,12 @@ impl IntermediateSource {
 }
 impl Intermediate {
     pub fn source_schema<'a>(&'a self, sources: &'a [SecondarySource]) -> Option<&'a TableSchema> {
+        if let Some(schema) = &self.pending_schema {
+            return Some(schema);
+        }
+        if let Some(derived) = &self.derivations {
+            return Some(derived.plan.output());
+        }
         match &self.source {
             IntermediateSource::Input(index) => sources.get(*index).map(|source| &source.schema),
             IntermediateSource::Primary { schema, .. }
@@ -69,11 +75,13 @@ fn aggregate_reads(aggregate: &BoundAggregate) -> bool {
             };
             donor
                 || keys.iter().any(|key| match &key.value {
-                    MatchValue::Literal(_) => false,
+                    MatchValue::Literal(_) | MatchValue::Contextual(_) => false,
                     MatchValue::Variable(read)
                     | MatchValue::Source(read)
                     | MatchValue::StrPad { read, .. } => match read {
-                        MatchRead::Record { .. } | MatchRead::Output { .. } => false,
+                        MatchRead::Record { .. }
+                        | MatchRead::SecondaryRecord { .. }
+                        | MatchRead::Output { .. } => false,
                     },
                 })
         }

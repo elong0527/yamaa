@@ -1153,3 +1153,104 @@ fn row_callbacks_join_primary_or_secondary_records_by_completed_keys() {
         );
     }
 }
+
+#[test]
+fn intermediate_derive_callbacks_activate_before_data_and_receive_donor_or_prior_values() {
+    for grouped_rows in [false, true] {
+        for argument in ["SRC.ID", "BASE"] {
+            let rows = if grouped_rows {
+                "rows: [{id: all, group_by: [SRC.ID], derivations: {ID: SRC.ID}}]\n"
+            } else {
+                ""
+            };
+            let raw = format!("schema_version: '1.0'\ndomain: TEST\ninput: {{SRC: {{path: input.csv, types: {{ID: int}}}}}}\nkeys: [ID]\n{rows}intermediates:\n  - id: DON\n    dataset: SRC\n    key: [ID]\n    order_by: [SRC.ID]\n    keep: first\n    derivations:\n      BASE: SRC.ID\n      V: {{function: {{name: id, args: {{x: {argument}}}}}}}\ncolumns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n  - {{name: VALUE, type: int, derivation: DON.V}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n");
+            let document = schemas::domain_schema()
+                .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
+                .unwrap();
+            let run = PreparedRun::prepare(document, environment())
+                .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
+            assert_eq!(run.compiled().called_functions(), [1]);
+            let (mut activation, mut study) = ports();
+            study.bytes = Arc::from(b"ID\n1\n1\n2\n".as_slice());
+            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            assert!(attempt.boundary.is_ok());
+            let trace = activation.trace.borrow();
+            assert_eq!(&trace[..4], &["lock", "bind", "case", "case"]);
+            assert!(trace.iter().position(|event| *event == "capture").unwrap() > 3);
+            assert_eq!(activation.values, [7, i64::MIN, 1, 1, 2]);
+            let entered = attempt
+                .dataset
+                .result
+                .unwrap_or_else(|error| panic!("{error:?}"));
+            let result = entered.result.unwrap_or_else(|error| panic!("{error:?}"));
+            assert_eq!(
+                result.dataset.rows(),
+                &[
+                    vec![Value::Int(1), Value::Int(1)],
+                    vec![Value::Int(2), Value::Int(2)]
+                ]
+            );
+        }
+    }
+}
+
+#[test]
+fn intermediate_callback_selects_for_donor_record_and_keeps_selected_field_types() {
+    let raw = "schema_version: '1.0'\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: str}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}\n  - id: DON\n    dataset: B\n    key: {ID: ID}\n    order_by: [B.ID]\n    keep: first\n    derivations:\n      V: {function: {name: id, args: {x: CAP.N}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: VALUE, type: int, derivation: DON.V}\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n";
+    let document = schemas::domain_schema()
+        .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
+        .unwrap();
+    let run = PreparedRun::prepare(document, environment())
+        .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
+    let (mut activation, mut study) = ports();
+    study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
+    let attempt = run.execute_with_ports(&mut activation, &mut study);
+    assert!(attempt.boundary.is_ok());
+    let entered = attempt
+        .dataset
+        .result
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    let result = entered.result.unwrap_or_else(|error| panic!("{error:?}"));
+    assert_eq!(
+        result.dataset.rows(),
+        &[
+            vec![Value::Int(1), Value::Int(10), Value::Int(10)],
+            vec![Value::Int(1), Value::Int(30), Value::Int(10)],
+            vec![Value::Int(2), Value::Int(40), Value::Int(40)]
+        ]
+    );
+    assert_eq!(activation.values, [7, i64::MIN, 10, 10, 40]);
+}
+
+#[test]
+fn callback_derived_fields_are_not_exposed_as_inferred_row_driver_types() {
+    let raw = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\nintermediates:\n  - id: DON\n    dataset: SRC\n    derivations:\n      V: {function: {name: id, args: {x: SRC.ID}}}\ncolumns:\n  - {name: ID, type: int}\nrows:\n  - id: records\n    dataset: DON\n    derivations: {ID: DON.ID}\noutput: {path: output.csv, columns: [ID]}\n";
+    let document = schemas::domain_schema()
+        .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
+        .unwrap();
+    let run = PreparedRun::prepare(document, environment())
+        .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
+    let (mut activation, mut study) = ports();
+    study.bytes = Arc::from(b"ID\n1\n".as_slice());
+    let attempt = run.execute_with_ports(&mut activation, &mut study);
+    let error = attempt.dataset.result.unwrap_err();
+    let PortError::Run(yamaa_engine::specification_run::RunError::Bind(
+        yamaa_core::specification::BindError::Invalid(findings),
+    )) = error
+    else {
+        panic!("{error:?}")
+    };
+    let diagnostics = findings
+        .iter()
+        .flat_map(|finding| finding.diagnostics(run.compiled().source()).unwrap())
+        .collect::<Vec<_>>();
+    assert!(
+        diagnostics.iter().any(
+            |d| d.definition().condition == "unknown_intermediate_driver_type"
+                && d.definition().requirement == Some("REQ-1262")
+                && d.spec_paths == ["rows[0].dataset"]
+        ),
+        "{diagnostics:?}"
+    );
+    assert_eq!(activation.values, [7, i64::MIN]);
+}

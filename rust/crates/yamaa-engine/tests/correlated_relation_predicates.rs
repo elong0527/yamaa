@@ -144,6 +144,9 @@ fn fixture(text: &str, failure: Option<(usize, usize)>) -> (Table, Table, Datase
             keep: Keep::Last,
         }),
         no_match: Some(Value::Missing),
+        unique: Vec::new(),
+        derivations: None,
+        pending_schema: None,
 
         range: None,
         columns: None,

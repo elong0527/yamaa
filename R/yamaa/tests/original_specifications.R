@@ -1763,7 +1763,7 @@ local({
   original <- file.path(directory,"adam-adlb-supplb-padded-key")
   unlink(file.path(original,"input"),recursive=TRUE)
   stopifnot(nrow(yamaa_check(file.path(original,"spec.yaml"))$issues)==0L,!file.exists(file.path(original,"input")))
-  cat("common input record rows match unchanged padded-key bytes, complete independent findings and reached handler ledgers without Python; EOT intermediate/grouped named-source scopes remain gated passed\n")
+  cat("common input record rows match unchanged padded-key bytes, complete independent findings and reached handler ledgers without Python; EOT intermediate/grouped named-source execution passed\n")
 })
 
 local({
