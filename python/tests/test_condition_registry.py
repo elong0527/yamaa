@@ -63,6 +63,35 @@ def _raised_conditions() -> set[str]:
                 f"{ast.dump(value)}"
             )
 
+        def add_assignment(target: ast.expr, value: ast.expr | None) -> None:
+            # Tuple unpacking pairs each target with its own value, e.g.
+            # ``condition, requirement = "unknown_field", "REQ-0103"``.
+            if (
+                isinstance(target, (ast.Tuple, ast.List))
+                and isinstance(value, (ast.Tuple, ast.List))
+                and len(target.elts) == len(value.elts)
+            ):
+                for sub_target, sub_value in zip(target.elts, value.elts, strict=True):
+                    add_assignment(sub_target, sub_value)
+                return
+            if (isinstance(target, ast.Name) and target.id == "condition") or (
+                isinstance(target, ast.Attribute) and target.attr == "condition"
+            ):
+                add_literal(value)
+
+        # Literal assignments to ``condition`` / ``*.condition`` anywhere in
+        # the file: class attributes, instance assignments such as
+        # ``self.condition = "..."``, and locals later passed through to a
+        # condition constructor. Collecting them here means a pass-through
+        # accepted by ``add_positional`` cannot hide a name that was only
+        # ever assigned, never passed as a literal at a call site.
+        for assignment in ast.walk(tree):
+            if isinstance(assignment, ast.Assign):
+                for target in assignment.targets:
+                    add_assignment(target, assignment.value)
+            elif isinstance(assignment, ast.AnnAssign):
+                add_assignment(assignment.target, assignment.value)
+
         for definition in ast.walk(tree):
             if isinstance(definition, ast.ClassDef):
                 for statement in definition.body:
