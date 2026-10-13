@@ -4908,9 +4908,9 @@ class TestRegularExpressionContract(unittest.TestCase):
         self.assertEqual(VALIDATOR.REGEX_CONTRACT, 'regex')
         self.assertEqual(VALIDATOR.REGEX_CONTRACT_VERSION, '2.0.0')
 
-    def test_the_replay_reads_through_the_shared_package_binding(self):
+    def test_the_replay_reads_through_public_native_specifications(self):
         VALIDATOR.require_regex_binding()
-        from yamaa import regex as package_binding
+        import _native_regex as package_binding
 
         self.assertIs(
             VALIDATOR._portable_compile, package_binding.compile_pattern
@@ -4918,6 +4918,8 @@ class TestRegularExpressionContract(unittest.TestCase):
         self.assertIs(
             VALIDATOR._portable_full_match, package_binding.full_match
         )
+        self.assertIs(package_binding.check, __import__('yamaa').check)
+        self.assertIs(package_binding.domain, __import__('yamaa').domain)
 
     def test_missing_binding_fails_rather_than_falling_back(self):
         saved = VALIDATOR._portable_binding
@@ -5743,6 +5745,13 @@ class TestReferenceDependencyBoundary(unittest.TestCase):
         self.assertNotIn('yamaa.io.csv', boundary)
         self.assertNotIn('yamaa.models', boundary)
         self.assertNotIn('spec_from_file_location', boundary)
+
+    def test_regex_fixture_admission_uses_only_public_native_specifications(self):
+        source = TOOL_PATH.with_name('_native_regex.py').read_text(encoding='utf-8')
+        self.assertEqual(self.forbidden_imports(source), [])
+        self.assertNotIn('.save(', source)
+        boundary = TOOL_PATH.with_name('_reference_checks.py').read_text(encoding='utf-8')
+        self.assertNotIn('yamaa.regex', boundary)
 
     def test_guard_rejects_direct_aliased_and_from_package_imports(self):
         for source in (
