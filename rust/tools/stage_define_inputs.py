@@ -9,6 +9,11 @@ CASES = ("sdtm-dm-metadata", "sdtm-ae-coding", "sdtm-vs-epoch-from-subject-eleme
 
 def stage(destination: Path):
     destination.mkdir()
+    # Independent XML/JSON oracles survive retirement of the Python evaluator.
+    shutil.copytree(
+        ROOT / "rust/crates/yamaa-adapters/tests/fixtures/define-schemas",
+        destination / "schemas",
+    )
     for name in CASES:
         original = ROOT / "benchmarks" / name
         target = destination / name

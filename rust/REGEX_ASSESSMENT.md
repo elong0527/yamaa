@@ -152,7 +152,8 @@ existing cases, twelve authored edges, scalar-set membership and integer-count
 truth. Rust tests additionally cover capture/ordering behavior, empty repeated
 groups, reversed lookbehind capture order, flat 3,000-scalar patterns, nested
 assertions, checked width overflow, budget exhaustion and successful retry.
-Native CI runs these checks and preserves the unchanged Python discrepancy report.
+Native CI runs these checks and uploads the native component assessment report;
+the historical Python discrepancies above remain archived evidence.
 The report cannot waive a failing Rust expectation or qualify reference parity.
 Braced code-point escapes also obey REQ-0825's scalar-expansion boundary:
 all 2,048 surrogate code points are rejected in atoms and character classes,
