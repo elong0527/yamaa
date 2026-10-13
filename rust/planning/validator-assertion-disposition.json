@@ -3152,7 +3152,14 @@
         "no artifact before explicit Save",
         "byte-for-byte original expected CSV and repeated activation"
       ],
-      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification"
+      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification",
+      "mandatory_repository_transport_runner": "rust/tests/check_repository_r_transport.py",
+      "transport_case": "schema-functions",
+      "transport_assertions": [
+        "actual installed R SDK/core/function-package identity and real authored renv.lock",
+        "the exact repository stdlib R Check program against the original declarations after deleting study inputs",
+        "complete five-field issue rows, UTF-8 JSON text context and array spec_paths, without activation or artifact publication"
+      ]
     },
     {
       "environment": "benchmarks/schema-non-finite/r/environment.yaml",
@@ -3166,7 +3173,14 @@
         "no artifact before explicit Save",
         "byte-for-byte original expected CSV and repeated activation"
       ],
-      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification"
+      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification",
+      "mandatory_repository_transport_runner": "rust/tests/check_repository_r_transport.py",
+      "transport_case": "schema-non-finite",
+      "transport_assertions": [
+        "actual installed R SDK/core/function-package identity and real authored renv.lock",
+        "the exact repository stdlib R Check program against the original declarations after deleting study inputs",
+        "complete five-field issue rows, UTF-8 JSON text context and array spec_paths, without activation or artifact publication"
+      ]
     },
     {
       "environment": "benchmarks/adam-adsl-bmi/r/environment.yaml",
@@ -3180,7 +3194,14 @@
         "no artifact before explicit Save",
         "byte-for-byte original expected CSV and repeated activation"
       ],
-      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification"
+      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification",
+      "mandatory_repository_transport_runner": "rust/tests/check_repository_r_transport.py",
+      "transport_case": "adam-adsl-bmi",
+      "transport_assertions": [
+        "actual installed R SDK/core/function-package identity and real authored renv.lock",
+        "the exact repository stdlib R Check program against the original declarations after deleting study inputs",
+        "complete five-field issue rows, UTF-8 JSON text context and array spec_paths, without activation or artifact publication"
+      ]
     },
     {
       "environment": "benchmarks/adam-advs-percentiles/r/environment.yaml",
@@ -3194,7 +3215,14 @@
         "no artifact before explicit Save",
         "byte-for-byte original expected CSV and repeated activation"
       ],
-      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification"
+      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification",
+      "mandatory_repository_transport_runner": "rust/tests/check_repository_r_transport.py",
+      "transport_case": "adam-advs-percentiles",
+      "transport_assertions": [
+        "actual installed R SDK/core/function-package identity and real authored renv.lock",
+        "the exact repository stdlib R Check program against the original declarations after deleting study inputs",
+        "complete five-field issue rows, UTF-8 JSON text context and array spec_paths, without activation or artifact publication"
+      ]
     },
     {
       "environment": "benchmarks/negative-function-contract/r/environment.yaml",
@@ -3207,7 +3235,14 @@
         "NULL output and Save refusal",
         "valid static call remains clean with no study input"
       ],
-      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification"
+      "mandatory_workflow": ".github/workflows/native.yml::installed R matrix qualification",
+      "mandatory_repository_transport_runner": "rust/tests/check_repository_r_transport.py",
+      "transport_case": "negative-function-contract",
+      "transport_assertions": [
+        "actual installed R SDK/core/function-package identity and real authored renv.lock",
+        "the exact repository stdlib R Check program against the original declarations after deleting study inputs",
+        "complete five-field issue rows, UTF-8 JSON text context and array spec_paths, without activation or artifact publication"
+      ]
     }
   ],
   "truth_policy": "No committed benchmark or grammar expected truth is modified. All originally declared phase/condition/requirement/path/context facts match. The audit records complete native contexts, including any additional native facts; no subset observation implies execution or full value acceptance."
