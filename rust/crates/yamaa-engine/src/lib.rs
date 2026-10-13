@@ -4,6 +4,7 @@
 
 extern crate alloc;
 
+pub mod application_observer;
 pub mod build;
 pub mod capacity;
 pub mod dataset;

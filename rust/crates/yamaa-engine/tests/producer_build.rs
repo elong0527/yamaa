@@ -390,6 +390,266 @@ impl Ports {
     }
 }
 type Attempt = build::BuildAttempt<Activation, Study, Decoder, Report, Codec>;
+
+mod application_observations {
+    use super::*;
+    use yamaa_engine::{
+        application_observer::{CallStage, Event, Observer, Phase, Scope},
+        dataset::ExecutionPhase,
+    };
+    type NodeCoordinate = Option<(usize, String)>;
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    enum Seen {
+        Phase(NodeCoordinate, Phase),
+        Call(NodeCoordinate, CallStage),
+    }
+    struct Recorder {
+        trace: Trace,
+        events: RefCell<Vec<Seen>>,
+    }
+    impl Observer for Recorder {
+        fn observe(&self, event: Event<'_>) {
+            let (node, seen, marker) = match event {
+                Event::Phase { node, phase } => (node, Seen::Phase(None, phase), "observe:phase"),
+                Event::FunctionCall { node, stage } => {
+                    (node, Seen::Call(None, stage), "observe:call")
+                }
+            };
+            let node = node.map(|node| (node.index, node.identity.to_owned()));
+            let seen = match seen {
+                Seen::Phase(_, phase) => Seen::Phase(node, phase),
+                Seen::Call(_, stage) => Seen::Call(node, stage),
+            };
+            self.events.borrow_mut().push(seen);
+            self.trace.borrow_mut().push(marker.into());
+        }
+    }
+    fn recorder(ports: &Ports) -> Recorder {
+        Recorder {
+            trace: Rc::clone(&ports.activation.trace),
+            events: RefCell::new(vec![]),
+        }
+    }
+    fn calls(events: &[Seen]) -> Vec<(NodeCoordinate, CallStage)> {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                Seen::Call(node, stage) => Some((node.clone(), *stage)),
+                _ => None,
+            })
+            .collect()
+    }
+    fn assert_immediately_before_actual_calls(ports: &Ports) {
+        let trace = ports.activation.trace.borrow();
+        let invoked = trace
+            .iter()
+            .enumerate()
+            .filter(|(_, event)| event.starts_with("invoke:"));
+        for (index, _) in invoked {
+            assert_eq!(trace[index - 1], "observe:call");
+        }
+        assert_eq!(
+            trace
+                .iter()
+                .filter(|event| *event == "observe:call")
+                .count(),
+            trace
+                .iter()
+                .filter(|event| event.starts_with("invoke:"))
+                .count()
+        );
+    }
+    #[test]
+    fn observer_preserves_alias_graph_truth_and_counts_only_real_activation_and_node_calls() {
+        let build = prepared();
+        let mut ordinary = Ports::new();
+        let mut plain = Attempt::default();
+        let expected = build
+            .build_publication_into(ordinary.borrow(), Default::default(), &mut plain)
+            .unwrap();
+        let mut ports = Ports::new();
+        let observer = recorder(&ports);
+        let mut attempt = Attempt::default();
+        let held = build
+            .build_publication_with_observer_into(
+                ports.borrow(),
+                Default::default(),
+                &mut attempt,
+                Scope::new(&observer),
+            )
+            .unwrap();
+        let real_trace = ports
+            .activation
+            .trace
+            .borrow()
+            .iter()
+            .filter(|event| !event.starts_with("observe:"))
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(real_trace, *ordinary.activation.trace.borrow());
+        assert_eq!(ports.study.reads, ordinary.study.reads);
+        assert_eq!(ports.decoder.cells.get(), ordinary.decoder.cells.get());
+        assert_eq!(attempt.activation, plain.activation);
+        assert_eq!(
+            held.artifacts()
+                .iter()
+                .map(|artifact| (artifact.node(), artifact.path(), artifact.bytes()))
+                .collect::<Vec<_>>(),
+            expected
+                .artifacts()
+                .iter()
+                .map(|artifact| (artifact.node(), artifact.path(), artifact.bytes()))
+                .collect::<Vec<_>>()
+        );
+        let events = observer.events.borrow();
+        assert_eq!(
+            calls(&events),
+            [
+                (None, CallStage::Activation),
+                (None, CallStage::Activation),
+                (None, CallStage::Activation),
+                (None, CallStage::Activation),
+                (
+                    Some((1, "/p".into())),
+                    CallStage::Dataset(ExecutionPhase::Derivation)
+                ),
+                (
+                    Some((0, "/root".into())),
+                    CallStage::Dataset(ExecutionPhase::Derivation)
+                ),
+            ]
+        );
+        // Each function's third authored case short-circuits missingness without
+        // crossing the port; aliases still execute their one producer once.
+        assert_eq!(attempt.activation.tests.len(), 6);
+        assert_eq!(
+            attempt
+                .activation
+                .tests
+                .iter()
+                .filter(|case| case.invoked)
+                .count(),
+            4
+        );
+        let phases = events
+            .iter()
+            .filter_map(|event| match event {
+                Seen::Phase(node, phase) => Some((node.clone(), *phase)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let mut expected_phases = vec![(None, Phase::Activation)];
+        for (index, identity) in [(1, "/p"), (0, "/root")] {
+            expected_phases.push((Some((index, identity.into())), Phase::Input));
+            for phase in [
+                ExecutionPhase::Admission,
+                ExecutionPhase::Derivation,
+                ExecutionPhase::OutputKeys,
+                ExecutionPhase::Verification,
+                ExecutionPhase::Finished,
+            ] {
+                expected_phases.push((Some((index, identity.into())), Phase::Dataset(phase)));
+            }
+            expected_phases.push((Some((index, identity.into())), Phase::Output));
+        }
+        assert_eq!(phases, expected_phases);
+        assert_immediately_before_actual_calls(&ports);
+    }
+    #[test]
+    fn observer_keeps_failed_activation_live_callback_and_unwind_prefixes() {
+        for mode in [
+            Mode::Lock,
+            Mode::CaseInterrupt,
+            Mode::Producer,
+            Mode::Unwind,
+        ] {
+            let mut ports = Ports::new();
+            ports.activation.mode = mode;
+            let observer = recorder(&ports);
+            let mut attempt = Attempt::default();
+            let build = prepared();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                build.build_publication_with_observer_into(
+                    ports.borrow(),
+                    Default::default(),
+                    &mut attempt,
+                    Scope::new(&observer),
+                )
+            }));
+            assert_immediately_before_actual_calls(&ports);
+            let events = observer.events.borrow();
+            let calls = calls(&events);
+            match mode {
+                Mode::Lock => {
+                    assert!(result.unwrap().is_err());
+                    assert!(calls.is_empty());
+                    assert_eq!(*events, [Seen::Phase(None, Phase::Activation)]);
+                    assert!(attempt.nodes.is_empty());
+                }
+                Mode::CaseInterrupt => {
+                    assert!(result.unwrap().is_err());
+                    assert_eq!(
+                        calls,
+                        [(None, CallStage::Activation), (None, CallStage::Activation)]
+                    );
+                    assert!(attempt.nodes.is_empty());
+                    assert_eq!(ports.study.reads, 0);
+                }
+                Mode::Producer => {
+                    assert!(result.unwrap().is_err());
+                    assert_eq!(calls.len(), 5);
+                    assert_eq!(
+                        calls.last(),
+                        Some(&(
+                            Some((1, "/p".into())),
+                            CallStage::Dataset(ExecutionPhase::Derivation)
+                        ))
+                    );
+                    let error = attempt.nodes[0]
+                        .dataset
+                        .result
+                        .as_ref()
+                        .unwrap()
+                        .result
+                        .as_ref()
+                        .unwrap_err();
+                    let ExecutionError::ProjectFunction { error, .. } = error.as_ref() else {
+                        panic!("original callback error")
+                    };
+                    let FailureKind::CallFailed(error) = &error.kind else {
+                        panic!("original payload")
+                    };
+                    assert!(Rc::ptr_eq(&error.original, &ports.activation.original));
+                    assert!(!events
+                        .iter()
+                        .any(|event| matches!(event, Seen::Phase(Some((0, _)), _))));
+                }
+                Mode::Unwind => {
+                    let Err(payload) = result else {
+                        panic!("original invocation unwind")
+                    };
+                    assert!(Arc::ptr_eq(
+                        payload.downcast_ref::<Arc<()>>().unwrap(),
+                        &ports.activation.unwind
+                    ));
+                    assert_eq!(calls.len(), 5);
+                    assert_eq!(
+                        events.last(),
+                        Some(&Seen::Call(
+                            Some((1, "/p".into())),
+                            CallStage::Dataset(ExecutionPhase::Derivation)
+                        ))
+                    );
+                    assert!(matches!(
+                        attempt.nodes[0].dataset.result,
+                        Err(PortError::Incomplete)
+                    ));
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+}
 fn prepared() -> build::PreparedBuild {
     let root = document(
         &[("FIRST", Some("/p")), ("SECOND", Some("/p"))],

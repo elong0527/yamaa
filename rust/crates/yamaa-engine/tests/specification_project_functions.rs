@@ -22,6 +22,28 @@ use yamaa_engine::{
 #[derive(Debug, PartialEq)]
 struct Payload(Rc<()>);
 type Trace = Rc<RefCell<Vec<&'static str>>>;
+#[derive(Debug, PartialEq, Eq)]
+enum Stage {
+    Phase(yamaa_engine::application_observer::Phase),
+    Call(yamaa_engine::application_observer::CallStage),
+}
+#[derive(Default)]
+struct Stages(RefCell<Vec<Stage>>);
+impl yamaa_engine::application_observer::Observer for Stages {
+    fn observe(&self, event: yamaa_engine::application_observer::Event<'_>) {
+        use yamaa_engine::application_observer::Event;
+        self.0.borrow_mut().push(match event {
+            Event::Phase { node, phase } => {
+                assert_eq!(node, None);
+                Stage::Phase(phase)
+            }
+            Event::FunctionCall { node, stage } => {
+                assert_eq!(node, None);
+                Stage::Call(stage)
+            }
+        });
+    }
+}
 struct Port {
     trace: Trace,
     held: Arc<[u8]>,
@@ -211,6 +233,129 @@ fn checked_calls_execute_through_shared_capture_and_repeat_on_held_snapshots() {
         &["inspect", "capture", "decode", "call", "inspect", "capture", "decode", "call"]
     );
 }
+#[test]
+fn observer_counts_actual_calls_and_preserves_signature_short_circuit_and_original_failure() {
+    use yamaa_engine::application_observer::{CallStage, Phase, Scope};
+    use yamaa_engine::dataset::ExecutionPhase;
+    for mode in ["normal", "missing", "signature", "raised"] {
+        let spec = specification(vec![(
+            "VALUE",
+            "int",
+            call(
+                "id",
+                vec![(
+                    "x",
+                    if mode == "missing" {
+                        Tree::Scalar(yamaa_core::schema::DocumentNode::Null)
+                    } else {
+                        Tree::text("SRC.ID")
+                    },
+                )],
+            ),
+        )]);
+        let checked = domain::check_with_project(&spec, &[function("id")]).unwrap();
+        let trace = Rc::new(RefCell::new(vec![]));
+        let cells = Rc::new(Cell::new(0));
+        let marker = Rc::new(());
+        let mut functions = Bindings {
+            plan: (mode != "signature")
+                .then(|| checked.compiled().project_calls().unwrap().plans()[0].clone()),
+            trace: Rc::clone(&trace),
+            raised: (mode == "raised").then(|| Rc::clone(&marker)),
+        };
+        let (mut source, mut decoder) = ports(&trace, &cells);
+        let mut attempt = CapturedAttempt::new(checked.compiled().source());
+        let observer = Stages::default();
+        checked.build_with_observer_into(
+            &mut source,
+            &mut decoder,
+            &mut functions,
+            limits(),
+            &mut attempt,
+            Scope::new(&observer),
+        );
+        let stages = observer.0.borrow();
+        let observed_calls = stages
+            .iter()
+            .filter(|event| matches!(event, Stage::Call(_)))
+            .count();
+        assert_eq!(
+            observed_calls,
+            trace
+                .borrow()
+                .iter()
+                .filter(|event| **event == "call")
+                .count()
+        );
+        assert_eq!(
+            observed_calls,
+            usize::from(matches!(mode, "normal" | "raised"))
+        );
+        if mode == "signature" {
+            assert_eq!(*stages, [Stage::Phase(Phase::Input)]);
+            assert!(trace.borrow().is_empty());
+            assert_eq!(source.reads, 0);
+            assert!(matches!(
+                *attempt.result.unwrap().result.unwrap_err(),
+                ExecutionError::FunctionBinding { slot: 0 }
+            ));
+            continue;
+        }
+        assert_eq!(
+            &stages[..3],
+            [
+                Stage::Phase(Phase::Input),
+                Stage::Phase(Phase::Dataset(ExecutionPhase::Admission)),
+                Stage::Phase(Phase::Dataset(ExecutionPhase::Derivation))
+            ]
+        );
+        if mode == "raised" {
+            assert_eq!(
+                stages[3],
+                Stage::Call(CallStage::Dataset(ExecutionPhase::Derivation))
+            );
+            assert_eq!(
+                stages.last(),
+                Some(&Stage::Phase(Phase::Dataset(ExecutionPhase::Finished)))
+            );
+            assert!(!stages.iter().any(|event| matches!(
+                event,
+                Stage::Phase(Phase::Dataset(
+                    ExecutionPhase::OutputKeys | ExecutionPhase::Verification
+                ))
+            )));
+            let error = attempt.result.unwrap().result.unwrap_err();
+            let ExecutionError::ProjectFunction { error, .. } = *error else {
+                panic!("original function failure")
+            };
+            let FailureKind::CallFailed(Payload(original)) = error.kind else {
+                panic!("original payload")
+            };
+            assert!(Rc::ptr_eq(&marker, &original));
+        } else {
+            assert_eq!(
+                attempt.result.unwrap().result.unwrap().dataset.rows(),
+                &[vec![
+                    Value::Int(1),
+                    if mode == "missing" {
+                        Value::Missing
+                    } else {
+                        Value::Int(1)
+                    }
+                ]]
+            );
+            assert_eq!(
+                &stages[stages.len() - 3..],
+                [
+                    Stage::Phase(Phase::Dataset(ExecutionPhase::OutputKeys)),
+                    Stage::Phase(Phase::Dataset(ExecutionPhase::Verification)),
+                    Stage::Phase(Phase::Dataset(ExecutionPhase::Finished))
+                ]
+            );
+        }
+    }
+}
+
 #[test]
 fn unmatched_activation_signatures_fail_before_every_study_port_and_keep_static_failures_early() {
     let trace = Rc::new(RefCell::new(vec![]));
@@ -875,6 +1020,85 @@ mod project_usecase {
             assert!(attempt.sources.is_empty());
             assert_eq!(port.reads, 0);
             assert_eq!(cells.get(), 0);
+        }
+    }
+    #[test]
+    fn owning_application_observer_attributes_actual_activation_and_preserves_empty_selection() {
+        use yamaa_engine::application_observer::{CallStage, Phase, Scope};
+        use yamaa_engine::dataset::ExecutionPhase;
+        for called in [false, true] {
+            let spec = if called {
+                model("id")
+            } else {
+                specification(vec![(
+                    "VALUE",
+                    "int",
+                    Tree::map(vec![("literal", Tree::Scalar(N::Integer("3".into())))]),
+                )])
+            };
+            let checked =
+                project_domain::check_owned(&spec, environment(Some(definitions()))).unwrap();
+            let trace = Rc::new(RefCell::new(vec![]));
+            let cells = Rc::new(Cell::new(0));
+            let mut activation = Activation {
+                trace: Rc::clone(&trace),
+                mode: if called { 0 } else { 1 },
+                calls: vec![],
+                payload: Rc::new(()),
+            };
+            let (mut source, mut decoder) = ports(&trace, &cells);
+            let mut attempt = CapturedAttempt::new(checked.compiled().source());
+            let mut activation_observations = Default::default();
+            let observer = Stages::default();
+            checked
+                .build_with_observer_into(
+                    &mut activation,
+                    &mut source,
+                    &mut decoder,
+                    limits(),
+                    (&mut attempt, &mut activation_observations),
+                    Scope::new(&observer),
+                )
+                .unwrap();
+            assert!(attempt.result.unwrap().result.is_ok());
+            let stages = observer.0.borrow();
+            assert_eq!(
+                stages
+                    .iter()
+                    .filter(|event| **event == Stage::Call(CallStage::Activation))
+                    .count(),
+                if called { 2 } else { 0 }
+            );
+            assert_eq!(
+                stages
+                    .iter()
+                    .filter(|event| **event
+                        == Stage::Call(CallStage::Dataset(ExecutionPhase::Derivation)))
+                    .count(),
+                usize::from(called)
+            );
+            assert_eq!(activation.calls.len(), if called { 3 } else { 0 });
+            assert_eq!(
+                stages.first(),
+                Some(&Stage::Phase(if called {
+                    Phase::Activation
+                } else {
+                    Phase::Input
+                }))
+            );
+            assert_eq!(
+                activation_observations.tests.len(),
+                if called { 3 } else { 0 }
+            );
+            assert_eq!(
+                activation_observations
+                    .tests
+                    .iter()
+                    .filter(|case| case.invoked)
+                    .count(),
+                if called { 2 } else { 0 }
+            );
+            assert_eq!(source.reads, 1);
         }
     }
     #[test]

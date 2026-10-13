@@ -1,5 +1,5 @@
 //! One request composition selects held metadata before any execution authority.
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 use yamaa_core::schema::{Document, DocumentNode as N};
 use yamaa_engine::{
     build::{self, EntrySelection, MetadataAdmissionPort, PreparationPort, Prepared},
@@ -13,9 +13,24 @@ struct Fake {
     events: Vec<&'static str>,
     producer: bool,
     failure: Option<(&'static str, Original)>,
+    phases: Option<Rc<RefCell<Vec<yamaa_engine::application_observer::Phase>>>>,
 }
 impl Fake {
     fn enter(&mut self, event: &'static str) -> Result<(), Original> {
+        if let Some(phases) = &self.phases {
+            use yamaa_engine::application_observer::Phase;
+            let expected = if self
+                .events
+                .iter()
+                .any(|event| matches!(*event, "plain build" | "project build" | "graph build"))
+                || matches!(event, "plain build" | "project build" | "graph build")
+            {
+                Phase::Input
+            } else {
+                Phase::Preparation
+            };
+            assert_eq!(phases.borrow().last(), Some(&expected));
+        }
         self.events.push(event);
         if self
             .failure
@@ -140,6 +155,56 @@ fn request(environment: bool) -> Request<'static> {
     Request {
         specification: "spec.yaml",
         environment: environment.then_some("environment.yaml"),
+    }
+}
+
+#[test]
+fn observed_request_brackets_actual_metadata_before_every_route_and_keeps_original_failure() {
+    use yamaa_engine::application_observer::{Event, Observer, Phase, Scope};
+    struct Stages(Rc<RefCell<Vec<Phase>>>);
+    impl Observer for Stages {
+        fn observe(&self, event: Event<'_>) {
+            let Event::Phase { node: None, phase } = event else {
+                panic!("this request spy invokes no real function port")
+            };
+            self.0.borrow_mut().push(phase);
+        }
+    }
+    for producer in [false, true] {
+        for environment in [false, true] {
+            for failure in [None, Some("entry"), Some("study capture")] {
+                let marker = Rc::new(());
+                let phases = Rc::new(RefCell::new(vec![]));
+                let observer = Stages(Rc::clone(&phases));
+                let mut port = Fake {
+                    producer,
+                    failure: failure.map(|stage| (stage, Original(Rc::clone(&marker)))),
+                    phases: Some(Rc::clone(&phases)),
+                    ..Default::default()
+                };
+                let result = domain_entry::domain_with_observer(
+                    request(environment),
+                    &mut port,
+                    Scope::new(&observer),
+                );
+                match failure {
+                    None => assert!(result.is_ok()),
+                    Some(stage) => {
+                        let Err(error) = result else {
+                            panic!("scripted original failure")
+                        };
+                        assert!(Rc::ptr_eq(&marker, &error.0));
+                        assert_eq!(port.events.last(), Some(&stage));
+                    }
+                }
+                let expected = if failure == Some("entry") {
+                    vec![Phase::Preparation, Phase::Finished]
+                } else {
+                    vec![Phase::Preparation, Phase::Input, Phase::Finished]
+                };
+                assert_eq!(*phases.borrow(), expected);
+            }
+        }
     }
 }
 #[test]

@@ -237,6 +237,28 @@ pub trait Ports {
         &mut self,
         prepared: Self::Producer,
     ) -> Result<Self::BuildResult, Self::Failure>;
+
+    fn build_plain_with_observer(
+        &mut self,
+        prepared: Self::Plain,
+        _scope: crate::application_observer::Scope<'_>,
+    ) -> Result<Self::BuildResult, Self::Failure> {
+        self.build_plain(prepared)
+    }
+    fn build_project_with_observer(
+        &mut self,
+        prepared: Self::Project,
+        _scope: crate::application_observer::Scope<'_>,
+    ) -> Result<Self::BuildResult, Self::Failure> {
+        self.build_project(prepared)
+    }
+    fn build_producer_with_observer(
+        &mut self,
+        prepared: Self::Producer,
+        _scope: crate::application_observer::Scope<'_>,
+    ) -> Result<Self::BuildResult, Self::Failure> {
+        self.build_producer(prepared)
+    }
 }
 
 pub type PreparedRequest<P> = Result<
@@ -253,9 +275,37 @@ pub fn check<P: Ports>(request: Request<'_>, port: &mut P) -> Result<P::CheckRes
 }
 
 pub fn domain<P: Ports>(request: Request<'_>, port: &mut P) -> Result<P::BuildResult, P::Failure> {
-    match port.prepare(request)? {
-        Prepared::Plain(prepared) => port.build_plain(prepared),
-        Prepared::Ordinary(prepared) => port.build_project(prepared),
-        Prepared::Producer(prepared) => port.build_producer(prepared),
-    }
+    domain_with_observer(
+        request,
+        port,
+        crate::application_observer::Scope::new(&crate::application_observer::Noop),
+    )
+}
+
+/// Preparation includes the actual port's original file/environment admission.
+/// Detailed execution events come from the selected checked service, never an
+/// invented second run. Returned failures close this outer attempt; panic fences
+/// keep the entered event prefix and may close their adapter clock separately.
+pub fn domain_with_observer<P: Ports>(
+    request: Request<'_>,
+    port: &mut P,
+    scope: crate::application_observer::Scope<'_>,
+) -> Result<P::BuildResult, P::Failure> {
+    use crate::application_observer::Phase;
+    scope.phase(Phase::Preparation);
+    let result = match port.prepare(request) {
+        Ok(prepared) => {
+            // Close actual metadata preparation before entering the selected
+            // runtime port, including older ports without detailed events.
+            scope.phase(Phase::Input);
+            match prepared {
+                Prepared::Plain(prepared) => port.build_plain_with_observer(prepared, scope),
+                Prepared::Ordinary(prepared) => port.build_project_with_observer(prepared, scope),
+                Prepared::Producer(prepared) => port.build_producer_with_observer(prepared, scope),
+            }
+        }
+        Err(error) => Err(error),
+    };
+    scope.phase(Phase::Finished);
+    result
 }

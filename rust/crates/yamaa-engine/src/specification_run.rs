@@ -343,6 +343,29 @@ pub fn execute_with_functions_into<P: SourcePort, D: SourceDecoder>(
     limits: Limits,
     attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
 ) {
+    execute_with_observer_into(
+        prepared,
+        port,
+        decoder,
+        functions,
+        limits,
+        attempt,
+        crate::application_observer::Scope::new(&crate::application_observer::Noop),
+    );
+}
+
+/// Preserve the same attempt and entered effect prefix while forwarding trusted
+/// stage observations. An event before a real call also survives its unwind.
+pub fn execute_with_observer_into<P: SourcePort, D: SourceDecoder>(
+    prepared: &PreparedSpecification,
+    port: &mut P,
+    decoder: &mut D,
+    functions: &mut dyn dataset::FunctionPort<Error = <D::Table as TableAccess>::Error>,
+    limits: Limits,
+    attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+    scope: crate::application_observer::Scope<'_>,
+) {
+    scope.phase(crate::application_observer::Phase::Input);
     *attempt = CapturedAttempt::new(prepared.source());
     attempt.sources.clear();
     if let Some(calls) = prepared.project_calls() {
@@ -519,6 +542,16 @@ pub fn execute_with_functions_into<P: SourcePort, D: SourceDecoder>(
                 as &dyn TableAccess<Error = <D::Table as TableAccess>::Error>
         })
         .collect::<Vec<_>>();
-    attempt.result =
-        Ok(plan.execute_observed_functions(primary, &secondary, functions, limits.execution));
+    let phase = core::cell::Cell::new(dataset::ExecutionPhase::Admission);
+    let mut functions = scope.functions(functions, &phase);
+    attempt.result = Ok(plan.execute_with_phase_observer(
+        primary,
+        &secondary,
+        &mut functions,
+        limits.execution,
+        &mut |current| {
+            phase.set(current);
+            scope.phase(crate::application_observer::Phase::Dataset(current));
+        },
+    ));
 }

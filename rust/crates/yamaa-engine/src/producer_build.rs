@@ -267,6 +267,29 @@ impl PreparedBuild {
         R: ReportPort,
         C: CodecPort,
     {
+        self.build_publication_with_observer_into(
+            ports,
+            limits,
+            attempt,
+            crate::application_observer::Scope::new(&crate::application_observer::Noop),
+        )
+    }
+
+    pub fn build_publication_with_observer_into<A, P, D, R, C>(
+        &self,
+        ports: Ports<'_, A, P, D, R, C>,
+        limits: Limits,
+        attempt: &mut BuildAttempt<A, P, D, R, C>,
+        scope: crate::application_observer::Scope<'_>,
+    ) -> Result<crate::producer_publication::PreparedPublication, &'static str>
+    where
+        A: ActivationPort,
+        P: StudyPort,
+        D: DecodePort,
+        D::Table: TableAccess<Error = A::Error>,
+        R: ReportPort,
+        C: CodecPort,
+    {
         *attempt = Attempt::default();
         let graph = self.metadata();
         let count = graph.nodes().len();
@@ -305,11 +328,12 @@ impl PreparedBuild {
         let activated = if selected.is_empty() {
             Vec::new()
         } else {
+            scope.phase(crate::application_observer::Phase::Activation);
             match project_activation::activate_references_observed(
                 environment.language().expect("admitted called language"),
                 environment.lock().expect("admitted called lock"),
                 &selected,
-                ports.activation,
+                &mut scope.activation(ports.activation),
                 limits.activation,
                 &mut attempt.activation,
             ) {
@@ -356,6 +380,7 @@ impl PreparedBuild {
         };
         for &index in graph.order() {
             let node = &graph.nodes()[index];
+            let node_scope = scope.for_node(index, node.identity());
             let plan = plans[index];
             attempt.nodes.push(NodeAttempt {
                 node: index,
@@ -376,7 +401,7 @@ impl PreparedBuild {
             let mut functions =
                 Bindings::projected(&activated, node.activation_slots(), calls, ports.activation)
                     .expect("complete graph projections preflighted before sources");
-            run::execute_with_functions_into(
+            run::execute_with_observer_into(
                 plan,
                 &mut sources,
                 &mut NodeDecoder {
@@ -390,7 +415,9 @@ impl PreparedBuild {
                 &mut functions,
                 node_limits,
                 &mut entered.dataset,
+                node_scope,
             );
+            node_scope.phase(crate::application_observer::Phase::Output);
             let diagnostics = ports.report.prepare_diagnostics(
                 node,
                 &entered.dataset,
