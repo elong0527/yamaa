@@ -97,7 +97,7 @@ pub(crate) mod platform {
         }
     }
     fn path(raw: &Raw) -> Result<&str, String> {
-        if raw.len() > 65536 {
+        if raw.len() > yamaa_adapters::host_limits::IDENTITY_BYTES {
             return Err("producer path byte limit".into());
         }
         std::str::from_utf8(raw.as_slice()).map_err(|_| "invalid producer path UTF-8".into())
@@ -107,7 +107,7 @@ pub(crate) mod platform {
         let prepared = file_workflow::prepare(
             path(&specification)?,
             path(&environment)?,
-            yamaa_core::project_function::Language::R,
+            yamaa_engine::host_values::Language::R,
         )
         .map(|graph| graph.into_build());
         register(State::Specification(RefCell::new(prepared)), slot)
@@ -205,9 +205,20 @@ pub(crate) mod platform {
         formatter: Function,
     ) -> Result<PublicResult, String> {
         let slot = Slot::reserve()?;
-        let attempt = build_selected_attempt(prepared, fields, verify, resolve_host, 16_777_216);
+        let attempt = build_selected_attempt(
+            prepared,
+            fields,
+            verify,
+            resolve_host,
+            yamaa_adapters::host_limits::REPLY_BYTES,
+        );
         Ok(PublicResult {
-            state: format_attempt(attempt, &formatter, 16_777_216, true)?,
+            state: format_attempt(
+                attempt,
+                &formatter,
+                yamaa_adapters::host_limits::REPLY_BYTES,
+                true,
+            )?,
             _slot: slot,
         })
     }
@@ -374,8 +385,8 @@ pub(crate) mod platform {
         yamaa_adapters::producer_attempt::visit_host_failures(&observations, |_, _| {
             count = count.saturating_add(1)
         });
-        let mut remaining = maximum.min(16_777_216);
-        let admitted = count <= 65536
+        let mut remaining = maximum.min(yamaa_adapters::host_limits::REPLY_BYTES);
+        let admitted = count <= yamaa_adapters::host_limits::RECORDS
             && count
                 .checked_mul(128)
                 .and_then(|size| remaining.checked_sub(size))
@@ -524,8 +535,8 @@ pub(crate) mod platform {
             .try_borrow()
             .map_err(|_| "producer attempt already borrowed")?;
         let mut count = 0usize;
-        let mut host_text = 16_777_216usize;
-        let mut records = 65_536usize;
+        let mut host_text = yamaa_adapters::host_limits::REPLY_BYTES;
+        let mut records = yamaa_adapters::host_limits::RECORDS;
         let mut admission: Result<(), &'static str> = Ok(());
         yamaa_adapters::producer_attempt::visit_host_failures(&held, |_, failure| {
             if admission.is_err() {
@@ -554,16 +565,16 @@ pub(crate) mod platform {
             }
         });
         admission?;
-        if count > 65536 {
+        if count > yamaa_adapters::host_limits::RECORDS {
             return Err("producer evidence limit".into());
         }
         let sources = match &held.resources {
             Ok(sources) => sources,
             Err(error) => &error.retained,
         };
-        let mut bytes = 67_108_864usize;
-        let mut text = 16_777_216usize;
-        if sources.len() > 65536 {
+        let mut bytes = yamaa_adapters::host_limits::SOURCE_BYTES;
+        let mut text = yamaa_adapters::host_limits::REPLY_BYTES;
+        if sources.len() > yamaa_adapters::host_limits::RECORDS {
             return Err("producer evidence limit".into());
         }
         for (name, source) in sources {
@@ -625,7 +636,7 @@ pub(crate) mod platform {
             .ok_or("producer preparation has no rejection")?;
         let issues = yamaa_adapters::producer_check::rejected_with_limit(
             error,
-            yamaa_core::project_function::Language::R,
+            yamaa_engine::host_values::Language::R,
             maximum,
         )
         .map_err(|_| "rejection projection refused; original rejection remains retained")?;
@@ -640,15 +651,19 @@ pub(crate) mod platform {
             .try_borrow()
             .map_err(|_| "producer handle already borrowed")?;
         let sources = match &*state {
-            Err(file_workflow::Error::Admission(error)) => error.retained_sources(65536, 16777216),
-            Err(file_workflow::Error::Environment(error)) => {
-                error.retained_sources(65536, 16777216)
+            Err(file_workflow::Error::Admission(error)) => {
+                error.retained_sources(yamaa_adapters::host_limits::RECORDS, 16777216)
             }
-            Err(file_workflow::Error::Graph(error)) => error.retained_sources(65536, 16777216),
+            Err(file_workflow::Error::Environment(error)) => {
+                error.retained_sources(yamaa_adapters::host_limits::RECORDS, 16777216)
+            }
+            Err(file_workflow::Error::Graph(error)) => {
+                error.retained_sources(yamaa_adapters::host_limits::RECORDS, 16777216)
+            }
             _ => Ok(Vec::new()),
         }
         .map_err(|_| "source evidence limit; original rejection remains retained")?;
-        let mut bytes = 67_108_864usize;
+        let mut bytes = yamaa_adapters::host_limits::SOURCE_BYTES;
         for (_, source) in &sources {
             bytes = bytes
                 .checked_sub(source.len())

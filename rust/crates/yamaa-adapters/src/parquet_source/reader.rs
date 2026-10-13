@@ -205,9 +205,12 @@ fn read_interpreted(bytes: &[u8], limits: Limits, odm: bool) -> Result<Decoded, 
             (ColumnType::Int, physical::Column::Int64(values)) => {
                 Arc::new(Int64Array::from(values))
             }
-            (ColumnType::Float, physical::Column::Double(values)) => Arc::new(
-                Float64Array::from_iter(values.into_iter().map(|v| v.filter(|v| v.is_finite()))),
-            ),
+            (ColumnType::Float, physical::Column::Double(values)) => {
+                Arc::new(Float64Array::from_iter(values.into_iter().map(|v| {
+                    v.and_then(yamaa_core::value::FiniteFloat::new)
+                        .map(yamaa_core::value::FiniteFloat::get)
+                })))
+            }
             (ColumnType::Date, physical::Column::Int32(values)) => {
                 Arc::new(Date32Array::from(values))
             }

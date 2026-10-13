@@ -164,15 +164,15 @@ impl Compute {
     fn decode(
         self,
         path: &str,
-        compiler: &mut dataset::DatasetCompiler,
-    ) -> Result<dataset::ExpressionDeclaration, Error> {
+        compiler: &mut yamaa_core::dataset::DatasetCompiler,
+    ) -> Result<yamaa_core::dataset::ExpressionDeclaration, Error> {
         if self.bindings.len() > 4096 {
             return Err(Error::RequestLimit);
         }
         compiler
             .reserve_numeric(&self.text, path)
             .map_err(compile_error)?;
-        Ok(dataset::ExpressionDeclaration::Compute {
+        Ok(yamaa_core::dataset::ExpressionDeclaration::Compute {
             text: self.text,
             bindings: self
                 .bindings
@@ -212,7 +212,7 @@ struct Window {
 impl Window {
     /// Lower one bounded window operation while retaining the legacy number request form.
     fn prepare(self, number: bool) -> Result<dataset::Window, Error> {
-        use dataset::WindowDeclarationKind as K;
+        use yamaa_core::dataset::WindowDeclarationKind as K;
         let kind = match &self.kind {
             WindowKind::RowNumber => K::RowNumber,
             WindowKind::Competition => K::Competition,
@@ -222,7 +222,7 @@ impl Window {
             WindowKind::Locf { .. } => K::Locf,
             WindowKind::BaselineFlag { .. } => K::BaselineFlag,
         };
-        dataset::validate_window_form(kind, number).map_err(compile_error)?;
+        yamaa_core::dataset::validate_window_form(kind, number).map_err(compile_error)?;
         if self.group_by.len() > MAX_COLUMNS || self.order_by.len() > MAX_COLUMNS {
             return Err(Error::RequestLimit);
         }
@@ -515,7 +515,7 @@ struct Request {
 
 /// The prepared bridge owns its admitted plan; no host objects or source buffers survive.
 pub struct PreparedDataset {
-    compiled: dataset::CompiledDataset,
+    compiled: yamaa_core::dataset::CompiledDataset,
     secondary_count: usize,
 }
 
@@ -548,6 +548,14 @@ pub fn execute_dataset_sources(
     secondary: &[&[u8]],
 ) -> Result<DatasetResponse, Error> {
     PreparedDataset::parse(request)?.execute_sources(source, secondary)
+}
+
+pub fn admit_secondary_count(count: usize) -> Result<(), Error> {
+    if count >= MAX_SOURCES {
+        Err(Error::RequestLimit)
+    } else {
+        Ok(())
+    }
 }
 
 impl PreparedDataset {
@@ -598,8 +606,9 @@ impl PreparedDataset {
                 .collect::<Result<Vec<_>, Error>>()?;
             let source = schema(request.source)?;
             let output = schema(request.output)?;
-            let mut compiler = dataset::DatasetCompiler::new(functions, Default::default())
-                .map_err(compile_error)?;
+            let mut compiler =
+                yamaa_core::dataset::DatasetCompiler::new(functions, Default::default())
+                    .map_err(compile_error)?;
             for template in request.templates {
                 let mode = match template.mode {
                     Mode::Records(()) => dataset::RowMode::Records,
@@ -670,7 +679,7 @@ impl PreparedDataset {
                 .map(ConversionHandler::prepare)
                 .collect::<Result<Vec<_>, Error>>()?;
             let compiled = compiler
-                .finish(dataset::DatasetMetadata {
+                .finish(yamaa_core::dataset::DatasetMetadata {
                     sources: dataset::SourceSchemas {
                         primary: source,
                         secondary,
@@ -819,14 +828,16 @@ impl PreparedDataset {
 }
 
 /// Project pure compilation failures into the unchanged temporary wire errors.
-fn compile_error(error: dataset::DatasetCompileError) -> Error {
+fn compile_error(error: yamaa_core::dataset::DatasetCompileError) -> Error {
     use yamaa_core::{numeric_compiler::CompileError, numeric_parser::ParseError};
     match error {
-        dataset::DatasetCompileError::Limit(_)
-        | dataset::DatasetCompileError::Numeric(CompileError::ResolutionLimit { .. })
-        | dataset::DatasetCompileError::Numeric(CompileError::Parse(ParseError::Limit {
+        yamaa_core::dataset::DatasetCompileError::Limit(_)
+        | yamaa_core::dataset::DatasetCompileError::Numeric(CompileError::ResolutionLimit {
             ..
-        })) => Error::RequestLimit,
+        })
+        | yamaa_core::dataset::DatasetCompileError::Numeric(CompileError::Parse(
+            ParseError::Limit { .. },
+        )) => Error::RequestLimit,
         _ => Error::InvalidPlan,
     }
 }
@@ -872,23 +883,25 @@ fn bound(value: Option<String>) -> Result<Option<i64>, Error> {
 /// Lower the closed expression vocabulary without performing any evaluation.
 fn assignment(
     assignment: Assignment,
-    compiler: &mut dataset::DatasetCompiler,
-) -> Result<dataset::AssignmentDeclaration, Error> {
+    compiler: &mut yamaa_core::dataset::DatasetCompiler,
+) -> Result<yamaa_core::dataset::AssignmentDeclaration, Error> {
     path(&assignment.path)?;
     let expression = match assignment.expression {
-        Expression::Literal(value) => dataset::ExpressionDeclaration::Literal(
+        Expression::Literal(value) => yamaa_core::dataset::ExpressionDeclaration::Literal(
             value.into_core().map_err(|_| Error::InvalidScalar)?,
         ),
         Expression::Function(call) => call.decode(compiler)?,
         Expression::Compute(expression) => expression.decode(&assignment.path, compiler)?,
-        Expression::Source(column) => dataset::ExpressionDeclaration::Source(column),
-        Expression::Intermediate(read) => dataset::ExpressionDeclaration::Intermediate {
-            index: read.index,
-            column: read.column,
-        },
+        Expression::Source(column) => yamaa_core::dataset::ExpressionDeclaration::Source(column),
+        Expression::Intermediate(read) => {
+            yamaa_core::dataset::ExpressionDeclaration::Intermediate {
+                index: read.index,
+                column: read.column,
+            }
+        }
         Expression::Collect(source) => {
             path(&source.identifier)?;
-            dataset::ExpressionDeclaration::Collect {
+            yamaa_core::dataset::ExpressionDeclaration::Collect {
                 column: source.column,
                 identifier: source.identifier,
                 filter: source.filter.map(Predicate::prepare).transpose()?,
@@ -899,7 +912,7 @@ fn assignment(
             if lookup.keys.len() > MAX_COLUMNS {
                 return Err(Error::RequestLimit);
             }
-            dataset::ExpressionDeclaration::RowLookup(dataset::RowLookup {
+            yamaa_core::dataset::ExpressionDeclaration::RowLookup(dataset::RowLookup {
                 source: lookup.source,
                 column: lookup.column,
                 keys: lookup
@@ -916,7 +929,7 @@ fn assignment(
             if lookup.keys.len() > MAX_COLUMNS {
                 return Err(Error::RequestLimit);
             }
-            dataset::ExpressionDeclaration::Lookup(dataset::Lookup {
+            yamaa_core::dataset::ExpressionDeclaration::Lookup(dataset::Lookup {
                 source: lookup.source,
                 column: lookup.column,
                 keys: lookup
@@ -929,14 +942,16 @@ fn assignment(
                     .collect(),
             })
         }
-        Expression::Column(column) => dataset::ExpressionDeclaration::Column(column),
-        Expression::Number(window) => dataset::ExpressionDeclaration::Number(window.prepare(true)?),
+        Expression::Column(column) => yamaa_core::dataset::ExpressionDeclaration::Column(column),
+        Expression::Number(window) => {
+            yamaa_core::dataset::ExpressionDeclaration::Number(window.prepare(true)?)
+        }
         Expression::Window(window) => {
-            dataset::ExpressionDeclaration::Window(window.prepare(false)?)
+            yamaa_core::dataset::ExpressionDeclaration::Window(window.prepare(false)?)
         }
         Expression::Count(count) => {
             path(&count.text)?;
-            dataset::ExpressionDeclaration::Count {
+            yamaa_core::dataset::ExpressionDeclaration::Count {
                 column: count.column,
                 text: count.text,
             }
@@ -946,7 +961,7 @@ fn assignment(
             if let Some(identifier) = &reduction.identifier {
                 path(identifier)?;
             }
-            dataset::ExpressionDeclaration::Reduce {
+            yamaa_core::dataset::ExpressionDeclaration::Reduce {
                 identifier: reduction.identifier,
                 column: reduction.column,
                 reducer: match reduction.reducer {
@@ -957,7 +972,7 @@ fn assignment(
             }
         }
     };
-    Ok(dataset::AssignmentDeclaration {
+    Ok(yamaa_core::dataset::AssignmentDeclaration {
         column: assignment.column,
         path: assignment.path,
         expression,

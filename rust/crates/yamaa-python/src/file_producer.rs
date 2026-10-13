@@ -41,7 +41,7 @@ impl Specification {
             Err(file_workflow::Error::Graph(_)) => "graph_failure",
         })
     }
-    #[pyo3(signature = (maximum=16_777_216))]
+    #[pyo3(signature = (maximum=yamaa_adapters::host_limits::REPLY_BYTES))]
     fn rejection_issues(&self, maximum: usize) -> PyResult<String> {
         let state = self.get()?;
         let error = state
@@ -50,7 +50,7 @@ impl Specification {
             .ok_or_else(|| PyValueError::new_err("producer preparation has no rejection"))?;
         let issues = yamaa_adapters::producer_check::rejected_with_limit(
             error,
-            yamaa_core::project_function::Language::Python,
+            yamaa_engine::host_values::Language::Python,
             maximum,
         )
         .map_err(|_| {
@@ -60,7 +60,7 @@ impl Specification {
         })?;
         Ok(yamaa_adapters::issue_rows::encode(&issues))
     }
-    #[pyo3(signature = (metadata, report_bytes=16_777_216))]
+    #[pyo3(signature = (metadata, report_bytes=yamaa_adapters::host_limits::REPLY_BYTES))]
     fn build(
         &self,
         py: Python<'_>,
@@ -84,25 +84,36 @@ impl Specification {
     ) -> PyResult<Vec<(String, Bound<'py, PyBytes>)>> {
         let state = self.get()?;
         let sources = match &*state {
-            Err(file_workflow::Error::Admission(error)) => {
-                error.retained_sources(65_536, 16_777_216).map_err(|_| {
-                    PyValueError::new_err(
-                        "source evidence limit; original rejection remains retained",
-                    )
-                })?
-            }
-            Err(file_workflow::Error::Environment(error)) => {
-                error.retained_sources(65_536, 16_777_216).map_err(|_| {
-                    PyValueError::new_err(
-                        "source evidence limit; original rejection remains retained",
-                    )
-                })?
-            }
-            Err(file_workflow::Error::Graph(error)) => error
-                .retained_sources(65_536, 16_777_216)
+            Err(file_workflow::Error::Admission(error)) => error
+                .retained_sources(
+                    yamaa_adapters::host_limits::RECORDS,
+                    yamaa_adapters::host_limits::REPLY_BYTES,
+                )
                 .map_err(|_| {
-                PyValueError::new_err("source evidence limit; original rejection remains retained")
-            })?,
+                    PyValueError::new_err(
+                        "source evidence limit; original rejection remains retained",
+                    )
+                })?,
+            Err(file_workflow::Error::Environment(error)) => error
+                .retained_sources(
+                    yamaa_adapters::host_limits::RECORDS,
+                    yamaa_adapters::host_limits::REPLY_BYTES,
+                )
+                .map_err(|_| {
+                    PyValueError::new_err(
+                        "source evidence limit; original rejection remains retained",
+                    )
+                })?,
+            Err(file_workflow::Error::Graph(error)) => error
+                .retained_sources(
+                    yamaa_adapters::host_limits::RECORDS,
+                    yamaa_adapters::host_limits::REPLY_BYTES,
+                )
+                .map_err(|_| {
+                    PyValueError::new_err(
+                        "source evidence limit; original rejection remains retained",
+                    )
+                })?,
             _ => Vec::new(),
         };
         source_budget(
@@ -151,7 +162,7 @@ pub fn _prepare_producer_file(specification: &str, environment: &str) -> Specifi
             file_workflow::prepare(
                 specification,
                 environment,
-                yamaa_core::project_function::Language::Python,
+                yamaa_engine::host_values::Language::Python,
             )
             .map(|graph| graph.into_build()),
         ),
@@ -184,8 +195,8 @@ impl Attempt {
         yamaa_adapters::producer_attempt::visit_host_failures(&state, |_, _| {
             count = count.saturating_add(1)
         });
-        let mut remaining = maximum.min(16_777_216);
-        let admitted = count <= 65_536
+        let mut remaining = maximum.min(yamaa_adapters::host_limits::REPLY_BYTES);
+        let admitted = count <= yamaa_adapters::host_limits::RECORDS
             && count
                 .checked_mul(128)
                 .and_then(|size| remaining.checked_sub(size))
@@ -334,7 +345,7 @@ impl Attempt {
         let state = self.get()?;
         Ok(state.graph.nodes.iter().map(|node| node.node).collect())
     }
-    #[pyo3(signature = (maximum=16_777_216))]
+    #[pyo3(signature = (maximum=yamaa_adapters::host_limits::REPLY_BYTES))]
     fn result(&self, py: Python<'_>, maximum: usize) -> PyResult<Report> {
         self.formatted(py, maximum, false)
     }
@@ -346,7 +357,7 @@ impl Attempt {
                 count = count.saturating_add(1);
             }
         });
-        if count > 65536 {
+        if count > yamaa_adapters::host_limits::RECORDS {
             return Err(PyValueError::new_err(
                 "host failure evidence limit; original attempt remains retained",
             ));
@@ -585,19 +596,5 @@ fn ordinary_exception(
 pub(crate) fn source_budget<'a>(
     sources: impl Iterator<Item = (&'a str, &'a [u8])>,
 ) -> PyResult<()> {
-    let mut text = 16_777_216usize;
-    let mut bytes = 67_108_864usize;
-    let mut count = 65_536usize;
-    for (name, source) in sources {
-        count = count
-            .checked_sub(1)
-            .ok_or_else(|| PyValueError::new_err("source evidence limit"))?;
-        text = text
-            .checked_sub(name.len())
-            .ok_or_else(|| PyValueError::new_err("source evidence limit"))?;
-        bytes = bytes
-            .checked_sub(source.len())
-            .ok_or_else(|| PyValueError::new_err("source evidence limit"))?;
-    }
-    Ok(())
+    yamaa_adapters::host_limits::source_evidence(sources).map_err(PyValueError::new_err)
 }

@@ -10,7 +10,7 @@ use yamaa_adapters::{
     specification_report::{self, BuildResult, Identity},
     specification_run::{CapturedAttempt, PreparedRun, SourcePort},
 };
-use yamaa_core::resource::ResourceFailure;
+use yamaa_engine::host_values::ResourceFailure;
 
 pub(super) struct CaptureError {
     failure: Option<ResourceFailure>,

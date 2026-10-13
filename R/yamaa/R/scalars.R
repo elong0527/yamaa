@@ -41,7 +41,7 @@
   if (!(kind %in% c("integer", "double", "logical", "character"))) {
     stop("unsupported scalar type", call. = FALSE)
   }
-  if (is.na(x) || (identical(kind, "double") && !is.finite(x))) {
+  if (!identical(kind, "double") && is.na(x)) {
     return(.scalar_native(0L, raw()))
   }
   switch(kind,
@@ -179,12 +179,9 @@ print.yamaa_utf8 <- function(x, ...) {
     return(.int64_vector_ops(e1, e2, .Generic))
   }
   unary <- missing(e2)
-  code <- if (unary) switch(.Generic, `+` = 6L, `-` = 7L) else {
-    switch(.Generic, `+` = 1L, `-` = 2L, `*` = 3L, `/` = 4L,
-           `==` = 8L, `!=` = 9L, `<` = 10L,
-           `<=` = 11L, `>` = 12L, `>=` = 13L)
-  }
-  if (is.null(code)) stop("unsupported scalar operator", call. = FALSE)
+  reply <- .Call(wrap__scalar_operator_code, .scalar_text_bytes(.Generic), unary)
+  if (!is.null(reply$error)) stop(reply$error, call. = FALSE)
+  code <- reply$value
   left <- .scalar_pack(e1)
   right <- if (unary) .scalar_native(0L, raw()) else .scalar_pack(e2)
   .scalar_unpack(.Call(wrap__scalar_operator, code, left$tag, left$payload,

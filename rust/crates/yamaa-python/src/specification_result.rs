@@ -9,7 +9,7 @@ use yamaa_adapters::{
     specification_report::{self, Identity},
     specification_run::{CapturedAttempt, PortError, PreparedRun, SourcePort},
 };
-use yamaa_core::resource::ResourceFailure;
+use yamaa_engine::host_values::ResourceFailure;
 
 pub(super) struct CaptureError {
     error: PyErr,

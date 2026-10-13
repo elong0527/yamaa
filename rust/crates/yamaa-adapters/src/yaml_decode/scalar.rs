@@ -67,11 +67,8 @@ pub(super) fn decode(text: String, limit: usize) -> Result<N, DecodeFailure> {
             return Err(DecodeFailure::Limit("numeric_digits"));
         }
         let value: f64 = text.parse().map_err(|_| DecodeFailure::Internal)?;
-        return Ok(if value.is_finite() {
-            N::Float(value)
-        } else {
-            N::Null
-        });
+        return Ok(yamaa_core::value::FiniteFloat::new(value)
+            .map_or(N::Null, |value| N::Float(value.get())));
     }
     Ok(N::Text(text))
 }

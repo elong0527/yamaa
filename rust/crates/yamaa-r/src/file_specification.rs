@@ -25,7 +25,7 @@ mod platform {
         }
     }
     fn text(bytes: &Raw) -> std::result::Result<&str, String> {
-        if bytes.len() > 65536 {
+        if bytes.len() > yamaa_adapters::host_limits::IDENTITY_BYTES {
             return Err("file specification path byte limit".into());
         }
         std::str::from_utf8(bytes.as_slice())
