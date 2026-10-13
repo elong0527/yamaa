@@ -57,7 +57,7 @@ jobs:
   python:
     name: performance-python (${{ matrix.os }}, ${{ matrix.python }}, ${{ matrix.form }})
     runs-on: ${{ matrix.os }}
-    # Approved reference producer 100k Build alone takes about 30–42 seconds;
+    # Approved reference producer 100k Build alone takes about 30-42 seconds;
     # both baseline scopes retain ten cold and 33 warm attempts for every case.
     timeout-minutes: 240
     strategy:

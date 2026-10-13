@@ -135,8 +135,8 @@
     }
   },
   "unavailable": {
-    "phase_durations": "null unless original application-measurements/1 evidence is required and independently admitted",
-    "actual_callback_counts": "null unless actual engine function entries/returns or independent once-delegating callback traces are retained",
+    "phase_durations": null,
+    "actual_callback_counts": null,
     "isolated_process_startup": null,
     "shipped_schema_initialization": null,
     "os_filesystem_cache": null
