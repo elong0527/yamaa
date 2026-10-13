@@ -1,14 +1,19 @@
 """Replay shared YAML shape, identifier, decision and vocabulary truth in typed core."""
 
+import importlib.util
 import subprocess
 from pathlib import Path
 
-from stage_grammar_inputs import cases, documents
+spec = importlib.util.spec_from_file_location(
+    "stage_grammar_inputs", Path(__file__).with_name("stage_grammar_inputs.py")
+)
+grammar = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(grammar)
 
 
 def main():
-    contracts = list(cases())
-    docs = dict(documents())
+    contracts = list(grammar.cases())
+    docs = dict(grammar.documents())
     inventories = [
         (
             "numeric-vocabulary",
