@@ -152,7 +152,8 @@ impl RuntimePort for Runtime<'_, '_> {
         );
         scope.phase(Phase::Output);
         let converted = (|| {
-            let producer = attempt.formatted(py, yamaa_engine::capacity::REPORT_ENCODED_BYTES, true)?;
+            let producer =
+                attempt.formatted(py, yamaa_engine::capacity::REPORT_ENCODED_BYTES, true)?;
             Ok(Domain {
                 producer: Some(producer),
                 measurements: None,
