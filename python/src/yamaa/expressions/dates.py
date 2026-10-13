@@ -239,7 +239,7 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
         return source
 
     minimum = payload.get("minimum_source_precision", "year")
-    if minimum not in {"year", "month"}:
+    if not isinstance(minimum, str) or minimum not in {"year", "month"}:
         return _condition(
             "value_not_permitted",
             {"field": "minimum_source_precision", "value": str(minimum)},
@@ -474,7 +474,7 @@ def _datetime_impute(payload: object, resolver: Resolver) -> EvaluationResult:
             requirement="REQ-0321",
         )
     time_rule = payload.get("time")
-    if time_rule not in {"first", "last"}:
+    if not isinstance(time_rule, str) or time_rule not in {"first", "last"}:
         return _condition(
             "value_not_permitted",
             {
@@ -725,7 +725,11 @@ def _date_diff(payload: object, resolver: Resolver) -> EvaluationResult:
             requirement="REQ-0322",
         )
     bounds = payload.get("bounds", "exclusive")
-    if bounds not in {"exclusive", "inclusive", "between"}:
+    if not isinstance(bounds, str) or bounds not in {
+        "exclusive",
+        "inclusive",
+        "between",
+    }:
         return _condition(
             "value_not_permitted",
             {
