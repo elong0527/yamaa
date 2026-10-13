@@ -83,13 +83,14 @@ suites remain separate. These dispositions do not suppress table differences.
 
 Each sampled PR lane and every main or full-dispatch lane uploads its inventory,
 individual records and staged saved artifacts. The committed
-`public-conformance.json` gates both installed hosts. Its 269 Python cases and
-268 R cases are the independently replayed intersection of all eighteen Python
-lanes and three R hosts in full-dispatch run 38345863406 at
-`67c0153274f77eb0ffa635c205d3a9f10418d076`. The four submission-metadata
-benchmarks advance the prior 265 Python and 264 R cases without removing a pass.
-Every lane retains 46 unsupported cases and two historical exclusions. Python and Linux/macOS R retain one mismatch;
-Windows R retains two, including the symlink negative that passes elsewhere.
+`public-conformance.json` gates both installed hosts. Its 277 Python cases and
+276 R cases are the independently replayed intersection of all eighteen Python
+lanes and three R hosts in full-dispatch run 38354915028 at
+`a44d8dd51e3ff27d62a9ec490b1c8e7a734cc3cf`. The eight per-record aggregate and
+inclusive-range benchmarks advance the prior 269 Python and 268 R cases without
+removing a pass. Every lane retains 38 unsupported cases and two historical
+exclusions. Python and Linux/macOS R retain one mismatch; Windows R retains two,
+including the symlink negative that passes elsewhere.
 No lane reports an execution error. The host-specific intersection keeps that
 Windows R mismatch visible rather than adding it to R's gate. This corpus
 evidence does not complete other migration or
