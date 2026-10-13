@@ -68,7 +68,11 @@ impl RejectedPlain {
 impl FileSpecification {
     pub fn prepare(mut resources: Resources, written: &str) -> Result<Self, Error> {
         let document = prepare_document(&mut resources, written, None)?;
-        let run = PreparedRun::prepare(document).map_err(Error::Compile)?;
+        let run =
+            PreparedRun::prepare_with_profile_inspection(document, |document, dataset, path| {
+                crate::source_profile_inspection::inspect(document, &resources, dataset, path)
+            })
+            .map_err(Error::Compile)?;
         let findings = crate::verification_logs::location_findings(&resources, &run);
         if !findings.is_empty() {
             return Err(Error::Compile(crate::specification_run::Error::Prepare(
@@ -179,6 +183,94 @@ pub fn opaque_resource_failure(attempt: &CapturedAttempt<ResourceError>) -> Opti
             .find(|error| error.failure.is_none())
             .map(|error| &error.error),
         _ => None,
+    }
+}
+
+#[cfg(all(test, any(unix, windows)))]
+mod profile_inspection_tests {
+    use super::*;
+    use std::{
+        fs,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn inherited_physical_kind_and_regular_unknown_profile_read_no_study_bytes() {
+        let root = std::env::temp_dir().join(format!(
+            "yamaa-profile-inspection-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(root.join("parent/input")).unwrap();
+        fs::create_dir(root.join("entry")).unwrap();
+        let source = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/unknown}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";
+        fs::write(root.join("parent/base.yaml"), source).unwrap();
+        fs::write(
+            root.join("entry/root.yaml"),
+            "schema_version: '1.0'\nparents: [../parent/base.yaml]\n",
+        )
+        .unwrap();
+        let root = fs::canonicalize(root).unwrap();
+        use yamaa_core::diagnostic::ConditionCode as C;
+        for (kind, condition) in [
+            (0, C::ResourceNotRegularFile),
+            (1, C::SourceUnknownProfile),
+            (2, C::SourceUnknownProfile),
+            (3, C::ResourceSymlink),
+        ] {
+            let input = root.join("parent/input/unknown");
+            match kind {
+                0 => fs::create_dir(&input).unwrap(),
+                1 => fs::write(&input, b"ID\n1\n").unwrap(),
+                2 => (),
+                _ => {
+                    fs::write(root.join("parent/input/target"), b"ID\n1\n").unwrap();
+                    #[cfg(unix)]
+                    std::os::unix::fs::symlink("target", &input).unwrap();
+                    #[cfg(windows)]
+                    std::os::windows::fs::symlink_file("target", &input).unwrap();
+                }
+            }
+            let mut resources = Resources::new(
+                root.to_str().unwrap(),
+                root.join("entry").to_str().unwrap(),
+                &[],
+            )
+            .unwrap();
+            let document = prepare_document(&mut resources, "root.yaml", None).unwrap();
+            let reads = resources.capture_reads();
+            assert_eq!(reads, 2);
+            let Err(crate::specification_run::Error::Prepare(
+                yamaa_core::specification::PrepareError::Invalid(findings),
+            )) = PreparedRun::prepare_with_profile_inspection(
+                document,
+                |document, dataset, path| {
+                    crate::source_profile_inspection::inspect(document, &resources, dataset, path)
+                },
+            )
+            else {
+                panic!("invalid source")
+            };
+            assert_eq!(resources.capture_reads(), reads);
+            let issue = findings[0].diagnostic();
+            assert_eq!(issue.code, condition);
+            assert_eq!(issue.spec_paths, ["input.SRC.path"]);
+            if kind == 0 || kind == 3 {
+                assert_eq!(
+                    issue.context["path"],
+                    yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                        "input/unknown".into()
+                    ))
+                );
+            }
+            match kind {
+                0 => fs::remove_dir(&input).unwrap(),
+                2 => (),
+                _ => fs::remove_file(&input).unwrap(),
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 }
 

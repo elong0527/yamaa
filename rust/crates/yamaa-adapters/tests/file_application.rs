@@ -119,6 +119,48 @@ fn static_check_does_not_need_study_data_and_failed_build_cannot_save() {
     assert!(result.save().is_err());
     assert_eq!(fs::read_dir(&study.0).unwrap().count(), 1);
 }
+
+#[test]
+fn unknown_suffix_directory_precedes_profile_rejection_through_the_file_entry() {
+    let study = Study::new();
+    fs::create_dir(study.0.join("input.unknown")).unwrap();
+    fs::write(
+        study.0.join("spec.yaml"),
+        VALID.replace("input.csv", "input.unknown"),
+    )
+    .unwrap();
+    let path = study.text("spec.yaml");
+    let issues = file_application::domain(
+        Request {
+            specification: &path,
+            environment: None,
+        },
+        identity(&path),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(issues.len(), 1);
+    assert_eq!(issues[0].condition, "resource_path_not_regular_file");
+    assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0785"));
+    assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
+    assert_eq!(
+        issues[0].context,
+        "{\"dataset\":\"SRC\",\"path\":\"input.unknown\"}"
+    );
+    fs::remove_dir(study.0.join("input.unknown")).unwrap();
+    fs::write(study.0.join("input.unknown"), b"ID\n1\n").unwrap();
+    let issues = file_application::domain(
+        Request {
+            specification: &path,
+            environment: None,
+        },
+        identity(&path),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(issues[0].condition, "source_profile_unknown");
+    assert!(!study.0.join("output.csv").exists());
+}
 #[test]
 fn saved_bytes_use_retained_values_and_save_failure_can_be_retried() {
     let study = Study::new();
