@@ -101,7 +101,11 @@ mod tests {
             })
             .unwrap();
         let run = PreparedRun::prepare(document).unwrap();
-        let expected = include_str!("../tests/fixtures/check_invalid_regex_truth.json").trim_end();
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/check_invalid_regex_truth.json"
+        ))
+        .unwrap();
+        let expected = serde_json::to_string(&expected).unwrap();
         assert_eq!(issues(&run).unwrap(), expected);
         assert_eq!(encode(&run, expected.len()).unwrap(), expected);
         assert_eq!(encode(&run, expected.len() - 1), Err(Error::Limit));

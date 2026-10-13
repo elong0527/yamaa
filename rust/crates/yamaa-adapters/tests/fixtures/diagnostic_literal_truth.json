@@ -14,14 +14,14 @@
     "condition": "integer_overflow",
     "requirement": null,
     "spec_paths": [
-      "columns.é🙂.derivation"
+      "columns.\u00e9\ud83d\ude42.derivation"
     ],
     "context": {
       "minimum": -9223372036854775808,
       "maximum": 9223372036854775807,
       "values": [
         null,
-        "é🙂",
+        "\u00e9\ud83d\ude42",
         true
       ]
     }

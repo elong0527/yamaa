@@ -1,1 +1,1 @@
-[{"condition":"invalid_regex","context":"{\"pattern\":\"é(\"}","phase":"validation","requirement":"REQ-0827","spec_paths":["columns.V.verifications[0].matches.pattern"]}]
+[{"condition":"invalid_regex","context":"{\"pattern\":\"\u00e9(\"}","phase":"validation","requirement":"REQ-0827","spec_paths":["columns.V.verifications[0].matches.pattern"]}]
