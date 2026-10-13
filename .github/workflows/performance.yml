@@ -1,6 +1,17 @@
 name: Public performance evidence
 
 on:
+  workflow_call:
+    inputs:
+      native_run_id:
+        required: true
+        type: string
+      purpose:
+        default: capacity-frontier
+        type: string
+      baseline_ref:
+        default: yamaa-py-0.3.0
+        type: string
   workflow_dispatch:
     inputs:
       native_run_id:
