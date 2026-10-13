@@ -41,7 +41,7 @@ fn classified_unavailable_root_maps_to_the_supplied_environment_requirement() {
 }
 #[test]
 fn every_root_and_terminology_cause_has_independent_normative_paths_and_mapping() {
-    assert_eq!(support::reached().len(), 8);
+    assert_eq!(support::reached().len(), 9);
     let draft = support::draft();
     let projected = diagnostics(
         &draft,
