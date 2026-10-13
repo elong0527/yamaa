@@ -18,24 +18,24 @@ trigger that workflow as well.
 
 ## Native coverage
 
-Each native PR run samples one of the 18 OS/Python/package-form combinations.
-The Actions run ID seeds the selection, so a new run samples again and retries
-keep the failed configuration. The workflow summary records the selection.
-Rust checks and distribution builds use the selected OS, and qualification
-installs the selected wheel or source archive on the selected Python version.
-Every sample also exercises the R package on the same host, including Windows.
-Public and producer cohort comparisons require the installed evidence for that selected configuration.
+Native PR runs use Linux for Rust checks, distribution builds, and R package
+checks. Installed Python qualification covers wheel and source installs on
+Python 3.12 and 3.14. The workflow summary records this reduced matrix.
+macOS, Windows, Python 3.13, cross-platform math, and complete public/producer
+cohort comparisons run on main pushes or manual full-matrix dispatches.
 
 Pushes to main retain the full three-OS, three-Python, two-package-form matrix,
 all three R hosts, the cross-platform math comparison, and the complete
-public/producer cohort gate. PR artifacts are labeled as sampled coverage;
-they do not establish full platform qualification. Main builds remain the
-source of full coverage evidence after merge.
+public/producer cohort gate. PR artifacts cover the reduced Linux matrix;
+they do not establish full platform qualification. Platform-specific regressions
+and Python 3.13 compatibility are checked in the full matrix.
 
 Benchmark Markdown changes trigger documentation checks without rebuilding
 the Python/native runtimes. Specification, input, expected-output, and SDK
-changes still trigger runtime coverage. Native PR runs use six jobs on every
-platform; full main runs use 30, including the selection job.
+changes still trigger runtime coverage. Native PR runs use eight jobs: the
+selection job, Linux Rust checks, a Linux distribution build, four installed
+Python qualifications, and Linux R package checks. Full dispatches use 30 jobs;
+main pushes add the nonblocking evidence audit for 31 jobs in total.
 
 Before merging changes to native code, R glue, package builds or native CI,
 dispatch the complete matrix on the current PR head:
@@ -50,7 +50,7 @@ The same dispatch is available in GitHub Actions under **Native installation
 prototype**, **Run workflow**, selecting the PR branch. Dispatch runs the same
 eighteen Python lanes, three R hosts and comparison gates as a main push. Require
 every lane, including Windows R, to pass on that exact head before merging, then
-retain the combined main run for work-package acceptance. A sampled PR run does
+retain the combined main run for work-package acceptance. A reduced PR run does
 not replace this gate.
 
 The shared-crates step also runs

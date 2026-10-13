@@ -4,7 +4,6 @@ import argparse
 import itertools
 import json
 import os
-import random
 import subprocess
 import sys
 from pathlib import Path
@@ -14,23 +13,26 @@ PYTHONS = ("3.12", "3.13", "3.14")
 FORMS = ("wheel", "source")
 R_PLATFORMS = PLATFORMS
 BUILD_PYTHON = "3.14"
+PR_PLATFORM = "ubuntu-24.04"
+PR_PYTHONS = ("3.12", "3.14")
 
 
-def plan(event, run_id):
-    combinations = [
-        {"os": platform, "python": version, "form": form}
-        for platform, version, form in itertools.product(PLATFORMS, PYTHONS, FORMS)
-    ]
+def plan(event):
     if event == "pull_request":
-        # A new Actions run samples again; retrying that run keeps its selection.
-        combinations = [random.Random(int(run_id)).choice(combinations)]
-        platforms = [combinations[0]["os"]]
-        r_platforms = [platform for platform in platforms if platform in R_PLATFORMS]
+        # Keep PR feedback on Linux and exercise both supported Python endpoints.
+        platforms = [PR_PLATFORM]
+        pythons = PR_PYTHONS
+        r_platforms = [PR_PLATFORM]
     elif event in {"push", "workflow_dispatch"}:
         platforms = list(PLATFORMS)
+        pythons = PYTHONS
         r_platforms = list(R_PLATFORMS)
     else:
         raise ValueError(f"unsupported native CI event: {event}")
+    combinations = [
+        {"os": platform, "python": version, "form": form}
+        for platform, version, form in itertools.product(platforms, pythons, FORMS)
+    ]
     return {
         "build": {
             "include": [
@@ -112,7 +114,7 @@ def main():
         ).strip()
         compare_cohorts(json.loads(os.environ["QUALIFICATION_MATRIX"]), root, revision)
         return
-    coverage = plan(os.environ["GITHUB_EVENT_NAME"], os.environ["GITHUB_RUN_ID"])
+    coverage = plan(os.environ["GITHUB_EVENT_NAME"])
     with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
         for key, value in coverage.items():
             encoded = (
@@ -127,12 +129,11 @@ def main():
                 "Full native coverage: all 18 Python combinations and all three R hosts.\n"
             )
         else:
-            selected = coverage["qualify"]["include"][0]
             summary.write(
-                f"PR sample for Actions run {os.environ['GITHUB_RUN_ID']}: "
-                f"{selected['os']}, Python {selected['python']}, {selected['form']}.\n\n"
-                "Retries keep this selection. Full coverage and cross-platform math "
-                "comparison run after merge to main.\n"
+                "PR native coverage: Linux, Python 3.12 and 3.14, "
+                "wheel and source installs.\n\n"
+                "Full platform coverage, cross-platform math, and complete cohort "
+                "comparisons run on main pushes or manual full-matrix dispatches.\n"
             )
 
 
