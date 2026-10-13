@@ -22,6 +22,32 @@ vocabulary!(FieldName {
     Description => "description", Documents => "documents", Expression => "expression", Text => "text",
     Context => "context", Code => "code", Document => "document", Pages => "pages", Refs => "refs", Title => "title"
 });
+/// Governed fields share one vocabulary in declaration and execution admission.
+pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
+    FieldName::HasNoData,
+    FieldName::Label,
+    FieldName::Class,
+    FieldName::Subclass,
+    FieldName::Structure,
+    FieldName::Repeating,
+    FieldName::ReferenceData,
+    FieldName::Domain,
+    FieldName::Comment,
+];
+pub const COLUMN_METADATA_FIELDS: &[FieldName] = &[
+    FieldName::Core,
+    FieldName::Mandatory,
+    FieldName::Role,
+    FieldName::DataType,
+    FieldName::Length,
+    FieldName::SignificantDigits,
+    FieldName::DisplayFormat,
+    FieldName::Codelist,
+    FieldName::InventoryVocabulary,
+    FieldName::Origin,
+    FieldName::Method,
+    FieldName::Comment,
+];
 vocabulary!(ColumnType { String => "str", Integer => "int", Float => "float", Date => "date", Datetime => "datetime" });
 vocabulary!(Core { Required => "Req", Expected => "Exp", Permissible => "Perm", Conditional => "Cond" });
 vocabulary!(OriginType { Assigned => "Assigned", Collected => "Collected", Derived => "Derived", NotAvailable => "Not Available", Other => "Other", Predecessor => "Predecessor", Protocol => "Protocol" });
@@ -34,6 +60,30 @@ vocabulary!(DataType {
     IncompleteDate => "incompleteDate", IncompleteTime => "incompleteTime", IncompleteDatetime => "incompleteDatetime",
     DurationDatetime => "durationDatetime", IntervalDatetime => "intervalDatetime", Uri => "URI"
 });
+impl ColumnType {
+    pub fn default_data_type(self) -> DataType {
+        match self {
+            Self::String => DataType::Text,
+            Self::Integer => DataType::Integer,
+            Self::Float => DataType::Float,
+            Self::Date => DataType::Date,
+            Self::Datetime => DataType::Datetime,
+        }
+    }
+    pub fn admits_data_type(self, data_type: DataType) -> bool {
+        if self == Self::String {
+            !matches!(data_type, DataType::Integer | DataType::Float)
+        } else {
+            data_type == self.default_data_type()
+        }
+    }
+}
+/// Both standalone and selected-study admission apply the same type vocabulary.
+pub fn admits_data_type_names(column: &str, data_type: &str) -> bool {
+    let column = ColumnType::VALUES.iter().find(|(name, _)| *name == column);
+    let data_type = DataType::VALUES.iter().find(|(name, _)| *name == data_type);
+    matches!((column, data_type), (Some((_, column)), Some((_, data_type))) if column.admits_data_type(*data_type))
+}
 vocabulary!(DatasetClass {
     AdamOther => "ADAM OTHER", BasicData => "BASIC DATA STRUCTURE", DeviceLevel => "DEVICE LEVEL ANALYSIS DATASET",
     Events => "EVENTS", Findings => "FINDINGS", FindingsAbout => "FINDINGS ABOUT", Interventions => "INTERVENTIONS",

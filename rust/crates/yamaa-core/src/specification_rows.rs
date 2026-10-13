@@ -574,7 +574,7 @@ impl Rows {
         driver: &str,
         limits: CompilationLimits,
         project: Option<&functions::Prepared>,
-        column_terminology: bool,
+        _column_terminology: bool,
         extraction: &str_extract::Prepared,
         string_templates: &str_template::Prepared,
         intermediates: &intermediates::Declarations,
@@ -707,7 +707,14 @@ impl Rows {
             closed_fields(
                 d,
                 row,
-                &["id", "dataset", "group_by", "derivations", "filter"],
+                &[
+                    "id",
+                    "dataset",
+                    "group_by",
+                    "derivations",
+                    "filter",
+                    "submission",
+                ],
                 &path,
             )?;
             let row_driver = d
@@ -845,11 +852,6 @@ impl Rows {
         let mut lowered_columns = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
             let prefix = format!("columns.{}", output.columns()[column].name);
-            for name in ["submission", "metadata"] {
-                if present(d, id, name) && (name != "submission" || !column_terminology) {
-                    return Err(unsupported(name, &format!("{prefix}.{name}")));
-                }
-            }
             if !selected.contains(&column) {
                 let Some(derivation) = d
                     .field(id, "derivation")

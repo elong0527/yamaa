@@ -191,7 +191,7 @@ fn whole_project_reports_match_independent_original_document_truth_and_exact_sav
 
 #[test]
 fn full_codelist_values_and_keys_survive_failed_output_and_repeated_reporting() {
-    let raw="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: str, derivation: SRC.CODE, submission: {codelist: SEX}}\noutput: {path: output.csv, columns: [ID, CODE]}\n";
+    let raw="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: str, derivation: SRC.CODE, submission: {codelist: SEX, origin: {type: Assigned}}}\noutput: {path: output.csv, columns: [ID, CODE]}\n";
     let document = schemas::domain_schema()
         .prepare_standalone(source("spec.yaml", raw.as_bytes()))
         .unwrap();
@@ -343,7 +343,7 @@ fn original_inspection_and_capture_failures_keep_complete_findings_and_counters(
 
 #[test]
 fn completed_codelist_check_survives_a_later_verification_declaration_failure() {
-    let raw="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: str, derivation: SRC.CODE, submission: {codelist: SEX}}\n  - {name: LATE, type: str, derivation: SRC.CODE, verifications: [{matches: {pattern: '('}}]}\noutput: {path: output.csv, columns: [ID, CODE]}\n";
+    let raw="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: str, derivation: SRC.CODE, submission: {codelist: SEX, origin: {type: Assigned}}}\n  - {name: LATE, type: str, derivation: SRC.CODE, verifications: [{matches: {pattern: '('}}]}\noutput: {path: output.csv, columns: [ID, CODE]}\n";
     let document = schemas::domain_schema()
         .prepare_standalone(source("spec.yaml", raw.as_bytes()))
         .unwrap();

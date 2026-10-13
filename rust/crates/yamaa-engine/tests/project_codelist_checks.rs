@@ -211,3 +211,109 @@ fn retained_value_text_and_empty_list_scans_consume_the_existing_cumulative_quot
         }
     ));
 }
+
+#[test]
+fn value_scopes_prove_a_string_discriminator_and_wait_for_its_completed_value() {
+    use yamaa_core::dataset::ValueCodelist;
+    let (table, base) = setup(
+        vec![Value::Str("bad".into())],
+        ColumnType::Str,
+        vec![Value::Str("good".into())],
+    );
+    let check = |discriminator| Check::ValueCodelists {
+        discriminator,
+        overrides: vec!["later".into()],
+        bindings: vec![ValueCodelist {
+            id: "SELECTED".into(),
+            values: vec![Value::Str("good".into())],
+            codes: vec!["later".into()],
+            default: false,
+        }],
+    };
+    let groups = |check| {
+        vec![ColumnVerifications {
+            column: 1,
+            checks: vec![Verification {
+                path: "columns.CODE.submission.codelist".into(),
+                check,
+            }],
+        }]
+    };
+    for discriminator in [0, 3] {
+        assert_eq!(
+            base.clone()
+                .with_column_verifications(groups(check(discriminator)))
+                .unwrap_err(),
+            yamaa_core::dataset::PlanError::InvalidColumns
+        );
+    }
+    let plan = base.with_column_verifications(groups(check(2))).unwrap();
+    let ExecutionError::VerificationFailures(records) =
+        *plan.execute(&table, limits()).unwrap_err()
+    else {
+        panic!("selected terminology failure")
+    };
+    assert_eq!(
+        (records[0].evaluated_count, records[0].failed_count),
+        (1, 1)
+    );
+    assert_eq!(records[0].codelist.as_ref().unwrap().id, "SELECTED");
+    assert_eq!(table.reads.borrow().as_slice(), &[(0, 0), (0, 1), (0, 2)]);
+}
+
+#[test]
+fn effective_length_scopes_reject_foreign_owners_and_check_a_later_completed_discriminator() {
+    let (table, base) = setup(
+        vec![Value::Str("abcde".into())],
+        ColumnType::Str,
+        vec![Value::Str("abcde".into())],
+    );
+    let check = |discriminator, max: &str| Check::ValueMaxLength {
+        max: yamaa_core::dataset::RowCountBound::new(max).unwrap(),
+        discriminator,
+        codes: vec!["later".into()],
+        include: true,
+    };
+    let group = |check| {
+        vec![ColumnVerifications {
+            column: 1,
+            checks: vec![Verification {
+                path: "rows.R.submission.CODE.length".into(),
+                check,
+            }],
+        }]
+    };
+    for discriminator in [0, 3] {
+        assert_eq!(
+            base.clone()
+                .with_column_verifications(group(check(discriminator, "4")))
+                .unwrap_err(),
+            yamaa_core::dataset::PlanError::InvalidColumns
+        );
+    }
+    for max in ["0", "-1"] {
+        assert_eq!(
+            base.clone()
+                .with_column_verifications(group(check(2, max)))
+                .unwrap_err(),
+            yamaa_core::dataset::PlanError::InvalidBounds
+        );
+    }
+    let plan = base
+        .with_column_verifications(group(check(2, "4")))
+        .unwrap();
+    let ExecutionError::VerificationFailures(records) =
+        *plan.execute(&table, limits()).unwrap_err()
+    else {
+        panic!("scoped length failure")
+    };
+    assert_eq!(
+        (records[0].evaluated_count, records[0].failed_count),
+        (1, 1)
+    );
+    assert_eq!(
+        records[0].code,
+        yamaa_core::diagnostic::ConditionCode::VerificationMaxLengthFailed
+    );
+    assert_eq!(table.reads.borrow().as_slice(), &[(0, 0), (0, 1), (0, 2)]);
+}

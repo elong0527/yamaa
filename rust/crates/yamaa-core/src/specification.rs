@@ -92,6 +92,8 @@ mod str_extract;
 mod str_pad;
 #[path = "specification_str_template.rs"]
 mod str_template;
+#[path = "specification_submission.rs"]
+mod submission;
 #[path = "specification_temporal.rs"]
 mod temporal;
 #[path = "specification_terminology.rs"]
@@ -530,69 +532,6 @@ fn optional_features(
     }
 }
 
-// Free-form descriptive metadata does not affect execution. Governed metadata
-// keys retain an explicit unsupported boundary until submission validation is
-// connected; accepting these as descriptions would bypass REQ-0910.
-fn metadata_features(
-    d: &Document,
-    id: usize,
-    prefix: &str,
-    column: bool,
-    extra: &mut Vec<UnsupportedFeature>,
-) -> Result<(), PrepareError> {
-    let Some(metadata) = d
-        .field(id, "metadata")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    else {
-        return Ok(());
-    };
-    let reserved: &[&str] = if column {
-        &[
-            "core",
-            "mandatory",
-            "role",
-            "data_type",
-            "length",
-            "significant_digits",
-            "display_format",
-            "codelist",
-            "inventory_vocabulary",
-            "origin",
-            "method",
-            "comment",
-        ]
-    } else {
-        &[
-            "label",
-            "class",
-            "subclass",
-            "structure",
-            "repeating",
-            "reference_data",
-            "has_no_data",
-            "domain",
-            "comment",
-        ]
-    };
-    for &(key, _) in mapping(d, metadata)? {
-        let key = text(d, key)?;
-        if reserved.contains(&key) {
-            reject(
-                extra,
-                crate::diagnostic::ConditionCode::SubmissionReservedMetadata
-                    .definition()
-                    .condition,
-                if prefix.is_empty() {
-                    format!("metadata.{key}")
-                } else {
-                    format!("{prefix}.metadata.{key}")
-                },
-            );
-        }
-    }
-    Ok(())
-}
-
 /// Preserve the reference preflight order and collect all independent findings.
 fn preflight(spec: &SpecificationDocument) -> Result<Vec<PreflightFinding>, PrepareError> {
     let d = spec.document();
@@ -778,7 +717,7 @@ impl PreparedSpecification {
         spec: &SpecificationDocument,
         limits: CompilationLimits,
     ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, limits, None, None, Default::default(), None)
+        Self::prepare_implementation(spec, limits, None, None, Default::default(), None, None)
     }
     /// Prepare calls against statically admitted environment definitions. No
     /// project imports, lock verification, test invocation or study reads occur.
@@ -792,6 +731,7 @@ impl PreparedSpecification {
             Some(functions),
             None,
             Default::default(),
+            None,
             None,
         )
     }
@@ -820,6 +760,7 @@ impl PreparedSpecification {
             Some(environment.catalogue()),
             terminology_limits,
             None,
+            Some(environment.inventory()),
         )
     }
     /// This representation stays inside the sealed producer metadata result.
@@ -837,6 +778,7 @@ impl PreparedSpecification {
             environment.map(|e| e.catalogue()),
             Default::default(),
             Some(producers),
+            environment.map(|e| e.inventory()),
         )
     }
     fn prepare_implementation(
@@ -846,6 +788,7 @@ impl PreparedSpecification {
         catalogue: Option<&crate::project_terminology::Catalogue>,
         terminology_limits: crate::project_limits::Limits,
         producers: Option<&[crate::producer_admission::Declaration]>,
+        inventory: Option<&crate::submission_inventory::Inventory>,
     ) -> Result<Self, PrepareError> {
         let d = spec.document();
         let root = d.root();
@@ -1042,6 +985,13 @@ impl PreparedSpecification {
                 Err(error) => return Err(error),
             }
         }
+        submission::admit(
+            d,
+            columns,
+            inventory.map_or(&[], |inventory| inventory.names()),
+            &mut column_verifications,
+            &mut findings,
+        )?;
         rounding::declaration_findings(d, columns, &output, &mut findings)?;
         temporal::declaration_findings(d, columns, &output, &mut findings)?;
         imputation::declaration_findings(d, columns, &output, &mut findings)?;
@@ -1061,20 +1011,8 @@ impl PreparedSpecification {
             .map(|id| sequence(d, id))
             .transpose()?
             .is_some_and(|rows| !rows.is_empty());
-        optional_features(d, root, &["parents", "submission"], "", &mut extra);
+        optional_features(d, root, &["parents"], "", &mut extra);
         let root_filter = root_filter::RootFilter::prepare(d, &mut extra)?;
-        metadata_features(d, root, "", false, &mut extra)?;
-        for &column in sequence(d, field(d, root, "columns")?)? {
-            let name = text(d, field(d, column, "name")?)?;
-            metadata_features(d, column, &format!("columns.{name}"), true, &mut extra)?;
-            terminology::submission_features(
-                d,
-                column,
-                &format!("columns.{name}"),
-                catalogue.is_some(),
-                &mut extra,
-            )?;
-        }
         let inputs = mapping(d, field(d, root, "input")?)?;
         let odm_inputs = odm::inputs(d)?;
         let mut source_findings = Vec::new();
@@ -1170,10 +1108,7 @@ impl PreparedSpecification {
         }
         // Unsupported row/intermediate/metadata semantics must never reach the
         // closed no-row lowering representation, even when their shapes are valid.
-        if extra
-            .iter()
-            .any(|feature| matches!(feature.operation.as_str(), "parents" | "submission"))
-        {
+        if extra.iter().any(|feature| feature.operation == "parents") {
             return Err(PrepareError::Unsupported(extra));
         }
         let mut sources = Vec::new();

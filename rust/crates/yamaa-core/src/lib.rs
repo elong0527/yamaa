@@ -46,6 +46,7 @@ pub mod specification;
 pub mod specification_submission_document;
 pub mod submission_composition;
 pub mod submission_document;
+pub mod submission_inventory;
 pub mod submission_json;
 pub mod submission_xml;
 pub mod temporal;

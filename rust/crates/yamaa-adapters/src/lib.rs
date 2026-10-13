@@ -132,3 +132,5 @@ pub mod project_application;
 pub mod project_check;
 
 mod project_diagnostic_projection;
+
+mod file_inventory;

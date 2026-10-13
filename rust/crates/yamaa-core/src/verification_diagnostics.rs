@@ -45,6 +45,7 @@ fn code<R>(record: &CheckObservation<'_, R>, phase: Phase) -> Result<ConditionCo
             | VerificationNotMissingFailed
             | VerificationAllowedValuesFailed
             | VerificationCodelistFailed
+            | SubmissionInventoryFailed
             | VerificationRangeFailed
             | VerificationMaxLengthFailed
             | VerificationMatchesFailed
@@ -140,6 +141,7 @@ fn base_context<'a, R>(
         VerificationNotMissingFailed
         | VerificationAllowedValuesFailed
         | VerificationCodelistFailed
+        | SubmissionInventoryFailed
         | VerificationRangeFailed
         | VerificationMaxLengthFailed
         | VerificationMatchesFailed => {
@@ -159,7 +161,15 @@ fn base_context<'a, R>(
             if let Check::MaxLength(maximum) = check {
                 context.insert("max", Fact::Unsigned(*maximum));
             }
-            if let Check::Codelist { id, .. } = check {
+            if let Check::WideMaxLength(maximum) | Check::ValueMaxLength { max: maximum, .. } =
+                check
+            {
+                context.insert("max", Fact::Bound(maximum));
+            }
+            if let Some(observation) = record.codelist {
+                let (id, _) = check
+                    .codelist(observation.id)
+                    .ok_or(Error::InvalidObservation)?;
                 context.insert("codelist", Fact::Text(id));
             }
             context
@@ -198,7 +208,10 @@ pub fn project<'a, R: RowObservation>(
                 }
             }
             if let Some(codelist) = record.codelist {
-                let Some(Check::Codelist { id, .. }) = compiled.column_check(record.path) else {
+                let Some((id, _)) = compiled
+                    .column_check(record.path)
+                    .and_then(|check| check.codelist(codelist.id))
+                else {
                     return Err(Error::InvalidObservation);
                 };
                 if id != codelist.id {
@@ -209,6 +222,29 @@ pub fn project<'a, R: RowObservation>(
                     Fact::Sequence(codelist.values.iter().map(Fact::Scalar).collect()),
                 );
             }
+            if let Some(values) = record.inventory {
+                if code != ConditionCode::SubmissionInventoryFailed
+                    || !matches!(
+                        compiled.column_check(record.path),
+                        Some(Check::Inventory { .. })
+                    )
+                    || values.len() != record.failed_count
+                    || record.offending_rows.len() != record.failed_count
+                    || record.failed_count > record.evaluated_count
+                    || record.failed_count > record.output_rows
+                    || values
+                        .iter()
+                        .any(|value| !matches!(value, crate::value::Value::Str(_)))
+                {
+                    return Err(Error::InvalidObservation);
+                }
+                context.insert(
+                    "values",
+                    Fact::Sequence(values.iter().map(Fact::Scalar).collect()),
+                );
+            } else if code == ConditionCode::SubmissionInventoryFailed {
+                return Err(Error::InvalidObservation);
+            }
             let mut log_context = context.clone();
             log_context.insert("keys", Fact::Sequence(keys.clone()));
             let display = if record.codelist.is_some() {
@@ -217,6 +253,11 @@ pub fn project<'a, R: RowObservation>(
                 keys[..keys.len().min(5)].to_vec()
             };
             context.insert("keys", Fact::Sequence(display));
+            if record.inventory.is_some() {
+                if let Some(Fact::Sequence(values)) = context.get_mut("values") {
+                    values.truncate(5);
+                }
+            }
             if severity == VerificationSeverity::Error {
                 diagnostics.push(Diagnostic {
                     code,

@@ -133,9 +133,11 @@ pub(crate) fn limits() -> application::Limits {
 fn response(
     execution: yamaa_engine::dataset::ExecutionAttempt<crate::function_transport::CallbackError>,
 ) -> Result<DatasetResponse, Error> {
-    catch_unwind(AssertUnwindSafe(|| dataset_transport::response(execution)))
-        .map_err(|_| Error::Execution(DatasetTransportError::Internal))?
-        .map_err(Error::Execution)
+    catch_unwind(AssertUnwindSafe(|| {
+        dataset_transport::specification_response(execution)
+    }))
+    .map_err(|_| Error::Execution(DatasetTransportError::Internal))?
+    .map_err(Error::Execution)
 }
 
 fn run_error(error: application::RunError<Error>, prepared: &PreparedSpecification) -> Error {

@@ -352,14 +352,11 @@ fn unsupported_operations_handlers_and_metadata_are_refused_before_binding() {
     let written = format!("{raw}\nmetadata:\n  label: reserved\n");
     let captured = prepare(&schema, written.as_bytes());
     let error = PreparedSpecification::prepare(captured.model()).unwrap_err();
-    let PrepareError::Unsupported(features) = error else {
+    let PrepareError::Invalid(findings) = error else {
         panic!("{error:?}")
     };
     assert!(
-        features
-            .iter()
-            .any(|f| f.operation == "reserved_metadata_key"),
-        "{features:?}"
+        matches!(&findings[0], yamaa_core::specification::PreflightFinding::Scalar(diagnostic) if diagnostic.code == yamaa_core::diagnostic::ConditionCode::SubmissionReservedMetadata && diagnostic.spec_paths == ["metadata.label"])
     );
     let written = raw.replace("100 * (AVAL - BASE) / BASE", "LB.LBSTRESN + 1");
     let captured = prepare(&schema, written.as_bytes());
@@ -2747,7 +2744,7 @@ fn inherited_original_preparation_prunes_before_source_binding() {
         let error =
             yamaa_core::specification::PreparedSpecification::prepare(&changed).unwrap_err();
         assert!(
-            matches!(error,yamaa_core::specification::PrepareError::Unsupported(ref items) if items.iter().any(|item|item.operation == "reserved_metadata_key" && item.path == path))
+            matches!(error,yamaa_core::specification::PrepareError::Invalid(ref items) if items.iter().any(|item|matches!(item, yamaa_core::specification::PreflightFinding::Scalar(diagnostic) if diagnostic.code == yamaa_core::diagnostic::ConditionCode::SubmissionReservedMetadata && diagnostic.spec_paths == [path])))
         );
     }
     host.reads.clear();

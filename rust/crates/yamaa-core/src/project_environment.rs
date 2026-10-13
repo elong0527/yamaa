@@ -84,6 +84,7 @@ pub struct ExecutionEnvironment {
     catalogue: project_terminology::Catalogue,
     has_study: bool,
     submissions: Vec<Submission>,
+    inventory: crate::submission_inventory::Inventory,
 }
 impl ExecutionEnvironment {
     pub fn host(&self) -> Language {
@@ -109,6 +110,16 @@ impl ExecutionEnvironment {
     }
     pub fn submissions(&self) -> &[Submission] {
         &self.submissions
+    }
+    pub fn inventory(&self) -> &crate::submission_inventory::Inventory {
+        &self.inventory
+    }
+    pub fn with_inventory(mut self, inventory: crate::submission_inventory::Inventory) -> Self {
+        self.attach_inventory(inventory);
+        self
+    }
+    pub fn attach_inventory(&mut self, inventory: crate::submission_inventory::Inventory) {
+        self.inventory = inventory;
     }
 }
 impl Environment {
@@ -189,6 +200,7 @@ impl Environment {
             catalogue: project_terminology::Catalogue::from_admitted(codelists),
             has_study,
             submissions,
+            inventory: Default::default(),
         }
     }
 }

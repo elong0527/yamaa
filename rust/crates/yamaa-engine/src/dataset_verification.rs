@@ -94,6 +94,7 @@ pub(crate) fn predicate_check<E>(
         failed_count: offending.len(),
         output_rows: dataset.rows().len(),
         codelist: None,
+        inventory: None,
         offending_rows: dataset::identities(dataset, keys, offending.into_iter(), budget)?,
     }))
 }

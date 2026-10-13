@@ -237,7 +237,7 @@ class PublicEnvironment(unittest.TestCase):
             "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
             "input: {SRC: {path: data.csv, types: {ID: str}}}\n"
             "columns: [{name: ID, type: str, derivation: SRC.ID, "
-            "submission: {codelist: IDENTIFIERS}}]\n"
+            "submission: {codelist: IDENTIFIERS, origin: {type: Assigned}}}]\n"
             "output: {path: ../outputs/ids.csv, columns: [ID]}\n"
         )
         Path("entry/data.csv").write_text("ID\n01\n")
@@ -547,7 +547,7 @@ class PublicEnvironment(unittest.TestCase):
         env.write_text(yaml.safe_dump(source, sort_keys=False))
         spec_path = case / "spec.yaml"
         spec = yaml.safe_load(spec_path.read_text())
-        spec["columns"][0]["submission"] = {"codelist": "IDENTIFIERS"}
+        spec["columns"][0]["submission"] = {"codelist": "IDENTIFIERS", "origin": {"type": "Assigned"}}
         spec_path.write_text(yaml.safe_dump(spec, sort_keys=False))
         checked = yamaa.check("spec.yaml", environment=env.resolve())
         self.assertTrue(checked.issues.is_empty(), checked.issues)

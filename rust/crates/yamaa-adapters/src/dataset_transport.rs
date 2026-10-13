@@ -1015,7 +1015,16 @@ struct Identity {
     keys: Vec<ScalarValue>,
 }
 #[derive(Serialize)]
+struct CodelistRecord {
+    id: String,
+    values: Vec<ScalarValue>,
+}
+#[derive(Serialize)]
 struct Record {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    codelist: Option<CodelistRecord>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    inventory: Option<Vec<ScalarValue>>,
     spec_path: String,
     condition: &'static str,
     requirement: &'static str,
@@ -1033,18 +1042,35 @@ fn identity(row: RowIdentity) -> Identity {
 }
 /// Preserve every completed check in declaration order, including successful checks.
 fn legacy_records(records: &[CheckRecord]) -> Result<(), Error> {
-    if records.iter().any(|record| record.codelist.is_some()) {
+    if records
+        .iter()
+        .any(|record| record.codelist.is_some() || record.inventory.is_some())
+    {
         return Err(Error::UnsupportedProtocol);
     }
     Ok(())
 }
 fn records(records: Vec<CheckRecord>) -> Result<Vec<Record>, Error> {
     legacy_records(&records)?;
+    native_records(records)
+}
+fn native_records(records: Vec<CheckRecord>) -> Result<Vec<Record>, Error> {
     records
         .into_iter()
         .map(|record| {
             let definition = record.definition();
             Ok(Record {
+                codelist: record.codelist.map(|observation| CodelistRecord {
+                    id: observation.id,
+                    values: observation
+                        .values
+                        .into_iter()
+                        .map(ScalarValue::from_core)
+                        .collect(),
+                }),
+                inventory: record
+                    .inventory
+                    .map(|values| values.into_iter().map(ScalarValue::from_core).collect()),
                 spec_path: record.path,
                 condition: definition.condition,
                 requirement: definition.requirement.ok_or(Error::Internal)?,
@@ -1061,7 +1087,10 @@ type FailedChecks = (
     yamaa_core::verification_diagnostics::Phase,
     Vec<CheckRecord>,
 );
-fn failure(error: ExecutionError<CallbackError>) -> Result<(Outcome, Option<FailedChecks>), Error> {
+fn failure(
+    error: ExecutionError<CallbackError>,
+    legacy: bool,
+) -> Result<(Outcome, Option<FailedChecks>), Error> {
     use yamaa_core::verification_diagnostics::Phase;
     match error {
         ExecutionError::Function {
@@ -1077,7 +1106,7 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<(Outcome, Option<Fail
         )),
         other => {
             // Encode before moving the ledger; no host error is cloned or inspected.
-            let outcome = semantic_failure(&other, true)?;
+            let outcome = semantic_failure(&other, true, legacy)?;
             let records = match other {
                 ExecutionError::KeyFailures(records) => Some((Phase::Output, records)),
                 ExecutionError::VerificationFailures(records)
@@ -1095,7 +1124,18 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<(Outcome, Option<Fail
 
 /// Read core-owned semantic facts without cloning or classifying any host payload.
 /// Project calls and codelist records retain their separate typed formatters.
-fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Result<Outcome, Error> {
+fn semantic_failure<E>(
+    error: &ExecutionError<E>,
+    retain_records: bool,
+    legacy: bool,
+) -> Result<Outcome, Error> {
+    let encode_records = |found: Vec<CheckRecord>| {
+        if legacy {
+            records(found)
+        } else {
+            native_records(found)
+        }
+    };
     Ok(match error {
         ExecutionError::Function { .. } => return Err(Error::UnsupportedProtocol),
         ExecutionError::FunctionBinding { .. } => return Err(Error::FunctionBinding),
@@ -1231,11 +1271,11 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
         },
         ExecutionError::KeyFailures(found) => Outcome::Failure {
             phase: "output",
-            verifications: records(found.clone())?,
+            verifications: encode_records(found.clone())?,
         },
         ExecutionError::VerificationFailures(found) => Outcome::Failure {
             phase: "verification",
-            verifications: records(found.clone())?,
+            verifications: encode_records(found.clone())?,
         },
         ExecutionError::Conversion {
             path,
@@ -1283,7 +1323,7 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             identity: None,
             diagnostic: Box::new(diagnostic.clone().into()),
             verifications: if retain_records {
-                Some(records(completed.clone())?)
+                Some(encode_records(completed.clone())?)
             } else {
                 None
             },
@@ -1300,7 +1340,7 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             diagnostic: crate::numeric_transport::declaration(path.clone(), *code, reason.clone())
                 .ok_or(Error::Internal)?,
             verifications: if retain_records {
-                Some(records(completed.clone())?)
+                Some(encode_records(completed.clone())?)
             } else {
                 None
             },
@@ -1314,7 +1354,7 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
             diagnostic: crate::numeric_transport::predicate(error)?,
             identity: None,
             verifications: if retain_records {
-                Some(records(completed.clone())?)
+                Some(encode_records(completed.clone())?)
             } else {
                 None
             },
@@ -1328,7 +1368,7 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
 
 /// Borrow a retained non-host failure for the complete project report formatter.
 pub(crate) fn semantic_condition<E>(error: &ExecutionError<E>) -> Result<serde_json::Value, Error> {
-    let outcome = semantic_failure(error, false)?;
+    let outcome = semantic_failure(error, false, false)?;
     serde_json::to_value(outcome).map_err(|_| Error::Internal)
 }
 
@@ -1336,18 +1376,39 @@ pub(crate) fn semantic_condition<E>(error: &ExecutionError<E>) -> Result<serde_j
 pub(crate) fn response(
     attempt: dataset::ExecutionAttempt<CallbackError>,
 ) -> Result<DatasetResponse, Error> {
-    legacy_records(&attempt.retained_verifications)?;
+    response_with_policy(attempt, true)
+}
+/// Native specification results preserve all owned vocabulary facts. The legacy
+/// public probe keeps its original closed wire and cannot admit these records.
+pub(crate) fn specification_response(
+    attempt: dataset::ExecutionAttempt<CallbackError>,
+) -> Result<DatasetResponse, Error> {
+    response_with_policy(attempt, false)
+}
+fn response_with_policy(
+    attempt: dataset::ExecutionAttempt<CallbackError>,
+    legacy: bool,
+) -> Result<DatasetResponse, Error> {
+    if legacy {
+        legacy_records(&attempt.retained_verifications)?;
+    }
     let (table, outcome, execution, failed_verifications) = match attempt.result {
         Ok(result) => {
-            legacy_records(&result.verifications)?;
+            if legacy {
+                legacy_records(&result.verifications)?;
+            }
             let table = Some(encode_dataset(&result.dataset).map_err(Error::Table)?);
             let outcome = Outcome::Success {
-                verifications: records(result.verifications.clone())?,
+                verifications: if legacy {
+                    records(result.verifications.clone())?
+                } else {
+                    native_records(result.verifications.clone())?
+                },
             };
             (table, outcome, Some(result), None)
         }
         Err(error) => {
-            let (outcome, records) = failure(*error)?;
+            let (outcome, records) = failure(*error, legacy)?;
             (None, outcome, None, records)
         }
     };
@@ -1401,6 +1462,8 @@ mod codelist_protocol_tests {
                 position: 1,
                 values: vec![Value::Int(i64::MAX)],
             }],
+            inventory: None,
+
             codelist: Some(CodelistObservation {
                 id: "SEX".into(),
                 values: vec![Value::Str("x\0🙂".into())],
@@ -1422,6 +1485,8 @@ mod codelist_protocol_tests {
         assert!(matches!(retained, Err(Error::UnsupportedProtocol)));
         let legacy = CheckRecord {
             codelist: None,
+            inventory: None,
+
             code: yamaa_core::diagnostic::ConditionCode::VerificationAllowedValuesFailed,
             ..record
         };

@@ -50,6 +50,8 @@ fn record(value: Value) -> CheckRecord {
             position: 1,
             values: vec![Value::Int(i64::MAX)],
         }],
+        inventory: None,
+
         codelist: Some(CodelistObservation {
             id: "SEX".into(),
             values: vec![value],

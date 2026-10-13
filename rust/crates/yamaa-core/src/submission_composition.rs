@@ -195,16 +195,6 @@ fn verification(document: &Document, node: usize, operation: &str) -> Vec<usize>
         .filter_map(|&node| document.field(node, operation))
         .collect()
 }
-fn default_type(kind: spec::ColumnType) -> spec::DataType {
-    use spec::{ColumnType as C, DataType as D};
-    match kind {
-        C::String => D::Text,
-        C::Integer => D::Integer,
-        C::Float => D::Float,
-        C::Date => D::Date,
-        C::Datetime => D::Datetime,
-    }
-}
 fn reference_id(reference: &spec::DocumentReference) -> &str {
     match reference {
         spec::DocumentReference::Plain(field) => &field.value,
@@ -275,7 +265,7 @@ fn derivation_admits(
         _ => matches!(kind, T::Derived | T::Assigned | T::Other),
     }
 }
-fn derivation_kind(
+pub(crate) fn derivation_kind(
     document: &Document,
     mut node: usize,
     intermediates: &BTreeSet<String>,
@@ -309,7 +299,7 @@ fn derivation_kind(
 fn reserved_metadata(
     document: &Document,
     node: usize,
-    governed: &[&str],
+    governed: &[spec::FieldName],
     path: &str,
     findings: &mut Vec<Finding>,
 ) {
@@ -319,7 +309,7 @@ fn reserved_metadata(
     {
         for &(key, _) in fields {
             if let N::Text(key) = &document.nodes()[key] {
-                if governed.contains(&key.as_str()) {
+                if governed.iter().any(|field| field.name() == key) {
                     findings.push(Finding::cause(
                         ConditionCode::SubmissionReservedMetadata,
                         &format!("{path}.metadata.{key}"),
@@ -508,12 +498,8 @@ impl ColumnAdmission<'_> {
         let data_type = metadata
             .data_type
             .as_ref()
-            .map_or(default_type(column.column_type.value), |d| d.value);
-        if column.column_type.value == spec::ColumnType::String
-            && matches!(data_type, spec::DataType::Integer | spec::DataType::Float)
-            || column.column_type.value != spec::ColumnType::String
-                && data_type != default_type(column.column_type.value)
-        {
+            .map_or(column.column_type.value.default_data_type(), |d| d.value);
+        if !column.column_type.value.admits_data_type(data_type) {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionDataType,
                 column_path,
@@ -1073,17 +1059,7 @@ pub fn compose(
         reserved_metadata(
             doc,
             doc.root(),
-            &[
-                "label",
-                "class",
-                "subclass",
-                "structure",
-                "repeating",
-                "reference_data",
-                "has_no_data",
-                "domain",
-                "comment",
-            ],
+            spec::DATASET_METADATA_FIELDS,
             &path,
             &mut findings,
         );
@@ -1213,20 +1189,7 @@ pub fn compose(
             reserved_metadata(
                 doc,
                 column.node,
-                &[
-                    "core",
-                    "mandatory",
-                    "role",
-                    "data_type",
-                    "length",
-                    "significant_digits",
-                    "display_format",
-                    "codelist",
-                    "inventory_vocabulary",
-                    "origin",
-                    "method",
-                    "comment",
-                ],
+                spec::COLUMN_METADATA_FIELDS,
                 &format!("{path}.columns.{}", column.name.value),
                 &mut findings,
             );

@@ -55,15 +55,18 @@ pub(crate) fn validate(check: &Check, kind: ColumnType) -> Result<(), PlanError>
                 return Err(PlanError::InvalidColumns);
             }
         }
-        Check::Codelist { id, values } => {
-            if id.is_empty()
-                || values.iter().any(|value| match (kind, value) {
-                    (ColumnType::Str, Value::Str(_))
-                    | (ColumnType::Int, Value::Int(_))
-                    | (ColumnType::Float, Value::Int(_) | Value::Float(_)) => false,
-                    // Preserve the existing admitted integer-codelist profile.
-                    (ColumnType::Int, Value::Float(value)) => value.get() % 1.0 != 0.0,
-                    _ => true,
+        Check::Codelist { id, values } => validate_codelist(id, values, kind)?,
+        Check::Inventory { values, .. } => {
+            if kind != ColumnType::Str || values.iter().any(|value| !matches!(value, Value::Str(_)))
+            {
+                return Err(PlanError::InvalidColumns);
+            }
+        }
+        Check::ValueCodelists { bindings, .. } => {
+            if bindings.is_empty()
+                || bindings.iter().enumerate().any(|(index, binding)| {
+                    bindings[..index].iter().any(|prior| prior.id == binding.id)
+                        || validate_codelist(&binding.id, &binding.values, kind).is_err()
                 })
             {
                 return Err(PlanError::InvalidColumns);
@@ -84,7 +87,17 @@ pub(crate) fn validate(check: &Check, kind: ColumnType) -> Result<(), PlanError>
                 return Err(PlanError::InvalidBounds);
             }
         }
+        Check::ValueMaxLength { max, .. }
+            if kind != ColumnType::Str || max.compare_count(0) != core::cmp::Ordering::Greater =>
+        {
+            return Err(PlanError::InvalidBounds)
+        }
         Check::MaxLength(max) if kind != ColumnType::Str || *max == 0 => {
+            return Err(PlanError::InvalidBounds)
+        }
+        Check::WideMaxLength(max)
+            if kind != ColumnType::Str || max.compare_count(0) != core::cmp::Ordering::Greater =>
+        {
             return Err(PlanError::InvalidBounds)
         }
         Check::Matches(_) if kind != ColumnType::Str => return Err(PlanError::InvalidColumns),
@@ -93,14 +106,35 @@ pub(crate) fn validate(check: &Check, kind: ColumnType) -> Result<(), PlanError>
     Ok(())
 }
 
+fn validate_codelist(id: &str, values: &[Value], kind: ColumnType) -> Result<(), PlanError> {
+    if id.is_empty()
+        || values.iter().any(|value| match (kind, value) {
+            (ColumnType::Str, Value::Str(_))
+            | (ColumnType::Int, Value::Int(_))
+            | (ColumnType::Float, Value::Int(_) | Value::Float(_)) => false,
+            (ColumnType::Int, Value::Float(value)) => value.get() % 1.0 != 0.0,
+            _ => true,
+        })
+    {
+        Err(PlanError::InvalidColumns)
+    } else {
+        Ok(())
+    }
+}
+
 /// The admitted check retains its semantic cause through every engine record.
 pub fn column_code(check: &Check) -> Option<ConditionCode> {
     Some(match check {
         Check::NotMissing => ConditionCode::VerificationNotMissingFailed,
         Check::AllowedValues(_) => ConditionCode::VerificationAllowedValuesFailed,
-        Check::Codelist { .. } => ConditionCode::VerificationCodelistFailed,
+        Check::Codelist { .. } | Check::ValueCodelists { .. } => {
+            ConditionCode::VerificationCodelistFailed
+        }
+        Check::Inventory { .. } => ConditionCode::SubmissionInventoryFailed,
         Check::Range { .. } => ConditionCode::VerificationRangeFailed,
-        Check::MaxLength(_) => ConditionCode::VerificationMaxLengthFailed,
+        Check::MaxLength(_) | Check::WideMaxLength(_) | Check::ValueMaxLength { .. } => {
+            ConditionCode::VerificationMaxLengthFailed
+        }
         Check::Matches(_) => ConditionCode::VerificationMatchesFailed,
         _ => return None,
     })
@@ -179,7 +213,10 @@ pub fn column_offenders<'a>(
             let failed = match check {
                 Check::NotMissing => matches!(value, Value::Missing),
                 _ if matches!(value, Value::Missing) => false,
-                Check::AllowedValues(accepted) => !accepted.contains(value),
+                Check::AllowedValues(accepted)
+                | Check::Inventory {
+                    values: accepted, ..
+                } => !accepted.contains(value),
                 Check::Codelist { values, .. } => !values
                     .iter()
                     .any(|code| compare_present(value, code) == Ok(core::cmp::Ordering::Equal)),
@@ -190,14 +227,26 @@ pub fn column_offenders<'a>(
                         compare_present(value, max) == Ok(core::cmp::Ordering::Greater)
                     })
                 }
+                Check::ValueMaxLength { max, .. } => matches!(value, Value::Str(text) if max.compare_count(text.chars().count()) == core::cmp::Ordering::Less),
                 Check::MaxLength(max) => {
                     matches!(value,Value::Str(text) if text.chars().count()>*max)
+                }
+                Check::WideMaxLength(max) => {
+                    matches!(value, Value::Str(text) if max.compare_count(text.chars().count()) == core::cmp::Ordering::Less)
                 }
                 _ => unreachable!("only admitted column checks reach the value service"),
             };
             failed.then_some(row)
         })
         .collect()
+}
+
+/// Exact fixed-list equality for inherited and per-value bindings alike.
+pub fn codelist_accepts(values: &[Value], value: &Value) -> bool {
+    matches!(value, Value::Missing)
+        || values
+            .iter()
+            .any(|code| compare_present(value, code) == Ok(core::cmp::Ordering::Equal))
 }
 
 pub fn column_diagnostic(
@@ -220,6 +269,9 @@ pub fn column_diagnostic(
     .into();
     if let Check::MaxLength(max) = check {
         context.insert("max".into(), ContextValue::Integer(max.to_string()));
+    }
+    if let Check::WideMaxLength(max) | Check::ValueMaxLength { max, .. } = check {
+        context.insert("max".into(), ContextValue::Integer(max.decimal().into()));
     }
     if let Check::Codelist { id, .. } = check {
         context.insert(

@@ -168,7 +168,7 @@ impl FileGraph {
     pub(crate) fn capture_admitted_entry(
         mut resources: Resources,
         admitted: AdmittedEntry,
-        environment: OwnedEnvironment,
+        mut environment: OwnedEnvironment,
     ) -> Result<CapturedEntry, Box<RejectedGraph>> {
         let AdmittedEntry {
             written,
@@ -187,6 +187,14 @@ impl FileGraph {
                 .map_err(Error::Document)?,
             );
             let root = document.as_ref().expect("captured entry");
+            crate::file_inventory::prepare(
+                &mut resources,
+                &schema,
+                &mut environment,
+                yamaa_core::submission_inventory::requested(root.model().document()),
+                &root.source().identity,
+            )
+            .map_err(Error::Document)?;
             yamaa_engine::build::select_entry(
                 yamaa_engine::build::EntryView {
                     original: root.normalization_input(),
@@ -239,7 +247,7 @@ impl FileGraph {
             limits,
             ..
         } = entry;
-        let (environment, captured) = environment.into_parts();
+        let (mut environment, mut captured) = environment.into_parts();
         let mut documents = Vec::new();
         let mut origin = None;
         let entry = written;
@@ -252,6 +260,17 @@ impl FileGraph {
             &mut origin,
         )
         .and_then(|nodes| {
+            crate::file_inventory::prepare_parts(
+                &mut resources,
+                &schema,
+                &mut environment,
+                &mut captured,
+                documents.iter().any(|document| {
+                    yamaa_core::submission_inventory::requested(document.model().document())
+                }),
+                &documents[0].source().identity,
+            )
+            .map_err(Error::Document)?;
             crate::producer_log_publication::admit_locations(&documents, &resources)?;
             let root = documents[0].source().identity.as_str();
             // Resource witnesses and native edge/index ownership share the
