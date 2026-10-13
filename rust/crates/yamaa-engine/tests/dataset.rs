@@ -7327,3 +7327,157 @@ fn presentation_budget_failure_retains_checks_and_recovers_on_a_fresh_run() {
         ExecutionError::VerificationFailures(_)
     ));
 }
+
+#[test]
+fn grouped_row_count_failures_retain_first_output_positions_and_empty_artifacts() {
+    use yamaa_core::dataset::{RowCount, RowCountBound};
+    for (rows, grouped, expected_positions) in [
+        (
+            vec![
+                vec![Value::Int(1), Value::Str("a".into())],
+                vec![Value::Int(2), Value::Str("a".into())],
+                vec![Value::Int(3), Value::Str("b".into())],
+                vec![Value::Int(4), Value::Str("b".into())],
+            ],
+            true,
+            vec![0, 2],
+        ),
+        (vec![], false, vec![0]),
+    ] {
+        let source = table(&[("ID", ColumnType::Int), ("G", ColumnType::Str)], rows);
+        let check = RowCount {
+            min: Some(RowCountBound::new(if grouped { "3" } else { "1" }).unwrap()),
+            max: None,
+            min_fraction: None,
+            max_fraction: None,
+            group_by: grouped.then_some(vec![1]),
+            filter: None,
+            when: None,
+        };
+        let plan = DatasetPlan::new(
+            source.schema.clone(),
+            source.schema.clone(),
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![
+                    assign(0, Expression::Source(0)),
+                    assign(1, Expression::Source(1)),
+                ],
+                filter: None,
+            }],
+            vec![],
+            vec![0],
+            vec![Verification {
+                path: "verifications[0].row_count".into(),
+                check: Check::ScopedRowCount(check),
+            }],
+        )
+        .unwrap();
+        let attempt = plan.execute_observed(&source, limits());
+        let ExecutionError::VerificationFailures(records) = *attempt.result.unwrap_err() else {
+            panic!("expected complete failed row-count records")
+        };
+        assert_eq!(records.len(), 1);
+        let record = &records[0];
+        assert_eq!(
+            record
+                .offending_rows
+                .iter()
+                .map(|row| row.position)
+                .collect::<Vec<_>>(),
+            expected_positions
+        );
+        assert_eq!(record.failed_count, if grouped { 2 } else { 1 });
+        assert_eq!(
+            record.row_count.as_ref().unwrap().counts,
+            if grouped { vec![2, 2] } else { vec![0] }
+        );
+    }
+}
+
+#[test]
+fn filtered_intermediate_grouping_charges_only_eligible_key_cells() {
+    use yamaa_core::{
+        bound_expression::{Binding, BoundPredicate, Read},
+        dataset::{
+            Intermediate, IntermediateKey, IntermediateSource, MatchRead, MatchValue, SourceSchemas,
+        },
+    };
+    let names = (0..16)
+        .map(|i| format!("K{i}"))
+        .chain(["KEEP".into()])
+        .collect::<Vec<_>>();
+    let fields = names
+        .iter()
+        .map(|name| (name.as_str(), ColumnType::Int))
+        .collect::<Vec<_>>();
+    let mut rows = vec![vec![Value::Int(0); 17]; 100];
+    rows[99][0] = Value::Int(1);
+    rows[99][16] = Value::Int(1);
+    let source = table(&fields, rows);
+    let filter = BoundPredicate::new(
+        yamaa_core::predicate_compiler::compile(
+            "KEEP = 1",
+            "intermediates[0].filter",
+            Default::default(),
+        )
+        .unwrap(),
+        vec![Binding {
+            name: "KEEP".into(),
+            read: Read::Source(16),
+        }],
+    )
+    .unwrap();
+    let item = Intermediate {
+        identifier: "KEPT".into(),
+        path: "intermediates[0]".into(),
+        source: IntermediateSource::Primary {
+            schema: source.schema.clone(),
+            name: "SRC".into(),
+        },
+        keys: vec![IntermediateKey {
+            source_column: 0,
+            path: "intermediates[0].key".into(),
+            value: MatchValue::Variable(MatchRead::Output {
+                column: 0,
+                identifier: "ID".into(),
+            }),
+        }],
+        filter: Some(filter.into()),
+        selection: None,
+        no_match: None,
+        range: None,
+        columns: None,
+    };
+    let plan = DatasetPlan::new_with_intermediates(
+        SourceSchemas {
+            primary: source.schema.clone(),
+            secondary: vec![],
+        },
+        vec![item],
+        schema(&[("ID", ColumnType::Int)]),
+        vec![RowTemplate {
+            mode: RowMode::IntermediateDriver {
+                index: 0,
+                source: 0,
+                mode: Box::new(RowMode::Groups((0..16).collect())),
+            },
+            assignments: vec![assign(0, Expression::Source(0))],
+            filter: None,
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    let result = plan
+        .execute(
+            &source,
+            Limits {
+                work_cells: 1000,
+                ..limits()
+            },
+        )
+        .unwrap();
+    assert_eq!(result.dataset.rows(), [vec![Value::Int(1)]]);
+}

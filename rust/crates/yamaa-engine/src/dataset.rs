@@ -1250,7 +1250,10 @@ impl Executor<'_> {
                         }
                     }
                     RowMode::Groups(keys) => {
-                        budget.work(table.row_count(), keys.len())?;
+                        budget.work(
+                            eligible.as_ref().map_or(table.row_count(), Vec::len),
+                            keys.len(),
+                        )?;
                         if let Some(rows) = &eligible {
                             intermediates::driver_groups(table, rows, keys, limits)?
                         } else {

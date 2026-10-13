@@ -83,8 +83,8 @@ suites remain separate. These dispositions do not suppress table differences.
 
 Each sampled PR lane and every main or full-dispatch lane uploads its inventory,
 individual records and staged saved artifacts. The committed
-`public-conformance.json` gates both installed hosts. Its 277 Python cases and
-276 R cases are the independently replayed intersection of all eighteen Python
+`public-conformance.json` gates both installed hosts. Its 294 Python cases and
+293 R cases are the independently replayed intersection of all eighteen Python
 lanes and three R hosts in full-dispatch run 38354915028 at
 `a44d8dd51e3ff27d62a9ec490b1c8e7a734cc3cf`. The eight per-record aggregate and
 inclusive-range benchmarks advance the prior 269 Python and 268 R cases without

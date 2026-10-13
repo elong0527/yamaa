@@ -157,7 +157,7 @@ pub(crate) fn row_count_check<E>(
     let mut offenders = Vec::new();
     let mut counts = Vec::new();
     let mut denominators = Vec::new();
-    for (index, members) in groups.iter().enumerate() {
+    for members in &groups {
         if check.when.is_some() && !members.iter().any(|&row| bound[row]) {
             continue;
         }
@@ -171,7 +171,7 @@ pub(crate) fn row_count_check<E>(
             budget.identity(borrowed.clone())?;
             let values = borrowed.cloned().collect();
             offenders.push(dataset::RowIdentity {
-                position: index,
+                position: members.first().copied().unwrap_or(0),
                 values,
             });
             counts.push(count);
