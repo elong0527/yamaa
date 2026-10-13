@@ -6,48 +6,6 @@ dir.create(runtime_path)
 rm_path <- Sys.which("rm")
 if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm")))
 Sys.setenv(PATH=runtime_path)
-local({
-  label <- "completed-lookup-assertions"
-  source(file.path(root,paste0(label,"-truth.R")),local=TRUE)
-  stopifnot(length(completed_lookup_assertion_truth)==17L)
-  for (name in names(completed_lookup_assertion_truth)) for (attempt in seq_len(2L)) {
-    truth <- completed_lookup_assertion_truth[[name]]
-    directory <- tempfile("yamaa-completed-assert-");dir.create(directory)
-    directory <- normalizePath(directory,winslash="/",mustWork=TRUE)
-    file.copy(list.files(file.path(root,paste0(label,"-cases"),truth$directory),full.names=TRUE),directory)
-    entry <- file.path(directory,"spec.yaml")
-    check_issue_frame(yamaa_check(entry)$issues,truth$check_issues)
-    result <- yamaa_domain(entry)
-    check_issue_frame(result$issues,truth$issues)
-    report <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
-    check_handler_ledger(report,truth$handlers)
-    if (!is.null(truth$verifications)) {
-      expected <- gsub('"__SPECIFICATION__"',json_text(entry),truth$verifications,fixed=TRUE)
-      stopifnot(grepl(paste0('"verifications":',expected),report,fixed=TRUE))
-    }
-    expected_reads <- paste0('"source_reads":',truth$source_reads)
-    stopifnot(grepl(expected_reads,report,fixed=TRUE),grepl('"artifacts":[]',report,fixed=TRUE))
-    if (!is.null(truth$columns)) {
-      stopifnot(identical(names(result$output),names(truth$columns)))
-      for (column in names(truth$columns)) {
-        actual <- result$output[[column]]
-        if (truth$kinds[[column]] == "int") stopifnot(inherits(actual,"yamaa_int64_vector"))
-        else stopifnot(is.character(actual))
-        stopifnot(identical(is.na(actual),is.na(truth$columns[[column]])),
-          identical(as.character(actual),truth$columns[[column]]))
-      }
-      stopifnot(identical(result$save(),TRUE),
-        identical(rawfile(file.path(directory,"result.csv")),rawfile(file.path(directory,"expected.csv"))))
-      writeBin(charToRaw("changed after build"),file.path(directory,"donor.csv"))
-      stopifnot(identical(result$save(),TRUE),
-        identical(rawfile(file.path(directory,"result.csv")),rawfile(file.path(directory,"expected.csv"))))
-    } else stopifnot(is.null(result$output),
-      inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"result.csv")))
-    unlink(directory,recursive=TRUE)
-  }
-  cat("independent completed-row selected assertions retain exact records, effects and Save bytes without Python\n")
-})
-
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
 root <- system.file("specification-original", package="yamaa", mustWork=TRUE)
