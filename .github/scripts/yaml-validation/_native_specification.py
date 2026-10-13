@@ -102,13 +102,18 @@ def issue_rows(
             try:
                 _, fields = _native_parquet.parquet_source_fields(raw)
             except _native_parquet.ParquetProfileFailure as failure:
+                context = dict(failure.context)
+                if "dataset" in context:
+                    context["dataset"] = dataset
+                if "path" in context:
+                    context["path"] = written
                 return [
                     (
                         "validation",
                         failure.condition,
                         failure.requirement,
                         [f"input.{dataset}.path"],
-                        json.dumps(failure.context),
+                        json.dumps(context),
                     )
                 ]
         sources.append((identity, dataset, list(fields)))
