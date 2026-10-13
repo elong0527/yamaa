@@ -11,6 +11,41 @@ rawfile <- function(path) readBin(path, "raw", n = file.info(path)$size)
 readtext <- function(path) readLines(path, warn = FALSE)
 observations_native <- get(".domain_observations", asNamespace("yamaa"))
 observations <- function(result) rawToChar(observations_native(result))
+
+qualify_unavailable_environment_root <- function() {
+  previous <- getwd(); on.exit(setwd(previous))
+  work <- tempfile("environment-root-"); dir.create(work); setwd(work)
+  base <- normalizePath(work, winslash = "/", mustWork = TRUE)
+  for (name in "missing-environment.yaml") {
+    cause <- "missing"
+    expected <- list(phase = "validation", condition = "project_environment_missing",
+      requirement = "REQ-0694", spec_paths = list("environment"),
+      context = paste0('{"cause":"', cause, '","path":"', file.path(base, name), '"}'))
+    for (content in list(NULL, "[entry must not be read")) {
+      unlink("spec.yaml")
+      if (!is.null(content)) writeLines(content, "spec.yaml")
+      checked <- yamaa_check("spec.yaml", environment = name)
+      failed <- yamaa_domain("spec.yaml", environment = name)
+      stopifnot(identical(lapply(checked$issues, identity), expected),
+        identical(lapply(failed$issues, identity), expected), is.null(failed$output),
+        inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"))
+      captured <- observations(failed)
+      stopifnot(grepl('"lock":"not_requested"', captured, fixed = TRUE),
+        grepl('"source_reads":[]', captured, fixed = TRUE),
+        grepl('"bindings":[]', captured, fixed = TRUE),
+        grepl('"callbacks":[]', captured, fixed = TRUE))
+    }
+  }
+  unlink("spec.yaml")
+  writeLines(c("schema_version: '1.0'", "language: r"), "environment.yaml")
+  checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
+  stopifnot(identical(checked$issues$condition, "engine_rejected"),
+    identical(checked$issues$context, '{"code":"resource_missing","stage":"prepare"}'),
+    identical(sort(list.files()), "environment.yaml"))
+  cat("public R missing supplied environments retain exact REQ-0694 issues before entry/data/activation\n")
+}
+qualify_unavailable_environment_root()
+
 previous <- getwd()
 work <- tempfile("public-environment-"); dir.create(work)
 for (name in c("schema-functions", "schema-non-finite", "adam-adsl-bmi", "adam-advs-percentiles")) {
