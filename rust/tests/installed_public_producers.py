@@ -467,6 +467,28 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
         self.assertEqual(self.observe(result)["artifacts"], [])
         self.assertGreater(result.issues.height, 0)
 
+    def test_public_copy_byte_quota_preserves_complete_accepted_graph_without_output_or_save(self):
+        # Text stays below the execution allowance, while IPC offsets and
+        # numeric columns take the public copy beyond its 8 MiB byte cap.
+        payload = "x" * 2048
+        extra = f'  - {{name: PAYLOAD, type: str, label: Payload, derivation: {{literal: "{payload}"}}}}\n'
+        self.write("consumer/root.yaml", CONSUMER.replace("output: {path:", extra + "output: {path:").replace("columns: [ID, VALUE], decimals: 2", "columns: [ID, VALUE, PAYLOAD], decimals: 2"))
+        self.write("raw/raw.csv", b"ID,VALUE\n" + "".join(f"{index},1.234\n" for index in range(1, 4096)).encode())
+        result = self.build()
+        self.assertTrue(self.entered(result).accepted())
+        self.assertEqual(self.entered(result).entered_nodes(), [1, 0])
+        self.assertIsNone(result.output)
+        self.assertEqual(result._native.producer_projection_failure(), "table output exceeds byte limit")
+        self.assertEqual(json.loads(result.issues["context"][0])["code"], "output_projection")
+        self.assertEqual(self.observe(result)["outcome"], "success")
+        self.assertEqual(len(self.observe(result)["artifacts"]), 2)
+        self.assertFalse((self.root / "generated").exists())
+        shutil.rmtree(self.root)
+        with self.assertRaisesRegex(DomainError, "cannot save a failed build"):
+            result.save()
+        self.assertEqual(result._native.producer_projection_failure(), "table output exceeds byte limit")
+        self.assertTrue(self.entered(result).accepted())
+
     def test_public_copy_quota_preserves_complete_accepted_graph_without_output_or_save(self):
         self.write("producer/layers/base.yaml", PRODUCER.replace("ID: int", "ID: str").replace("name: ID, type: int", "name: ID, type: str"))
         extra = "".join(f"  - {{name: EXTRA{index}, type: str, label: Extra value, derivation: {{literal: null}}}}\n" for index in range(59))

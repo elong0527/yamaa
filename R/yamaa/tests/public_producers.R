@@ -327,6 +327,28 @@ stopifnot(identical(refusal(result),"table output exceeds byte limit"),isTRUE(ev
   inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
 cat("R public copy quota preserves accepted whole attempt and typed original refusal without output or Save\n")
 
+# Text stays below the execution allowance, while IPC offsets and numeric
+# columns take the public copy beyond its 8 MiB byte cap.
+work <- study()
+extra <- paste0('  - {name: PAYLOAD, type: str, label: Payload, derivation: {literal: "',
+  strrep("x",2048),'"}}\n')
+text <- sub("output: {path:",paste0(extra,"output: {path:"),consumer,fixed=TRUE)
+text <- sub("columns: [ID, VALUE], decimals: 2","columns: [ID, VALUE, PAYLOAD], decimals: 2",text,fixed=TRUE)
+write(work,"consumer/root.yaml",text)
+write(work,"raw/raw.csv",paste0("ID,VALUE\n",paste0(1:4095,",1.234\n",collapse="")))
+result <- build(work)
+refusal <- function(result) reply(.Call(private("wrap__domain_projection_failure"),handle(result)))
+stopifnot(isTRUE(evidence(result)$accepted),is.null(result$output),
+  identical(unlist(evidence(result)$entered),c(1,0)),
+  identical(refusal(result),"table output exceeds byte limit"),
+  grepl('"code":"output_projection"',result$issues$context,fixed=TRUE),
+  grepl('"outcome":"success"',observe(result),fixed=TRUE),
+  !dir.exists(file.path(work,"generated")))
+unlink(work,recursive=TRUE); invisible(gc())
+stopifnot(identical(refusal(result),"table output exceeds byte limit"),isTRUE(evidence(result)$accepted),
+  inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+cat("R public byte copy quota preserves accepted whole attempt and typed original refusal without output or Save\n")
+
 work <- study();dir.create(file.path(work,"generated"));dir.create(file.path(work,"generated/root.csv"))
 result <- build(work)
 stopifnot(identical(result$save(),FALSE),isTRUE(evidence(result)$accepted),

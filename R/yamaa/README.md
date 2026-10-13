@@ -62,7 +62,7 @@ complete Rust workspace and the unchanged canonical Cargo lock. Compilation uses
 is needed during R installation. Cargo downloads the already locked dependencies
 when they are absent from its cache.
 
-For a development build of the current 0.3.0 candidate, stage this repository
+For a development build of the prepared 0.4.0 candidate, stage this repository
 template before `R CMD build`.
 Direct `devtools::install_github(..., subdir = "R/yamaa")` installation omits the
 shared Rust sources and is unsupported. From the repository root:
@@ -71,8 +71,8 @@ shared Rust sources and is unsupported. From the repository root:
 python -m pip install py-yaml12==0.2.0
 python rust/tools/stage_r_package.py /tmp/yamaa-stage/yamaa
 R CMD build --no-build-vignettes --no-manual /tmp/yamaa-stage/yamaa
-R CMD INSTALL yamaa_0.3.0.tar.gz
-R CMD check --no-manual yamaa_0.3.0.tar.gz
+R CMD INSTALL yamaa_0.4.0.tar.gz
+R CMD check --no-manual yamaa_0.4.0.tar.gz
 Rscript --vanilla R/yamaa/tests/public_grammar.R
 ```
 
