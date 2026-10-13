@@ -573,7 +573,9 @@ fn unclassified_failures_and_contradictory_cycles_have_no_semantic_projection() 
     let address = &*payload as *const u8;
     let error = Error::Host(Opaque(payload));
     assert!(error.diagnostic().is_none());
-    let Error::Host(Opaque(payload)) = error else {
+    let yamaa_engine::inheritance_outcome::Outcome::Original(Error::Host(Opaque(payload))) =
+        yamaa_engine::inheritance_outcome::traversal_outcome(error, 16_777_216).unwrap()
+    else {
         panic!("original host failure replaced")
     };
     assert_eq!(&*payload as *const u8, address);

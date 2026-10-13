@@ -35,6 +35,7 @@ class HarborChanges(unittest.TestCase):
             "evaluations/harbor/grade.py",
             "evaluations/harbor/Dockerfile",
             "evaluations/harbor/system-r.md",
+            "evaluations/harbor/leaderboards/system-r.md",
             "evaluations/harbor/licenses/opensas/LICENSE-APACHE-2.0.txt",
             "python/pyproject.toml",
             "python/uv.lock",

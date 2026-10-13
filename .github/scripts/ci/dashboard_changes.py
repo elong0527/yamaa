@@ -27,7 +27,9 @@ def main():
             text=True,
         ).strip()
         paths = (
-            subprocess.check_output(["git", "diff", "--name-only", "-z", base, "HEAD"])
+            subprocess.check_output(
+                ["git", "diff", "--no-renames", "--name-only", "-z", base, "HEAD"]
+            )
             .decode()
             .split("\0")
         )

@@ -1,7 +1,7 @@
 # yamaa Rust migration release readiness
 
-Assessed 2026-10-11 against main
-`c8076646f403e2c15337c7771fa4341d2e5eaeee`. This is the finite blocker register
+Assessed 2026-10-13 against main
+`da6d40378d1a54f028252e14ef1e6c6003607fee`. This is the finite blocker register
 for [#1969](https://github.com/elong0527/yamaa/issues/1969). Earlier release and
 prototype observations are preserved verbatim in
 [the archive](archive/release-readiness-before-work-packages.md); their counts
@@ -23,25 +23,25 @@ an explicit approved disposition, not with a component-test count.
 
 | ID | Current status and remaining evidence | Primary owner |
 | --- | --- | --- |
-| B01 | Bounded public cohorts exist. Complete public Python/R conformance against every supported benchmark and the full-matrix ratchet are open. | [#1974](https://github.com/elong0527/yamaa/issues/1974) |
+| B01 | Verified ratchet: 312 Python and 311 R cases out of 318. Three producer-schema refusals and one path mismatch remain everywhere; Windows R has one additional symlink-staging mismatch. Complete active corpus acceptance remains open. | [#1974](https://github.com/elong0527/yamaa/issues/1974) |
 | B02 | Public domain/check facades run on the shared engine. Installed signatures, argument errors, complete issues/log/output/save behavior and consumer migration remain. | [#1991](https://github.com/elong0527/yamaa/issues/1991) |
 | B03 | Full-range R int64 and JSON-text context are approved. Lossless NUL-vector and retained-helper operations, deliberate removals and final installed surface qualification remain. | [#1991](https://github.com/elong0527/yamaa/issues/1991) |
-| B04 | Declaring-file local paths are merged under #1905. The repository validator still enforces retired root containment and must align without weakening kind/link/snapshot checks. | [#1995](https://github.com/elong0527/yamaa/issues/1995) |
+| B04 | Declaring-file validator alignment is merged (#2012/#1995). Fix the active directory diagnostic order and Windows R symlink staging without weakening kind/link/snapshot checks. | [#1995](https://github.com/elong0527/yamaa/issues/1995) |
 | B05 | Combined packages exist. Probe consumers must migrate before obsolete component endpoints and JSON transports are removed. | [#1990](https://github.com/elong0527/yamaa/issues/1990) |
 | B06 | #1757 closed environment/function/codelist implementation. One complete engine use case must retain activation-before-data and all host effects in both bindings. | [#1987](https://github.com/elong0527/yamaa/issues/1987) |
 | B07 | #1741 closed producer workflow implementation. Qualify its final composition with the unified use case, every port and failure/publication order. | [#1987](https://github.com/elong0527/yamaa/issues/1987) |
-| B08 | #1758 closed shared Define/Dataset-JSON generation. Engine-level Define orchestration, submission metadata in domain builds and diagnostic ownership remain. | [#1986](https://github.com/elong0527/yamaa/issues/1986) |
-| B09 | Shared language coverage remains incomplete. Mapping/cut is one owner in the broader #1975-#1983 language wave, plus #1986 and #2005; all require public ratchet acceptance. | [#1975](https://github.com/elong0527/yamaa/issues/1975) |
+| B08 | Engine Define orchestration, registry ownership and domain submission metadata are merged (#2051/#2068). Renew final installed evidence after ownership and removal changes. | [#1986](https://github.com/elong0527/yamaa/issues/1986) |
+| B09 | Most language families are merged. Finish #1979/#1980/#2005 acceptance and the no-environment producer-schema route; preserve the entire public corpus. | [#1975](https://github.com/elong0527/yamaa/issues/1975) |
 | B10 | File/codec/publication implementations are merged. Final unified port composition must retain exact CSV, logical Parquet, original failures and held-save behavior. | [#1987](https://github.com/elong0527/yamaa/issues/1987) |
-| B11 | Portable registry exists, but adapter/core/engine diagnostic ownership, literal guards and normative null dispositions are incomplete. Two historical predicate gaps now match; ESCAPE policy implementation is #1983. | [#1984](https://github.com/elong0527/yamaa/issues/1984) |
+| B11 | Core/engine registry ownership and normative null dispositions are merged. The adapter/binding allowlist retains 12 frozen test sites; finish #1984 without deriving expected diagnostics from the registry under test. | [#1984](https://github.com/elong0527/yamaa/issues/1984) |
 | B12 | #1740 closed the PortableLibmV1 numerical decision. Every affected supported language scope still needs exact public truth on the complete installed matrix. | [#1974](https://github.com/elong0527/yamaa/issues/1974) |
-| B13 | Canonical Cargo locking, unchanged packaged workspace membership including build scripts and locked builds are merged. Retain final clean transitive-feature/toolchain evidence in every approved package tuple. | [#1996](https://github.com/elong0527/yamaa/issues/1996) |
+| B13 | Canonical Cargo locking, unchanged packaged workspace membership including build.rs and locked builds pass the audited full main run. Renew transitive-feature/toolchain and archive evidence on the final release revision. | [#1996](https://github.com/elong0527/yamaa/issues/1996) |
 | B14 | Policy resolved: only packaging-tool checksum fields in python/uv.lock, rust/Cargo.lock and unchanged staged copies are allowed. Runtime/contract/cache/resource identity digests remain prohibited. Build evidence belongs to B13. | [#1996](https://github.com/elong0527/yamaa/issues/1996) |
-| B15 | Complete support matrix is approved. #2000 is merged and its dispatched Windows R lane passes; full PR-head and combined-main runs are still incomplete at this assessment. Final all-lane release qualification remains open. | [#1996](https://github.com/elong0527/yamaa/issues/1996) |
+| B15 | All approved installed routes and strict Windows R CMD check pass full main run 38394553441. Its audit passes 97 evidence checks. Remaining report-only public failures and final release qualification remain open. | [#1996](https://github.com/elong0527/yamaa/issues/1996) |
 | B16 | Boundary probes cover ownership/interruption/reentrancy/repeated use. Repeat those contracts through the final installed public facade, including failures and expired/mismatched handles. | [#1991](https://github.com/elong0527/yamaa/issues/1991) |
-| B17 | Representative lookup, aggregate, window, callback and producer measurements at 1k/10k/100k rows are approved. PR #2003 is an open collector candidate; complete truth, comparable baselines, raw cold/warm samples, phase attribution and memory evidence remain. | [#1998](https://github.com/elong0527/yamaa/issues/1998) |
+| B17 | Independent scalable workload generation and the installed collector are merged (#2003). Full collection, comparable baselines, phase/callback attribution and all-platform memory evidence remain incomplete. | [#1998](https://github.com/elong0527/yamaa/issues/1998) |
 | B18 | Select numeric budgets after actual B17 measurements. Capacity refusals and unavailable metrics are not accepted timing/memory samples. | [#1973](https://github.com/elong0527/yamaa/issues/1973) |
-| B19 | Write the concrete transition, release/rollback and evaluator-removal plan. Approve only after all entry criteria pass; keep the reference until then. Removal implementation is #1994. | [#1999](https://github.com/elong0527/yamaa/issues/1999) |
+| B19 | The concrete transition/rollback/removal plan is merged (#2027). Approval awaits its complete entry gates, budgets and rollback rehearsal; the reference remains present. | [#1999](https://github.com/elong0527/yamaa/issues/1999) |
 
 ## API and final audit
 
@@ -51,7 +51,7 @@ dispositions; `python rust/tools/check_release_api.py` rejects source drift.
 qualify attributes, signatures, result operations and retained helpers outside
 the checkout. The inventory guard does not prove those behaviors.
 
-#1997 must audit the exact source revision/parents, every required lane, package
+#1997 now automates audits of the exact source revision/parents, every required lane, package
 bytes, runtime/image/toolchain versions, numerical comparison and public/producer
 reports. Missing, failed and unexercised tuples stay explicit. PR sampling is
 feedback; full dispatched and main evidence supply qualification.
