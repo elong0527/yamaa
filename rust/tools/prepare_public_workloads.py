@@ -461,7 +461,8 @@ def producer(case, rows, depth):
     )
     spec["base"] = "LEFT"
     spec["intermediates"] = [
-        {"id": "RIGHT_SELECTED", "dataset": "RIGHT", "no_match": None}
+        {"id": "RIGHT_SELECTED", "dataset": "RIGHT",
+         "key": {"ID": "ID"}, "order_by": ["RIGHT.ID"], "keep": "first", "no_match": None}
     ]
     spec["output"] = {"path": "out.csv", "columns": ["ID", "VALUE"], "decimals": 2}
     case.document("spec.yaml", spec)

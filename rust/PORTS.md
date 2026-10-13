@@ -150,6 +150,42 @@ in place so an outer panic boundary can preserve completed observations without
 reopening or reparsing input. An interrupted attempt remains explicitly
 incomplete until the adapter maps its boundary failure.
 
+Ordinary named selections without derived materialization charge the choices
+cache for one lookup and, on a miss, one insertion search plus three new typed
+fields. No prior entries or donor values/text are copied into a choice. The
+tuple comparison admits its identity tag, identity value and intermediate index.
+The pinned Rust 1.90 B-tree has eleven keys per node, at least five keys/six edges
+in a non-root node, and a linear node search: see its
+[node layout](https://github.com/rust-lang/rust/blob/1.90.0/library/alloc/src/collections/btree/node.rs)
+and [search](https://github.com/rust-lang/rust/blob/1.90.0/library/alloc/src/collections/btree/search.rs).
+Twelve comparisons at each of `1 + ceil(log6(max(entries, 1)))` rounded levels
+bound each search, including the root and unsuccessful searches. Thus each new
+ordinary choice consumes at least 75 logical work units. Existing identity,
+key-cell, string and selected-value admission remains cumulative. Expression
+keys and all derived contexts retain their prior linear cache admission;
+current-dependent materialized schema/text retention needs a separate guard.
+
+The ordinary cache's held storage is bounded separately from work. On the
+qualified 64-bit Rust 1.90 hosts, the actual typed choice entry is 40 bytes and
+the string/bucket entry is 48 bytes. Including unused node slots and all twelve
+internal edges, conservative node sizes are respectively 552 and 640 bytes;
+numeric-key/vector or numeric-key/index maps need at most 464 bytes per node.
+With `N(n) = 1 + floor(n/5)`, a tree with `n` entries has at most `N(n)` nodes,
+including an allocated empty root. For ordinary-only attempts, let `C` be
+choices, `E` eligibility entries, `I` indexes, `G` retained distinct string
+groups, and `R` the sum of input-row capacities of held eligibility vectors.
+Let `W`, `K`, and `T` be existing work-cell, key-cell, and scalar-text limits.
+Then `C <= floor(W/75)`, `I <= floor(K/128)`, `G <= K`, and
+`R <= min(W, E * source_rows)`; `E` also cannot exceed admitted intermediate
+declarations. Index bucket capacities hold at most `2*K` coordinates, and
+copied key strings at most `T` bytes. A conservative requested-storage bound is
+`104 + 552*N(C) + 464*N(E) + 8*R + 464*N(I) + 640*(I + floor(G/5)) + 16*K + T`
+bytes. It includes map metadata, unused node capacity, string storage and row
+coordinate capacity. Allocator metadata/rounding and other retained execution
+objects belong to measured process RSS, not this logical cache bound. SELF
+invalidation still charges the actual linear visit to held entries. No quota
+is increased by this accounting change.
+
 Core owns pure CSV profile admission, declared type admission/conversion, and
 their closed failure causes and diagnostic context. Its immutable typed rows own
 normalized values independently of source bytes and declarations. The CSV adapter
