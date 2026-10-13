@@ -2120,7 +2120,7 @@ local({
       identical(rawfile(file.path(root,"case-predicate-history",name,"expected.csv")),
         charToRaw(disposition$historical_csv)))
   }
-  for (label in c("source-selection","source-filter-scope")) {
+  for (label in c("source-selection","source-filter-scope","source-filter-mixed")) {
   source(file.path(root,paste0(label,"-truth.R")),local=TRUE)
   for (name in names(source_selection_truth)) for (attempt in seq_len(2L)) {
     truth <- source_selection_truth[[name]]

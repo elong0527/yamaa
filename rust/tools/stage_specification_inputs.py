@@ -574,6 +574,7 @@ def stage(destination: Path):
     stage_decode_replay(destination)
     stage_source_selection_truth(destination)
     stage_source_selection_truth(destination, "source_filter_scope", "source-filter-scope")
+    stage_source_selection_truth(destination, "source_filter_mixed", "source-filter-mixed")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv", destination / "inheritance-preparation.tsv")
     # Preserve historical reports and stage only approved citation dispositions separately.
     with (destination / "inheritance-preparation.tsv").open(encoding="ascii", newline="") as stream:

@@ -170,3 +170,8 @@ fn every_source_selection_case_keeps_exact_types_diagnostics_counts_and_saved_by
 fn group_key_filters_have_complete_normative_findings_and_record_controls() {
     verify_truth(include_str!("fixtures/source_filter_scope.json"));
 }
+
+#[test]
+fn mixed_grouped_and_record_templates_preserve_only_shared_group_key_scalars() {
+    verify_truth(include_str!("fixtures/source_filter_mixed.json"));
+}
