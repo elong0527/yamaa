@@ -1,68 +1,52 @@
-# Engine migration compatibility
+# Shared-engine compatibility
 
-This is the compatibility inventory for [#1585](https://github.com/elong0527/yamaa/issues/1585).
-The Python implementation remains the default and reference during preparation.
-The rules and independently reviewed fixtures define semantics; an implementation
-disagreement requires investigation rather than automatic golden regeneration.
+[Maintainer decisions](../rust/planning/maintainer-decisions.md) define the
+first-release scope. Domain/check/Define are owned by the shared Rust engine;
+Python and R convert host arguments and copied result views. The independently
+reviewed rules and fixtures define semantics. A disagreement requires a repair
+or explicit reviewed disposition, never regenerated expected output.
 
-## Preserved interfaces
-
-| Surface | Required behavior |
+| Retained surface | Required behavior |
 | --- | --- |
-| `yamaa.yamaa_domain` | Explicit schema, project and data roots; optional project configuration and study document; one cached workflow execution. |
-| `DomainRun` | `spec`, declaration-ordered `inputs` and `input` alias, Polars `output`, `issues`, warning and verification logs; returned frames are independent copies. Failed runs have no accepted output. |
-| `DomainRun.save` / `DomainRunError` | Explicit publication only, output gates, requested transport extension, atomic replacement, and structured issues on unsuccessful runs. |
-| `yamaa.domain` / `yamaa.check` with `environment=` | Shared original-file preparation, static diagnostics without code/data, fresh lock verification and called-function tests before each build, retained issues/output and explicit publication. The superseded `functions` runner, artifact resolver and activation cache are retired under #1757. |
-| `ExpressionDispatcher` | Caller-supplied supported-operation registry and nested dispatch. An unsupported extension must be reported before execution, never silently ignored or retried with another backend. |
-| `ExecutionHooks` | Column, key, dataset and output hooks; existing three-argument verification hooks and records-aware hooks. |
-| `specification.load_specification` | Strict current-schema validation, normalized models and portable diagnostic paths. Python model compatibility must be decided before replacing exposed objects with Rust wrappers. |
-| ODM and submission helpers | Preserve `iter_odm_records`, `read_odm`, `write_odm_parquet`, and `generate_study_document`. XML/JSON rendering can remain in adapters. |
+| Python `domain` / R `yamaa_domain` | Original-file preparation, one ordered workflow, declared host functions/terminology, copied output/issues/logs and explicit held-byte Save. |
+| Python `check` / R `yamaa_check` | Preparation/static diagnostic issues only; no study data or project-code execution. |
+| Python `define` / R `yamaa_define` | Fixed-time environment submission rendering, complete validation before Save, ordered Dataset-JSON/XML publication. |
+| Package version | Python `__version__` and R `packageVersion("yamaa")` identify the installed distribution. Core metadata stays private qualification evidence. |
+| Python `read_odm` / `write_odm_parquet` | Fixed-schema ODM XML/TAR I/O and bounded atomic Parquet writing, independent of reference semantics. |
+| Style CLI | `python -m yamaa.style`; private implementation with packaged field order and shared admission/edit proof. |
 
-Internal planner and evaluator classes are migration seams, not a commitment to
-reproduce the same internal object graph in Rust. Existing tests remain valuable
-even when their implementation-specific setup changes.
+The approved result/error contracts retain owned views, full-range signed integer
+values, lossless NUL text, ordinary temporal host types, interruptions/reentrancy,
+verification/warning logs and repeated use. Semantic fields, identifier names,
+row/column/node order, missingness, exact scalar bits, diagnostics, handler and
+callback counts/order and resource capture observations remain qualified.
+CSV compares exact bytes and Parquet compares logical fields/types/rows/nulls and
+values. Reporting precision cannot hide changes to source or prepublication tables.
 
-## Explicit behavior improvements
+Legacy Python `yamaa_domain`/`DomainRun`, exposed planner/evaluator/model/schema/IO
+and resolved/provenance APIs, and the old submission generator retire at qualified
+cutover. The old R `cdiscbuilder` semantic/SQL evaluator, clinical helpers,
+submission extensions and `parse_odm_to_long_df` retire under the approved scope.
+They are not separate APIs translated into the current package. See the
+[Python migration guide](README.md#migration-from-the-reference-api) and
+[R assertion/removal inventory](../rust/planning/r-package-cutover.md).
 
-Preparation fixes workflow-wide function activation: a function used only by a
-producer must work through the public runner just as it does through benchmark
-execution. Preparation also exposes a retained failure verification log through
-`DomainRun.verification_log`; doing so does not make failed output publishable.
-Each improvement needs a focused regression, separately from behavior-preserving
-extraction. Numeric rounding policy changes are outside this cleanup.
+There is one locked release per host and no public backend selector or fallback.
+Project functions use ordinary packages in the declared uv/renv environment;
+activation is checked freshly before every build. Resource snapshots retain bytes
+and compare them directly. Runtime artifacts are pinned by
+`runtime.artifact.reference`, with no content digest identity.
 
-## R compatibility
+Shared numeric operations use the approved
+[PortableLibmV1 policy](../rust/planning/1740-math-decision.md). Historical
+EXP/LN/POWER bits and dependent predicates/conversions/output can differ; the
+release does not promise historical bit compatibility or universal accuracy.
 
-The approved R surface is `yamaa_domain`, `yamaa_check`, `yamaa_define`,
-package version metadata and lossless public result representations. The old
-`cdiscbuilder` SQL/semantic evaluator, clinical helper functions, submission
-extension APIs and `parse_odm_to_long_df` retire at qualified cutover. They are
-not translated into the current schema's public surface. The preceding legacy
-inventory is historical; [maintainer decisions](../rust/planning/maintainer-decisions.md)
-and [the transition plan](../rust/planning/transition.md) govern the release.
-
-The shared grammar documents now replay directly through typed Rust APIs,
-preserving exact shapes, identifier collection and closed vocabulary boundaries.
-Installed R public grammar checks run from the staged source package, and public
-benchmark conformance compares retained outputs with independent committed truth
-on every supported R platform. These are separate evidence levels: parser replay
-alone does not establish domain execution parity. Public integer and NUL-text
-vectors retain their approved lossless representations.
-
-## Migration checks
-
-Preserve types, values, row/column order, missingness, diagnostics, handler counts,
-evaluated verification records and callback order/counts. Compare exact CSV bytes
-and logical Parquet data. Check source and prepublication tables as well as final
-artifacts so reporting precision cannot hide a change to dependent calculations.
-
-Reports must identify host language and engine backend separately. Select a
-backend before a run has side effects; never fall back after invoking callbacks.
-Unsupported coverage is explicit, and reference reports are observations rather
-than replacements for independently committed expected artifacts.
-
-Public environment functions use the ordinary packages installed in the uv/renv
-locked host. yamaa does not resolve artifacts or cache activation; every build
-repeats called-function tests. Resource snapshots compare held bytes directly.
-Keep AGENTS.md unchanged: only the existing `python/uv.lock` carries tool hashes;
-do not introduce content hashes or new digest-bearing locks during migration.
+The complete public ratchet and installed matrix establish active language/API
+coverage. Typed core grammar replay separately preserves exact syntax shapes,
+identifier sets and closed vocabulary. Complete M1 public report comparisons use
+unchanged committed authored truth, retain actual installed owners and saved
+bytes, and import no reference evaluator. Component evidence does not substitute
+for a fresh installed tuple. Reference source artifacts remain until the
+[transition gates](../rust/planning/transition.md) pass and the removal sequence
+is approved; preparation alone supplies no release approval.
