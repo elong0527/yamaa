@@ -829,6 +829,21 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
             "range min exceeds max",
         ),
         (
+            "int",
+            List(vec![]),
+            List(vec![Map(vec![(
+                "row_count",
+                Map(vec![
+                    ("min", Scalar(N::Integer("1".into()))),
+                    ("group_by", List(vec![Text("ID"), Text("ID")])),
+                ]),
+            )])]),
+            "invalid_declaration",
+            "REQ-0403",
+            "verifications[0].row_count",
+            "row_count group_by repeats a column",
+        ),
+        (
             "str",
             List(vec![Map(vec![(
                 "max_length",

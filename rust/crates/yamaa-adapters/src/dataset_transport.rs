@@ -1464,6 +1464,7 @@ mod codelist_protocol_tests {
             }],
             inventory: None,
 
+            row_count: None,
             codelist: Some(CodelistObservation {
                 id: "SEX".into(),
                 values: vec![Value::Str("x\0🙂".into())],
@@ -1487,6 +1488,7 @@ mod codelist_protocol_tests {
             codelist: None,
             inventory: None,
 
+            row_count: None,
             code: yamaa_core::diagnostic::ConditionCode::VerificationAllowedValuesFailed,
             ..record
         };

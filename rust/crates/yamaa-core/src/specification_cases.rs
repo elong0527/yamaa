@@ -67,8 +67,13 @@ pub(super) fn prepare(
         return Err(PrepareError::Limit("case_depth"));
     }
     let items = sequence(d, node)?;
-    if items.is_empty() || items.len() > 1024 {
-        return Err(unsupported(path, "case_shape"));
+    if items.len() > 1024 {
+        return Err(PrepareError::Limit("case_branches"));
+    }
+    // The schema owns REQ-0339 shape failures. These branches defend the
+    // normalized-document contract rather than declare a language subset.
+    if items.is_empty() {
+        return Err(PrepareError::Internal);
     }
     let mut branches = Vec::new();
     for (index, &item) in items.iter().enumerate() {
@@ -79,7 +84,7 @@ pub(super) fn prepare(
                 || d.field(item, "when").is_some()
                 || d.field(item, "then").is_some()
             {
-                return Err(unsupported(&prefix, "case_shape"));
+                return Err(PrepareError::Internal);
             }
             (None, value, format!("{prefix}.otherwise"))
         } else {
@@ -244,6 +249,7 @@ pub(super) fn bind(
                 None
             }
             Operation::Literal(value) => Some(Expression::Literal(value.clone())),
+            Operation::Window(window) => window.bind(catalog, edges, findings)?,
             Operation::Flag(operation) => flags::bind(
                 operation,
                 column,

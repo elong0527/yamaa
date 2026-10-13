@@ -777,5 +777,43 @@ output: {path: output.csv, columns: [ID, N, VALUE]}
         self.assertTrue(any(row["condition"] == "invalid_derive_step" and row["requirement"] == "REQ-1242" for row in issues), issues)
 
 
+    def test_row_callbacks_join_each_driver_by_completed_keys(self):
+        case = self.study("negative-function-contract")
+        (case / "a.csv").write_text("ID,N\n1,10\n2,20\n3,30\n")
+        (case / "b.csv").write_text("ID,N\n2,40\n1,50\n")
+        for driver, other, rows, csv in (
+            ("SRC", "B", [(1, 50.0), (2, 40.0), (3, None)], b"ID,VALUE\n1,50\n2,40\n3,\n"),
+            ("B", "SRC", [(2, 20.0), (1, 10.0)], b"ID,VALUE\n2,20\n1,10\n"),
+        ):
+            spec = f"""schema_version: '1.0'
+domain: TEST
+input:
+  SRC: {{path: a.csv, types: {{ID: int, N: float}}}}
+  B: {{path: b.csv, types: {{ID: int, N: float}}}}
+base: SRC
+keys: [ID]
+columns:
+  - {{name: ID, type: int}}
+  - {{name: VALUE, type: float}}
+rows:
+  - id: records
+    dataset: {driver}
+    derivations:
+      ID: {driver}.ID
+      VALUE: {{function: {{name: project_value, args: {{x: {other}.N}}}}}}
+output: {{path: output.csv, columns: [ID, VALUE]}}
+"""
+            (case / "spec.yaml").write_text(spec)
+            result = yamaa.domain("spec.yaml", environment="python/environment.yaml")
+            self.assertTrue(result.issues.is_empty(), result.issues)
+            self.assertEqual(result.output.rows(), rows)
+            activation = self.report(result)["activation"]
+            self.assertEqual([row["function"] for row in activation["bindings"]], ["project_value"])
+            self.assertTrue(result.save())
+            self.assertEqual((case / "output.csv").read_bytes(), csv)
+            self.assertTrue(result.save())
+            self.assertEqual(self.report(result)["activation"], activation)
+
+
 if __name__ == "__main__":
     unittest.main()

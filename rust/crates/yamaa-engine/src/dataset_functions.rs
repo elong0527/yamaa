@@ -89,6 +89,21 @@ fn supplied<T: TableAccess + ?Sized>(
             supplied.insert(argument.name.clone(), value);
             continue;
         }
+        if let FunctionInput::Read(Read::Joined(read)) = &argument.input {
+            let value = joined::read(
+                read,
+                context.assignment,
+                candidate,
+                context.plan,
+                context.row,
+                state,
+            )?;
+            if let Value::Str(text) = &value {
+                state.budget.scalar_text(text.len())?;
+            }
+            supplied.insert(argument.name.clone(), value);
+            continue;
+        }
         if let FunctionInput::Read(Read::Intermediate { index, column }) = argument.input {
             let value = intermediates::read(
                 index,
@@ -107,8 +122,8 @@ fn supplied<T: TableAccess + ?Sized>(
             continue;
         }
         let value = match &argument.input {
-            FunctionInput::Read(Read::Intermediate { .. }) => {
-                unreachable!("selected input resolved above")
+            FunctionInput::Read(Read::Intermediate { .. } | Read::Joined(_)) => {
+                unreachable!("selected or joined input resolved above")
             }
             FunctionInput::Collect { .. } => unreachable!("collected input was resolved above"),
             FunctionInput::Literal(value) => ValueRef::from(value),

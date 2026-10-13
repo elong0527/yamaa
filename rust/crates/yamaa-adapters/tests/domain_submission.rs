@@ -355,6 +355,7 @@ fn wide_length_projection_borrows_the_exact_bound_from_compiled_metadata() {
         }],
         codelist: None,
         inventory: None,
+        row_count: None,
     }];
     let projected = yamaa_engine::verification_diagnostics::project(
         compiled,

@@ -19,10 +19,48 @@ struct Declaration {
     no_match: Option<Value>,
     range: Option<intermediate_range::Declaration>,
     columns: Option<Vec<String>>,
+    driver_prohibited: Vec<String>,
 }
 #[derive(Debug, Default)]
 pub(super) struct Declarations(Vec<Declaration>);
 impl Declarations {
+    pub(super) fn driver_findings(
+        &self,
+        name: &str,
+        path: &str,
+        item: &Intermediate,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        let declaration = self
+            .0
+            .iter()
+            .find(|item| item.name == name)
+            .ok_or(BindError::Internal)?;
+        let mut prohibited = declaration.driver_prohibited.clone();
+        if item.source.is_self() {
+            prohibited.push("dataset".into());
+        }
+        if item
+            .filter
+            .as_ref()
+            .is_some_and(crate::dataset::RelationPredicate::correlated)
+        {
+            prohibited.push("filter".into());
+        }
+        if !prohibited.is_empty() {
+            let mut finding = LookupFinding::new(
+                path,
+                crate::diagnostic::ConditionCode::IntermediateDriverInvalid,
+            );
+            finding.text("intermediate", name);
+            finding.texts(
+                "fields",
+                &prohibited.iter().map(String::as_str).collect::<Vec<_>>(),
+            );
+            findings.push(BindFinding::Lookup(finding));
+        }
+        Ok(())
+    }
     pub fn is_self(&self, index: usize) -> bool {
         self.0
             .get(index)
@@ -265,6 +303,17 @@ impl Declarations {
                 .field(id, "no_match")
                 .map(|value| literal(d, value, &format!("{path}.no_match")))
                 .transpose()?;
+            let driver_prohibited = ["key", "between", "order_by", "keep", "no_match"]
+                .into_iter()
+                .filter(|name| {
+                    if *name == "no_match" {
+                        d.field(id, name).is_some()
+                    } else {
+                        present(d, id, name)
+                    }
+                })
+                .map(String::from)
+                .collect();
             result.0.push(Declaration {
                 name: name.into(),
                 path,
@@ -277,6 +326,7 @@ impl Declarations {
                 no_match,
                 range,
                 columns,
+                driver_prohibited,
             });
         }
         Ok(result)

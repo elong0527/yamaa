@@ -226,15 +226,32 @@ fn unknown_and_omitted_drivers_keep_model_preflight_and_exact_typed_context() {
     }
 }
 #[test]
-fn foreign_driver_defaults_and_grouped_named_reads_keep_explicit_pending_boundaries() {
-    let Err(PrepareError::Unsupported(features)) =
+fn foreign_driver_defaults_require_completed_keys_and_grouped_named_reads_keep_pending_boundary() {
+    let prepared =
         PreparedSpecification::prepare(&doc(false, [Some("SRC"), Some("DONOR")], false, "P.V"))
-    else {
-        panic!("distinct gate")
+            .unwrap();
+    let src = schema(&[("ID", T::Str), ("K", T::Str)]);
+    let donor = schema(&[("K", T::Str), ("V", T::Str)]);
+    let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &donor]) else {
+        panic!("a foreign default cannot bootstrap its own matching key")
     };
+    let diagnostics = findings
+        .iter()
+        .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
+        .collect::<Vec<_>>();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.definition().condition == "dependency_cycle"
+                && d.definition().requirement == Some("REQ-0072")
+                && d.spec_paths == ["columns.ID.derivation.source"]),
+        "{diagnostics:?}"
+    );
     assert_eq!(
-        (features[0].operation.as_str(), features[0].path.as_str()),
-        ("row_secondary_source", "columns.ID.derivation")
+        diagnostics[0].context["cycle"],
+        yamaa_core::diagnostic::ContextValue::Sequence(
+            vec![yamaa_core::diagnostic::ContextValue::Scalar(Value::Str("ID".into())); 2]
+        )
     );
     let Err(PrepareError::Unsupported(features)) =
         PreparedSpecification::prepare(&doc(false, [Some("SRC"), Some("SRC")], true, "P.V"))

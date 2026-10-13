@@ -111,6 +111,8 @@ impl<S> BoundFunction<S> {
     pub(super) fn validate(
         &self,
         source: &TableSchema,
+        secondary: &[SecondarySource],
+        output: &TableSchema,
         available: &[bool],
         mode: &RowMode,
     ) -> Result<(), PlanError> {
@@ -118,6 +120,9 @@ impl<S> BoundFunction<S> {
             match &argument.input {
                 // The enclosing plan validates selected relations and key dependencies.
                 FunctionInput::Read(Read::Intermediate { .. }) => {}
+                FunctionInput::Read(Read::Joined(read)) => {
+                    read.validate(source, secondary, output, available)?
+                }
                 FunctionInput::Read(Read::Source(column)) => {
                     if *column >= source.columns().len() {
                         return Err(PlanError::InvalidSource);

@@ -1075,3 +1075,81 @@ fn zero_sized_host_failures_remain_opaque_and_never_accept_address_classificatio
     ));
     assert_eq!(study.capture_reads(), 0);
 }
+
+#[test]
+fn row_callbacks_join_primary_or_secondary_records_by_completed_keys() {
+    struct TwoSources {
+        trace: Trace,
+        reads: usize,
+    }
+    impl SourcePort for TwoSources {
+        type Error = std::convert::Infallible;
+        fn inspect(&mut self, _: &SourceDeclaration) -> Result<(), Self::Error> {
+            self.trace.borrow_mut().push("inspect");
+            Ok(())
+        }
+        fn capture_reads(&self) -> usize {
+            self.reads
+        }
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            _: usize,
+        ) -> Result<Arc<[u8]>, Self::Error> {
+            self.reads += 1;
+            self.trace.borrow_mut().push("capture");
+            Ok(Arc::from(match source.name.as_str() {
+                "SRC" => b"ID,N\n1,10\n2,20\n3,30\n".as_slice(),
+                "B" => b"ID,N\n2,40\n1,50\n".as_slice(),
+                _ => panic!("known source"),
+            }))
+        }
+    }
+    for (driver, other, expected, live) in [
+        (
+            "SRC",
+            "B",
+            vec![
+                vec![Value::Int(1), Value::Int(50)],
+                vec![Value::Int(2), Value::Int(40)],
+                vec![Value::Int(3), Value::Missing],
+            ],
+            vec![50, 40],
+        ),
+        (
+            "B",
+            "SRC",
+            vec![
+                vec![Value::Int(2), Value::Int(20)],
+                vec![Value::Int(1), Value::Int(10)],
+            ],
+            vec![20, 10],
+        ),
+    ] {
+        let raw = format!("schema_version: '1.0'\ndomain: TEST\ninput:\n  SRC: {{path: a.csv, types: {{ID: int, N: int}}}}\n  B: {{path: b.csv, types: {{ID: int, N: int}}}}\nbase: SRC\nkeys: [ID]\ncolumns:\n  - {{name: ID, type: int}}\n  - {{name: VALUE, type: int}}\nrows:\n  - id: records\n    dataset: {driver}\n    derivations:\n      ID: {driver}.ID\n      VALUE: {{function: {{name: id, args: {{x: {other}.N}}}}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n");
+        let document = schemas::domain_schema()
+            .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
+            .unwrap();
+        let run = PreparedRun::prepare(document, environment())
+            .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
+        let (mut activation, _) = ports();
+        let mut study = TwoSources {
+            trace: Rc::clone(&activation.trace),
+            reads: 0,
+        };
+        let attempt = run.execute_with_ports(&mut activation, &mut study);
+        let entered = attempt
+            .dataset
+            .result
+            .unwrap_or_else(|error| panic!("{error:?}"));
+        let result = entered.result.unwrap_or_else(|error| panic!("{error:?}"));
+        assert_eq!(result.dataset.rows(), expected.as_slice());
+        let mut values = vec![7, i64::MIN];
+        values.extend(live);
+        assert_eq!(activation.values, values);
+        assert_eq!(
+            &activation.trace.borrow()[..4],
+            &["lock", "bind", "case", "case"]
+        );
+    }
+}

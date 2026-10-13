@@ -5,6 +5,7 @@ use crate::{
     dataset::{OrderTerm, Window, WindowKind},
     predicate_compiler,
 };
+use alloc::collections::BTreeSet;
 
 #[derive(Clone, Debug)]
 enum Kind {
@@ -109,12 +110,17 @@ impl Declaration {
                 let N::Integer(value) = &d.nodes()[field(d, payload, "offset")?] else {
                     return Err(PrepareError::Internal);
                 };
-                let offset = value.parse().map_err(|_| {
-                    PrepareError::Unsupported(vec![UnsupportedFeature {
-                        operation: "wide_window_offset".into(),
-                        path: format!("{path}.offset"),
-                    }])
-                })?;
+                // Execution admits at most i64::MAX context rows. Every larger
+                // magnitude is therefore observationally an absent neighbor;
+                // its signed endpoint preserves that behavior without coercing
+                // the authored arbitrary-width integer through binary64.
+                let offset = value.parse().unwrap_or_else(|_| {
+                    if value.starts_with('-') {
+                        i64::MIN
+                    } else {
+                        i64::MAX
+                    }
+                });
                 Kind::RowValue {
                     source: name("source")?,
                     offset,
@@ -202,30 +208,6 @@ impl Declaration {
                 filter = Some((expression.into(), compiled));
             }
         }
-        let mut names = groups
-            .iter()
-            .map(String::as_str)
-            .chain(order.iter().map(|term| term.0.as_str()))
-            .collect::<Vec<_>>();
-        match &kind {
-            Kind::RowValue { source, .. }
-            | Kind::PreviousNonMissing(source)
-            | Kind::Locf(source) => names.push(source),
-            Kind::BaselineFlag {
-                date,
-                reference_date,
-            } => {
-                names.push(date);
-                names.push(reference_date);
-            }
-            _ => {}
-        }
-        if let Some((_, Ok(plan))) = &filter {
-            names.extend(plan.identifiers());
-        }
-        if names.iter().any(|name| name.contains('.')) {
-            reject(extra, "qualified_window_reference", path.into());
-        }
         Ok(Self {
             kind,
             operation: op.into(),
@@ -240,7 +222,7 @@ impl Declaration {
         catalog: &Catalog,
         edges: &mut Vec<usize>,
         findings: &mut Vec<BindFinding>,
-    ) -> Result<Option<Window>, BindError> {
+    ) -> Result<Option<crate::dataset::Expression>, BindError> {
         self.bind_available(catalog, None, edges, findings)
     }
     pub(super) fn bind_available(
@@ -249,7 +231,7 @@ impl Declaration {
         available: Option<&[usize]>,
         edges: &mut Vec<usize>,
         findings: &mut Vec<BindFinding>,
-    ) -> Result<Option<Window>, BindError> {
+    ) -> Result<Option<crate::dataset::Expression>, BindError> {
         let start = findings.len();
         if matches!(self.kind, Kind::RowValue { offset: 0, .. }) {
             findings.push(BindFinding::Window(WindowFinding::ZeroOffset {
@@ -289,7 +271,32 @@ impl Declaration {
             Some((_, Ok(plan))) => Some(plan),
             None => None,
         };
+        let mut sources = Vec::new();
         let mut resolve = |name: &str, path: String| -> Result<usize, BindError> {
+            if name.contains('.') {
+                match catalog.bind(name).map_err(BindError::Catalog)? {
+                    Some(reference_binding::Binding::Dataset {
+                        dataset: 0, field, ..
+                    }) => {
+                        let position =
+                            match sources.iter().position(|(existing, _)| existing == name) {
+                                Some(p) => p,
+                                None => {
+                                    sources.push((name.into(), field));
+                                    sources.len() - 1
+                                }
+                            };
+                        return Ok(catalog.output_width() + position);
+                    }
+                    _ => {
+                        findings.push(BindFinding::UnknownReference {
+                            path,
+                            name: name.into(),
+                        });
+                        return Ok(0);
+                    }
+                }
+            }
             if let Some(finding) = catalog
                 .validate_output(name, None, available, &[0])
                 .map_err(BindError::Catalog)?
@@ -348,7 +355,8 @@ impl Declaration {
         }
         let mut bindings = Vec::new();
         if let Some(plan) = filter {
-            for name in plan.identifiers() {
+            let names: BTreeSet<_> = plan.identifiers().into_iter().collect();
+            for name in names {
                 bindings.push(Binding {
                     name: name.into(),
                     read: Read::Column(resolve(name, plan.spec_path().into())?),
@@ -362,11 +370,19 @@ impl Declaration {
             .map(|plan| BoundPredicate::new(plan.clone(), bindings))
             .transpose()
             .map_err(BindError::InvalidPredicateBinding)?;
-        Ok(Some(Window {
+        let window = Window {
             kind,
             group_by,
             order_by,
             filter,
+        };
+        Ok(Some(if sources.is_empty() {
+            crate::dataset::Expression::Window(window)
+        } else {
+            crate::dataset::Expression::ContextWindow(crate::dataset::ContextWindow {
+                window,
+                sources,
+            })
         }))
     }
 }

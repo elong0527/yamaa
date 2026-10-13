@@ -79,7 +79,7 @@ pub(super) fn common_driver<'a>(
 ) -> Result<&'a str, PrepareError> {
     let rows = sequence(d, field(d, d.root(), "rows")?)?;
     let mut common = None;
-    for (index, &row) in rows.iter().enumerate() {
+    for (row_index, &row) in rows.iter().enumerate() {
         let selected = d
             .field(row, "dataset")
             .filter(|&id| !matches!(d.nodes()[id], N::Null));
@@ -89,15 +89,50 @@ pub(super) fn common_driver<'a>(
             // Invalid/missing names have already failed model preflight.
             None => return Err(PrepareError::Internal),
         };
-        if !inputs
+        let name = if inputs
             .iter()
             .any(|&(id, _)| text(d, id).is_ok_and(|input| input == name))
         {
-            return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                operation: "row_driver".into(),
-                path: format!("rows[{index}].dataset"),
-            }]));
-        }
+            name
+        } else {
+            let declarations = sequence(d, field(d, d.root(), "intermediates")?)?;
+            let declaration = declarations
+                .iter()
+                .find(|&&item| {
+                    d.field(item, "id")
+                        .is_some_and(|id| text(d, id).is_ok_and(|id| id == name))
+                })
+                .ok_or(PrepareError::Internal)?;
+            let selected = text(d, field(d, *declaration, "dataset")?)?;
+            let mut prohibited = ["key", "between", "order_by", "keep", "no_match"]
+                .into_iter()
+                .filter(|field| {
+                    if *field == "no_match" {
+                        d.field(*declaration, field).is_some()
+                    } else {
+                        present(d, *declaration, field)
+                    }
+                })
+                .collect::<Vec<_>>();
+            if !inputs
+                .iter()
+                .any(|&(id, _)| text(d, id).is_ok_and(|name| name == selected))
+            {
+                prohibited.push("dataset");
+            }
+            if !prohibited.is_empty() {
+                let mut finding = LookupFinding::new(
+                    &format!("rows[{row_index}].dataset"),
+                    crate::diagnostic::ConditionCode::IntermediateDriverInvalid,
+                );
+                finding.text("intermediate", name);
+                finding.texts("fields", &prohibited);
+                return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
+                    finding.diagnostic(),
+                )]));
+            }
+            selected
+        };
         common.get_or_insert(name);
     }
     common.ok_or(PrepareError::Internal)

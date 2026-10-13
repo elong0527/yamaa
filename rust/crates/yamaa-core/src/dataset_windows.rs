@@ -86,3 +86,61 @@ impl Window {
         Ok(())
     }
 }
+
+/// Window operands read either completed output columns or the candidate's original
+/// driver membership. Source operands occupy typed virtual slots after output fields.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContextWindow {
+    pub window: Window,
+    pub sources: Vec<(alloc::string::String, usize)>,
+}
+impl ContextWindow {
+    pub fn schema(
+        &self,
+        output: &TableSchema,
+        source: &TableSchema,
+    ) -> Result<TableSchema, PlanError> {
+        let mut fields = output.columns().to_vec();
+        for (name, column) in &self.sources {
+            let kind = source
+                .columns()
+                .get(*column)
+                .ok_or(PlanError::InvalidWindow)?
+                .kind;
+            fields.push(crate::table::Column {
+                name: name.clone(),
+                kind,
+            });
+        }
+        TableSchema::new(fields).map_err(|_| PlanError::InvalidWindow)
+    }
+    pub(super) fn validate(
+        &self,
+        available: &[bool],
+        output: &TableSchema,
+        source: &TableSchema,
+        mode: &RowMode,
+    ) -> Result<(), PlanError> {
+        if self.sources.is_empty() {
+            return Err(PlanError::InvalidWindow);
+        }
+        if let RowMode::Groups(groups) = mode {
+            if self.sources.iter().any(|(_, c)| !groups.contains(c)) {
+                return Err(PlanError::InvalidWindow);
+            }
+        }
+        let schema = self.schema(output, source)?;
+        let mut slots = available.to_vec();
+        slots.extend(core::iter::repeat_n(true, self.sources.len()));
+        self.window.validate(&slots, &schema)
+    }
+}
+impl Expression {
+    pub fn window(&self) -> Option<&Window> {
+        match self {
+            Self::Window(w) => Some(w),
+            Self::ContextWindow(w) => Some(&w.window),
+            _ => None,
+        }
+    }
+}

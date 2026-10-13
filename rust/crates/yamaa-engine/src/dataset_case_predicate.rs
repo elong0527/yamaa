@@ -75,6 +75,17 @@ impl<T: TableAccess + ?Sized> EvaluationContext for Context<'_, '_, T> {
             .expect("case names are admitted before execution");
         let binding = &self.predicate.bindings()[index];
         let owned = match binding.read {
+            Read::Joined(ref read) => Some(
+                joined::read(
+                    read,
+                    self.assignment,
+                    self.candidate,
+                    self.plan,
+                    self.row,
+                    self.state,
+                )
+                .map_err(ContextError::Resolution)?,
+            ),
             Read::Intermediate { index, column } => {
                 self.state
                     .budget
@@ -145,7 +156,9 @@ impl<T: TableAccess + ?Sized> EvaluationContext for Context<'_, '_, T> {
                 })?
             }
             Read::Column(column) => ValueRef::from(&self.candidate.values[column]),
-            Read::Intermediate { .. } => unreachable!("kept values were owned above"),
+            Read::Joined(_) | Read::Intermediate { .. } => {
+                unreachable!("kept/joined values were owned above")
+            }
         };
         let bytes = match value {
             ValueRef::Str(text) => text.len(),

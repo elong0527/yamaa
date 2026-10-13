@@ -68,6 +68,17 @@ impl<T: TableAccess + ?Sized> EvaluationContext for Context<'_, '_, T> {
             .expect("flag names are completely bound before execution");
         let read = &self.flag.bindings()[index].read;
         let owned = match read {
+            FlagRead::Read(Read::Joined(read)) => Some(
+                joined::read(
+                    read,
+                    self.assignment,
+                    self.candidate,
+                    self.plan,
+                    self.row,
+                    self.state,
+                )
+                .map_err(ContextError::Resolution)?,
+            ),
             FlagRead::Read(Read::Intermediate { index, column }) => {
                 self.state
                     .budget

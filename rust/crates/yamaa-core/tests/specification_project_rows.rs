@@ -664,7 +664,7 @@ fn cumulative_row_context_is_bounded_before_binding_or_activation() {
 }
 
 #[test]
-fn newly_supported_defaults_bind_in_row_scope_when_promoted_or_overridden() {
+fn column_windows_stay_global_and_scalar_row_defaults_remain_local() {
     for operation in ["row_number", "rank", "locf", "first_available"] {
         for overridden in [false, true] {
             let payload = if operation == "first_available" {
@@ -696,7 +696,25 @@ fn newly_supported_defaults_bind_in_row_scope_when_promoted_or_overridden() {
                 ],
                 vec![row("record", derivations, None)],
             );
-            let prepared = PreparedSpecification::prepare_with_project(&spec, &[]).unwrap();
+            let prepared = PreparedSpecification::prepare_with_project(&spec, &[]);
+            if operation != "first_available" {
+                let Err(PrepareError::Invalid(findings)) = prepared else {
+                    panic!("column windows stay in the column phase");
+                };
+                let condition = if overridden {
+                    "duplicate_derivation"
+                } else {
+                    "phase_boundary"
+                };
+                assert!(
+                    findings
+                        .iter()
+                        .any(|finding| finding.diagnostic().definition().condition == condition),
+                    "{findings:?}"
+                );
+                continue;
+            }
+            let prepared = prepared.unwrap();
             let plan = prepared.bind(&source()).unwrap();
             assert!(plan.columns().is_empty());
             assert_eq!(
@@ -714,7 +732,9 @@ fn newly_supported_defaults_bind_in_row_scope_when_promoted_or_overridden() {
                 assert_eq!(a.path, format!("columns.A.derivation.{operation}"));
                 assert!(matches!(
                     a.expression,
-                    Expression::Window(_) | Expression::FirstAvailable(_)
+                    Expression::Window(_)
+                        | Expression::ContextWindow(_)
+                        | Expression::FirstAvailable(_)
                 ));
             }
         }

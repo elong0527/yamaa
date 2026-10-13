@@ -246,7 +246,7 @@ fn key_grain_admission_sees_raw_reads_through_recursive_source_containers() {
 }
 
 #[test]
-fn whole_column_windows_cannot_be_hidden_inside_selected_case_branches() {
+fn nested_windows_admit_completed_dependencies_and_refuse_uncompleted_dependencies() {
     use yamaa_core::{
         bound_expression::{Binding, BoundPredicate, Read},
         dataset::{CaseBranch, OrderTerm, Window, WindowKind},
@@ -291,8 +291,25 @@ fn whole_column_windows_cannot_be_hidden_inside_selected_case_branches() {
             when: Some(predicate.clone()),
             assignment: Box::new(assign(1, nested)),
         }]);
-        assert_eq!(make(nested.clone()), Err(PlanError::InvalidWindow));
+        assert!(make(nested.clone()).is_ok());
     }
+    let unavailable = Expression::Case(vec![CaseBranch {
+        when: Some(predicate),
+        assignment: Box::new(assign(
+            1,
+            Expression::Window(Window {
+                kind: WindowKind::RowNumber,
+                group_by: vec![],
+                order_by: vec![OrderTerm {
+                    column: 1,
+                    descending: false,
+                    nulls_first: false,
+                }],
+                filter: None,
+            }),
+        )),
+    }]);
+    assert_eq!(make(unavailable), Err(PlanError::InvalidWindow));
 }
 
 fn verification(check: Check) -> Verification {

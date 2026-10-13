@@ -373,3 +373,30 @@ qualify_aggregate_callback <- function() {
   cat("public R aggregate callbacks preserve current-source types and kept record identity\n")
 }
 qualify_aggregate_callback()
+
+qualify_row_callback_joins <- function() {
+  previous <- getwd(); on.exit(setwd(previous))
+  work <- tempfile("row-callback-joins-"); dir.create(work); setwd(work); dir.create("r")
+  stopifnot(file.copy(file.path(root, "negative-function-contract", "r", c("environment.yaml", "renv.lock")), "r"))
+  writeLines(c("ID,N", "1,10", "2,20", "3,30"), "a.csv")
+  writeLines(c("ID,N", "2,40", "1,50"), "b.csv")
+  for (driver in c("SRC", "B")) {
+    other <- if (driver == "SRC") "B" else "SRC"
+    spec <- paste(c("schema_version: '1.0'", "domain: TEST", "input:",
+      "  SRC: {path: a.csv, types: {ID: int, N: float}}", "  B: {path: b.csv, types: {ID: int, N: float}}",
+      "base: SRC", "keys: [ID]", "columns:", "  - {name: ID, type: int}", "  - {name: VALUE, type: float}",
+      "rows:", "  - id: records", paste0("    dataset: ", driver), "    derivations:",
+      paste0("      ID: ", driver, ".ID"), paste0("      VALUE: {function: {name: project_value, args: {x: ", other, ".N}}}"),
+      "output: {path: output.csv, columns: [ID, VALUE]}"), collapse="\n")
+    writeLines(spec, "spec.yaml")
+    result <- yamaa_domain("spec.yaml", environment="r/environment.yaml")
+    expected_id <- if (driver == "SRC") c("1", "2", "3") else c("2", "1")
+    expected_value <- if (driver == "SRC") c(50, 40, NA_real_) else c(20, 10)
+    expected_csv <- if (driver == "SRC") "ID,VALUE\n1,50\n2,40\n3,\n" else "ID,VALUE\n2,20\n1,10\n"
+    stopifnot(nrow(result$issues) == 0L, identical(as.character(result$output$ID), expected_id),
+      identical(result$output$VALUE, expected_value), result$save(), result$save(),
+      identical(rawToChar(rawfile("output.csv")), expected_csv))
+  }
+  cat("public R row callbacks join primary and secondary source records by completed keys\n")
+}
+qualify_row_callback_joins()

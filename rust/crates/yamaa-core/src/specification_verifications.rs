@@ -2,7 +2,7 @@
 //! executes only after derivation and output keys; unsupported vocabulary is
 //! scanned across every declaration before any source request.
 use super::*;
-use crate::dataset::{Check, CountBoundError, RowCountBound, Verification};
+use crate::dataset::{Check, CountBoundError, RowCount, RowCountBound, Verification};
 use crate::{
     bound_expression::BoundPredicate,
     diagnostic::{ConditionCode, ContextValue, Diagnostic},
@@ -222,7 +222,17 @@ impl Verifications {
                 "max_length" if column.is_some() => &["max", "id", "severity"],
                 "matches" if column.is_some() => &["pattern", "id", "severity"],
                 "unique" | "all_or_none" => &["columns", "id", "severity"],
-                "row_count" => &["min", "max", "id", "severity"],
+                "row_count" => &[
+                    "min",
+                    "max",
+                    "min_fraction",
+                    "max_fraction",
+                    "filter",
+                    "when",
+                    "group_by",
+                    "id",
+                    "severity",
+                ],
                 "assert" => &["when", "require", "id", "severity"],
                 _ => {
                     reject(&mut extra, op, path);
@@ -264,8 +274,12 @@ impl Verifications {
                     }
                 }
             }
-            if op == "assert" {
-                for name in ["when", "require"] {
+            if op == "assert" || op == "row_count" {
+                for name in if op == "assert" {
+                    ["when", "require"]
+                } else {
+                    ["filter", "when"]
+                } {
                     if name == "require" || d.field(payload, name).is_some() {
                         predicates
                             .insert((index, name), predicate(d, payload, name, &path, output)?);
@@ -423,10 +437,44 @@ impl Verifications {
                 };
                 let min = bound("min")?;
                 let max = bound("max")?;
-                let reason = if min.is_none() && max.is_none() {
+                let fraction = |name| {
+                    d.field(payload, name)
+                        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                        .map(|id| match &d.nodes()[id] {
+                            N::Integer(n) => n.parse::<f64>().map_err(|_| PrepareError::Internal),
+                            N::Float(n) => Ok(*n),
+                            _ => Err(PrepareError::Internal),
+                        })
+                        .transpose()
+                };
+                let min_fraction = fraction("min_fraction")?;
+                let max_fraction = fraction("max_fraction")?;
+                for (field, bound) in [
+                    ("min_fraction", min_fraction),
+                    ("max_fraction", max_fraction),
+                ] {
+                    if bound.is_some_and(|n| !n.is_finite() || !(0.0..=1.0).contains(&n)) {
+                        result.deferred = invalid(
+                            format!("{path}.{field}"),
+                            ConditionCode::VerificationDeclarationRequired,
+                            "a row_count fraction is between 0 and 1".into(),
+                        );
+                        break;
+                    }
+                }
+                if result.deferred.is_some() {
+                    break;
+                }
+                let reason = if min.is_none()
+                    && max.is_none()
+                    && min_fraction.is_none()
+                    && max_fraction.is_none()
+                {
                     Some("row_count requires one bound")
                 } else if matches!((&min,&max),(Some(a),Some(b)) if a>b) {
                     Some("row_count min exceeds max")
+                } else if matches!((min_fraction,max_fraction),(Some(a),Some(b)) if a>b) {
+                    Some("row_count min_fraction exceeds max_fraction")
                 } else {
                     None
                 };
@@ -435,7 +483,83 @@ impl Verifications {
                         invalid(path, ConditionCode::VerificationBounds, reason.into());
                     break;
                 }
-                Check::WideRowCount { min, max }
+                let group_by = if let Some(groups) = d
+                    .field(payload, "group_by")
+                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                {
+                    let values = sequence(d, groups)?;
+                    if values.is_empty() {
+                        result.deferred = invalid(
+                            path,
+                            ConditionCode::VerificationGrouping,
+                            "group_by names at least one column".into(),
+                        );
+                        break;
+                    }
+                    let mut columns = Vec::new();
+                    for &id in values {
+                        let name = text(d, id)?;
+                        let Some(column) = output.columns().iter().position(|c| c.name == name)
+                        else {
+                            result.deferred = invalid(
+                                format!("{path}.group_by"),
+                                ConditionCode::VerificationDeclaredColumnUnknown,
+                                format!("unknown column {}", quote(name)?),
+                            );
+                            break;
+                        };
+                        if columns.contains(&column) {
+                            result.deferred = invalid(
+                                path.clone(),
+                                ConditionCode::VerificationGrouping,
+                                "row_count group_by repeats a column".into(),
+                            );
+                            break;
+                        }
+                        columns.push(column);
+                    }
+                    if result.deferred.is_some() {
+                        break;
+                    }
+                    Some(columns)
+                } else {
+                    None
+                };
+                let mut filter = None;
+                let mut when = None;
+                for name in ["filter", "when"] {
+                    if let Some(predicate) = predicates.remove(&(index, name)) {
+                        match predicate {
+                            Ok(p) if name == "filter" => filter = Some(p),
+                            Ok(p) => when = Some(p),
+                            Err(diagnostic) => {
+                                result.deferred = Some(DeclarationFinding::Diagnostic(diagnostic));
+                                break;
+                            }
+                        }
+                    }
+                }
+                if result.deferred.is_some() {
+                    break;
+                }
+                if group_by.is_none()
+                    && filter.is_none()
+                    && when.is_none()
+                    && min_fraction.is_none()
+                    && max_fraction.is_none()
+                {
+                    Check::WideRowCount { min, max }
+                } else {
+                    Check::ScopedRowCount(RowCount {
+                        min,
+                        max,
+                        min_fraction,
+                        max_fraction,
+                        group_by,
+                        filter,
+                        when,
+                    })
+                }
             };
             if d.field(payload, "severity")
                 .is_some_and(|id| matches!(&d.nodes()[id], N::Text(value) if value == "warning"))

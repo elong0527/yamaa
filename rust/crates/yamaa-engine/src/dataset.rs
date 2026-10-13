@@ -27,6 +27,8 @@ pub(crate) fn unavailable_functions<E>() -> impl FunctionPort<Error = E> {
 mod aggregates;
 #[path = "dataset_temporal_imputation.rs"]
 mod imputation;
+#[path = "dataset_joined.rs"]
+mod joined;
 #[path = "dataset_keys.rs"]
 mod key_grain;
 #[path = "dataset_lookup.rs"]
@@ -159,6 +161,12 @@ pub struct RowIdentity {
 
 /// Portable observations retain full identities; a host may format bounded samples.
 #[derive(Clone, Debug, PartialEq)]
+pub struct RowCountObservation {
+    pub counts: Vec<usize>,
+    pub denominators: Option<Vec<usize>>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct CheckRecord {
     pub path: String,
     pub code: yamaa_core::diagnostic::ConditionCode,
@@ -169,6 +177,7 @@ pub struct CheckRecord {
     /// Full offending values survive discarded output, under identity quotas.
     pub codelist: Option<CodelistObservation>,
     pub inventory: Option<Vec<Value>>,
+    pub row_count: Option<RowCountObservation>,
 }
 
 impl CheckRecord {
@@ -385,6 +394,8 @@ struct EvaluationState<'a, E> {
     intermediates: &'a mut intermediates::Run,
     output_rows: &'a [Candidate],
     aggregate_row: Option<Candidate>,
+    output_offset: usize,
+    windows: &'a mut windows::Cache,
 }
 
 /// Evaluate one admitted assignment and finish conversion before publishing it.
@@ -460,6 +471,41 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                 row,
                 assignment,
             },
+            state,
+        );
+    }
+    if matches!(
+        assignment.expression,
+        Expression::Window(_) | Expression::ContextWindow(_)
+    ) {
+        return state.windows.value(
+            assignment,
+            state.output_rows,
+            plan,
+            table,
+            row - state.output_offset,
+            limits,
+            state.budget,
+            state.handlers,
+        );
+    }
+    if let Expression::Joined(read) = &assignment.expression {
+        return joined::read(read, assignment, candidate, plan, row, state);
+    }
+    if let Expression::JoinedSource {
+        read,
+        filter,
+        selection,
+    } = &assignment.expression
+    {
+        return joined::read_options(
+            read,
+            filter.as_ref(),
+            selection.as_ref(),
+            assignment,
+            candidate,
+            plan,
+            row,
             state,
         );
     }
@@ -707,8 +753,13 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         Expression::Function(_) | Expression::ProjectFunction(_) => {
             unreachable!("callback arguments resolve through complete run state")
         }
-        Expression::Window(_) => unreachable!("window assignments execute by whole column"),
+        Expression::Window(_) | Expression::ContextWindow(_) => {
+            unreachable!("window assignments execute by whole column")
+        }
         Expression::Intermediate { .. } => unreachable!("intermediates execute through run state"),
+        Expression::Joined(_) | Expression::JoinedSource { .. } => {
+            unreachable!("joined reads execute through run state")
+        }
         Expression::Literal(value) => {
             if let Value::Str(text) = value {
                 budget.scalar_text(text.len())?;
@@ -1168,6 +1219,15 @@ impl Executor<'_> {
                 let table =
                     row_drivers::Driver::new(table, secondary, template.mode.source_index());
                 let table = &table;
+                let eligible = if let RowMode::IntermediateDriver { index, .. } = &template.mode {
+                    Some(intermediates::driver_records(
+                        table,
+                        &self.plan.intermediates()[*index],
+                        &mut budget,
+                    )?)
+                } else {
+                    None
+                };
                 let first = candidates.len();
                 let deferred = yamaa_core::dataset::window_stages(
                     &template.assignments,
@@ -1175,17 +1235,28 @@ impl Executor<'_> {
                     self.plan.intermediates(),
                 );
                 let groups = match template.mode.local_mode() {
-                    RowMode::Driver { .. } => unreachable!("plan admission rejects nested drivers"),
+                    RowMode::Driver { .. } | RowMode::IntermediateDriver { .. } => {
+                        unreachable!("plan admission rejects nested drivers")
+                    }
                     RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
                     RowMode::Records => {
                         // Admit the known cardinality before materializing record memberships.
-                        self.check_capacity(candidates.len(), table.row_count(), limits)?;
-                        (0..table.row_count()).map(|row| vec![row]).collect()
+                        let rows = eligible.as_ref().map_or(table.row_count(), Vec::len);
+                        self.check_capacity(candidates.len(), rows, limits)?;
+                        if let Some(rows) = &eligible {
+                            rows.iter().map(|&row| vec![row]).collect()
+                        } else {
+                            (0..table.row_count()).map(|row| vec![row]).collect()
+                        }
                     }
                     RowMode::Groups(keys) => {
                         budget.work(table.row_count(), keys.len())?;
-                        partition(table, keys, limits.source_rows, limits.key_cells)
-                            .map_err(|error| Box::new(ExecutionError::Grouping(error)))?
+                        if let Some(rows) = &eligible {
+                            intermediates::driver_groups(table, rows, keys, limits)?
+                        } else {
+                            partition(table, keys, limits.source_rows, limits.key_cells)
+                                .map_err(|error| Box::new(ExecutionError::Grouping(error)))?
+                        }
                     }
                 };
                 self.check_capacity(candidates.len(), groups.len(), limits)?;
@@ -1230,25 +1301,62 @@ impl Executor<'_> {
                                 intermediates: &mut intermediate_run,
                                 output_rows: &[],
                                 aggregate_row: None,
+                                output_offset: 0,
+                                windows: &mut windows::Cache::default(),
                             },
                         )?;
                         candidate.completed[assignment.column] = true;
                     }
                     if let Some(filter) = template.filter.as_ref() {
                         let source_row = candidate.members[0];
-                        let truth = crate::dataset_predicate::evaluate(
-                            filter,
-                            table,
-                            source_row,
-                            &candidate.values,
-                            budget.predicate(),
-                        )
-                        .map_err(|error| match error.kind {
-                            yamaa_core::predicate::ErrorKind::Limit(limit) => {
-                                Box::new(predicate_limit(limit))
-                            }
-                            _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                        })?;
+                        let truth = if filter.bindings().iter().any(|binding| {
+                            matches!(
+                                binding.read,
+                                yamaa_core::bound_expression::Read::Intermediate { .. }
+                                    | yamaa_core::bound_expression::Read::Joined(_)
+                            )
+                        }) {
+                            let assignment = Assignment {
+                                column: 0,
+                                path: filter.plan().spec_path().into(),
+                                expression: Expression::Literal(Value::Missing),
+                            };
+                            case_predicates::evaluate(
+                                filter,
+                                table,
+                                &candidate,
+                                self,
+                                candidates.len(),
+                                &assignment,
+                                &mut EvaluationState {
+                                    primary: &primary,
+                                    functions,
+                                    secondary,
+                                    self_rows: &candidates[..first],
+                                    budget: &mut budget,
+                                    handlers,
+                                    intermediates: &mut intermediate_run,
+                                    output_rows: &[],
+                                    aggregate_row: None,
+                                    output_offset: 0,
+                                    windows: &mut windows::Cache::default(),
+                                },
+                            )?
+                        } else {
+                            crate::dataset_predicate::evaluate(
+                                filter,
+                                table,
+                                source_row,
+                                &candidate.values,
+                                budget.predicate(),
+                            )
+                            .map_err(|error| match error.kind {
+                                yamaa_core::predicate::ErrorKind::Limit(limit) => {
+                                    Box::new(predicate_limit(limit))
+                                }
+                                _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                            })?
+                        };
                         if truth != yamaa_core::predicate::Truth::True {
                             budget.discard_candidate(&candidate.values);
                             continue;
@@ -1275,6 +1383,8 @@ impl Executor<'_> {
                         intermediates: &mut intermediate_run,
                         output_rows: &[],
                         aggregate_row: None,
+                        output_offset: 0,
+                        windows: &mut windows::Cache::default(),
                     },
                 )?;
                 intermediate_run.publish_self(self, &mut budget)?;
@@ -1293,32 +1403,19 @@ impl Executor<'_> {
             &mut budget,
         )?;
         for assignment in self.plan.columns() {
-            let mut numbers = if let Expression::Window(window) = &assignment.expression {
-                Some(windows::Run::new(
-                    window,
-                    &candidates,
-                    self,
-                    limits,
-                    &mut budget,
-                )?)
-            } else {
-                None
-            };
+            let mut nested_windows = windows::Cache::default();
+            let mut numbers = windows::Evaluation::new(
+                assignment,
+                &candidates,
+                self,
+                table,
+                limits,
+                &mut budget,
+                handlers,
+            )?;
             for row in 0..candidates.len() {
-                let number = if let (Some(run), Expression::Window(window)) =
-                    (&mut numbers, &assignment.expression)
-                {
-                    Some(run.value(
-                        row,
-                        window,
-                        &candidates,
-                        table,
-                        &mut budget,
-                        &windows::Context {
-                            assignment,
-                            plan: self,
-                        },
-                    )?)
+                let number = if let Some(run) = &mut numbers {
+                    Some(run.value(row, &candidates, table, &mut budget, assignment, self)?)
                 } else {
                     None
                 };
@@ -1351,6 +1448,8 @@ impl Executor<'_> {
                             intermediates: &mut intermediate_run,
                             output_rows: &candidates,
                             aggregate_row: None,
+                            output_offset: 0,
+                            windows: &mut nested_windows,
                         },
                     )?
                 };
@@ -1391,6 +1490,7 @@ impl Executor<'_> {
                     codelist: None,
                     inventory: None,
 
+                    row_count: None,
                     offending_rows: identities(&dataset, self.plan.keys(), missing, &mut budget)?,
                 });
             }
@@ -1418,6 +1518,7 @@ impl Executor<'_> {
                 codelist: None,
                 inventory: None,
 
+                row_count: None,
                 offending_rows: identities(&dataset, self.plan.keys(), duplicates, &mut budget)?,
             });
         }
@@ -1488,6 +1589,7 @@ impl Executor<'_> {
                         codelist: None,
                         inventory: None,
 
+                        row_count: None,
                         offending_rows: identities(
                             &dataset,
                             self.plan.keys(),
@@ -1518,9 +1620,18 @@ impl Executor<'_> {
                         codelist: None,
                         inventory: None,
 
+                        row_count: None,
                         offending_rows,
                     }
                 }
+                Check::ScopedRowCount(check) => crate::dataset_verification::row_count_check(
+                    verification,
+                    check,
+                    &dataset,
+                    limits,
+                    &mut budget,
+                    records,
+                )?,
                 Check::RowCount { .. } | Check::WideRowCount { .. } => {
                     budget.work(1, verification.check.row_count_work())?;
                     let failed = !verification
@@ -1536,6 +1647,7 @@ impl Executor<'_> {
                         codelist: None,
                         inventory: None,
 
+                        row_count: None,
                         offending_rows: Vec::new(),
                     }
                 }
@@ -1844,7 +1956,7 @@ impl Executor<'_> {
                                     output_rows: candidates.len(),
                                     codelist,
                                     inventory,
-
+                                    row_count: None,
                                     offending_rows,
                                 });
                             }

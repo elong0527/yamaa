@@ -95,6 +95,102 @@ pub(crate) fn predicate_check<E>(
         output_rows: dataset.rows().len(),
         codelist: None,
         inventory: None,
+        row_count: None,
         offending_rows: dataset::identities(dataset, keys, offending.into_iter(), budget)?,
     }))
+}
+
+/// Partition all artifact rows before applying predicates; a filtered-empty group remains visible.
+pub(crate) fn row_count_check<E>(
+    verification: &Verification,
+    check: &yamaa_core::dataset::RowCount,
+    dataset: &Dataset,
+    limits: dataset::Limits,
+    budget: &mut Budget,
+    records: &mut Vec<CheckRecord>,
+) -> Result<CheckRecord, Box<ExecutionError<E>>> {
+    let samples: Vec<_> = dataset
+        .schema()
+        .columns()
+        .iter()
+        .map(|column| sample(column.kind))
+        .collect();
+    budget.work(dataset.rows().len(), 2)?;
+    let mut evaluate = |predicate: &BoundPredicate, values: &[Value]| {
+        crate::dataset_predicate::evaluate(predicate, dataset, 0, values, budget.predicate())
+            .map_err(|error| {
+                Box::new(match error.kind {
+                    ErrorKind::Limit(limit) => dataset::predicate_limit(limit),
+                    _ => ExecutionError::VerificationPredicate {
+                        error,
+                        records: core::mem::take(records),
+                    },
+                })
+            })
+    };
+    // Invalid comparison types are diagnosed even for an empty artifact.
+    for predicate in check.filter.iter().chain(&check.when) {
+        evaluate(predicate, &samples)?;
+    }
+    let mut admitted = Vec::with_capacity(dataset.rows().len());
+    let mut bound = Vec::with_capacity(dataset.rows().len());
+    for values in dataset.rows() {
+        admitted.push(match &check.filter {
+            Some(filter) => evaluate(filter, values)? == Truth::True,
+            None => true,
+        });
+    }
+    for values in dataset.rows() {
+        bound.push(match &check.when {
+            Some(when) => evaluate(when, values)? == Truth::True,
+            None => true,
+        });
+    }
+    let groups = if let Some(columns) = &check.group_by {
+        budget.work(dataset.rows().len(), columns.len())?;
+        crate::table_grouping::partition(dataset, columns, limits.output_rows, limits.key_cells)
+            .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?
+    } else {
+        alloc::vec![(0..dataset.rows().len()).collect()]
+    };
+    budget.work(groups.len(), check.bound_work())?;
+    let mut offenders = Vec::new();
+    let mut counts = Vec::new();
+    let mut denominators = Vec::new();
+    for (index, members) in groups.iter().enumerate() {
+        if check.when.is_some() && !members.iter().any(|&row| bound[row]) {
+            continue;
+        }
+        let count = members.iter().filter(|&&row| admitted[row]).count();
+        if !check.accepts(count, members.len()) {
+            let borrowed = check
+                .group_by
+                .iter()
+                .flatten()
+                .map(|&column| &dataset.rows()[members[0]][column]);
+            budget.identity(borrowed.clone())?;
+            let values = borrowed.cloned().collect();
+            offenders.push(dataset::RowIdentity {
+                position: index,
+                values,
+            });
+            counts.push(count);
+            denominators.push(members.len());
+        }
+    }
+    Ok(CheckRecord {
+        path: verification.path.clone(),
+        code: yamaa_core::diagnostic::ConditionCode::VerificationRowCountFailed,
+        evaluated_count: groups.len(),
+        failed_count: offenders.len(),
+        output_rows: dataset.rows().len(),
+        offending_rows: offenders,
+        codelist: None,
+        inventory: None,
+        row_count: Some(dataset::RowCountObservation {
+            counts,
+            denominators: (check.min_fraction.is_some() || check.max_fraction.is_some())
+                .then_some(denominators),
+        }),
+    })
 }

@@ -247,10 +247,13 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
         }
         // The current aggregate relation/source/key IR has no named selector.
         // Extend this visitor when aggregate derive or named relations are added.
-        Expression::Aggregate(_)
+        Expression::Joined(_)
+        | Expression::JoinedSource { .. }
+        | Expression::Aggregate(_)
         | Expression::Odm(_)
         | Expression::Literal(_)
         | Expression::Window(_)
+        | Expression::ContextWindow(_)
         | Expression::Source(_)
         | Expression::SourceLookup { .. }
         | Expression::Lookup(_)

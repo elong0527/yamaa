@@ -99,8 +99,8 @@ pub(super) fn prepare(
     d: &Document,
     payload: usize,
     path: &str,
-    driver: Option<&str>,
-    intermediates: Option<&intermediates::Declarations>,
+    _driver: Option<&str>,
+    _intermediates: Option<&intermediates::Declarations>,
     extra: &mut Vec<UnsupportedFeature>,
 ) -> Result<Rounding, PrepareError> {
     // Schema admission checks the written source/digits fields before this
@@ -115,16 +115,6 @@ pub(super) fn prepare(
         return Err(PrepareError::Internal);
     };
     let source = text(d, field(d, payload, "source")?)?;
-    if source.split_once('.').is_some_and(|(relation, _)| {
-        driver.is_some_and(|driver| relation != driver)
-            && !intermediates.is_some_and(|items| items.contains(relation))
-    }) {
-        reject(
-            extra,
-            "secondary_source_expression",
-            format!("{path}.source"),
-        );
-    }
     Rounding::new(source, path, digits).map_err(|_| PrepareError::Internal)
 }
 
@@ -168,6 +158,14 @@ pub(super) fn bind_operand(
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
+    if name
+        .split_once('.')
+        .is_some_and(|(dataset, _)| secondary.iter().any(|source| source.name == dataset))
+    {
+        return source_expressions::bind_implicit(
+            name, path, keys, catalog, secondary, edges, findings,
+        );
+    }
     let path = String::from(path);
     if !name.contains('.') {
         if let Some(finding) = catalog
@@ -288,6 +286,14 @@ pub(super) fn bind_row_operand(
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
     use crate::reference_scope::{self, Reach, Scope};
+    if name
+        .split_once('.')
+        .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
+    {
+        return source_expressions::bind_catalog_join(
+            name, path, catalog, row, available, edges, findings,
+        );
+    }
     let path = String::from(path);
     if name.contains('.') {
         let scoped = reference_scope::validate(

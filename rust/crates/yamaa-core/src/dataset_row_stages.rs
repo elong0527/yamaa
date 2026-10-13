@@ -18,6 +18,7 @@ fn read_deferred(read: Read, deferred: &[bool], intermediates: &[Intermediate]) 
         Read::Column(column) => deferred[column],
         Read::Intermediate { index, .. } => intermediate_deferred(index, deferred, intermediates),
         Read::Source(_) => false,
+        Read::Joined(read) => read.keys.iter().any(|key| deferred[key.output_column]),
     }
 }
 fn expression_deferred(
@@ -26,7 +27,8 @@ fn expression_deferred(
     intermediates: &[Intermediate],
 ) -> bool {
     match expression {
-        Expression::Window(_) => true,
+        Expression::Window(_) | Expression::ContextWindow(_) => true,
+        Expression::Joined(read) | Expression::JoinedSource { read, .. } => read.keys.iter().any(|key| deferred[key.output_column]),
         Expression::Aggregate(aggregate) => match aggregate.relation() {
             AggregateRelation::Output { group_by } => group_by.iter().any(|&column| deferred[column])
                 || aggregate.bindings().iter().any(|binding| deferred[binding.column]),
@@ -34,11 +36,11 @@ fn expression_deferred(
             AggregateRelation::CurrentGroup => false,
         },
         Expression::Column(column) => deferred[*column],
-        Expression::Compute(plan) => plan.bindings().iter().any(|binding| read_deferred(binding.read, deferred, intermediates)),
-        Expression::Flag(plan) => plan.bindings().iter().any(|binding| matches!(&binding.read, FlagRead::Read(read) if read_deferred(*read,deferred,intermediates))),
-        Expression::Function(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if read_deferred(*read,deferred,intermediates))),
-        Expression::ProjectFunction(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if read_deferred(*read,deferred,intermediates))),
-        Expression::Case(branches) => branches.iter().any(|branch| branch.when.as_ref().is_some_and(|predicate| predicate.bindings().iter().any(|binding| read_deferred(binding.read,deferred,intermediates))) || expression_deferred(&branch.assignment.expression,deferred,intermediates)),
+        Expression::Compute(plan) => plan.bindings().iter().any(|binding| read_deferred(binding.read.clone(), deferred, intermediates)),
+        Expression::Flag(plan) => plan.bindings().iter().any(|binding| matches!(&binding.read, FlagRead::Read(read) if read_deferred(read.clone(),deferred,intermediates))),
+        Expression::Function(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if read_deferred(read.clone(),deferred,intermediates))),
+        Expression::ProjectFunction(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if read_deferred(read.clone(),deferred,intermediates))),
+        Expression::Case(branches) => branches.iter().any(|branch| branch.when.as_ref().is_some_and(|predicate| predicate.bindings().iter().any(|binding| read_deferred(binding.read.clone(),deferred,intermediates))) || expression_deferred(&branch.assignment.expression,deferred,intermediates)),
         Expression::Extreme {operands,..} | Expression::StrConcat {operands,..} | Expression::StrTemplate {operands,..} | Expression::Imputation {operands,..} | Expression::Temporal {operands,..} => operands.iter().any(|operand| expression_deferred(&operand.expression,deferred,intermediates)),
         Expression::StrContains {source,..} | Expression::StrExtract {source,..} | Expression::StrCase {source,..} | Expression::StrPad {source,..} | Expression::MappingCut {source,..} | Expression::Round {source,..} => expression_deferred(&source.expression,deferred,intermediates),
         Expression::SourceBinding { source, .. } => expression_deferred(&source.expression, deferred, intermediates),

@@ -37,6 +37,7 @@ pub(super) fn read<E>(
         None,
         None,
         None,
+        None,
     )
 }
 
@@ -84,6 +85,7 @@ pub(super) fn read_row<T: TableAccess + ?Sized>(
         None,
         None,
         None,
+        None,
     )
 }
 
@@ -99,6 +101,7 @@ fn read_matching<E>(
     filter: Option<&yamaa_core::bound_expression::BoundPredicate>,
     selection: Option<&SourceSelection>,
     mut handlers: Option<&mut HandlerCounter>,
+    donor_name: Option<&str>,
 ) -> Result<Value, Box<ExecutionError<E>>> {
     // Complete the authored eligibility expression before inspecting match keys.
     let mut eligible = Vec::new();
@@ -190,8 +193,13 @@ fn read_matching<E>(
         budget.identity_refs(keys.iter().map(|(_, value)| *value))?;
         return Err(Box::new(ExecutionError::MultipleMatches {
             path: context.assignment.path.clone(),
-            dataset: context.plan.secondary()[source].name.clone(),
-            intermediate: alloc::format!("intermediate({})", context.plan.secondary()[source].name),
+            dataset: donor_name
+                .map(String::from)
+                .unwrap_or_else(|| context.plan.secondary()[source].name.clone()),
+            intermediate: alloc::format!(
+                "intermediate({})",
+                donor_name.unwrap_or_else(|| context.plan.secondary()[source].name.as_str())
+            ),
             match_count: count,
             matched_key: keys
                 .iter()
@@ -224,11 +232,19 @@ fn cell<'a, E>(
     column: usize,
 ) -> Result<ValueRef<'a>, Box<ExecutionError<E>>> {
     table.cell(source_row, column).map_err(|error| {
-        Box::new(ExecutionError::SecondaryCell {
-            path: assignment.path.clone(),
-            source,
-            source_row,
-            error,
+        Box::new(if source == usize::MAX {
+            ExecutionError::Cell {
+                path: assignment.path.clone(),
+                source_row,
+                error,
+            }
+        } else {
+            ExecutionError::SecondaryCell {
+                path: assignment.path.clone(),
+                source,
+                source_row,
+                error,
+            }
         })
     })
 }
@@ -264,6 +280,7 @@ pub(super) fn read_source<E>(
         filter,
         selection,
         Some(handlers),
+        None,
     )
 }
 
@@ -301,4 +318,47 @@ fn select<E>(
         }
     }
     Ok(best)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn read_joined<E>(
+    table: &dyn TableAccess<Error = E>,
+    source: usize,
+    joined: &yamaa_core::dataset::JoinedRead,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    budget: &mut Budget,
+    filter: Option<&yamaa_core::bound_expression::BoundPredicate>,
+    selection: Option<&SourceSelection>,
+    handlers: &mut HandlerCounter,
+) -> Result<Value, Box<ExecutionError<E>>> {
+    let keys = joined
+        .keys
+        .iter()
+        .map(|key| {
+            (
+                key.source_column,
+                ValueRef::from(&candidate.values[key.output_column]),
+            )
+        })
+        .collect::<Vec<_>>();
+    read_matching(
+        table,
+        source,
+        joined.column,
+        &keys,
+        &Context {
+            assignment,
+            candidate,
+            plan,
+            row,
+        },
+        budget,
+        filter,
+        selection,
+        Some(handlers),
+        Some(&joined.name),
+    )
 }

@@ -138,6 +138,10 @@ impl BindFinding {
                 finding,
             } => {
                 let (code, values) = match finding {
+                    reference_scope::Finding::UnknownField => (
+                        C::SourceUnknownReference,
+                        context([("identifier", text(name))]),
+                    ),
                     reference_scope::Finding::RowGroup => (
                         C::GroupedRowReference,
                         context([

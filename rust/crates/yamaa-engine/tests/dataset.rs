@@ -452,7 +452,7 @@ fn computed(text: &str, bindings: &[(&str, Read)]) -> Expression {
                 .iter()
                 .map(|(name, read)| Binding {
                     name: (*name).into(),
-                    read: *read,
+                    read: read.clone(),
                 })
                 .collect(),
         )

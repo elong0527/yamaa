@@ -88,6 +88,8 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
                     intermediates: &mut intermediates::Run::default(),
                     output_rows: &[],
                     aggregate_row: None,
+                    output_offset: 0,
+                    windows: &mut windows::Cache::default(),
                 },
             )?;
             probe.completed[assignment.column] = true;

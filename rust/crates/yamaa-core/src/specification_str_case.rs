@@ -6,8 +6,8 @@ pub(super) fn prepare(
     d: &Document,
     payload: usize,
     path: &str,
-    driver: Option<&str>,
-    intermediates: Option<&intermediates::Declarations>,
+    _driver: Option<&str>,
+    _intermediates: Option<&intermediates::Declarations>,
     extra: &mut Vec<UnsupportedFeature>,
 ) -> Result<StringCase, PrepareError> {
     for &(key, _) in mapping(d, payload)? {
@@ -33,16 +33,6 @@ pub(super) fn prepare(
         // The original schema owns enum rejection, before compiler admission.
         _ => return Err(PrepareError::Internal),
     };
-    if source.split_once('.').is_some_and(|(relation, _)| {
-        driver.is_some_and(|driver| relation != driver)
-            && !intermediates.is_some_and(|items| items.contains(relation))
-    }) {
-        reject(
-            extra,
-            "secondary_source_expression",
-            format!("{path}.source"),
-        );
-    }
     StringCase::new(
         source.into(),
         path.into(),

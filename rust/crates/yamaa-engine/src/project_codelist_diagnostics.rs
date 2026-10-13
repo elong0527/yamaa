@@ -40,6 +40,13 @@ pub(crate) fn observations(
             output_rows: record.output_rows,
             offending_rows: &record.offending_rows,
             inventory: record.inventory.as_deref(),
+            row_count: record
+                .row_count
+                .as_ref()
+                .map(|observation| core::RowCountObservation {
+                    counts: &observation.counts,
+                    denominators: observation.denominators.as_deref(),
+                }),
             codelist: record
                 .codelist
                 .as_ref()

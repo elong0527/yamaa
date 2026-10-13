@@ -148,6 +148,9 @@ impl Flag {
     ) -> Result<(), PlanError> {
         for binding in &self.bindings {
             match &binding.read {
+                FlagRead::Read(Read::Joined(read)) => {
+                    read.validate(source, secondary, output, available)?
+                }
                 FlagRead::Read(Read::Source(column)) => {
                     if *column >= source.columns().len() {
                         return Err(PlanError::InvalidSource);

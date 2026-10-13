@@ -226,11 +226,11 @@ macro_rules! walk {
                 }
             }
             Expression::Literal(_) | Expression::Flag(_) | Expression::Compute(_)
-            | Expression::Function(_) | Expression::ProjectFunction(_) | Expression::Window(_)
+            | Expression::Function(_) | Expression::ProjectFunction(_) | Expression::Window(_) | Expression::ContextWindow(_)
             | Expression::Source(_) | Expression::SourceLookup { .. } | Expression::Lookup(_)
             | Expression::RowLookup(_) | Expression::Intermediate { .. } | Expression::Collect { .. }
             | Expression::Column(_) | Expression::Reduce { .. } | Expression::Count { .. }
-            | Expression::Aggregate(_) => (),
+            | Expression::Aggregate(_) | Expression::Joined(_) | Expression::JoinedSource { .. } => (),
         }
         Ok(())
     }};

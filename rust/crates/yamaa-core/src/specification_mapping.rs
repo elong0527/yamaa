@@ -143,6 +143,9 @@ fn bound_kind(
             .get(lookup.source)
             .and_then(|item| item.schema.columns().get(lookup.column))
             .map(|c| c.kind),
+        Expression::Joined(read) | Expression::JoinedSource { read, .. } => {
+            read.schema.columns().get(read.column).map(|c| c.kind)
+        }
         Expression::SourceBinding { source, .. } => {
             bound_kind(&source.expression, driver, output, secondary, intermediates)
         }
@@ -226,24 +229,22 @@ pub(super) fn bind_row(
 ) -> Result<Option<Expression>, BindError> {
     let path = format!("{}.source", declaration.operation.path());
     let name = &declaration.source.variable;
-    let expression = if named.reference(name).is_some() {
-        row_intermediates::bind(
-            name,
-            &path,
-            named,
-            secondary,
-            intermediates,
-            output,
-            catalog,
-            available,
-            edges,
-            findings,
-        )?
-    } else {
-        rounding::bind_row_operand(
-            name, &path, catalog, driver, row, phase, available, edges, findings,
-        )?
-    };
+    let expression = source_expressions::bind_row(
+        &declaration.source,
+        column,
+        &path,
+        catalog,
+        driver,
+        row,
+        phase,
+        available,
+        edges,
+        findings,
+        output,
+        named,
+        secondary,
+        intermediates,
+    )?;
     let kind = if let Some((index, field)) = named.reference(name) {
         intermediates
             .get(index)
@@ -252,13 +253,7 @@ pub(super) fn bind_row(
             .and_then(|schema| schema.columns().iter().find(|c| c.name == field))
             .map(|c| c.kind)
     } else {
-        catalog
-            .bind(name)
-            .map_err(BindError::Catalog)?
-            .map(|binding| match binding {
-                reference_binding::Binding::Output { column_type, .. }
-                | reference_binding::Binding::Dataset { column_type, .. } => column_type,
-            })
+        catalog.type_of(name).map_err(BindError::Catalog)?
     };
     Ok(expression
         .and_then(|expression| checked_wrap(declaration, column, expression, kind, findings)))
