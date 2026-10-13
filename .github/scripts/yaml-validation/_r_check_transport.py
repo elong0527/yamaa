@@ -20,10 +20,15 @@ close(stream)
 """
 
 METADATA_PROGRAM = r"""
-if (!requireNamespace("yamaa", quietly = TRUE) ||
-    !requireNamespace("jsonlite", quietly = TRUE)) quit(status = 9L)
+for (package in c("yamaa", "jsonlite")) {
+  if (!requireNamespace(package, quietly = TRUE)) {
+    cat(paste0("required R namespace unavailable: ", package, "\n"), file = stderr())
+    quit(status = 9L)
+  }
+}
 args <- commandArgs(trailingOnly = TRUE)
 metadata <- list(package = "yamaa", version = as.character(utils::packageVersion("yamaa")),
+  jsonlite_version = as.character(utils::packageVersion("jsonlite")),
   core = yamaa:::.core_version(), package_path = normalizePath(find.package("yamaa")),
   fixture_path = system.file("project-original", package = "yamaa"),
   function_package_version = tryCatch(
@@ -52,8 +57,10 @@ def installation(*, required=False):
             return None
         if completed.returncode != 0:
             raise RuntimeError(
-                "installed R metadata failed: "
+                f"installed R metadata failed (exit {completed.returncode}): "
                 + completed.stderr.decode("utf-8", errors="replace")
+                + "\nstdout: "
+                + completed.stdout.decode("utf-8", errors="replace")
             )
         metadata = json.loads(output.read_text(encoding="utf-8"))
     if metadata["package"] != "yamaa" or not metadata["core"]:

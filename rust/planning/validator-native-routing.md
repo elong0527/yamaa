@@ -53,7 +53,10 @@ pins its complete issue table, missing-study ordering and Save refusal. Those
 mandatory R matrix witnesses own full R semantic acceptance.
 
 The mandatory R lanes also run `rust/tests/check_repository_r_transport.py`
-against the exact stdlib repository transport. It requires the real installed
+against the exact stdlib repository transport. The required R CI step installs
+jsonlite 2.0.0 as a pinned tool-only codec and verifies its actual version; the
+SDK has no new dependency. Missing namespaces and process failures retain their
+explicit exit code, stderr and stdout. It requires the real installed
 R SDK, package identities and declared locks, copies all five original cases
 outside the package, deletes study inputs, and checks the complete returned issue
 rows. The R program copies `result$issues` from the read-only Check facade; UTF-8

@@ -14,6 +14,7 @@ loader.loader.exec_module(transport)
 metadata = transport.installation(required=True)
 assert metadata["version"] == "0.3.0", metadata
 assert metadata["core"] == "0.1.0", metadata
+assert metadata["jsonlite_version"] == "2.0.0", metadata
 assert metadata["function_package_version"] == "1.0.0", metadata
 package = Path(metadata["package_path"]).resolve()
 assert package.is_dir() and (package / "DESCRIPTION").is_file()
