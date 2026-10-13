@@ -17,6 +17,7 @@ pub mod file_preparation;
 pub mod function_invocation;
 pub mod inheritance;
 pub mod inheritance_capture;
+pub mod inheritance_outcome;
 pub mod inheritance_preparation;
 pub mod numeric_lifecycle;
 pub mod schema_capture;
