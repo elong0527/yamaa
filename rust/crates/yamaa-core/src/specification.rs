@@ -953,11 +953,11 @@ impl PreparedSpecification {
                 .collect::<Result<Vec<_>, _>>()?,
         )
         .map_err(PrepareError::OutputSchema)?;
-        let project = match functions
-            .map(|functions| functions::prepare(d, columns, functions))
-            .transpose()
-        {
-            Ok(project) => project,
+        // Absence supplies no callable definitions. It does not invent an
+        // environment document, and unknown calls retain ordinary static causes.
+        let functions = functions.unwrap_or(&[]);
+        let project = match functions::prepare(d, columns, functions) {
+            Ok(project) => Some(project),
             Err(PrepareError::Invalid(errors)) => {
                 findings.extend(errors);
                 None
@@ -1261,11 +1261,7 @@ impl PreparedSpecification {
             let project = match project {
                 Some(project) => {
                     let uses = rows.call_uses(&project.calls)?;
-                    Some(functions::select_rows(
-                        project,
-                        functions.ok_or(PrepareError::Internal)?,
-                        &uses,
-                    )?)
+                    Some(functions::select_rows(project, functions, &uses)?)
                 }
                 None => None,
             };
@@ -1344,10 +1340,6 @@ impl PreparedSpecification {
                 | "baseline_flag" => Some(Operation::Window(alloc::boxed::Box::new(
                     windows::Declaration::prepare(d, payload, op, &path, limits, &mut extra)?,
                 ))),
-                "function" if project.is_none() => {
-                    reject(&mut extra, "function", path.clone());
-                    None
-                }
                 _ => match derivations::prepare_value_with_driver(
                     d,
                     field(d, derivation, "value")?,
@@ -1370,7 +1362,6 @@ impl PreparedSpecification {
                 },
             };
             if let Some(operation) = operation {
-                scalar::unsupported_relations(&operation, driver, &intermediates, &mut extra);
                 declarations.push(Declaration {
                     handler,
                     path,
@@ -1719,6 +1710,14 @@ impl PreparedSpecification {
             None,
             &mut findings,
         )?;
+        let catalog = row_drivers::extend_catalog(
+            catalog,
+            source,
+            &self.source().name,
+            &self.keys,
+            &secondary,
+            &self.source().name,
+        )?;
         let mut assignments = BTreeMap::new();
         let mut dependencies = Vec::new();
         for (column, declaration) in self.declarations.iter().enumerate() {
@@ -1957,9 +1956,7 @@ impl PreparedSpecification {
                     &mut edges,
                     &mut findings,
                 )?,
-                Operation::Window(window) => window
-                    .bind(&catalog, &mut edges, &mut findings)?
-                    .map(Expression::Window),
+                Operation::Window(window) => window.bind(&catalog, &mut edges, &mut findings)?,
                 Operation::InvalidNumeric { expression, error } => {
                     findings.push(BindFinding::Numeric {
                         path: reference_path.clone(),
@@ -2152,6 +2149,9 @@ impl PreparedSpecification {
                 columns.push(assignment)
             }
         }
+        let record_windows = key_assignments
+            .iter()
+            .any(|a| a.expression.window().is_some());
         DatasetPlan::new_with_intermediates(
             crate::dataset::SourceSchemas {
                 primary: source.clone(),
@@ -2163,7 +2163,11 @@ impl PreparedSpecification {
                 .collect(),
             self.output.clone(),
             vec![RowTemplate {
-                mode: RowMode::Keys,
+                mode: if record_windows {
+                    RowMode::Records
+                } else {
+                    RowMode::Keys
+                },
                 assignments: key_assignments,
                 filter: root_filter,
             }],

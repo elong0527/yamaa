@@ -93,6 +93,17 @@ impl<T: TableAccess + ?Sized> NumericResolver for Resolver<'_, '_, T> {
             .binary_search_by(|binding| binding.name.as_str().cmp(identifier))
             .expect("numeric names were bound before execution");
         let value = match self.bound.bindings()[index].read {
+            Read::Joined(ref read) => {
+                return joined::read(
+                    read,
+                    self.assignment,
+                    self.candidate,
+                    self.plan,
+                    self.row,
+                    self.state,
+                )
+                .map(Selection::Present)
+            }
             Read::Intermediate { index, column } => {
                 return intermediates::read(
                     index,

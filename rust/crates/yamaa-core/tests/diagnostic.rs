@@ -69,6 +69,8 @@ mod project_functions;
 mod project_lock;
 #[path = "support/project_call_compiler.rs"]
 mod project_support;
+#[path = "diagnostic/record_operations.rs"]
+mod record_operations;
 impl NumericResolver for Bindings {
     type Error = Infallible;
     fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
@@ -85,6 +87,7 @@ impl NumericResolver for Bindings {
 #[test]
 fn every_registered_cause_is_reached_with_its_normative_mapping() {
     let mut reached = BTreeSet::new();
+    reached.extend(record_operations::reached());
     reached.extend(mapping_cut::reached());
     let publication = yamaa_core::application_issue::publication_failed("generated/producer.csv");
     assert_eq!(

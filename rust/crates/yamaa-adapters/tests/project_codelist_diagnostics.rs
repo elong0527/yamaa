@@ -52,6 +52,7 @@ fn record(value: Value) -> CheckRecord {
         }],
         inventory: None,
 
+        row_count: None,
         codelist: Some(CodelistObservation {
             id: "SEX".into(),
             values: vec![value],

@@ -1,8 +1,8 @@
 {
   "protocol": "public-conformance-ratchet/1",
-  "source_revision": "a44d8dd51e3ff27d62a9ec490b1c8e7a734cc3cf",
-  "evidence": "https://github.com/elong0527/yamaa/actions/runs/38354915028",
-  "run_attempt": 2,
+  "source_revision": "9b52b1f0ed841b499c578f63916eda8f1e7f6b02",
+  "evidence": "https://github.com/elong0527/yamaa/actions/runs/38379046837",
+  "run_attempt": 1,
   "benchmarks": 318,
   "python": [
     "adam-adae-death",
@@ -13,18 +13,22 @@
     "adam-adae-protocol-review",
     "adam-adae-query-flags",
     "adam-adae-review-order",
+    "adam-adae-serious-events",
     "adam-adae-serious-sequence",
     "adam-adae-severity",
     "adam-adae-severity-override",
     "adam-adae-severity-rank",
     "adam-adae-text-cleanup",
     "adam-adae-worst-severity",
+    "adam-adce-worst-toxicity",
     "adam-adcm-atc-classes",
     "adam-adcm-on-treatment",
     "adam-adeg-derived-intervals",
     "adam-adex-cumulative-dose",
     "adam-adex-dose-reduction",
     "adam-adex-uncollected",
+    "adam-adfa-fever",
+    "adam-adlb-bds",
     "adam-adlb-closest-visit",
     "adam-adlb-lymphocytes",
     "adam-adlb-mean",
@@ -35,6 +39,7 @@
     "adam-adlbc-row-window",
     "adam-adlbc-window-chain",
     "adam-adoe-study-eye",
+    "adam-adqs-missed-visit-locf",
     "adam-adqs-multi-scale-scoring",
     "adam-adqs-subscale-score",
     "adam-adrs-best-response",
@@ -67,6 +72,7 @@
     "adam-adtte-first-ae",
     "adam-adtte-os",
     "adam-adtte-pfs",
+    "adam-advs-bmi",
     "adam-advs-bsa",
     "adam-advs-carryforward",
     "adam-advs-first-observed-carry",
@@ -76,12 +82,15 @@
     "adam-advs-percentiles",
     "adam-advs-prior-result",
     "adam-advs-window-table",
+    "adam-advs-windows",
     "bimo-clinsite-site-level",
     "negative-adeg-rrr",
     "negative-adlb-computed-param",
     "negative-adlb-duplicate-wbc",
+    "negative-adlb-two-baselines",
     "negative-ambiguous-type",
     "negative-conversion-fractional",
+    "negative-count-unnamed",
     "negative-cut-coded",
     "negative-cut-missing-input",
     "negative-cyclic-parent",
@@ -231,10 +240,13 @@
     "schema-parquet",
     "schema-predicates",
     "schema-round-half-away-from-zero-ties",
+    "schema-row-count-fractions",
     "schema-row-templates",
+    "schema-rows-override",
     "schema-sentence-case",
     "schema-shorthand",
     "schema-source-binding",
+    "schema-source-ordinal",
     "schema-str-contains",
     "schema-str-contains-missing",
     "schema-structure",
@@ -258,8 +270,11 @@
     "sdtm-ds-multi-form-disposition",
     "sdtm-ds-reasons",
     "sdtm-ds-sequence",
+    "sdtm-ec-collected-exposure",
+    "sdtm-ex-combination",
     "sdtm-ex-intervals",
     "sdtm-fa-odm-multitest",
+    "sdtm-fa-reactogenicity-diary",
     "sdtm-lb-character-results",
     "sdtm-lb-compartments",
     "sdtm-lb-findings",
@@ -272,7 +287,9 @@
     "sdtm-mh-prespecified-conditions",
     "sdtm-pr-procedures",
     "sdtm-relrec-dataset-level",
+    "sdtm-relrec-links",
     "sdtm-rs-timepoint-response",
+    "sdtm-se-subject-elements",
     "sdtm-suppmh-linkage",
     "sdtm-suppmh-qualifiers",
     "sdtm-sv-subject-visits",
@@ -292,18 +309,22 @@
     "adam-adae-protocol-review",
     "adam-adae-query-flags",
     "adam-adae-review-order",
+    "adam-adae-serious-events",
     "adam-adae-serious-sequence",
     "adam-adae-severity",
     "adam-adae-severity-override",
     "adam-adae-severity-rank",
     "adam-adae-text-cleanup",
     "adam-adae-worst-severity",
+    "adam-adce-worst-toxicity",
     "adam-adcm-atc-classes",
     "adam-adcm-on-treatment",
     "adam-adeg-derived-intervals",
     "adam-adex-cumulative-dose",
     "adam-adex-dose-reduction",
     "adam-adex-uncollected",
+    "adam-adfa-fever",
+    "adam-adlb-bds",
     "adam-adlb-closest-visit",
     "adam-adlb-lymphocytes",
     "adam-adlb-mean",
@@ -314,6 +335,7 @@
     "adam-adlbc-row-window",
     "adam-adlbc-window-chain",
     "adam-adoe-study-eye",
+    "adam-adqs-missed-visit-locf",
     "adam-adqs-multi-scale-scoring",
     "adam-adqs-subscale-score",
     "adam-adrs-best-response",
@@ -346,6 +368,7 @@
     "adam-adtte-first-ae",
     "adam-adtte-os",
     "adam-adtte-pfs",
+    "adam-advs-bmi",
     "adam-advs-bsa",
     "adam-advs-carryforward",
     "adam-advs-first-observed-carry",
@@ -355,12 +378,15 @@
     "adam-advs-percentiles",
     "adam-advs-prior-result",
     "adam-advs-window-table",
+    "adam-advs-windows",
     "bimo-clinsite-site-level",
     "negative-adeg-rrr",
     "negative-adlb-computed-param",
     "negative-adlb-duplicate-wbc",
+    "negative-adlb-two-baselines",
     "negative-ambiguous-type",
     "negative-conversion-fractional",
+    "negative-count-unnamed",
     "negative-cut-coded",
     "negative-cut-missing-input",
     "negative-cyclic-parent",
@@ -509,10 +535,13 @@
     "schema-parquet",
     "schema-predicates",
     "schema-round-half-away-from-zero-ties",
+    "schema-row-count-fractions",
     "schema-row-templates",
+    "schema-rows-override",
     "schema-sentence-case",
     "schema-shorthand",
     "schema-source-binding",
+    "schema-source-ordinal",
     "schema-str-contains",
     "schema-str-contains-missing",
     "schema-structure",
@@ -536,8 +565,11 @@
     "sdtm-ds-multi-form-disposition",
     "sdtm-ds-reasons",
     "sdtm-ds-sequence",
+    "sdtm-ec-collected-exposure",
+    "sdtm-ex-combination",
     "sdtm-ex-intervals",
     "sdtm-fa-odm-multitest",
+    "sdtm-fa-reactogenicity-diary",
     "sdtm-lb-character-results",
     "sdtm-lb-compartments",
     "sdtm-lb-findings",
@@ -550,7 +582,9 @@
     "sdtm-mh-prespecified-conditions",
     "sdtm-pr-procedures",
     "sdtm-relrec-dataset-level",
+    "sdtm-relrec-links",
     "sdtm-rs-timepoint-response",
+    "sdtm-se-subject-elements",
     "sdtm-suppmh-linkage",
     "sdtm-suppmh-qualifiers",
     "sdtm-sv-subject-visits",
@@ -565,9 +599,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.12-wheel",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -575,9 +609,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.12-source",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -585,9 +619,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.13-wheel",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -595,9 +629,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.13-source",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -605,9 +639,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.14-wheel",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -615,9 +649,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.14-source",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -625,9 +659,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.12-wheel",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -635,9 +669,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.12-source",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -645,9 +679,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.13-wheel",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -655,9 +689,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.13-source",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -665,9 +699,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.14-wheel",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -675,9 +709,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.14-source",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -685,9 +719,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.12-wheel",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -695,9 +729,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.12-source",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -705,9 +739,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.13-wheel",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -715,9 +749,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.13-source",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -725,9 +759,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.14-wheel",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -735,9 +769,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.14-source",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -745,9 +779,9 @@
     {
       "artifact": "public-conformance-r-ubuntu-24.04",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -755,9 +789,9 @@
     {
       "artifact": "public-conformance-r-macos-15",
       "summary": {
-        "pass": 277,
+        "pass": 294,
         "mismatch": 1,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }
@@ -765,9 +799,9 @@
     {
       "artifact": "public-conformance-r-windows-latest",
       "summary": {
-        "pass": 276,
+        "pass": 293,
         "mismatch": 2,
-        "unsupported": 38,
+        "unsupported": 21,
         "error": 0,
         "excluded": 2
       }

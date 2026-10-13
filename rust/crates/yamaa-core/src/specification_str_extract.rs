@@ -223,14 +223,10 @@ fn finish(
         return Ok(None);
     }
     // Scope/availability succeeds before type and retained pattern/group facts.
-    if let Some(binding) = catalog
-        .bind(operation.source())
+    if let Some(kind) = catalog
+        .type_of(operation.source())
         .map_err(BindError::Catalog)?
     {
-        let kind = match binding {
-            reference_binding::Binding::Output { column_type, .. }
-            | reference_binding::Binding::Dataset { column_type, .. } => column_type,
-        };
         if kind != ColumnType::Str {
             findings.push(BindFinding::TextExtract(
                 operation.input_diagnostic(kind_name(kind)),

@@ -110,6 +110,7 @@ enum Answer {
 pub(super) struct Context<'a> {
     pub assignment: &'a Assignment,
     pub plan: &'a DatasetPlan,
+    pub schema: Option<&'a TableSchema>,
 }
 
 /// Run-local partition membership and results; no state survives plan reuse.
@@ -120,10 +121,10 @@ pub(super) struct Run {
 }
 impl Run {
     /// Partition once without evaluating later partitions' filters or converting results.
-    pub(super) fn new<E>(
+    fn new_schema<E>(
         window: &Window,
         candidates: &[Candidate],
-        plan: &DatasetPlan,
+        schema: &TableSchema,
         limits: Limits,
         budget: &mut Budget,
     ) -> Result<Self, Box<ExecutionError<E>>> {
@@ -136,10 +137,7 @@ impl Run {
             vec![(0..rows).collect()]
         } else {
             partition(
-                &Rows {
-                    candidates,
-                    schema: plan.output(),
-                },
+                &Rows { candidates, schema },
                 &window.group_by,
                 limits.output_rows,
                 limits.key_cells,
@@ -329,7 +327,12 @@ impl Run {
                         .iter()
                         .map(|&column| {
                             (
-                                context.plan.output().columns()[column].name.clone(),
+                                context
+                                    .schema
+                                    .unwrap_or_else(|| context.plan.output())
+                                    .columns()[column]
+                                    .name
+                                    .clone(),
                                 candidates[row].values[column].clone(),
                             )
                         })
@@ -369,5 +372,155 @@ fn temporal_order(left: &Value, right: &Value) -> Ordering {
         (Value::Date(left), Value::Date(right)) => left.cmp(right),
         (Value::DateTime(left), Value::DateTime(right)) => left.cmp(right),
         _ => unreachable!("admitted matching temporal baseline columns"),
+    }
+}
+
+/// One window execution over borrowed completed rows or a bounded typed driver snapshot.
+pub(super) struct Evaluation {
+    run: Run,
+    window: Window,
+    rows: Option<Vec<Candidate>>,
+    schema: Option<TableSchema>,
+}
+
+/// One assignment's reached windows, independent for every template and donor context.
+/// A case branch creates a partition run only when a row selects that branch.
+#[derive(Default)]
+pub(super) struct Cache {
+    evaluations: BTreeMap<String, Evaluation>,
+}
+impl Cache {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn value<T: TableAccess + ?Sized>(
+        &mut self,
+        assignment: &Assignment,
+        candidates: &[Candidate],
+        plan: &DatasetPlan,
+        table: &T,
+        row: usize,
+        limits: Limits,
+        budget: &mut Budget,
+        handlers: &mut HandlerCounter,
+    ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+        if !self.evaluations.contains_key(&assignment.path) {
+            budget.work(1, 1)?;
+            budget.scalar_text(assignment.path.len())?;
+            let evaluation = Evaluation::new(
+                assignment, candidates, plan, table, limits, budget, handlers,
+            )?
+            .expect("only admitted window expressions use the partition cache");
+            self.evaluations.insert(assignment.path.clone(), evaluation);
+        }
+        self.evaluations
+            .get_mut(&assignment.path)
+            .expect("the reached window has a run-local cache entry")
+            .value(row, candidates, table, budget, assignment, plan)
+    }
+}
+impl Evaluation {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn new<T: TableAccess + ?Sized>(
+        assignment: &Assignment,
+        candidates: &[Candidate],
+        plan: &DatasetPlan,
+        table: &T,
+        limits: Limits,
+        budget: &mut Budget,
+        handlers: &mut HandlerCounter,
+    ) -> Result<Option<Self>, Box<ExecutionError<T::Error>>> {
+        let Some(window) = assignment.expression.window() else {
+            return Ok(None);
+        };
+        let (rows, schema) = if let Expression::ContextWindow(context) = &assignment.expression {
+            let schema = context
+                .schema(plan.output(), table.schema())
+                .map_err(|_| Box::new(ExecutionError::Capacity))?;
+            if candidates
+                .len()
+                .checked_mul(schema.columns().len())
+                .is_none_or(|n| n > limits.output_cells)
+            {
+                return Err(Box::new(ExecutionError::Capacity));
+            }
+            budget.work(candidates.len(), schema.columns().len())?;
+            let mut rows = Vec::new();
+            rows.try_reserve_exact(candidates.len())
+                .map_err(|_| Box::new(ExecutionError::Allocation))?;
+            for (row, candidate) in candidates.iter().enumerate() {
+                for value in &candidate.values {
+                    if let Value::Str(text) = value {
+                        budget.scalar_text(text.len())?;
+                    }
+                }
+                let mut values = candidate.values.clone();
+                for (name, column) in &context.sources {
+                    budget.work(candidate.members.len(), 1)?;
+                    let value = key_grain::collect_bound(
+                        table,
+                        key_grain::Collection {
+                            column: *column,
+                            identifier: name,
+                            filter: None,
+                            selection: None,
+                        },
+                        key_grain::CollectionContext {
+                            path: &assignment.path,
+                            candidate,
+                            plan,
+                            row,
+                        },
+                        budget,
+                        handlers,
+                    )?;
+                    values.push(value);
+                }
+                budget.work(candidate.members.len(), 1)?;
+                rows.push(Candidate {
+                    template: candidate.template,
+                    selection_identity: candidate.selection_identity,
+                    members: candidate.members.clone(),
+                    completed: vec![true; values.len()],
+                    values,
+                });
+            }
+            (Some(rows), Some(schema))
+        } else {
+            (None, None)
+        };
+        let run = Run::new_schema(
+            window,
+            rows.as_deref().unwrap_or(candidates),
+            schema.as_ref().unwrap_or_else(|| plan.output()),
+            limits,
+            budget,
+        )?;
+        Ok(Some(Self {
+            run,
+            window: window.clone(),
+            rows,
+            schema,
+        }))
+    }
+    pub(super) fn value<T: TableAccess + ?Sized>(
+        &mut self,
+        row: usize,
+        candidates: &[Candidate],
+        table: &T,
+        budget: &mut Budget,
+        assignment: &Assignment,
+        plan: &DatasetPlan,
+    ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+        self.run.value(
+            row,
+            &self.window,
+            self.rows.as_deref().unwrap_or(candidates),
+            table,
+            budget,
+            &Context {
+                assignment,
+                plan,
+                schema: self.schema.as_ref(),
+            },
+        )
     }
 }

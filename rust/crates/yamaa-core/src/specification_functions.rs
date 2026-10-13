@@ -510,6 +510,15 @@ pub(super) fn bind_findings(
                 return Err(BindError::Internal);
             };
             Ok(match error.kind {
+                crate::project_call_binding::Kind::Joined(cause) => match cause {
+                    reference_binding::JoinedFinding::UnknownField => BindFinding::UnknownReference { path, name: name.clone() },
+                    reference_binding::JoinedFinding::UnavailableKey { .. } => BindFinding::ProjectFunction(FunctionFinding { path, function: call.call.name.clone(), argument: Some(argument.name.clone()), node: argument.node, cause: Cause::RowPhase { identifier: name.clone(), row: row.ok_or(BindError::Internal)?.into() } }),
+                    reference_binding::JoinedFinding::NoApplicableKeys { dataset, keys } => {
+                        let mut finding = source_expressions::SourceFinding::new(C::ImplicitSourceNoApplicableKeys, &path, &[("dataset", &dataset), ("hint", "declare an explicit `intermediate:` with `source`/`key` pairs")]);
+                        finding.texts("keys", keys); BindFinding::Source(finding)
+                    },
+                    reference_binding::JoinedFinding::KeyType { source, expected, actual } => BindFinding::Source(source_expressions::SourceFinding::new(C::ImplicitSourceKeyType, &path, &[("source", &source), ("expected", type_name(expected.into())), ("actual", type_name(actual.into()))])),
+                },
                 crate::project_call_binding::Kind::Output(
                     crate::reference_binding::Diagnostic::PhaseBoundary { .. },
                 ) => BindFinding::ProjectFunction(FunctionFinding {

@@ -4,11 +4,12 @@
 use crate::{numeric_compiler::CompiledNumeric, predicate};
 use alloc::{boxed::Box, collections::BTreeSet, string::String, vec::Vec};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Read {
     Source(usize),
     Column(usize),
     Intermediate { index: usize, column: usize },
+    Joined(Box<crate::dataset::JoinedRead>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -84,6 +85,14 @@ fn validate_scope(
             Read::Column(index) if !available.get(index).copied().unwrap_or(false) => {
                 return Err(ScopeError::UnavailableColumn)
             }
+            Read::Joined(ref read)
+                if read
+                    .keys
+                    .iter()
+                    .any(|key| !available.get(key.output_column).copied().unwrap_or(false)) =>
+            {
+                return Err(ScopeError::UnavailableColumn)
+            }
             _ => {}
         }
     }
@@ -103,7 +112,7 @@ impl BoundPredicate {
     pub fn new(plan: predicate::Plan, bindings: Vec<Binding>) -> Result<Self, BindingError> {
         if bindings
             .iter()
-            .any(|binding| matches!(binding.read, Read::Intermediate { .. }))
+            .any(|binding| matches!(binding.read, Read::Intermediate { .. } | Read::Joined(_)))
         {
             return Err(BindingError::InvalidSource);
         }
@@ -203,7 +212,7 @@ impl BoundPredicate {
             || self
                 .bindings
                 .iter()
-                .any(|binding| matches!(binding.read, Read::Intermediate { .. }))
+                .any(|binding| matches!(binding.read, Read::Intermediate { .. } | Read::Joined(_)))
         {
             return Err(BindingError::InvalidSource);
         }

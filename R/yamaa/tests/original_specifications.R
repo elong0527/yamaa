@@ -2065,11 +2065,17 @@ local({
     identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,A,B\n1,first,\n2,skip,skip\n3,,\n")))
   observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
   check_handler_ledger(observed,"[{\"spec_path\":\"columns.A.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.case[0].then.source.no_match\",\"handler\":\"no_match\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.no_match\",\"handler\":\"no_match\",\"count\":1}]")
-  unlink(file.path(directory,c("src.csv","donor.csv","result.csv")))
-  writeBin(charToRaw(sub("then: P.A","then: {source: {variable: P.A, absent: fallback}}",body,fixed=TRUE)),entry)
-  rejected <- yamaa_domain(entry)
-  check_issue_frame(rejected$issues,list(phase="planning",condition="unsupported_operation",requirement=NA_character_,spec_paths=list("columns.A.derivation.case[0].then.source"),context='{"operation":"case_source_options"}'))
-  stopifnot(is.null(rejected$output),is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"src.csv")),!file.exists(file.path(directory,"result.csv")))
+  for (variable in c("P.A", "P.ABSENT")) {
+    writeBin(charToRaw(sub("then: P.A",paste0("then: {source: {variable: ",variable,", absent: fallback}}"),body,fixed=TRUE)),entry)
+    admitted <- yamaa_domain(entry)
+    expected <- if (variable == "P.A") "ID,A,B\n1,first,\n2,skip,skip\n3,,\n" else "ID,A,B\n1,fallback,\n2,skip,skip\n3,fallback,\n"
+    count <- if (variable == "P.A") "0" else "2"
+    stopifnot(nrow(admitted$issues)==0L, admitted$save(),
+      identical(rawfile(file.path(directory,"result.csv")), charToRaw(expected)))
+    observations <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(admitted))
+    handler <- paste0('{"count":',count,',"handler":"absent","spec_path":"columns.A.derivation.case[0].then.source.absent"}')
+    stopifnot(grepl(handler,observations,fixed=TRUE))
+  }
   cat("nested case intermediate source shares lazy kept selection and complete handler accounting without Python\n")
 })
 

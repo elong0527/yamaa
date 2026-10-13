@@ -8,7 +8,7 @@ use yamaa_core::{
         BindError, BindFinding, CompilationLimits, PrepareError, PreparedSpecification,
     },
     table::{Column, TableSchema},
-    value::ColumnType,
+    value::{ColumnType, Value},
 };
 
 #[derive(Clone)]
@@ -441,10 +441,18 @@ fn window_compiler_binds_output_dependencies_without_engine_or_records() {
         PreparedSpecification::prepare_with_limits(&window_document("ID > 0"), policy),
         Err(PrepareError::Limit("window_order"))
     ));
-    assert!(matches!(
-        PreparedSpecification::prepare(&window_document("SRC.ID > 0")),
-        Err(PrepareError::Unsupported(_))
-    ));
+    let qualified = PreparedSpecification::prepare(&window_document("SRC.ID > 0"))
+        .unwrap()
+        .bind(&source())
+        .unwrap();
+    let Expression::ContextWindow(window) = &qualified.columns()[0].expression else {
+        panic!("qualified source window");
+    };
+    assert_eq!(window.sources, vec![("SRC.ID".into(), 0)]);
+    assert_eq!(
+        window.window.filter.as_ref().unwrap().bindings()[0].read,
+        yamaa_core::bound_expression::Read::Column(qualified.output().columns().len())
+    );
 }
 
 #[test]
@@ -917,7 +925,7 @@ fn selection_metadata_and_filters_are_bounded_before_owned_compilation() {
 }
 
 #[test]
-fn nested_source_options_are_rejected_before_binding_instead_of_dropped() {
+fn nested_source_options_keep_authored_handlers_and_selection_after_binding() {
     use Tree::*;
     for fields in [
         vec![("absent", Scalar(N::Integer("7".into())))],
@@ -928,6 +936,7 @@ fn nested_source_options_are_rejected_before_binding_instead_of_dropped() {
     ] {
         for concat in [false, true] {
             let mut fields = fields.clone();
+            let absent_handler = fields.iter().any(|(name, _)| *name == "absent");
             fields.insert(0, ("variable", Text("SRC.ID")));
             let value = Map(vec![("source", Map(fields))]);
             let (operation, payload, path) = if concat {
@@ -950,17 +959,36 @@ fn nested_source_options_are_rejected_before_binding_instead_of_dropped() {
                 )
             };
             let document = operation_document(operation, payload, "input.csv");
-            let Err(PrepareError::Unsupported(findings)) =
-                PreparedSpecification::prepare(&document)
+            let prepared = PreparedSpecification::prepare(&document).unwrap();
+            let plan = prepared.bind(&source()).unwrap();
+            let expression =
+                if let Expression::StrConcat { operands, .. } = &plan.columns()[0].expression {
+                    &operands[0].expression
+                } else if let Expression::Case(branches) = &plan.columns()[0].expression {
+                    &branches[0].assignment.expression
+                } else {
+                    panic!("nested source operation")
+                };
+            let Expression::SourceBinding {
+                source,
+                absent,
+                variable_absent,
+                path: bound_path,
+                ..
+            } = expression
             else {
-                panic!("nested source options must not be silently ignored");
+                panic!("source options lost")
             };
-            assert!(
-                findings.iter().any(|finding| {
-                    finding.operation == "case_source_options" && finding.path == path
-                }),
-                "{findings:?}"
-            );
+            assert_eq!(bound_path, path);
+            assert!(!variable_absent);
+            if absent_handler {
+                assert_eq!(absent, &Some(Value::Int(7)));
+            } else {
+                assert_eq!(absent, &None);
+                assert!(
+                    matches!(&source.expression, Expression::Collect { selection: Some(selection), .. } if selection.keep == yamaa_core::dataset::Keep::First && selection.order_by.len()==1)
+                );
+            }
         }
     }
 }

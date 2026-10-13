@@ -465,3 +465,85 @@ fn select<E>(
     }
     Ok(best)
 }
+
+/// A driver reads the source-only eligible records without running a keyed match.
+pub(super) fn driver_records<T: TableAccess + ?Sized>(
+    table: &T,
+    item: &Intermediate,
+    budget: &mut Budget,
+) -> Result<Vec<usize>, Box<ExecutionError<T::Error>>> {
+    budget.work(table.row_count(), 1)?;
+    let mut eligible = Vec::new();
+    eligible
+        .try_reserve_exact(table.row_count())
+        .map_err(|_| Box::new(ExecutionError::Allocation))?;
+    for source_row in 0..table.row_count() {
+        if let Some(filter) = &item.filter {
+            let truth = crate::dataset_predicate::evaluate(
+                filter.predicate(),
+                table,
+                source_row,
+                &[],
+                budget.predicate(),
+            )
+            .map_err(|error| match error.kind {
+                yamaa_core::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
+                _ => Box::new(ExecutionError::Predicate { source_row, error }),
+            })?;
+            if truth != yamaa_core::predicate::Truth::True {
+                continue;
+            }
+        }
+        eligible.push(source_row);
+    }
+    Ok(eligible)
+}
+struct DriverRows<'a, T: TableAccess + ?Sized> {
+    table: &'a T,
+    rows: &'a [usize],
+}
+impl<T: TableAccess + ?Sized> TableAccess for DriverRows<'_, T> {
+    type Error = T::Error;
+    fn schema(&self) -> &TableSchema {
+        self.table.schema()
+    }
+    fn row_count(&self) -> usize {
+        self.rows.len()
+    }
+    fn cell(
+        &self,
+        row: usize,
+        column: usize,
+    ) -> Result<yamaa_core::table::ValueRef<'_>, yamaa_core::table::CellError<Self::Error>> {
+        self.table.cell(
+            self.rows
+                .get(row)
+                .copied()
+                .ok_or(yamaa_core::table::CellError::OutOfBounds { row, column })?,
+            column,
+        )
+    }
+}
+pub(super) fn driver_groups<T: TableAccess + ?Sized>(
+    table: &T,
+    eligible: &[usize],
+    keys: &[usize],
+    limits: Limits,
+) -> Result<Vec<Vec<usize>>, Box<ExecutionError<T::Error>>> {
+    partition(
+        &DriverRows {
+            table,
+            rows: eligible,
+        },
+        keys,
+        limits.source_rows,
+        limits.key_cells,
+    )
+    .map(|groups| {
+        groups
+            .into_iter()
+            .map(|group| group.into_iter().map(|row| eligible[row]).collect())
+            .collect()
+    })
+    .map_err(|error| Box::new(ExecutionError::Grouping(error)))
+}

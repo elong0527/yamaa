@@ -82,6 +82,7 @@ fn aggregate_reads(aggregate: &BoundAggregate) -> bool {
 fn reads(expression: &Expression, items: &[Intermediate]) -> bool {
     match expression {
         Expression::Aggregate(aggregate) => aggregate_reads(aggregate),
+        Expression::Joined(_) | Expression::JoinedSource { .. } => false,
         Expression::Intermediate { index, .. } => named_selector(*index, items, 0),
         Expression::SourceBinding { source, .. } | Expression::StrContains { source, .. }
         | Expression::StrCase { source, .. } | Expression::StrPad { source, .. }
@@ -95,7 +96,7 @@ fn reads(expression: &Expression, items: &[Intermediate]) -> bool {
         Expression::Function(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if named_read(read, items))),
         Expression::ProjectFunction(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if named_read(read, items))),
         Expression::Case(branches) => branches.iter().any(|branch| branch.when.as_ref().is_some_and(|when| when.bindings().iter().any(|binding| named_read(&binding.read, items))) || reads(&branch.assignment.expression, items)),
-        Expression::Odm(_) | Expression::Literal(_) | Expression::Window(_) | Expression::Source(_)
+        Expression::Odm(_) | Expression::Literal(_) | Expression::Window(_) | Expression::ContextWindow(_) | Expression::Source(_)
         | Expression::SourceLookup { .. } | Expression::Lookup(_) | Expression::RowLookup(_)
         | Expression::Collect { .. } | Expression::Column(_) | Expression::Reduce { .. }
         | Expression::Count { .. } => false,

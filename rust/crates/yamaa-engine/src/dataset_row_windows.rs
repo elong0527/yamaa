@@ -16,29 +16,19 @@ pub(super) fn complete<T: TableAccess + ?Sized>(
         .iter()
         .filter(|assignment| deferred[assignment.column])
     {
-        let mut run = if let Expression::Window(window) = &assignment.expression {
-            Some(windows::Run::new(
-                window,
-                candidates,
-                plan,
-                limits,
-                state.budget,
-            )?)
-        } else {
-            None
-        };
+        let mut nested_windows = windows::Cache::default();
+        let mut run = windows::Evaluation::new(
+            assignment,
+            candidates,
+            plan,
+            table,
+            limits,
+            state.budget,
+            state.handlers,
+        )?;
         for row in 0..candidates.len() {
-            let value = if let (Some(run), Expression::Window(window)) =
-                (&mut run, &assignment.expression)
-            {
-                let value = run.value(
-                    row,
-                    window,
-                    candidates,
-                    table,
-                    state.budget,
-                    &windows::Context { assignment, plan },
-                )?;
+            let value = if let Some(run) = &mut run {
+                let value = run.value(row, candidates, table, state.budget, assignment, plan)?;
                 finish(
                     value,
                     assignment,
@@ -56,7 +46,19 @@ pub(super) fn complete<T: TableAccess + ?Sized>(
                     plan,
                     offset + row,
                     limits,
-                    state,
+                    &mut EvaluationState {
+                        primary: state.primary,
+                        functions: state.functions,
+                        secondary: state.secondary,
+                        self_rows: state.self_rows,
+                        budget: state.budget,
+                        handlers: state.handlers,
+                        intermediates: state.intermediates,
+                        output_rows: candidates,
+                        output_offset: offset,
+                        windows: &mut nested_windows,
+                        aggregate_row: None,
+                    },
                 )?
             };
             candidates[row].values[assignment.column] = value;

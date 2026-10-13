@@ -43,6 +43,23 @@ pub(super) fn bind(
             } else {
                 None
             }
+        } else if name
+            .split_once('.')
+            .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
+        {
+            source_expressions::bind_catalog_join(
+                name,
+                plan.spec_path(),
+                catalog,
+                None,
+                None,
+                edges,
+                findings,
+            )?
+            .and_then(|expression| match expression {
+                Expression::Joined(read) => Some(Read::Joined(read)),
+                _ => None,
+            })
         } else {
             match catalog.bind(name).map_err(BindError::Catalog)? {
                 Some(reference_binding::Binding::Output { column, .. }) => {

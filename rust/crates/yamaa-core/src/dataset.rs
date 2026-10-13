@@ -20,7 +20,7 @@ mod conversion;
 pub use conversion::ConversionHandler;
 #[path = "dataset_count.rs"]
 mod count;
-pub use count::{CountBoundError, RowCountBound, MAX_COUNT_BOUND_BYTES};
+pub use count::{CountBoundError, RowCount, RowCountBound, MAX_COUNT_BOUND_BYTES};
 #[path = "dataset_flag.rs"]
 mod flags;
 pub use flags::{
@@ -60,8 +60,11 @@ pub use self_relations::IntermediateSource;
 #[path = "dataset_match_values.rs"]
 mod match_values;
 pub use match_values::{IntermediateKey, MatchRead, MatchValue};
+#[path = "dataset_joined.rs"]
+mod joined;
 #[path = "dataset_lookup.rs"]
 mod lookup;
+pub use joined::JoinedRead;
 #[path = "dataset_rounding.rs"]
 mod rounding;
 pub use rounding::{InvalidDigits, Rounding};
@@ -88,11 +91,12 @@ pub use row_stages::window_stages;
 mod row_drivers;
 #[path = "dataset_windows.rs"]
 mod windows;
-pub use windows::{OrderTerm, Window, WindowKind};
+pub use windows::{ContextWindow, OrderTerm, Window, WindowKind};
 
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
+    Joined(alloc::boxed::Box<JoinedRead>),
     Odm(alloc::boxed::Box<BoundOdm>),
     Aggregate(alloc::boxed::Box<BoundAggregate>),
     MappingCut {
@@ -145,6 +149,12 @@ pub enum Expression {
         filter: Option<BoundPredicate>,
         selection: Option<SourceSelection>,
     },
+    /// A qualified source keeps its filter and stable choice on its declared port.
+    JoinedSource {
+        read: alloc::boxed::Box<JoinedRead>,
+        filter: Option<BoundPredicate>,
+        selection: Option<SourceSelection>,
+    },
     /// One condition selects a raw true/false/UNKNOWN literal.
     Flag(Flag),
     /// Compiled scalar arithmetic over statically bound source/completed output reads.
@@ -168,6 +178,7 @@ pub enum Expression {
     ProjectFunction(BoundProjectFunction),
     /// Windows over completed output rows in their column or row-template context.
     Window(Window),
+    ContextWindow(ContextWindow),
     /// First present raw operand in authored order, followed by one output conversion.
     FirstAvailable(alloc::boxed::Box<FirstAvailable>),
     Source(usize),
@@ -281,6 +292,12 @@ pub enum RowMode {
     Records,
     Groups(Vec<usize>),
     Keys,
+    /// A named input relation retains the backing donor coordinates.
+    IntermediateDriver {
+        index: usize,
+        source: usize,
+        mode: alloc::boxed::Box<RowMode>,
+    },
     /// A stored secondary source with one bounded record/group construction mode.
     Driver {
         source: usize,
@@ -363,6 +380,8 @@ pub enum Check {
         min: Option<RowCountBound>,
         max: Option<RowCountBound>,
     },
+    /// Count filtered rows in each constructed-output group.
+    ScopedRowCount(RowCount),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -615,6 +634,25 @@ fn validate_assignment_at(
         return Err(PlanError::DuplicateAssignment);
     }
     match &assignment.expression {
+        Expression::Joined(read) => read.validate(source, secondary, output, available)?,
+        Expression::JoinedSource {
+            read,
+            filter,
+            selection,
+        } => {
+            read.validate(source, secondary, output, available)?;
+            let width = read.schema.columns().len();
+            if let Some(filter) = filter {
+                filter
+                    .validate(width, &[], false)
+                    .map_err(PlanError::Filter)?;
+            }
+            if selection.as_ref().is_some_and(|s| {
+                s.order_by.is_empty() || s.order_by.iter().any(|term| term.column >= width)
+            }) {
+                return Err(PlanError::InvalidSourceOrder);
+            }
+        }
         Expression::Case(branches) => {
             if branches.is_empty() || branches.len() > 1024 || branches[0].when.is_none() {
                 return Err(PlanError::InvalidColumns);
@@ -626,7 +664,9 @@ fn validate_assignment_at(
                     return Err(PlanError::InvalidColumns);
                 }
                 if let Some(when) = &branch.when {
-                    if !when.collected().is_empty() && !matches!(mode, RowMode::Keys) {
+                    if !when.collected().is_empty()
+                        && !matches!(mode, RowMode::Keys | RowMode::Records)
+                    {
                         return Err(PlanError::InvalidKeyMode);
                     }
                     if let RowMode::Groups(keys) = mode {
@@ -854,7 +894,7 @@ fn validate_assignment_at(
             }
         }
         Expression::Function(function) => {
-            function.validate(source, available, mode)?;
+            function.validate(source, secondary, output, available, mode)?;
             validate_function_intermediates(
                 function.arguments(),
                 primary,
@@ -866,7 +906,7 @@ fn validate_assignment_at(
             )?;
         }
         Expression::ProjectFunction(function) => {
-            function.validate(source, available, mode)?;
+            function.validate(source, secondary, output, available, mode)?;
             validate_function_intermediates(
                 function.arguments(),
                 primary,
@@ -964,10 +1004,10 @@ fn validate_assignment_at(
             }
             lookup::validate(lookup, secondary, available, output)?;
         }
+        Expression::ContextWindow(window) => {
+            window.validate(available, output, source, mode)?;
+        }
         Expression::Window(window) => {
-            if depth != 0 {
-                return Err(PlanError::InvalidWindow);
-            }
             window.validate(available, output)?;
         }
         Expression::Column(column) => {
@@ -994,10 +1034,8 @@ fn validate_assignment_at(
             if *column >= source.columns().len() {
                 return Err(PlanError::InvalidSource);
             }
-            let scalar_records = filter.is_some()
-                && selection.is_none()
-                && (matches!(mode, RowMode::Records)
-                    || matches!(mode, RowMode::Groups(keys) if keys.contains(column)));
+            let scalar_records = matches!(mode, RowMode::Records)
+                || matches!(mode, RowMode::Groups(keys) if keys.contains(column));
             if (!matches!(mode, RowMode::Keys) && !scalar_records) || identifier.is_empty() {
                 return Err(PlanError::InvalidKeyMode);
             }
@@ -1048,6 +1086,34 @@ fn validate_assignment_at(
                 return Err(PlanError::EmptyPath);
             }
         }
+    }
+    match &assignment.expression {
+        Expression::Compute(numeric) => {
+            for binding in numeric.bindings() {
+                if let Read::Joined(read) = &binding.read {
+                    read.validate(source, secondary, output, available)?;
+                }
+            }
+        }
+        Expression::Flag(flag) => {
+            for binding in flag.bindings() {
+                if let FlagRead::Read(Read::Joined(read)) = &binding.read {
+                    read.validate(source, secondary, output, available)?;
+                }
+            }
+        }
+        Expression::Case(branches) => {
+            for branch in branches {
+                if let Some(when) = &branch.when {
+                    for binding in when.bindings() {
+                        if let Read::Joined(read) = &binding.read {
+                            read.validate(source, secondary, output, available)?;
+                        }
+                    }
+                }
+            }
+        }
+        _ => (),
     }
     available[assignment.column] = true;
     Ok(())
@@ -1140,6 +1206,7 @@ fn current_record_read(
             }
             AggregateRelation::Output { .. } => false,
         },
+        Expression::Joined(_) | Expression::JoinedSource { .. } => false,
         Expression::Source(_) | Expression::RowLookup(_) => include_raw,
         // A key-grain collection is valid in the primary implicit form. A
         // global column shared by foreign drivers cannot borrow its coordinates.
@@ -1210,7 +1277,7 @@ fn current_record_read(
                             intermediates,
                             scope,
                         ),
-                        Read::Column(_) => false,
+                        Read::Column(_) | Read::Joined(_) => false,
                     })
             }) || current_record_read(&branch.assignment.expression, intermediates, scope)
         }),
@@ -1296,7 +1363,8 @@ impl DatasetPlan {
         validate_columns(&keys, width)?;
         let mut row_columns = None;
         for (template_index, template) in templates.iter().enumerate() {
-            let (template_source, mode) = template.mode.context(&source, &secondary)?;
+            let (template_source, mode) =
+                template.mode.context(&source, &secondary, &intermediates)?;
             let keyed = matches!(mode, RowMode::Keys);
             if keyed && templates.len() != 1 {
                 return Err(PlanError::InvalidKeyMode);
@@ -1337,6 +1405,7 @@ impl DatasetPlan {
                 {
                     return Err(PlanError::InvalidKeyMode);
                 }
+                joined::validate_sources(&assignment.expression, &source, &secondary)?;
                 validate_assignment(
                     assignment,
                     &mut available,
@@ -1358,13 +1427,66 @@ impl DatasetPlan {
                 {
                     return Err(PlanError::Filter(BindingError::UnavailableColumn));
                 }
-                filter
-                    .validate(
-                        template_source.columns().len(),
-                        if keyed { &[] } else { &available },
-                        matches!(mode, RowMode::Groups(_)),
-                    )
-                    .map_err(PlanError::Filter)?;
+                if filter.bindings().iter().any(|binding| {
+                    matches!(binding.read, Read::Intermediate { .. } | Read::Joined(_))
+                }) {
+                    filter
+                        .validate_contextual(template_source.columns().len(), &available)
+                        .map_err(PlanError::Filter)?;
+                    for binding in filter.bindings() {
+                        if let Read::Joined(read) = &binding.read {
+                            joined::validate_source(read, &source, &secondary)?;
+                            read.validate(&source, &secondary, &output, &available)?;
+                            if read
+                                .keys
+                                .iter()
+                                .any(|key| deferred.get(key.output_column).copied().unwrap_or(true))
+                            {
+                                return Err(PlanError::Filter(BindingError::UnavailableColumn));
+                            }
+                        }
+                        if let Read::Intermediate { index, column } = binding.read {
+                            let item = intermediates
+                                .get(index)
+                                .ok_or(PlanError::InvalidIntermediate)?;
+                            intermediates::validate_context_read(
+                                item,
+                                column,
+                                template_source,
+                                &secondary,
+                                &available,
+                                &output,
+                                mode,
+                            )?;
+                            for field in item.current_fields() {
+                                field.validate_context(
+                                    template.mode.source_index(),
+                                    mode,
+                                    &available,
+                                )?;
+                            }
+                            let mut later = false;
+                            visit_output_dependencies(
+                                index,
+                                |index| intermediates.get(index),
+                                |column| {
+                                    later |= deferred.get(column).copied().unwrap_or(true);
+                                },
+                            )?;
+                            if later {
+                                return Err(PlanError::Filter(BindingError::UnavailableColumn));
+                            }
+                        }
+                    }
+                } else {
+                    filter
+                        .validate(
+                            template_source.columns().len(),
+                            if keyed { &[] } else { &available },
+                            matches!(mode, RowMode::Groups(_)),
+                        )
+                        .map_err(PlanError::Filter)?;
+                }
             }
             if row_columns
                 .as_ref()
@@ -1400,6 +1522,7 @@ impl DatasetPlan {
                 {
                     return Err(PlanError::InvalidKeyMode);
                 }
+                joined::validate_sources(&assignment.expression, &source, &secondary)?;
                 validate_assignment(
                     assignment,
                     &mut available,
@@ -1467,6 +1590,7 @@ impl DatasetPlan {
                         return Err(PlanError::InvalidBounds);
                     }
                 }
+                Check::ScopedRowCount(check) => check.validate(width)?,
                 Check::WideRowCount { min, max } => {
                     if (min.is_none() && max.is_none())
                         || matches!((min, max), (Some(a), Some(b)) if a > b)

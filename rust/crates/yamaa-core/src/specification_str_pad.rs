@@ -34,8 +34,8 @@ pub(super) fn prepare(
     d: &Document,
     payload: usize,
     path: &str,
-    driver: Option<&str>,
-    intermediates: Option<&intermediates::Declarations>,
+    _driver: Option<&str>,
+    _intermediates: Option<&intermediates::Declarations>,
     extra: &mut Vec<UnsupportedFeature>,
 ) -> Result<Declaration, PrepareError> {
     for &(key, _) in mapping(d, payload)? {
@@ -48,16 +48,6 @@ pub(super) fn prepare(
     let N::Integer(width) = &d.nodes()[field(d, payload, "width")?] else {
         return Err(PrepareError::Internal);
     };
-    if source.split_once('.').is_some_and(|(relation, _)| {
-        driver.is_some_and(|driver| relation != driver)
-            && !intermediates.is_some_and(|items| items.contains(relation))
-    }) {
-        reject(
-            extra,
-            "secondary_source_expression",
-            format!("{path}.source"),
-        );
-    }
     match StringPad::new(source, path, width) {
         Ok(pad) => Ok(Declaration::Valid(pad)),
         Err(DeclarationError::Width) => Ok(Declaration::WidthError {

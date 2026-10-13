@@ -2,6 +2,9 @@
 use alloc::{collections::BTreeMap, string::String, vec};
 
 use crate::value::ColumnType;
+#[path = "reference_joined_binding.rs"]
+mod joined_binding;
+pub use joined_binding::JoinedFinding;
 
 /// Borrowed field metadata supplied by a schema/normalization adapter.
 #[derive(Clone, Copy, Debug)]
@@ -96,6 +99,15 @@ pub struct Catalog {
     datasets: BTreeMap<String, DatasetCatalog>,
     limits: Limits,
     selected: BTreeMap<String, SelectedRelation>,
+    joined: BTreeMap<String, JoinedRelation>,
+}
+#[derive(Debug)]
+pub(crate) struct JoinedRelation {
+    pub source: usize,
+    pub fields: BTreeMap<String, (usize, ColumnType)>,
+    pub inference: crate::key_relation::Inference,
+    pub keys: alloc::vec::Vec<(String, usize)>,
+    pub schema: alloc::sync::Arc<crate::table::TableSchema>,
 }
 
 /// A kept relation used by a scalar callback, with its original key dependencies.
@@ -201,6 +213,111 @@ impl Catalog {
                 .ok_or(Diagnostic::UnknownField),
         ))
     }
+    pub(crate) fn joined(&self, name: &str) -> Option<&JoinedRelation> {
+        self.joined.get(name)
+    }
+    pub(crate) fn type_of(&self, name: &str) -> Result<Option<ColumnType>, Error> {
+        let bound = self.bind(name)?.map(|binding| match binding {
+            Binding::Output { column_type, .. } | Binding::Dataset { column_type, .. } => {
+                column_type
+            }
+        });
+        Ok(bound.or_else(|| {
+            name.split_once('.').and_then(|(relation, field)| {
+                self.joined(relation)?
+                    .fields
+                    .get(field)
+                    .map(|(_, kind)| *kind)
+            })
+        }))
+    }
+
+    /// Retain pure donor schemas and inferred current-output equality metadata.
+    pub(crate) fn with_joined(
+        mut self,
+        relations: &[(usize, Dataset<'_>)],
+        keys: &[usize],
+    ) -> Result<Self, Error> {
+        let outputs = self.output_names();
+        let keys = keys
+            .iter()
+            .map(|&key| {
+                outputs
+                    .get(key)
+                    .copied()
+                    .map(String::from)
+                    .ok_or(Error::InvalidAvailableOutput)
+            })
+            .collect::<Result<alloc::vec::Vec<_>, _>>()?;
+        let retained_keys = keys
+            .iter()
+            .map(|name| (name.clone(), self.outputs[name].0))
+            .collect::<alloc::vec::Vec<_>>();
+        let mut bytes = 0usize;
+        for (source, relation) in relations {
+            bytes = bytes
+                .checked_add(relation.name.len())
+                .and_then(|bytes| {
+                    relation.fields.iter().try_fold(bytes, |bytes, field| {
+                        bytes.checked_add(field.name.len())?.checked_add(64)
+                    })
+                })
+                .and_then(|bytes| bytes.checked_add(retained_keys.len().checked_mul(64)?))
+                .ok_or(Error::SizeOverflow)?;
+            limit("joined_catalog_bytes", bytes, self.limits.catalog_bytes)?;
+            let names = keys
+                .iter()
+                .map(String::as_str)
+                .collect::<alloc::vec::Vec<_>>();
+            let inference =
+                crate::key_relation::infer(&self, &names, relation.fields, Default::default())?;
+            let fields = relation
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(index, field)| (field.name.into(), (index, field.column_type)))
+                .collect();
+            let schema = alloc::sync::Arc::new(
+                crate::table::TableSchema::new(
+                    relation
+                        .fields
+                        .iter()
+                        .map(|field| crate::table::Column {
+                            name: field.name.into(),
+                            kind: field.column_type,
+                        })
+                        .collect(),
+                )
+                .map_err(|_| Error::DuplicateField)?,
+            );
+            self.joined.insert(
+                relation.name.into(),
+                JoinedRelation {
+                    source: *source,
+                    fields,
+                    inference,
+                    keys: retained_keys.clone(),
+                    schema,
+                },
+            );
+        }
+        Ok(self)
+    }
+    pub(crate) fn output_names(&self) -> alloc::vec::Vec<&str> {
+        let mut names = self
+            .outputs
+            .iter()
+            .map(|(name, (index, _))| (*index, name.as_str()))
+            .collect::<alloc::vec::Vec<_>>();
+        names.sort_unstable_by_key(|(index, _)| *index);
+        names.into_iter().map(|(_, name)| name).collect()
+    }
+    pub(crate) fn dataset_name(&self, index: usize) -> Option<&str> {
+        self.datasets
+            .iter()
+            .find(|(_, dataset)| dataset.index == index)
+            .map(|(name, _)| name.as_str())
+    }
     /// Borrow a declared relation's fields in stored column order.
     pub(crate) fn fields(&self, name: &str) -> Option<alloc::vec::Vec<Field<'_>>> {
         let dataset = self.datasets.get(name)?;
@@ -219,6 +336,9 @@ impl Catalog {
             .collect::<alloc::vec::Vec<_>>();
         fields.sort_unstable_by_key(|(index, _)| *index);
         Some(fields.into_iter().map(|(_, field)| field).collect())
+    }
+    pub(crate) fn output_width(&self) -> usize {
+        self.outputs.len()
     }
     /// Read an exact output declaration without interpreting it as a source path.
     pub(crate) fn output_type(&self, name: &str) -> Option<ColumnType> {
@@ -291,6 +411,7 @@ impl Catalog {
             datasets: dataset_index,
             limits,
             selected: BTreeMap::new(),
+            joined: BTreeMap::new(),
         })
     }
 

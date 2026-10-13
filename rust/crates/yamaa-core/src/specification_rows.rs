@@ -132,7 +132,7 @@ fn declaration(
                 .ok_or(PrepareError::Internal)?,
         ),
         "function" if project.is_none() => return Err(unsupported("function", &path)),
-        "source" => {
+        "source" if mapping(d, payload)?.len() == 1 => {
             closed_fields(d, payload, &["variable"], &path)?;
             let name = text(d, field(d, payload, "variable")?)?;
             if name.contains('.') {
@@ -176,6 +176,47 @@ fn default_reads(
         return Err(PrepareError::Internal);
     };
     let operation = text(d, operation)?;
+    fn contains_window(d: &Document, value: usize, depth: usize) -> Result<bool, PrepareError> {
+        if depth > 64 {
+            return Err(PrepareError::Limit("expression_depth"));
+        }
+        if [
+            "row_number",
+            "rank",
+            "row_value",
+            "previous_non_missing",
+            "locf",
+            "baseline_flag",
+            "window",
+        ]
+        .iter()
+        .any(|operation| d.field(value, operation).is_some())
+        {
+            return Ok(true);
+        }
+        if let Some(branches) = d.field(value, "case") {
+            for &branch in sequence(d, branches)? {
+                for name in ["then", "otherwise"] {
+                    if let Some(child) = d.field(branch, name) {
+                        if contains_window(d, child, depth + 1)? {
+                            return Ok(true);
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(concat) = d.field(value, "str_concat") {
+            for &child in sequence(d, field(d, concat, "sources")?)? {
+                if contains_window(d, child, depth + 1)? {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+    // A column window spans the complete constructed dataset, including when
+    // a nested branch or another output-key default depends on it.
+    let window_default = contains_window(d, value, 0)?;
     let mut reads = Vec::new();
     let mut names = Vec::new();
     derivations::references(d, value, project, &mut names, 0)?;
@@ -218,6 +259,11 @@ fn default_reads(
             let name = text(d, field(d, payload, "variable")?)?;
             reference(name);
             reads.extend(row_intermediates::default_dependencies(d, name, output)?);
+        }
+        "str_template" => {
+            for name in string_templates.get(payload)?.identifiers() {
+                reference(name);
+            }
         }
         "round_half_away_from_zero" => reference(text(d, field(d, payload, "source")?)?),
         "date_diff" | "study_day" | "to_epoch_day" => {
@@ -276,7 +322,7 @@ fn default_reads(
         "aggregate" | "lookup" | "window" => return Ok((false, reads)),
         _ => return Ok((true, reads)),
     }
-    Ok((true, reads))
+    Ok((!window_default, reads))
 }
 
 fn select_defaults(
@@ -636,7 +682,46 @@ impl Rows {
             }
         }
         // Complete row-local identity defaults before a newly admitted selector can fail.
-        if present(d, root, "intermediates") {
+        let mut secondary_reads = false;
+        for (row_index, &row) in raw_rows.iter().enumerate() {
+            let row_driver = d
+                .field(row, "dataset")
+                .map(|id| text(d, id))
+                .transpose()?
+                .unwrap_or(driver);
+            secondary_reads |= filters[row_index].as_ref().is_some_and(|(_, compiled)| {
+                compiled.as_ref().is_ok_and(|plan| {
+                    plan.identifiers().into_iter().any(|read| {
+                        read.split_once('.').is_some_and(|(source, _)| {
+                            source != row_driver
+                                && d.field(
+                                    field(d, root, "input").expect("admitted sources"),
+                                    source,
+                                )
+                                .is_some()
+                        })
+                    })
+                })
+            });
+            for &(_, declaration) in mapping(d, field(d, row, "derivations")?)? {
+                let mut reads = Vec::new();
+                derivations::current_references(
+                    d,
+                    field(d, declaration, "value")?,
+                    project,
+                    &mut reads,
+                    0,
+                )?;
+                secondary_reads |= reads.iter().any(|read| {
+                    read.split_once('.').is_some_and(|(source, _)| {
+                        source != row_driver
+                            && d.field(field(d, root, "input").expect("admitted sources"), source)
+                                .is_some()
+                    })
+                });
+            }
+        }
+        if present(d, root, "intermediates") || secondary_reads {
             for &key in sequence(d, field(d, root, "keys")?)? {
                 if let Some(column) = output
                     .columns()
@@ -747,7 +832,9 @@ impl Rows {
                     .iter()
                     .any(|c| text(d, name).is_ok_and(|name| name == c.name))
                 {
-                    return Err(unsupported("undeclared_row_column", &path));
+                    // Authored preflight already owns the undeclared-column
+                    // diagnostic; this is only a normalized-plan invariant.
+                    return Err(PrepareError::Internal);
                 }
             }
             let mut declarations = Vec::new();
@@ -786,20 +873,6 @@ impl Rows {
                     intermediates,
                 )?);
             }
-            // Other datasets require lookup/join state outside this closed row language.
-            if groups.is_none()
-                && filter.as_ref().is_some_and(|(_, compiled)| {
-                    compiled.as_ref().is_ok_and(|plan| {
-                        plan.identifiers().into_iter().any(|name| {
-                            name.contains('.')
-                                && name.split_once('.').map(|(dataset, _)| dataset)
-                                    != Some(row_driver)
-                        })
-                    })
-                })
-            {
-                return Err(unsupported("row_filter_dataset", &format!("{path}.filter")));
-            }
             templates.push(Template {
                 id: text(d, field(d, row, "id")?)?.into(),
                 driver: row_driver.into(),
@@ -813,6 +886,9 @@ impl Rows {
                 for declaration in &template.declarations {
                     if let RowOperation::Source(reference) = &declaration.operation {
                         if row_intermediates::named_reference(d, reference)?
+                            && reference
+                                .split_once('.')
+                                .is_none_or(|(owner, _)| owner != template.driver)
                             && !intermediates
                                 .reference(reference)
                                 .is_some_and(|(index, _)| intermediates.is_self(index))
@@ -857,7 +933,9 @@ impl Rows {
                     .field(id, "derivation")
                     .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 else {
-                    return Err(unsupported("missing_column", &prefix));
+                    // Authored preflight already retains missing defaults and
+                    // row derivations before lowering any template.
+                    return Err(PrepareError::Internal);
                 };
                 if templates.iter().any(|template| template.driver != driver) {
                     row_drivers::admit_reads(
@@ -971,7 +1049,7 @@ impl Rows {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind(
         &self,
-        prepared: &PreparedSpecification,
+        _prepared: &PreparedSpecification,
         source: &TableSchema,
         name: &str,
         output: &TableSchema,
@@ -983,7 +1061,17 @@ impl Rows {
         intermediates: Vec<Option<crate::dataset::Intermediate>>,
         mut findings: Vec<BindFinding>,
     ) -> Result<DatasetPlan, BindError> {
-        let catalog = row_drivers::catalog(output, source, name)?;
+        let mut catalog =
+            row_drivers::joined_catalog(output, source, name, keys, &secondary, name)?;
+        if self
+            .templates
+            .iter()
+            .any(|template| template.driver != name)
+        {
+            // Post-construction columns have no record owner shared by every
+            // template. Every stored source uses its captured port and output keys.
+            catalog = row_drivers::extend_catalog(catalog, source, name, keys, &secondary, "")?;
+        }
         let groups = self
             .templates
             .iter()
@@ -1093,24 +1181,24 @@ impl Rows {
                     &intermediates,
                 )?,
                 RowOperation::Source(reference) => {
-                    if matches!(phase, Phase::Column { .. })
-                        && reference.split_once('.').is_some_and(|(dataset, _)| {
-                            secondary.iter().any(|source| source.name == dataset)
-                        })
+                    if reference
+                        .split_once('.')
+                        .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
                     {
-                        source_expressions::bind(
-                            prepared,
-                            &source_expressions::Declaration::variable(reference),
-                            declaration.column,
+                        source_expressions::bind_catalog_join(
+                            reference,
                             &declaration.path,
                             catalog,
-                            source,
-                            &secondary,
-                            &intermediates,
+                            row,
+                            available,
                             edges,
                             findings,
                         )?
-                    } else if named.reference(reference).is_some() {
+                    } else if named.reference(reference).is_some()
+                        && reference
+                            .split_once('.')
+                            .is_none_or(|(owner, _)| owner != name)
+                    {
                         if !named
                             .reference(reference)
                             .is_some_and(|(index, _)| named.is_self(index))
@@ -1174,9 +1262,45 @@ impl Rows {
         let mut templates = Vec::new();
         for (index, template) in self.templates.iter().enumerate() {
             let filter_path = format!("rows[{index}].filter");
-            let (driver_index, row_source) =
-                row_drivers::select(source, name, &secondary, &template.driver)?;
-            let row_catalog = row_drivers::catalog(output, row_source, &template.driver)?;
+            if named
+                .reference(&format!("{}.driver", template.driver))
+                .is_some_and(|(index, _)| intermediates.get(index).is_some_and(Option::is_none))
+                && !findings.is_empty()
+            {
+                continue;
+            }
+            let (driver_index, row_source, named_driver) = row_drivers::select(
+                source,
+                name,
+                &secondary,
+                &template.driver,
+                named,
+                &intermediates,
+            )?;
+            if let Some(named_index) = named_driver {
+                named.driver_findings(
+                    &template.driver,
+                    &format!("rows[{index}].dataset"),
+                    intermediates[named_index]
+                        .as_ref()
+                        .ok_or(BindError::Internal)?,
+                    &mut findings,
+                )?;
+            }
+            let row_catalog = row_drivers::catalog_visible(
+                output,
+                row_source,
+                &template.driver,
+                named_driver.and_then(|index| intermediates[index].as_ref()),
+            )?;
+            let row_catalog = row_drivers::extend_catalog(
+                row_catalog,
+                source,
+                name,
+                keys,
+                &secondary,
+                &template.driver,
+            )?;
             let mode = match &template.groups {
                 None => RowMode::Records,
                 Some(groups) => RowMode::Groups(
@@ -1184,13 +1308,28 @@ impl Rows {
                         .iter()
                         .enumerate()
                         .filter_map(|(position, name)| {
-                            resolve(
+                            let resolved = resolve(
                                 name,
                                 &format!("rows[{index}].group_by[{position}]"),
                                 row_source,
                                 &template.driver,
                                 &mut findings,
-                            )
+                            );
+                            resolved.filter(|&column| {
+                                let visible = named_driver
+                                    .and_then(|index| intermediates[index].as_ref())
+                                    .is_none_or(|item| item.admits_column(column));
+                                if !visible {
+                                    findings.push(BindFinding::Lookup(LookupFinding::reference(
+                                        &format!("rows[{index}].group_by[{position}]"),
+                                        name,
+                                        Some(&template.driver),
+                                        ReferenceCause::Value,
+                                        None,
+                                    )));
+                                }
+                                visible
+                            })
                         })
                         .collect(),
                 ),
@@ -1330,7 +1469,54 @@ impl Rows {
                         continue;
                     }
                     if identifier.contains('.') {
-                        if !grouped {
+                        if !grouped
+                            && named.reference(identifier).is_some()
+                            && identifier
+                                .split_once('.')
+                                .is_none_or(|(owner, _)| owner != template.driver)
+                        {
+                            let mut edges = Vec::new();
+                            if let Some(Expression::Intermediate { index, column }) =
+                                row_intermediates::bind(
+                                    identifier,
+                                    &filter_path,
+                                    named,
+                                    &secondary,
+                                    &intermediates,
+                                    output,
+                                    &row_catalog,
+                                    Some(&available),
+                                    &mut edges,
+                                    &mut findings,
+                                )?
+                            {
+                                bindings.push(Binding {
+                                    name: identifier.into(),
+                                    read: Read::Intermediate { index, column },
+                                });
+                            }
+                        } else if !grouped
+                            && identifier
+                                .split_once('.')
+                                .is_some_and(|(owner, _)| row_catalog.joined(owner).is_some())
+                        {
+                            if let Some(Expression::Joined(read)) =
+                                source_expressions::bind_catalog_join(
+                                    identifier,
+                                    &filter_path,
+                                    &row_catalog,
+                                    Some(&template.id),
+                                    Some(&available),
+                                    &mut Vec::new(),
+                                    &mut findings,
+                                )?
+                            {
+                                bindings.push(Binding {
+                                    name: identifier.into(),
+                                    read: Read::Joined(read),
+                                });
+                            }
+                        } else if !grouped {
                             if let Some(column) = resolve(
                                 identifier,
                                 &filter_path,
@@ -1376,7 +1562,7 @@ impl Rows {
                 None
             } else {
                 predicate
-                    .map(|plan| BoundPredicate::new(plan.clone(), bindings))
+                    .map(|plan| BoundPredicate::new_contextual(plan.clone(), bindings, Vec::new()))
                     .transpose()
                     .map_err(BindError::InvalidPredicateBinding)?
             };
@@ -1390,6 +1576,7 @@ impl Rows {
                     crate::dataset::window_stages(&assignments, output.columns().len(), &bound);
                 for binding in filter.bindings() {
                     if matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
+                        || matches!(&binding.read, Read::Joined(read) if read.keys.iter().any(|key| deferred.get(key.output_column).copied().unwrap_or(true)))
                     {
                         findings.push(BindFinding::Scalar(crate::diagnostic::Diagnostic {
                             code: crate::diagnostic::ConditionCode::RowFilterPhaseBoundary,
@@ -1428,7 +1615,13 @@ impl Rows {
                 }
             }
             templates.push(RowTemplate {
-                mode: if driver_index == 0 {
+                mode: if let Some(index) = named_driver {
+                    RowMode::IntermediateDriver {
+                        index,
+                        source: driver_index,
+                        mode: alloc::boxed::Box::new(mode),
+                    }
+                } else if driver_index == 0 {
                     mode
                 } else {
                     RowMode::Driver {

@@ -82,11 +82,48 @@ fn base_context<'a, R>(
     use ConditionCode::*;
     let failed = Fact::Unsigned(record.failed_count);
     Ok(match code {
-        VerificationRowCountFailed => [
-            ("count", Fact::Unsigned(record.output_rows)),
-            ("failure_count", failed),
-        ]
-        .into(),
+        VerificationRowCountFailed => {
+            if let Some(observation) = record.row_count {
+                if observation.counts.len() != record.failed_count
+                    || observation
+                        .denominators
+                        .is_some_and(|d| d.len() != record.failed_count)
+                {
+                    return Err(Error::InvalidObservation);
+                }
+                let mut context: Context<'a> = [("failure_count", failed)].into();
+                if observation.counts.len() == 1 {
+                    context.insert("count", Fact::Unsigned(observation.counts[0]));
+                    if let Some(d) = observation.denominators {
+                        context.insert("denominator", Fact::Unsigned(d[0]));
+                    }
+                } else {
+                    context.insert(
+                        "counts",
+                        Fact::Sequence(
+                            observation
+                                .counts
+                                .iter()
+                                .map(|&n| Fact::Unsigned(n))
+                                .collect(),
+                        ),
+                    );
+                    if let Some(d) = observation.denominators {
+                        context.insert(
+                            "denominators",
+                            Fact::Sequence(d.iter().map(|&n| Fact::Unsigned(n)).collect()),
+                        );
+                    }
+                }
+                context
+            } else {
+                [
+                    ("count", Fact::Unsigned(record.output_rows)),
+                    ("failure_count", failed),
+                ]
+                .into()
+            }
+        }
         VerificationUniqueFailed => {
             let Some(Check::Unique(columns)) = compiled
                 .verifications()
@@ -197,8 +234,25 @@ pub fn project<'a, R: RowObservation>(
         let severity = compiled.verification_severity(record.path);
         let mut failure = Fact::Null;
         if record.failed_count > 0 {
-            let mut keys = keys(&names, record.offending_rows)?;
-            if code == ConditionCode::VerificationRowCountFailed {
+            let mut key_names = names.clone();
+            if code == ConditionCode::VerificationRowCountFailed && record.row_count.is_some() {
+                let Some(Check::ScopedRowCount(check)) = compiled
+                    .verifications()
+                    .iter()
+                    .find(|c| c.path == record.path)
+                    .map(|c| &c.check)
+                else {
+                    return Err(Error::InvalidObservation);
+                };
+                key_names = check
+                    .group_by
+                    .iter()
+                    .flatten()
+                    .map(|&c| compiled.output().columns()[c].name.as_str())
+                    .collect();
+            }
+            let mut keys = keys(&key_names, record.offending_rows)?;
+            if code == ConditionCode::VerificationRowCountFailed && record.row_count.is_none() {
                 keys = vec![Fact::Object(Context::new())];
             }
             let mut context = base_context(compiled, record, code)?;
@@ -256,6 +310,14 @@ pub fn project<'a, R: RowObservation>(
             if record.inventory.is_some() {
                 if let Some(Fact::Sequence(values)) = context.get_mut("values") {
                     values.truncate(5);
+                }
+            }
+            // Display samples and complete governed logs retain aligned group counts.
+            if record.row_count.is_some() && record.failed_count > 5 {
+                for name in ["counts", "denominators"] {
+                    if let Some(Fact::Sequence(values)) = context.get_mut(name) {
+                        values.truncate(5);
+                    }
                 }
             }
             if severity == VerificationSeverity::Error {

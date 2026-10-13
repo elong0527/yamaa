@@ -165,10 +165,15 @@ fn checked_calls_execute_through_shared_capture_and_repeat_on_held_snapshots() {
     let cells = Rc::new(Cell::new(0));
     let definition = function("id");
     let spec = model("id");
-    assert!(matches!(
-        domain::check(&spec),
-        Err(PrepareError::Unsupported(_))
-    ));
+    let Err(PrepareError::Invalid(findings)) = domain::check(&spec) else {
+        panic!("the called function needs its admitted environment");
+    };
+    assert!(
+        findings.iter().any(
+            |finding| finding.diagnostic().definition().condition == "unknown_project_function"
+        ),
+        "{findings:?}"
+    );
     let checked = domain::check_with_project(&spec, &[definition]).unwrap();
     assert!(trace.borrow().is_empty());
     assert!(checked.verification_declaration_diagnostics().is_empty());

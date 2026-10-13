@@ -35,6 +35,9 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
         }
         Expression::SourceLookup {
             selection: Some(_), ..
+        }
+        | Expression::JoinedSource {
+            selection: Some(_), ..
         } => {
             counter.register(
                 &alloc::format!("{}.multiple_matches", assignment.path),

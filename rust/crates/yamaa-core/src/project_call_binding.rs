@@ -24,6 +24,7 @@ pub struct Context<'a> {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Kind {
+    Joined(reference_binding::JoinedFinding),
     Output(Diagnostic),
     Scope(reference_scope::Finding),
     UnsupportedRelation {
@@ -84,6 +85,40 @@ pub fn bind(
                         Err(finding) => findings.push(Finding {
                             argument,
                             kind: Kind::Output(finding),
+                        }),
+                        Ok((read, actual, edges)) => {
+                            dependencies.extend(edges);
+                            let parameter = plan
+                                .signature()
+                                .parameters()
+                                .iter()
+                                .find(|p| p.name == item.name)
+                                .ok_or(Error::InvalidAdmittedCall)?;
+                            if kind(actual) != parameter.kind {
+                                findings.push(Finding {
+                                    argument,
+                                    kind: Kind::ArgumentType {
+                                        expected: parameter.kind,
+                                        actual: kind(actual),
+                                    },
+                                });
+                            }
+                            arguments.push(FunctionArgument {
+                                name: item.name.clone(),
+                                input: FunctionInput::Read(read),
+                            });
+                        }
+                    }
+                    continue;
+                }
+                if let Some(read) = catalog
+                    .joined_read(name, context.available_outputs)
+                    .map_err(Error::Reference)?
+                {
+                    match read {
+                        Err(kind) => findings.push(Finding {
+                            argument,
+                            kind: Kind::Joined(kind),
                         }),
                         Ok((read, actual, edges)) => {
                             dependencies.extend(edges);

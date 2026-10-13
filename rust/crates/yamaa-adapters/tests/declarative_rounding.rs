@@ -137,30 +137,30 @@ fn malformed_digits_precede_unknown_source_and_missing_study_data() {
 }
 
 #[test]
-fn unsupported_rounding_secondary_scope_rejects_before_study_data() {
+fn undeclared_rounding_relation_is_classified_with_actual_source_schema() {
     let study = Study::new(
         &POSITIVE.replace("source: VAL1", "source: OTHER.VAL1"),
-        false,
+        true,
     );
     let path = study.path();
-    let findings = file_application::check(
+    let findings = file_application::domain(
         Request {
             specification: &path,
             environment: None,
         },
         identity(&path),
-    );
+    )
+    .unwrap()
+    .issues()
+    .to_vec();
     assert_eq!(findings.len(), 1, "{findings:?}");
-    assert_eq!(findings[0].condition, "unsupported_operation");
+    assert_eq!(findings[0].condition, "unknown_field");
     assert_eq!(
         findings[0].spec_paths,
         ["columns.RND1.derivation.round_half_away_from_zero.source"]
     );
-    assert_eq!(
-        findings[0].context,
-        "{\"operation\":\"secondary_source_expression\"}"
-    );
-    assert!(!study.0.join("input").exists());
+    assert_eq!(findings[0].context, "{\"identifier\":\"OTHER.VAL1\"}");
+    assert!(!study.0.join("adsl.csv").exists());
 }
 
 fn assert_expected(result: &file_application::Domain) {

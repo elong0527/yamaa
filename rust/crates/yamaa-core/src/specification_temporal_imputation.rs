@@ -22,8 +22,8 @@ pub(super) fn prepare(
     payload: usize,
     op: &str,
     path: &str,
-    driver: Option<&str>,
-    intermediates: Option<&intermediates::Declarations>,
+    _driver: Option<&str>,
+    _intermediates: Option<&intermediates::Declarations>,
     extra: &mut Vec<UnsupportedFeature>,
 ) -> Result<Imputation, PrepareError> {
     let allowed: &[&str] = match op {
@@ -65,20 +65,6 @@ pub(super) fn prepare(
         handler_text("invalid"),
     ) {
         return Err(PrepareError::Limit("imputation_metadata"));
-    }
-    for (field_name, name) in
-        core::iter::once(("source", source)).chain(bound.map(|name| ("not_before", name)))
-    {
-        if name.split_once('.').is_some_and(|(relation, _)| {
-            driver.is_some_and(|driver| relation != driver)
-                && !intermediates.is_some_and(|items| items.contains(relation))
-        }) {
-            reject(
-                extra,
-                "secondary_source_expression",
-                format!("{path}.{field_name}"),
-            );
-        }
     }
     let kind = match op {
         "date_impute" => {

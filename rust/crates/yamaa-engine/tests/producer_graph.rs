@@ -54,10 +54,15 @@ fn complete_graph_metadata_never_grants_the_ordinary_build_capability() {
         matches!(leaf.execution_capability(), Err(PrepareError::Unsupported(features))
         if features.len() == 1 && features[0].operation == "producer_workflow" && features[0].path == "input")
     );
-    assert!(matches!(
-        yamaa_engine::domain::check(&root),
-        Err(PrepareError::Unsupported(_))
-    ));
+    let Err(PrepareError::Invalid(findings)) = yamaa_engine::domain::check(&root) else {
+        panic!("metadata alone does not admit the called project function");
+    };
+    assert!(
+        findings.iter().any(
+            |finding| finding.diagnostic().definition().condition == "unknown_project_function"
+        ),
+        "{findings:?}"
+    );
 }
 
 #[test]

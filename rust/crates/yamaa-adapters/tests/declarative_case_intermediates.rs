@@ -164,23 +164,39 @@ fn unchanged_first_ae_capture_matches_full_csv_and_complete_reached_handlers() {
     );
 }
 #[test]
-fn unimplemented_nested_source_options_still_refuse_before_study_capture() {
+fn nested_named_source_absence_handlers_are_lazy_and_preserve_existing_missing_values() {
     let fixture = Fixture::new();
+    fixture.populate();
     let body = BODY.replace(
         "then: P.A",
         "then: {source: {variable: P.A, absent: fallback}}",
     );
-    let issues = match fixture.run(&body) {
-        Ok(result) => result.issues().to_vec(),
-        Err(issues) => issues,
-    };
-    let observed=issues.iter().map(|issue|serde_json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<serde_json::Value>(&issue.context).unwrap()})).collect::<Vec<_>>();
-    assert_eq!(
-        observed,
-        vec![
-            serde_json::json!({"phase":"planning","condition":"unsupported_operation","requirement":null,"spec_paths":["columns.A.derivation.case[0].then.source"],"context":{"operation":"case_source_options"}})
-        ]
-    );
-    assert!(!fixture.0.join("src.csv").exists());
-    assert!(!fixture.0.join("result.csv").exists());
+    for (body, expected, count) in [
+        (
+            body.clone(),
+            b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n".as_slice(),
+            0,
+        ),
+        (
+            body.replace("variable: P.A,", "variable: P.ABSENT,"),
+            b"ID,A,B\n1,fallback,\n2,skip,skip\n3,fallback,\n".as_slice(),
+            2,
+        ),
+    ] {
+        let mut result = fixture.run(&body).unwrap();
+        assert!(result.issues().is_empty(), "{:?}", result.issues());
+        assert!(result.save().unwrap());
+        assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), expected);
+        assert_eq!(
+            result.observations()["handler_counts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(
+                    |entry| entry["spec_path"] == "columns.A.derivation.case[0].then.source.absent"
+                )
+                .unwrap(),
+            &serde_json::json!({"spec_path":"columns.A.derivation.case[0].then.source.absent","handler":"absent","count":count})
+        );
+    }
 }

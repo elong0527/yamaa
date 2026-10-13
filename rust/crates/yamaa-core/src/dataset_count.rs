@@ -70,3 +70,81 @@ impl PartialOrd for RowCountBound {
         Some(self.cmp(other))
     }
 }
+
+/// Inclusive bounds and row predicates over one completed output relation.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RowCount {
+    pub min: Option<RowCountBound>,
+    pub max: Option<RowCountBound>,
+    pub min_fraction: Option<f64>,
+    pub max_fraction: Option<f64>,
+    /// None denotes the one whole-artifact group, even for an empty output.
+    pub group_by: Option<alloc::vec::Vec<usize>>,
+    pub filter: Option<crate::bound_expression::BoundPredicate>,
+    pub when: Option<crate::bound_expression::BoundPredicate>,
+}
+impl RowCount {
+    pub(crate) fn validate(&self, width: usize) -> Result<(), super::PlanError> {
+        use super::PlanError;
+        if [self.min_fraction, self.max_fraction]
+            .into_iter()
+            .flatten()
+            .any(|n| !n.is_finite() || !(0.0..=1.0).contains(&n))
+            || (self.min.is_none()
+                && self.max.is_none()
+                && self.min_fraction.is_none()
+                && self.max_fraction.is_none())
+            || self
+                .min
+                .as_ref()
+                .zip(self.max.as_ref())
+                .is_some_and(|(a, b)| a > b)
+            || self
+                .min_fraction
+                .zip(self.max_fraction)
+                .is_some_and(|(a, b)| a > b)
+        {
+            return Err(PlanError::InvalidBounds);
+        }
+        if let Some(groups) = &self.group_by {
+            if groups.is_empty()
+                || groups
+                    .iter()
+                    .enumerate()
+                    .any(|(i, &c)| c >= width || groups[..i].contains(&c))
+            {
+                return Err(PlanError::InvalidColumns);
+            }
+        }
+        for predicate in self.filter.iter().chain(&self.when) {
+            predicate
+                .validate(0, &alloc::vec![true;width], true)
+                .map_err(PlanError::Predicate)?;
+        }
+        Ok(())
+    }
+    pub fn accepts(&self, count: usize, total: usize) -> bool {
+        let fraction = if total == 0 {
+            0.0
+        } else {
+            count as f64 / total as f64
+        };
+        self.min
+            .as_ref()
+            .is_none_or(|min| min.compare_count(count) != Ordering::Greater)
+            && self
+                .max
+                .as_ref()
+                .is_none_or(|max| max.compare_count(count) != Ordering::Less)
+            && self.min_fraction.is_none_or(|min| fraction >= min)
+            && self.max_fraction.is_none_or(|max| fraction <= max)
+    }
+    pub fn bound_work(&self) -> usize {
+        self.min
+            .iter()
+            .chain(&self.max)
+            .map(|n| n.decimal().len())
+            .sum::<usize>()
+            .max(1)
+    }
+}

@@ -340,6 +340,23 @@ pub(super) fn bind(
                 edges,
                 findings,
             )?
+        } else if name
+            .split_once('.')
+            .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
+        {
+            source_expressions::bind_catalog_join(
+                name,
+                condition.spec_path(),
+                catalog,
+                None,
+                None,
+                edges,
+                findings,
+            )?
+            .and_then(|expression| match expression {
+                Expression::Joined(read) => Some(FlagRead::Read(Read::Joined(read))),
+                _ => None,
+            })
         } else {
             match catalog.bind(name).map_err(BindError::Catalog)? {
                 Some(reference_binding::Binding::Dataset { field, .. }) => {
@@ -395,7 +412,44 @@ pub(super) fn bind_row(
         if !seen.insert(name) {
             continue;
         }
-        let read = if !name.contains('.') {
+        if let crate::reference_scope::Phase::Row { group_by } = phase {
+            if name
+                .split_once('.')
+                .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
+            {
+                let mut finding = LookupFinding::new(
+                    condition.spec_path(),
+                    if group_by.is_some() {
+                        C::GroupedRowNumericSourceScope
+                    } else {
+                        C::RowNumericSourceScope
+                    },
+                );
+                finding.text("identifier", name);
+                finding.texts("drivers", &[driver]);
+                findings.push(BindFinding::Lookup(finding));
+                continue;
+            }
+        }
+        let read = if matches!(phase, crate::reference_scope::Phase::Column { .. })
+            && name
+                .split_once('.')
+                .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
+        {
+            source_expressions::bind_catalog_join(
+                name,
+                condition.spec_path(),
+                catalog,
+                row,
+                available,
+                edges,
+                findings,
+            )?
+            .and_then(|expression| match expression {
+                Expression::Joined(read) => Some(FlagRead::Read(Read::Joined(read))),
+                _ => None,
+            })
+        } else if !name.contains('.') {
             output_binding(
                 name,
                 condition.spec_path(),

@@ -70,6 +70,7 @@ fn record<'a>(code: ConditionCode, path: &'a str, rows: &'a [Row]) -> CheckObser
         offending_rows: rows,
         codelist: None,
         inventory: None,
+        row_count: None,
     }
 }
 fn object<'a>(fact: &'a Fact<'a>) -> &'a yamaa_core::project_diagnostics::Context<'a> {

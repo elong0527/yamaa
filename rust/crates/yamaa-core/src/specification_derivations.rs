@@ -80,7 +80,7 @@ pub(super) fn prepare_value_with_driver(
         "function" => Operation::ProjectFunction(
             *project
                 .and_then(|p| p.nodes.get(&payload))
-                .ok_or_else(|| unsupported(&result_path, "function_environment"))?,
+                .ok_or(PrepareError::Internal)?,
         ),
         "case" => Operation::Case(cases::prepare(
             d,
@@ -116,9 +116,6 @@ pub(super) fn prepare_value_with_driver(
                 mapping_cut::prepare(d, payload, op, &result_path, intermediates, &mut features)?;
             if !features.is_empty() {
                 return Err(PrepareError::Unsupported(features));
-            }
-            if record && declaration.source.has_filter() {
-                return Err(unsupported(&result_path, "row_selection_filter"));
             }
             Operation::MappingCut(alloc::boxed::Box::new(declaration))
         }
@@ -211,19 +208,9 @@ pub(super) fn prepare_value_with_driver(
             if !features.is_empty() {
                 return Err(PrepareError::Unsupported(features));
             }
-            if operation
-                .sources
-                .iter()
-                .any(source_expressions::Declaration::has_filter)
-            {
-                return Err(unsupported(&result_path, "row_selection_filter"));
-            }
             Operation::FirstAvailable(alloc::boxed::Box::new(operation))
         }
         "row_number" | "rank" | "row_value" | "previous_non_missing" | "locf" | "baseline_flag" => {
-            if depth != 0 {
-                return Err(unsupported(&result_path, "nested_window"));
-            }
             let mut features = Vec::new();
             let operation = windows::Declaration::prepare(
                 d,
@@ -260,7 +247,9 @@ pub(super) fn prepare_value_with_driver(
                     }
                 }
                 Err(CompileError::Unsupported { .. }) => {
-                    return Err(unsupported(&result_path, "numeric_function"))
+                    // PortableLibmV1 admits every closed R003 function variant.
+                    // A contrary compiler outcome is an implementation defect.
+                    return Err(PrepareError::Internal);
                 }
                 Err(error) => {
                     return Err(PrepareError::Numeric {
@@ -281,9 +270,6 @@ pub(super) fn prepare_value_with_driver(
             )?;
             if !features.is_empty() {
                 return Err(PrepareError::Unsupported(features));
-            }
-            if source.has_selection() || source.has_absent() {
-                return Err(unsupported(&result_path, "case_source_options"));
             }
             Operation::Source(alloc::boxed::Box::new(source))
         }
@@ -328,53 +314,22 @@ pub(super) fn bind_row(
             findings,
         ),
         Operation::Literal(value) => Ok(Some(Expression::Literal(value.clone()))),
-        Operation::Source(source) => {
-            let before = findings.len();
-            let filter = source.bind_row_filter(path, driver, catalog, named, findings)?;
-            let expression = if named.reference(&source.variable).is_some() {
-                row_intermediates::bind(
-                    &source.variable,
-                    path,
-                    named,
-                    secondary,
-                    intermediates,
-                    output,
-                    catalog,
-                    available,
-                    edges,
-                    findings,
-                )?
-            } else {
-                rounding::bind_row_operand(
-                    &source.variable,
-                    path,
-                    catalog,
-                    driver,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                )?
-            };
-            if findings.len() != before {
-                return Ok(None);
-            }
-            Ok(expression.map(|expression| match filter {
-                Some(filter) => {
-                    let Expression::Source(column) = expression else {
-                        unreachable!("admitted filtered source has current-driver records");
-                    };
-                    Expression::Collect {
-                        column,
-                        identifier: source.variable.clone(),
-                        filter: Some(filter),
-                        selection: None,
-                    }
-                }
-                None => expression,
-            }))
-        }
+        Operation::Source(source) => source_expressions::bind_row(
+            source,
+            column,
+            path,
+            catalog,
+            driver,
+            row,
+            phase,
+            available,
+            edges,
+            findings,
+            output,
+            named,
+            secondary,
+            intermediates,
+        ),
         Operation::Scalar(operation) => scalar::bind_row(
             operation,
             column,
@@ -448,6 +403,35 @@ pub(super) fn bind_row(
             let before = findings.len();
             let mut bindings = Vec::new();
             for identifier in compiled.identifiers() {
+                if identifier.split_once('.').is_some_and(|(dataset, _)| {
+                    named.reference(identifier).is_none()
+                        && (matches!(phase, Phase::Column { .. })
+                            || catalog.joined(dataset).is_some())
+                }) {
+                    match phase {
+                        Phase::Column { .. } => {
+                            findings.push(BindFinding::QualifiedNumericReference {
+                                path: format!("{path}.expr"),
+                                expression: compiled.expression().into(),
+                                identifier: identifier.into(),
+                            })
+                        }
+                        Phase::Row { group_by } => {
+                            let mut finding = LookupFinding::new(
+                                &format!("{path}.expr"),
+                                if group_by.is_some() {
+                                    crate::diagnostic::ConditionCode::GroupedRowNumericSourceScope
+                                } else {
+                                    crate::diagnostic::ConditionCode::RowNumericSourceScope
+                                },
+                            );
+                            finding.text("identifier", identifier);
+                            finding.texts("drivers", &[driver]);
+                            findings.push(BindFinding::Lookup(finding));
+                        }
+                    }
+                    continue;
+                }
                 if let Some(expression) = self_relations::bind_operand(
                     identifier,
                     &format!("{path}.expr"),
@@ -529,6 +513,25 @@ pub(super) fn bind_row(
                             if !seen.insert(identifier) {
                                 continue;
                             }
+                            if let Phase::Row { group_by } = phase {
+                                if identifier
+                                    .split_once('.')
+                                    .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
+                                {
+                                    let mut finding = LookupFinding::new(
+                                        plan.spec_path(),
+                                        if group_by.is_some() {
+                                            crate::diagnostic::ConditionCode::GroupedRowNumericSourceScope
+                                        } else {
+                                            crate::diagnostic::ConditionCode::RowNumericSourceScope
+                                        },
+                                    );
+                                    finding.text("identifier", identifier);
+                                    finding.texts("drivers", &[driver]);
+                                    findings.push(BindFinding::Lookup(finding));
+                                    continue;
+                                }
+                            }
                             if let Some(expression) = self_relations::bind_operand(
                                 identifier,
                                 plan.spec_path(),
@@ -550,6 +553,7 @@ pub(super) fn bind_row(
                                     Expression::Intermediate { index, column } => {
                                         Read::Intermediate { index, column }
                                     }
+                                    Expression::Joined(read) => Read::Joined(read),
                                     _ => return Err(BindError::Internal),
                                 };
                                 bindings.push(Binding {
@@ -599,9 +603,7 @@ pub(super) fn bind_row(
             }
             Ok((findings.len() == before).then_some(Expression::Case(result)))
         }
-        Operation::Window(window) => window
-            .bind_available(catalog, available, edges, findings)
-            .map(|window| window.map(Expression::Window)),
+        Operation::Window(window) => window.bind_available(catalog, available, edges, findings),
         Operation::FirstAvailable(selection) => bind_selection(
             selection,
             path,
@@ -682,71 +684,47 @@ pub(super) fn bind_selection(
     let mut operands = Vec::new();
     for (index, source) in selection.sources.iter().enumerate() {
         let path = format!("{path}.sources[{index}]");
-        let read = if named.reference(&source.variable).is_some() {
-            row_intermediates::bind(
-                &source.variable,
-                &path,
-                named,
-                secondary,
-                intermediates,
-                output,
-                catalog,
-                row_context.as_ref().and_then(|context| context.available),
-                edges,
-                findings,
-            )?
-            .map(|expression| {
+        let fallback = SelectionContext {
+            driver: catalog.dataset_name(0).ok_or(BindError::Internal)?,
+            row: None,
+            phase: Phase::Column { groups: &[] },
+            available: None,
+        };
+        let context = row_context.as_ref().unwrap_or(&fallback);
+        let read = source_expressions::bind_row(
+            source,
+            column,
+            &path,
+            catalog,
+            context.driver,
+            context.row,
+            context.phase,
+            context.available,
+            edges,
+            findings,
+            output,
+            named,
+            secondary,
+            intermediates,
+        )?
+        .map(|expression| match expression {
+            Expression::Source(column) if row_context.is_none() => {
+                crate::dataset::SelectionRead::Collect {
+                    column,
+                    identifier: source.variable.clone(),
+                    filter: None,
+                }
+            }
+            Expression::Source(column) => crate::dataset::SelectionRead::Source(column),
+            Expression::Column(column) => crate::dataset::SelectionRead::Column(column),
+            expression => {
                 crate::dataset::SelectionRead::Expression(alloc::boxed::Box::new(Assignment {
                     column,
                     expression,
                     path: path.clone(),
                 }))
-            })
-        } else if let Some(SelectionContext {
-            driver,
-            row,
-            phase,
-            available,
-        }) = &row_context
-        {
-            rounding::bind_row_operand(
-                &source.variable,
-                &path,
-                catalog,
-                driver,
-                *row,
-                *phase,
-                *available,
-                edges,
-                findings,
-            )?
-            .map(|expression| match expression {
-                Expression::Source(column) => crate::dataset::SelectionRead::Source(column),
-                Expression::Column(column) => crate::dataset::SelectionRead::Column(column),
-                _ => unreachable!(),
-            })
-        } else {
-            match catalog.bind(&source.variable).map_err(BindError::Catalog)? {
-                Some(reference_binding::Binding::Output { column, .. }) => {
-                    edges.push(column);
-                    Some(crate::dataset::SelectionRead::Column(column))
-                }
-                Some(reference_binding::Binding::Dataset { field, .. }) => {
-                    Some(crate::dataset::SelectionRead::Collect {
-                        column: field,
-                        identifier: source.variable.clone(),
-                        filter: None,
-                    })
-                }
-                None => {
-                    findings.push(BindFinding::UnknownReference {
-                        path: path.clone(),
-                        name: source.variable.clone(),
-                    });
-                    None
-                }
             }
-        };
+        });
         if let Some(read) = read {
             operands.push(crate::dataset::SelectionSource { path, read });
         }

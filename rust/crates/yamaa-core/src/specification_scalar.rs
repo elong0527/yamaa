@@ -199,14 +199,7 @@ fn bound_types(
 ) -> Result<Vec<Option<ColumnType>>, BindError> {
     sources
         .iter()
-        .map(|name| {
-            catalog.bind(name).map(|binding| {
-                binding.map(|binding| match binding {
-                    reference_binding::Binding::Output { column_type, .. }
-                    | reference_binding::Binding::Dataset { column_type, .. } => column_type,
-                })
-            })
-        })
+        .map(|name| catalog.type_of(name))
         .collect::<Result<_, _>>()
         .map_err(BindError::Catalog)
 }
@@ -295,13 +288,13 @@ pub(super) fn bind(
             let mut operands = Vec::new();
             for source in sources {
                 let expression = if let Operation::Source(item) = source.operation.as_ref() {
-                    rounding::bind_operand(
-                        &item.variable,
-                        &source.path,
+                    source_expressions::bind(
+                        spec,
+                        item,
                         column,
-                        &spec.keys,
+                        &source.path,
                         catalog,
-                        &spec.intermediates,
+                        driver,
                         secondary,
                         intermediates,
                         edges,
@@ -514,64 +507,6 @@ pub(super) fn bind_row_contains(
 
 /// These new scalar operands may read the driver and an admitted named
 /// intermediate; implicit secondary joins are a separate language work package.
-pub(super) fn unsupported_relations(
-    operation: &Operation,
-    driver: &str,
-    declarations: &intermediates::Declarations,
-    extra: &mut Vec<UnsupportedFeature>,
-) {
-    fn reference(
-        name: &str,
-        path: &str,
-        driver: &str,
-        declarations: &intermediates::Declarations,
-        extra: &mut Vec<UnsupportedFeature>,
-    ) {
-        if name
-            .split_once('.')
-            .is_some_and(|(relation, _)| relation != driver && !declarations.contains(relation))
-        {
-            reject(extra, "secondary_source_expression", path.into());
-        }
-    }
-    match operation {
-        Operation::Scalar(operation) => match operation.as_ref() {
-            Declaration::Extreme { sources, path, .. } => {
-                for (index, name) in sources.iter().enumerate() {
-                    reference(
-                        name,
-                        &format!("{path}.sources[{index}]"),
-                        driver,
-                        declarations,
-                        extra,
-                    );
-                }
-            }
-            Declaration::Concat { sources, .. } => {
-                for source in sources {
-                    if let Operation::Source(item) = source.operation.as_ref() {
-                        reference(&item.variable, &source.path, driver, declarations, extra);
-                    }
-                    unsupported_relations(&source.operation, driver, declarations, extra);
-                }
-            }
-        },
-        Operation::StrContains(operation) => reference(
-            operation.source(),
-            &format!("{}.source", operation.path()),
-            driver,
-            declarations,
-            extra,
-        ),
-        Operation::Case(branches) => {
-            for source in branches {
-                unsupported_relations(&source.operation, driver, declarations, extra);
-            }
-        }
-        _ => (),
-    }
-}
-
 pub(super) fn operand_references(
     d: &Document,
     value: usize,

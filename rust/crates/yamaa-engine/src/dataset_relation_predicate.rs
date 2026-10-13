@@ -213,7 +213,7 @@ impl<T: TableAccess + ?Sized> EvaluationContext for Context<'_, '_, T> {
                 )
                 .map_err(ContextError::Resolution)?
             }
-            Read::Intermediate { .. } => {
+            Read::Intermediate { .. } | Read::Joined(_) => {
                 unreachable!("relation predicate uses explicit current metadata")
             }
         };

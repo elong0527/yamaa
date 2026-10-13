@@ -6,6 +6,9 @@ use crate::{
     predicate_compiler,
     value::Value,
 };
+#[path = "specification_source_rows.rs"]
+mod row_sources;
+pub(super) use row_sources::bind as bind_row;
 
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {
@@ -23,6 +26,17 @@ struct Filter {
 #[derive(Debug)]
 pub struct SourceFinding(Diagnostic);
 impl SourceFinding {
+    pub(super) fn texts(&mut self, name: &str, values: Vec<String>) {
+        self.0.context.insert(
+            name.into(),
+            ContextValue::Sequence(
+                values
+                    .into_iter()
+                    .map(|value| ContextValue::Scalar(Value::Str(value)))
+                    .collect(),
+            ),
+        );
+    }
     pub fn diagnostic(&self) -> Diagnostic {
         self.0.clone()
     }
@@ -48,15 +62,6 @@ impl SourceFinding {
     }
 }
 impl Declaration {
-    pub(super) fn variable(variable: &str) -> Self {
-        Self {
-            variable: variable.into(),
-            filter: None,
-            order: Vec::new(),
-            keep: None,
-            absent: None,
-        }
-    }
     pub fn prepare(
         d: &Document,
         payload: usize,
@@ -184,6 +189,16 @@ impl Declaration {
         intermediates: &intermediates::Declarations,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<BoundPredicate>, BindError> {
+        self.bind_filter_named(path, &source.name, schema, intermediates, findings)
+    }
+    pub fn bind_filter_named(
+        &self,
+        path: &str,
+        source: &str,
+        schema: &TableSchema,
+        intermediates: &intermediates::Declarations,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<Option<BoundPredicate>, BindError> {
         let Some(Filter {
             expression,
             compiled,
@@ -237,7 +252,7 @@ impl Declaration {
                 continue;
             }
             // The predicate is bound against the named immutable input schema.
-            if dataset != source.name {
+            if dataset != source {
                 return Err(BindError::Internal);
             }
             let field = reference.expect("qualified filter reference").1;
@@ -389,6 +404,29 @@ impl Declaration {
     }
     pub fn has_filter(&self) -> bool {
         self.filter.is_some()
+    }
+    fn wrap(
+        &self,
+        expression: Expression,
+        column: usize,
+        path: &str,
+        variable_absent: bool,
+    ) -> Expression {
+        if self.absent.is_some() || self.keep.is_some() {
+            Expression::SourceBinding {
+                source: alloc::boxed::Box::new(crate::dataset::Assignment {
+                    column,
+                    expression,
+                    path: path.into(),
+                }),
+                absent: self.absent.clone(),
+                variable_absent,
+                variable: self.variable.clone(),
+                path: path.into(),
+            }
+        } else {
+            expression
+        }
     }
 }
 
@@ -683,23 +721,7 @@ pub(super) fn bind(
             None
         }
     };
-    Ok(expression.map(|expression| {
-        if declaration.absent.is_some() || declaration.keep.is_some() {
-            Expression::SourceBinding {
-                source: alloc::boxed::Box::new(crate::dataset::Assignment {
-                    column,
-                    expression,
-                    path: path.into(),
-                }),
-                absent: declaration.absent.clone(),
-                variable_absent,
-                variable: name.clone(),
-                path: path.into(),
-            }
-        } else {
-            expression
-        }
-    }))
+    Ok(expression.map(|expression| declaration.wrap(expression, column, path, variable_absent)))
 }
 
 fn type_name(kind: crate::value::ColumnType) -> &'static str {
@@ -711,4 +733,234 @@ fn type_name(kind: crate::value::ColumnType) -> &'static str {
         Date => "date",
         DateTime => "datetime",
     }
+}
+
+/// Scalar expression operands use the same inferred output-key join as a bare
+/// stored-source derivation. Admission retains the donor and key types.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn bind_implicit(
+    name: &str,
+    path: &str,
+    keys: &[usize],
+    catalog: &Catalog,
+    secondary: &[crate::dataset::SecondarySource],
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<Expression>, BindError> {
+    let (dataset, field) = name.split_once('.').ok_or(BindError::Internal)?;
+    let (index, source) = secondary
+        .iter()
+        .enumerate()
+        .find(|(_, source)| source.name == dataset)
+        .ok_or(BindError::Internal)?;
+    let Some(column) = source
+        .schema
+        .columns()
+        .iter()
+        .position(|column| column.name == field)
+    else {
+        findings.push(BindFinding::UnknownReference {
+            path: path.into(),
+            name: name.into(),
+        });
+        return Ok(None);
+    };
+    let outputs = catalog.output_names();
+    let key_names = keys
+        .iter()
+        .map(|&key| outputs.get(key).copied().ok_or(BindError::Internal))
+        .collect::<Result<Vec<_>, _>>()?;
+    let donor = source
+        .schema
+        .columns()
+        .iter()
+        .map(|column| reference_binding::Field {
+            name: &column.name,
+            column_type: column.kind,
+        })
+        .collect::<Vec<_>>();
+    match crate::key_relation::infer(catalog, &key_names, &donor, Default::default())
+        .map_err(BindError::Catalog)?
+    {
+        crate::key_relation::Inference::Keys { keys: inferred } => {
+            let mut bound = Vec::new();
+            for key in inferred {
+                let output_column = keys[key];
+                let source_column = source
+                    .schema
+                    .columns()
+                    .iter()
+                    .position(|column| column.name == key_names[key])
+                    .ok_or(BindError::Internal)?;
+                edges.push(output_column);
+                bound.push(crate::dataset::MatchKey {
+                    source_column,
+                    output_column,
+                });
+            }
+            Ok(Some(Expression::SourceLookup {
+                lookup: crate::dataset::Lookup {
+                    source: index,
+                    column,
+                    keys: bound,
+                },
+                filter: None,
+                selection: None,
+            }))
+        }
+        crate::key_relation::Inference::NoApplicableKeys => {
+            let mut finding = SourceFinding::new(
+                C::ImplicitSourceNoApplicableKeys,
+                path,
+                &[
+                    ("dataset", dataset),
+                    (
+                        "hint",
+                        "declare an explicit `intermediate:` with `source`/`key` pairs",
+                    ),
+                ],
+            );
+            finding.0.context.insert(
+                "keys".into(),
+                ContextValue::Sequence(
+                    key_names
+                        .iter()
+                        .map(|name| ContextValue::Scalar(Value::Str((*name).into())))
+                        .collect(),
+                ),
+            );
+            findings.push(BindFinding::Source(finding));
+            Ok(None)
+        }
+        crate::key_relation::Inference::Incompatible {
+            key,
+            expected,
+            actual,
+        } => {
+            findings.push(BindFinding::Source(SourceFinding::new(
+                C::ImplicitSourceKeyType,
+                path,
+                &[
+                    ("source", key_names[key]),
+                    ("expected", type_name(expected)),
+                    ("actual", type_name(actual)),
+                ],
+            )));
+            Ok(None)
+        }
+        crate::key_relation::Inference::UndeclaredOutput { .. } => Err(BindError::Internal),
+    }
+}
+
+/// Common scalar operand hook for every row driver and its declared donor ports.
+pub(super) fn bind_catalog_join(
+    name: &str,
+    path: &str,
+    catalog: &Catalog,
+    row: Option<&str>,
+    available: Option<&[usize]>,
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<Expression>, BindError> {
+    let (dataset, field) = name.split_once('.').ok_or(BindError::Internal)?;
+    let donor = catalog.joined(dataset).ok_or(BindError::Internal)?;
+    let Some(&(column, _)) = donor.fields.get(field) else {
+        findings.push(BindFinding::UnknownReference {
+            path: path.into(),
+            name: name.into(),
+        });
+        return Ok(None);
+    };
+    let pairs = match &donor.inference {
+        crate::key_relation::Inference::Keys { keys } => keys,
+        crate::key_relation::Inference::Incompatible {
+            key,
+            expected,
+            actual,
+        } => {
+            findings.push(BindFinding::Source(SourceFinding::new(
+                C::ImplicitSourceKeyType,
+                path,
+                &[
+                    ("source", &donor.keys[*key].0),
+                    ("expected", type_name(*expected)),
+                    ("actual", type_name(*actual)),
+                ],
+            )));
+            return Ok(None);
+        }
+        crate::key_relation::Inference::NoApplicableKeys => {
+            let mut finding = SourceFinding::new(
+                C::ImplicitSourceNoApplicableKeys,
+                path,
+                &[
+                    ("dataset", dataset),
+                    (
+                        "hint",
+                        "declare an explicit `intermediate:` with `source`/`key` pairs",
+                    ),
+                ],
+            );
+            finding.0.context.insert(
+                "keys".into(),
+                ContextValue::Sequence(
+                    donor
+                        .keys
+                        .iter()
+                        .map(|(name, _)| ContextValue::Scalar(Value::Str(name.clone())))
+                        .collect(),
+                ),
+            );
+            findings.push(BindFinding::Source(finding));
+            return Ok(None);
+        }
+        _ => return Err(BindError::Internal),
+    };
+    let mut keys = Vec::new();
+    for &index in pairs {
+        let (name, output_column) = &donor.keys[index];
+        if let Some(finding) = catalog
+            .validate_output(name, None, available, &[0])
+            .map_err(BindError::Catalog)?
+        {
+            if matches!(finding, reference_binding::Diagnostic::PhaseBoundary { .. }) {
+                findings.push(BindFinding::Source(SourceFinding::new(
+                    C::RowDependencyPhaseBoundary,
+                    path,
+                    &[
+                        ("identifier", name),
+                        ("row", row.ok_or(BindError::Internal)?),
+                        ("available_phase", "column_derivation"),
+                        ("required_phase", "row_construction"),
+                    ],
+                )));
+                return Ok(None);
+            }
+            findings.push(BindFinding::OutputReference {
+                path: path.into(),
+                name: name.clone(),
+                finding,
+            });
+            return Ok(None);
+        }
+        let source_column = donor.fields.get(name).ok_or(BindError::Internal)?.0;
+        edges.push(*output_column);
+        keys.push(crate::dataset::MatchKey {
+            source_column,
+            output_column: *output_column,
+        });
+    }
+    Ok(Some(Expression::Joined(alloc::boxed::Box::new(
+        crate::dataset::JoinedRead {
+            source: if donor.source == 0 {
+                crate::dataset::AggregateSource::Primary
+            } else {
+                crate::dataset::AggregateSource::Secondary(donor.source - 1)
+            },
+            column,
+            keys,
+            name: dataset.into(),
+            schema: donor.schema.clone(),
+        },
+    ))))
 }

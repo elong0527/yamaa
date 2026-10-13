@@ -184,6 +184,7 @@ pub fn declaration_diagnostic(
         ConditionCode::VerificationIdentifierType
             | ConditionCode::VerificationDeclarationRequired
             | ConditionCode::VerificationIdentifierRepeated
+            | ConditionCode::VerificationGrouping
             | ConditionCode::VerificationBounds
             | ConditionCode::VerificationLengthBounds
             | ConditionCode::VerificationCardinality

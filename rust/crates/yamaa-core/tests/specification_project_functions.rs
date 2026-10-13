@@ -22,6 +22,44 @@ fn source() -> TableSchema {
 }
 
 #[test]
+fn absent_environment_and_empty_function_catalogue_retain_identical_static_nested_call_causes() {
+    let spec = specification(vec![(
+        "A",
+        "int",
+        Tree::map(vec![(
+            "case",
+            Tree::List(vec![Tree::map(vec![
+                ("when", Tree::text("ID > 0")),
+                ("then", call("unknown", vec![("x", Tree::text("ID"))])),
+            ])]),
+        )]),
+    )]);
+    let findings = |result| {
+        let Err(PrepareError::Invalid(findings)) = result else {
+            panic!("static function admission")
+        };
+        findings
+            .into_iter()
+            .map(|finding| {
+                let PreflightFinding::ProjectFunction(finding) = finding else {
+                    panic!("function cause")
+                };
+                finding.diagnostic()
+            })
+            .collect::<Vec<_>>()
+    };
+    let absent = findings(PreparedSpecification::prepare(&spec));
+    let empty = findings(PreparedSpecification::prepare_with_project(&spec, &[]));
+    assert_eq!(absent, empty);
+    assert_eq!(absent.len(), 1);
+    assert_eq!(absent[0].definition().condition, "unknown_project_function");
+    assert_eq!(
+        absent[0].spec_paths,
+        ["columns.A.derivation.case[0].then.function.name"]
+    );
+}
+
+#[test]
 fn compiler_selects_environment_slots_and_lowers_output_argument_dependencies() {
     let spec = specification(vec![
         ("A", "int", call("beta", vec![("x", Tree::text("ID"))])),
@@ -239,15 +277,21 @@ fn missing_stored_fields_and_unknown_relations_keep_authored_argument_diagnostic
 }
 
 #[test]
-fn calls_keep_dependency_cycles_and_legacy_compiler_boundaries() {
+fn calls_keep_dependency_cycles_and_absent_catalogue_static_causes() {
     let spec = specification(vec![
         ("A", "int", call("id", vec![("x", Tree::text("B"))])),
         ("B", "int", call("id", vec![("x", Tree::text("A"))])),
     ]);
-    assert!(matches!(
-        PreparedSpecification::prepare(&spec),
-        Err(PrepareError::Unsupported(_))
-    ));
+    let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&spec) else {
+        panic!("absent function catalogue retains the unknown-call cause")
+    };
+    assert_eq!(findings.len(), 2);
+    for finding in findings {
+        let PreflightFinding::ProjectFunction(finding) = finding else {
+            panic!("function cause")
+        };
+        assert_eq!(finding.cause, FunctionCause::UnknownFunction);
+    }
     let prepared = PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
     let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
         panic!("dependency findings")

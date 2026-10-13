@@ -24,6 +24,11 @@ pub struct CodelistObservation<'a> {
     pub id: &'a str,
     pub values: &'a [Value],
 }
+#[derive(Clone, Copy)]
+pub struct RowCountObservation<'a> {
+    pub counts: &'a [usize],
+    pub denominators: Option<&'a [usize]>,
+}
 pub struct CheckObservation<'a, R> {
     pub path: &'a str,
     pub code: ConditionCode,
@@ -33,6 +38,7 @@ pub struct CheckObservation<'a, R> {
     pub offending_rows: &'a [R],
     pub codelist: Option<CodelistObservation<'a>>,
     pub inventory: Option<&'a [Value]>,
+    pub row_count: Option<RowCountObservation<'a>>,
 }
 struct Budget(usize);
 impl Budget {
