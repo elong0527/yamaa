@@ -1,0 +1,13 @@
+{
+  "authorship": "Explicit normative correction disposition; original case_predicates.json bytes and historical CSV remain preserved.",
+  "cases": {
+    "grouped_key_filter": {
+      "classification": "historical_private_reference_defect",
+      "requirement": "REQ-0148",
+      "normative_fixture": "source_filter_scope.json",
+      "normative_case": "column-group-key-filter",
+      "historical_csv": "ID,VALUE\na,a\nb,\n",
+      "reason": "Private reference column_scope omits grouped_driver; the grouped driver key is a scalar under REQ-0086 and cannot be filtered under REQ-0148."
+    }
+  }
+}

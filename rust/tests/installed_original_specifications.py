@@ -2533,7 +2533,14 @@ columns:
     def test_public_case_predicates_and_filtered_sources_preserve_complete_authored_truth(self):
         import yamaa
         truth = json.loads((ROOT / "case-predicate-truth.json").read_text())
+        dispositions = json.loads((ROOT / "case-predicate-dispositions.json").read_text())["cases"]
         for name, case in truth["cases"].items():
+            if name in dispositions:
+                self.assertEqual(dispositions[name]["classification"], "historical_private_reference_defect")
+                self.assertEqual(dispositions[name]["requirement"], "REQ-0148")
+                self.assertEqual(case["csv"], dispositions[name]["historical_csv"])
+                self.assertEqual((ROOT / "case-predicate-history" / name / "expected.csv").read_text(), case["csv"])
+                continue
             with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
                 destination = Path(directory) / name
                 shutil.copytree(ROOT / "case-predicate-cases" / name, destination)
@@ -2568,7 +2575,9 @@ columns:
     def test_public_source_selection_preserves_authored_types_effect_order_and_save_bytes(self):
         import polars as pl
         import yamaa
-        truth = json.loads((ROOT / "source-selection-truth.json").read_text())
+        cases = [(name, case, ROOT / (label + "-cases") / name)
+                 for label in ("source-selection", "source-filter-scope")
+                 for name, case in json.loads((ROOT / (label + "-truth.json")).read_text())["cases"].items()]
 
         def issues(frame):
             rows = frame.to_dicts()
@@ -2577,11 +2586,11 @@ columns:
                 row["context"] = json.loads(row["context"])
             return rows
 
-        for name, case in truth["cases"].items():
+        for name, case, staged in cases:
             for attempt in range(2):
                 with self.subTest(case=name, attempt=attempt), tempfile.TemporaryDirectory() as directory:
                     destination = Path(directory) / name
-                    shutil.copytree(ROOT / "source-selection-cases" / name, destination)
+                    shutil.copytree(staged, destination)
                     entry = destination / "spec.yaml"
                     self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
                     result = yamaa.domain(entry)
