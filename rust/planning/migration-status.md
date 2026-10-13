@@ -1,7 +1,7 @@
 # yamaa Rust migration status
 
 Assessed 2026-10-13 against main
-`4b93a8e694f0ea8f73059ccdb82b4e79fdf21b12`. The implementation and acceptance
+`81a210ca98cc98402579144ab8845facf78b653b`. The implementation and acceptance
 owner is [#1969](https://github.com/elong0527/yamaa/issues/1969). This snapshot
 records merged behavior and remaining gates; it is not release approval.
 Earlier narrative remains in [the archive](archive/migration-status-before-work-packages.md).
@@ -49,7 +49,15 @@ metadata and correlated intermediate derivations with eager verification.
 Binding-to-core dependencies and duplicated binding policy are removed (#2085),
 and the R JSON inheritance callback is replaced by a typed engine outcome
 (#2086). Correlated-intermediate acceptance (#1979) is closed with its full-matrix
-truth and ratchet evidence.
+truth and ratchet evidence. Translating-binding acceptance (#1989) is closed with
+the exact-head full matrix and the independently replayed complete main audit.
+
+The external merge of #2089 retires R/cdiscbuilder, points installation guidance
+and shared grammar replay at R/yamaa, and includes the earlier probe-removal
+slices. That merge does not supply final qualification: main still lacks the
+last public filesystem and supplied-environment controls retained in #2093.
+The installed Python filesystem suite on this main revision still imports the
+legacy IO helper; its public replacement must land before Python removal.
 
 The first release still requires CPython 3.12-3.14 wheel and independent source
 rebuilds on Linux x86_64, macOS arm64 and Windows x64, plus R 4.6.1 source builds
@@ -67,22 +75,22 @@ the deferred Rust and numerical evidence. See [CI instructions](../../.github/ci
 
 | Scope | Open owners and concrete remaining gate |
 | --- | --- |
-| Language acceptance | #1980: finish additional authored scalar/key source forms and the reviewed grouped-filter disposition (#2101/#2103). #2005: finish declared predicate-site acceptance. Candidate public corpus coverage is complete. |
+| Language acceptance | #1980: qualify the consolidated authored scalar/key and grouped-source forms in #2108. #2005: finish top-level assertions on declared selected lookup fields and their complete predicate-site acceptance. Candidate public corpus coverage is complete. |
 | Diagnostic ownership | #2084 empties the adapter/binding literal allowlist using independent JSON truth. Core/engine ownership and normative null decisions are merged; #1984 still requires the current-head full dispatch and combined-main evidence. |
-| Binding and orchestration ownership | #1989 implementation is merged; renew combined-main acceptance. #1987's unified ordinary/environment/producer candidate passes the full installed dispatch. Qualify its supplied-environment diagnostic follow-up and final composition before closure. |
-| Callback/probe cleanup | The R inheritance/1 callback is retired; #1988's remaining transports and #1990's unique assertions, obsolete exports and assisted consumers are addressed by the probe-removal candidate. Its cohort/audit replacement must reject malformed evidence. Diagnostic context remains JSON text. |
-| Public surface and R package | #1991: complete the approved installed surface and deliberate removals; #1993: finish R/yamaa installation guidance, grammar replay and cdiscbuilder retirement. |
-| Repository tooling | Native CSV and regex validator routes and the retained style CLI are merged (#2095/#2097/#2087). #2002 must finish held native metadata, typed declaration/grammar consumers and the complete original validator controls before reference removal. |
+| Binding and orchestration ownership | #1989 is closed with #2085's full-matrix evidence. #1987's unified ordinary/environment/producer candidate passes the full installed dispatch. Qualify its supplied-environment diagnostic follow-up and final composition before closure. |
+| Callback/probe cleanup | #2089 includes the earlier endpoint and JSON-protocol retirement. #1988/#1990 still need #2093's final public filesystem, supplied-environment and unique assertion controls in the complete installed matrix. Diagnostic context remains JSON text. |
+| Public surface and R package | #1991: complete qualified Python legacy-surface removal and final installed contract evidence. #1993's R/yamaa guidance, grammar replay and cdiscbuilder deletion are merged in #2089; its final package matrix remains pending. |
+| Repository tooling | Native CSV and regex validator routes and the retained style CLI are merged (#2095/#2097/#2087). #2111 retains all 420 original validator controls, 1,907 passing Rust tests and 77 active native fixture proofs plus two historical exclusions. Its exact full installed matrix includes mandatory real-R issue transport; that acceptance is pending. #2109's changed numerical tools pass on all three hosts and await the full installed matrix. |
 | Release evidence | #1996: final combined-main evidence, complete public corpus, Windows R resource behavior and locked package membership after the remaining changes. |
-| Measurements | #1998 and #1973 item 10: collect the approved workload/size/form matrix, same-machine prior-release baselines, phase/callback/RSS evidence, raw samples and concrete passing budgets. The generator and collector exist; collection is incomplete. |
-| Transition and removal | #1999 and #1973 item 11: approve the existing [transition plan](transition.md) only after all entry criteria and rollback rehearsals pass; #1994 then removes the reference and obsolete APIs, renewing all affected evidence. |
+| Measurements | #1998 and #1973 item 10: collect the approved workload/size/form matrix, same-machine prior-release baselines, phase/callback/RSS evidence, raw samples and concrete passing budgets. Actual phase and cumulative-work prototypes pass functional controls; largest-size resource acceptance and distributions are incomplete. |
+| Transition and removal | #1999 and #1973 item 11: approve the existing [transition plan](transition.md) only after all entry criteria pass. Two draft rollback releases retain eleven assets with authenticated byte-equality receipts; the R canonical source archive passes all three hosts, while remaining Python source/host rollback proof is pending. #2110 prepares Python removal separately. |
 
 The maintainer delegated implementation decisions in
 [maintainer-decisions.md](maintainer-decisions.md); no additional confirmation is
 needed to continue independent implementation. Evidence-dependent budgets and
-transition approval remain pending. The reference evaluator, assisted inventory,
-component probe exports and R/cdiscbuilder remain in main. Their removal
-candidates are not release approval.
+transition approval remain pending. The Python reference evaluator and legacy
+exports remain in main. The externally merged R/probe removals and the remaining
+Python removal candidate are not release approval.
 
 Keep the assisted inventory frozen until its qualified public/typed replacements
 permit retirement. Existing per-slice qualification ledgers remain historical.

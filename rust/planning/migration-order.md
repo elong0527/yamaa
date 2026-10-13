@@ -1,7 +1,7 @@
 # yamaa Rust migration delivery order
 
 Assessed 2026-10-13 against main
-`4b93a8e694f0ea8f73059ccdb82b4e79fdf21b12`. The authoritative work packages,
+`81a210ca98cc98402579144ab8845facf78b653b`. The authoritative work packages,
 dependencies, waves and conflict groups are in
 [#1969](https://github.com/elong0527/yamaa/issues/1969). Use that issue's current
 table when selecting work. The earlier serial plan is preserved in
@@ -10,10 +10,13 @@ table when selecting work. The earlier serial plan is preserved in
 The CI prerequisites, public conformance inventory and most language families
 have landed. The candidate ratchet reaches 316 Python and 316 R benchmarks out
 of 318, with every active case passing and two approved historical exclusions.
-The binding, R inheritance and diagnostic ownership changes are merged. Finish
-their combined-main acceptance, source-option and predicate acceptance, and the unified engine follow-up. Migrate unique
-probe consumers, decouple repository tooling and qualify the final public surface
-before retirement. Collect performance baselines before removing the reference.
+The binding work package is closed; R inheritance and diagnostic ownership are
+merged. R retirement and earlier probe-removal slices landed externally in
+#2089. Finish their combined-main acceptance, the final public filesystem and
+environment controls, source-option and lookup-predicate acceptance, and the
+unified engine follow-up. Qualify the decoupled repository validator and final
+public surface before Python retirement. Collect performance baselines before
+removing the reference.
 The transition plan is merged; approval and removal still require its concrete
 entry criteria and complete combined-main evidence.
 
