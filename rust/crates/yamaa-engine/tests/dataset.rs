@@ -1676,7 +1676,9 @@ fn verification_identity_budgets_accumulate_across_checks() {
 /// Work admission precedes grouped reads and the aggregate's eager argument collection.
 #[test]
 fn work_limits_fail_before_the_next_source_operation() {
+    use yamaa_engine::application_observer::{Outcome, Refusal};
     use yamaa_engine::dataset::Resource;
+    use yamaa_engine::dataset::{ExecutionEvent, ExecutionPhase};
     let source = table(
         &[("id", ColumnType::Int), ("x", ColumnType::Int)],
         vec![
@@ -1709,21 +1711,49 @@ fn work_limits_fail_before_the_next_source_operation() {
         vec![],
     )
     .unwrap();
+    let mut events = Vec::new();
+    let attempt = plan.execute_with_execution_observer(
+        &source,
+        &[],
+        &mut yamaa_engine::function_invocation::NoFunctions::new(),
+        Limits {
+            work_cells: 2,
+            ..limits()
+        },
+        &mut |event| events.push(event),
+    );
     assert_eq!(
-        *plan
-            .execute(
-                &source,
-                Limits {
-                    work_cells: 2,
-                    ..limits()
-                }
-            )
-            .unwrap_err(),
+        *attempt.result.unwrap_err(),
         ExecutionError::Limit {
             resource: Resource::WorkCells,
             limit: 2,
             required: Some(3)
         }
+    );
+    assert_eq!(
+        &events[events.len() - 3..],
+        [
+            ExecutionEvent::Refusal {
+                phase: ExecutionPhase::Derivation,
+                refusal: Refusal {
+                    resource: Resource::WorkCells,
+                    limit: 2,
+                    required: Some(3)
+                }
+            },
+            ExecutionEvent::Exit {
+                phase: ExecutionPhase::Derivation,
+                outcome: Outcome::Failed
+            },
+            ExecutionEvent::Phase(ExecutionPhase::Finished),
+        ]
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, ExecutionEvent::Refusal { .. }))
+            .count(),
+        1
     );
     assert!(source.reads.borrow().is_empty());
     assert_eq!(

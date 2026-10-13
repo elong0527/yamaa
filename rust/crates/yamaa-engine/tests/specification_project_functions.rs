@@ -34,6 +34,10 @@ enum Stage {
         yamaa_engine::application_observer::CallStage,
         yamaa_engine::application_observer::Outcome,
     ),
+    Refusal(
+        yamaa_engine::application_observer::Phase,
+        yamaa_engine::application_observer::Refusal,
+    ),
 }
 #[derive(Default)]
 struct Stages(RefCell<Vec<Stage>>);
@@ -64,6 +68,14 @@ impl yamaa_engine::application_observer::Observer for Stages {
             } => {
                 assert_eq!(node, None);
                 Stage::Return(stage, outcome)
+            }
+            Event::Refusal {
+                node,
+                phase,
+                refusal,
+            } => {
+                assert_eq!(node, None);
+                Stage::Refusal(phase, refusal)
             }
         });
     }
@@ -429,6 +441,79 @@ fn observer_counts_actual_calls_and_preserves_signature_short_circuit_and_origin
                 ]
             );
         }
+    }
+}
+
+#[test]
+fn classified_limit_observation_keeps_exact_facts_and_never_invents_generic_capacity_details() {
+    use yamaa_engine::application_observer::{Phase, Refusal, Scope};
+    use yamaa_engine::dataset::{ExecutionPhase, Resource};
+    for classified in [true, false] {
+        let checked = domain::check_with_project(&model("id"), &[function("id")]).unwrap();
+        let trace = Rc::new(RefCell::new(vec![]));
+        let cells = Rc::new(Cell::new(0));
+        let mut functions = Bindings {
+            plan: Some(checked.compiled().project_calls().unwrap().plans()[0].clone()),
+            trace: Rc::clone(&trace),
+            raised: None,
+        };
+        let (mut source, mut decoder) = ports(&trace, &cells);
+        let mut limits = limits();
+        if classified {
+            limits.execution.work_cells = 0;
+        } else {
+            limits.execution.source_rows = 0;
+        }
+        let mut attempt = CapturedAttempt::new(checked.compiled().source());
+        let observer = Stages::default();
+        checked.build_with_observer_into(
+            &mut source,
+            &mut decoder,
+            &mut functions,
+            limits,
+            &mut attempt,
+            Scope::new(&observer),
+        );
+        let error = attempt.result.unwrap().result.unwrap_err();
+        let refusals = observer
+            .0
+            .borrow()
+            .iter()
+            .filter_map(|event| {
+                if let Stage::Refusal(phase, refusal) = event {
+                    Some((*phase, *refusal))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        if classified {
+            assert!(matches!(
+                *error,
+                ExecutionError::Limit {
+                    resource: Resource::WorkCells,
+                    limit: 0,
+                    required: Some(1)
+                }
+            ));
+            assert_eq!(
+                refusals,
+                [(
+                    Phase::Dataset(ExecutionPhase::Derivation),
+                    Refusal {
+                        resource: Resource::WorkCells,
+                        limit: 0,
+                        required: Some(1)
+                    }
+                )]
+            );
+        } else {
+            assert!(matches!(*error, ExecutionError::Capacity));
+            assert!(refusals.is_empty());
+        }
+        assert_eq!(source.reads, 1);
+        assert_eq!(cells.get(), 0);
+        assert_eq!(*trace.borrow(), ["inspect", "capture", "decode"]);
     }
 }
 

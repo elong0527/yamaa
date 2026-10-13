@@ -404,6 +404,11 @@ mod application_observations {
         Call(NodeCoordinate, CallStage),
         Exit(NodeCoordinate, Phase, Outcome),
         Return(NodeCoordinate, CallStage, Outcome),
+        Refusal(
+            NodeCoordinate,
+            Phase,
+            yamaa_engine::application_observer::Refusal,
+        ),
     }
     struct Recorder {
         trace: Trace,
@@ -426,6 +431,11 @@ mod application_observations {
                     stage,
                     outcome,
                 } => (node, Seen::Return(None, stage, outcome), "observe:return"),
+                Event::Refusal {
+                    node,
+                    phase,
+                    refusal,
+                } => (node, Seen::Refusal(None, phase, refusal), "observe:refusal"),
             };
             let node = node.map(|node| (node.index, node.identity.to_owned()));
             let seen = match seen {
@@ -433,6 +443,7 @@ mod application_observations {
                 Seen::Call(_, stage) => Seen::Call(node, stage),
                 Seen::Exit(_, phase, outcome) => Seen::Exit(node, phase, outcome),
                 Seen::Return(_, stage, outcome) => Seen::Return(node, stage, outcome),
+                Seen::Refusal(_, phase, refusal) => Seen::Refusal(node, phase, refusal),
             };
             self.events.borrow_mut().push(seen);
             self.trace.borrow_mut().push(marker.into());

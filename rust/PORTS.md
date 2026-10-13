@@ -96,6 +96,9 @@ records the delegated port result without inspecting its opaque payload. A
 missing argument has no call/return pair, and an invocation or stage that unwinds
 has an unmatched entry rather than an invented failed return. These measurement
 outcomes do not replace diagnostic phases, findings or original error owners.
+An optional Refusal event copies only an existing classified execution limit's
+resource, limit and optional required amount before its failed exit. It neither
+invents a used counter nor classifies generic Capacity or opaque port failures.
 
 ## Current lifecycle
 

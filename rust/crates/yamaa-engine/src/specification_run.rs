@@ -593,6 +593,9 @@ fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
             dataset::ExecutionEvent::Exit { phase, outcome } => {
                 scope.exit(crate::application_observer::Phase::Dataset(phase), outcome)
             }
+            dataset::ExecutionEvent::Refusal { phase, refusal } => {
+                scope.refusal(crate::application_observer::Phase::Dataset(phase), refusal)
+            }
         },
     ));
 }

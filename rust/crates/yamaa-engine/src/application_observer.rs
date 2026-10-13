@@ -47,6 +47,14 @@ impl Outcome {
     }
 }
 
+/// Only the classified native limit payload; no opaque-error or cap inference.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Refusal {
+    pub resource: crate::dataset::Resource,
+    pub limit: usize,
+    pub required: Option<usize>,
+}
+
 /// The actual graph node, borrowed only for the observer call. Ordinary requests
 /// have no graph node; a retained adapter already owns the graph's identities.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -74,6 +82,11 @@ pub enum Event<'a> {
         node: Option<Node<'a>>,
         stage: CallStage,
         outcome: Outcome,
+    },
+    Refusal {
+        node: Option<Node<'a>>,
+        phase: Phase,
+        refusal: Refusal,
     },
 }
 
@@ -119,6 +132,13 @@ impl<'a> Scope<'a> {
             node: self.node,
             phase,
             outcome,
+        });
+    }
+    pub fn refusal(self, phase: Phase, refusal: Refusal) {
+        self.observer.observe(Event::Refusal {
+            node: self.node,
+            phase,
+            refusal,
         });
     }
     pub(crate) fn activation<P: ActivationPort>(self, port: &mut P) -> Activation<'_, 'a, P> {

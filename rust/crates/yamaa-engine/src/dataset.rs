@@ -113,6 +113,10 @@ pub enum ExecutionEvent {
         phase: ExecutionPhase,
         outcome: crate::application_observer::Outcome,
     },
+    Refusal {
+        phase: ExecutionPhase,
+        refusal: crate::application_observer::Refusal,
+    },
 }
 
 /// Caller-selected capacity limits, not normative language limits.
@@ -1229,6 +1233,23 @@ impl Executor<'_> {
             &mut observations,
             &mut observer,
         );
+        if let Err(error) = &result {
+            if let ExecutionError::Limit {
+                resource,
+                limit,
+                required,
+            } = error.as_ref()
+            {
+                observer(ExecutionEvent::Refusal {
+                    phase: active.get(),
+                    refusal: crate::application_observer::Refusal {
+                        resource: *resource,
+                        limit: *limit,
+                        required: *required,
+                    },
+                });
+            }
+        }
         observer(ExecutionEvent::Exit {
             phase: active.get(),
             outcome: crate::application_observer::Outcome::from_result(&result),
