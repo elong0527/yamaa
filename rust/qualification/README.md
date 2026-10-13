@@ -85,10 +85,10 @@ Each sampled PR lane and every main or full-dispatch lane uploads its inventory,
 individual records and staged saved artifacts. The committed
 `public-conformance.json` gates both installed hosts. Its 294 Python cases and
 293 R cases are the independently replayed intersection of all eighteen Python
-lanes and three R hosts in full-dispatch run 38354915028 at
-`a44d8dd51e3ff27d62a9ec490b1c8e7a734cc3cf`. The eight per-record aggregate and
-inclusive-range benchmarks advance the prior 269 Python and 268 R cases without
-removing a pass. Every lane retains 38 unsupported cases and two historical
+lanes and three R hosts in full-dispatch run 38379046837 at
+`9b52b1f0ed841b499c578f63916eda8f1e7f6b02`. The seventeen row, window and
+filtered-driver benchmarks advance the prior 277 Python and 276 R cases without
+removing a pass. Every lane retains 21 unsupported cases and two historical
 exclusions. Python and Linux/macOS R retain one mismatch; Windows R retains two,
 including the symlink negative that passes elsewhere.
 No lane reports an execution error. The host-specific intersection keeps that
