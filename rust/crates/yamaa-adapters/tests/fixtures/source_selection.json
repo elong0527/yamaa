@@ -247,7 +247,7 @@
       },
       "csv": "ID,VALUE\n-9223372036854775808,constant\n"
     },
-    "key-first-available-earlier-key": {
+    "key-first-available-earlier": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, K]\ninput:\n  SRC: {path: input.csv}\noutput: {path: result.csv, columns: [ID, K, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: K, type: str, derivation: {first_available: {sources: [ID, SRC.OTHER]}}}\n  - {name: VALUE, type: int, derivation: SRC.V}\n",
       "inputs": {
         "input.csv": "ID,OTHER,V\na,unused,10\nb,unused,20\n"
@@ -332,7 +332,7 @@
       },
       "csv": "ID,K,VALUE\na,second,10\n"
     },
-    "secondary-filtered-key-first-available": {
+    "secondary-filtered-key-first": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, K]\ninput:\n  SRC: {path: input.csv}\n  D: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, K, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: K, type: str, derivation: {first_available: {sources: [{variable: D.NEWKEY, filter: 'D.SEQ = 2'}, SRC.BACKUP]}}}\n  - {name: VALUE, type: int, derivation: SRC.V}\n",
       "inputs": {
         "input.csv": "ID,BACKUP,V\na,local-a,10\nb,local-b,20\n",
@@ -375,7 +375,7 @@
       },
       "csv": "ID,K,VALUE\na,second,10\nb,local-b,20\n"
     },
-    "named-key-candidates-and-column-choice": {
+    "named-key-candidates-choice": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, A, B]\ninput:\n  SRC: {path: input.csv, types: {CUT: int}}\n  DONOR: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B, C]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID}\n    filter: 'DONOR.SEQ > SRC.CUT'\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: {first_available: {sources: [P.A, SRC.BACKUP]}}}\n  - {name: B, type: str, derivation: {source: {variable: P.B, order_by: [DONOR.SEQ], keep: last}}}\n  - {name: C, type: str, derivation: P.C}\n",
       "inputs": {
         "input.csv": "ID,CUT,BACKUP\na,0,unused\nb,1,unused\n",
@@ -440,7 +440,7 @@
       },
       "csv": "ID,A,B,C\na,a1,b1,c1\nb,a2,b2,c2\n"
     },
-    "all-key-conversions-before-nonkey-effects": {
+    "all-key-conv-before-nonkey": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {USE: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: {variable: SRC.ID, filter: 'SRC.USE = 1'}}}\n  - {name: VALUE, type: int, derivation: {compute: {expr: '1 / 0'}}}\n",
       "inputs": {
         "input.csv": "ID,USE\n1,1\nbad,1\n"
@@ -466,7 +466,7 @@
         "input.csv"
       ]
     },
-    "filtered-key-missing-reaches-output-gate": {
+    "filtered-key-missing-gate": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {USE: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: {source: {variable: SRC.ID, filter: 'SRC.USE = 1'}}}\n  - {name: VALUE, type: int, derivation: SRC.V}\n",
       "inputs": {
         "input.csv": "ID,USE,V\na,1,10\nb,0,20\n"
@@ -640,7 +640,7 @@
         "input.csv"
       ]
     },
-    "resource-failure-precedes-unpaired-build": {
+    "resource-failure-first": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.V, keep: first}}}\n",
       "inputs": {},
       "issues": [
@@ -679,7 +679,7 @@
       "handlers": [],
       "source_reads": []
     },
-    "key-nonkey-dependency-stays-forbidden": {
+    "key-nonkey-dep-forbidden": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\noutput: {path: result.csv, columns: [VALUE, ID]}\ncolumns:\n  - {name: VALUE, type: int, derivation: {literal: 7}}\n  - {name: ID, type: int, derivation: {first_available: {sources: [VALUE]}}}\n",
       "inputs": {
         "input.csv": "ID\na\n"
