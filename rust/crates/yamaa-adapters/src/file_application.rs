@@ -769,7 +769,10 @@ mod tests {
                     Ok(_) => panic!("rejected public view acquired a Domain owner"),
                 };
                 assert_eq!(failures.len(), 1);
-                assert_eq!(failures[0].condition, "engine_rejected");
+                assert_eq!(
+                    failures[0].condition,
+                    crate::test_diagnostic_truth::text("implementation-rejection", "condition")
+                );
                 assert_eq!(
                     serde_json::from_str::<Value>(&failures[0].context).unwrap(),
                     serde_json::json!({"stage":"build","code":"output_projection"})

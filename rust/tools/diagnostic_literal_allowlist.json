@@ -1,9 +1,1 @@
-{
-  "rust/crates/yamaa-adapters/src/file_application.rs:699": 1,
-  "rust/crates/yamaa-adapters/src/issue_rows.rs:116": 1,
-  "rust/crates/yamaa-adapters/src/issue_rows.rs:141": 1,
-  "rust/crates/yamaa-adapters/src/producer_report.rs:1073": 1,
-  "rust/crates/yamaa-adapters/src/producer_result.rs:1160": 2,
-  "rust/crates/yamaa-adapters/src/producer_result.rs:997": 1,
-  "rust/crates/yamaa-adapters/src/specification_check.rs:104": 1
-}
+{}

@@ -93,6 +93,42 @@ def test_warning_retains_all_keys_without_changing_fatal_diagnostic_shape() -> N
     assert "log_context" not in reported(failure)
 
 
+@pytest.mark.parametrize("severity", [["warning"], {"value": "warning"}])
+def test_an_unhashable_severity_is_refused_rather_than_crashing(
+    severity: object,
+) -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")],
+        [["S", "S-1", 50]],
+    )
+
+    with pytest.raises(DeclarationError) as column_caught:
+        check_column(
+            completed,
+            column(
+                "AGE",
+                "int",
+                {"range": {"min": 18, "max": 100, "severity": severity}},
+            ),
+            KEYS,
+        )
+    assert column_caught.value.condition == "value_not_permitted"
+    assert column_caught.value.requirement == "REQ-0389"
+    assert column_caught.value.context == {
+        "value": severity,
+        "permitted": ["error", "warning"],
+    }
+
+    with pytest.raises(DeclarationError) as dataset_caught:
+        check_dataset(
+            completed,
+            [Expression(root={"row_count": {"min": 1, "severity": severity}})],
+            KEYS,
+        )
+    assert dataset_caught.value.condition == "value_not_permitted"
+    assert dataset_caught.value.requirement == "REQ-0389"
+
+
 def test_not_missing_failure_reproduces_the_committed_error_contract() -> None:
     completed = table(
         [("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")],
