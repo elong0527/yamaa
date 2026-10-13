@@ -57,48 +57,89 @@ matrix. A still-live import, unported assertion or failed public comparison
 stops that slice. Deletion commits stay separate from the helper port and
 from the R rollback rehearsal, so reviewers can retain or restore one family.
 
-## Retained R source and fresh-environment rehearsal
+## Concrete source and assertion inventory
 
-The successful audited native run
-[38394553441](https://github.com/elong0527/yamaa/actions/runs/38394553441)
-at `a1a9c2d216075f331ac108aa4d3638573f103cea` supplied qualified installed
-pre-cutover R source packages, version 0.3.0. They are not published R
-releases; the previous Python tag supplied no R release asset.
+[python-retirement-inventory.json](python-retirement-inventory.json) freezes the
+pre-removal source revision, all 99 retiring source/assets files and every named
+function in the 77 retiring test files (1,193 functions before parametrization).
+It records the retained source/proof families and deliberate API dispositions.
+The inventory makes source-level review possible; it does not claim that a list
+of proof paths establishes new installed qualification.
 
-| Platform artifact | Exact GitHub Actions artifact ID |
-| --- | --- |
-| `native-r-ubuntu-24.04/yamaa_0.3.0.tar.gz` | 11811851297 |
-| `native-r-macos-15/yamaa_0.3.0.tar.gz` | 11812627529 |
-| `native-r-windows-latest/yamaa_0.3.0.tar.gz` | 11812047748 |
+The exact-value arithmetic, conversion, numeric literal, reduction, predicate and
+numeric-lifecycle fixtures remain in their typed Rust owners. Python component
+endpoints and their JSON/envelope refusal tests disappear under #1990, while the
+original-specification report fixtures remain independent authored M1 truth.
+Complete report comparison retains exact scalar bits, missing/empty distinctions,
+types, row/node/source/callback order, handler counts and verification ledgers.
+The reviewed mutation controls refuse incomplete reports, observation changes,
+wrong source truth, wrong installed owner/core/runtime and altered publication
+types or saved artifacts.
 
-All three archives were retrieved independently through the GitHub connector
-and compare byte-for-byte with the retained audit copies. Receipts identify
-the source revision, run/attempt, artifact, version and byte count without
-content digests. The Actions artifacts expire on 2027-01-11; a durable
-retrievable source asset remains a release gate under #1999.
+Public domain/check/Define suites preserve semantic output, diagnostics, logs,
+argument, ownership and held Save assertions. Python planner/model objects,
+custom evaluator injection, arbitrary Save destinations, exposed input/resolved
+views, legacy ODM binding objects and the old submission authoring interface
+retire under the approved scope. Root discovery, root containment and fallback
+path expectations retire under #1905; file-kind/symlink, snapshot, byte-bound and
+declaring-file path assertions retain typed adapters and installed public owners.
 
-The explicit `rollback_r=true` dispatch mode in `r.yml` downloads those exact
-artifact IDs and verifies their successful run and source identity before
-installation. It installs the old archive in an empty library with its
-required Rust 1.90.0/R 4.6.1 toolchain, using Rtools45/GNU on Windows. A new
-R process verifies the installed package path/version before creating study
-data. It then replays authored domain/check fixtures with full-range integer
-and leading-zero text, removes the input/specification before held Save,
-compares exact CSV bytes, and replays fixed-time Define against the prior
-archive's previously qualified goldens. A sentinel candidate output must
-remain unchanged throughout. Source bytes, identities, installed versions,
-logs and saved replay outputs are retained as evidence.
+The separate prerequisite commits must be composed before applying the deletion
+series: the complete #2002 validator delegation, qualification's numerical CLI
+ports, the public file-resources port and the reviewed M1 owner comparison. The
+series retains `_odm`, the private style package, all eight approved root exports,
+native facades/results/callbacks and the single distribution's extension. It
+removes assisted qualification manifests and the legacy reference workflow only
+after their assertions and active consumers have those successors. Historical
+audits remain readable through the explicit v1 audit branch; retained authored
+report truth is never relabeled as a fresh reference run.
 
-All three platform-specific source restores passed in
-[run 38426887552](https://github.com/elong0527/yamaa/actions/runs/38426887552),
-at immutable rehearsal head `560c5bd3685340945bb3ad52b322514534f54a5a`.
-Downloaded proof archives retain exact byte equality with each prior artifact.
-The current workflow selects the same canonical Linux-built source archive on
-all three platforms, matching the proposed single durable source asset. This
-additional cross-platform rehearsal remains pending. The source contains
-both Unix and Windows build rules; its publication requires that exact-byte
-installation proof on every supported R platform.
+## Retained prior-package rollback preparation
 
-The rehearsals prove fresh source-archive restores. They do not claim an
-existing published R release, a restored `renv.lock`, durable publication,
-performance acceptance or transition approval.
+The prior Python package is tag `yamaa-py-0.3.0` at source
+`845a91ff9ba4ab6599efbd79fafe1c4e1dd14255`. Its retained Linux abi3 wheel was built
+from that source with Rust 1.90.0 and locked dependencies. The old release had no
+package assets, and registry version 0.3.0 was unavailable. The source-built
+package is distinct from the qualified installed pre-cutover R candidate at
+`a1a9c2d216075f331ac108aa4d3638573f103cea`; no prior R release was published.
+
+An explicit fresh Linux CPython 3.12.14 reinstall of the exact Python wheel
+verified version 0.3.0 before extracting or reading study inputs. All 135 installed
+wheel members except generated `RECORD` matched the retained archive bytes.
+Unchanged committed lookup, ordered aggregate and window CSV outputs passed;
+each prior result saved twice after its input/specification directory was removed.
+The retained prior `uv.lock`, exact dependency pins, receipts and output bytes
+are in the unpublished preparation kit. The unchanged prior packaging backend
+also prepared an installable source distribution with byte-identical Python and
+Rust sources, manifests, canonical Cargo lock and toolchain. A second fresh
+Linux CPython 3.12.14 environment rebuilt that exact source distribution with
+locked Rust 1.90.0 and maturin 1.9.6. All 135 installed rebuilt-wheel members,
+the three committed outputs and six post-input-removal Saves passed again.
+These wheel and source proofs cover Linux CPython 3.12.14; other rollback
+tuples and a full producer graph Save baseline remain separate requirements.
+
+The R source-package rehearsal passed all three platforms with their retained
+pre-cutover source archives in run 38426887552 at preparation head 560c5bd3.
+Rehearsal of one identical canonical archive passed Linux, macOS and Windows in
+run 38435902670 at preparation head
+`d909928c94f308550c7f584c12b6b42506c4c84c`. Each retained proof compares the
+same 3,290,128 source bytes and verifies installed version 0.3.0 before study
+data. The original artifact identity remains run 38394553441, artifact
+11811851297 and source `a1a9c2d216075f331ac108aa4d3638573f103cea`.
+
+Authorized draft retention releases now exist at those exact source revisions:
+Python release 411980272, tag `yamaa-py-reference-845a91ff`, and R release
+411979803, tag `yamaa-r-reference-a1a9c2d2`. Their source assets and fresh-install
+receipts are now retained. Run 38450032850 at
+`99b4fc28110bceaa346df7a93cf28138f12ec44f` uploaded the eleven reviewed assets
+and independently downloaded every asset through authenticated endpoints; all
+bytes matched. Before any upload, it also downloaded original R artifact
+11811851297 and matched the exact source archive, and compared every tracked
+prior Python archive entry's bytes, kind, symlink target and executable flag.
+The [asset receipt](../qualification/rollback-assets.json) pins the exact release,
+source and asset IDs without digests. R source asset 637944247 and prior Python
+sdist asset 637944563 remain unpublished. Durable reviewed study pins, all required rollback tuples, B17
+budgets and item 11 transition approval remain gates. Publication requires root
+review of the concrete asset identities, receipts and
+[prior study source pin selections](rollback-pins.md). Complete renv restoration
+from the published URL remains distinct from the passing fresh-library installs.

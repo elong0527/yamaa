@@ -193,14 +193,6 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/numeric_transport.tsv",
-      "family": "numeric",
-      "level": "component",
-      "consumers": [
-        "python/tests/native/test_numeric_transport_vectors.py"
-      ]
-    },
-    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/predicate_context_diagnostics.tsv",
       "family": "predicate",
       "level": "compile",
@@ -331,7 +323,6 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "python/tests/native/test_core_vectors.py",
         "rust/crates/yamaa-core/tests/arithmetic.rs",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
@@ -349,7 +340,6 @@
       "family": "types",
       "level": "component",
       "consumers": [
-        "python/tests/native/test_core_conversion_vectors.py",
         "rust/crates/yamaa-core/tests/conversion.rs"
       ]
     },
@@ -358,7 +348,6 @@
       "family": "dependencies",
       "level": "component",
       "consumers": [
-        "python/tests/planning/test_dependencies.py",
         "rust/crates/yamaa-core/tests/dependency_analysis.rs"
       ]
     },
@@ -367,7 +356,6 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "python/tests/native/test_core_evaluation_vectors.py",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
     },
@@ -376,7 +364,6 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "python/tests/native/test_core_evaluation_vectors.py",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
     },
@@ -385,7 +372,6 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "python/tests/native/test_core_numeric_literal_vectors.py",
         "rust/crates/yamaa-core/tests/numeric_compiler.rs"
       ]
     },
@@ -394,7 +380,6 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "python/tests/native/test_core_evaluation_vectors.py",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
     },
@@ -403,8 +388,6 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "python/tests/expressions/test_rounding_reference.py",
-        "python/tests/native/test_core_evaluation_vectors.py",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
     },
@@ -413,7 +396,6 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "python/tests/native/test_core_evaluation_vectors.py",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
     },
@@ -422,7 +404,6 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "python/tests/native/test_core_evaluation_vectors.py",
         "rust/crates/yamaa-core/tests/evaluation.rs"
       ]
     },
@@ -431,7 +412,6 @@
       "family": "predicate",
       "level": "component",
       "consumers": [
-        "python/tests/native/test_predicate_reference.py",
         "rust/crates/yamaa-core/tests/predicate.rs"
       ]
     },
@@ -440,7 +420,6 @@
       "family": "aggregates",
       "level": "component",
       "consumers": [
-        "python/tests/native/test_reduction_contract.py",
         "rust/crates/yamaa-core/tests/reduction.rs"
       ]
     },
@@ -457,7 +436,6 @@
       "family": "numeric",
       "level": "component",
       "consumers": [
-        "python/tests/native/test_numeric_lifecycle_vectors.py",
         "rust/crates/yamaa-engine/tests/numeric_lifecycle.rs"
       ]
     },
@@ -506,7 +484,6 @@
       "family": "specification",
       "level": "compile",
       "consumers": [
-        "python/tests/native/test_original_specification_truth.py",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
@@ -517,7 +494,6 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "python/tests/native/test_original_specification_truth.py",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
@@ -527,7 +503,6 @@
       "family": "specification",
       "level": "compile",
       "consumers": [
-        "python/tests/native/test_original_specification_truth.py",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]
@@ -538,7 +513,6 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
-        "python/tests/native/test_original_specification_truth.py",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_original_specifications.py"
       ]

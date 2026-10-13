@@ -1,0 +1,205 @@
+{
+  "schema_version": "rollback-retention/1",
+  "scope": "authenticated retained asset byte equality; not combined release or transition approval",
+  "proof_run": 38450032850,
+  "proof_head": "99b4fc28110bceaa346df7a93cf28138f12ec44f",
+  "proof_artifact": 11839419291,
+  "publication": "unpublished drafts; root review pending",
+  "retention": {
+    "repository": "elong0527/yamaa",
+    "publication": "unpublished drafts; no publication operation",
+    "status": "pass",
+    "checks": {
+      "r": {
+        "source_revision": "a1a9c2d216075f331ac108aa4d3638573f103cea",
+        "package_version": "0.3.0",
+        "source_and_receipts": "pass",
+        "assets": [
+          "yamaa_0.3.0.tar.gz",
+          "fresh-install-receipts.zip",
+          "retention-manifest.json"
+        ]
+      },
+      "python": {
+        "source_revision": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255",
+        "package_version": "0.3.0",
+        "source_and_receipts": "pass",
+        "assets": [
+          "yamaa-reference-845a91ff.tar.gz",
+          "yamaa-0.3.0.tar.gz",
+          "yamaa-0.3.0-cp312-abi3-linux_x86_64.whl",
+          "uv.lock",
+          "baseline-dependencies.txt",
+          "fresh-install-receipts.zip",
+          "fresh-source-rebuilt-wheel.zip",
+          "retention-manifest.json"
+        ]
+      }
+    },
+    "r_hosted_history": {
+      "source_run": 38394553441,
+      "source_artifact": 11811851297,
+      "canonical_rehearsal_run": 38435902670,
+      "canonical_rehearsal_artifacts": {
+        "r-source-rollback-ubuntu-24.04": 11832953460,
+        "r-source-rollback-macos-15": 11837325176,
+        "r-source-rollback-windows-latest": 11834482773
+      },
+      "identity": "pass",
+      "original_artifact_source_archive_bytes_equal": true
+    },
+    "releases": [
+      {
+        "release_id": 411979803,
+        "tag_name": "yamaa-r-reference-a1a9c2d2",
+        "source_revision": "a1a9c2d216075f331ac108aa4d3638573f103cea",
+        "draft": true,
+        "assets": [
+          {
+            "asset_id": 637944247,
+            "name": "yamaa_0.3.0.tar.gz",
+            "bytes": 3290128,
+            "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637944247",
+            "bytes_equal": true,
+            "reused_without_overwrite": false
+          },
+          {
+            "asset_id": 637944307,
+            "name": "fresh-install-receipts.zip",
+            "bytes": 27653,
+            "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637944307",
+            "bytes_equal": true,
+            "reused_without_overwrite": false
+          },
+          {
+            "asset_id": 637944356,
+            "name": "retention-manifest.json",
+            "bytes": 1008,
+            "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637944356",
+            "bytes_equal": true,
+            "reused_without_overwrite": false
+          }
+        ]
+      },
+      {
+        "release_id": 411980272,
+        "tag_name": "yamaa-py-reference-845a91ff",
+        "source_revision": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255",
+        "draft": true,
+        "assets": [
+          {
+            "asset_id": 637944446,
+            "name": "yamaa-reference-845a91ff.tar.gz",
+            "bytes": 5444762,
+            "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637944446",
+            "bytes_equal": true,
+            "reused_without_overwrite": false
+          },
+          {
+            "asset_id": 637944563,
+            "name": "yamaa-0.3.0.tar.gz",
+            "bytes": 1909336,
+            "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637944563",
+            "bytes_equal": true,
+            "reused_without_overwrite": false
+          },
+          {
+            "asset_id": 637944633,
+            "name": "yamaa-0.3.0-cp312-abi3-linux_x86_64.whl",
+            "bytes": 6978344,
+            "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637944633",
+            "bytes_equal": true,
+            "reused_without_overwrite": false
+          },
+          {
+            "asset_id": 637944703,
+            "name": "uv.lock",
+            "bytes": 556719,
+            "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637944703",
+            "bytes_equal": true,
+            "reused_without_overwrite": false
+          },
+          {
+            "asset_id": 637944785,
+            "name": "baseline-dependencies.txt",
+            "bytes": 336,
+            "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637944785",
+            "bytes_equal": true,
+            "reused_without_overwrite": false
+          },
+          {
+            "asset_id": 637944830,
+            "name": "fresh-install-receipts.zip",
+            "bytes": 463021,
+            "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637944830",
+            "bytes_equal": true,
+            "reused_without_overwrite": false
+          },
+          {
+            "asset_id": 637944905,
+            "name": "fresh-source-rebuilt-wheel.zip",
+            "bytes": 6935822,
+            "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637944905",
+            "bytes_equal": true,
+            "reused_without_overwrite": false
+          },
+          {
+            "asset_id": 637945011,
+            "name": "retention-manifest.json",
+            "bytes": 1766,
+            "authenticated_api_reference": "https://api.github.com/repos/elong0527/yamaa/releases/assets/637945011",
+            "bytes_equal": true,
+            "reused_without_overwrite": false
+          }
+        ]
+      }
+    ]
+  },
+  "qualified_reinstall_scope": {
+    "r": {
+      "source_revision": "a1a9c2d216075f331ac108aa4d3638573f103cea",
+      "package_version": "0.3.0",
+      "association": "qualified installed pre-cutover source candidate; no previous R release published",
+      "form": "source",
+      "runtime_version": "4.6.1",
+      "platforms": [
+        "ubuntu-24.04",
+        "macos-15",
+        "windows-latest"
+      ],
+      "same_archive_rehearsal_run": 38435902670,
+      "rehearsal_preparation_head": "d909928c94f308550c7f584c12b6b42506c4c84c",
+      "version_checked_before_study_data": true,
+      "held_saves_after_input_removal": true
+    },
+    "python": {
+      "source_tag": "yamaa-py-0.3.0",
+      "source_revision": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255",
+      "package_version": "0.3.0",
+      "association": "source-built prior-release packages; no published prior binary",
+      "forms": [
+        "wheel",
+        "fresh locked source rebuild"
+      ],
+      "runtime_version": "3.12.14",
+      "system": "Linux",
+      "machine": "x86_64",
+      "installed_wheel_members_compared": 135,
+      "authored_cases": [
+        "schema-lookup",
+        "adam-adlb-ordered-sum",
+        "schema-window-functions"
+      ],
+      "version_checked_before_study_data": true,
+      "saves_per_case_after_input_removal": 2
+    }
+  },
+  "pending_gates": [
+    "publication after root asset/pin review",
+    "remaining Python rollback platform/interpreter/form tuples",
+    "full producer graph Save baseline",
+    "B17 performance measurements and budget decision",
+    "combined final release installed qualification",
+    "item 11 transition approval"
+  ]
+}
