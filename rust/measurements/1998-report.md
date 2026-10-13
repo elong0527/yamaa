@@ -31,10 +31,22 @@ Their durations never become successful samples.
 The previous release passes all 18 lookup/aggregate/window variants at the three
 approved sizes against independent typed cells, float bits and both original CSV
 Saves. Its public reference API does not accept `environment`; nine callback and
-producer cases retain the resulting `TypeError`. No baseline ratio is available
-for those families. The reference wheel also needs its supported explicit
+producer cases retain the resulting `TypeError`. The reference wheel needs its supported explicit
 `schema_root` argument; the collector retains the release's original YAML bytes
 outside the checkout rather than substituting candidate schema content.
+
+A separately labeled producer root-Build scope now passes all six variants
+through 100k using the previous release's actual `yamaa_domain` callable and
+`schema_root`, with no environment argument. Its installed callable source is
+compared directly with the pinned Git bytes; its exact signature is retained.
+The authored environment declares empty functions and only schema/language/lock
+metadata, with no codelist/study/submission fields. Every independently authored
+root cell, issue/log expectation and Build artifact absence passes. No Save is
+called or timed in this scope: the previous reference only publishes the root
+CSV and cannot provide a complete producer/branch Save comparator. The 100k
+depth-3 root-Build child peak is 518,799,360 bytes; it cannot be compared directly
+with a complete native graph lifecycle peak. Its raw clocks are diagnostic.
+Callback and complete graph Save budgets still need measured absolute proposals.
 
 The 1,000-row callback observer records 859 actual delegated invocations: the
 two present activation-test arguments and 857 present study arguments, in exact
@@ -54,7 +66,12 @@ otherwise survive fork/exec in the child high-water observation. An actual
 allocation verifies measurement and nonzero exit preservation. Raw observations
 retain original units. Warm-child RSS is cumulative across repetitions and
 includes collector transport. Supported-platform provider failures stay null
-and reject admission. R and Windows implementations still require CI execution.
+and reject admission. Isolated macOS R source collection now admits aggregate
+1k widths 10/100 and callback 1k with actual child peaks
+95,240,192 / 101,548,032 / 105,873,408 bytes. The complete raw ZIP is retained from
+run 38425076753, artifact 11829916909. Windows collection initially stopped at
+baseline archive extraction; portable filtered extraction is fixed for the next
+run. No cross-platform qualification is claimed from these partial frontiers.
 
 ## Concrete resource-policy proposal for review
 
@@ -99,9 +116,9 @@ For item 10 review, retain the existing recommended numerical proposal:
   three retained warm-ups, plus ten fresh cold children.
 
 These numbers remain proposals. No ratio or budget is approved from a refused
-sample or a single frontier run. The previous release's unavailable callback
-and producer API requires an explicit comparable baseline or a separately
-reviewed absolute budget after successful candidate measurements. Preparation,
+sample or a single frontier run. Producer root-Build has a separately labeled
+supported reference scope; its complete graph Saves and callback workloads need
+reviewed absolute budgets after successful candidate measurements. Preparation,
 activation, ingestion, derivation and verification stage attribution remains
 unavailable; copied views and held Saves are actual separate outer boundaries.
 
@@ -116,6 +133,10 @@ Characterization compresses retained views/reports/copied CSV bytes losslessly
 to keep the full raw scope within runner storage; comparisons use the original
 decompressed bytes. An actual installed compressed aggregate control passes.
 Callback observation runs separately and does not count toward timing samples.
+The workflow retains the 18 compatible full reference lifecycles separately from
+the six supported producer root Builds. Their scopes never become one Save or
+memory comparator. Cold package-import distributions are derived from actual
+child import anchors; a warm child's one import is not repeated as warm samples.
 
 The 90-day Actions retention is a collection window. Preserve the accepted
 baseline/archive and raw evidence durably before that window expires and before

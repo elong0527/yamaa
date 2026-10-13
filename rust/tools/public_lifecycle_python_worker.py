@@ -307,12 +307,22 @@ def run(request):
                     **({"schema_root": request["reference_schema"]} if request.get("reference_schema") else {}),
                     **(
                         {"environment": declaration["environment"]}
-                        if declaration.get("environment")
+                        if declaration.get("environment") and not request.get("reference_root_build")
                         else {}
                     ),
                 ),
             )
             retain_reached("build")
+            if request.get("reference_root_build"):
+                import inspect
+                row["build_invocation"] = {
+                    "callable": domain.__module__ + "." + domain.__qualname__,
+                    "signature": str(inspect.signature(domain)),
+                    "parameters": list(inspect.signature(domain).parameters),
+                    "source_file": str(Path(inspect.getsourcefile(domain)).resolve()),
+                    "schema_root": request["reference_schema"],
+                    "environment_passed": False,
+                }
             if "artifact_names" in declaration:
                 row["build_artifact_presence"] = {
                     name: (Path(declaration["work_directory"]) / name).exists()
@@ -333,7 +343,7 @@ def run(request):
             ):
                 views[name] = timed(row["durations"], "copied_" + name, call)
                 write_json(output / row["views"], views)
-            for number in (1, 2):
+            for number in (() if request.get("reference_root_build") else (1, 2)):
                 label = f"save_{number}"
                 try:
                     returned = timed(row["durations"], "held_" + label, result.save)
@@ -343,7 +353,14 @@ def run(request):
                 if capture_errors:
                     raise capture_errors[0]
                 write_json(output / "response.json", response)
-            views["output_after_save_2"] = frame(access("output"), pl)
+            if request.get("reference_root_build"):
+                views["output_after_build_repeat"] = frame(access("output"), pl)
+                row["root_build_artifact_presence"] = {
+                    name: (Path(declaration["work_directory"]) / name).exists()
+                    for name in declaration["artifact_names"]
+                }
+            else:
+                views["output_after_save_2"] = frame(access("output"), pl)
             write_json(output / row["views"], views)
             row["status"] = "success"
         except BaseException as error:

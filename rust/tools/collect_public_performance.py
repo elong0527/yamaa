@@ -22,6 +22,42 @@ import measure_scalable_public as scalable
 import prepare_public_workloads as workloads
 
 
+def root_build_environment(case, authored):
+    """Admit only generated producer environments with no active semantics."""
+    if case["family"] != "producer":
+        raise ValueError("the supported root-Build baseline is restricted to producers")
+    path = authored / case["environment"]["python"]
+    value = lifecycle.read_json(path)
+    if (set(value) != {"schema_version", "language", "lock", "functions"}
+            or value["schema_version"] != "1.0" or value["language"] != "python"
+            or value["functions"] != {}):
+        raise ValueError("omitted producer environment has active or unreviewed semantics")
+    return {"path": str(path), "exact_declaration": value,
+            "omission": "empty functions; only language/schema/packaging lock metadata; no codelist/study/submission fields",
+            "graph_save_baseline": None,
+            "memory_comparison_with_full_graph_lifecycle": None}
+
+
+def validate_root_invocation(actual, request, record, repository):
+    invocation = actual["build_invocation"]
+    if (invocation["callable"] != "yamaa._reference_domain.yamaa_domain"
+            or "environment" in invocation["parameters"]
+            or "schema_root" not in invocation["parameters"]
+            or invocation["schema_root"] != request["reference_schema"]
+            or invocation["environment_passed"] is not False):
+        raise ValueError("supported reference root-Build invocation changed")
+    source = Path(invocation["source_file"])
+    if not source.is_relative_to(Path(record["installed_origins"]["package"])):
+        raise ValueError("reference callable source is outside its installed package")
+    if source.read_bytes() != lifecycle.git_bytes(repository, record["source_revision"],
+                                                 "python/src/yamaa/_reference_domain.py"):
+        raise ValueError("reference callable source differs from the pinned previous release")
+    if (actual["save_returns"] or actual["saved_files"] or actual.get("saved_artifacts")
+            or any(name.startswith("held_save_") for name in actual["durations"])):
+        raise ValueError("root-Build baseline entered or timed a Save")
+    if any(actual["root_build_artifact_presence"].values()):
+        raise ValueError("root-Build baseline published an artifact")
+
 
 def validate_reference(case, authored, child, request, response, record, repository):
     """Compare actual legacy public results; unavailable ledgers stay unavailable."""
@@ -37,10 +73,13 @@ def validate_reference(case, authored, child, request, response, record, reposit
         if actual["status"] != "success" or actual["declaration"] != declaration or actual["evidence_capture_failures"]:
             raise ValueError("reference repetition failed: " + str(actual.get("failure")))
         lifecycle.actual_origins(actual["metadata"], record, repository)
-        for boundary in lifecycle.BOUNDARIES[1:]:
+        root_only = request.get("reference_root_build", False)
+        boundaries = [name for name in lifecycle.BOUNDARIES[1:]
+                      if not root_only or not name.startswith("held_save_")]
+        for boundary in boundaries:
             lifecycle.validate_duration(actual["durations"][boundary], "python")
         views = lifecycle.read_json(child / actual["views"])
-        for name in ("output", "output_after_save_2"):
+        for name in ("output", "output_after_build_repeat" if root_only else "output_after_save_2"):
             for key in ("columns", "row_count", "rows"):
                 if views[name][key] != expected[key]:
                     raise ValueError("reference differs from independent truth: " + name + "." + key)
@@ -48,6 +87,10 @@ def validate_reference(case, authored, child, request, response, record, reposit
             raise ValueError("reference issues/logs differ from independent truth")
         if any(actual["build_artifact_presence"].values()):
             raise ValueError("reference published before explicit Save; lifecycle baseline incompatible")
+        if root_only:
+            root_build_environment(case, authored)
+            validate_root_invocation(actual, request, record, repository)
+            continue
         for stage in ("save_1", "save_2"):
             for artifact in case["expected_artifacts"]:
                 name = actual.get("saved_artifacts", {}).get(stage, {}).get(artifact["path"])
@@ -69,6 +112,9 @@ def collect(args):
                  "public_lifecycle_worker_protocol.json", *lifecycle.WORKERS.values()):
         shutil.copyfile(lifecycle.HERE / name, harness / name)
     record = lifecycle.read_json(args.provenance)
+    root_only = args.scope == "producer-root-build"
+    if root_only and (args.host != "python" or args.evaluator != "python-reference"):
+        raise ValueError("producer root-Build scope needs the installed Python reference")
     plan = {
         "protocol": "public-performance/1", "purpose": args.purpose,
         "host": args.host, "source_revision": record["source_revision"],
@@ -78,6 +124,10 @@ def collect(args):
         "numeric_budgets": None, "phase_durations": None,
         "actual_callback_counts": None,
         "evaluator": args.evaluator, "selected_cases": args.cases,
+        "selected_families": args.families,
+        "measurement_scope": args.scope,
+        "graph_save_baseline": None if root_only else "complete declared artifacts",
+        "memory_comparison_with_full_graph_lifecycle": None if root_only else "same declared lifecycle required",
     }
     lifecycle.write_json(output / "collection.json", plan)
     # Frontier admission retains origin/archive observations but does not admit
@@ -107,10 +157,17 @@ def collect(args):
             target.write_bytes(lifecycle.git_bytes(repository, record["source_revision"], path))
     executable = lifecycle.worker_executable(args.executable, repository)
     for case in manifest["cases"]:
+        if args.families and case["family"] not in args.families:
+            continue
+        if root_only and case["family"] != "producer":
+            continue
         if args.cases and case["name"] not in args.cases:
             continue
         row = {"case": case["name"], "truth_accepted": False, "accepted": False,
                "children": [], "distribution": None}
+        if root_only:
+            row["supported_reference_invocation"] = root_build_environment(
+                case, output / "workloads" / case["name"])
         plan["cases"].append(row)
         lifecycle.write_json(output / "collection.json", plan)
         declarations = [("truth", 0, [{"index": 0, "warmup": False}])]
@@ -149,6 +206,7 @@ def collect(args):
                            "host": args.host, "output": str(child), "provenance": record,
                            "unavailable": lifecycle.UNAVAILABLE, "repetitions": staged,
                            "evaluator": args.evaluator, "reference_schema": str(reference_schema) if reference_schema else None,
+                           "reference_root_build": root_only,
                            "observe_callbacks": mode == "callback-observer",
                            "compress_evidence": args.purpose == "characterization"}
                 lifecycle.write_json(child / "request.json", request)
@@ -191,6 +249,9 @@ def collect(args):
                     observation["accepted"] = True
                 else:
                     observation["counts_toward_timing"] = True
+                    if mode == "cold":
+                        samples.append({"mode": mode, "boundary": "package_import",
+                            "duration_ns": lifecycle.validate_duration(response["import_duration"], args.host)})
                     for repetition in response["repetitions"]:
                         if not repetition["declaration"]["warmup"]:
                             for boundary, duration in repetition["durations"].items():
@@ -227,6 +288,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", type=Path, required=True)
     parser.add_argument("--cases", nargs="+")
+    parser.add_argument("--families", nargs="+", choices=workloads.FAMILIES)
+    parser.add_argument("--scope", choices=("full-lifecycle", "producer-root-build"), default="full-lifecycle")
     parser.add_argument("--evaluator", choices=("public", "python-reference"), default="public")
     parser.add_argument("--host", choices=("python", "r"), required=True)
     parser.add_argument("--executable", type=Path, required=True)

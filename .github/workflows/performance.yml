@@ -49,7 +49,9 @@ jobs:
   python:
     name: performance-python (${{ matrix.os }}, ${{ matrix.python }}, ${{ matrix.form }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    # Approved reference producer 100k Build alone takes about 30–42 seconds;
+    # both baseline scopes retain ten cold and 33 warm attempts for every case.
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -131,7 +133,11 @@ jobs:
       - name: Collect compatible previous-release Python reference on the same runner
         id: baseline
         continue-on-error: true
-        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence"
+        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --families lookup aggregate window --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence"
+      - name: Collect supported producer root-Build reference without graph Saves
+        id: producer_baseline
+        continue-on-error: true
+        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --scope producer-root-build --families producer --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/producer-root-build-baseline"
       - name: Preserve source baseline, distributions and every raw observation
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -149,15 +155,16 @@ jobs:
             ${{ runner.temp }}/baseline-installation
             ${{ runner.temp }}/candidate-evidence
             ${{ runner.temp }}/baseline-evidence
+            ${{ runner.temp }}/producer-root-build-baseline
           if-no-files-found: error
       - name: Require complete evidence after preserving failures
         if: always()
-        run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success
+        run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success && test "${{ steps.producer_baseline.outcome }}" = success
 
   r:
     name: performance-r (${{ matrix.os }}, source)
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -267,7 +274,11 @@ jobs:
       - name: Collect compatible previous-release reference on the same R runner
         id: baseline
         continue-on-error: true
-        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence"
+        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --families lookup aggregate window --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/baseline-evidence"
+      - name: Collect supported producer root-Build reference on the R runner
+        id: producer_baseline
+        continue-on-error: true
+        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${BASELINE_PYTHON}" --provenance "${RUNNER_TEMP}/baseline-installation/provenance.json" --evaluator python-reference --scope producer-root-build --families producer --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/producer-root-build-baseline"
       - name: Preserve R package, clock build and every raw observation
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -290,7 +301,8 @@ jobs:
             ${{ runner.temp }}/baseline-distribution
             ${{ runner.temp }}/baseline-installation
             ${{ runner.temp }}/baseline-evidence
+            ${{ runner.temp }}/producer-root-build-baseline
           if-no-files-found: error
       - name: Require complete evidence after preserving failures
         if: always()
-        run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success
+        run: test "${{ steps.candidate.outcome }}" = success && test "${{ steps.baseline.outcome }}" = success && test "${{ steps.producer_baseline.outcome }}" = success
