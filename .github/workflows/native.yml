@@ -202,7 +202,7 @@ jobs:
           name: rounding-assessment-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/rounding-assessment.json
           if-no-files-found: error
-      - name: Preserve regex reference discrepancies
+      - name: Preserve native regex assessment and historical disposition
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: regex-native-${{ matrix.os }}-${{ matrix.python }}
