@@ -25,7 +25,13 @@ impl Study {
         Self(fs::canonicalize(path).unwrap())
     }
     fn text(&self, path: &str) -> String {
-        self.0.join(path).to_str().unwrap().into()
+        let path = self.0.join(path).to_str().unwrap().to_owned();
+        #[cfg(windows)]
+        let path = path
+            .strip_prefix(r"\\?\")
+            .unwrap_or(&path)
+            .replace('\\', "/");
+        path
     }
     fn build(&self) -> file_application::Domain {
         let path = self.text("spec.yaml");
@@ -58,18 +64,26 @@ fn identity(specification: &str) -> Identity<'_> {
 fn environment_and_invalid_source_profile_precede_entry_and_study_reads() {
     let study = Study::new();
     let path = study.text("absent.yaml");
+    let environment = study.text("absent-environment.yaml");
     let issues = file_application::check(
         Request {
             specification: &path,
-            environment: Some("absent-environment.yaml"),
+            environment: Some(&environment),
         },
         identity(&path),
     );
     assert_eq!(issues.len(), 1);
-    assert_eq!(issues[0].condition, "unsupported_operation");
-    assert_eq!(issues[0].context, "{\"operation\":\"environment\"}");
+    assert_eq!(issues[0].phase, "validation");
+    assert_eq!(issues[0].condition, "project_environment_missing");
+    assert_eq!(
+        issues[0].context,
+        serde_json::json!({
+            "cause": "missing", "path": environment,
+        })
+        .to_string()
+    );
     assert_eq!(issues[0].spec_paths, ["environment"]);
-    assert_eq!(issues[0].requirement, None);
+    assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0694"));
     fs::write(
         study.0.join("spec.yaml"),
         VALID.replace(

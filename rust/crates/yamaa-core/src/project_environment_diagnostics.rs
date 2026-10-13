@@ -19,6 +19,37 @@ pub enum Error {
     UnavailableShape,
 }
 
+/// Closed native root-read facts; arbitrary error messages cannot establish them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReadFailure {
+    Missing,
+    Unreadable,
+}
+impl ReadFailure {
+    pub fn diagnostic(self, path: &str) -> Diagnostic {
+        Diagnostic {
+            code: C::ProjectEnvironmentMissing,
+            spec_paths: vec!["environment".into()],
+            context: [
+                ("path".into(), ContextValue::Scalar(Value::Str(path.into()))),
+                (
+                    "cause".into(),
+                    ContextValue::Scalar(Value::Str(
+                        match self {
+                            Self::Missing => "missing",
+                            Self::Unreadable => "unreadable",
+                        }
+                        .into(),
+                    )),
+                ),
+            ]
+            .into(),
+            source_span: None,
+            operand_route: None,
+        }
+    }
+}
+
 /// Independent root obligations remain observable when an inline scalar cannot
 /// decode. The normalized root is retained, and lock format is never inferred
 /// from an uncaptured path. No partial function or terminology model is created.
