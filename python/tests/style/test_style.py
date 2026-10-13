@@ -793,6 +793,21 @@ def test_redundant_intermediate_keeps_narrowing_lookups(
     assert "redundant_intermediate" not in _names(_spec(tmp_path, rename_only))
 
 
+def test_redundant_intermediate_is_not_read_by_a_longer_name(
+    tmp_path: Path,
+) -> None:
+    # The intermediate DSL is never read: the only qualified read is of the
+    # ADSL dataset itself, whose name merely ends with the intermediate id.
+    # A substring search for `DSL.` mistook that read for a read of DSL.
+    suffix = REDUNDANT.replace("  - id: ADSL1\n", "  - id: DSL\n").replace(
+        "    derivation: ADSL1.AGE", "    derivation: ADSL.AGE"
+    )
+    assert "redundant_intermediate" not in _names(_spec(tmp_path, suffix))
+    # A genuine qualified read of DSL, here after punctuation, still reports.
+    genuine = suffix.replace("    derivation: ADSL.AGE", "    derivation: DSL.AGE")
+    assert "redundant_intermediate" in _names(_spec(tmp_path, genuine))
+
+
 MISSING_LABEL = """\
 schema_version: "1.0"
 domain: ADSL

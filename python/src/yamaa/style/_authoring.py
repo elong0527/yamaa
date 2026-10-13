@@ -12,6 +12,7 @@ its author corrects it.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator, Mapping, Sequence
 
 import yaml
@@ -29,9 +30,17 @@ def _filter_identifiers(predicate: object) -> frozenset[str]:
     """
     if not isinstance(predicate, str):
         return frozenset()
-    import re
-
     return frozenset(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", predicate))
+
+
+def _reads_qualified_name(text: str, identifier: str) -> bool:
+    """True when `text` reads `IDENTIFIER.` at an identifier boundary.
+
+    A qualified read starts a name or follows a character that cannot be
+    part of one, so `ADSL.AGE` reads ADSL, never an intermediate named
+    DSL whose name is only a suffix of it.
+    """
+    return re.search(rf"(?<![A-Za-z0-9_]){re.escape(identifier)}\.", text) is not None
 
 
 _DATASET_LEVEL_OPERATIONS = frozenset(
@@ -100,7 +109,7 @@ def _reads_intermediate(value: object, intermediate_ids: frozenset[str]) -> bool
         return False
     for text in _walk_strings(value):
         for identifier in intermediate_ids:
-            if f"{identifier}." in text:
+            if _reads_qualified_name(text, identifier):
                 return True
     return False
 
@@ -393,7 +402,7 @@ def _key_equals_output_keys(key: object, output_keys: Sequence[str]) -> bool:
 
 def _intermediate_is_read(value: Mapping, identifier: str) -> bool:
     for text in _walk_strings(value):
-        if f"{identifier}." in text:
+        if _reads_qualified_name(text, identifier):
             return True
     return False
 
