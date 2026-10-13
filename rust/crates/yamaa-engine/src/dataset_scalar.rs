@@ -48,18 +48,13 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
             source,
             path,
             absent,
+            selection_declared,
             ..
         } => {
             if absent.is_some() {
                 counter.register(&alloc::format!("{path}.absent"), HandlerKind::Absent);
             }
-            if matches!(
-                &source.expression,
-                Expression::Collect {
-                    selection: Some(_),
-                    ..
-                }
-            ) {
+            if *selection_declared {
                 counter.register(
                     &alloc::format!("{}.multiple_matches", source.path),
                     HandlerKind::MultipleMatches,

@@ -607,7 +607,7 @@ fn invalid_key_grain_plans_fail_before_ipc_and_recover() {
     variants.push(req);
     let mut req = key_request();
     req["templates"][0]["assignments"][0]["expression"] =
-        json!({"collect":{"column":0,"identifier":"SRC.id"}});
+        json!({"collect":{"column":99,"identifier":"SRC.unknown"}});
     variants.push(req);
     let mut req = key_request();
     req["columns"][0]["expression"]["collect"]["column"] = json!(99);

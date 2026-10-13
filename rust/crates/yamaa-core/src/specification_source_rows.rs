@@ -17,6 +17,10 @@ pub(in crate::specification) fn bind(
     secondary: &[crate::dataset::SecondarySource],
     intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
+    if let Some(finding) = &declaration.declaration_finding {
+        findings.push(BindFinding::Source(SourceFinding(finding.clone())));
+        return Ok(None);
+    }
     let before = findings.len();
     let name = &declaration.variable;
     let mut variable_absent = false;
