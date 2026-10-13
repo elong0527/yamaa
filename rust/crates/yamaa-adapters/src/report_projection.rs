@@ -26,7 +26,7 @@ impl Budget {
         }
     }
     pub(crate) fn remaining_bytes(&self) -> usize {
-        self.bytes.min(yamaa_engine::capacity::REPORT_ENCODED_BYTES)
+        self.bytes / yamaa_engine::capacity::REPORT_RETAINED_FACTOR
     }
     pub(crate) fn work(&mut self, count: usize) -> Result<(), Error> {
         self.work = self.work.checked_sub(count).ok_or(Error::OutputLimit)?;
@@ -161,6 +161,25 @@ impl Budget {
     /// and actual traversal work are bounded independently of retained bytes.
     pub(crate) fn json(&mut self, value: &Value) -> Result<(), Error> {
         self.json_at(value, 0)
+    }
+    pub(crate) fn json_object_without(
+        &mut self,
+        value: &Value,
+        omitted: &str,
+    ) -> Result<(), Error> {
+        let values = value.as_object().ok_or(Error::InvalidObservation)?;
+        self.entries(1)?;
+        self.entries(
+            values
+                .keys()
+                .filter(|name| name.as_str() != omitted)
+                .count(),
+        )?;
+        for (name, value) in values.iter().filter(|(name, _)| name.as_str() != omitted) {
+            self.text(name)?;
+            self.json_at(value, 1)?;
+        }
+        Ok(())
     }
     fn json_at(&mut self, value: &Value, depth: usize) -> Result<(), Error> {
         if depth > 64 {

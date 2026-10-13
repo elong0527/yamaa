@@ -213,7 +213,7 @@ fn domain_observations(handle: Robj) -> List {
             .map_err(|_| "domain result already borrowed")?;
         #[cfg(any(unix, windows))]
         if let Some(result) = &state.result {
-            return Ok(Raw::from_bytes(result.observations().to_string().as_bytes()).into_robj());
+            return Ok(Raw::from_bytes(result.observations_json().as_bytes()).into_robj());
         }
         #[cfg(any(unix, windows))]
         if let Some(value) = state

@@ -92,7 +92,7 @@ impl Domain {
         if let Some(inner) = &self.inner {
             return inner
                 .try_lock()
-                .map(|inner| Some(inner.observations().to_string()))
+                .map(|inner| Some(inner.observations_json()))
                 .map_err(|_| {
                     pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
                 });

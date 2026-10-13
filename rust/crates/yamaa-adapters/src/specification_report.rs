@@ -534,7 +534,7 @@ impl BuildResult {
             return Err(Error::InvalidObservation);
         }
         let original = self.prepared.prepared_report();
-        budget.json(original)?;
+        budget.json_object_without(original, "artifacts")?;
         for (_, _, value) in items.iter().take(completed) {
             budget.json(value)?;
         }
@@ -563,6 +563,28 @@ impl BuildResult {
         let mut report = self.prepared.prepared_report().clone();
         report["artifacts"] = json!([]);
         report
+    }
+    /// Serialize the immutable Build report while excluding prospective
+    /// artifacts, without cloning its source/output cell objects.
+    pub fn observations_json(&self) -> String {
+        struct BuildView<'a>(&'a Value);
+        impl serde::Serialize for BuildView<'_> {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                use serde::ser::SerializeMap;
+                let values = self.0.as_object().expect("prepared report object");
+                let mut map = serializer.serialize_map(Some(values.len()))?;
+                for (name, value) in values {
+                    if name == "artifacts" {
+                        map.serialize_entry(name, &[] as &[Value])?;
+                    } else {
+                        map.serialize_entry(name, value)?;
+                    }
+                }
+                map.end()
+            }
+        }
+        serde_json::to_string(&BuildView(self.prepared.prepared_report()))
+            .expect("JSON Value serialization")
     }
     /// Return complete publication observations only after the publisher succeeds.
     pub fn save<P: ArtifactPort>(
