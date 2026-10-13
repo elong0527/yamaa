@@ -27,11 +27,12 @@ CASES = (
 
 class PublicEnvironment(unittest.TestCase):
     def test_supplied_missing_environment_precedes_bad_or_absent_entry_without_activation(self):
-        os.chdir(self.directory)
+        directory = self.directory.resolve()
+        os.chdir(directory)
         expected = {
             "phase": "validation", "condition": "project_environment_missing",
             "requirement": "REQ-0694", "spec_paths": ["environment"],
-            "context": json.dumps({"cause": "missing", "path": (self.directory / "missing-environment.yaml").as_posix()},
+            "context": json.dumps({"cause": "missing", "path": (directory / "missing-environment.yaml").as_posix()},
                 ensure_ascii=False, separators=(",", ":")),
         }
         with (
