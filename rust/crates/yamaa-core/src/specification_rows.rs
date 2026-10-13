@@ -1722,12 +1722,32 @@ impl Rows {
 
 impl Rows {
     pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+        let groups = self
+            .templates
+            .iter()
+            .filter_map(|template| template.groups.as_ref())
+            .map(|group| group.iter().map(String::as_str).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        let column_groups = groups.iter().map(Vec::as_slice).collect::<Vec<_>>();
         for declaration in &self.columns {
             if let RowOperation::Shared(branch) = &declaration.operation {
-                static_checks::branch(branch, findings)?;
+                static_checks::scoped_branch(
+                    branch,
+                    Some((
+                        "",
+                        Phase::Column {
+                            groups: &column_groups,
+                        },
+                    )),
+                    findings,
+                )?;
             }
         }
         for template in &self.templates {
+            let groups = template
+                .groups
+                .as_ref()
+                .map(|group| group.iter().map(String::as_str).collect::<Vec<_>>());
             if let Some((expression, compiled)) = &template.filter {
                 static_checks::predicate(
                     compiled,
@@ -1738,7 +1758,16 @@ impl Rows {
             }
             for declaration in &template.declarations {
                 if let RowOperation::Shared(branch) = &declaration.operation {
-                    static_checks::branch(branch, findings)?;
+                    static_checks::scoped_branch(
+                        branch,
+                        Some((
+                            &template.driver,
+                            Phase::Row {
+                                group_by: groups.as_deref(),
+                            },
+                        )),
+                        findings,
+                    )?;
                 }
             }
         }

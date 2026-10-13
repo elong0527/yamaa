@@ -88,10 +88,8 @@ fn identity(specification: &str) -> Identity<'_> {
     }
 }
 
-#[test]
-fn every_source_selection_case_keeps_exact_types_diagnostics_counts_and_saved_bytes() {
-    let truth: serde_json::Value =
-        serde_json::from_str(include_str!("fixtures/source_selection.json")).unwrap();
+fn verify_truth(fixture: &str) {
+    let truth: serde_json::Value = serde_json::from_str(fixture).unwrap();
     for (name, case) in truth["cases"].as_object().unwrap() {
         for _ in 0..2 {
             let fixture = Fixture::new(case);
@@ -162,4 +160,13 @@ fn every_source_selection_case_keeps_exact_types_diagnostics_counts_and_saved_by
             }
         }
     }
+}
+
+#[test]
+fn every_source_selection_case_keeps_exact_types_diagnostics_counts_and_saved_bytes() {
+    verify_truth(include_str!("fixtures/source_selection.json"));
+}
+#[test]
+fn group_key_filters_have_complete_normative_findings_and_record_controls() {
+    verify_truth(include_str!("fixtures/source_filter_scope.json"));
 }
