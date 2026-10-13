@@ -1278,3 +1278,41 @@ fn bind_derivations(
     }
     Ok((bound, Some(derived_schema)))
 }
+
+impl Declaration {
+    pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+        match &self.compiled {
+            Ok(_) => (),
+            Err(AggregateCompileError::Parse(crate::aggregate_parser::ParseError::Grammar {
+                failure,
+                ..
+            })) => {
+                findings.push(BindFinding::Aggregate {
+                    path: self.expression_path.clone(),
+                    expression: self.expression.clone(),
+                    error: failure.clone(),
+                });
+            }
+            Err(AggregateCompileError::Numeric(error)) => {
+                findings.push(BindFinding::Numeric {
+                    path: self.expression_path.clone(),
+                    expression: self.expression.clone(),
+                    error: error.clone(),
+                });
+            }
+            Err(_) => return Err(BindError::Internal),
+        }
+        if let Some((expression, compiled)) = &self.filter {
+            static_checks::predicate(
+                compiled,
+                expression,
+                &format!("{}.filter", self.path),
+                findings,
+            )?;
+        }
+        for declaration in self.derive.iter().flatten() {
+            static_checks::branch(&declaration.branch, findings)?;
+        }
+        Ok(())
+    }
+}

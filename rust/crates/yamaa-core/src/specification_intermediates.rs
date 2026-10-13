@@ -851,3 +851,24 @@ impl Declarations {
         Ok((secondary, result))
     }
 }
+
+impl Declarations {
+    pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+        for declaration in self.0.iter() {
+            if let (Some(expression), Some(compiled)) =
+                (&declaration.filter_text, &declaration.filter)
+            {
+                static_checks::predicate(
+                    compiled,
+                    expression,
+                    &format!("{}.filter", declaration.path),
+                    findings,
+                )?;
+            }
+            for derived in &declaration.derivations {
+                static_checks::branch(&derived.branch, findings)?;
+            }
+        }
+        Ok(())
+    }
+}
