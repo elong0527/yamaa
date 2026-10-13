@@ -94,7 +94,9 @@ class NativeCoverage(unittest.TestCase):
                 env=environment,
                 check=True,
             )
-            values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+            values = dict(
+                line.split("=", 1) for line in output.read_text().splitlines()
+            )
             self.assertEqual(values["full"], "true")
             self.assertEqual(values["run-rust"], "false")
             self.assertEqual(len(json.loads(values["qualify"])["include"]), 18)

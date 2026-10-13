@@ -18,16 +18,18 @@ trigger that workflow as well.
 
 ## Native coverage
 
-Native PR runs use Linux for distribution builds and R package checks.
+Native PR runs use Linux for distribution builds and R package checks by default.
 Installed Python qualification covers wheel and source installs on Python 3.12
 and 3.14. The workflow summary records this reduced matrix. macOS, Windows,
 Python 3.13, and complete public/producer cohort comparisons run on main pushes
-or manual full-matrix dispatches. Shared Rust checks and cross-platform math
+or manual full-matrix dispatches. A maintainer can add the `native-full-matrix`
+label to run that complete installed matrix and cohort gate on a PR; label changes
+and subsequent commits trigger qualification again. Shared Rust checks and cross-platform math
 run only on pushes to main.
 
 Pushes to main retain the full three-OS, three-Python, two-package-form matrix,
 all three R hosts, the cross-platform math comparison, and the complete
-public/producer cohort gate. PR artifacts cover the reduced Linux matrix;
+public/producer cohort gate. Default PR artifacts cover the reduced Linux matrix;
 they do not establish full platform qualification. Platform-specific regressions
 and Python 3.13 compatibility are checked in the full matrix.
 
@@ -40,7 +42,8 @@ add three shared Rust jobs, the cross-platform math comparison, and the
 nonblocking evidence audit for 31 jobs in total.
 
 Before merging changes to native code, R glue, package builds or native CI,
-dispatch the complete matrix on the current PR head:
+run the complete matrix on the current PR head, either with the
+`native-full-matrix` label or a dispatch:
 
 ```sh
 gh workflow run native.yml --ref <branch>
@@ -54,7 +57,9 @@ eighteen installed Python lanes, three R hosts, and public/producer cohort gate
 as a main push. Require every enabled lane, including Windows R, to pass on that
 exact head before merging. Shared Rust checks and the math comparison are
 deferred to the main push; retain that combined run for work-package acceptance.
-A reduced PR run does not replace the installed dispatch gate.
+A reduced PR run does not replace the complete installed matrix gate. Labeled
+PR runs record the synthetic merge revision, including its current main parent;
+all installed reports must identify that same tested revision.
 
 The shared-crates step also runs
 `cargo test --locked -p yamaa-engine --features test-support` on every selected

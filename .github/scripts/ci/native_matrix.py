@@ -138,7 +138,8 @@ def main():
                 "PR native coverage: Linux, Python 3.12 and 3.14, "
                 "wheel and source installs.\n\n"
                 "Full installed platform coverage and complete cohort "
-                "comparisons run on main pushes or manual full-matrix dispatches.\n"
+                "comparisons run on main pushes, manual full-matrix dispatches, "
+                "or PRs labeled native-full-matrix.\n"
             )
         summary.write(
             "Shared Rust checks and cross-platform math run only on pushes to main.\n"
