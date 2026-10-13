@@ -101,6 +101,22 @@ def batch(record, runtime, report_directory):
     }
 
 
+def require_report_owner(report, record, runtime):
+    installation = record["installation"]
+    if (report.runtime, report.backend, report.engine_version) != (
+        runtime,
+        "rust",
+        installation["core_version"],
+    ):
+        raise ValueError("actual complete report installed host/core differs")
+    # Python transports sys.version or platform.python_version; R transports getRversion.
+    version = report.runtime_version.split()
+    if not version or version[0] != installation["runtime_version"]:
+        raise ValueError(
+            "actual complete report runtime version differs from installed owner"
+        )
+
+
 def coverage_row(name, runtime, truth, retained_report, verdicts):
     findings = [
         finding.model_dump(mode="json") for v in verdicts for finding in v.findings

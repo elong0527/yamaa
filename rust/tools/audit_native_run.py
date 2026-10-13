@@ -450,9 +450,10 @@ class Audit:
             "incomplete installation metadata",
         )
         require(
-            runtime != "python"
-            or installation["runtime_version"].startswith(version + "."),
-            "wrong installed Python version",
+            installation["runtime_version"].startswith(version + ".")
+            if runtime == "python"
+            else installation["runtime_version"] == "4.6.1",
+            "wrong installed supported runtime version",
         )
         expected_system = "macOS" if platform == "macos-15" else SYSTEMS[platform]
         require(
@@ -794,6 +795,11 @@ class Audit:
             owner = next(
                 b for b in inventory["batches"] if b["runtime"] == row["runtime"]
             )
+            committed_cohort.require_report_owner(
+                actual,
+                read(directory / (row["runtime"] + "-installed-evidence.json")),
+                row["runtime"],
+            )
             require(
                 (actual.example, actual.runtime, actual.backend, actual.engine_version)
                 == (row["example"], row["runtime"], "rust", owner["core_version"]),
@@ -833,15 +839,7 @@ class Audit:
                     "publication" not in before, "Build contains a publication attempt"
                 )
                 projected_before = project_report(before, case)
-                require(
-                    (
-                        projected_before.runtime,
-                        projected_before.backend,
-                        projected_before.engine_version,
-                    )
-                    == (runtime, "rust", record["installation"]["core_version"]),
-                    "producer raw report installed host/core differs",
-                )
+                committed_cohort.require_report_owner(projected_before, record, runtime)
                 require(
                     committed_cohort.reports.compare_reports(
                         expected, projected_before

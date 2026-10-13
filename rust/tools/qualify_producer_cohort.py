@@ -137,11 +137,7 @@ def retain_owner(directory, runtime, record, expected, output):
     if "publication" in before:
         raise ValueError("Build unexpectedly contains a publication attempt")
     before_report = project_report(before, case)
-    if (
-        before_report.runtime != runtime
-        or before_report.engine_version != record["installation"]["core_version"]
-    ):
-        raise ValueError("producer report differs from its actual installed host/core")
+    cohort.require_report_owner(before_report, record, runtime)
     require_parity(expected, before_report, runtime + " original complete Build report")
     snapshots = []
     comparisons = []

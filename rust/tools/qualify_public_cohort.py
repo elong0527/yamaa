@@ -85,6 +85,9 @@ def compare_owners(
                 raise ValueError(
                     "actual public complete report retains an infrastructure error"
                 )
+            cohort.require_report_owner(
+                actual, python_record if runtime == "python" else r_record, runtime
+            )
             if (
                 actual.example,
                 actual.runtime,
