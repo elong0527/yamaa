@@ -2519,18 +2519,18 @@ columns:
             self.assertEqual(json.loads(result._native.observations())["handler_counts"], [{'spec_path': 'columns.A.derivation.case[0].then.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.A.derivation.case[0].then.source.no_match', 'handler': 'no_match', 'count': 1}, {'spec_path': 'columns.B.derivation.case[0].then.source.multiple_matches', 'handler': 'multiple_matches', 'count': 1}, {'spec_path': 'columns.B.derivation.case[0].then.source.no_match', 'handler': 'no_match', 'count': 1}])
             self.assertTrue(result.save())
             self.assertEqual((root / "result.csv").read_bytes(), b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n")
-            for name in ("src.csv", "donor.csv", "result.csv"): (root / name).unlink()
-            entry.write_text(body.replace("then: P.A", "then: {source: {variable: P.A, absent: fallback}}"))
-            rejected = yamaa.domain(entry)
-            observed = [dict(phase=phase,condition=condition,requirement=requirement,
-                             spec_paths=paths,context=json.loads(context))
-                        for phase,condition,requirement,paths,context in rejected.issues.rows()]
-            self.assertEqual(observed, [{"phase":"planning","condition":"unsupported_operation","requirement":None,"spec_paths":["columns.A.derivation.case[0].then.source"],"context":{"operation":"case_source_options"}}])
-            self.assertIsNone(rejected.output)
-            self.assertIsNone(rejected._native.observations())
-            with self.assertRaises(yamaa.DomainError): rejected.save()
-            self.assertFalse((root / "src.csv").exists())
-            self.assertFalse((root / "result.csv").exists())
+            for variable, expected, count in (
+                ("P.A", b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n", 0),
+                ("P.ABSENT", b"ID,A,B\n1,fallback,\n2,skip,skip\n3,fallback,\n", 2),
+            ):
+                entry.write_text(body.replace("then: P.A", f"then: {{source: {{variable: {variable}, absent: fallback}}}}"))
+                admitted = yamaa.domain(entry)
+                self.assertEqual(admitted.issues.rows(), [])
+                self.assertTrue(admitted.save())
+                self.assertEqual((root / "result.csv").read_bytes(), expected)
+                handlers = json.loads(admitted._native.observations())["handler_counts"]
+                self.assertEqual(next(row for row in handlers if row["spec_path"] == "columns.A.derivation.case[0].then.source.absent"),
+                                 {"spec_path": "columns.A.derivation.case[0].then.source.absent", "handler": "absent", "count": count})
 
     def test_public_case_predicates_and_filtered_sources_preserve_complete_authored_truth(self):
         import yamaa
