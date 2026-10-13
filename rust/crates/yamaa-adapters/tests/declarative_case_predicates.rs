@@ -349,6 +349,9 @@ fn assertion_lookup_reuses_current_selection_without_adding_derivation_handlers(
 #[test]
 fn false_when_still_resolves_require_lookup_and_refuses_an_unhandled_absence() {
     let (fixture, body) = lookup_fixture("assert_lookup_only");
+    for pattern in ["    no_match: null\n", "when: 'P.X IS NOT NULL'"] {
+        assert!(body.contains(pattern), "fixture drifted: {pattern}");
+    }
     let body = body
         .replace("    no_match: null\n", "")
         .replace("when: 'P.X IS NOT NULL'", "when: 'FALSE'");
@@ -373,6 +376,12 @@ fn false_when_still_resolves_require_lookup_and_refuses_an_unhandled_absence() {
 #[test]
 fn empty_output_validates_lookup_operand_types_without_selecting_a_donor() {
     let (fixture, body) = lookup_fixture("assert_lookup_empty");
+    for pattern in [
+        "when: 'P.X IS NOT NULL'",
+        "require: 'VALUE = P.X AND P.X >= 10'",
+    ] {
+        assert!(body.contains(pattern), "fixture drifted: {pattern}");
+    }
     let body = body
         .replace("when: 'P.X IS NOT NULL'", "when: 'FALSE'")
         .replace(
@@ -390,4 +399,43 @@ fn empty_output_validates_lookup_operand_types_without_selecting_a_donor() {
     );
     assert!(result.output().is_none());
     assert!(result.save().is_err());
+}
+
+#[test]
+fn warning_assertion_missing_lookup_fields_retain_field_specific_diagnostics() {
+    for (field, pattern) in [
+        ("when", "when: 'P.X IS NOT NULL'"),
+        ("require", "require: 'P.X >= 10'"),
+    ] {
+        let (fixture, body) = lookup_fixture("assert_lookup_only");
+        for pattern in ["  - assert:\n", "output: {path: result.csv,", pattern] {
+            assert!(body.contains(pattern), "fixture drifted: {pattern}");
+        }
+        let body = body
+            .replace(
+                "output: {path: result.csv,",
+                "output: {path: result.csv, warning_log: warnings.csv,",
+            )
+            .replace("  - assert:\n", "  - assert:\n      severity: warning\n")
+            .replace(pattern, &pattern.replace("P.X", "P.MISSING"));
+        let mut result = fixture.run(&body).unwrap();
+        let definition =
+            yamaa_core::diagnostic::ConditionCode::VerificationUnknownReference.definition();
+        assert_eq!(result.issues().len(), 1);
+        let issue = &result.issues()[0];
+        assert_eq!(issue.phase, definition.phase);
+        assert_eq!(issue.condition, definition.condition);
+        assert_eq!(issue.requirement.as_deref(), definition.requirement);
+        assert_eq!(
+            issue.spec_paths,
+            vec![format!("verifications[0].assert.{field}")]
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
+            serde_json::json!({"identifier": "P.MISSING"})
+        );
+        assert!(result.output().is_none());
+        assert!(result.save().is_err());
+        assert!(!fixture.0.join("result.csv").exists());
+    }
 }
