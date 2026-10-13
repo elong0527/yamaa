@@ -81,6 +81,10 @@ def compare_owners(
             if retained.read_bytes() != source.read_bytes():
                 raise ValueError("retaining actual complete report changed bytes")
             actual = cohort.reports.read_report(retained)
+            if actual.error is not None:
+                raise ValueError(
+                    "actual public complete report retains an infrastructure error"
+                )
             if (
                 actual.example,
                 actual.runtime,
