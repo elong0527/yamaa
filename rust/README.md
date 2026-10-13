@@ -1,3 +1,8 @@
+> The component endpoint descriptions below are historical development evidence.
+> Installed JSON request protocols and probe exports were retired under #1990;
+> see [SUPPLEMENTAL.md](SUPPLEMENTAL.md) for their typed/public successors.
+> Public qualification uses domain/check/define in both installed hosts.
+
 # Shared native engine bootstrap
 
 This is the shared engine prototype for [#1585](https://github.com/elong0527/yamaa/issues/1585).

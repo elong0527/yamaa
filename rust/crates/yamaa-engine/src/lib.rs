@@ -70,3 +70,7 @@ pub mod verification_diagnostics;
 pub mod define;
 
 pub mod submission_inventory;
+
+pub mod source_header;
+
+pub mod source_decode;

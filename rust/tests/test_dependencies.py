@@ -150,3 +150,27 @@ class DependencyTests(unittest.TestCase):
         metadata = self.metadata()
         metadata["packages"].append({"name": "extra", "dependencies": []})
         self.assertTrue(guard.violations(metadata))
+
+
+class AdapterSourceBoundaries(unittest.TestCase):
+    def test_core_compilers_parsers_and_validators_are_rejected_with_aliases(self):
+        for source in (
+            "yamaa_core::numeric_parser::parse_numeric(input, limits);",
+            "use yamaa_core::numeric_parser as syntax; syntax::parse_numeric(input, limits);",
+            "use yamaa_core::{numeric_parser::{parse_numeric as parse}}; parse(input, limits);",
+            "use yamaa_core::regex::Pattern as Regex; Regex::compile(input, limits);",
+            "use yamaa_core::schema::SchemaStructure; schema.validate_document(input, limits);",
+            "pub mod dataset_transport;",
+        ):
+            with self.subTest(source=source):
+                self.assertTrue(guard.adapter_source_violations(source, "fixture.rs"))
+
+    def test_engine_use_cases_codec_parsing_values_and_diagnostics_are_permitted(self):
+        source = """
+use yamaa_core::{schema::DocumentNode, diagnostic::Diagnostic, value::Value};
+let parsed = yamaa_engine::domain::check(model);
+let yaml = crate::yaml_decode::decode_yaml(bytes,limits);
+let number = text.parse::<i64>();
+let finding = error.diagnostic();
+"""
+        self.assertEqual(guard.adapter_source_violations(source, "fixture.rs"), [])

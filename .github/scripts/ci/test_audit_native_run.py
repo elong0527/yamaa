@@ -118,14 +118,6 @@ class NativeAudit(unittest.TestCase):
         }
         (directory / "check.log").write_text("independently authored successful log\n")
         audit.write(directory / "supplemental.json", record)
-        audit.write(
-            directory.parent / "coverage.json",
-            {
-                "source_revision": self.auditor.source["sha"],
-                "errors": [],
-                "summary": {"python/rust": {"pass": 1}},
-            },
-        )
         return directory, record
 
     def test_discovery_enumerates_every_required_tuple_and_missing_never_passes(self):

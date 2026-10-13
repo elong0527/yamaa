@@ -446,15 +446,15 @@ fn original_yaml_run_returns_complete_independent_portable_failures() {
         let run = PreparedRun::prepare(captured).unwrap();
         assert_eq!(run.source().name, "LB");
         assert_eq!(run.source().path, "input/lb.csv");
-        let mut context = json!({"expr":{"str":expr}});
+        let mut context = json!({"expr":expr});
         if condition == "integer_overflow" {
-            context["minimum"] = json!({"int":"-9223372036854775808"});
-            context["maximum"] = json!({"int":"9223372036854775807"});
-            context["value"] = json!({"str":"9223372036854776832"});
+            context["minimum"] = json!(i64::MIN);
+            context["maximum"] = json!(i64::MAX);
+            context["value"] = json!("9223372036854776832");
         }
-        let expected = json!({"protocol":"dataset/1","outcome":{
+        let expected = json!({"protocol":"execution/1","outcome":{
             "status":"condition","diagnostic":{"phase":"derivation","condition":condition,"requirement":requirement,
-            "spec_paths":[format!("columns.{column}.derivation.compute")],"context":context,"source_span":{"start":"0","end":expr.len().to_string()},"operand_route":[]},
+            "spec_paths":[format!("columns.{column}.derivation.compute")],"context":context},
             "identity":{"position":"1","keys":keys.iter().map(|key|json!({"str":key})).collect::<Vec<_>>()}
         }});
         for _ in 0..2 {

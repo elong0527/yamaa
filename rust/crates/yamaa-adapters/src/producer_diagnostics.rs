@@ -27,7 +27,7 @@ fn host_budget(budget: &mut Budget, details: HostDetails<'_>) -> Result<(), Erro
         HostDetails::Rejected { reason, returned } => [Some(reason), returned],
     };
     for text in fields.into_iter().flatten() {
-        if text.len() > crate::function_transport::MAX_ERROR_BYTES {
+        if text.len() > crate::callback::MAX_ERROR_BYTES {
             return Err(Error::OutputLimit);
         }
         // A conformance issue nests invocation facts within a second context.

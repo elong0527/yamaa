@@ -433,6 +433,7 @@
         "_BuildResult.observations",
         "_BuildResult.output",
         "_BuildResult.save",
+        "_CORE_VERSION",
         "_DefineResult",
         "_DefineResult.artifacts",
         "_DefineResult.capture_reads",
@@ -470,10 +471,6 @@
         "_ProjectSpecification.build",
         "_ProjectSpecification.capture_reads",
         "_ProjectSpecification.preparation_status",
-        "_ReferenceCatalog",
-        "_ReferenceCatalog.analyze",
-        "_Schema",
-        "_Schema.analyze",
         "_Specification",
         "_Specification.build",
         "_Specification.check_issues",
@@ -483,40 +480,17 @@
         "_Specification.source",
         "_check_file",
         "_check_project_metadata",
-        "_compile_reference_catalog",
-        "_compile_schema",
         "_define_file",
         "_domain_file",
         "_prepare_document",
         "_prepare_file_project",
         "_prepare_inherited_specification",
         "_prepare_specification",
-        "_profile_dataset_functions",
-        "_temporal_result",
-        "analyze_aggregate",
-        "analyze_column_dependencies",
-        "analyze_dependencies",
-        "analyze_numeric",
-        "analyze_predicate",
-        "analyze_references",
-        "dataset_capabilities",
-        "decode_yaml",
-        "engine_info",
-        "evaluate_numeric",
-        "evaluate_regex",
-        "execute_dataset",
-        "execute_dataset_functions",
-        "execute_dataset_sources",
-        "interpret_schema",
-        "invoke_function",
-        "reference_capabilities",
-        "scalar_round_trip",
-        "table_round_trip",
-        "table_snapshot"
+        "_temporal_result"
       ],
-      "disposition": "remove_public",
-      "issue": "#1751",
-      "rationale": "Fold native distribution into yamaa and remove standalone component probes after qualification consumers migrate. Private handle methods are inventoried but are not release promises.",
+      "disposition": "internal",
+      "issue": "#1990",
+      "rationale": "Approved public domain/check/define and private typed production services remain; all installed component request protocols and probe exports retired under #1990.",
       "overrides": {
         "_ProjectAttempt": {
           "disposition": "internal",
@@ -659,64 +633,37 @@
         "S3:length.yamaa_utf8",
         "S3:print.yamaa_int64",
         "S3:print.yamaa_utf8",
-        "analyze_aggregate",
-        "analyze_column_dependencies",
-        "analyze_dependencies",
-        "analyze_numeric",
-        "analyze_predicate",
-        "analyze_references",
-        "dataset_capabilities",
-        "decode_yaml",
-        "engine_info",
-        "evaluate_numeric",
-        "evaluate_regex",
-        "execute_dataset",
-        "execute_dataset_functions",
-        "execute_dataset_sources",
-        "int64",
-        "interpret_schema",
-        "invoke_function",
-        "prepare_specification",
-        "reference_capabilities",
-        "scalar_round_trip",
-        "specification_failure_report",
-        "specification_report",
-        "specification_source",
-        "table_round_trip",
-        "table_snapshot",
-        "utf8_bytes",
-        "utf8_scalar",
         "yamaa_check",
         "yamaa_define",
         "yamaa_domain"
       ],
       "disposition": "remove_public",
-      "issue": "#1751",
-      "rationale": "The yamaa package includes the public domain/check candidate; qualification interfaces remain pending removal from the release surface. Full migration coverage and the final public API remain unqualified.",
+      "issue": "#1990",
+      "rationale": "Approved public domain/check/define and private typed production services remain; all installed component request protocols and probe exports retired under #1990.",
       "overrides": {
         "S3:Ops.yamaa_int64_vector": {
           "disposition": "retain_candidate",
-          "rationale": "Exact Rust scalar comparisons for approved lossless public integer output; remaining vector methods and full release qualification stay open."
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
         },
         "S3:[[.yamaa_int64_vector": {
           "disposition": "retain_candidate",
-          "rationale": "Retain the approved integer representation and separate missingness on single-element output extraction; full release qualification stays open."
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
         },
         "S3:[.yamaa_int64_vector": {
           "disposition": "retain_candidate",
-          "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
         },
         "S3:[.yamaa_utf8_vector": {
           "disposition": "retain_candidate",
-          "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
         },
         "S3:as.character.yamaa_int64_vector": {
           "disposition": "retain_candidate",
-          "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
         },
         "S3:is.na.yamaa_utf8_vector": {
           "disposition": "retain_candidate",
-          "rationale": "Bounded public result conversion candidate; final package and full release API remain unqualified."
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
         },
         "yamaa_check": {
           "disposition": "retain_candidate",
@@ -728,15 +675,67 @@
         },
         "S3:as.double.yamaa_int64_vector": {
           "disposition": "retain_candidate",
-          "rationale": "Approved exact-or-error conversion of lossless public integer output; final release matrix qualification remains required."
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
         },
         "S3:as.integer.yamaa_int64_vector": {
           "disposition": "retain_candidate",
-          "rationale": "Approved exact-or-error conversion of lossless public integer output; final release matrix qualification remains required."
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
         },
         "yamaa_define": {
           "disposition": "retain_candidate",
           "rationale": "Approved #1973 item 2 public Define API, matching Python define; complete installed release qualification remains required."
+        },
+        "S3:Ops.yamaa_int64": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:Ops.yamaa_utf8": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:as.character.yamaa_int64": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:as.character.yamaa_utf8": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:as.double.yamaa_int64": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:as.integer.yamaa_int64": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:format.yamaa_int64": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:format.yamaa_utf8": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:is.na.yamaa_int64": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:is.na.yamaa_utf8": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:length.yamaa_utf8": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:print.yamaa_int64": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
+        },
+        "S3:print.yamaa_utf8": {
+          "disposition": "retain_candidate",
+          "rationale": "Lossless approved public result representations and preserve-or-error conversions; installed matrix qualification remains required."
         }
       }
     },

@@ -8,7 +8,7 @@
 yamaa_define <- function(environment, standard, created = NULL) {
   handle <- .domain_reply(.Call(wrap__define_file, .domain_path_bytes(environment),
     .domain_path_bytes(standard), if (is.null(created)) NULL else .domain_path_bytes(created),
-    charToRaw(as.character(utils::packageVersion("yamaa")))))
+    charToRaw(.core_version())))
   result <- new.env(parent = emptyenv())
   makeActiveBinding("issues", local({ h <- handle; function(value) {
     if (!missing(value)) stop("issues are read only", call. = FALSE)

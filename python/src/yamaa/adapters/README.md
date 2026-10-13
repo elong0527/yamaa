@@ -5,24 +5,15 @@
 `compare_reports` compares two completed executions without running callbacks
 again or changing expected artifacts.
 
-## Available execution coverage
+## Retained reference execution
 
-| Host | Backend | Coverage |
-| --- | --- | --- |
-| Python | Python | Cases declaring `python` in `benchmarks/execution-manifest.yaml`. |
-| Python | Rust | Single-node examples executed through the installed native dataset bridge (`--backend rust`); producer workflows report `unsupported`. The manifest still declares `python` coverage only. |
-| R | Rust | Not implemented; blocked by #1585. |
-| R | Legacy R | Package and grammar tests only; no claim of current-schema benchmark execution. |
-
-Accepting a backend label in a report is protocol support, not an implementation
-of that backend. The CLI runs the Python backend by default; `--backend rust`
-selects the native bridge above, and this CLI implements no R host. Unsupported or
-infrastructure-error reports never establish parity, even against identical
-reports. Add manifest coverage only after an actual runtime executes the fixture.
-
-Rust core primitives and their remaining requirement-level gates are tracked in
-[`rust/CAPABILITIES.md`](../../../../rust/CAPABILITIES.md). Those unit tests and
-native installation probes do not change this execution coverage table.
+This internal runner preserves the Python reference baseline until the qualified
+transition. Component native endpoints and the former `--backend rust` route
+were retired under #1990. Installed replacement qualification runs every original
+benchmark through public domain/check/define using
+[`rust/tools/public_conformance.py`](../../../../rust/tools/public_conformance.py)
+and the installed Python/R runners. The frozen assisted inventory is historical
+migration evidence; it does not describe active host routes.
 
 ## Version 0.3.0-draft
 
@@ -76,33 +67,3 @@ The command checks both committed goldens and reference observations. A future
 adapter can call `read_report` and `compare_reports` directly. A reference report
 is differential evidence, not normative expected truth; disagreement must be
 resolved against rules and independent edge cases.
-
-## Optional native callback facade
-
-`native_functions.invoke_function(request, callback)` explicitly invokes the
-optional Rust function/1 API. Known DateValue/DateTimeValue results (including
-subtypes) retain collected precision through an immutable native temporal
-representation; ordinary builtin temporal results retain day/second precision.
-All other results follow native exact-type admission. Arbitrary wrappers are
-not inspected or coerced. Invalid known model fields are result failures, not
-callback exceptions, and callback effects are never replayed. The installed
-native extension must include the private temporal bridge; an incompatible
-extension fails before callback effects. No fallback or default-backend dispatch
-is introduced. See `rust/FUNCTION_TRANSPORT.md` for the protocol and remaining
-activation, workflow and release gates.
-
-The explicit optional [native dataset frontend](NATIVE_DATASETS.md) runs the admitted
-single-source normalized specification subset through Rust. It retains the ordinary
-result and report types while keeping source/artifact IO as temporary host ports.
-It does not change backend defaults or enable workflow execution.
-
-`native_specification.load_specification(entry_path, schema_root)` explicitly
-loads a specification through an installed shared Rust schema snapshot. Rust
-owns schema admission, constraints, defaults, shorthand and type queries used
-by inheritance and windows. Python still owns YAML decoding, filesystem access,
-composition, dependency discovery, window expansion and model validation.
-The ordinary `yamaa.specification.load_specification` remains the default.
-Resource and unsupported outcomes propagate without falling back to Python
-interpretation. See `rust/SCHEMA_TRANSPORT.md` for policies, installed checks
-and compatibility limits; this optional path does not establish full engine
-readiness.

@@ -1,4 +1,6 @@
 #![cfg(any(unix, windows))]
+#[path = "support/ipc_snapshot.rs"]
+mod ipc_snapshot;
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -350,7 +352,7 @@ fn dictionary_resources_are_held_once_and_original_authored_model_is_retained() 
     let response = prepared.run().execute_csv(b"ID,CODE\n1,A\n").unwrap();
     assert!(response.table.is_some());
     let outcome: Value = serde_json::from_str(
-        &yamaa_adapters::table_transport::table_snapshot(response.table.as_ref().unwrap()).unwrap(),
+        &ipc_snapshot::table_snapshot(response.table.as_ref().unwrap()).unwrap(),
     )
     .unwrap();
     assert_eq!(
@@ -380,7 +382,7 @@ fn inherited_dictionary_resources_start_at_original_declaring_layer() {
     assert!(dictionary.identity.ends_with("/parent/dict.yaml"));
     let response = prepared.run().execute_csv(b"ID,CODE\n1,A\n").unwrap();
     let outcome: Value = serde_json::from_str(
-        &yamaa_adapters::table_transport::table_snapshot(response.table.as_ref().unwrap()).unwrap(),
+        &ipc_snapshot::table_snapshot(response.table.as_ref().unwrap()).unwrap(),
     )
     .unwrap();
     assert_eq!(
