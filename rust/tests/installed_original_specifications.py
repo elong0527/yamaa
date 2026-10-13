@@ -2558,7 +2558,14 @@ columns:
     def test_public_case_predicates_and_filtered_sources_preserve_complete_authored_truth(self):
         import yamaa
         truth = json.loads((ROOT / "case-predicate-truth.json").read_text())
+        dispositions = json.loads((ROOT / "case-predicate-dispositions.json").read_text())["cases"]
         for name, case in truth["cases"].items():
+            if name in dispositions:
+                self.assertEqual(dispositions[name]["classification"], "historical_private_reference_defect")
+                self.assertEqual(dispositions[name]["requirement"], "REQ-0148")
+                self.assertEqual(case["csv"], dispositions[name]["historical_csv"])
+                self.assertEqual((ROOT / "case-predicate-history" / name / "expected.csv").read_text(), case["csv"])
+                continue
             with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
                 destination = Path(directory) / name
                 shutil.copytree(ROOT / "case-predicate-cases" / name, destination)
@@ -2589,6 +2596,54 @@ columns:
                 self.assertTrue(result.save())
                 for expected in (destination / "expected").glob("*.csv"):
                     self.assertEqual((destination / expected.name).read_bytes(), expected.read_bytes())
+
+    def test_public_source_selection_preserves_authored_types_effect_order_and_save_bytes(self):
+        import polars as pl
+        import yamaa
+        cases = [(name, case, ROOT / (label + "-cases") /
+                  json.loads((ROOT / (label + "-case-paths.json")).read_text())[name])
+                 for label in ("source-selection", "source-filter-scope", "source-filter-mixed")
+                 for name, case in json.loads((ROOT / (label + "-truth.json")).read_text())["cases"].items()]
+
+        def issues(frame):
+            rows = frame.to_dicts()
+            for row in rows:
+                self.assertIsInstance(row["context"], str)
+                row["context"] = json.loads(row["context"])
+            return rows
+
+        for name, case, staged in cases:
+            for attempt in range(2):
+                with self.subTest(case=name, attempt=attempt), tempfile.TemporaryDirectory() as directory:
+                    destination = Path(directory) / name
+                    shutil.copytree(staged, destination)
+                    entry = destination / "spec.yaml"
+                    self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
+                    result = yamaa.domain(entry)
+                    self.assertEqual(issues(result.issues), case["issues"])
+                    report = json.loads(result._native.observations())
+                    self.assertEqual(report["handler_counts"], case["handlers"])
+                    self.assertEqual(report["source_reads"], [
+                        dict(base_directory=".", condition=None, outcome="captured", path=path, snapshots_created=1)
+                        for path in case["source_reads"]])
+                    self.assertEqual(report["artifacts"], [])
+                    if "table" in case:
+                        expected = case["table"]
+                        self.assertEqual(result.output.columns, [column for column, _ in expected["columns"]])
+                        self.assertEqual(result.output.dtypes, [pl.String if kind == "str" else pl.Int64
+                                                               for _, kind in expected["columns"]])
+                        self.assertEqual([[None if value is None else str(value) for value in row]
+                                          for row in result.output.rows()], expected["rows"])
+                        self.assertTrue(result.save())
+                        self.assertEqual((destination / "result.csv").read_bytes(), case["csv"].encode())
+                        (destination / "input.csv").write_bytes(b"changed after build")
+                        self.assertTrue(result.save())
+                        self.assertEqual((destination / "result.csv").read_bytes(), case["csv"].encode())
+                    else:
+                        self.assertIsNone(result.output)
+                        with self.assertRaises(yamaa.DomainError):
+                            result.save()
+                        self.assertFalse((destination / "result.csv").exists())
 
 if __name__ == "__main__":
     unittest.main()

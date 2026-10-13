@@ -143,6 +143,9 @@ pub enum Expression {
         source: alloc::boxed::Box<Assignment>,
         absent: Option<Value>,
         variable_absent: bool,
+        /// A source keep declaration still has an auditable zero count when its
+        /// operand is an already selected scalar and needs no new record choice.
+        selection_declared: bool,
         variable: String,
         path: String,
     },
@@ -1080,6 +1083,7 @@ fn validate_assignment_at(
             variable,
             absent,
             variable_absent,
+            ..
         } => {
             if operand.column != assignment.column
                 || path.is_empty()
@@ -1257,7 +1261,21 @@ fn validate_assignment_at(
 // Recursively preserve key-phase authority through selected case branches.
 fn key_expression(expression: &Expression) -> bool {
     match expression {
-        Expression::Literal(_) | Expression::Source(_) | Expression::Column(_) => true,
+        Expression::Literal(_)
+        | Expression::Source(_)
+        | Expression::Column(_)
+        | Expression::Collect { .. }
+        | Expression::SourceLookup { .. }
+        | Expression::Intermediate { .. } => true,
+        Expression::SourceBinding { source, .. } => key_expression(&source.expression),
+        Expression::FirstAvailable(selection) => {
+            selection.sources().iter().all(|source| match &source.read {
+                SelectionRead::Expression(assignment) => key_expression(&assignment.expression),
+                SelectionRead::Column(_)
+                | SelectionRead::Source(_)
+                | SelectionRead::Collect { .. } => true,
+            })
+        }
         Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
             .iter()
             .all(|source| key_expression(&source.expression)),

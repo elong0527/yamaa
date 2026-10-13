@@ -1,0 +1,439 @@
+{
+  "authorship": "Independently authored normative group-scalar prohibition and record-selection controls; preserves the historical conflicting private fixture separately.",
+  "requirements": [
+    "REQ-0086",
+    "REQ-0087",
+    "REQ-0107",
+    "REQ-0132",
+    "REQ-0148"
+  ],
+  "cases": {
+    "column-group-key-filter": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: {literal: unused}}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "inputs": {
+        "input.csv": "ID,V\na,1\nb,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.case[0].then.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.case[0].then.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ],
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": []
+    },
+    "column-group-key-first-available": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {first_available: {sources: [{variable: SRC.ID, filter: 'SRC.V > 0'}, SRC.ID]}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "inputs": {
+        "input.csv": "ID,V\na,1\nb,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.first_available.sources[0].filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.first_available.sources[0].filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ],
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": []
+    },
+    "row-group-key-unreached-branch": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}, {name: VALUE, type: str}]\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations:\n      VALUE: {case: [{when: 'FALSE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: {literal: unused}}]}\n",
+      "inputs": {
+        "input.csv": "ID,V\na,1\nb,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "rows[0].derivations.VALUE.case[0].then.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "rows[0].derivations.VALUE.case[0].then.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ],
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": []
+    },
+    "group-key-prohibition-before-filter-grammar": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, filter: 'SRC.V >'}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "inputs": {
+        "input.csv": "ID,V\na,1\nb,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ],
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": []
+    },
+    "group-key-shared-across-templates": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, filter: 'TRUE'}}}\nrows:\n  - {id: first, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n  - {id: second, dataset: SRC, group_by: [SRC.ID, SRC.V], derivations: {}}\n",
+      "inputs": {
+        "input.csv": "ID,V\na,1\nb,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ],
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": []
+    },
+    "grouped-nonkey-remains-unavailable": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.V, filter: 'TRUE'}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "inputs": {
+        "input.csv": "ID,V\na,1\nb,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "ungrouped_driver_field",
+          "requirement": "REQ-0107",
+          "spec_paths": [
+            "columns.VALUE.derivation.source"
+          ],
+          "context": {
+            "identifier": "SRC.V",
+            "dataset": "SRC"
+          }
+        }
+      ],
+      "check_issues": [],
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": []
+    },
+    "resource-failure-precedes-group-bind": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: {literal: unused}}]}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "inputs": {},
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "resource_path_missing",
+          "requirement": "REQ-0785",
+          "spec_paths": [
+            "input.SRC.path"
+          ],
+          "context": {
+            "dataset": "SRC",
+            "path": "input.csv"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.case[0].then.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        }
+      ],
+      "source_reads": [],
+      "handlers": []
+    },
+    "ordinary-key-grain-filter": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: {literal: unused}}]}}\n",
+      "inputs": {
+        "input.csv": "ID,V\na,1\nb,\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": [],
+      "csv": "ID,VALUE\na,a\nb,\n",
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "VALUE",
+            "str"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "a"
+          ],
+          [
+            "b",
+            null
+          ]
+        ]
+      }
+    },
+    "record-row-filter": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'TRUE', then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}}, {otherwise: {literal: unused}}]}}\nrows:\n  - {id: records, dataset: SRC, derivations: {}}\n",
+      "inputs": {
+        "input.csv": "ID,V\na,1\nb,\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": [],
+      "csv": "ID,VALUE\na,a\nb,\n",
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "VALUE",
+            "str"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "a"
+          ],
+          [
+            "b",
+            null
+          ]
+        ]
+      }
+    },
+    "unfiltered-group-key": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: SRC.ID}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "inputs": {
+        "input.csv": "ID,V\na,1\nb,\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": [],
+      "csv": "ID,VALUE\na,a\nb,b\n",
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "VALUE",
+            "str"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "a"
+          ],
+          [
+            "b",
+            "b"
+          ]
+        ]
+      }
+    },
+    "group-key-keep-is-redundant": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, order_by: [SRC.V], keep: last}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "inputs": {
+        "input.csv": "ID,V\na,1\na,2\nb,3\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "source_reads": [
+        "input.csv"
+      ],
+      "handlers": [
+        {
+          "spec_path": "columns.VALUE.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": 0
+        }
+      ],
+      "csv": "ID,VALUE\na,a\nb,b\n",
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "VALUE",
+            "str"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "a"
+          ],
+          [
+            "b",
+            "b"
+          ]
+        ]
+      }
+    },
+    "secondary-record-filter-over-grouped-driver": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: SRC\ninput:\n  SRC: {path: input.csv, types: {V: int}}\n  D: {path: donor.csv, types: {SEQ: int, USE: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: D.V, filter: 'D.USE = 1', order_by: [D.SEQ], keep: first}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {}}\n",
+      "inputs": {
+        "input.csv": "ID,V\na,1\nb,\n",
+        "donor.csv": "ID,SEQ,USE,V\na,1,0,hidden\na,2,1,selected\nb,3,1,B\n"
+      },
+      "issues": [],
+      "check_issues": [],
+      "source_reads": [
+        "input.csv",
+        "donor.csv"
+      ],
+      "handlers": [
+        {
+          "spec_path": "columns.VALUE.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": 0
+        }
+      ],
+      "csv": "ID,VALUE\na,selected\nb,B\n",
+      "table": {
+        "columns": [
+          [
+            "ID",
+            "str"
+          ],
+          [
+            "VALUE",
+            "str"
+          ]
+        ],
+        "rows": [
+          [
+            "a",
+            "selected"
+          ],
+          [
+            "b",
+            "B"
+          ]
+        ]
+      }
+    }
+  }
+}
