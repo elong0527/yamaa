@@ -428,3 +428,57 @@ fn capture_environment(
         }))),
     }
 }
+
+#[cfg(test)]
+mod root_read_tests {
+    use super::*;
+    #[test]
+    fn classified_unreadable_root_projects_without_new_captures_or_losing_its_owner() {
+        let root =
+            std::env::temp_dir().join(format!("yamaa-env-read-facts-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        struct Cleanup(std::path::PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                std::fs::remove_dir_all(&self.0).unwrap();
+            }
+        }
+        let _cleanup = Cleanup(root.clone());
+        let entry = root
+            .join("absent-entry.yaml")
+            .to_string_lossy()
+            .into_owned();
+        let environment = root.join("environment.yaml").to_string_lossy().into_owned();
+        let configured = configure(&entry, Some(&environment)).unwrap();
+        let path = configured.environment.clone().unwrap();
+        let rejection = Error::Environment(Box::new(RejectedEnvironment {
+            error: file_project::Error::Resource(crate::file_resources::Error::Unreadable),
+            entry: Some(configured.entry),
+            environment: configured.environment,
+            specification_schema: configured.specification_schema,
+            environment_schema: configured.environment_schema,
+            resources: configured.resources,
+        }));
+        let Error::Environment(owner) = &rejection else {
+            unreachable!()
+        };
+        let original = owner.error() as *const file_project::Error;
+        let issues = crate::producer_check::rejected(&rejection, Language::Python).unwrap();
+        assert_eq!(issues.len(), 1);
+        let definition =
+            yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentMissing.definition();
+        assert_eq!(issues[0].condition, definition.condition);
+        assert_eq!(issues[0].requirement.as_deref(), definition.requirement);
+        assert_eq!(
+            issues[0].context,
+            serde_json::json!({"cause":"unreadable", "path":path}).to_string()
+        );
+        assert!(matches!(
+            crate::producer_check::rejected_with_limit(&rejection, Language::Python, 1),
+            Err(crate::producer_check::Error::Projection(_))
+        ));
+        assert_eq!(owner.error() as *const file_project::Error, original);
+        assert_eq!(owner.capture_reads(), 0);
+        assert_eq!(owner.captured_sources().count(), 0);
+    }
+}

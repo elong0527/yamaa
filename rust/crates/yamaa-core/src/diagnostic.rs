@@ -172,6 +172,7 @@ macro_rules! conditions {
 }
 
 conditions! {
+    ProjectEnvironmentMissing => ("validation", "project_environment_missing", Some("REQ-0694")),
     ProjectEnvironmentInvalid => ("validation", "project_environment_invalid", Some("REQ-0695")),
     ProjectLockMismatch => ("validation", "runtime_artifact_mismatch", Some("REQ-0697")),
     RunnerLanguageMismatch => ("validation", "runner_language_mismatch", Some("REQ-0696")),
