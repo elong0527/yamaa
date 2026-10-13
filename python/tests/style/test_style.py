@@ -844,3 +844,28 @@ def test_authoring_suppression_with_a_reason_covers_its_entry(
         "  - id: a",
     )
     assert _names(_spec(tmp_path, text)) == []
+
+
+def test_large_unchanged_document_still_has_shared_yaml_admission() -> None:
+    source = "\n".join(f"K{index}: {index}" for index in range(1024)) + "\n"
+    assert proved(source, source)
+
+
+def test_leading_underscore_filter_name_retains_its_row_derivation(
+    tmp_path: Path,
+) -> None:
+    filtered = (
+        REPEATED.replace("DOMAIN", "_X")
+        .replace(
+            "  - id: a\n    derivations:",
+            "  - id: a\n    filter: \"_X = 'DM'\"\n    derivations:",
+        )
+        .replace(
+            "  - id: b\n    derivations:",
+            "  - id: b\n    filter: \"_X = 'DM'\"\n    derivations:",
+        )
+    )
+    findings = check_file(_spec(tmp_path, filtered), orders=ORDERS)
+    assert ("repeated_row_derivation", "rows[0].derivations._X") not in [
+        (finding.name, finding.spec_path) for finding in findings
+    ]
