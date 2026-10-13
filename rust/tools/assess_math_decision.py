@@ -490,6 +490,9 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     output = args.output.resolve()
+    archive = (WORKSPACE / "qualification/math-decision-v1.json").resolve()
+    if output == archive:
+        parser.error("--output must not overwrite qualification/math-decision-v1.json")
     sample = sample_inventory(args.reports)
     boundary = boundaries()
     exp = next(row for row in boundary if row["input"]["id"] == "exp-one")
