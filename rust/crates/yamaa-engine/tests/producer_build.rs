@@ -1967,3 +1967,299 @@ fn actual_graph_has_one_work_ceiling_and_input_slot_reservations_at_exact_bounda
         }
     }
 }
+
+#[test]
+fn owned_column_weighted_output_cells_keep_the_completed_producer_at_the_exact_boundary() {
+    use yamaa_core::schema::{
+        Document, DocumentNode as N, SpecificationDocument, ValidationBudget,
+    };
+    fn append(nodes: &mut Vec<N>, node: N) -> usize {
+        let index = nodes.len();
+        nodes.push(node);
+        index
+    }
+    fn text(nodes: &mut Vec<N>, value: &str) -> usize {
+        append(nodes, N::Text(value.into()))
+    }
+    fn mapping(nodes: &mut Vec<N>, fields: Vec<(&str, usize)>) -> usize {
+        let fields = fields
+            .into_iter()
+            .map(|(name, value)| (text(nodes, name), value))
+            .collect();
+        append(nodes, N::Mapping(fields))
+    }
+    fn literal(nodes: &mut Vec<N>, value: i64) -> usize {
+        let value = append(nodes, N::Integer(value.to_string()));
+        let expression = mapping(nodes, vec![("literal", value)]);
+        mapping(nodes, vec![("value", expression)])
+    }
+    fn ordered(nodes: &[N], index: usize, output: &mut Vec<N>) -> usize {
+        let node = match &nodes[index] {
+            N::Sequence(items) => N::Sequence(
+                items
+                    .iter()
+                    .map(|&item| ordered(nodes, item, output))
+                    .collect(),
+            ),
+            N::Mapping(fields) => N::Mapping(
+                fields
+                    .iter()
+                    .map(|&(name, value)| {
+                        (ordered(nodes, name, output), ordered(nodes, value, output))
+                    })
+                    .collect(),
+            ),
+            node => node.clone(),
+        };
+        append(output, node)
+    }
+    struct RootCodec(Codec);
+    impl CodecPort for RootCodec {
+        type Error = &'static str;
+        fn encode(
+            &mut self,
+            plan: &PreparedSpecification,
+            dataset: &Dataset,
+            projection: &[usize],
+            maximum: usize,
+        ) -> Result<Vec<u8>, Self::Error> {
+            if plan.source().name == "RAW" {
+                return self.0.encode(plan, dataset, projection, maximum);
+            }
+            assert_eq!(projection, [0, 1, 2]);
+            assert_eq!(dataset.row_count(), 2);
+            for row in 0..2 {
+                assert_eq!(dataset.cell(row, 0).unwrap(), ValueRef::Int(1));
+                assert_eq!(dataset.cell(row, 1).unwrap(), ValueRef::Int(1));
+                assert_eq!(dataset.cell(row, 2).unwrap(), ValueRef::Int(row as i64 + 1));
+            }
+            self.0.trace.borrow_mut().push("encode:FIRST".into());
+            let bytes = b"ID,VALUE,ROW\n1,1,1\n1,1,2\n";
+            assert!(bytes.len() <= maximum);
+            Ok(bytes.to_vec())
+        }
+    }
+    let original = document(
+        &[("FIRST", Some("/p")), ("SECOND", Some("/p"))],
+        Some("alpha"),
+    );
+    let document = original.document();
+    let mut nodes = document.nodes().to_vec();
+    let columns = document.field(document.root(), "columns").unwrap();
+    for name in ["ROW", "EXTRA"] {
+        let column_name = text(&mut nodes, name);
+        let kind = text(&mut nodes, "int");
+        let label = text(&mut nodes, name);
+        let derivation = literal(&mut nodes, 0);
+        let column = mapping(
+            &mut nodes,
+            vec![
+                ("name", column_name),
+                ("type", kind),
+                ("label", label),
+                ("derivation", derivation),
+            ],
+        );
+        let N::Sequence(columns) = &mut nodes[columns] else {
+            panic!("declared columns");
+        };
+        columns.push(column);
+    }
+    let row_key = text(&mut nodes, "ROW");
+    let keys = document.field(document.root(), "keys").unwrap();
+    let N::Sequence(keys) = &mut nodes[keys] else {
+        panic!("declared keys");
+    };
+    keys.push(row_key);
+    let output = document.field(document.root(), "output").unwrap();
+    let projection = document.field(output, "columns").unwrap();
+    let row_projection = text(&mut nodes, "ROW");
+    let N::Sequence(projection) = &mut nodes[projection] else {
+        panic!("declared output projection");
+    };
+    projection.push(row_projection);
+    let rows = (1..=2)
+        .map(|value| {
+            let id = text(&mut nodes, &format!("row-{value}"));
+            let dataset = text(&mut nodes, "FIRST");
+            let row = literal(&mut nodes, value);
+            let derivations = mapping(&mut nodes, vec![("ROW", row)]);
+            mapping(
+                &mut nodes,
+                vec![
+                    ("id", id),
+                    ("dataset", dataset),
+                    ("derivations", derivations),
+                ],
+            )
+        })
+        .collect();
+    let rows = append(&mut nodes, N::Sequence(rows));
+    let rows_name = text(&mut nodes, "rows");
+    let N::Mapping(root) = &mut nodes[document.root()] else {
+        panic!("specification mapping");
+    };
+    root.push((rows_name, rows));
+    let mut ordered_nodes = Vec::new();
+    let root = ordered(&nodes, document.root(), &mut ordered_nodes);
+    let root = SpecificationDocument::admit(
+        Document::new(ordered_nodes, root, Default::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap();
+    let producer = support::document(&[("RAW", None)], Some("beta"));
+    let links = [
+        candidate("/root", "FIRST", "/p", &producer),
+        candidate("/root", "SECOND", "/p", &producer),
+    ];
+    let prepared = yamaa_engine::producer_graph::check(
+        "/root",
+        &[node("/root", &root, &links), node("/p", &producer, &[])],
+        environment(&["beta", "unused", "alpha"]),
+        Default::default(),
+    )
+    .unwrap()
+    .into_build();
+    assert_eq!(
+        prepared
+            .report_contexts()
+            .map(|(node, plan)| (node.identity(), plan.output().columns().len()))
+            .collect::<Vec<_>>(),
+        [("/root", 4), ("/p", 2)]
+    );
+    // The root owns four columns, while its serialized projection keeps three.
+    // Total12 reserves8 root cells and4 producer cells; total11 reserves7/3.
+    // The producer needs only2, so both runs enter the same completed prefix.
+    for (cells, accepted, root_calls) in [(12, true, 2), (11, false, 0)] {
+        let mut ports = Ports::new();
+        let mut codec = RootCodec(Codec {
+            trace: Rc::clone(&ports.codec.trace),
+            failure: false,
+        });
+        let mut attempt =
+            build::BuildAttempt::<Activation, Study, Decoder, Report, RootCodec>::default();
+        let mut limits = build::Limits::default();
+        limits.execution.output_cells = cells;
+        prepared.build_into(
+            build::Ports {
+                activation: &mut ports.activation,
+                study: &mut ports.study,
+                decoder: &mut ports.decoder,
+                report: &mut ports.report,
+                codec: &mut codec,
+            },
+            limits,
+            &mut attempt,
+        );
+        assert_eq!(
+            attempt.outcome.is_ok(),
+            accepted,
+            "outcome={:?}, dataset={:?}",
+            attempt.outcome,
+            attempt
+                .nodes
+                .last()
+                .map(|node| node.dataset.result.as_ref().map(|run| &run.result))
+        );
+        assert_eq!(ports.study.reads, 1);
+        assert_eq!(attempt.nodes.len(), 2);
+        let producer = &attempt.nodes[0];
+        assert_eq!(producer.node, 1);
+        let execution = producer
+            .dataset
+            .result
+            .as_ref()
+            .unwrap()
+            .result
+            .as_ref()
+            .unwrap();
+        assert_eq!(execution.dataset.row_count(), 1);
+        assert_eq!(execution.dataset.schema().columns().len(), 2);
+        assert_eq!(execution.dataset.cell(0, 1).unwrap(), ValueRef::Int(1));
+        assert_eq!(
+            producer
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .unwrap()
+                .bytes(),
+            b"ID,VALUE\n1,1\n"
+        );
+        let root = &attempt.nodes[1];
+        assert_eq!(root.node, 0);
+        assert!(root.dataset.sources.iter().all(|source| {
+            source.read.captured
+                && source.read.snapshots_created == Some(0)
+                && source.snapshot.is_some()
+                && source.table.is_some()
+        }));
+        let trace = ports.activation.trace.borrow();
+        assert_eq!(
+            trace
+                .iter()
+                .filter(|event| *event == "invoke:beta:1")
+                .count(),
+            1
+        );
+        assert_eq!(
+            trace
+                .iter()
+                .filter(|event| *event == "invoke:alpha:1")
+                .count(),
+            root_calls
+        );
+        assert_eq!(
+            trace.iter().filter(|event| *event == "encode:RAW").count(),
+            1
+        );
+        if accepted {
+            let execution = root
+                .dataset
+                .result
+                .as_ref()
+                .unwrap()
+                .result
+                .as_ref()
+                .unwrap();
+            assert_eq!(execution.dataset.row_count(), 2);
+            assert_eq!(execution.dataset.schema().columns().len(), 4);
+            assert_eq!(execution.dataset.cell(0, 2).unwrap(), ValueRef::Int(1));
+            assert_eq!(execution.dataset.cell(1, 2).unwrap(), ValueRef::Int(2));
+            assert!(root
+                .output
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .artifact()
+                .is_some());
+            assert_eq!(
+                trace
+                    .iter()
+                    .filter(|event| *event == "encode:FIRST")
+                    .count(),
+                1
+            );
+        } else {
+            assert!(matches!(attempt.outcome, Err(Failure::Node { node: 0 })));
+            assert!(matches!(
+                root.dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .as_ref()
+                    .map_err(|error| &**error),
+                Err(ExecutionError::Capacity)
+            ));
+            assert!(root.output.as_ref().unwrap().is_none());
+            assert!(!trace
+                .iter()
+                .any(|event| event == "report:/root" || event == "encode:FIRST"));
+        }
+    }
+}
