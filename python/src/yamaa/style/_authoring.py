@@ -15,25 +15,23 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping, Sequence
 
 import yaml
+import yaml12
 
-from yamaa.specification._yaml import read_yaml_bytes
-from yamaa.specification.diagnostics import SpecificationError
 from yamaa.style._checks import Departure
 from yamaa.style._document import Document, member
 
 
 def _filter_identifiers(predicate: object) -> frozenset[str]:
-    """Bare identifiers a row filter reads; empty when unparsable."""
+    """Conservative names written in a filter, for the optional hoisting lint.
+
+    This host authoring policy never accepts or rejects a predicate. Extra names
+    can only retain a row derivation, and never change specification behavior.
+    """
     if not isinstance(predicate, str):
         return frozenset()
-    try:
-        from yamaa.expressions import parse_predicate, predicate_identifiers
-    except ImportError:
-        return frozenset()
-    try:
-        return frozenset(predicate_identifiers(parse_predicate(predicate)))
-    except ValueError:
-        return frozenset()
+    import re
+
+    return frozenset(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", predicate))
 
 
 _DATASET_LEVEL_OPERATIONS = frozenset(
@@ -50,10 +48,10 @@ _DATASET_LEVEL_OPERATIONS = frozenset(
 
 
 def spec_value(document: Document) -> dict | None:
-    """The engine-reader value of `document`, or None when it has none."""
+    """Values used only by host authoring policy, never semantic acceptance."""
     try:
-        value = read_yaml_bytes(document.text.encode("utf-8"), "<style>")
-    except SpecificationError:
+        value = yaml12.parse_yaml(document.text)
+    except (ValueError, yaml.YAMLError):
         return None
     return value if isinstance(value, dict) else None
 

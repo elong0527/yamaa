@@ -17,6 +17,7 @@ mod schema_service;
 mod specification_inheritance;
 mod specification_result;
 mod specification_service;
+mod style;
 mod temporal_result;
 use pyo3::types::PyDict;
 
@@ -259,6 +260,7 @@ fn engine_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(style::_style_same_value, module)?)?;
     module.add_class::<define_entry::Define>()?;
     module.add(
         "DefineError",

@@ -1,4 +1,4 @@
-//! Application boundary; the installation probe does not execute specifications.
+//! Typed application services independent of host representations.
 #![no_std]
 #![forbid(unsafe_code)]
 
@@ -24,6 +24,7 @@ pub mod numeric_lifecycle;
 pub mod schema_capture;
 pub mod standalone_preparation;
 pub mod structural_preparation;
+pub mod style_values;
 pub mod table_grouping;
 
 #[cfg(any(test, feature = "test-support"))]
