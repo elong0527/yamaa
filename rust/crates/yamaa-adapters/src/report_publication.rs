@@ -179,15 +179,15 @@ mod tests {
     fn every_owned_actual_code_and_location_finishes_without_allocation_or_refusal() {
         let locations = [
             Location {
-                key: 0,
-                node: 0,
+                key: 3,
+                node: 19,
                 field: Some("verification_log"),
                 path: Some("first.csv"),
             },
             Location {
-                key: 1,
-                node: 1,
-                field: Some("path"),
+                key: 7,
+                node: 19,
+                field: Some("normalization_log"),
                 path: Some("last.csv"),
             },
         ];
@@ -197,23 +197,27 @@ mod tests {
                 .condition,
         ));
         for code in codes {
-            for key in [None, Some(0), Some(1)] {
+            for key in [None, Some(3), Some(7)] {
                 for logged in [false, true] {
                     let mut candidate = report();
                     let mut budget = Budget::new(16_777_216);
                     let mut prepared =
                         Prepared::new(&mut candidate, &locations, logged, 16_777_216, &mut budget)
                             .unwrap();
-                    let code_pointer = prepared
+                    let owned = &prepared
                         .errors
                         .iter()
                         .find(|(at, condition, _)| *at == key && *condition == code)
                         .unwrap()
-                        .2["code"]
-                        .as_str()
-                        .unwrap()
-                        .as_ptr();
+                        .2;
+                    let code_pointer = owned["code"].as_str().unwrap().as_ptr();
+                    let field_pointer = owned.get("field").and_then(Value::as_str).map(str::as_ptr);
+                    let path_pointer = owned.get("path").and_then(Value::as_str).map(str::as_ptr);
+                    let expected = owned.clone();
+                    let complete_prefix = candidate.observations_json(false).len();
                     prepared.finish(&mut candidate, false, code, key);
+                    assert_eq!(candidate["publication"]["error"], expected);
+                    assert!(candidate.observations_json(false).len() <= complete_prefix);
                     assert_eq!(candidate["publication"]["error"]["code"], code);
                     assert_eq!(
                         candidate["publication"]["error"]["code"]
@@ -224,7 +228,21 @@ mod tests {
                     );
                     assert_eq!(
                         candidate["publication"]["error"]["node"],
-                        key.map_or(Value::Null, |value| json!(value))
+                        key.map_or(Value::Null, |_| json!(19))
+                    );
+                    assert_eq!(
+                        candidate["publication"]["error"]
+                            .get("field")
+                            .and_then(Value::as_str)
+                            .map(str::as_ptr),
+                        field_pointer
+                    );
+                    assert_eq!(
+                        candidate["publication"]["error"]
+                            .get("path")
+                            .and_then(Value::as_str)
+                            .map(str::as_ptr),
+                        path_pointer
                     );
                 }
             }
