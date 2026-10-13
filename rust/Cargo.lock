@@ -1150,7 +1150,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "yamaa-adapters"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -1178,7 +1178,7 @@ dependencies = [
 
 [[package]]
 name = "yamaa-core"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "libm",
  "num-bigint",
@@ -1187,14 +1187,14 @@ dependencies = [
 
 [[package]]
 name = "yamaa-engine"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "yamaa-core",
 ]
 
 [[package]]
 name = "yamaa-python"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "pyo3",
  "pyo3-build-config",
@@ -1204,7 +1204,7 @@ dependencies = [
 
 [[package]]
 name = "yamaa-r"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "extendr-api",
  "yamaa-adapters",

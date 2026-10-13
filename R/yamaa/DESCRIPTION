@@ -1,6 +1,6 @@
 Package: yamaa
 Title: Clinical Data Specifications with the Shared Rust Engine
-Version: 0.3.0
+Version: 0.4.0
 Authors@R: person("Ming-Chun", "Chen", email = "hellomingchun@gmail.com", role = c("aut", "cre"))
 Description: Builds clinical data specifications, checks declarations, and
     renders submission metadata through the shared Rust engine. Returns owned

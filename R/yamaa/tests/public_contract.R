@@ -1,5 +1,7 @@
 # Installed public API contracts; inputs and exact truth are independently authored.
 library(yamaa)
+stopifnot(identical(as.character(packageVersion("yamaa")), "0.4.0"),
+  identical(yamaa:::.core_version(), as.character(packageVersion("yamaa"))))
 stopifnot(identical(sort(getNamespaceExports("yamaa")), c("yamaa_check", "yamaa_define", "yamaa_domain")))
 check_issues <- function(result) {
   value <- result$issues

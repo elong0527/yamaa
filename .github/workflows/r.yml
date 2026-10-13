@@ -47,7 +47,9 @@ jobs:
           shared-key: r-shared-grammar
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Replay exact shared shapes, dependencies and vocabulary in the typed core
-        run: python rust/tools/check_shared_grammar.py
+        run: |
+          python rust/tools/check_shared_release_versions.py
+          python rust/tools/check_shared_grammar.py
       - name: Stage standalone R source package
         run: python rust/tools/stage_r_package.py "${RUNNER_TEMP}/grammar-stage/yamaa"
       - name: Build and install outside the checkout
@@ -55,8 +57,8 @@ jobs:
         run: |
           mkdir grammar-r-library
           R CMD build --no-build-vignettes --no-manual grammar-stage/yamaa
-          python "${GITHUB_WORKSPACE}/rust/tools/check_cargo_lock.py" yamaa_0.3.0.tar.gz
-          R CMD INSTALL --library="${RUNNER_TEMP}/grammar-r-library" yamaa_0.3.0.tar.gz
+          python "${GITHUB_WORKSPACE}/rust/tools/check_cargo_lock.py" yamaa_0.4.0.tar.gz
+          R CMD INSTALL --library="${RUNNER_TEMP}/grammar-r-library" yamaa_0.4.0.tar.gz
       - name: Replay shared decisions through the installed public R facade
         working-directory: ${{ runner.temp }}
         env:
@@ -72,5 +74,5 @@ jobs:
           name: r-shared-grammar
           path: |
             ${{ runner.temp }}/r-shared-grammar.log
-            ${{ runner.temp }}/yamaa_0.3.0.tar.gz
+            ${{ runner.temp }}/yamaa_0.4.0.tar.gz
           if-no-files-found: warn
