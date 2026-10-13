@@ -1,22 +1,10 @@
-"""Check shared numeric grammar truth and deterministic reference comparisons.
+"""Check independent numeric truth through the retained typed Rust fixture."""
 
-Committed YAML supplies independent acceptance, shapes and vocabulary. Python
-comparisons additionally pin exact ASTs, number text, diagnostics and metadata;
-they never regenerate fixtures or establish evaluator/numerical qualification.
-"""
-
-import json
-import subprocess
 from pathlib import Path
 
 from check_numeric_grammar import contract_cases as numeric_contract_cases
 from check_numeric_grammar import differential_sources as numeric_sources
-from check_numeric_grammar import reference_shape as numeric_shape
-from yamaa.expressions.numeric import (
-    NumericError,
-    numeric_identifiers,
-    parse_numeric,
-)
+from check_numeric_grammar import syntax_shape as numeric_shape
 
 import yaml
 
@@ -31,82 +19,20 @@ def cases():
     return numeric_contract_cases(contract)
 
 
-def compare_reference(text, outcome):
-    """Pin full syntax or diagnostic context against the unchanged reference."""
-    try:
-        ast = parse_numeric(text)
-    except NumericError as error:
-        expected = {
-            "status": "invalid",
-            "condition": error.condition,
-            "requirement": error.requirement,
-            "position": {
-                "byte": len(text[: error.position].encode()),
-                "character": error.position,
-            },
-            "context": error.context,
-        }
-    else:
-        expected = {
-            "status": "parsed",
-            "ast": ast,
-            "identifiers": list(numeric_identifiers(ast)),
-        }
-    if outcome != expected:
-        raise AssertionError(f"{text!r}: actual {outcome!r}, expected {expected!r}")
-
-
 def main():
-    """Replay both independent truth and reference samples through typed Rust parsers."""
+    """Check authored truth; retain all old differential inputs as robustness only."""
+    from native_syntax_checks import assert_contract, exact_controls, replay
+
     contract = cases()
     sources = [case["text"] for case in contract] + numeric_sources()
-    run = subprocess.run(
-        [
-            "cargo",
-            "run",
-            "--offline",
-            "--quiet",
-            "-p",
-            "yamaa-adapters",
-            "--example",
-            "numeric_syntax_fixture",
-        ],
-        cwd=WORKSPACE,
-        input="".join(
-            json.dumps(text) + "\n"
-            for text in sources
-        ),
-        text=True,
-        capture_output=True,
-        check=True,
-    )
-    responses = [json.loads(line) for line in run.stdout.splitlines()]
-    assert len(responses) == len(sources)
+    responses = replay("numeric", sources)
     for case, response in zip(contract, responses, strict=False):
-        actual = response["outcome"]
-
-        assert actual["status"] == (
-            "parsed" if case["parse"] == "accept" else "invalid"
-        ), (case, actual)
-        if case["parse"] == "reject":
-            assert actual["condition"] == case["condition"], (case, actual)
-        else:
-            if "shape" in case:
-                assert numeric_shape(actual["ast"]) == " ".join(
-                    case["shape"].split()
-                ), (
-                    case,
-                    actual,
-                )
-            if "identifiers" in case:
-                assert sorted(actual["identifiers"]) == sorted(case["identifiers"]), (
-                    case,
-                    actual,
-                )
-    for text, response in zip(sources, responses, strict=True):
-        compare_reference(text, response["outcome"])
+        assert_contract(case, response["outcome"], numeric_shape)
+    controls = exact_controls("numeric")
     print(
-        f"Numeric typed syntax fixture: {len(contract)} independent contract checks and {len(sources)} complete reference comparisons passed"
+        f"Numeric typed syntax: {len(contract)} independent contract checks, "
+        f"{controls} complete authored controls; {len(sources)} robustness observations "
+        "(historical reference comparisons are not rerun or claimed as semantic truth)"
     )
 
 

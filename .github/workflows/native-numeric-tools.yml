@@ -1,0 +1,97 @@
+name: Native numerical and syntax obligations
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'rust/tools/check_*grammar.py'
+      - 'rust/tools/check_*syntax.py'
+      - 'rust/tools/native_syntax_checks.py'
+      - 'rust/tools/assess_regex_reference.py'
+      - 'rust/tools/check_regex.py'
+      - 'rust/tools/assess_rounding.py'
+      - 'rust/tools/check_rounding.py'
+      - 'rust/tools/assess_math_decision.py'
+      - 'rust/tools/native-numeric-tool-assertions.json'
+      - 'rust/tests/test_native_numeric_tools.py'
+      - 'rust/tests/test_math_decision.py'
+      - 'rust/tests/test_predicate_syntax_encoding.py'
+      - '.github/workflows/native-numeric-tools.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'rust/tools/**'
+      - 'rust/tests/test_*numeric*.py'
+      - 'rust/tests/test_*math*.py'
+      - 'rust/tests/test_*rounding*.py'
+      - 'rust/tests/test_predicate_syntax_encoding.py'
+      - '.github/workflows/native-numeric-tools.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-numeric-tools-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  RUSTUP_TOOLCHAIN: 1.90.0
+
+jobs:
+  obligations:
+    name: native-numeric-tools (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || 35 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: rust
+          shared-key: native-numeric-tools-${{ matrix.os }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install locked toolchain and package tools
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal
+          python -m pip install uv==0.11.6
+      - name: Preserve original spans, parser precedence and numerical policy truth
+        working-directory: rust
+        run: cargo test --locked -p yamaa-core --test numeric_parser --test aggregate_parser --test predicate_parser --test rounding --test regex
+      - name: Replay independent truth and retain historical coverage disposition
+        working-directory: rust
+        run: |
+          set -e
+          uv run --project ../python --locked --no-editable python tools/check_numeric_grammar.py
+          uv run --project ../python --locked --no-editable python tools/check_aggregate_grammar.py
+          uv run --project ../python --locked --no-editable python tools/check_numeric_syntax.py
+          uv run --project ../python --locked --no-editable python tools/check_predicate_syntax.py
+          uv run --project ../python --locked --no-editable python tools/check_regex.py
+          uv run --project ../python --locked --no-editable python tools/check_rounding.py
+          uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-native-assessment.json"
+          uv run --project ../python --locked --no-editable python tools/assess_rounding.py --output "${RUNNER_TEMP}/rounding-assessment.json"
+          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_native_numeric_tools.py -v
+          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_predicate_syntax_encoding.py -v
+          uv run --project ../python --locked --no-editable --group benchmark python -m unittest discover -s tests -p test_math_decision.py -v
+          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_rounding_assessment.py -v
+          uv run --project ../python --locked --no-editable python -m unittest discover -s tests -p test_rounding_check.py -v
+      - name: Retain component evidence without claiming installed matrix qualification
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-numeric-tools-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/regex-native-assessment.json
+            ${{ runner.temp }}/rounding-assessment.json
+          if-no-files-found: error
