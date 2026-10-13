@@ -49,6 +49,11 @@ UNAVAILABLE = {
     "shipped_schema_initialization": None,
     "os_filesystem_cache": None,
 }
+def unavailable(phase_measurements=False):
+    return {key: value for key, value in UNAVAILABLE.items()
+            if not phase_measurements or key not in {"phase_durations", "actual_callback_counts"}}
+
+
 HERE = Path(__file__).resolve().parent
 WORKERS = {
     "python": "public_lifecycle_python_worker.py",
@@ -686,7 +691,7 @@ def validate_repetition(repository, originals, request, child, row, declared):
         raise ValueError(
             "public Build must precede the first explicit native metadata call"
         )
-    assert_equal(row["unavailable"], UNAVAILABLE, "unavailable metrics")
+    assert_equal(row["unavailable"], unavailable(request.get("phase_measurements", False)), "unavailable metrics")
     validate_rss(row["rss"], request["host"], observed["system"])
     for boundary in BOUNDARIES[1:]:
         validate_duration(row["durations"][boundary], request["host"])
@@ -841,6 +846,7 @@ def prepare(args):
     for name in (
         Path(__file__).name,
         "public_lifecycle_worker_protocol.json",
+        "application_measurement_evidence.py",
         "child_peak_rss.py",
         *WORKERS.values(),
     ):

@@ -193,6 +193,7 @@ def run(request):
             "rss": None,
             "failure": None,
             "reports": {},
+            "measurements": {},
             "saved_files": {},
             "save_returns": [],
             "evidence_capture_failures": [],
@@ -215,9 +216,19 @@ def run(request):
             # A secondary transport error never replaces a pending public cause.
             try:
                 filename = prefix + "-" + label + "-report.json" + (".gz" if request.get("compress_evidence") else "")
-                raw = (None if request.get("evaluator") == "python-reference"
-                       else result._native.observations())
-                write_bytes(output / filename, b"null" if raw is None else raw.encode("utf-8"))
+                if request.get("phase_measurements"):
+                    raw = result._native.observations(include_measurements=True)
+                    metrics = prefix + "-" + label + "-measurements.json" + (".gz" if request.get("compress_evidence") else "")
+                    import importlib.util
+                    specification = importlib.util.spec_from_file_location("retained_application_measurements", Path(__file__).with_name("application_measurement_evidence.py"))
+                    adapter = importlib.util.module_from_spec(specification)
+                    specification.loader.exec_module(adapter)
+                    adapter.retain_envelope(raw, output / filename, output / metrics)
+                    row["measurements"][label] = metrics
+                else:
+                    raw = (None if request.get("evaluator") == "python-reference"
+                           else result._native.observations())
+                    write_bytes(output / filename, b"null" if raw is None else raw.encode("utf-8"))
                 row["reports"][label] = filename
             except BaseException as error:
                 capture_errors.append(error)

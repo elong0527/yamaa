@@ -499,6 +499,7 @@ class Pipeline(unittest.TestCase):
         for name in (
             "measure_public_lifecycle.py",
             "public_lifecycle_worker_protocol.json",
+            "application_measurement_evidence.py",
             "child_peak_rss.py",
             *controller.WORKERS.values(),
         ):

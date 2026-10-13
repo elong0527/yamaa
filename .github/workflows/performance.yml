@@ -9,6 +9,9 @@ on:
       purpose:
         default: capacity-frontier
         type: string
+      phase_measurements:
+        default: false
+        type: boolean
       baseline_ref:
         default: yamaa-py-0.3.0
         type: string
@@ -23,6 +26,10 @@ on:
         default: capacity-frontier
         type: choice
         options: [capacity-frontier, characterization]
+      phase_measurements:
+        description: Require original bounded phase evidence from the instrumented candidate
+        default: false
+        type: boolean
       baseline_ref:
         description: Previous release source retained and built before collection
         default: yamaa-py-0.3.0
@@ -44,6 +51,7 @@ env:
   COLLECTION_PURPOSE: ${{ inputs.purpose }}
   BASELINE_REF: ${{ inputs.baseline_ref }}
   NATIVE_RUN_ID: ${{ inputs.native_run_id }}
+  PHASE_MEASUREMENTS: ${{ inputs.phase_measurements }}
 
 jobs:
   python:
@@ -129,7 +137,10 @@ jobs:
       - name: Collect candidate with independent truth before timing
         id: candidate
         continue-on-error: true
-        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${CANDIDATE_PYTHON}" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence"
+        run: |
+          phase_args=()
+          if [[ "${PHASE_MEASUREMENTS}" == "true" ]]; then phase_args+=(--phase-measurements); fi
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host python --executable "${CANDIDATE_PYTHON}" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence" "${phase_args[@]}"
       - name: Collect compatible previous-release Python reference on the same runner
         id: baseline
         continue-on-error: true
@@ -270,7 +281,10 @@ jobs:
       - name: Collect installed R with independent truth and child lifetime peak RSS
         id: candidate
         continue-on-error: true
-        run: python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host r --executable "$(command -v Rscript)" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence"
+        run: |
+          phase_args=()
+          if [[ "${PHASE_MEASUREMENTS}" == "true" ]]; then phase_args+=(--phase-measurements); fi
+          python rust/tools/collect_public_performance.py --repository "${GITHUB_WORKSPACE}" --host r --executable "$(command -v Rscript)" --provenance "${RUNNER_TEMP}/candidate-installation/provenance.json" --purpose "${COLLECTION_PURPOSE}" --output "${RUNNER_TEMP}/candidate-evidence" "${phase_args[@]}"
       - name: Collect compatible previous-release reference on the same R runner
         id: baseline
         continue-on-error: true

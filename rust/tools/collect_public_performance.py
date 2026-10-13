@@ -16,6 +16,7 @@ import statistics
 import subprocess
 from pathlib import Path
 
+import application_measurement_evidence as phases
 import child_peak_rss
 import measure_public_lifecycle as lifecycle
 import measure_scalable_public as scalable
@@ -109,19 +110,24 @@ def collect(args):
     harness.mkdir()
     for name in (Path(__file__).name, "child_peak_rss.py", "measure_public_lifecycle.py",
                  "measure_scalable_public.py", "prepare_public_workloads.py",
-                 "public_lifecycle_worker_protocol.json", *lifecycle.WORKERS.values()):
+                 "public_lifecycle_worker_protocol.json", "application_measurement_evidence.py", *lifecycle.WORKERS.values()):
         shutil.copyfile(lifecycle.HERE / name, harness / name)
     record = lifecycle.read_json(args.provenance)
+    phase_measurements = bool(getattr(args, "phase_measurements", False))
+    if phase_measurements and args.evaluator != "public":
+        raise ValueError("phase measurements require the instrumented public candidate")
     root_only = args.scope == "producer-root-build"
     if root_only and (args.host != "python" or args.evaluator != "python-reference"):
         raise ValueError("producer root-Build scope needs the installed Python reference")
     plan = {
         "protocol": "public-performance/1", "purpose": args.purpose,
         "host": args.host, "source_revision": record["source_revision"],
-        "harness_checkout_head": lifecycle.surrounding_git_head(repository),
+        "harness_checkout_head": lifecycle.surrounding_git_head(lifecycle.HERE),
+        "truth_repository_head": lifecycle.surrounding_git_head(repository),
         "provenance": record, "accepted": False, "cases": [],
         "sampling": {"cold": 10, "warm": 30, "warmups": 3},
         "numeric_budgets": None, "phase_durations": None,
+        "phase_measurements_required": phase_measurements,
         "actual_callback_counts": None,
         "evaluator": args.evaluator, "selected_cases": args.cases,
         "selected_families": args.families,
@@ -211,7 +217,8 @@ def collect(args):
                         artifact_names=[a["path"] for a in case["expected_artifacts"]]))
                 request = {"protocol": lifecycle.PROTOCOL, "child": child.name,
                            "host": args.host, "output": str(child), "provenance": record,
-                           "unavailable": lifecycle.UNAVAILABLE, "repetitions": staged,
+                           "unavailable": lifecycle.unavailable(phase_measurements), "repetitions": staged,
+                           "phase_measurements": phase_measurements,
                            "evaluator": args.evaluator, "reference_schema": str(reference_schema) if reference_schema else None,
                            "reference_root_build": root_only,
                            "observe_callbacks": mode == "callback-observer",
@@ -234,6 +241,8 @@ def collect(args):
                     raise ValueError("worker returned a nonzero status")
                 child_peak_rss.validate(process["peak_rss"], record["system"])
                 observation["accepted"] = True
+                if phase_measurements:
+                    observation["actual_application_measurements"] = [phases.validate_repetition(case, child, rep, lifecycle.read_json) for rep in response["repetitions"]]
                 if mode == "truth":
                     row["truth_accepted"] = True
                 elif mode == "callback-observer":
@@ -280,12 +289,17 @@ def collect(args):
                 "quartiles_ns": statistics.quantiles(values, n=4, method="inclusive")}
                 for (mode, boundary), values in groups.items()]
         lifecycle.write_json(output / "collection.json", plan)
-    plan["actual_callback_counts"] = [
-        {"case": case["case"], "combined_activation_and_derivation_calls": child["actual_callback_calls"],
-         "stage_counts": None}
-        for case in plan["cases"] for child in case["children"]
-        if child["accepted"] and "actual_callback_calls" in child
-    ] or None
+    if phase_measurements:
+        plan["phase_durations"] = [{"case":case["case"],"child":child["child"],"repetitions":child["actual_application_measurements"]} for case in plan["cases"] for child in case["children"] if child["accepted"]]
+    if phase_measurements:
+        plan["actual_callback_counts"] = [{"case":case["case"],"child":child["child"],"repetitions":[rep["function_calls"] for rep in child["actual_application_measurements"]]} for case in plan["cases"] for child in case["children"] if child["accepted"]]
+    else:
+        plan["actual_callback_counts"] = [
+            {"case": case["case"], "combined_activation_and_derivation_calls": child["actual_callback_calls"],
+             "stage_counts": None}
+            for case in plan["cases"] for child in case["children"]
+            if child["accepted"] and "actual_callback_calls" in child
+        ] or None
     plan["accepted"] = all(case["accepted"] for case in plan["cases"]) and (
         not root_only or bool(plan["cases"]))
     lifecycle.write_json(output / "collection.json", plan)
@@ -294,6 +308,7 @@ def collect(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--phase-measurements", action="store_true")
     parser.add_argument("--repository", type=Path, required=True)
     parser.add_argument("--cases", nargs="+")
     parser.add_argument("--families", nargs="+", choices=workloads.FAMILIES)

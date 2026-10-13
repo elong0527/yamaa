@@ -23,6 +23,30 @@ write_bytes <- function(path, bytes) {
     writeBin(bytes, target)
   } else writeBin(bytes, path)
 }
+retain_envelope <- function(raw, report_path, measurements_path) {
+  prefix <- '{"protocol":"held-observations/1","report":'
+  delimiter <- ',"measurements":'
+  text <- rawToChar(raw)
+  if (!startsWith(text, prefix) || !endsWith(text, "}")) stop("invalid held observation envelope")
+  positions <- gregexpr(delimiter, text, fixed = TRUE, useBytes = TRUE)[[1L]]
+  split <- tail(positions, 1L)
+  if (split < nchar(prefix, type = "bytes")) stop("missing original measurement evidence")
+  rm(text)
+  # Retain exact raw JSON integers and report bytes; no report cell DOM and no
+  # R binary64 conversion of uint64 measurement offsets/counts.
+  ranges <- list(c(nchar(prefix, type = "bytes") + 1L, split - 1L),
+                 c(split + nchar(delimiter, type = "bytes"), length(raw) - 1L))
+  paths <- list(report_path, measurements_path)
+  for (index in seq_along(paths)) {
+    target <- if (endsWith(paths[[index]], ".gz")) gzfile(paths[[index]], "wb", compression = 1L) else file(paths[[index]], "wb")
+    tryCatch({
+      for (start in seq.int(ranges[[index]][[1L]], ranges[[index]][[2L]], by = 1048576L)) {
+        end <- min(start + 1048575L, ranges[[index]][[2L]])
+        writeBin(raw[start:end], target)
+      }
+    }, finally = close(target))
+  }
+}
 write_json <- function(path, value) {
   json <- jsonlite::toJSON(value, auto_unbox = TRUE, null = "null", na = "null",
                           digits = NA, pretty = TRUE, force = TRUE)
@@ -156,7 +180,7 @@ for (declaration in request$repetitions) {
               durations = list(), metadata = NULL, native_call_order = list(),
               unavailable = request$unavailable, rss = NULL, failure = NULL,
               reports = list(), saved_files = list(), save_returns = list(),
-              evidence_capture_failures = list(), host_view_access_counts = list(), callback_observation = NULL,
+              measurements = list(), evidence_capture_failures = list(), host_view_access_counts = list(), callback_observation = NULL,
               views = paste0("rep-", declaration$index, "-views.json", if (isTRUE(request$compress_evidence)) ".gz" else ""))
   views <- list()
   result <- NULL
@@ -181,8 +205,15 @@ for (declaration in request$repetitions) {
     # Safe finally transport: never retry a Build/Save or replace its public cause.
     tryCatch({
       filename <- paste0(prefix, "-", label, "-report.json", if (isTRUE(request$compress_evidence)) ".gz" else "")
-      raw <- get(".domain_observations", asNamespace("yamaa"))(result)
-      write_bytes(file.path(output, filename), if (is.null(raw)) charToRaw("null") else raw)
+      if (isTRUE(request$phase_measurements)) {
+        raw <- get(".domain_observations", asNamespace("yamaa"))(result, include_measurements = TRUE)
+        metrics <- paste0(prefix, "-", label, "-measurements.json", if (isTRUE(request$compress_evidence)) ".gz" else "")
+        retain_envelope(raw, file.path(output, filename), file.path(output, metrics))
+        row$measurements[[label]] <<- metrics
+      } else {
+        raw <- get(".domain_observations", asNamespace("yamaa"))(result)
+        write_bytes(file.path(output, filename), if (is.null(raw)) charToRaw("null") else raw)
+      }
       row$reports[[label]] <<- filename
     }, error = function(error) secondary_failure(error, paste0(label, "_report")),
        interrupt = function(error) secondary_failure(error, paste0(label, "_report")))

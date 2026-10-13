@@ -18,6 +18,7 @@ import shutil
 import statistics
 from pathlib import Path
 
+import application_measurement_evidence as phases
 import measure_public_lifecycle as lifecycle
 import prepare_public_workloads as workloads
 
@@ -75,7 +76,7 @@ def validate(case, authored, child, request, response, record, repository):
         lifecycle.actual_origins(actual["metadata"], record, repository)
         if (
             actual["native_call_order"] != ["public_build", "metadata_after_build"]
-            or actual["unavailable"] != lifecycle.UNAVAILABLE
+            or actual["unavailable"] != lifecycle.unavailable(request.get("phase_measurements", False))
         ):
             raise ValueError("native call order or unavailable metrics differ")
         lifecycle.validate_rss(actual["rss"], request["host"], record["system"])
@@ -95,6 +96,8 @@ def validate(case, authored, child, request, response, record, repository):
             raise ValueError("public issues differ from independent empty truth")
         if views["verification_log"] is not None or views["warning_log"] is not None:
             raise ValueError("undeclared logs must remain null")
+        if request.get("phase_measurements"):
+            phases.validate_repetition(case, child, actual, lifecycle.read_json)
         if actual["save_returns"] != [True, True]:
             raise ValueError("held Saves failed")
         reports = {
@@ -241,6 +244,7 @@ def collect(args):
             "measure_public_lifecycle.py",
             "prepare_public_workloads.py",
             "public_lifecycle_worker_protocol.json",
+            "application_measurement_evidence.py",
         "child_peak_rss.py",
             *lifecycle.WORKERS.values(),
         ):
