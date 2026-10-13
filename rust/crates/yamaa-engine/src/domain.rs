@@ -76,8 +76,13 @@ impl CheckedSpecification {
     pub fn compiled(&self) -> &PreparedSpecification {
         &self.compiled
     }
-    /// Report known verification declaration findings without entering study authority.
+    /// Report all known declaration findings without entering study authority.
     /// Build still defers these findings to their ordered execution checkpoints.
+    pub fn check_diagnostics(&self) -> alloc::vec::Vec<yamaa_core::diagnostic::Diagnostic> {
+        self.compiled.check_declaration_diagnostics()
+    }
+
+    /// Inspect verification declarations alone for callers with that narrow scope.
     pub fn verification_declaration_diagnostics(
         &self,
     ) -> alloc::vec::Vec<yamaa_core::diagnostic::Diagnostic> {

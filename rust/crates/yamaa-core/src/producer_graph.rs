@@ -142,7 +142,7 @@ impl PreparedGraph {
     > {
         self.nodes.iter().enumerate().flat_map(|(index, node)| {
             node.compiled
-                .verification_declaration_findings()
+                .check_declaration_findings()
                 .map(move |finding| (index, finding))
         })
     }

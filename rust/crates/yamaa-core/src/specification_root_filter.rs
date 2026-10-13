@@ -118,3 +118,9 @@ impl RootFilter {
             .map_err(BindError::InvalidPredicateBinding)
     }
 }
+
+impl RootFilter {
+    pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+        static_checks::predicate(&self.compiled, &self.expression, "filter", findings)
+    }
+}
