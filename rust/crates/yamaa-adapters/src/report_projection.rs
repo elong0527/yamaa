@@ -73,6 +73,10 @@ impl Budget {
         }
     }
     pub(crate) fn cell(&mut self, value: &ValueRef<'_>) -> Result<(), Error> {
+        // The wire cell owns a two-entry type/value map, its key/type strings
+        // and the reserved map node. Shape already charged its parent slot.
+        // Admit that fixed structure before allocating the actual payload.
+        self.entries(4)?;
         match value {
             ValueRef::Str(text) => self.text(text),
             ValueRef::Int(value) => self.text(&value.to_string()),
