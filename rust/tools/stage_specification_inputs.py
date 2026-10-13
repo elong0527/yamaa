@@ -540,13 +540,15 @@ def stage_source_selection_truth(destination: Path, fixture="source_selection", 
         return "list(" + ",".join(fields) + ")"
 
     entries = []
-    for name, case in truth["cases"].items():
-        directory = directories / name
+    case_paths = {}
+    for index, (name, case) in enumerate(truth["cases"].items(), start=1):
+        case_paths[name] = f"{index:04d}"
+        directory = directories / case_paths[name]
         directory.mkdir()
         (directory / "spec.yaml").write_text(case["specification"], encoding="ascii", newline="\n")
         for path, contents in case["inputs"].items():
             (directory / path).write_text(contents, encoding="ascii", newline="\n")
-        fields = ["issues=" + issues(case["issues"]), "check_issues=" + issues(case["check_issues"]),
+        fields = ["directory=" + text(case_paths[name]), "issues=" + issues(case["issues"]), "check_issues=" + issues(case["check_issues"]),
                   "handlers=" + text(json.dumps(case["handlers"], sort_keys=True, separators=(",", ":")))]
         reads = [{"base_directory": ".", "condition": None, "outcome": "captured",
                   "path": path, "snapshots_created": 1} for path in case["source_reads"]]
@@ -561,6 +563,8 @@ def stage_source_selection_truth(destination: Path, fixture="source_selection", 
                 kinds.append(text(column) + "=" + text(kind))
             fields.extend(("columns=list(" + ",".join(columns) + ")", "kinds=c(" + ",".join(kinds) + ")"))
         entries.append(text(name) + "=list(" + ",".join(fields) + ")")
+    (destination / (label + "-case-paths.json")).write_text(
+        json.dumps(case_paths, indent=2) + "\n", encoding="ascii")
     (destination / (label + "-truth.R")).write_text(
         "# Literal typed cells and complete findings from independent source-selection truth.\n"
         "source_selection_truth <- list(\n" + ",\n".join(entries) + "\n)\n", encoding="ascii")

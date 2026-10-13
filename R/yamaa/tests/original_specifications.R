@@ -2125,7 +2125,7 @@ local({
   for (name in names(source_selection_truth)) for (attempt in seq_len(2L)) {
     truth <- source_selection_truth[[name]]
     directory <- tempfile("yamaa-source-selection-");dir.create(directory)
-    file.copy(list.files(file.path(root,paste0(label,"-cases"),name),full.names=TRUE),directory)
+    file.copy(list.files(file.path(root,paste0(label,"-cases"),truth$directory),full.names=TRUE),directory)
     entry <- file.path(directory,"spec.yaml")
     check_issue_frame(yamaa_check(entry)$issues,truth$check_issues)
     result <- yamaa_domain(entry)
