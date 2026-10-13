@@ -167,7 +167,7 @@ def validate(
         existing = None
         try:
             existing = yaml12.parse_yaml(spec_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, yaml.YAMLError):
+        except (OSError, UnicodeError, ValueError, yaml.YAMLError):
             pass
         needs_staging = existing != specification
         if python_environment is not None:
@@ -234,13 +234,22 @@ def validate(
                     (path, source.replace(str(relocated), str(original_root)))
                     for path, source in list(origins.items())
                 )
+            def remap_context(text):
+                text = text.replace(str(relocated), str(original_root))
+                escaped = json.dumps(str(relocated))[1:-1]
+                if escaped != str(relocated):
+                    text = text.replace(
+                        escaped, json.dumps(str(original_root))[1:-1]
+                    )
+                return text
+
             rows = [
                 (
                     phase,
                     condition,
                     requirement,
                     paths,
-                    context.replace(str(relocated), str(original_root)),
+                    remap_context(context),
                 )
                 for phase, condition, requirement, paths, context in rows
             ]

@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 from decimal import Decimal
+from importlib import import_module
 from itertools import pairwise
 from pathlib import Path
 
@@ -95,6 +96,16 @@ def _worsening_rows(tmp_path, track, ae=None, fa=None):
     }
     if track != "yamaa":
         return _run(tmp_path, name, track, changes)["adae.csv"]
+    # The native extension is optional for the test suite (see
+    # test_package.py), but the yamaa track runs the compiled domain entry
+    # point: skip it like the R and opensas tracks skip unavailable
+    # runtimes, instead of failing on the missing module.
+    try:
+        import_module("yamaa._native")
+    except ModuleNotFoundError as error:
+        if error.name != "yamaa._native":
+            raise
+        pytest.skip("the compiled native extension is not installed")
     from yamaa import domain
 
     study = tmp_path / "study"

@@ -1077,7 +1077,7 @@
       "runtime": "python",
       "path": "rust/tests/installed_file_resources.py",
       "staged_path": "installed_file_resources.py",
-      "level": "compile"
+      "level": "shared_run"
     },
     {
       "id": "python/public-environment",
