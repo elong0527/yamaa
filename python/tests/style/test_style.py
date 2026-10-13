@@ -7,12 +7,22 @@ from pathlib import Path
 import pytest
 
 from yamaa.style import (
-    FINDINGS,
-    check_file,
-    field_orders,
-    fix_file,
-    is_specification,
-    specification_files,
+    _FINDINGS as FINDINGS,
+)
+from yamaa.style import (
+    _check_file as check_file,
+)
+from yamaa.style import (
+    _field_orders as field_orders,
+)
+from yamaa.style import (
+    _fix_file as fix_file,
+)
+from yamaa.style import (
+    _is_specification as is_specification,
+)
+from yamaa.style import (
+    _specification_files as specification_files,
 )
 from yamaa.style.__main__ import main
 from yamaa.style._fix import proved
@@ -20,7 +30,7 @@ from yamaa.style._fix import proved
 REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
 CONTRACT = REPOSITORY_ROOT / "rules" / "specification" / "style.md"
-ORDERS = field_orders(SCHEMA_ROOT)
+ORDERS = field_orders()
 
 CANONICAL = """\
 schema_version: "1.0"
@@ -473,7 +483,7 @@ def test_directories_expand_to_specifications_only(tmp_path: Path) -> None:
 def test_command_line_exit_status(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    schema = ["--schema-root", str(SCHEMA_ROOT)]
+    schema: list[str] = []
     clean = _spec(tmp_path, CANONICAL, "clean.yaml")
     packed = _spec(
         tmp_path,
@@ -502,6 +512,37 @@ def test_every_finding_is_named_by_its_contract_requirement() -> None:
         )
         assert match is not None, requirement
         assert f"`{name}`" in match[1], (name, requirement)
+
+
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        ("a: 1\nb: [true, null]\n", "b: [true, null]\na: 1\n"),
+        ("a: 01\n", "a: 1\n"),
+        ("a: .nan\n", "a: null\n"),
+    ],
+)
+def test_native_fix_proof_preserves_decoded_values(before: str, after: str) -> None:
+    assert proved(before, after)
+
+
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        ("a: 1\n", "a: 1.0\n"),
+        ("a: true\n", "a: 1\n"),
+        ("a: [1, 2]\n", "a: [2, 1]\n"),
+        ("a: 9223372036854775808\n", "a: 9223372036854775809\n"),
+        ("a: x\n", "a: x\na: x\n"),
+        ("a: &x 1\n", "a: &x 1\n"),
+        ("a: [\n", "a: [\n"),
+        ("a: x # retained\n", "a: x\n"),
+    ],
+)
+def test_native_fix_proof_refuses_changed_or_invalid_values(
+    before: str, after: str
+) -> None:
+    assert not proved(before, after)
 
 
 REPEATED = """\
