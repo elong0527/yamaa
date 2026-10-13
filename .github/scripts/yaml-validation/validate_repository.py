@@ -21,6 +21,7 @@ import yaml
 # `from validate_repository import ...` call sites keep working.
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # noqa: E402
 import _reference_checks  # noqa: E402
+import _native_csv  # noqa: E402
 from editorial import (  # noqa: E402
     ASCII_SOURCE_IGNORED_PARTS,
     ASCII_SOURCE_NAMES,
@@ -3850,27 +3851,11 @@ def example_artifact_owners(example_dir: Path):
 
 
 def valid_temporal_literal(kind, text):
-    """True when text is a valid R016 temporal literal for kind.
-
-    REQ-0672 permits a tagged temporal form (``{"date": "2020-01-01"}``)
-    for a contract default, and REQ-0679 permits it for a call argument.
-    The verdict comes from the runtime's strict parsers (``DateValue`` /
-    ``DateTimeValue``, already imported for the csv-profile checks), so
-    the lexical rule is read from the one implementation: ``YYYY-MM-DD``
-    for ``date``, ``YYYY-MM-DDThh:mm[:ss]`` for ``datetime``, and both a
-    real date on the calendar.
-    """
-    _ensure_csv_binding()
-    if not isinstance(text, str):
-        return False
-    if kind == 'date':
-        parsed_type = DateValue
-    elif kind == 'datetime':
-        parsed_type = DateTimeValue
-    else:
+    """Tagged R018 defaults/call arguments use the shared typed source admission."""
+    if kind not in {'date', 'datetime'} or not isinstance(text, str):
         return False
     try:
-        parsed_type.parse(text)
+        _native_csv.scalar_text(text, kind)
     except ValueError:
         return False
     return True
@@ -9471,37 +9456,16 @@ CANONICAL_INT = re.compile(r'0|-?[1-9][0-9]*')
 # The import is lazy (see the regex binding note above): importing the yamaa
 # package pulls in polars, which this module only needs for csv-profile checks.
 CsvProfileFailure = None
-fixed_point = None
 render_records = None
 scan_records = None
-DateTimeValue = None
-DateValue = None
-convert_value = None
 
 
 def _ensure_csv_binding():
-    """Import yamaa.io.csv and yamaa.models on first use, or exit when unavailable."""
-    global CsvProfileFailure, fixed_point, render_records, scan_records
-    global DateTimeValue, DateValue, convert_value
-    if scan_records is None:
-        try:
-            (
-                csv_failure, profile_fixed_point, profile_render_records,
-                profile_scan_records, model_datetime_value, model_date_value,
-                model_convert_value,
-            ) = _reference_checks.csv_binding()
-        except ImportError as error:
-            raise SystemExit(
-                "validate_repository.py requires the yamaa package "
-                "(run: uv sync --project python --locked)"
-            ) from error
-        CsvProfileFailure = csv_failure
-        fixed_point = profile_fixed_point
-        render_records = profile_render_records
-        scan_records = profile_scan_records
-        DateTimeValue = model_datetime_value
-        DateValue = model_date_value
-        convert_value = model_convert_value
+    """Retained repository CSV layout policy with native source admission."""
+    global CsvProfileFailure, render_records, scan_records
+    CsvProfileFailure = _native_csv.CsvProfileFailure
+    render_records = _native_csv.render_records
+    scan_records = _native_csv.records
 
 
 def canonical_float_text(value: str, decimals=None):
@@ -9520,12 +9484,11 @@ def canonical_float_text(value: str, decimals=None):
     if math.isnan(number) or math.isinf(number):
         return 'a non-finite float is the missing value'
     if decimals is None:
-        converted = convert_value(number, 'str')
-        canonical = converted.value
+        canonical = _native_csv.scalar_text(value, 'float')
         if value != canonical:
             return f'expected the shortest round-trip text {canonical}'
         return None
-    canonical = fixed_point(number, decimals)
+    canonical = _native_csv.scalar_text(value, 'float', decimals)
     if value != canonical:
         return (
             f'expected exactly {decimals} digit(s) after the decimal point '
@@ -9547,24 +9510,16 @@ def canonical_temporal_text(value: str, declared: str):
     from the runtime's strict parsers; the shape patterns below only route
     the message, telling a misspelled field from a date no calendar admits.
     """
-    _ensure_csv_binding()
-    if declared == 'date':
-        parsed_type = DateValue
-        pattern = CANONICAL_DATE
-        yours = 'expected YYYY-MM-DD'
-        calendar = 'not a date on the calendar'
-    else:
-        parsed_type = DateTimeValue
-        pattern = CANONICAL_DATETIME
-        yours = 'expected YYYY-MM-DDThh:mm:ss'
-        calendar = 'not a moment on the calendar'
+    pattern = CANONICAL_DATE if declared == 'date' else CANONICAL_DATETIME
+    expected = 'expected YYYY-MM-DD' if declared == 'date' else 'expected YYYY-MM-DDThh:mm:ss'
+    if pattern.fullmatch(value) is None:
+        return expected
     try:
-        if parsed_type.parse(value).to_text() != value:
-            return yours
+        if _native_csv.scalar_text(value, declared) != value:
+            return expected
     except ValueError as exc:
-        if pattern.fullmatch(value) is None:
-            return yours
-        return f'{calendar}: {exc}'
+        return f'not a {declared} on the calendar: {exc}'
+
     return None
 
 
@@ -9687,11 +9642,11 @@ def artifact_profile(output):
 # this script can load it by path without installing anything. What a
 # repository check adds stays below: fixture wording, and reporting every
 # departure in one pass where a runtime stops at the first.
-CSV_PROFILE = _reference_checks.source_profile_binding()
+CSV_PROFILE = _native_csv
 
 SourceProfileError = CSV_PROFILE.CsvProfileFailure
-parse_source_profile = CSV_PROFILE.scan_records
-source_coordinates = CSV_PROFILE.record_coordinates
+parse_source_profile = CSV_PROFILE.records
+source_coordinates = CSV_PROFILE.coordinates
 
 
 SOURCE_PROFILE_CONDITIONS = {
