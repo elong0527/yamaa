@@ -30,7 +30,7 @@ engine, and benchmark.
 | --- | --- | --- |
 | Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
 | Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
-| Engine | Runs specifications in Python and R according to the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
+| Engine | Runs specifications in Python and R according to the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) |
 | Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
 
 ## From ODM XML to SDTM and ADaM
@@ -95,10 +95,23 @@ pip install git+https://github.com/elong0527/yamaa.git#subdirectory=python
 
 R engine:
 
+The planned first shared-engine R release uses a standalone source tarball attached to
+its [GitHub release](https://github.com/elong0527/yamaa/releases). After downloading
+`yamaa_0.4.0.tar.gz` from the selected qualified release:
+
 ```r
-# install.packages("devtools")
-devtools::install_github("elong0527/yamaa", subdir = "R/cdiscbuilder")
+install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
+library(yamaa)
+result <- yamaa_domain("spec.yaml")
+result$output
+yamaa_check("spec.yaml")$issues
+result$save()
 ```
+
+Source installation requires R 4.6.1, Rust 1.90.0/Cargo and platform build tools.
+The candidate tarball is not yet a qualified release asset. To build it from this
+checkout, follow [the R package guide](R/yamaa/README.md). CRAN and r-universe
+publication are later distribution work.
 
 ## Where to go next
 

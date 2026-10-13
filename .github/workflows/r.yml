@@ -1,16 +1,12 @@
-name: R package tests
+name: R shared grammar
 
 on:
-
-  push:
-    branches: [main]
-    paths:
-      - 'R/**'
-      - 'yaml/grammar/**'
-      - '.github/workflows/r.yml'
+  workflow_dispatch:
   pull_request:
     paths:
-      - 'R/**'
+      - 'R/yamaa/**'
+      - 'rust/**'
+      - '!rust/**/*.md'
       - 'yaml/grammar/**'
       - '.github/workflows/r.yml'
 
@@ -22,39 +18,58 @@ permissions:
   contents: read
 
 jobs:
-  package-tests:
+  installed-grammar:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
+    env:
+      RUSTUP_TOOLCHAIN: '1.90.0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
         with:
           r-version: '4.6.1'
           use-public-rspm: true
-      - name: Install system build dependencies
+      - name: Install locked grammar and Rust build tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libxml2-dev libsqlite3-dev
-          # yaml12 is a declared R dependency with a Rust source build.
+          python -m pip install py-yaml12==0.2.0
           rustup toolchain install 1.90.0 --profile minimal
-          rustup default 1.90.0
-      - name: Install R dependencies
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: rust
+          shared-key: r-shared-grammar
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Replay exact shared shapes, dependencies and vocabulary in the typed core
+        run: python rust/tools/check_shared_grammar.py
+      - name: Stage standalone R source package
+        run: python rust/tools/stage_r_package.py "${RUNNER_TEMP}/grammar-stage/yamaa"
+      - name: Build and install outside the checkout
+        working-directory: ${{ runner.temp }}
         run: |
-          Rscript -e 'd <- read.dcf("R/cdiscbuilder/DESCRIPTION"); deps <- paste(d[1, c("Imports", "Suggests")], collapse=","); packages <- trimws(gsub("\\s*\\([^)]*\\)", "", strsplit(deps, ",")[[1]])); install.packages(unique(c(packages, "pkgload")), Ncpus=2)'
-      - name: Run the complete R package suite
+          mkdir grammar-r-library
+          R CMD build --no-build-vignettes --no-manual grammar-stage/yamaa
+          python "${GITHUB_WORKSPACE}/rust/tools/check_cargo_lock.py" yamaa_0.3.0.tar.gz
+          R CMD INSTALL --library="${RUNNER_TEMP}/grammar-r-library" yamaa_0.3.0.tar.gz
+      - name: Replay shared decisions through the installed public R facade
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/grammar-r-library
         run: |
-          # Keep shared grammar replay explicit so missing fixtures cannot skip it.
-          Rscript R/cdiscbuilder/inst/conformance/grammar_conformance.R
-          Rscript R/cdiscbuilder/inst/conformance/package_tests.R 2>&1 | tee "${RUNNER_TEMP}/r-package-tests.log"
-      - name: Preserve test results and dependency versions
+          Rscript --vanilla "${GITHUB_WORKSPACE}/R/yamaa/tests/public_grammar.R" 2>&1 | tee r-shared-grammar.log
+          Rscript --vanilla -e 'print(sessionInfo()); print(packageVersion("yamaa"))' >> r-shared-grammar.log
+      - name: Preserve grammar evidence and standalone source artifact
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: r-package-tests
-          path: ${{ runner.temp }}/r-package-tests.log
+          name: r-shared-grammar
+          path: |
+            ${{ runner.temp }}/r-shared-grammar.log
+            ${{ runner.temp }}/yamaa_0.3.0.tar.gz
           if-no-files-found: warn

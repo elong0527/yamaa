@@ -9,13 +9,15 @@ The language admits four closed grammars. Each one is defined once, here:
 | [`string-template.yaml`](string-template.yaml) | [R012](../rules/operations/text.md) | `str_template.template` |
 | [`aggregate.yaml`](aggregate.yaml) | [R013](../rules/operations/aggregation.md) | `aggregate.expr` |
 
-A grammar written in prose, in an R parser, and in a Python parser is three
-copies that can disagree. These files are the one source all three are read
-against: repository validation renders each rule's grammar block from
-`productions` and fails when the rule carries a different block, compares
-each closed vocabulary with the constants its parser uses, and replays every
-vector in `cases` through that parser. The R implementation replays the same
-vectors against the same files.
+These files are the single authored grammar truth for the shared Rust parser
+used by Python and R. Repository validation renders each rule's grammar block
+from `productions` and validates the structure and vocabulary of every contract.
+The typed core replay checks every case's exact parse shape, collected identifier
+set and decision, and expands the declared function arities, reducers, reserved
+words and comparison operators into independent acceptance boundaries. Installed
+Python and R public suites put the same texts into real specification fields;
+later binding failures remain separate from grammar decisions. Empty expression
+fields fail public schema admission under REQ-0287 before reaching the parser.
 
 Changing a grammar therefore starts here. A change that is not carried into
 every consumer fails validation rather than producing two runtimes that
@@ -113,14 +115,20 @@ its spelling is not. A quoted value doubles an interior quote, as R004 does.
 
 ## Running the vectors
 
-From the repository root:
+From the repository root, with Rust 1.90.0 and `py-yaml12==0.2.0` installed:
 
 ```bash
 python3 .github/scripts/yaml-validation/validate_repository.py --root .
-Rscript R/cdiscbuilder/inst/conformance/grammar_conformance.R
+python3 rust/tools/check_shared_grammar.py
 ```
 
-The first replays every vector against the Python parser and checks each rule
-block and vocabulary; the second replays the same files against the R parser.
-On every pull request the `YAML Validation` workflow runs the first and the
-`Grammar Conformance` workflow runs the second.
+The first checks the rule blocks and contract structure. The second replays
+all authored vectors and expanded vocabulary boundaries directly through the
+shared typed core, including shapes that acceptance alone cannot distinguish.
+Neither command imports the reference evaluator.
+
+The `R shared grammar` workflow stages, builds and installs the standalone
+`R/yamaa` source package and runs `R/yamaa/tests/public_grammar.R` against its
+installed copies of these documents. The native workflow runs that suite and
+`rust/tests/installed_public_grammar.py` outside the checkout across the complete
+supported installed matrix. There is no R parser or public grammar probe API.
