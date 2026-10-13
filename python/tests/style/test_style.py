@@ -6,6 +6,14 @@ from pathlib import Path
 
 import pytest
 
+# The native extension is optional for the test suite (see
+# test_package.py), but yamaa.style proves its fixes through the compiled
+# `_style_same_value` helper, so this module has no pure-Python fallback:
+# skip the whole module instead of erroring on import during collection.
+pytest.importorskip(
+    "yamaa._native", reason="the compiled native extension is not installed"
+)
+
 from yamaa.style import (
     _FINDINGS as FINDINGS,
 )
