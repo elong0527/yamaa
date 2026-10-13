@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-SOURCE_REVISION = 'c7b88a4fd3a593d5742c9449a23bbdb75291ee20'
-SOURCE_PATH = 'python/tests/planning/test_workflow.py'
+SOURCE_REVISION = "c7b88a4fd3a593d5742c9449a23bbdb75291ee20"
+SOURCE_PATH = "python/tests/planning/test_workflow.py"
 
 
 def test_shared_producer_executes_once_and_shares_generated_snapshot(
