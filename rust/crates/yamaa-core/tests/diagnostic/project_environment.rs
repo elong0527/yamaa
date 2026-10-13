@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::ConditionCode,
+    diagnostic::{ConditionCode, ContextValue},
     project_environment::{self, Draft},
     project_environment_diagnostics,
     project_function::Language,
@@ -150,6 +150,43 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ("validation", condition, Some(requirement))
         );
         assert_eq!(finding.spec_paths, [path]);
+        assert_eq!(finding.source_span, None);
+        assert_eq!(finding.operand_route, None);
+        reached.insert(finding.code);
+    }
+    for (failure, cause) in [
+        (
+            project_environment_diagnostics::ReadFailure::Missing,
+            "missing",
+        ),
+        (
+            project_environment_diagnostics::ReadFailure::Unreadable,
+            "unreadable",
+        ),
+    ] {
+        let finding = failure.diagnostic("/study/environment.yaml");
+        assert_eq!(
+            (
+                finding.definition().phase,
+                finding.definition().condition,
+                finding.definition().requirement,
+            ),
+            (
+                "validation",
+                "project_environment_missing",
+                Some("REQ-0694"),
+            ),
+        );
+        assert_eq!(finding.spec_paths, ["environment"]);
+        assert_eq!(finding.context.len(), 2);
+        assert_eq!(
+            finding.context["cause"],
+            ContextValue::Scalar(Value::Str(cause.into())),
+        );
+        assert_eq!(
+            finding.context["path"],
+            ContextValue::Scalar(Value::Str("/study/environment.yaml".into())),
+        );
         assert_eq!(finding.source_span, None);
         assert_eq!(finding.operand_route, None);
         reached.insert(finding.code);
