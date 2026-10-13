@@ -8,8 +8,40 @@ use yamaa_core::{
     value::{ColumnType, Value, ValueType},
 };
 #[test]
+fn classified_unavailable_root_maps_to_the_supplied_environment_requirement() {
+    use yamaa_core::project_environment_diagnostics::ReadFailure;
+    for (failure, cause) in [
+        (ReadFailure::Missing, "missing"),
+        (ReadFailure::Unreadable, "unreadable"),
+    ] {
+        let diagnostic = failure.diagnostic("/study/environment.yaml");
+        let definition = diagnostic.code.definition();
+        assert_eq!(
+            (
+                definition.phase,
+                definition.condition,
+                definition.requirement
+            ),
+            (
+                "validation",
+                "project_environment_missing",
+                Some("REQ-0694")
+            )
+        );
+        assert_eq!(diagnostic.spec_paths, ["environment"]);
+        assert_eq!(
+            diagnostic.context["cause"],
+            ContextValue::Scalar(Value::Str(cause.into()))
+        );
+        assert_eq!(
+            diagnostic.context["path"],
+            ContextValue::Scalar(Value::Str("/study/environment.yaml".into()))
+        );
+    }
+}
+#[test]
 fn every_root_and_terminology_cause_has_independent_normative_paths_and_mapping() {
-    assert_eq!(support::reached().len(), 8);
+    assert_eq!(support::reached().len(), 9);
     let draft = support::draft();
     let projected = diagnostics(
         &draft,

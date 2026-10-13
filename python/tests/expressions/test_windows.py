@@ -404,6 +404,27 @@ def test_a_method_outside_the_two_r007_names_is_refused() -> None:
     assert condition.condition.condition == "value_not_permitted"
 
 
+@pytest.mark.parametrize("method", [["dense"], {"name": "dense"}])
+def test_an_unhashable_method_is_refused_rather_than_crashing(
+    method: object,
+) -> None:
+    # A list or mapping is unhashable, so a bare set-membership check raises
+    # TypeError instead of answering value_not_permitted.
+    condition = _condition(
+        evaluate_window(
+            "rank",
+            {"window": {"order_by": ["AVAL"]}, "method": method},
+            partition(visits(1), 0),
+        )
+    )
+
+    assert condition.condition.condition == "value_not_permitted"
+    assert condition.condition.requirement == "REQ-0322"
+    assert condition.condition.path_suffix is None
+    assert condition.condition.context["field"] == "method"
+    assert condition.condition.context["value"] == str(method)
+
+
 @pytest.mark.parametrize(
     "values",
     [

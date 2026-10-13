@@ -1,24 +1,27 @@
 # yamaa Rust migration delivery order
 
-Assessed 2026-10-11 against main
-`c8076646f403e2c15337c7771fa4341d2e5eaeee`. The authoritative work packages,
+Assessed 2026-10-13 against main
+`da6d40378d1a54f028252e14ef1e6c6003607fee`. The authoritative work packages,
 dependencies, waves and conflict groups are in
 [#1969](https://github.com/elong0527/yamaa/issues/1969). Use that issue's current
 table when selecting work. The earlier serial plan is preserved in
 [the archive](archive/migration-order-before-work-packages.md).
 
-Wave 0 completes Windows R acceptance, the CI test-support/dispatch prerequisite
-and this status refresh. Wave 1 starts with the public conformance inventory and
-then develops language, diagnostics, bindings, public API and repository tooling
-in their declared conflict groups. Wave 2 migrates consumers and retires probes,
-qualifies the complete installed matrix, decouples the validator and prepares
-the transition. Wave 3 removes the reference only after the concrete transition
-entry criteria and complete combined-main evidence pass.
+The CI prerequisites, public conformance inventory and most language families
+have landed. The verified ratchet reaches 312 Python and 311 R benchmarks out
+of 318. Finish the remaining producer-schema/path cases and language acceptance,
+then diagnostic/binding ownership and the unified engine use case. Migrate unique
+probe consumers, decouple repository tooling and qualify the final public surface
+before retirement. Collect performance baselines before removing the reference.
+The transition plan is merged; approval and removal still require its concrete
+entry criteria and complete combined-main evidence.
 
 Implementation may proceed before its conformance acceptance dependency closes;
 acceptance may not. Rebase shared-file changes onto current main before opening
 and merging their PRs. Native/R/packaging/CI changes require complete dispatched
-PR-head qualification, including Windows R, followed by combined-main acceptance.
+PR-head installed qualification, including Windows R, followed by combined-main
+acceptance. Under #2080, shared Rust checks and the exact math assessment run on
+main pushes; a PR dispatch alone cannot establish their acceptance.
 See [the dispatch instructions](../../.github/ci.md).
 
 The [decision record](maintainer-decisions.md), [status](migration-status.md) and
