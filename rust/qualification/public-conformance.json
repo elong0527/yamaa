@@ -1,7 +1,7 @@
 {
   "protocol": "public-conformance-ratchet/1",
-  "source_revision": "1eeeaf04294e4c4c4f09bc6382bbde8c38aab14b",
-  "evidence": "https://github.com/elong0527/yamaa/actions/runs/38306751419",
+  "source_revision": "67c0153274f77eb0ffa635c205d3a9f10418d076",
+  "evidence": "https://github.com/elong0527/yamaa/actions/runs/38345863406",
   "run_attempt": 1,
   "benchmarks": 318,
   "python": [
@@ -236,6 +236,7 @@
     "schema-text-mapping-unmapped",
     "schema-verification-log",
     "schema-window-functions",
+    "sdtm-ae-coding",
     "sdtm-ae-odm-repeated",
     "sdtm-ae-partial-dates",
     "sdtm-ae-seriousness",
@@ -246,6 +247,7 @@
     "sdtm-dm-basic",
     "sdtm-dm-dates",
     "sdtm-dm-death",
+    "sdtm-dm-metadata",
     "sdtm-ds-multi-form-disposition",
     "sdtm-ds-reasons",
     "sdtm-ds-sequence",
@@ -256,6 +258,7 @@
     "sdtm-lb-findings",
     "sdtm-lb-grading",
     "sdtm-lb-lab-specific-ranges",
+    "sdtm-lb-metadata",
     "sdtm-lb-multiform",
     "sdtm-lb-ranges",
     "sdtm-mh-ongoing-conditions",
@@ -267,6 +270,7 @@
     "sdtm-sv-subject-visits",
     "sdtm-tr-tumor-measurements",
     "sdtm-tu-tumor-identification",
+    "sdtm-vs-epoch-from-subject-elements",
     "sdtm-vs-replicates",
     "sdtm-vs-study-day",
     "sdtm-vs-units"
@@ -502,6 +506,7 @@
     "schema-text-mapping-unmapped",
     "schema-verification-log",
     "schema-window-functions",
+    "sdtm-ae-coding",
     "sdtm-ae-odm-repeated",
     "sdtm-ae-partial-dates",
     "sdtm-ae-seriousness",
@@ -512,6 +517,7 @@
     "sdtm-dm-basic",
     "sdtm-dm-dates",
     "sdtm-dm-death",
+    "sdtm-dm-metadata",
     "sdtm-ds-multi-form-disposition",
     "sdtm-ds-reasons",
     "sdtm-ds-sequence",
@@ -522,6 +528,7 @@
     "sdtm-lb-findings",
     "sdtm-lb-grading",
     "sdtm-lb-lab-specific-ranges",
+    "sdtm-lb-metadata",
     "sdtm-lb-multiform",
     "sdtm-lb-ranges",
     "sdtm-mh-ongoing-conditions",
@@ -533,6 +540,7 @@
     "sdtm-sv-subject-visits",
     "sdtm-tr-tumor-measurements",
     "sdtm-tu-tumor-identification",
+    "sdtm-vs-epoch-from-subject-elements",
     "sdtm-vs-replicates",
     "sdtm-vs-study-day",
     "sdtm-vs-units"
@@ -541,9 +549,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.12-wheel",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -551,9 +559,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.12-source",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -561,9 +569,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.13-wheel",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -571,9 +579,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.13-source",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -581,9 +589,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.14-wheel",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -591,9 +599,9 @@
     {
       "artifact": "public-conformance-python-ubuntu-24.04-3.14-source",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -601,9 +609,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.12-wheel",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -611,9 +619,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.12-source",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -621,9 +629,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.13-wheel",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -631,9 +639,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.13-source",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -641,9 +649,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.14-wheel",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -651,9 +659,9 @@
     {
       "artifact": "public-conformance-python-macos-15-3.14-source",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -661,9 +669,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.12-wheel",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -671,9 +679,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.12-source",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -681,9 +689,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.13-wheel",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -691,9 +699,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.13-source",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -701,9 +709,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.14-wheel",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -711,9 +719,9 @@
     {
       "artifact": "public-conformance-python-windows-latest-3.14-source",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -721,9 +729,9 @@
     {
       "artifact": "public-conformance-r-ubuntu-24.04",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -731,9 +739,9 @@
     {
       "artifact": "public-conformance-r-macos-15",
       "summary": {
-        "pass": 265,
+        "pass": 269,
         "mismatch": 1,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
@@ -741,9 +749,9 @@
     {
       "artifact": "public-conformance-r-windows-latest",
       "summary": {
-        "pass": 264,
+        "pass": 268,
         "mismatch": 2,
-        "unsupported": 50,
+        "unsupported": 46,
         "error": 0,
         "excluded": 2
       }
