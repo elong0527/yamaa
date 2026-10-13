@@ -1,6 +1,7 @@
 //! Closed string-template parsing and whole-output admission, without data effects.
 use crate::{
     diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
+    numeric_parser::SourceSpan,
     table::ValueRef,
     value::Value,
 };
@@ -21,6 +22,7 @@ pub struct StringTemplate {
     identifiers: Vec<String>,
     missing: Option<Value>,
     deferred: Option<Diagnostic>,
+    syntax_failure_span: Option<SourceSpan>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AdmissionError {
@@ -108,19 +110,33 @@ impl StringTemplate {
                         .position(|b| *b == b'}')
                         .map(|n| at + 1 + n)
                     else {
-                        invalid = Some(("unmatched_brace", None));
+                        invalid = Some((
+                            "unmatched_brace",
+                            None,
+                            SourceSpan {
+                                start,
+                                end: bytes.len(),
+                            },
+                        ));
                         break;
                     };
                     let name = &template[at + 1..end];
                     if !valid_name(name) {
-                        invalid = Some(("invalid_placeholder", Some(name)));
+                        invalid = Some((
+                            "invalid_placeholder",
+                            Some(name),
+                            SourceSpan {
+                                start,
+                                end: end + 1,
+                            },
+                        ));
                         break;
                     }
                     spans.push((at + 1, end, 2));
                     at = end + 1;
                 }
                 b'}' => {
-                    invalid = Some(("unmatched_brace", None));
+                    invalid = Some(("unmatched_brace", None, SourceSpan { start, end: at + 1 }));
                     break;
                 }
                 _ => {
@@ -132,7 +148,7 @@ impl StringTemplate {
                 }
             }
         }
-        if let Some((reason, placeholder)) = invalid {
+        if let Some((reason, placeholder, syntax_failure_span)) = invalid {
             let mut context = vec![("reason", V::Scalar(Value::Str(reason.into())))];
             if let Some(name) = placeholder {
                 context.push(("placeholder", V::Scalar(Value::Str(name.into()))));
@@ -145,6 +161,7 @@ impl StringTemplate {
                 identifiers: Vec::new(),
                 missing,
                 deferred,
+                syntax_failure_span: Some(syntax_failure_span),
             });
         }
         let mut identifiers: Vec<String> = Vec::new();
@@ -189,6 +206,7 @@ impl StringTemplate {
             identifiers,
             missing,
             deferred: None,
+            syntax_failure_span: None,
         })
     }
     pub fn path(&self) -> &str {
@@ -205,6 +223,10 @@ impl StringTemplate {
     }
     pub fn declaration_diagnostic(&self) -> Option<&Diagnostic> {
         self.deferred.as_ref()
+    }
+    /// Half-open UTF-8 byte span of a deferred syntax refusal in the original text.
+    pub fn syntax_failure_span(&self) -> Option<SourceSpan> {
+        self.syntax_failure_span
     }
     pub fn literal(&self, part: &Part) -> Option<&str> {
         match part {

@@ -1,12 +1,9 @@
-"""Replay committed R004 truth and supplemental reference syntax observations.
+"""Replay committed predicate truth and explicit native syntax controls.
 
-Expected shapes/acceptance come from the unchanged grammar. Reference comparisons
-are additional evidence, not generated truth or regex/evaluator qualification.
+All former differential inputs remain robustness observations, not semantic truth.
 """
 
-import json
 import random
-import subprocess
 from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[1]
@@ -114,65 +111,14 @@ def samples():
 
 
 def probe(sources):
-    """Replay UTF-8 JSON through Rust using only Python's standard library."""
-    run = subprocess.run(
-        [
-            "cargo",
-            "run",
-            "--offline",
-            "--quiet",
-            "-p",
-            "yamaa-adapters",
-            "--example",
-            "predicate_syntax_fixture",
-        ],
-        cwd=WORKSPACE,
-        input="".join(
-            json.dumps(text) + "\n"
-            for text in sources
-        ),
-        text=True,
-        encoding="utf-8",
-        errors="strict",
-        capture_output=True,
-        check=True,
-    )
-    # JSON-lines frames use LF only; U+0085/U+2028/U+2029 may occur inside JSON strings.
-    responses = [json.loads(line) for line in run.stdout.split("\n") if line]
-    assert len(responses) == len(sources)
-    return responses
+    """Replay explicit UTF-8/LF frames through the retained typed fixture."""
+    from native_syntax_checks import replay
+
+    return replay("predicate", sources)
 
 
-def integer_overflow_position(ast):
-    """Locate the first literal outside the normative signed 64-bit carrier."""
-    pending = [ast]
-    positions = []
-    while pending:
-        node = pending.pop()
-        if isinstance(node, list):
-            pending.extend(node)
-        elif isinstance(node, dict):
-            if node.get("kind") == "literal" and node.get("type") == "int":
-                written = node["value"]
-                negative = written.startswith("-")
-                digits = written.lstrip("+-").lstrip("0") or "0"
-                bound = "9223372036854775808" if negative else "9223372036854775807"
-                if len(digits) > len(bound) or (
-                    len(digits) == len(bound) and digits > bound
-                ):
-                    positions.append(node["position"])
-            pending.extend(node.values())
-    return min(positions) if positions else None
-
-
-def main():
-    """Check independent contract truth first, then exact common-reference syntax."""
-    from yamaa.expressions.predicates import (
-        PredicateError,
-        parse_predicate,
-        predicate_identifiers,
-    )
-
+def cases():
+    """Retain every shared case, reserved identifier and independent call control."""
     import yaml
 
     grammar = yaml.safe_load(
@@ -203,9 +149,15 @@ def main():
         cases.append(
             {"text": text, "parse": "accept", "shape": expected, "identifiers": names}
         )
-    sources = [case["text"] for case in cases] + samples()
+    return cases
+
+
+def main():
+    """Check independent contract truth without importing a reference parser."""
+    contract = cases()
+    sources = [case["text"] for case in contract] + samples()
     responses = probe(sources)
-    for case, response in zip(cases, responses, strict=False):
+    for case, response in zip(contract, responses, strict=False):
         actual = response["outcome"]
         assert actual["status"] == (
             "parsed" if case["parse"] == "accept" else "invalid"
@@ -219,65 +171,13 @@ def main():
             )
         else:
             assert actual["condition"] == case["condition"], (case, actual)
-    escape_requirements = 0
-    overflow_requirements = 0
-    for text, response in zip(sources, responses, strict=True):
+    from native_syntax_checks import exact_controls
 
-        actual = response["outcome"]
-        try:
-            ast = parse_predicate(text)
-        except PredicateError as error:
-            assert (
-                actual["status"] == "invalid" and actual["condition"] == error.condition
-            ), (text, actual)
-            assert actual["position"] == {
-                "byte": len(text[: error.position].encode()),
-                "character": error.position,
-            }, (text, actual, error.position)
-            # These explicit ESCAPE cases own REQ-0191; Python currently reports REQ-0188.
-            if text in {
-                "AEDECOD LIKE 'a' ESCAPE ''",
-                "AEDECOD LIKE 'a' ESCAPE '!!'",
-                "AEDECOD LIKE 'HEAD!' ESCAPE '!'",
-            }:
-                assert (
-                    actual["requirement"] == "REQ-0191"
-                    and error.requirement == "REQ-0188"
-                )
-                escape_requirements += 1
-            else:
-                assert actual["requirement"] == error.requirement, (
-                    text,
-                    actual,
-                    error.requirement,
-                )
-        else:
-            overflow = integer_overflow_position(ast)
-            if overflow is not None:
-                # The Python syntax oracle retains mathematical integer text;
-                # REQ-0014 separately bounds the admitted Rust literal carrier.
-                assert actual == {
-                    "status": "invalid",
-                    "condition": "integer_overflow",
-                    "requirement": "REQ-0014",
-                    "message": "integer literal is outside the signed 64-bit range",
-                    "context": {},
-                    "position": {
-                        "byte": len(text[:overflow].encode()),
-                        "character": overflow,
-                    },
-                }, (text, actual, overflow)
-                overflow_requirements += 1
-            else:
-                assert actual == {
-                    "status": "parsed",
-                    "ast": ast,
-                    "identifiers": list(predicate_identifiers(ast)),
-                }, (text, actual, ast)
-    assert escape_requirements == 3
-    assert overflow_requirements > 0
+    controls = exact_controls("predicate")
     print(
-        f"Predicate syntax: {len(cases)} independent contract checks; {len(sources)} reference observations; three explicit ESCAPE requirement differences and {overflow_requirements} normative integer carrier failures retained"
+        f"Predicate typed syntax: {len(contract)} independent contract checks, "
+        f"{controls} complete authored controls; {len(sources)} robustness observations "
+        "(historical reference comparisons are not rerun or claimed as semantic truth)"
     )
 
 

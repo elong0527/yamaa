@@ -60,7 +60,7 @@ def _specification(columns, *, profile=False, decimals=None):
     }
 
 
-def source_issue(raw):
+def profile_issues(raw):
     """The exact source refusal from an owned native build, without publication."""
     with TemporaryDirectory(prefix="yamaa-validator-source-") as temporary:
         root = Path(temporary)
@@ -71,18 +71,23 @@ def source_issue(raw):
         )
         result = domain(specification)
         rows = result.issues.to_dicts()
-        if not rows:
-            return None
-        if (
-            len(rows) == 1
-            and rows[0]["condition"] in SYNTAX_CONDITIONS | STRUCTURE_CONDITIONS
-        ):
-            row = rows[0]
-            return row["condition"], json.loads(row["context"])
         if len(rows) == 1 and rows[0]["condition"] == "ordinal_field_collision":
-            # Source syntax/header/width admission precedes the generated ordinal.
-            return None
-        raise RuntimeError(f"native fixture source refused: {rows!r}")
+            # Complete syntax, header and width admission precedes the ordinal.
+            return []
+        return rows
+
+
+def source_issue(raw):
+    rows = profile_issues(raw)
+    if not rows:
+        return None
+    if (
+        len(rows) == 1
+        and rows[0]["condition"] in SYNTAX_CONDITIONS | STRUCTURE_CONDITIONS
+    ):
+        row = rows[0]
+        return row["condition"], json.loads(row["context"])
+    raise RuntimeError(f"native fixture source refused: {rows!r}")
 
 
 def records(text):
