@@ -2110,6 +2110,41 @@ local({
   cat("case predicates, branch filters and unchanged original CSV truth passed without Python\n")
 })
 
+local({
+  source(file.path(root,"source-selection-truth.R"),local=TRUE)
+  for (name in names(source_selection_truth)) for (attempt in seq_len(2L)) {
+    truth <- source_selection_truth[[name]]
+    directory <- tempfile("yamaa-source-selection-");dir.create(directory)
+    file.copy(list.files(file.path(root,"source-selection-cases",name),full.names=TRUE),directory)
+    entry <- file.path(directory,"spec.yaml")
+    check_issue_frame(yamaa_check(entry)$issues,truth$check_issues)
+    result <- yamaa_domain(entry)
+    check_issue_frame(result$issues,truth$issues)
+    report <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+    check_handler_ledger(report,truth$handlers)
+    expected_reads <- paste0('"source_reads":',truth$source_reads)
+    stopifnot(grepl(expected_reads,report,fixed=TRUE),grepl('"artifacts":[]',report,fixed=TRUE))
+    if (!is.null(truth$columns)) {
+      stopifnot(identical(names(result$output),names(truth$columns)))
+      for (column in names(truth$columns)) {
+        actual <- result$output[[column]]
+        if (truth$kinds[[column]] == "int") stopifnot(inherits(actual,"yamaa_int64_vector"))
+        else stopifnot(is.character(actual))
+        stopifnot(identical(is.na(actual),is.na(truth$columns[[column]])),
+          identical(as.character(actual),truth$columns[[column]]))
+      }
+      stopifnot(identical(result$save(),TRUE),
+        identical(rawfile(file.path(directory,"result.csv")),rawfile(file.path(directory,"expected.csv"))))
+      writeBin(charToRaw("changed after build"),file.path(directory,"input.csv"))
+      stopifnot(identical(result$save(),TRUE),
+        identical(rawfile(file.path(directory,"result.csv")),rawfile(file.path(directory,"expected.csv"))))
+    } else stopifnot(is.null(result$output),
+      inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"result.csv")))
+    unlink(directory,recursive=TRUE)
+  }
+  cat("independent source selection, key-phase ordering, full int64 cells and retained bytes passed without Python\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)
