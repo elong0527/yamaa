@@ -1,25 +1,11 @@
-"""Check shared aggregate grammar truth and deterministic reference comparisons.
+"""Check independent aggregate truth through the retained typed Rust fixture."""
 
-Committed YAML supplies independent acceptance, shapes and vocabulary. Python
-comparisons additionally pin exact ASTs, reducer text, diagnostics and metadata;
-they never regenerate fixtures or establish evaluator/numerical qualification.
-"""
-
-import json
 import random
-import subprocess
 from pathlib import Path
 
 from check_numeric_grammar import contract_cases as numeric_contract_cases
 from check_numeric_grammar import differential_sources as numeric_sources
-from check_numeric_grammar import reference_shape as numeric_shape
-from yamaa.expressions.aggregate import (
-    AggregateError,
-    aggregate_identifiers,
-    aggregate_star_datasets,
-    parse_aggregate,
-    ungrouped_identifiers,
-)
+from check_numeric_grammar import syntax_shape as numeric_shape
 
 import yaml
 
@@ -117,82 +103,20 @@ def samples():
     return result
 
 
-def compare_reference(text, outcome):
-    """Pin full syntax or diagnostic context against the unchanged reference."""
-    try:
-        ast = parse_aggregate(text)
-    except AggregateError as error:
-        expected = {
-            "status": "invalid",
-            "condition": error.condition,
-            "requirement": error.requirement,
-            "position": {
-                "byte": len(text[: error.position].encode()),
-                "character": error.position,
-            },
-            "context": error.context,
-        }
-    else:
-        expected = {
-            "status": "parsed",
-            "ast": ast,
-            "identifiers": list(aggregate_identifiers(ast)),
-            "star_datasets": list(aggregate_star_datasets(ast)),
-            "ungrouped_identifiers": list(ungrouped_identifiers(ast)),
-        }
-    if outcome != expected:
-        raise AssertionError(f"{text!r}: actual {outcome!r}, expected {expected!r}")
-
-
 def main():
-    """Replay both independent truth and reference samples through typed Rust parsers."""
+    """Check authored truth and preserve the old input inventory as robustness."""
+    from native_syntax_checks import assert_contract, exact_controls, replay
+
     contract = cases()
     sources = [case["text"] for case in contract] + samples()
-    run = subprocess.run(
-        [
-            "cargo",
-            "run",
-            "--offline",
-            "--quiet",
-            "-p",
-            "yamaa-adapters",
-            "--example",
-            "aggregate_syntax_fixture",
-        ],
-        cwd=WORKSPACE,
-        input="".join(
-            json.dumps(text) + "\n"
-            for text in sources
-        ),
-        text=True,
-        capture_output=True,
-        check=True,
-    )
-    responses = [json.loads(line) for line in run.stdout.splitlines()]
-    assert len(responses) == len(sources)
+    responses = replay("aggregate", sources)
     for case, response in zip(contract, responses, strict=False):
-        actual = response["outcome"]
-
-        assert actual["status"] == (
-            "parsed" if case["parse"] == "accept" else "invalid"
-        ), (case, actual)
-        if case["parse"] == "reject":
-            assert actual["condition"] == case["condition"], (case, actual)
-        else:
-            if "shape" in case:
-                assert shape(actual["ast"]) == " ".join(case["shape"].split()), (
-                    case,
-                    actual,
-                )
-            if "identifiers" in case:
-                assert sorted(actual["identifiers"]) == sorted(case["identifiers"]), (
-                    case,
-                    actual,
-                )
-    for text, response in zip(sources, responses, strict=True):
-        compare_reference(text, response["outcome"])
+        assert_contract(case, response["outcome"], shape)
+    controls = exact_controls("aggregate")
     print(
-        f"Aggregate grammar: {len(contract)} independent contract checks and {len(sources)} complete reference comparisons passed"
+        f"Aggregate typed syntax: {len(contract)} independent contract checks, "
+        f"{controls} complete authored controls; {len(sources)} robustness observations "
+        "(historical reference comparisons are not rerun or claimed as semantic truth)"
     )
 
 

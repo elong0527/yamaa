@@ -1,7 +1,7 @@
 """Retain exact decision evidence without changing a production policy or golden.
 
 Run with a normally installed yamaa Python package. Historical hosted reports,
-independent accuracy certificates, local native observations and policy-isolation
+independent accuracy certificates, local native observations and frozen historical
 artifact witnesses stay distinct. Completion never implies universal accuracy or
 release qualification. The script refuses incomplete or inconsistent evidence.
 """
@@ -9,7 +9,6 @@ release qualification. The script refuses incomplete or inconsistent evidence.
 import argparse
 import importlib.metadata
 import json
-import math
 import os
 import platform
 import shutil
@@ -159,6 +158,7 @@ def public_numeric(request):
     from tempfile import TemporaryDirectory
 
     import yamaa
+
     import yaml
 
     types = {"ID": "int"}
@@ -225,76 +225,20 @@ def public_numeric(request):
 
 
 def historical(case, target="float", handler=False):
-    """Observe the retained Python parser and actual completed-value lifecycle."""
-    from yamaa.expressions import ExpressionDispatcher, MappingResolver
-    from yamaa.models import MISSING
-    from yamaa.planning import PlannedDerivation
-    from yamaa.runtime.lifecycle import (
-        HandlerCounter,
-        LifecycleCondition,
-        evaluate_derivation,
+    """Read exact frozen lifecycle evidence; never execute the retiring evaluator."""
+    report = json.loads(
+        (WORKSPACE / "qualification/math-decision-v1.json").read_text(encoding="ascii")
     )
-    from yamaa.specification.models import Expression, HandledExpression
-
-    request = numeric_fixture(case, target, handler)
-    arguments = {"value": Expression(root={"compute": request["expression"]})}
-    if handler:
-        arguments["unconvertible"] = 9
-    declaration = HandledExpression(**arguments)
-    planned = PlannedDerivation(
-        column="VALUE",
-        path="columns.VALUE.derivation",
-        expression_path="columns.VALUE.derivation.value",
-        declaration=declaration,
-        dependencies=(),
-    )
-    bindings = {}
-    for entry in request["bindings"]:
-        kind, value = next(iter(entry["value"].items()))
-        bindings[entry["name"]] = (
-            MISSING
-            if kind == "missing"
-            else int(value)
-            if kind == "int"
-            else decode(value)
-        )
-    counter = HandlerCounter()
-    counter.register_derivation(planned)
-    try:
-        value = evaluate_derivation(
-            planned,
-            target,
-            {},
-            lambda outputs: MappingResolver(bindings),
-            ExpressionDispatcher(),
-            counter,
-        )
-        outcome = {
-            "status": "value",
-            "value": wire(None if value is MISSING else value),
-        }
-    except LifecycleCondition as failure:
-        diagnostic = failure.diagnostic
-        outcome = {
-            "status": "failure",
-            "diagnostic": {
-                "phase": diagnostic.phase,
-                "condition": diagnostic.condition,
-                "requirement": diagnostic.requirement,
-                "spec_paths": list(diagnostic.spec_paths),
-                "context": wire(diagnostic.context),
-            },
-        }
-    # The public counter snapshot retains declared zero counts and selected fires.
-    counts = [
-        {
-            "spec_path": count.spec_path,
-            "handler": count.handler,
-            "count": str(count.count),
-        }
-        for count in counter.snapshot()
-    ]
-    return {"outcome": outcome, "handler_counts": counts}
+    if target == "float" and not handler:
+        rows = report["boundaries"]
+    elif target == "int" and handler:
+        rows = report["integer_handlers"]
+    else:
+        raise ValueError("no frozen historical observation for requested lifecycle")
+    matches = [row for row in rows if row["input"] == case]
+    if len(matches) != 1:
+        raise ValueError("historical input is absent or ambiguous")
+    return matches[0]["historical"]
 
 
 def outcome_bits(outcome):
@@ -440,9 +384,8 @@ def downstream(values):
 
 
 def fixture_evidence():
-    """Replay unchanged affected goldens and expose the remaining frontend refusal."""
+    """Replay five unchanged original fixtures through installed public domain."""
     import yamaa
-    from yamaa._reference_domain import yamaa_domain
 
     import yaml
 
@@ -454,161 +397,64 @@ def fixture_evidence():
         "adam-advs-percentiles",
     )
     evidence = []
-    originals = {"EXP": math.exp, "LN": math.log, "POWER": math.pow}
-
-    def captured_calls(policy, calls):
-        def implementation(function):
-            def call(*operands):
-                inputs = [normalized_bits(float(value)) for value in operands]
-                if policy == "historical":
-                    result = originals[function](*operands)
-                else:
-                    request = numeric_fixture({"function": function, "inputs": inputs})
-                    observed = public_numeric(request)
-                    value = observed["outcome"]["value"]
-                    result = (
-                        float("inf") if "missing" in value else decode(value["float"])
-                    )
-                calls.append(
-                    {
-                        "function": function,
-                        "inputs": inputs,
-                        "result": normalized_bits(result),
-                    }
+    with temporary_workspace("yamaa-math-fixtures-") as temporary:
+        for name in names:
+            target = Path(temporary) / name
+            shutil.copytree(WORKSPACE.parent / "benchmarks" / name, target)
+            if (target / "python/environment.yaml").exists():
+                shutil.copyfile(
+                    WORKSPACE.parent / "python/uv.lock", target / "python/uv.lock"
                 )
-                return result
-
-            return call
-
-        return {
-            "exp": implementation("EXP"),
-            "log": implementation("LN"),
-            "pow": implementation("POWER"),
-        }
-
-    try:
-        with temporary_workspace("yamaa-math-fixtures-") as temporary:
-            for name in names:
-                target = Path(temporary) / name
-                shutil.copytree(WORKSPACE.parent / "benchmarks" / name, target)
-                if (target / "python/environment.yaml").exists():
-                    shutil.copyfile(
-                        WORKSPACE.parent / "python/uv.lock", target / "python/uv.lock"
-                    )
-                os.chdir(target)
-                environment = (
-                    "python/environment.yaml"
-                    if Path("python/environment.yaml").exists()
-                    else None
+            os.chdir(target)
+            environment = (
+                "python/environment.yaml"
+                if Path("python/environment.yaml").exists()
+                else None
+            )
+            built = yamaa.domain("spec.yaml", environment=environment)
+            observed = {
+                "name": name,
+                "native_issues": built.issues.to_dicts(),
+                "native_artifacts": [],
+            }
+            if name == "negative-log-zero":
+                expected = yaml.safe_load(
+                    Path("expected/error.yaml").read_text(encoding="utf-8")
                 )
-                built = yamaa.domain("spec.yaml", environment=environment)
-                observed = {
-                    "name": name,
-                    "native_issues": built.issues.to_dicts(),
-                    "native_artifacts": [],
-                }
-                if built.output is not None:
-                    built.save()
-                    for expected in sorted(Path("expected").glob("*.csv")):
-                        actual = Path(expected.name).read_bytes()
-                        truth = expected.read_bytes()
-                        if actual != truth:
-                            raise AssertionError(
-                                f"unchanged benchmark truth differs: {name}/{expected.name}"
-                            )
-                        observed["native_artifacts"].append(
-                            {
-                                "name": expected.name,
-                                "expected_hex": truth.hex(),
-                                "actual_hex": actual.hex(),
-                                "exact": True,
-                            }
-                        )
-                elif name == "negative-log-zero":
-                    expected = yaml.safe_load(Path("expected/error.yaml").read_text())
-                    rows = built.issues.to_dicts()
-                    actual = [
-                        {**row, "context": json.loads(row["context"])} for row in rows
-                    ]
-                    if actual != [expected]:
-                        raise AssertionError("unchanged negative LN diagnostic differs")
-                    observed["expected_diagnostic"] = expected
-                    observed["exact_diagnostic"] = True
-                elif name == "adam-adeg-derived-intervals":
-                    rows = built.issues.to_dicts()
-                    if (
-                        len(rows) != 1
-                        or rows[0]["condition"] != "unsupported_operation"
-                        or rows[0]["spec_paths"]
-                        != ["rows[1].derivations.QTVAL.aggregate.filter"]
-                    ):
-                        raise AssertionError(
-                            "unexpected filtered-aggregate frontend outcome"
-                        )
-                    observed["qualification"] = (
-                        "frontend-blocked; numerical isolation only"
-                    )
-                    observed["follow_up"] = (
-                        "#1751 shared filtered aggregate, then #1742 full fixture qualification"
-                    )
-                    observed["policy_isolation"] = []
-                    # A preparatory experiment through the explicit retained
-                    # reference route. It supplies no native-frontend capability.
-                    for policy in ("historical", "candidate"):
-                        calls = []
-                        replacements = captured_calls(policy, calls)
-                        try:
-                            for function, replacement in replacements.items():
-                                setattr(math, function, replacement)
-                            isolated = yamaa_domain(
-                                "spec.yaml", schema_root=WORKSPACE.parent / "yaml"
-                            )
-                        finally:
-                            math.exp, math.log, math.pow = (
-                                originals["EXP"],
-                                originals["LN"],
-                                originals["POWER"],
-                            )
-                        if not isolated.issues.is_empty() or isolated.output is None:
-                            raise AssertionError(
-                                f"numerical isolation failed: {isolated.issues}"
-                            )
-                        isolated.save()
-                        artifacts = []
-                        for expected in sorted(Path("expected").glob("*.csv")):
-                            actual = Path(expected.name).read_bytes()
-                            truth = expected.read_bytes()
-                            if actual != truth:
-                                raise AssertionError(
-                                    "filtered aggregate numerical isolation changed golden"
-                                )
-                            artifacts.append(
-                                {
-                                    "name": expected.name,
-                                    "expected_hex": truth.hex(),
-                                    "actual_hex": actual.hex(),
-                                    "exact": True,
-                                }
-                            )
-                        observed["policy_isolation"].append(
-                            {"policy": policy, "calls": calls, "artifacts": artifacts}
-                        )
-                    left, right = observed["policy_isolation"]
-                    if left["calls"] != right["calls"]:
-                        raise AssertionError(
-                            "filtered aggregate original math-call observations differ"
-                        )
-                else:
+                actual = [
+                    {**row, "context": json.loads(row["context"])}
+                    for row in built.issues.to_dicts()
+                ]
+                if built.output is not None or actual != [expected]:
+                    raise AssertionError("unchanged negative LN diagnostic differs")
+                observed.update(expected_diagnostic=expected, exact_diagnostic=True)
+            else:
+                if not built.issues.is_empty() or built.output is None:
                     raise AssertionError(
                         f"affected original native fixture failed: {name}: {built.issues}"
                     )
-                evidence.append(observed)
-    finally:
-        math.exp, math.log, math.pow = (
-            originals["EXP"],
-            originals["LN"],
-            originals["POWER"],
-        )
+                built.save()
+                expected_files = sorted(Path("expected").glob("*.csv"))
+                if not expected_files:
+                    raise AssertionError(f"missing committed CSV truth: {name}")
+                for expected in expected_files:
+                    actual, truth = (
+                        Path(expected.name).read_bytes(),
+                        expected.read_bytes(),
+                    )
+                    if actual != truth:
+                        raise AssertionError(
+                            f"unchanged benchmark truth differs: {name}/{expected.name}"
+                        )
+                    observed["native_artifacts"].append(
+                        {
+                            "name": expected.name,
+                            "expected_hex": truth.hex(),
+                            "actual_hex": actual.hex(),
+                            "exact": True,
+                        }
+                    )
+            evidence.append(observed)
     return evidence
 
 
@@ -654,6 +500,15 @@ def main():
         "source_commit": args.source_commit,
         "artifact_reference": args.artifact_reference,
         "hosted_sample_run": args.hosted_run,
+        "historical_lifecycle_source": "frozen qualification/math-decision-v1.json; not rerun",
+        "historical_lifecycle_provenance": {
+            key: json.loads(
+                (WORKSPACE / "qualification/math-decision-v1.json").read_text(
+                    encoding="ascii"
+                )
+            )[key]
+            for key in ("source_commit", "artifact_reference", "hosted_sample_run")
+        },
         "local_host": {
             "system": platform.system(),
             "machine": platform.machine(),
