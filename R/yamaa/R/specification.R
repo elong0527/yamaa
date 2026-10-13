@@ -20,7 +20,6 @@
 #' @param identity Identity of the original specification source.
 #' @param source Raw original specification YAML.
 #' @return An owned native specification handle.
-#' @export
 prepare_specification <- function(modules, entry, identity, source) {
   args <- .specification_inputs(modules, entry, identity, source)
   result <- .Call(wrap__prepare_specification, args$names, args$modules,
@@ -110,7 +109,6 @@ prepare_specification <- function(modules, entry, identity, source) {
 #' Inspect the source request of a prepared specification
 #' @param handle An owned handle from prepare_specification().
 #' @return Source name and authored path; this function does not perform IO.
-#' @export
 specification_source <- function(handle) {
   result <- .Call(wrap__specification_source, handle)
   if (!is.null(result$error)) stop(result$error, call. = FALSE)
@@ -137,7 +135,6 @@ specification_source <- function(handle) {
 #' @param inspect Optional metadata-only callback taking name and path; returns
 #'   NULL or an explicit classified failure pair before any source capture.
 #' @return Complete portable failure-report JSON; never accepted output artifacts.
-#' @export
 specification_failure_report <- function(handle, capture, example,
     specification = "spec.yaml", base_directory = ".", inspect = NULL) {
   .specification_observed_report(handle, capture, NULL, example, specification, base_directory, inspect=inspect)
@@ -155,7 +152,6 @@ specification_failure_report <- function(handle, capture, example,
 #' @param inspect Optional metadata-only callback taking name and path; returns
 #'   NULL or an explicit classified failure pair before any source capture.
 #' @return Portable report JSON; publication errors and interrupts are rethrown.
-#' @export
 specification_report <- function(handle, capture, publish, example,
     specification = "spec.yaml", base_directory = ".", inspect = NULL) {
   if (!is.function(publish)) stop("publish must be a function", call. = FALSE)
@@ -206,7 +202,7 @@ specification_report <- function(handle, capture, publish, example,
     },error=function(e) {failure <<- e;list(NULL,FALSE)},
       interrupt=function(e) {failure <<- e;list(NULL,FALSE)})
   }
-  metadata <- lapply(list(as.character(getRversion()), engine_info()$core_version,
+  metadata <- lapply(list(as.character(getRversion()), .core_version(),
                           example, specification, base_directory), .specification_text_bytes, maximum=4096)
   if (build) {
     result <- .Call(wrap__specification_build, handle, dispatch, metadata, inspect_dispatch)

@@ -15,9 +15,29 @@ from pathlib import Path
 from unittest.mock import patch
 
 from yamaa import _native as yamaa_native
+import pyarrow as pa
+import struct
 
 ROOT = Path(__file__).with_name("specification-original")
 CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter", "negative-paired-dates", "negative-not-missing-age", "negative-implausible-age", "negative-invalid-sex", "negative-sex-code", "negative-matches-bad-pattern")
+
+
+def table_snapshot(content):
+    """Decode owned IPC in the test codec; no native snapshot probe is installed."""
+    reader=pa.ipc.open_stream(content)
+    batches=list(reader)
+    kinds=[]
+    for field in reader.schema:
+        kind="int" if pa.types.is_int64(field.type) else "float" if pa.types.is_float64(field.type) else "str" if pa.types.is_string(field.type) else "date" if pa.types.is_date32(field.type[0].type) else "datetime"
+        kinds.append(kind)
+    def cell(value,kind):
+        if value is None:return {"missing":None}
+        if kind=="int":return {"int":str(value)}
+        if kind=="float":return {"float":struct.pack(">d",value).hex()}
+        if kind=="str":return {"str":value}
+        precision=("year","month","day")[value["precision"]] if kind=="date" else ("day","second")[value["precision"]]
+        return {kind:{"text":value["value"].isoformat(),"precision":precision}}
+    return json.dumps({"columns":[[field.name,kind] for field,kind in zip(reader.schema,kinds)],"row_count":str(sum(batch.num_rows for batch in batches)),"chunks":[str(batch.num_rows) for batch in batches],"rows":[[cell(batch.column(index)[row].as_py(),kind) for index,kind in enumerate(kinds)] for batch in batches for row in range(batch.num_rows)]})
 
 
 def modules():
@@ -96,7 +116,7 @@ class OriginalSpecifications(unittest.TestCase):
                 self.assertEqual(specification.capture_reads(), before)
                 self.assertEqual(json.loads(specification.check_issues()), json.loads(prepare(name).check_issues()))
                 self.assertEqual(specification.capture_reads(), before)
-                metadata = (platform.python_version(), yamaa_native.engine_info()["core_version"], name, entry, ".")
+                metadata = (platform.python_version(), yamaa_native._CORE_VERSION, name, entry, ".")
                 expected = json.loads((ROOT / "expected" / (name + ".json")).read_text())
                 expected.update(runtime="python", runtime_version=metadata[0], engine_version=metadata[1])
                 captures = sum(source["snapshots_created"] or 0 for source in expected["source_reads"])
@@ -120,7 +140,7 @@ class OriginalSpecifications(unittest.TestCase):
                         artifact = expected["artifacts"][0]
                         derived = next(table for table in expected["tables"] if table["stage"] == "derived")
                         projection = [derived["columns"].index(column) for column in artifact["columns"]]
-                        snapshot = json.loads(yamaa_native.table_snapshot(result.output()))
+                        snapshot = json.loads(table_snapshot(result.output()))
                         self.assertEqual(snapshot["columns"], list(map(list, zip(artifact["columns"], artifact["types"]))))
                         self.assertEqual(snapshot["row_count"], str(artifact["row_count"]))
                         def scalar(value):
@@ -174,7 +194,7 @@ class OriginalSpecifications(unittest.TestCase):
             (root / "parent/input.csv").write_bytes(b"ID\n1\n")
             result = specification.build(("fixture-runtime", "fixture-engine", "file-view", "spec.yaml", "."))
             held_output = result.output()
-            snapshot = json.loads(yamaa_native.table_snapshot(held_output))
+            snapshot = json.loads(table_snapshot(held_output))
             self.assertEqual(snapshot["columns"], [["ID", "int"]])
             self.assertEqual(snapshot["row_count"], "1")
             self.assertEqual(snapshot["rows"], [[{"int": "1"}]])
@@ -308,7 +328,7 @@ class OriginalSpecifications(unittest.TestCase):
                 artifact = expected["artifacts"][0]
                 derived = [t for t in expected["tables"] if t["stage"] == "derived"][0]
                 projection = [derived["columns"].index(c) for c in artifact["columns"]]
-                snapshot = json.loads(yamaa_native.table_snapshot(result.output()))
+                snapshot = json.loads(table_snapshot(result.output()))
                 self.assertEqual(snapshot["columns"], list(map(list, zip(artifact["columns"], artifact["types"]))))
                 self.assertEqual(snapshot["row_count"], str(artifact["row_count"]))
                 def scalar(v):
@@ -705,7 +725,7 @@ class OriginalSpecifications(unittest.TestCase):
                     self.assertLessEqual(len(content), maximum)
                     state["reads"] += 1
                     return content, True
-                result = handle.build(capture, (platform.python_version(),yamaa_native.engine_info()["core_version"],name,specification_name(name),"."))
+                result = handle.build(capture, (platform.python_version(),yamaa_native._CORE_VERSION,name,specification_name(name),"."))
                 reads = state["reads"]
                 diagnostics = json.loads((ROOT / "expected" / (name + ".json")).read_text())["diagnostics"]
                 expected = [(d["phase"],d["condition"],d["requirement"],d["spec_paths"],json.dumps(d["context"],ensure_ascii=False,sort_keys=True,separators=(",", ":"))) for d in diagnostics]
@@ -1008,7 +1028,7 @@ class OriginalSpecifications(unittest.TestCase):
 
                 metadata = (
                     platform.python_version(),
-                    yamaa_native.engine_info()["core_version"],
+                    yamaa_native._CORE_VERSION,
                     name,
                     specification_name(name),
                     ".",
@@ -1119,7 +1139,7 @@ class OriginalSpecifications(unittest.TestCase):
         specification = prepare(CASES[0])
         metadata = (
             platform.python_version(),
-            yamaa_native.engine_info()["core_version"],
+            yamaa_native._CORE_VERSION,
             CASES[0],
             "spec.yaml",
             ".",
@@ -1144,7 +1164,7 @@ class OriginalSpecifications(unittest.TestCase):
         specification = prepare(name)
         metadata = (
             platform.python_version(),
-            yamaa_native.engine_info()["core_version"],
+            yamaa_native._CORE_VERSION,
             name,
             "spec.yaml",
             ".",
@@ -2274,7 +2294,7 @@ columns:
                 result = yamaa.domain(entry)
                 observed_expected = json.loads(json.dumps(expected))
                 observed_expected.update(runtime="python", runtime_version=sys.version,
-                                         engine_version=yamaa_native.engine_info()["core_version"],
+                                         engine_version=yamaa_native._CORE_VERSION,
                                          example="domain")
                 for group in ("nodes", "tables", "verifications", "callbacks"):
                     for record in observed_expected[group]:

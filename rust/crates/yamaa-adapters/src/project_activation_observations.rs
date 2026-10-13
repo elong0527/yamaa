@@ -3,7 +3,7 @@
 use crate::{
     project_run::PreparedRun,
     project_source::{CapturedEnvironment, Origin},
-    scalar_transport::ScalarValue,
+    report_scalar::ScalarValue,
 };
 use serde_json::{json, Value as Json};
 use yamaa_core::{

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import copy
 import functools
+import gzip
 import json
 import math
 import os
@@ -24,6 +25,7 @@ import tarfile
 import traceback
 import zipfile
 from pathlib import Path, PureWindowsPath
+
 
 CASES = ("adam-adlb-ordered-sum", "schema-window-functions", "schema-lookup")
 OUTPUTS = dict(zip(CASES, ("adlb.csv", "advs.csv", "adsl.csv")))
@@ -47,6 +49,11 @@ UNAVAILABLE = {
     "shipped_schema_initialization": None,
     "os_filesystem_cache": None,
 }
+def unavailable(phase_measurements=False):
+    return {key: value for key, value in UNAVAILABLE.items()
+            if not phase_measurements or key not in {"phase_durations", "actual_callback_counts"}}
+
+
 HERE = Path(__file__).resolve().parent
 WORKERS = {
     "python": "public_lifecycle_python_worker.py",
@@ -61,8 +68,12 @@ def write_json(path, value):
     )
 
 
+def retained_bytes(path):
+    return gzip.decompress(path.read_bytes()) if path.suffix == ".gz" else path.read_bytes()
+
+
 def read_json(path):
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(retained_bytes(path).decode("utf-8"))
 
 
 @functools.lru_cache(maxsize=2048)
@@ -536,11 +547,12 @@ def actual_origins(observed, declared, repository):
         "host",
         "runtime_version",
         "package_version",
-        "engine_version",
         "system",
     ):
         if observed[field] != declared[field]:
             raise ValueError(f"actual installed identity differs: {field}")
+    if observed.get("engine_version") is not None and observed["engine_version"] != declared["engine_version"]:
+        raise ValueError("actual installed core version differs from build attestation")
     roots = checkout_roots(repository)
     origins = {
         key: outside_checkout(value, repository, roots)
@@ -679,7 +691,7 @@ def validate_repetition(repository, originals, request, child, row, declared):
         raise ValueError(
             "public Build must precede the first explicit native metadata call"
         )
-    assert_equal(row["unavailable"], UNAVAILABLE, "unavailable metrics")
+    assert_equal(row["unavailable"], unavailable(request.get("phase_measurements", False)), "unavailable metrics")
     validate_rss(row["rss"], request["host"], observed["system"])
     for boundary in BOUNDARIES[1:]:
         validate_duration(row["durations"][boundary], request["host"])
@@ -759,20 +771,28 @@ def launch(command, child):
         (child / "stdout.txt").open("wb") as out,
         (child / "stderr.txt").open("wb") as err,
     ):
+        broker = [sys.executable, "-I", str(HERE / "child_peak_rss.py"),
+                  "--command", json.dumps(command), "--record", str(child / "process.json")]
         process = subprocess.Popen(
-            command, cwd=child, env=environment, stdout=out, stderr=err
+            broker, cwd=child, env=environment, stdout=out, stderr=err
         )
         try:
             code = process.wait()
         except BaseException:
-            process.terminate()
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                process.terminate()
             try:
                 process.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
             raise
-    return {"exit_code": code, "pid": process.pid}
+    if code:
+        raise ValueError("child RSS broker failed; retain stdout/stderr and unavailable peak")
+    return read_json(child / "process.json")
 
 
 def prepare(args):
@@ -826,6 +846,8 @@ def prepare(args):
     for name in (
         Path(__file__).name,
         "public_lifecycle_worker_protocol.json",
+        "application_measurement_evidence.py",
+        "child_peak_rss.py",
         *WORKERS.values(),
     ):
         shutil.copyfile(HERE / name, harness / name)

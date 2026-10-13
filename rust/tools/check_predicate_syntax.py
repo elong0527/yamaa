@@ -124,11 +124,11 @@ def probe(sources):
             "-p",
             "yamaa-adapters",
             "--example",
-            "predicate_syntax_probe",
+            "predicate_syntax_fixture",
         ],
         cwd=WORKSPACE,
         input="".join(
-            json.dumps({"protocol": "predicate-syntax/1", "expression": text}) + "\n"
+            json.dumps(text) + "\n"
             for text in sources
         ),
         text=True,
@@ -222,7 +222,7 @@ def main():
     escape_requirements = 0
     overflow_requirements = 0
     for text, response in zip(sources, responses, strict=True):
-        assert response["protocol"] == "predicate-syntax/1"
+
         actual = response["outcome"]
         try:
             ast = parse_predicate(text)

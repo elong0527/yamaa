@@ -1477,7 +1477,7 @@ fn public_root_result_refuses_limited_or_contradictory_whole_attempts_before_out
 
 #[test]
 fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_refusal() {
-    use yamaa_adapters::{producer_result, table_transport::TableTransportError};
+    use yamaa_adapters::{ipc_table::TableError, producer_result};
     let study = Study::new();
     study.rounded();
     let declarations = (0..59).map(|index| format!("  - {{name: EXTRA{index}, type: float, label: Extra value, derivation: {{literal: 1.234}}}}\n")).collect::<String>();
@@ -1513,7 +1513,7 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
         Err(producer_result::Error::Output {
             attempt: held,
             observations,
-            error: TableTransportError::OutputLimit,
+            error: TableError::OutputLimit,
         }) => {
             assert!(std::ptr::eq(&attempt, held));
             assert_eq!(observations["outcome"], "success");
@@ -1537,7 +1537,7 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
     assert!(matches!(
         producer_result::prepare_classified(&attempt, report_id(), 16777216, &[]),
         Err(producer_result::Error::Output {
-            error: TableTransportError::OutputLimit,
+            error: TableError::OutputLimit,
             ..
         })
     ));

@@ -145,7 +145,7 @@ def compare_reference(text, outcome):
 
 
 def main():
-    """Replay both independent truth and reference samples through real transport."""
+    """Replay both independent truth and reference samples through typed Rust parsers."""
     contract = cases()
     sources = [case["text"] for case in contract] + samples()
     run = subprocess.run(
@@ -157,11 +157,11 @@ def main():
             "-p",
             "yamaa-adapters",
             "--example",
-            "aggregate_grammar_probe",
+            "aggregate_syntax_fixture",
         ],
         cwd=WORKSPACE,
         input="".join(
-            json.dumps({"protocol": "aggregate-syntax/1", "expression": text}) + "\n"
+            json.dumps(text) + "\n"
             for text in sources
         ),
         text=True,
@@ -172,7 +172,7 @@ def main():
     assert len(responses) == len(sources)
     for case, response in zip(contract, responses, strict=False):
         actual = response["outcome"]
-        assert response["protocol"] == "aggregate-syntax/1"
+
         assert actual["status"] == (
             "parsed" if case["parse"] == "accept" else "invalid"
         ), (case, actual)

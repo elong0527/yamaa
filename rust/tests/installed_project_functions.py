@@ -32,23 +32,22 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
         ):
             for _ in range(2):
                 self.assertEqual(
-                    host.verify_versions(raw, ["yamaa._native.engine_info"]), ()
+                    host.verify_versions(raw, ["yamaa.domain"]), ()
                 )
             wrong = raw.replace(
                 f'version = "{installed_version}"'.encode(),
                 b'version = "999999.0"',
             )
             self.assertEqual(
-                host.verify_versions(wrong, ["yamaa._native.engine_info"]),
+                host.verify_versions(wrong, ["yamaa.domain"]),
                 (
                     host.Finding(
                         "yamaa", "version_mismatch", ("999999.0",), installed_version
                     ),
                 ),
             )
-        bound = host.resolve_callable("yamaa._native.engine_info", [])
-        self.assertIs(bound, yamaa_native.engine_info)
-        self.assertEqual(bound()["core_version"], "0.1.0")
+        bound = host.resolve_callable("yamaa.domain", ["specification", "environment"])
+        self.assertIs(bound, __import__("yamaa").domain)
 
     def test_normally_installed_project_wheel_is_checked_before_import_and_binding(
         self,

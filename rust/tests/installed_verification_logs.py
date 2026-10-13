@@ -52,7 +52,7 @@ class VerificationLogs(unittest.TestCase):
         report.update(
             runtime="python",
             runtime_version=sys.version,
-            engine_version=_native.engine_info()["core_version"],
+            engine_version=_native._CORE_VERSION,
             example="domain",
         )
         for group in ("nodes", "tables", "verifications", "callbacks"):
