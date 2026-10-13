@@ -558,7 +558,7 @@ class DashboardTests(unittest.TestCase):
             ["solutions/adam-adsl-age-quality/result.sas"],
         )
 
-    def test_multi_level_spec_renders_panes_with_resolved_default(self):
+    def test_multi_level_spec_renders_panes_without_retired_resolved_output(self):
         benchmark = generate.BENCHMARKS / "schema-inheritance"
         entry, chain = generate.benchmark_entry(benchmark)
         self.assertEqual(entry.name, "spec_study.yaml")
@@ -573,13 +573,12 @@ class DashboardTests(unittest.TestCase):
                 "spec_organization.yaml",
                 "spec_compound.yaml",
                 "spec_study.yaml",
-                "spec_resolved.yaml",
                 "run.R",
                 "run.py",
             ],
         )
         self.assertIn("Choose specification document", page)
-        self.assertIn('<span class="panel-caption">4 spec files</span>', page)
+        self.assertIn('<span class="panel-caption">3 spec files</span>', page)
         base = (
             "https://github.com/elong0527/yamaa/edit/main/benchmarks/schema-inheritance"
         )
@@ -587,7 +586,6 @@ class DashboardTests(unittest.TestCase):
             "spec_organization.yaml",
             "spec_compound.yaml",
             "spec_study.yaml",
-            "expected/spec_resolved.yaml",
         ]:
             self.assertIn(f'data-edit-url="{base}/{path}"', page)
         self.assertIn('fileHeading.className = "file-heading spec-file-heading"', page)
@@ -605,14 +603,23 @@ class DashboardTests(unittest.TestCase):
             self.assertIn(
                 f'<a class="edit-button" href="{base}/{target}">Edit</a>', page
             )
-        self.assertIn(
-            f'<a class="edit-button" href="{base}/expected/spec_resolved.yaml">Edit</a>',
-            page,
-        )
+        self.assertNotIn('data-filename="spec_resolved.yaml"', page)
         self.assertIn(
             '<header class="section-header"><h2 id="schema-heading">YAML specification</h2>',
             page,
         )
+
+    def test_optional_resolved_spec_renders_when_present(self):
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark = Path(directory) / "schema-inheritance"
+            shutil.copytree(generate.BENCHMARKS / benchmark.name, benchmark)
+            (benchmark / "expected" / "spec_resolved.yaml").write_text(
+                "name: resolved\n", encoding="ascii"
+            )
+            page = generate.render_benchmark(benchmark).decode("ascii")
+        self.assertIn('data-filename="spec_resolved.yaml"', page)
+        self.assertIn('<span class="panel-caption">4 spec files</span>', page)
+        self.assertIn("expected/spec_resolved.yaml", page)
 
     def test_schema_prefixed_benchmark_gets_its_own_gallery_category(self):
         benchmark = generate.BENCHMARKS / "schema-inheritance"

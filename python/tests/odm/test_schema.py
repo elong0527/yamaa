@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from yamaa.odm.schema import ClinicalItemRow
+from yamaa._odm.schema import ClinicalItemRow
 
 
 def valid_row() -> dict[str, object]:

@@ -5,24 +5,24 @@ from importlib.metadata import version as _distribution_version
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from yamaa._reference_domain import DomainRun, DomainRunError, yamaa_domain
-    from yamaa.submission import generate_study_document
+    from yamaa._define import DefineError, define
+    from yamaa._domain import DomainError, check, domain
+    from yamaa._odm.parquet import write_odm_parquet
+    from yamaa._odm.readers import read_odm
 
 _EXPORTS = {
+    "read_odm": ("yamaa._odm.readers", "read_odm"),
+    "write_odm_parquet": ("yamaa._odm.parquet", "write_odm_parquet"),
     "define": ("yamaa._define", "define"),
     "DefineError": ("yamaa._define", "DefineError"),
     "domain": ("yamaa._domain", "domain"),
     "check": ("yamaa._domain", "check"),
     "DomainError": ("yamaa._domain", "DomainError"),
-    "DomainRun": ("yamaa._reference_domain", "DomainRun"),
-    "DomainRunError": ("yamaa._reference_domain", "DomainRunError"),
-    "yamaa_domain": ("yamaa._reference_domain", "yamaa_domain"),
-    "generate_study_document": ("yamaa.submission", "generate_study_document"),
 }
 
 
 def __getattr__(name: str):
-    """Load a reference export only when that export is requested."""
+    """Load a requested facade or helper without importing unrelated implementations."""
     if name not in _EXPORTS:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module, attribute = _EXPORTS[name]
@@ -40,12 +40,10 @@ __version__ = _distribution_version("yamaa")
 __all__ = [
     "DefineError",
     "DomainError",
-    "DomainRun",
-    "DomainRunError",
     "__version__",
     "check",
     "define",
     "domain",
-    "generate_study_document",
-    "yamaa_domain",
+    "read_odm",
+    "write_odm_parquet",
 ]

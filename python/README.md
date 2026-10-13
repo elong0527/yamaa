@@ -1,793 +1,138 @@
-# yamaa Python
+# yamaa for Python
 
-The migration candidate bundles the Python facade and shared Rust engine in one
-`yamaa` distribution. Native file builds use `yamaa.domain` and static checks use
-`yamaa.check`; their result views are copied into Polars data frames.
+The migration candidate packages the Python facade and shared Rust engine in one
+`yamaa` distribution. The approved release surface is `domain`, `check`, `define`,
+their result/error APIs, package version metadata, and the two ODM file helpers.
+Full installed qualification and the [transition gates](../rust/planning/transition.md)
+remain required before release and reference removal.
 
 ```python
 import yamaa
 
-result = yamaa.domain("spec.yaml")
-result.output
-result.issues
-result.verification_log
-result.warning_log
-result.save()
+built = yamaa.domain("spec.yaml", environment="python/environment.yaml")
+built.output
+built.issues
+built.verification_log
+built.warning_log
+built.save()
 
-checked = yamaa.check("spec.yaml")
+checked = yamaa.check("spec.yaml", environment="python/environment.yaml")
 checked.issues
 ```
 
-The current bounded frontend qualifies seventeen original specifications. A failed
-build has no output and its save raises `yamaa.DomainError`. Operational save
-failures return `False` and remain in issues. Checks read no study data and run no
-project code. Context is JSON text and output integers retain their full signed
-64-bit range. Public date/datetime columns retain their ordinary Polars types.
+`environment` is optional. Pass a declared host environment explicitly when the
+study uses project functions or terminology. Paths resolve relative to their
+original declaring YAML layer under the [local path policy](../rules/storage/resources.md).
+There is no upward project-root discovery or public backend selector in this API.
 
-Declared verification/warning logs are fresh owned data frames. Build never
-writes them. Explicit Save preflights all targets and publishes verification,
-warning and primary bytes in order. A failed build may retain a verification log;
-its explicit Save publishes that diagnostic sidecar and still raises the
-failed-build error. Repeated Save uses the same held bytes.
+Build reads inputs and invokes the declared project functions through the shared
+engine. Check performs preparation/static validation without reading study data
+or invoking project code. Each result owns its native state; copied Polars output,
+issue and log views remain independent. Issues contain `phase`, `condition`,
+`requirement`, `spec_paths` and JSON-text `context`. The public issue table has no
+legacy `severity` field. Signed integers retain their full 64-bit range; strings
+retain Unicode and embedded NUL, and date/datetime columns retain ordinary Polars
+types. The numerical policy is [PortableLibmV1](../rust/planning/1740-math-decision.md).
 
-Document paths use their original declaring YAML layer under the approved
-[local-path policy](../rules/storage/resources.md). Producer graphs
-with declared logs remain explicitly refused until their ordered sidecars qualify.
-Broader language, API and release qualification remain open. Retained reference
-helpers continue independent migration assessment. ODM helpers below remain available.
+Build publishes nothing. Explicit `save()` uses the declared destinations and
+held bytes, without rereading inputs or rerunning callbacks. A failed build has
+no accepted output and Save raises `yamaa.DomainError`; a diagnostic verification
+sidecar can still be publishable. An operational publication failure returns
+`False` and remains in issues. Publication preflights targets, then writes the
+ordered producer/log/output set. Replacement is atomic for each file; completed
+writes remain if a later target fails. There is no whole-run file rollback.
 
-## Install and test
+## Define documents
 
-From the repository root, create the locked test environment and run all Python
-checks:
+```python
+import yamaa
+
+created = yamaa.define("environment.yaml", "sdtm", created="2026-09-11T00:00:00")
+created.issues
+created.save()
+```
+
+Define reads the selected environment submission section and its metadata and
+parent specifications. Dataset-JSON reads already published CSV/Parquet artifacts
+when requested. It executes no specification, reads no ordinary study source and
+opens no supporting-document links. The shared lifecycle renders/validates the
+whole output set before Save, then publishes Dataset-JSON in section order and
+XML last. A failed Save raises `yamaa.DefineError` carrying issues. See the
+[native Define contract](../rust/DEFINE_GENERATION.md).
+
+## ODM file helpers
+
+```python
+from yamaa import read_odm, write_odm_parquet
+
+frame = read_odm("input.xml")
+written = write_odm_parquet("input.xml", "clinical-items.parquet")
+print(written.output_path, written.row_count)
+```
+
+These retained helpers read ODM 1.3/2.0 XML or TAR inputs into the fixed
+clinical-item schema. They preserve source order and absent/null/empty values,
+and the Parquet writer uses bounded batches and atomic publication. Their
+[private implementation](src/yamaa/_odm/README.md) imports only file/schema
+libraries, with no reference specification/evaluator dependency. Internal row
+models, iterators, binding plans and contexts are not public authoring APIs.
+
+## Specification style
+
+The retained style CLI uses packaged field order and the shared native YAML/schema
+services. Style findings are authoring advice, separate from validation diagnostics.
+
+```bash
+python -m yamaa.style study/adsl.yaml study/adae.yaml
+python -m yamaa.style study/
+python -m yamaa.style --fix study/adsl.yaml
+python -m yamaa.style --ignore line_width study/
+```
+
+Findings print `path:line:column: name message (REQ-NNNN)`. Exit status is 0 when
+no finding remains, 1 when findings remain and 2 when input cannot be read/parsed.
+`--fix` keeps a layout edit only when the shared admission/equality proof accepts
+it and comments remain unchanged. Authoring lints that require a semantic rewrite
+offer no automatic fix. See the [style contract](../rules/specification/style.md).
+Its Python implementation names remain private.
+
+## Install and verify
+
+Use the qualified wheel for the supported platform/interpreter, or build the
+source distribution with Rust 1.90.0 and Cargo. The planned shared release is
+0.4.0; these migration branches have not published it. For a locked development
+installation from the repository root:
 
 ```bash
 uv sync --project python --extra test --locked --no-editable
 uv run --project python --no-sync ruff format --check python/src/yamaa python/tests
 uv run --project python --no-sync ruff check python/src/yamaa python/tests
-uv run --project python --no-sync pytest python/tests
 ```
 
-For installation with `pip`:
-
-```bash
-python -m pip install './python[test]'
-python -m pytest python/tests
-```
-
-Tests import the installed package. They do not require `PYTHONPATH` or depend
-on the repository's current working directory.
-
-## ODM helpers
-
-```python
-from yamaa.odm import iter_odm_records, read_odm, write_odm_parquet
-
-frame = read_odm("input.xml")
-result = write_odm_parquet("input.xml", "clinical-items.parquet")
-```
-
-See the [ODM helper documentation](src/yamaa/odm/README.md) for the fixed schema
-and supported XML layouts.
-
-## Submission documents
-
-`yamaa.define` composes one environment submission section through the shared
-Rust lifecycle. A fixed creation time reproduces the same bytes:
-
-```python
-result = yamaa.define("environment.yaml", "sdtm", created="2026-09-11T00:00:00")
-result.issues
-result.save()
-```
-
-The result has the same five issue columns as `domain`; a failed save raises
-`yamaa.DefineError` with those issues. Preparation reads metadata and parent
-specifications. Dataset-JSON, when requested by the section, reads already
-published CSV/Parquet artifacts. Generation executes no specification, reads
-no ordinary study inputs and opens no supporting-document links. It renders
-and validates the complete output set before publication, then Save publishes
-JSON files in section order and XML last. Replacement is atomic per file;
-an operational failure preserves completed files and stops the remainder.
-
-This is the bounded column-metadata migration candidate. DM's existing XML/JSON
-goldens and AE/VS's independent fixed-time structure/schema witnesses are kept
-unchanged. Value-level generation and the complete replacement qualification
-remain open. The reference route below remains until coordinated retirement.
-See [the native Define contract](../rust/DEFINE_GENERATION.md).
-
-`yamaa.generate_study_document("define.yaml")` composes the declared datasets
-into deterministic, schema-validated Define-XML 2.1. Entries declaring
-`dataset_json` also produce Dataset-JSON 1.1 from already-published artifacts.
-Passing `study_document="define.yaml"` to `yamaa_domain` enforces bound,
-non-extensible codelists during execution. See the
-[submission documentation](src/yamaa/submission/README.md) for usage and
-publication behavior.
-
-## Specification loader
-
-Load one specification against the repository schema bundle:
-
-```python
-from yamaa.specification import load_specification
-
-loaded = load_specification("study/spec.yaml", "yaml")
-print(loaded.specification.domain)
-```
-
-The loader applies YAML 1.2 core scalar rules, rejects YAML features outside
-the authored-source contract, reads safe schema includes, validates the document
-against the bundle, materializes R006 shorthands and defaults, and returns strict
-Pydantic models. It does not execute the specification or resolve inheritance.
-
-## Specification style
-
-`yamaa.style` checks a specification against the
-[style contract](../rules/specification/style.md): field order, blank lines,
-line width, the canonical literal and source spellings, and three authoring
-lints -- a derivation identical in every row template that belongs at
-column level (`repeated_row_derivation`), a named intermediate equivalent
-to the implicit join (`redundant_intermediate`), and an output column
-without a label (`missing_label`). A style finding
-is not a validation diagnostic; the specification stays valid and runs the
-same way.
-
-```bash
-python -m yamaa.style study/adsl.yaml study/adae.yaml
-python -m yamaa.style study/                  # every specification below it
-python -m yamaa.style --fix study/adsl.yaml   # apply the proved layout fixes
-python -m yamaa.style --ignore line_width study/
-```
-
-Each finding prints as `path:line:column: name message (REQ-NNNN)`. The exit
-status is 0 when no finding remains, 1 when one does, and 2 when a file
-cannot be read or parsed. `--fix` moves and inserts whole lines only, and
-keeps an edit only when the file still parses to the same typed value with
-the same comments; a finding it cannot fix that way stays reported.
-`literal_form`, `source_form`, and the three authoring lints rewrite the
-specification value to preserve derivation behavior, so their authors
-correct them; no fix is offered. A
-comment `# yamaa-style: allow <name> -- <reason>` directly above a field or
-an entry suppresses that finding there.
-
-The style CLI uses the schema field order packaged with the installed release.
-
-## Typed values and scalar expressions
-
-The runtime value kernel exposes strict Pydantic result models, explicit
-missingness, R011 conversions, R016 date and datetime values, an ordered Polars
-table contract, and R004 predicate evaluation.
-
-### Registered operations
-
-Dispatch supports exactly these operations. Every other registered keyword
-returns an explicit `UnsupportedResult` until its owning runtime component is
-implemented, and an unregistered keyword fails schema validation before it
-reaches dispatch. `function` is the one operation a component registers
-rather than the table declaring: it appears once a runner activates a
-project environment, and not before. Record reads are not an expression
-operation: qualified sources and named intermediates reach right-side records
-through the keyed-join contract documented below, not through dispatch.
-
-| Operation | Rule | What it returns |
-|---|---|---|
-| `source` | R002, R008 | the named source or derived variable |
-| `odm` | R008 | one collected item read from the row's ODM scope |
-| `literal` | R007 | the declared scalar, unchanged |
-| `mapping` | R007, R019 | an inline dictionary lookup on a string source |
-| `compute` | R010 | one scalar numeric formula in the closed grammar |
-| `round_half_away_from_zero` | R010 | the source rounded half away from zero to the declared digits |
-| `first_available` | R007 | the first non-missing source, else `missing` |
-| `greatest`, `least` | R007, R019 | the row-wise extreme of comparable sources |
-| `case` | R004, R007 | the first true branch, then `otherwise`, else missing |
-| `flag` | R004, R007 | the one-predicate shorthand for a `case` returning a flag value |
-| `cut` | R007 | the label of the break interval a numeric source lands in |
-| `str_extract` | R022 | one capture group of the leftmost match |
-| `str_concat` | R007 | its nested expression results, in order |
-| `str_template` | R012 | literal text with its placeholders interpolated |
-| `str_case` | R019 | the exact ASCII casing substitution |
-| `str_pad` | R007 | the source left-padded to the declared width |
-| `str_contains` | R022 | whether a portable regex matches anywhere in the source |
-| `aggregate` | R003, R007, R013 | one relation, or one partition, reduced to one value |
-| `date_diff` | R016 | whole calendar units between two dates |
-| `study_day` | R016 | the CDISC study day, counting from 1 with no day zero |
-| `date_impute` | R016 | a truncated date completed under a declared rule |
-| `date_precision` | R016 | `Y`, `M`, or `D` for how much of a date was collected |
-| `datetime_impute` | R016 | a truncated datetime completed under a declared rule |
-| `datetime_precision` | R016 | `D` or `S` for how much of a datetime was collected |
-| `to_date` | R016 | the calendar date of a datetime |
-| `to_epoch_day` | R016 | the integer count of days since 1970-01-01 |
-| `row_number`, `rank` | R007 | the position of a row in its ordered partition |
-| `row_value` | R007 | one source read from another row of that partition |
-| `locf` | R007 | the current source value, or the closest earlier non-missing source |
-| `previous_non_missing` | R007 | the closest strictly earlier non-missing source |
-| `baseline_flag` | R007 | the one baseline row |
-| `function` | R018 | one scalar from the pinned project code an activated environment binds |
-
-`compute` reads the closed R010 grammar: the operators `+ - * /` with unary
-sign, and exactly `ABS`, `CEIL`, `FLOOR`, `TRUNC`, `SQRT`, `POWER`, `EXP`,
-`LN`, `MOD`, `GREATEST`, `LEAST`, `NULLIF`, `COALESCE`, and
-`ROUND_HALF_AWAY_FROM_ZERO`. There is no host
-`eval`: a formula is tokenized, parsed, and evaluated in the association it
-was written in, and a division by zero, a negative `SQRT`, a non-positive
-`LN`, an invalid `POWER`, or an integer overflow fails the run rather than
-becoming missing.
-
-Numeric selection functions evaluate all arguments in written order, including
-`COALESCE` after finding a present value. A later argument's failure remains fatal.
-`GREATEST`, `LEAST`, `NULLIF`, and `COALESCE` return a float when any present
-argument is float; missing arguments do not force promotion. In particular,
-`COALESCE(1, 2.0)` returns float `1.0`. This corrects the former behavior that kept
-an integer first argument unchanged, and can affect dependent calculations for
-integers above binary64's exact range.
-
-Integer literals keep exact i64 semantics even when written with thousands of
-leading zeros. An out-of-range literal reports `integer_overflow` (REQ-0434),
-with its canonical decimal digits as diagnostic text, independently of Python's
-integer-string digit limit. Evaluation still visits operands in written order:
-a literal fails only when reached, and its sign is a separate unary operation.
-Thus `-9223372036854775808` fails on the positive literal before negation, while
-`-9223372036854775807 - 1` successfully evaluates to the minimum i64. Parsing does
-not eagerly convert or range-check numeric literals.
-
-`aggregate` reads the closed R013 grammar over that same arithmetic, with
-exactly the reducers `SUM`, `COUNT`, `MIN`, `MAX`, `MEAN`, and `ONLY`, plus
-`COUNT(D.*)` for records rather than values. `SUM` is a left fold in relation
-record order and `MEAN` is that fold divided by `COUNT`, so both round in
-binary64 exactly where the expression says they do. `MIN` and `MAX` read
-R019's text order and R016's chronological order; `ONLY` accepts one record
-and rejects several rather than choosing.
-
-Every regular expression in the package -- the R006 `pattern` descriptor, the
-R009 `matches` verification, and `str_extract` -- is read by `yamaa.regex`,
-the single binding of the portable R022 contract over the standard library
-`re` module. No other regular-expression library reads a pattern of the
-language. The shared vectors in `yaml/conformance/regex.yaml` are replayed
-through all three consumers.
-
-`yamaa.expressions` also exposes the closed parsers directly -- the R010
-`parse_numeric`, the R012 `parse_template`, and the R013 `parse_aggregate` --
-each checked against the vectors in `yaml/grammar/`, which is the single
-source those grammars are written in.
-
-```python
-from yamaa.expressions import MappingResolver, evaluate_expression
-from yamaa.models import ValueResult, convert_value
-from yamaa.specification.models import Expression
-
-resolver = MappingResolver({"RAW.AGE": "42"})
-expression = Expression(root={"source": {"variable": "RAW.AGE"}})
-source = evaluate_expression(expression, resolver)
-
-assert isinstance(source, ValueResult)
-age = convert_value(source.value, "int")
-assert age == ValueResult(value=42)
-```
-
-Run this component's focused tests from the repository root:
-
-```bash
-uv run --project python --isolated --extra test pytest \
-  python/tests/models python/tests/expressions \
-  python/tests/runtime/test_expression_examples.py
-```
-
-## Source binding
-
-Build one binding plan from a normalized specification and its loaded source
-tables, then share one index across row-local resolvers:
-
-```python
-from yamaa.odm import BindingIndex, build_binding_plan
-
-plan = build_binding_plan(loaded_spec.specification, loaded_sources)
-index = BindingIndex(plan, loaded_sources)
-resolver = index.context({"ODM": current_odm_row}, {"STUDYID": "STUDY01"})
-```
-
-The resolver implements the scalar expression protocol. Direct qualified
-fields read the supplied source record, and unqualified names read completed
-output values. Disagreeing values require flat R008 `order_by`/`keep`
-siblings; successful selection is returned with
-`handled_by="multiple_matches"` so the executor can count that path.
-Implicit cross-dataset row selection remains the keyed-join component's
-responsibility; this context resolves only source records its caller has
-explicitly bound.
-
-## ODM item reads
-
-An `odm` derivation reads one collected item from an ODM input:
-
-```yaml
-derivation: {odm: ODM.IT.DM.AGE}
-```
-
-An ODM input is any declared input an `odm` derivation names. It is read
-under the fixed eleven-field ODM schema in `yamaa.odm.items`: stored field
-names bind to the schema by ASCII case folding, vendor fields are neither
-typed nor exposed, and the fields and then the records are verified before
-any row reads them. Workflow execution reads ODM inputs this way through
-`load_source_tables(..., odm_datasets=...)`; `execute_specification` holds a
-table supplied any other way to the same schema, so a caller's own source
-provider cannot skip the verification.
-
-Run this component's focused tests from the repository root:
-
-```bash
-uv run --project python --isolated --extra test pytest \
-  python/tests/odm
-```
-
-## CSV source ingestion
-
-Create one resource manager for the approved project and use normalized
-`DatasetSource` declarations to load ordered, typed Polars tables:
-
-```python
-from yamaa.io import ProjectResources, load_source_tables
-from yamaa.specification.models import DatasetSource
-
-resources = ProjectResources("study")
-datasets = {
-    "DM": DatasetSource(
-        path="input/dm.csv",
-        types={"AGE": "int", "RFSTDTC": "date"},
-    )
-}
-loaded = load_source_tables(datasets, resources)
-dm = loaded["DM"].table
-```
-
-### Current public resource paths
-
-The replacement `yamaa.domain` and `yamaa.check` routes resolve each relative
-resource from the YAML file that declares it. An inherited layer keeps its own
-location, and environment lock/function/codelist paths start at the environment
-file. The caller explicitly supplies entry and environment arguments using
-ordinary host path resolution.
-
-A study can name data beside its specification, in a parent directory, or at
-an absolute local location:
-
-```yaml
-input:
-  DM: ../data/dm.csv
-  LBREF: /data/pilot7/reference/lbref.csv
-output:
-  path: ../results/adsl.csv
-```
-
-A missing resource fails at that named location. The public routes neither
-search for `yamaa-project.yaml` nor use its `data_roots`, and they do not retry
-from an entry directory, configured root or the process working directory.
-OS permissions and the caller's sandbox govern access. URI schemes, symbolic
-links below the retained anchor and non-regular resources remain rejected.
-Native capture retains bounded immutable bytes, and explicit Save publishes
-already serialized held bytes at the original output declaration.
-
-The `ProjectResources`/`approve_roots` helpers in the retained reference engine
-and private explicit-root qualification probes keep their historical policy
-until the coordinated reference transition. That history does not describe
-replacement public resource resolution.
-
-The reader accepts the fixed `.csv` profile only. It parses the retained byte
-snapshot in memory, preserves source row and header order, and reads a field
-with no characters as missing whether it was written bare or quoted, before
-applying declared types. A `str`, `int`, or `float` column lands in the
-matching native Polars type, a `date` column in `pl.Date`, and a `datetime`
-column in `pl.Datetime("us")`, so an ingested table answers ordinary Polars
-expressions. The reader does not create CSV or other intermediate files. A
-declaration carrying `schema` is accepted only when the workflow supplies the
-resolved producer contract; execution without that contract reports an
-unsupported result. This mapping is Python-only because R has no
-producer-linked ingestion path.
-
-The R023 syntax scanner in `yamaa.io.csv` imports the standard library alone.
-The repository validator loads that module by path rather than keeping a second
-reader, so one implementation decides how every fixture reads.
-
-Run this component's focused tests from the repository root:
-
-```bash
-uv run --project python --isolated --extra test pytest python/tests/io
-```
-
-## Minimal YAML execution
-
-The retained reference engine can load and execute one domain specification
-through its historical facade:
-
-```python
-from yamaa import yamaa_domain
-
-pilot = yamaa_domain("spec.yaml")
-
-print(pilot.spec)  # normalized specification
-print(pilot.inputs)  # dataset name -> Polars DataFrame
-print(pilot.output)  # ordered output Polars DataFrame, or None
-print(pilot.warning_log)  # R009 sidecar Polars DataFrame, or None
-print(pilot.verification_log)  # verification log sidecar Polars DataFrame, or None
-print(pilot.issues)  # stable Polars issue table
-
-pilot.save("expected.parquet")
-```
-
-In the retained reference engine, `yamaa_domain` searches upward from the
-specification for `schema.yaml`; a specification kept elsewhere supplies
-`schema_root=`. Its project and data roots follow the historical R021
-configuration rules. The replacement `domain` and `check` routes use the
-declaring-file policy described above.
-Loading, source capture, and execution happen once. The facade writes nothing
-until `save` is called: without an argument it uses the specification's
-`output.path`, while an explicit `.csv` or `.parquet` path selects that output
-profile. An unsuccessful run exposes no output and `save` raises
-`DomainRunError` with the same issue table available from `pilot.issues`.
-
-The lower-level executor remains available for adapters and injected test
-hooks. It plans dependencies before evaluation, constructs record-driven rows
-in specification and source order, then enriches those rows without changing
-their count. The provider entry point completes all source-independent
-validation before it asks for source bytes. each scalar completes expression evaluation, declared type conversion, and
-conversion handling before a dependent reads it. Handler counts include
-declared paths that fired zero times. Column, key, dataset-verification, and ordered-output
-work is delegated to the pure hooks exposed by the verification and I/O
-components.
-
-Execution supports every operation in the registered table above, along with
-record-driven and grouped row templates, their filters, record lookups,
-explicit absent-source defaults, and earlier output-column references. A
-call to an R018 project function needs a project root the runner selected;
-without one, it and inheritance return an explicit unsupported result rather
-than a fabricated output. Execution never reads an `expected/` artifact.
-
-Run the focused tests from the repository root:
-
-```bash
-uv run --project python --isolated --extra test pytest \
-  python/tests/test_domain.py python/tests/planning python/tests/runtime
-```
-
-## Keyed joins, record lookups, and reductions
-
-A qualified source naming another dataset joins it to the constructed row on
-the output keys both sides carry, in `keys` order:
-
-```yaml
-- name: TRT01A
-  type: str
-  derivation:
-    source:
-      variable: EX.EXTRT
-      order_by: [EX.EXSTDTC, EX.EXSEQ]
-      keep: first
-```
-
-`yamaa.runtime.joins` reads each declared source once into ordered typed
-records and answers every operation that reaches them from that one reading,
-so a `lookup`, an R013 reduction, and grouped row construction cannot disagree about which records a
-key reaches or which record an order puts first. Its `partition_records`,
-`order_records`, and `compare_values` are the typed partition and order
-helpers, published for the window component.
-
-The join is many-to-one: it preserves left row count and order, produces
-missing where nothing matched, and refuses to choose among several matches
-unless the specification declared how. A right-side record whose applicable
-key is missing matches nothing, so a subject id reused under a second study
-never reads the first study's records, and a right-side record with no left
-row creates none.
-
-`yamaa.runtime.joins` performs the R003 match once and names the record, so
-the columns that read it are plainly reading one record:
-
-```yaml
-intermediates:
-  - id: LASTEX
-    dataset: EX
-    filter: "EX.EXENDTC IS NOT NULL"
-    order_by: [EX.EXENDTC, EX.EXSEQ]
-    keep: last
-```
-
-A named intermediate can use `dataset: SELF` to select rows completed by
-earlier row templates. Its donor fields are row-derived output columns, so a
-later LOCF template can filter and order on a window-derived flag without
-staging a second input file. During column derivation, `SELF` contains all
-completed row templates.
-
-```yaml
-intermediates:
-  - id: DONOR8
-    dataset: SELF
-    key: [STUDYID, USUBJID]
-    filter: "ANL01FL = 'Y' AND AVISITN <= 8"
-    order_by: [{variable: AVISITN, direction: desc}]
-    keep: first
-```
-
-An incomplete match value is answered before a record is looked for and an
-unmatched key after. The two share the intermediate's `no_match` handler
-(REQ-0129): a missing match value and an unmatched key are one absence
-category. They stay disjoint only from a `source` binding, which answers an
-absent source variable with its `absent` handler (REQ-0345). Omitting the
-handler keeps the behavior of the match the lookup performs: missing when it
-matches on output keys (REQ-0111), fatal when it declares its own `key` --
-an `unmatched_key` failure for an intermediate (REQ-0124, REQ-0344), an
-unhandled-absent failure for a `source` binding (REQ-0334).
-
-`yamaa.runtime.rows` owns grouped row construction. A template with
-`group_by` partitions the complete driver relation, orders the groups by the
-position of their first record, and appends one candidate per group only
-where the template's filter is `TRUE` over its completed columns. Inside such
-a template a driver field is a scalar only when the keys declare it; every
-other field is read through an aggregate over the group's records.
-
-An output key and the same-named right-side column must already carry one
-comparable type. REQ-0151 requires it of an inferred key and REQ-0305 of a
-declared pair, REQ-0004 converts no operand between an operation's inputs,
-and REQ-0005 makes comparability a property of the runtime type, so a
-disagreement is reported under REQ-0323 rather than quietly matching
-nothing.
-
-Because a join infers its keys, the plan states what it inferred.
-`ExecutionPlan.resolved_joins` names, for each qualified source and each
-reduction, the dataset it reaches and the columns it matches on -- the
-coarser keys when declared, the applicable keys otherwise -- and
-`ExecutionPlan.intermediates` says the same for each named record:
-
-```python
-plan = plan_execution(specification, sources)
-for join in plan.resolved_joins:
-    print(join.spec_path, join.dataset, join.key)
-```
-
-Run this component's focused tests from the repository root:
-
-```bash
-uv run --project python --isolated --extra test pytest \
-  python/tests/expressions/test_aggregate.py python/tests/runtime/test_joins.py \
-  python/tests/runtime/test_relational_examples.py python/tests/planning
-```
-
-## Temporal values and ordered windows
-
-R016 owns both temporal types completely, so the date operations compute
-rather than decide. A `date` and a `datetime` each parse from exactly one
-lexical form, carry no zone and no fractional second, and render back as
-canonical text.
-
-Every value also records its **collected precision**: the finest field the
-collected source supplied. `date_impute` completes a truncated date and the
-completed value keeps the precision of the text it came from, so
-`date_precision` reads how much was collected off the value itself rather
-than off the text beside it:
-
-```yaml
-- name: ASTDT
-  type: date
-  derivation:
-    date_impute:
-      source: AESTDTC          # "2025-01"
-      day: 15
-      minimum_source_precision: month
-      not_before: TRTSDT       # moves only what imputation supplied
-- name: ASTDTPR
-  type: str
-  derivation:
-    date_precision: {source: ASTDT}   # "M"
-```
-
-REQ-0570 keeps precision out of the artifact on purpose: a column stores the
-day its value names, and a specification carrying precision further derives
-a column from `date_precision`. REQ-0573 keeps it out of every comparison
-too, so an imputed date and a collected one naming the same day are one
-value wherever a join matches or a partition groups.
-
-### The temporal matrix
-
-Every case R016 defines is executed. #166 owned the month and year counting
-that was once undefined; it closed as completed, and REQ-0594 through REQ-0613
-now pin it, so nothing in this family is blocked:
-
-| Case | Rule | Status |
-|---|---|---|
-| `unit: day`, all three `bounds` | REQ-0598 | executed |
-| `unit: week`, whole seven-day blocks | REQ-0594 | executed |
-| `unit: month` and `unit: year` anniversaries | REQ-0595 | executed |
-| February 29 anniversary in a common year | REQ-0596 | executed |
-| An earlier `end` negating the count | REQ-0597 | executed |
-| Non-`exclusive` `bounds` beyond `unit: day` | REQ-0613 | rejected, as the rule requires |
-| A `datetime` operand to a date operation | REQ-0606 | rejected, as the rule requires |
-
-A window reads the constructed output rows of its partition and preserves
-row count: a row its `filter` excludes receives missing rather than
-disappearing, and ties fall back to construction order, so every numbering
-is total. A row template completes each derivation across its rows before a
-dependent derivation starts, so a later window can read a column derived from
-an earlier window. `previous_non_missing` searches a separate completed source
-column and never the column being derived, which is why reaching one's own
-value that way stays a cycle rather than an iteration.
-
-Run this component's focused tests from the repository root:
-
-```bash
-uv run --project python --isolated --extra test pytest \
-  python/tests/expressions/test_dates.py python/tests/expressions/test_windows.py \
-  python/tests/runtime/test_temporal_examples.py python/tests/planning
-```
-
-## Inheritance and producer workflows
-
-`resolve_specification(entry, bundle)` resolves R017 parents before ordinary
-validation. Its result carries the canonical resolved document, its Pydantic
-`Specification`, the depth-first contribution order, and the source origin of
-each contributed value, down to the leaf a layer wrote, because a `columns`
-member composes by declared kind rather than replacing each field whole.
-
-Producer links form an explicit acyclic plan. Every producer is resolved and
-executed once in producer-first order; its rendered artifact becomes an
-immutable in-memory source snapshot for consumers, under the producer's exact
-field order and declared types. The workflow does not publish intermediate
-files, so the facade's existing rule that only `save()` writes remains true.
-
-```python
-from yamaa.io import ProjectResources
-from yamaa.planning import execute_workflow, plan_workflow
-from yamaa.specification.schema import load_schema_bundle
-
-resources = ProjectResources("study", base_directory="study/adam/adsl")
-workflow = plan_workflow(
-    "study/adam/adsl/spec.yaml",
-    load_schema_bundle("yaml"),
-    resources,
-)
-execution = execute_workflow(workflow, resources)
-```
-
-Run this component's focused tests from the repository root:
-
-```bash
-uv run --project python --isolated --extra test pytest \
-  python/tests/schema/test_inheritance.py python/tests/planning/test_workflow.py
-```
-
-## Project functions
-
-Pass the study environment explicitly to the public SDK:
-
-```python
-import yamaa
-
-checked = yamaa.check("spec.yaml", environment="python/environment.yaml")
-result = yamaa.domain("spec.yaml", environment="python/environment.yaml")
-result.save()
-```
-
-`environment=` names a YAML metadata file. Paths written in that file resolve
-relative to its containing directory. It declares the host language, packaging
-lock, versionless function definitions with inline tests, shared codelists, and
-optional submission metadata. Function implementations belong to ordinary
-installed packages; the SDK does not install packages or load an artifact tree.
-
-`check()` captures metadata and returns static issues without importing project
-code, verifying installed versions, running function tests, or reading study data.
-Each `domain()` build verifies the installed packages used by its calls against
-the held lock, binds callable signatures, and runs every test for the called
-functions before reading study data. Unused definitions stay inactive. Failed
-locks or tests stop the build; activation success is never cached between builds.
-
-The five original function studies have equivalent Python and R environments.
-Their installed qualification is in `rust/tests/installed_public_environment.py`
-and `R/yamaa/tests/public_environment.R`; the same original positive CSV truth is
-used by both hosts. See `rust/tests/project-programs/README.md` for setup and staging.
-
-## Verified tables and published artifacts
-
-Assert over a completed table, then write and publish what it produces:
-
-```python
-from yamaa.io import ArtifactTarget, build_artifact, publish_artifact
-from yamaa.verification import verify_completed_table
-
-verify_completed_table(table, spec.columns, spec.keys, spec.verifications or [])
-artifact = build_artifact(table, spec.output, spec.keys)
-publish_artifact(ArtifactTarget(run_directory / "adsl.csv"), artifact)
-```
-
-`yamaa.verification` exposes one hook per R005 stage -- `check_column`,
-`check_keys`, and `check_dataset` -- so an executor runs each assertion when
-R005 says it runs rather than sweeping every check to the end. Each reports
-failures in the committed error shape and leaves the run's fate to its
-caller; `verify_completed_table` runs the three in order and raises. Dataset
-verification accepts typed, per-row record-lookup bindings for the qualified
-fields REQ-0183 makes visible to predicates.
-
-`yamaa.io` writes the other way for the same reason it reads: the artifact
-selects its profile from `output.path`, takes R005's column selection and
-row order, and becomes `.csv` byte for byte or `.parquet` under the R020
-type mapping. Publication replaces one target the caller explicitly
-permits, through a temporary file beside it, so a failure leaves the
-previous artifact in place.
-
-Source paths select the same `.csv` or `.parquet` profile. A Parquet source
-supplies its field types from the embedded schema, preserves nulls apart from
-collected empty strings, and can consume a preceding specification's Parquet
-output directly without an intermediate CSV file.
-
-See the [input and output documentation](src/yamaa/io/README.md) for what
-each step owns.
-
-Run this component's focused tests from the repository root:
-
-```bash
-uv run --project python --isolated --extra test pytest \
-  python/tests/verification python/tests/io
-```
-
-## Conformance reports for one example
-
-`yamaa.adapters.conformance` runs a committed example through the same
-engine `yamaa_domain` exposes and says what the run observed. One command
-executes the examples it is given, writes one report each, and compares
-them with what those examples committed:
-
-```bash
-python -m yamaa.adapters.conformance \
-  --run-dir build/conformance \
-  sdtm-dm-basic negative-ambiguous-type
-```
-
-Artifacts land under `build/conformance/artifacts/` and reports under
-`build/conformance/reports/`, so a run never writes into the fixture it is
-being judged against. The command exits non-zero when an example drifts,
-and `--no-compare` writes the reports without judging them.
-
-A report carries what a cross-runtime comparison needs and nothing that
-belongs to one implementation: the artifact's column order, declared
-types, record count and complete R020 bytes; a failure's `phase`,
-`condition`, `spec_paths`, `requirement`, and context; each unsupported
-operation and where it was declared; and the REQ-0361 count for every
-declared handler path, including the ones that never fired.
-
-```python
-from yamaa.adapters.conformance import compare_example, execute_example
-
-report = execute_example(
-    "benchmarks/sdtm-dm-basic",
-    schema_root="yaml",
-    output_dir="build/conformance/artifacts/sdtm-dm-basic",
-)
-verdict = compare_example(report, "benchmarks/sdtm-dm-basic")
-```
-
-The two halves stay apart. `execute_example` opens a specification and the
-sources it declares, so a run cannot answer with the value it was supposed
-to produce; `compare_example` is the only half that reads `expected/`, and
-it reads a finished report rather than a live engine. Nothing is
-normalized on the way: column order, record order, a missing value, and a
-quoted empty string are compared as rendered, and an artifact's verdict is
-its complete bytes for CSV or ordered logical data for Parquet. An unsupported run and a crashed one each fail the
-example they were given rather than passing quietly, because neither one
-reproduced what the example committed.
-
-`REPORT_VERSION` is `0.3.0-draft`. Reports identify host language separately
-from engine backend and include source/prepublication tables, per-node outcomes,
-evaluated verification records and study callback traces. Filenames use
-`<example>.<runtime>.<backend>.json`; older report versions must be regenerated.
-Use `compare_reports` or `--reference-reports` to compare independent runs in
-addition to committed goldens. See the [report protocol](src/yamaa/adapters/README.md)
-for exact scalar encodings, comparison rules and explicitly unsupported backends.
-
-The manifest declares execution coverage by runtime. The historical #101 and
-#200 are closed; a passing Python report establishes Python coverage only.
-R package/grammar checks do not establish current-schema R execution parity.
-
-Run this component's focused tests from the repository root:
-
-```bash
-uv run --project python --isolated --extra test pytest python/tests/adapters
-```
-
-## Engine migration
-
-See [Engine migration compatibility](ENGINE_COMPATIBILITY.md) for the public API,
-extension hooks, R compatibility, and validation boundaries preserved for #1585.
+The complete installed native workflow qualifies wheel/source packages outside
+the checkout on CPython 3.12-3.14, Linux x86_64, macOS arm64 and Windows x64.
+Public benchmark conformance compares independently committed expected data;
+installed supplemental suites cover argument/result/ownership, callbacks,
+producer order/logs, exact scalar values, grammar, Define and retained ODM I/O.
+A local source import or component test alone does not establish release parity.
+
+## Migration from the reference API
+
+| Previous usage | Approved replacement |
+| --- | --- |
+| `yamaa.yamaa_domain(...)`, `DomainRun` | `yamaa.domain(specification, environment=...)` and its owned result. |
+| `DomainRunError` | `yamaa.DomainError`. |
+| `save(path)` | Declare the destination in YAML, then call `save()` without arguments. |
+| `.spec`, `.inputs`, `.input`, resolved-spec/provenance helpers | These authoring views have no retained public producer. Use authored specifications and the public output/issues/logs. |
+| `specification.load_specification` | `yamaa.check(...)` for diagnostic validation; strict Python model objects are not retained. |
+| `generate_study_document(define.yaml)` | `yamaa.define(environment, standard, created=...)` using the environment submission section. Update the authored metadata to that contract. |
+| Project/schema/data root overrides and `yamaa-project.yaml` discovery | Declaring-file paths and an explicitly passed environment. |
+| `yamaa.odm.read_odm`, `write_odm_parquet` | Import both helpers from `yamaa`; their implementation is private. |
+| Public expression/planning/runtime/verification/IO/schema/model/ODM-binding extensions | Retired under the approved first-release scope. Domain/check/Define use the shared engine directly. |
+
+Reference code and measurement artifacts remain during qualification. Removal
+follows [the family inventory](../rust/planning/python-cutover.md), after the
+complete matrix, native validator, performance/rollback and transition approval
+pass. Pin one whole prior release in a fresh environment before starting a
+rollback replay; do not switch an outstanding build or retained Save to another
+backend. Previously saved outputs retain their original release provenance.
