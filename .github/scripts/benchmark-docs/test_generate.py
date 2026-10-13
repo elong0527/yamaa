@@ -630,7 +630,7 @@ class DashboardTests(unittest.TestCase):
         # file, so stage it in a copied folder and render the copy.
         source = generate.BENCHMARKS / "schema-inheritance"
         with tempfile.TemporaryDirectory() as directory:
-            benchmark = Path(directory) / source.name
+            benchmark = (Path(directory) / source.name).resolve()
             shutil.copytree(source, benchmark)
             (benchmark / "expected" / "spec_resolved.yaml").write_text(
                 SCHEMA_INHERITANCE_RESOLVED_SPEC, encoding="utf-8"
