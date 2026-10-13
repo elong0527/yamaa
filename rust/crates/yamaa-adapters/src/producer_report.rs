@@ -254,9 +254,7 @@ impl<'a, 'i> NativeReport<'a, 'i> {
             .ok_or(Error::InvalidObservation)
     }
     fn finish(&self, value: Value) -> Result<Value, Error> {
-        if value.to_string().len() > self.maximum {
-            return Err(Error::OutputLimit);
-        }
+        crate::report_projection::encoded_within_limit(&value, self.maximum)?;
         report::bounded(value)
     }
     pub(crate) fn take_logs(&mut self) -> Vec<NodeLogs> {
@@ -1088,9 +1086,7 @@ pub fn attempt_report_classified<'a, E>(
     if attempt.accepted() && entered.len() != metadata.order().len() {
         return Err(Error::InvalidObservation.into());
     }
-    if result.to_string().len() > maximum {
-        return Err(Error::OutputLimit.into());
-    }
+    crate::report_projection::encoded_within_limit(&result, maximum)?;
     let result = report::bounded(result)?;
     if portable {
         Ok(result)

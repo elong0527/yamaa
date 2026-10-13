@@ -400,11 +400,11 @@ pub(crate) fn envelope_sources_projected<T: TableAccess>(
     )
 }
 pub(crate) fn bounded(report: Value) -> Result<Value, Error> {
-    if report.to_string().len() > 16_777_216 {
-        Err(Error::OutputLimit)
-    } else {
-        Ok(report)
-    }
+    crate::report_projection::encoded_within_limit(
+        &report,
+        yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+    )?;
+    Ok(report)
 }
 pub(crate) fn set_handler_counts(report: &mut Value, response: &Value) -> Result<(), Error> {
     let Some(raw) = response.get("handler_counts") else {

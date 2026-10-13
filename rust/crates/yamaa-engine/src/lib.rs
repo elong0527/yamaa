@@ -5,6 +5,7 @@
 extern crate alloc;
 
 pub mod build;
+pub mod capacity;
 pub mod dataset;
 mod dataset_budget;
 pub mod dataset_predicate;

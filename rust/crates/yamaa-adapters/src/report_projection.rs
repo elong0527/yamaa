@@ -8,17 +8,25 @@ pub(crate) struct Budget {
     bytes: usize,
     cells: usize,
     work: usize,
+    initial_bytes: usize,
+    initial_work: usize,
 }
 impl Budget {
     pub(crate) fn new(bytes: usize) -> Self {
+        let bytes = bytes
+            .min(yamaa_engine::capacity::REPORT_ENCODED_BYTES)
+            .saturating_mul(yamaa_engine::capacity::REPORT_RETAINED_FACTOR)
+            .min(yamaa_engine::capacity::REPORT_RETAINED_BYTES);
         Self {
-            bytes: bytes.min(16_777_216),
+            bytes,
             cells: 1_048_576,
             work: 67_108_864,
+            initial_bytes: bytes,
+            initial_work: 67_108_864,
         }
     }
     pub(crate) fn remaining_bytes(&self) -> usize {
-        self.bytes
+        self.bytes.min(yamaa_engine::capacity::REPORT_ENCODED_BYTES)
     }
     pub(crate) fn work(&mut self, count: usize) -> Result<(), Error> {
         self.work = self.work.checked_sub(count).ok_or(Error::OutputLimit)?;
@@ -57,13 +65,21 @@ impl Budget {
     pub(crate) fn scalar(&mut self, value: &Scalar) -> Result<(), Error> {
         match value {
             Scalar::Str(text) => self.text(text),
-            _ => self.text("012345678901234567890123456789012345678901234567890123456789012345"),
+            Scalar::Int(value) => self.text(&value.to_string()),
+            Scalar::Float(_) => self.text("0123456789012345"),
+            Scalar::Date(value) => self.text(&value.to_string()),
+            Scalar::DateTime(value) => self.text(&value.to_string()),
+            Scalar::Missing | Scalar::Bool(_) => self.entries(1),
         }
     }
     pub(crate) fn cell(&mut self, value: &ValueRef<'_>) -> Result<(), Error> {
         match value {
             ValueRef::Str(text) => self.text(text),
-            _ => self.text("012345678901234567890123456789012345678901234567890123456789012345"),
+            ValueRef::Int(value) => self.text(&value.to_string()),
+            ValueRef::Float(_) => self.text("0123456789012345"),
+            ValueRef::Date(value) => self.text(&value.to_string()),
+            ValueRef::DateTime(value) => self.text(&value.to_string()),
+            ValueRef::Missing | ValueRef::Bool(_) => self.entries(1),
         }
     }
     pub(crate) fn check(&mut self, check: &yamaa_core::dataset::Check) -> Result<(), Error> {
@@ -170,5 +186,81 @@ impl Budget {
             }
             _ => Ok(()),
         }
+    }
+}
+
+impl Drop for Budget {
+    fn drop(&mut self) {
+        if std::env::var_os("YAMAA_REPORT_CAPACITY_TRACE").is_some() {
+            use std::io::Write;
+            let _ = writeln!(
+                std::io::stderr(),
+                "report-capacity retained_limit={} retained_charged={} cells_charged={} work_charged={}",
+                self.initial_bytes,
+                self.initial_bytes - self.bytes,
+                1_048_576 - self.cells,
+                self.initial_work - self.work
+            );
+        }
+    }
+}
+
+/// Count the actual compact encoded representation without first allocating
+/// an unbounded temporary String. The writer stops at the admitted ceiling.
+pub(crate) fn encoded_within_limit(value: &Value, maximum: usize) -> Result<(), Error> {
+    struct Counter {
+        remaining: usize,
+        exceeded: bool,
+    }
+    impl std::io::Write for Counter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            match self.remaining.checked_sub(bytes.len()) {
+                Some(remaining) => {
+                    self.remaining = remaining;
+                    Ok(bytes.len())
+                }
+                None => {
+                    self.exceeded = true;
+                    Err(std::io::Error::other("encoded report capacity"))
+                }
+            }
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut counter = Counter {
+        remaining: maximum,
+        exceeded: false,
+    };
+    match serde_json::to_writer(&mut counter, value) {
+        Ok(()) => Ok(()),
+        Err(_) if counter.exceeded => Err(Error::OutputLimit),
+        Err(_) => Err(Error::InvalidObservation),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encoded_ceiling_counts_unicode_escaping_and_container_syntax_exactly() {
+        let value = serde_json::json!({"value": ["é\n\"", null, true, -17]});
+        let exact = serde_json::to_vec(&value).unwrap().len();
+        assert!(encoded_within_limit(&value, exact).is_ok());
+        assert!(matches!(
+            encoded_within_limit(&value, exact - 1),
+            Err(Error::OutputLimit)
+        ));
+    }
+
+    #[test]
+    fn encoded_ceiling_stops_a_large_value_without_a_temporary_encoded_copy() {
+        let value = Value::Array(vec![Value::String("x".repeat(4096)); 100]);
+        assert!(matches!(
+            encoded_within_limit(&value, 4096),
+            Err(Error::OutputLimit)
+        ));
     }
 }
