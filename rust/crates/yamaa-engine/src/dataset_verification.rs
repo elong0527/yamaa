@@ -1,6 +1,6 @@
 //! Predicate declarations and row checks at the completed-dataset verification phase.
 use crate::{
-    dataset::{self, Check, CheckRecord, Dataset, ExecutionError, Verification},
+    dataset::{self, Check, CheckRecord, ExecutionError, Verification},
     dataset_budget::Budget,
     dataset_predicate::BoundPredicate,
 };
@@ -34,13 +34,17 @@ fn sample(kind: ColumnType) -> Value {
 
 /// Validate declarations in order, then evaluate every row without a `when` short circuit.
 /// Semantic failures retain previously completed check records and never an output artifact.
-pub(crate) fn predicate_check<E>(
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn predicate_check<T: TableAccess + ?Sized>(
     verification: &Verification,
-    dataset: &Dataset,
-    keys: &[usize],
-    budget: &mut Budget,
+    dataset: &CompletedRows<'_>,
+    plan: &dataset::DatasetPlan,
+    primary: &T,
+    candidates: &[dataset::Candidate],
+    state: &mut dataset::EvaluationState<'_, T::Error>,
     records: &mut Vec<CheckRecord>,
-) -> Result<Option<CheckRecord>, Box<ExecutionError<E>>> {
+) -> Result<Option<CheckRecord>, Box<ExecutionError<T::Error>>> {
+    use yamaa_core::bound_expression::{Binding, Read};
     let (when, require, metadata) = match &verification.check {
         Check::Assert { when, require } => (
             when.as_ref(),
@@ -50,39 +54,115 @@ pub(crate) fn predicate_check<E>(
         Check::PredicateDeclaration(predicate) => (None, predicate, None),
         _ => unreachable!("only predicate checks use this service"),
     };
-    let samples: Vec<_> = dataset
-        .schema()
-        .columns()
-        .iter()
-        .map(|column| sample(column.kind))
-        .collect();
-    let mut evaluate = |predicate: &BoundPredicate, values: &[Value]| {
-        crate::dataset_predicate::evaluate(predicate, dataset, 0, values, budget.predicate())
-            .map_err(|error| {
-                Box::new(match error.kind {
-                    ErrorKind::Limit(limit) => dataset::predicate_limit(limit),
-                    _ => ExecutionError::VerificationPredicate {
-                        error,
-                        records: core::mem::take(records),
-                    },
-                })
+    // Validate types from immutable schemas, including an empty output. These
+    // synthetic operands never select donors, run handlers or read source cells.
+    for predicate in when.into_iter().chain([require]) {
+        let mut samples = Vec::new();
+        let mut bindings = Vec::new();
+        for binding in predicate.bindings() {
+            let kind = match binding.read {
+                Read::Column(column) => plan.output().columns()[column].kind,
+                Read::Intermediate { index, column } => {
+                    plan.intermediates()[index]
+                        .source_schema(plan.secondary())
+                        .expect("admitted donor schema")
+                        .columns()[column]
+                        .kind
+                }
+                _ => unreachable!(
+                    "verification admission permits completed columns and declared lookups"
+                ),
+            };
+            bindings.push(Binding {
+                name: binding.name.clone(),
+                read: Read::Column(samples.len()),
+            });
+            samples.push(sample(kind));
+        }
+        let sample_predicate = BoundPredicate::new(predicate.plan().clone(), bindings)
+            .expect("admitted verification names");
+        crate::dataset_predicate::evaluate(
+            &sample_predicate,
+            dataset,
+            0,
+            &samples,
+            state.budget.predicate(),
+        )
+        .map_err(|error| {
+            Box::new(match error.kind {
+                ErrorKind::Limit(limit) => dataset::predicate_limit(limit),
+                _ => ExecutionError::VerificationPredicate {
+                    error,
+                    records: core::mem::take(records),
+                },
             })
-    };
-    // Both declarations are validated before the first actual-row predicate read.
-    if let Some(when) = when {
-        evaluate(when, &samples)?;
+        })?;
     }
-    evaluate(require, &samples)?;
     let Some(code) = metadata else {
         return Ok(None);
     };
+    let assignment = dataset::Assignment {
+        column: 0,
+        path: verification.path.clone(),
+        expression: dataset::Expression::Literal(Value::Missing),
+    };
     let mut offending = Vec::new();
-    for (position, values) in dataset.rows().iter().enumerate() {
+    for (position, candidate) in candidates.iter().enumerate() {
+        let mut evaluate = |predicate: &BoundPredicate| {
+            if !predicate
+                .bindings()
+                .iter()
+                .any(|binding| matches!(binding.read, Read::Intermediate { .. }))
+            {
+                return crate::dataset_predicate::evaluate(
+                    predicate,
+                    dataset,
+                    0,
+                    &candidate.values,
+                    state.budget.predicate(),
+                )
+                .map_err(|error| {
+                    Box::new(match error.kind {
+                        ErrorKind::Limit(limit) => dataset::predicate_limit(limit),
+                        _ => ExecutionError::VerificationPredicate {
+                            error,
+                            records: core::mem::take(records),
+                        },
+                    })
+                });
+            }
+            super::case_predicates::evaluate(
+                predicate,
+                primary,
+                candidate,
+                plan,
+                position,
+                &assignment,
+                state,
+            )
+            .map_err(|error| match *error {
+                ExecutionError::Predicate { source_row, error } => match error.kind {
+                    ErrorKind::Condition(condition) => {
+                        Box::new(ExecutionError::VerificationPredicate {
+                            error: yamaa_core::predicate::EvaluationError {
+                                spec_path: error.spec_path,
+                                expression: error.expression,
+                                route: error.route,
+                                kind: ErrorKind::Condition(condition),
+                            },
+                            records: core::mem::take(records),
+                        })
+                    }
+                    _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                },
+                other => Box::new(other),
+            })
+        };
         let binds = match when {
-            Some(when) => evaluate(when, values)?,
+            Some(when) => evaluate(when)?,
             None => Truth::True,
         };
-        let holds = evaluate(require, values)?;
+        let holds = evaluate(require)?;
         if binds == Truth::True && holds != Truth::True {
             offending.push(position);
         }
@@ -90,13 +170,13 @@ pub(crate) fn predicate_check<E>(
     Ok(Some(CheckRecord {
         path: verification.path.clone(),
         code,
-        evaluated_count: dataset.rows().len(),
+        evaluated_count: candidates.len(),
         failed_count: offending.len(),
-        output_rows: dataset.rows().len(),
+        output_rows: candidates.len(),
         codelist: None,
         inventory: None,
         row_count: None,
-        offending_rows: dataset::identities(dataset, keys, offending.into_iter(), budget)?,
+        offending_rows: dataset::identities(dataset, plan.keys(), offending, state.budget)?,
     }))
 }
 
@@ -104,7 +184,7 @@ pub(crate) fn predicate_check<E>(
 pub(crate) fn row_count_check<E>(
     verification: &Verification,
     check: &yamaa_core::dataset::RowCount,
-    dataset: &Dataset,
+    dataset: &CompletedRows<'_>,
     limits: dataset::Limits,
     budget: &mut Budget,
     records: &mut Vec<CheckRecord>,
@@ -193,4 +273,34 @@ pub(crate) fn row_count_check<E>(
                 .then_some(denominators),
         }),
     })
+}
+
+use core::convert::Infallible;
+use yamaa_core::table::{CellError, TableSchema, ValueRef};
+
+/// Borrow completed cells while retaining the attempt's candidate selection identities.
+pub(crate) struct CompletedRows<'a> {
+    pub(crate) schema: &'a TableSchema,
+    pub(crate) rows: Vec<&'a Vec<Value>>,
+}
+impl CompletedRows<'_> {
+    pub(crate) fn rows(&self) -> &[&Vec<Value>] {
+        &self.rows
+    }
+}
+impl TableAccess for CompletedRows<'_> {
+    type Error = Infallible;
+    fn schema(&self) -> &TableSchema {
+        self.schema
+    }
+    fn row_count(&self) -> usize {
+        self.rows.len()
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
+        self.rows
+            .get(row)
+            .and_then(|values| values.get(column))
+            .map(ValueRef::from)
+            .ok_or(CellError::OutOfBounds { row, column })
+    }
 }
