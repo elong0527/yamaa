@@ -7,9 +7,9 @@ use pyo3::{
 };
 use std::sync::{Arc, Mutex, MutexGuard};
 use yamaa_adapters::{
+    callback::CallbackError,
     file_producer_build::{FileBuild, Limits},
     file_workflow,
-    function_transport::CallbackError,
     producer_report::{self, ProjectionError},
     project_function_diagnostics::HostDetails,
     project_report::Classified,
@@ -440,7 +440,7 @@ pub struct Report {
     observations: Option<String>,
     refusal: &'static str,
     domain: Option<Mutex<yamaa_adapters::producer_result::RootResult>>,
-    output_error: Option<yamaa_adapters::table_transport::TableTransportError>,
+    output_error: Option<yamaa_adapters::ipc_table::TableError>,
 }
 impl Report {
     pub(crate) fn domain_attempt(&self) -> Attempt {
@@ -593,7 +593,7 @@ fn ordinary_exception(
     let message = message.to_str().ok()?;
     if [class, message]
         .iter()
-        .any(|text| text.len() > yamaa_adapters::function_transport::MAX_ERROR_BYTES)
+        .any(|text| text.len() > yamaa_adapters::callback::MAX_ERROR_BYTES)
     {
         *limited = true;
         return None;

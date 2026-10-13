@@ -499,6 +499,8 @@ class Pipeline(unittest.TestCase):
         for name in (
             "measure_public_lifecycle.py",
             "public_lifecycle_worker_protocol.json",
+            "application_measurement_evidence.py",
+            "child_peak_rss.py",
             *controller.WORKERS.values(),
         ):
             shutil.copyfile(TOOLS / name, harness_repo / name)  # deliberately untracked
@@ -852,7 +854,7 @@ if (!requireNamespace("jsonlite", quietly=TRUE)) quit(status=77L)
 stopifnot(!("yamaa" %in% loadedNamespaces()))
 expressions <- parse(args[1])
 e <- new.env(parent=globalenv())
-wanted <- c("write_json", "binary64_number", "timed")
+wanted <- c("write_bytes", "write_json", "binary64_number", "timed")
 for (x in expressions) if (is.call(x) && identical(x[[1]], as.name("<-")) &&
                           is.symbol(x[[2]]) && as.character(x[[2]]) %in% wanted) eval(x,envir=e)
 pairs <- list(c(2540977198640091,2540977224087848),
@@ -981,17 +983,12 @@ cat("actual jsonlite authored binary64 transport PASS\\n")
                 domains.append(result)
                 return result
 
-            def info():
-                self.assertEqual(calls[-1], "build")
-                calls.append("metadata")
-                return {"core_version": "test"}
-
             candidate = types.ModuleType("yamaa")
             candidate.__file__ = str(root / "installed" / "__init__.py")
             candidate.__version__ = "test"
             candidate.domain = domain
             candidate._native = types.SimpleNamespace(
-                __file__=str(root / "installed" / "native.so"), engine_info=info
+                __file__=str(root / "installed" / "native.so"), _CORE_VERSION="test"
             )
             polars = types.ModuleType("polars")
             polars.String, polars.Int64, polars.Float64, polars.Date = (
@@ -1042,7 +1039,7 @@ cat("actual jsonlite authored binary64 transport PASS\\n")
                 ),
             ):
                 self.assertEqual(worker.run(request), 0)
-            self.assertEqual(calls, ["build", "metadata", "build", "metadata"])
+            self.assertEqual(calls, ["build", "build"])
             self.assertIsNot(domains[0], domains[1])
             response = json.loads((root / "response.json").read_text(encoding="utf-8"))
             self.assertEqual(

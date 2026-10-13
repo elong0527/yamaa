@@ -2,10 +2,10 @@ Package: yamaa
 Title: Clinical Data Specifications with the Shared Rust Engine
 Version: 0.3.0
 Authors@R: person("Ming-Chun", "Chen", email = "hellomingchun@gmail.com", role = c("aut", "cre"))
-Description: Builds a bounded set of clinical data specifications through the
-    shared Rust engine and returns owned data frames and structured issues.
-    Includes native qualification interfaces while full migration coverage,
-    producer workflows and release API consolidation remain in progress.
+Description: Builds clinical data specifications, checks declarations, and
+    renders submission metadata through the shared Rust engine. Returns owned
+    data frames and structured diagnostics, with explicit publication of
+    retained outputs and lossless signed 64-bit integer and UTF-8 values.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.6.1)

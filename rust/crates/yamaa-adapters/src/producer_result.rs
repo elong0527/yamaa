@@ -1,6 +1,7 @@
 //! Public root results and explicit ordered publication from a sealed native owner.
 //! Successful node reports still gate artifact consumption inside the build.
 use crate::{
+    ipc_table::{self, TableError},
     issue_rows::Issue,
     producer_report::{self, NativeAttempt, ProjectionError},
     project_report::Classified,
@@ -8,7 +9,6 @@ use crate::{
     report_projection::Budget,
     report_storage::StoredReport,
     specification_report::{Error as ReportError, Identity},
-    table_transport::{self, TableTransportError},
 };
 use serde_json::Value;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ pub struct RootResult {
     logs: Arc<[crate::producer_report::NodeLogs]>,
     log_publication: Option<Arc<crate::producer_log_publication::Publication>>,
     log_save_attempt: Option<crate::producer_log_publication::Attempt>,
-    _output_failure: Option<TableTransportError>,
+    _output_failure: Option<TableError>,
     publication: Option<Arc<crate::producer_publication::Publication>>,
     publication_refusal: Option<&'static str>,
     base_issues: usize,
@@ -401,7 +401,7 @@ pub enum Error<'a, E> {
     Output {
         attempt: &'a NativeAttempt<E>,
         observations: StoredReport,
-        error: TableTransportError,
+        error: TableError,
     },
 }
 impl<E> std::fmt::Debug for Error<'_, E> {
@@ -556,22 +556,22 @@ pub fn prepare_owned_classified<'a, E>(
 fn root_output<E>(
     attempt: &NativeAttempt<E>,
     budget: &mut Budget,
-) -> Result<(PublicTable, Vec<u8>), TableTransportError> {
-    let invalid = TableTransportError::InvalidTable;
+) -> Result<(PublicTable, Vec<u8>), TableError> {
+    let invalid = TableError::InvalidTable;
     let metadata = attempt.provenance.metadata();
     // Root identity and compiler are borrowed from the sealed complete owner.
     budget
         .entries(metadata.nodes().len())
-        .map_err(|_| TableTransportError::OutputLimit)?;
+        .map_err(|_| TableError::OutputLimit)?;
     budget
         .work(
             metadata
                 .nodes()
                 .len()
                 .checked_mul(3)
-                .ok_or(TableTransportError::OutputLimit)?,
+                .ok_or(TableError::OutputLimit)?,
         )
-        .map_err(|_| TableTransportError::OutputLimit)?;
+        .map_err(|_| TableError::OutputLimit)?;
     let root = metadata.root();
     let view = attempt.provenance.report_views().nth(root).ok_or(invalid)?;
     let mut matches = attempt.graph.nodes.iter().filter(|node| node.node == root);
@@ -599,15 +599,15 @@ fn root_output<E>(
     let projection = artifact.projection();
     budget
         .entries(projection.len())
-        .map_err(|_| TableTransportError::OutputLimit)?;
+        .map_err(|_| TableError::OutputLimit)?;
     budget
         .work(
             projection
                 .len()
                 .checked_mul(columns.len())
-                .ok_or(TableTransportError::OutputLimit)?,
+                .ok_or(TableError::OutputLimit)?,
         )
-        .map_err(|_| TableTransportError::OutputLimit)?;
+        .map_err(|_| TableError::OutputLimit)?;
     if projection.len() != view.compiled().projection().len()
         || projection
             .iter()
@@ -622,20 +622,20 @@ fn root_output<E>(
     for _ in 0..3 {
         budget
             .typed_shape(table.row_count(), columns.len())
-            .map_err(|_| TableTransportError::OutputLimit)?;
+            .map_err(|_| TableError::OutputLimit)?;
         for (index, column) in columns.iter().enumerate() {
             budget
                 .text(&column.name)
-                .map_err(|_| TableTransportError::OutputLimit)?;
+                .map_err(|_| TableError::OutputLimit)?;
             for row in 0..table.row_count() {
                 let cell = table.cell(row, index).map_err(|_| invalid)?;
                 budget
                     .typed_cell(&cell)
-                    .map_err(|_| TableTransportError::OutputLimit)?;
+                    .map_err(|_| TableError::OutputLimit)?;
             }
         }
     }
-    let bytes = table_transport::encode_projected_dataset(table, projection)?;
+    let bytes = ipc_table::encode_projected_dataset(table, projection)?;
     let table = PublicTable::decode(&bytes)?;
     let bytes = table.ipc()?;
     Ok((table, bytes))
@@ -1062,7 +1062,13 @@ mod log_tests {
             let normative = result
                 .issues()
                 .iter()
-                .filter(|issue| issue.requirement.as_deref() == Some("REQ-0764"))
+                .filter(|issue| {
+                    issue.requirement.as_deref()
+                        == Some(
+                            crate::test_diagnostic_truth::text("publication", "requirement")
+                                .as_str(),
+                        )
+                })
                 .collect::<Vec<_>>();
             if unwind {
                 assert!(
@@ -1225,7 +1231,10 @@ mod log_tests {
         assert!(!result
             .issues()
             .iter()
-            .any(|issue| issue.requirement.as_deref() == Some("REQ-0764")));
+            .any(|issue| issue.requirement.as_deref()
+                == Some(
+                    crate::test_diagnostic_truth::text("publication", "requirement").as_str()
+                )));
         fs::create_dir(study.0.join("generated")).unwrap();
         assert!(result.save().unwrap());
     }
@@ -1317,7 +1326,10 @@ mod log_tests {
             assert!(!result
                 .issues()
                 .iter()
-                .any(|issue| issue.requirement.as_deref() == Some("REQ-0764")));
+                .any(|issue| issue.requirement.as_deref()
+                    == Some(
+                        crate::test_diagnostic_truth::text("publication", "requirement").as_str()
+                    )));
             assert_eq!(execution(result.observations().clone()), before);
         }
         assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
@@ -1459,17 +1471,14 @@ mod log_tests {
                 assert!(matches!(
                     prepared,
                     Err(Error::Output {
-                        error: TableTransportError::ShapeLimit,
+                        error: TableError::ShapeLimit,
                         ..
                     })
                 ));
                 continue;
             }
             let mut result = prepared.unwrap();
-            assert_eq!(
-                result._output_failure,
-                Some(TableTransportError::ShapeLimit)
-            );
+            assert_eq!(result._output_failure, Some(TableError::ShapeLimit));
             assert!(result.output().is_none());
             assert!(result.warning_log().is_none());
             assert!(result.verification_log().is_some());

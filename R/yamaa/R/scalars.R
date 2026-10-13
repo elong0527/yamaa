@@ -77,7 +77,6 @@
 #' already-rounded values from being mistaken for exact integers.
 #' @param x One canonical decimal character scalar or non-missing R integer.
 #' @return A validated `yamaa_int64` scalar.
-#' @export
 int64 <- function(x) {
   if (is.integer(x) && is.null(attributes(x)) && length(x) == 1L && !is.na(x)) {
     x <- as.character(x)
@@ -91,7 +90,6 @@ int64 <- function(x) {
 #' rejected rather than replaced. Missing is distinct from empty text.
 #' @param x An unclassed raw UTF-8 vector or one non-missing character scalar.
 #' @return A validated `yamaa_utf8` scalar.
-#' @export
 utf8_scalar <- function(x) {
   if (is.raw(x) && is.null(attributes(x))) {
     bytes <- x
@@ -104,7 +102,6 @@ utf8_scalar <- function(x) {
 #' Access the exact UTF-8 bytes of a scalar
 #' @param x A `yamaa_utf8` or ordinary character scalar.
 #' @return An owned raw UTF-8 vector, including any NUL bytes.
-#' @export
 utf8_bytes <- function(x) {
   value <- .scalar_pack(x)
   if (!identical(value$tag, 3L)) stop("expected a text scalar", call. = FALSE)
@@ -112,32 +109,27 @@ utf8_bytes <- function(x) {
 }
 
 #' Return canonical decimal text without numeric conversion.
-#' @export
 as.character.yamaa_int64 <- function(x, ...) {
   value <- .scalar_pack(x)
   rawToChar(value$payload)
 }
 
 #' Format a validated integer as its exact decimal spelling.
-#' @export
 format.yamaa_int64 <- function(x, ...) as.character(x)
 
 #' Print an integer without narrowing its value.
-#' @export
 print.yamaa_int64 <- function(x, ...) {
   cat("<yamaa_int64> ", as.character(x), "\n", sep = "")
   invisible(x)
 }
 
 #' Convert to binary64 only when the integer is exactly retained.
-#' @export
 as.double.yamaa_int64 <- function(x, ...) {
   value <- .scalar_pack(x)
   .scalar_unpack(.Call(wrap__scalar_exact_double, value$tag, value$payload))
 }
 
 #' Convert only inside the non-missing R integer range.
-#' @export
 as.integer.yamaa_int64 <- function(x, ...) {
   if (x < int64("-2147483647") || x > int64("2147483647")) {
     stop("integer is not representable as a non-missing R integer", call. = FALSE)
@@ -146,7 +138,6 @@ as.integer.yamaa_int64 <- function(x, ...) {
 }
 
 #' Return native text only when R can preserve every byte.
-#' @export
 as.character.yamaa_utf8 <- function(x, ...) {
   bytes <- utf8_bytes(x)
   if (any(bytes == as.raw(0L))) {
@@ -158,14 +149,12 @@ as.character.yamaa_utf8 <- function(x, ...) {
 }
 
 #' Format exact bytes without changing the held UTF-8 scalar.
-#' @export
 format.yamaa_utf8 <- function(x, ...) {
   bytes <- utf8_bytes(x)
   paste0("<yamaa_utf8: ", paste(format(bytes), collapse = " "), ">")
 }
 
 #' Print the lossless byte representation of a text scalar.
-#' @export
 print.yamaa_utf8 <- function(x, ...) {
   cat(format(x), "\n", sep = "")
   invisible(x)
@@ -188,29 +177,23 @@ print.yamaa_utf8 <- function(x, ...) {
                        right$tag, right$payload, unary))
 }
 
-#' @export
 Ops.yamaa_int64 <- .scalar_ops
-#' @export
 Ops.yamaa_int64_vector <- .scalar_ops
-#' @export
 Ops.yamaa_utf8 <- .scalar_ops
 
 #' Validate the present integer before reporting non-missingness.
-#' @export
 is.na.yamaa_int64 <- function(x) {
   .scalar_pack(x)
   FALSE
 }
 
 #' Validate the present text before reporting non-missingness.
-#' @export
 is.na.yamaa_utf8 <- function(x) {
   .scalar_pack(x)
   FALSE
 }
 
 #' Report one logical scalar independently of its byte count.
-#' @export
 length.yamaa_utf8 <- function(x) {
   .scalar_pack(x)
   1L

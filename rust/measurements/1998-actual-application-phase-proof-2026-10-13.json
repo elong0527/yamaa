@@ -1,0 +1,1040 @@
+{
+  "protocol": "actual-application-phase-proof/1",
+  "source_revision": "dfc1368bdcd4a7230c3ff62cfa25b4debd931b8d",
+  "artifact_reference": "local-dev-observer-dfc1368b",
+  "installation_receipt": "/workspace/scratch/phase-observer-installation-dfc1368b/provenance.json",
+  "raw_collection": "/workspace/scratch/phase-observer-frontier-dfc1368b-installed-program",
+  "measurement_scope": "actual captured original monotonic offsets/typed Result exits/function entry-return counts/native Save attempts; canonical independent semantic acceptance before any timing admission",
+  "characterization": null,
+  "release_numerical_budget_approval": null,
+  "harness_identity": "Retained executed harness bytes, separate from committed installed native source. These were functional diagnostics while shared host work continued.",
+  "prior_failed_diagnostics_retained": [
+    "/workspace/scratch/phase-observer-frontier-dfc1368b (isolated helper import failure before worker response)",
+    "/workspace/scratch/phase-observer-frontier-dfc1368b-isolated-import (callback fixture distribution absent: actual failed activation, Build-service success/held failed build, zero actual callback entries, first failed Save; no timing acceptance)"
+  ],
+  "unavailable": [
+    "internal allocator copy counts",
+    "isolated process startup",
+    "shipped-schema initialization",
+    "OS filesystem cache state",
+    "R installed observer qualification"
+  ],
+  "cases": [
+    {
+      "case": "lookup-1000-4",
+      "accepted": true,
+      "children": [
+        {
+          "mode": "truth",
+          "independent_full_lifecycle_accepted": true,
+          "actual_measurements_after_two_held_saves": {
+            "admitted": true,
+            "build_accepted": true,
+            "classified_refusals": [],
+            "clock": {
+              "origin": "owner-local monotonic origin immediately before original application entry",
+              "provider": "std::time::Instant",
+              "unit": "nanoseconds"
+            },
+            "function_calls": [
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": null,
+                "stage": "execution_admission",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": null,
+                "stage": "execution_derivation",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": null,
+                "stage": "output_keys",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": null,
+                "stage": "verification",
+                "succeeded": 0
+              }
+            ],
+            "nodes": [],
+            "original_execution_finished": true,
+            "protocol": "application-measurements/1",
+            "refusal": null,
+            "retention_limits": {
+              "identity_bytes": 1048576,
+              "nodes": 64,
+              "save_records": 16,
+              "stage_records": 1024
+            },
+            "save_attempts": 2,
+            "saves": [
+              {
+                "attempt": 1,
+                "completed_ns": 120901901,
+                "entered_ns": 116980242,
+                "outcome": "succeeded"
+              },
+              {
+                "attempt": 2,
+                "completed_ns": 138126799,
+                "entered_ns": 134753180,
+                "outcome": "succeeded"
+              }
+            ],
+            "stages": [
+              {
+                "completed_ns": 20438901,
+                "entered_ns": 35973,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "preparation"
+              },
+              {
+                "completed_ns": 72561577,
+                "entered_ns": 20444068,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "build_service"
+              },
+              {
+                "completed_ns": 26272872,
+                "entered_ns": 20454033,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "input"
+              },
+              {
+                "completed_ns": 26306522,
+                "entered_ns": 26281916,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "execution_admission"
+              },
+              {
+                "completed_ns": 38027094,
+                "entered_ns": 26306763,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "execution_derivation"
+              },
+              {
+                "completed_ns": 40815659,
+                "entered_ns": 38030519,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "output_keys"
+              },
+              {
+                "completed_ns": 40997800,
+                "entered_ns": 40816911,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "verification"
+              },
+              {
+                "completed_ns": 71744012,
+                "entered_ns": 41516351,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "output_preparation"
+              }
+            ],
+            "types": {
+              "function_counts": "uint64 actual calls",
+              "offsets": "uint64 nanoseconds since owner origin",
+              "resource_counts": "usize; required null preserves original overflow/absence"
+            }
+          },
+          "canonical_report_bytes": {
+            "build": 434140,
+            "save_1": 475679,
+            "save_2": 475679
+          },
+          "actual_delegated_callback_count": null,
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 83256,
+            "original_unit": "KiB",
+            "bytes": 85254144,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "raw_child": "/workspace/scratch/phase-observer-frontier-dfc1368b-installed-program/lookup-1000-4-truth-0"
+        }
+      ]
+    },
+    {
+      "case": "callback-1000-1",
+      "accepted": true,
+      "children": [
+        {
+          "mode": "truth",
+          "independent_full_lifecycle_accepted": true,
+          "actual_measurements_after_two_held_saves": {
+            "admitted": true,
+            "build_accepted": true,
+            "classified_refusals": [],
+            "clock": {
+              "origin": "owner-local monotonic origin immediately before original application entry",
+              "provider": "std::time::Instant",
+              "unit": "nanoseconds"
+            },
+            "function_calls": [
+              {
+                "entered": 2,
+                "failed": 0,
+                "node": null,
+                "stage": "activation",
+                "succeeded": 2
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": null,
+                "stage": "execution_admission",
+                "succeeded": 0
+              },
+              {
+                "entered": 857,
+                "failed": 0,
+                "node": null,
+                "stage": "execution_derivation",
+                "succeeded": 857
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": null,
+                "stage": "output_keys",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": null,
+                "stage": "verification",
+                "succeeded": 0
+              }
+            ],
+            "nodes": [],
+            "original_execution_finished": true,
+            "protocol": "application-measurements/1",
+            "refusal": null,
+            "retention_limits": {
+              "identity_bytes": 1048576,
+              "nodes": 64,
+              "save_records": 16,
+              "stage_records": 1024
+            },
+            "save_attempts": 2,
+            "saves": [
+              {
+                "attempt": 1,
+                "completed_ns": 246896163,
+                "entered_ns": 244563305,
+                "outcome": "succeeded"
+              },
+              {
+                "attempt": 2,
+                "completed_ns": 252759748,
+                "entered_ns": 250925903,
+                "outcome": "succeeded"
+              }
+            ],
+            "stages": [
+              {
+                "completed_ns": 99476024,
+                "entered_ns": 36114,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "preparation"
+              },
+              {
+                "completed_ns": 219191171,
+                "entered_ns": 99481783,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "build_service"
+              },
+              {
+                "completed_ns": 194781318,
+                "entered_ns": 99510826,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "activation"
+              },
+              {
+                "completed_ns": 196661002,
+                "entered_ns": 194792044,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "input"
+              },
+              {
+                "completed_ns": 196690526,
+                "entered_ns": 196665218,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "execution_admission"
+              },
+              {
+                "completed_ns": 203787905,
+                "entered_ns": 196690906,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "execution_derivation"
+              },
+              {
+                "completed_ns": 206848705,
+                "entered_ns": 203790159,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "output_keys"
+              },
+              {
+                "completed_ns": 206885590,
+                "entered_ns": 206851510,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "verification"
+              },
+              {
+                "completed_ns": 219145864,
+                "entered_ns": 206923557,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "output_preparation"
+              }
+            ],
+            "types": {
+              "function_counts": "uint64 actual calls",
+              "offsets": "uint64 nanoseconds since owner origin",
+              "resource_counts": "usize; required null preserves original overflow/absence"
+            }
+          },
+          "canonical_report_bytes": {
+            "build": 157174,
+            "save_1": 184460,
+            "save_2": 184460
+          },
+          "actual_delegated_callback_count": null,
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 88696,
+            "original_unit": "KiB",
+            "bytes": 90824704,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "raw_child": "/workspace/scratch/phase-observer-frontier-dfc1368b-installed-program/callback-1000-1-truth-0"
+        },
+        {
+          "mode": "callback-observer",
+          "independent_full_lifecycle_accepted": true,
+          "actual_measurements_after_two_held_saves": {
+            "admitted": true,
+            "build_accepted": true,
+            "classified_refusals": [],
+            "clock": {
+              "origin": "owner-local monotonic origin immediately before original application entry",
+              "provider": "std::time::Instant",
+              "unit": "nanoseconds"
+            },
+            "function_calls": [
+              {
+                "entered": 2,
+                "failed": 0,
+                "node": null,
+                "stage": "activation",
+                "succeeded": 2
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": null,
+                "stage": "execution_admission",
+                "succeeded": 0
+              },
+              {
+                "entered": 857,
+                "failed": 0,
+                "node": null,
+                "stage": "execution_derivation",
+                "succeeded": 857
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": null,
+                "stage": "output_keys",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": null,
+                "stage": "verification",
+                "succeeded": 0
+              }
+            ],
+            "nodes": [],
+            "original_execution_finished": true,
+            "protocol": "application-measurements/1",
+            "refusal": null,
+            "retention_limits": {
+              "identity_bytes": 1048576,
+              "nodes": 64,
+              "save_records": 16,
+              "stage_records": 1024
+            },
+            "save_attempts": 2,
+            "saves": [
+              {
+                "attempt": 1,
+                "completed_ns": 214603262,
+                "entered_ns": 212028114,
+                "outcome": "succeeded"
+              },
+              {
+                "attempt": 2,
+                "completed_ns": 220697139,
+                "entered_ns": 219043952,
+                "outcome": "succeeded"
+              }
+            ],
+            "stages": [
+              {
+                "completed_ns": 73361787,
+                "entered_ns": 67040,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "preparation"
+              },
+              {
+                "completed_ns": 184771188,
+                "entered_ns": 73367095,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "build_service"
+              },
+              {
+                "completed_ns": 159301390,
+                "entered_ns": 73395397,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "activation"
+              },
+              {
+                "completed_ns": 161101655,
+                "entered_ns": 159311154,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "input"
+              },
+              {
+                "completed_ns": 161130268,
+                "entered_ns": 161105271,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "execution_admission"
+              },
+              {
+                "completed_ns": 169289887,
+                "entered_ns": 161130538,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "execution_derivation"
+              },
+              {
+                "completed_ns": 172158621,
+                "entered_ns": 169293102,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "output_keys"
+              },
+              {
+                "completed_ns": 172178711,
+                "entered_ns": 172159783,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "verification"
+              },
+              {
+                "completed_ns": 184732461,
+                "entered_ns": 172214254,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "output_preparation"
+              }
+            ],
+            "types": {
+              "function_counts": "uint64 actual calls",
+              "offsets": "uint64 nanoseconds since owner origin",
+              "resource_counts": "usize; required null preserves original overflow/absence"
+            }
+          },
+          "canonical_report_bytes": {
+            "build": 157258,
+            "save_1": 184544,
+            "save_2": 184544
+          },
+          "actual_delegated_callback_count": 859,
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 89460,
+            "original_unit": "KiB",
+            "bytes": 91607040,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "raw_child": "/workspace/scratch/phase-observer-frontier-dfc1368b-installed-program/callback-1000-1-callback-observer-0"
+        }
+      ]
+    },
+    {
+      "case": "producer-1000-3",
+      "accepted": true,
+      "children": [
+        {
+          "mode": "truth",
+          "independent_full_lifecycle_accepted": true,
+          "actual_measurements_after_two_held_saves": {
+            "admitted": true,
+            "build_accepted": true,
+            "classified_refusals": [],
+            "clock": {
+              "origin": "owner-local monotonic origin immediately before original application entry",
+              "provider": "std::time::Instant",
+              "unit": "nanoseconds"
+            },
+            "function_calls": [
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 0,
+                "stage": "execution_admission",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 0,
+                "stage": "execution_derivation",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 0,
+                "stage": "output_keys",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 0,
+                "stage": "verification",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 1,
+                "stage": "execution_admission",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 1,
+                "stage": "execution_derivation",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 1,
+                "stage": "output_keys",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 1,
+                "stage": "verification",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 2,
+                "stage": "execution_admission",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 2,
+                "stage": "execution_derivation",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 2,
+                "stage": "output_keys",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 2,
+                "stage": "verification",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 3,
+                "stage": "execution_admission",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 3,
+                "stage": "execution_derivation",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 3,
+                "stage": "output_keys",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 3,
+                "stage": "verification",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 4,
+                "stage": "execution_admission",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 4,
+                "stage": "execution_derivation",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 4,
+                "stage": "output_keys",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 4,
+                "stage": "verification",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 5,
+                "stage": "execution_admission",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 5,
+                "stage": "execution_derivation",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 5,
+                "stage": "output_keys",
+                "succeeded": 0
+              },
+              {
+                "entered": 0,
+                "failed": 0,
+                "node": 5,
+                "stage": "verification",
+                "succeeded": 0
+              }
+            ],
+            "nodes": [
+              {
+                "identity": "/workspace/scratch/phase-observer-frontier-dfc1368b-installed-program/producer-1000-3-truth-0/work-0/producer-0.yaml",
+                "index": 5
+              },
+              {
+                "identity": "/workspace/scratch/phase-observer-frontier-dfc1368b-installed-program/producer-1000-3-truth-0/work-0/producer-1.yaml",
+                "index": 4
+              },
+              {
+                "identity": "/workspace/scratch/phase-observer-frontier-dfc1368b-installed-program/producer-1000-3-truth-0/work-0/producer-2.yaml",
+                "index": 3
+              },
+              {
+                "identity": "/workspace/scratch/phase-observer-frontier-dfc1368b-installed-program/producer-1000-3-truth-0/work-0/left.yaml",
+                "index": 1
+              },
+              {
+                "identity": "/workspace/scratch/phase-observer-frontier-dfc1368b-installed-program/producer-1000-3-truth-0/work-0/right.yaml",
+                "index": 2
+              },
+              {
+                "identity": "/workspace/scratch/phase-observer-frontier-dfc1368b-installed-program/producer-1000-3-truth-0/work-0/spec.yaml",
+                "index": 0
+              }
+            ],
+            "original_execution_finished": true,
+            "protocol": "application-measurements/1",
+            "refusal": null,
+            "retention_limits": {
+              "identity_bytes": 1048576,
+              "nodes": 64,
+              "save_records": 16,
+              "stage_records": 1024
+            },
+            "save_attempts": 2,
+            "saves": [
+              {
+                "attempt": 1,
+                "completed_ns": 321595778,
+                "entered_ns": 311960024,
+                "outcome": "succeeded"
+              },
+              {
+                "attempt": 2,
+                "completed_ns": 358985234,
+                "entered_ns": 349679041,
+                "outcome": "succeeded"
+              }
+            ],
+            "stages": [
+              {
+                "completed_ns": 83802877,
+                "entered_ns": 36735,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "preparation"
+              },
+              {
+                "completed_ns": 252150582,
+                "entered_ns": 83808565,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "build_service"
+              },
+              {
+                "completed_ns": 85554430,
+                "entered_ns": 84154639,
+                "node": 5,
+                "outcome": "succeeded",
+                "phase": "input"
+              },
+              {
+                "completed_ns": 85576022,
+                "entered_ns": 85558266,
+                "node": 5,
+                "outcome": "succeeded",
+                "phase": "execution_admission"
+              },
+              {
+                "completed_ns": 90933576,
+                "entered_ns": 85576363,
+                "node": 5,
+                "outcome": "succeeded",
+                "phase": "execution_derivation"
+              },
+              {
+                "completed_ns": 94099452,
+                "entered_ns": 90935929,
+                "node": 5,
+                "outcome": "succeeded",
+                "phase": "output_keys"
+              },
+              {
+                "completed_ns": 94121675,
+                "entered_ns": 94101134,
+                "node": 5,
+                "outcome": "succeeded",
+                "phase": "verification"
+              },
+              {
+                "completed_ns": 107303228,
+                "entered_ns": 94133693,
+                "node": 5,
+                "outcome": "succeeded",
+                "phase": "output_preparation"
+              },
+              {
+                "completed_ns": 108758120,
+                "entered_ns": 107314865,
+                "node": 4,
+                "outcome": "succeeded",
+                "phase": "input"
+              },
+              {
+                "completed_ns": 108776838,
+                "entered_ns": 108760764,
+                "node": 4,
+                "outcome": "succeeded",
+                "phase": "execution_admission"
+              },
+              {
+                "completed_ns": 114006082,
+                "entered_ns": 108777079,
+                "node": 4,
+                "outcome": "succeeded",
+                "phase": "execution_derivation"
+              },
+              {
+                "completed_ns": 116969226,
+                "entered_ns": 114008245,
+                "node": 4,
+                "outcome": "succeeded",
+                "phase": "output_keys"
+              },
+              {
+                "completed_ns": 116992110,
+                "entered_ns": 116971039,
+                "node": 4,
+                "outcome": "succeeded",
+                "phase": "verification"
+              },
+              {
+                "completed_ns": 130003460,
+                "entered_ns": 117002666,
+                "node": 4,
+                "outcome": "succeeded",
+                "phase": "output_preparation"
+              },
+              {
+                "completed_ns": 131253418,
+                "entered_ns": 130014477,
+                "node": 3,
+                "outcome": "succeeded",
+                "phase": "input"
+              },
+              {
+                "completed_ns": 131267810,
+                "entered_ns": 131255381,
+                "node": 3,
+                "outcome": "succeeded",
+                "phase": "execution_admission"
+              },
+              {
+                "completed_ns": 136678042,
+                "entered_ns": 131268090,
+                "node": 3,
+                "outcome": "succeeded",
+                "phase": "execution_derivation"
+              },
+              {
+                "completed_ns": 139500637,
+                "entered_ns": 136680675,
+                "node": 3,
+                "outcome": "succeeded",
+                "phase": "output_keys"
+              },
+              {
+                "completed_ns": 139533936,
+                "entered_ns": 139501528,
+                "node": 3,
+                "outcome": "succeeded",
+                "phase": "verification"
+              },
+              {
+                "completed_ns": 152194115,
+                "entered_ns": 139543411,
+                "node": 3,
+                "outcome": "succeeded",
+                "phase": "output_preparation"
+              },
+              {
+                "completed_ns": 153721826,
+                "entered_ns": 152203409,
+                "node": 1,
+                "outcome": "succeeded",
+                "phase": "input"
+              },
+              {
+                "completed_ns": 153737058,
+                "entered_ns": 153724700,
+                "node": 1,
+                "outcome": "succeeded",
+                "phase": "execution_admission"
+              },
+              {
+                "completed_ns": 159077366,
+                "entered_ns": 153737329,
+                "node": 1,
+                "outcome": "succeeded",
+                "phase": "execution_derivation"
+              },
+              {
+                "completed_ns": 161890248,
+                "entered_ns": 159080481,
+                "node": 1,
+                "outcome": "succeeded",
+                "phase": "output_keys"
+              },
+              {
+                "completed_ns": 161924368,
+                "entered_ns": 161891349,
+                "node": 1,
+                "outcome": "succeeded",
+                "phase": "verification"
+              },
+              {
+                "completed_ns": 175185430,
+                "entered_ns": 161936046,
+                "node": 1,
+                "outcome": "succeeded",
+                "phase": "output_preparation"
+              },
+              {
+                "completed_ns": 176571190,
+                "entered_ns": 175198269,
+                "node": 2,
+                "outcome": "succeeded",
+                "phase": "input"
+              },
+              {
+                "completed_ns": 176590739,
+                "entered_ns": 176574615,
+                "node": 2,
+                "outcome": "succeeded",
+                "phase": "execution_admission"
+              },
+              {
+                "completed_ns": 181940030,
+                "entered_ns": 176591049,
+                "node": 2,
+                "outcome": "succeeded",
+                "phase": "execution_derivation"
+              },
+              {
+                "completed_ns": 185119456,
+                "entered_ns": 181941923,
+                "node": 2,
+                "outcome": "succeeded",
+                "phase": "output_keys"
+              },
+              {
+                "completed_ns": 185143602,
+                "entered_ns": 185121880,
+                "node": 2,
+                "outcome": "succeeded",
+                "phase": "verification"
+              },
+              {
+                "completed_ns": 199349137,
+                "entered_ns": 185155420,
+                "node": 2,
+                "outcome": "succeeded",
+                "phase": "output_preparation"
+              },
+              {
+                "completed_ns": 202151102,
+                "entered_ns": 199365952,
+                "node": 0,
+                "outcome": "succeeded",
+                "phase": "input"
+              },
+              {
+                "completed_ns": 202179454,
+                "entered_ns": 202154517,
+                "node": 0,
+                "outcome": "succeeded",
+                "phase": "execution_admission"
+              },
+              {
+                "completed_ns": 213810944,
+                "entered_ns": 202180135,
+                "node": 0,
+                "outcome": "succeeded",
+                "phase": "execution_derivation"
+              },
+              {
+                "completed_ns": 216889920,
+                "entered_ns": 213815510,
+                "node": 0,
+                "outcome": "succeeded",
+                "phase": "output_keys"
+              },
+              {
+                "completed_ns": 217138580,
+                "entered_ns": 216892244,
+                "node": 0,
+                "outcome": "succeeded",
+                "phase": "verification"
+              },
+              {
+                "completed_ns": 239879883,
+                "entered_ns": 217169786,
+                "node": 0,
+                "outcome": "succeeded",
+                "phase": "output_preparation"
+              },
+              {
+                "completed_ns": 252085135,
+                "entered_ns": 240110426,
+                "node": null,
+                "outcome": "succeeded",
+                "phase": "output_preparation"
+              }
+            ],
+            "types": {
+              "function_counts": "uint64 actual calls",
+              "offsets": "uint64 nanoseconds since owner origin",
+              "resource_counts": "usize; required null preserves original overflow/absence"
+            }
+          },
+          "canonical_report_bytes": {
+            "build": 1300875,
+            "save_1": 1301103,
+            "save_2": 1301103
+          },
+          "actual_delegated_callback_count": null,
+          "actual_child_peak_rss": {
+            "provider": "os.wait4(child_pid).ru_maxrss",
+            "raw": 92832,
+            "original_unit": "KiB",
+            "bytes": 95059968,
+            "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+            "system": "Linux"
+          },
+          "raw_child": "/workspace/scratch/phase-observer-frontier-dfc1368b-installed-program/producer-1000-3-truth-0"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "phase": "derivation",
+  "condition": "multiple_values_per_key",
+  "requirement": "REQ-0075",
+  "spec_paths": [
+    "columns.A.source"
+  ],
+  "context": {
+    "identifier": "SRC.A",
+    "value_count": 18446744073709551615
+  }
+}

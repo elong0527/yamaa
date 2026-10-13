@@ -1,0 +1,377 @@
+{
+  "protocol": "producer-reference-root-build-frontier/1",
+  "source_revision": "845a91ff9ba4ab6599efbd79fafe1c4e1dd14255",
+  "evidence_directory": "/workspace/scratch/reference-producer-root-build-frontier",
+  "purpose": "capacity-frontier",
+  "timing_distributions": null,
+  "graph_save_baseline": null,
+  "memory_comparison_with_full_graph_lifecycle": null,
+  "cases": [
+    {
+      "case": "producer-1000-1",
+      "accepted": true,
+      "peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 104364,
+        "original_unit": "KiB",
+        "bytes": 106868736,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "supported_reference_invocation": {
+        "path": "/workspace/scratch/reference-producer-root-build-frontier/workloads/producer-1000-1/python/environment.yaml",
+        "exact_declaration": {
+          "schema_version": "1.0",
+          "language": "python",
+          "lock": "uv.lock",
+          "functions": {}
+        },
+        "omission": "empty functions; only language/schema/packaging lock metadata; no codelist/study/submission fields",
+        "graph_save_baseline": null,
+        "memory_comparison_with_full_graph_lifecycle": null
+      },
+      "actual_build_invocation": {
+        "callable": "yamaa._reference_domain.yamaa_domain",
+        "signature": "(entry_path: 'str | Path', *, schema_root: 'str | Path | None' = None, project_root: 'str | Path | None' = None, data_roots: 'Iterable[str | Path] | None' = None, read_project_configuration: 'bool' = True, dispatcher: 'ExpressionDispatcher | None' = None, study_document: 'str | Path | None' = None) -> 'DomainRun'",
+        "parameters": [
+          "entry_path",
+          "schema_root",
+          "project_root",
+          "data_roots",
+          "read_project_configuration",
+          "dispatcher",
+          "study_document"
+        ],
+        "source_file": "/workspace/scratch/performance-reference-env/lib/python3.12/site-packages/yamaa/_reference_domain.py",
+        "schema_root": "/workspace/scratch/reference-producer-root-build-frontier/reference-schema",
+        "environment_passed": false
+      },
+      "build_artifact_presence": {
+        "producer-0.csv": false,
+        "left.csv": false,
+        "right.csv": false,
+        "out.csv": false
+      },
+      "root_build_artifact_presence": {
+        "producer-0.csv": false,
+        "left.csv": false,
+        "right.csv": false,
+        "out.csv": false
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "save_returns": []
+    },
+    {
+      "case": "producer-1000-3",
+      "accepted": true,
+      "peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 104028,
+        "original_unit": "KiB",
+        "bytes": 106524672,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "supported_reference_invocation": {
+        "path": "/workspace/scratch/reference-producer-root-build-frontier/workloads/producer-1000-3/python/environment.yaml",
+        "exact_declaration": {
+          "schema_version": "1.0",
+          "language": "python",
+          "lock": "uv.lock",
+          "functions": {}
+        },
+        "omission": "empty functions; only language/schema/packaging lock metadata; no codelist/study/submission fields",
+        "graph_save_baseline": null,
+        "memory_comparison_with_full_graph_lifecycle": null
+      },
+      "actual_build_invocation": {
+        "callable": "yamaa._reference_domain.yamaa_domain",
+        "signature": "(entry_path: 'str | Path', *, schema_root: 'str | Path | None' = None, project_root: 'str | Path | None' = None, data_roots: 'Iterable[str | Path] | None' = None, read_project_configuration: 'bool' = True, dispatcher: 'ExpressionDispatcher | None' = None, study_document: 'str | Path | None' = None) -> 'DomainRun'",
+        "parameters": [
+          "entry_path",
+          "schema_root",
+          "project_root",
+          "data_roots",
+          "read_project_configuration",
+          "dispatcher",
+          "study_document"
+        ],
+        "source_file": "/workspace/scratch/performance-reference-env/lib/python3.12/site-packages/yamaa/_reference_domain.py",
+        "schema_root": "/workspace/scratch/reference-producer-root-build-frontier/reference-schema",
+        "environment_passed": false
+      },
+      "build_artifact_presence": {
+        "producer-0.csv": false,
+        "producer-1.csv": false,
+        "producer-2.csv": false,
+        "left.csv": false,
+        "right.csv": false,
+        "out.csv": false
+      },
+      "root_build_artifact_presence": {
+        "producer-0.csv": false,
+        "producer-1.csv": false,
+        "producer-2.csv": false,
+        "left.csv": false,
+        "right.csv": false,
+        "out.csv": false
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "save_returns": []
+    },
+    {
+      "case": "producer-10000-1",
+      "accepted": true,
+      "peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 140892,
+        "original_unit": "KiB",
+        "bytes": 144273408,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "supported_reference_invocation": {
+        "path": "/workspace/scratch/reference-producer-root-build-frontier/workloads/producer-10000-1/python/environment.yaml",
+        "exact_declaration": {
+          "schema_version": "1.0",
+          "language": "python",
+          "lock": "uv.lock",
+          "functions": {}
+        },
+        "omission": "empty functions; only language/schema/packaging lock metadata; no codelist/study/submission fields",
+        "graph_save_baseline": null,
+        "memory_comparison_with_full_graph_lifecycle": null
+      },
+      "actual_build_invocation": {
+        "callable": "yamaa._reference_domain.yamaa_domain",
+        "signature": "(entry_path: 'str | Path', *, schema_root: 'str | Path | None' = None, project_root: 'str | Path | None' = None, data_roots: 'Iterable[str | Path] | None' = None, read_project_configuration: 'bool' = True, dispatcher: 'ExpressionDispatcher | None' = None, study_document: 'str | Path | None' = None) -> 'DomainRun'",
+        "parameters": [
+          "entry_path",
+          "schema_root",
+          "project_root",
+          "data_roots",
+          "read_project_configuration",
+          "dispatcher",
+          "study_document"
+        ],
+        "source_file": "/workspace/scratch/performance-reference-env/lib/python3.12/site-packages/yamaa/_reference_domain.py",
+        "schema_root": "/workspace/scratch/reference-producer-root-build-frontier/reference-schema",
+        "environment_passed": false
+      },
+      "build_artifact_presence": {
+        "producer-0.csv": false,
+        "left.csv": false,
+        "right.csv": false,
+        "out.csv": false
+      },
+      "root_build_artifact_presence": {
+        "producer-0.csv": false,
+        "left.csv": false,
+        "right.csv": false,
+        "out.csv": false
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "save_returns": []
+    },
+    {
+      "case": "producer-10000-3",
+      "accepted": true,
+      "peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 143188,
+        "original_unit": "KiB",
+        "bytes": 146624512,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "supported_reference_invocation": {
+        "path": "/workspace/scratch/reference-producer-root-build-frontier/workloads/producer-10000-3/python/environment.yaml",
+        "exact_declaration": {
+          "schema_version": "1.0",
+          "language": "python",
+          "lock": "uv.lock",
+          "functions": {}
+        },
+        "omission": "empty functions; only language/schema/packaging lock metadata; no codelist/study/submission fields",
+        "graph_save_baseline": null,
+        "memory_comparison_with_full_graph_lifecycle": null
+      },
+      "actual_build_invocation": {
+        "callable": "yamaa._reference_domain.yamaa_domain",
+        "signature": "(entry_path: 'str | Path', *, schema_root: 'str | Path | None' = None, project_root: 'str | Path | None' = None, data_roots: 'Iterable[str | Path] | None' = None, read_project_configuration: 'bool' = True, dispatcher: 'ExpressionDispatcher | None' = None, study_document: 'str | Path | None' = None) -> 'DomainRun'",
+        "parameters": [
+          "entry_path",
+          "schema_root",
+          "project_root",
+          "data_roots",
+          "read_project_configuration",
+          "dispatcher",
+          "study_document"
+        ],
+        "source_file": "/workspace/scratch/performance-reference-env/lib/python3.12/site-packages/yamaa/_reference_domain.py",
+        "schema_root": "/workspace/scratch/reference-producer-root-build-frontier/reference-schema",
+        "environment_passed": false
+      },
+      "build_artifact_presence": {
+        "producer-0.csv": false,
+        "producer-1.csv": false,
+        "producer-2.csv": false,
+        "left.csv": false,
+        "right.csv": false,
+        "out.csv": false
+      },
+      "root_build_artifact_presence": {
+        "producer-0.csv": false,
+        "producer-1.csv": false,
+        "producer-2.csv": false,
+        "left.csv": false,
+        "right.csv": false,
+        "out.csv": false
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "save_returns": []
+    },
+    {
+      "case": "producer-100000-1",
+      "accepted": true,
+      "peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 505168,
+        "original_unit": "KiB",
+        "bytes": 517292032,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "supported_reference_invocation": {
+        "path": "/workspace/scratch/reference-producer-root-build-frontier/workloads/producer-100000-1/python/environment.yaml",
+        "exact_declaration": {
+          "schema_version": "1.0",
+          "language": "python",
+          "lock": "uv.lock",
+          "functions": {}
+        },
+        "omission": "empty functions; only language/schema/packaging lock metadata; no codelist/study/submission fields",
+        "graph_save_baseline": null,
+        "memory_comparison_with_full_graph_lifecycle": null
+      },
+      "actual_build_invocation": {
+        "callable": "yamaa._reference_domain.yamaa_domain",
+        "signature": "(entry_path: 'str | Path', *, schema_root: 'str | Path | None' = None, project_root: 'str | Path | None' = None, data_roots: 'Iterable[str | Path] | None' = None, read_project_configuration: 'bool' = True, dispatcher: 'ExpressionDispatcher | None' = None, study_document: 'str | Path | None' = None) -> 'DomainRun'",
+        "parameters": [
+          "entry_path",
+          "schema_root",
+          "project_root",
+          "data_roots",
+          "read_project_configuration",
+          "dispatcher",
+          "study_document"
+        ],
+        "source_file": "/workspace/scratch/performance-reference-env/lib/python3.12/site-packages/yamaa/_reference_domain.py",
+        "schema_root": "/workspace/scratch/reference-producer-root-build-frontier/reference-schema",
+        "environment_passed": false
+      },
+      "build_artifact_presence": {
+        "producer-0.csv": false,
+        "left.csv": false,
+        "right.csv": false,
+        "out.csv": false
+      },
+      "root_build_artifact_presence": {
+        "producer-0.csv": false,
+        "left.csv": false,
+        "right.csv": false,
+        "out.csv": false
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "save_returns": []
+    },
+    {
+      "case": "producer-100000-3",
+      "accepted": true,
+      "peak_rss": {
+        "provider": "os.wait4(child_pid).ru_maxrss",
+        "raw": 506640,
+        "original_unit": "KiB",
+        "bytes": 518799360,
+        "scope": "whole-child-lifetime; cumulative across warm repetitions; includes collector transport",
+        "system": "Linux"
+      },
+      "supported_reference_invocation": {
+        "path": "/workspace/scratch/reference-producer-root-build-frontier/workloads/producer-100000-3/python/environment.yaml",
+        "exact_declaration": {
+          "schema_version": "1.0",
+          "language": "python",
+          "lock": "uv.lock",
+          "functions": {}
+        },
+        "omission": "empty functions; only language/schema/packaging lock metadata; no codelist/study/submission fields",
+        "graph_save_baseline": null,
+        "memory_comparison_with_full_graph_lifecycle": null
+      },
+      "actual_build_invocation": {
+        "callable": "yamaa._reference_domain.yamaa_domain",
+        "signature": "(entry_path: 'str | Path', *, schema_root: 'str | Path | None' = None, project_root: 'str | Path | None' = None, data_roots: 'Iterable[str | Path] | None' = None, read_project_configuration: 'bool' = True, dispatcher: 'ExpressionDispatcher | None' = None, study_document: 'str | Path | None' = None) -> 'DomainRun'",
+        "parameters": [
+          "entry_path",
+          "schema_root",
+          "project_root",
+          "data_roots",
+          "read_project_configuration",
+          "dispatcher",
+          "study_document"
+        ],
+        "source_file": "/workspace/scratch/performance-reference-env/lib/python3.12/site-packages/yamaa/_reference_domain.py",
+        "schema_root": "/workspace/scratch/reference-producer-root-build-frontier/reference-schema",
+        "environment_passed": false
+      },
+      "build_artifact_presence": {
+        "producer-0.csv": false,
+        "producer-1.csv": false,
+        "producer-2.csv": false,
+        "left.csv": false,
+        "right.csv": false,
+        "out.csv": false
+      },
+      "root_build_artifact_presence": {
+        "producer-0.csv": false,
+        "producer-1.csv": false,
+        "producer-2.csv": false,
+        "left.csv": false,
+        "right.csv": false,
+        "out.csv": false
+      },
+      "host_view_access_counts": {
+        "output": 2,
+        "issues": 1,
+        "verification_log": 1,
+        "warning_log": 1
+      },
+      "save_returns": []
+    }
+  ]
+}

@@ -8,7 +8,7 @@ use pyo3::{
 };
 use std::sync::Arc;
 use yamaa_adapters::{
-    function_transport::CallbackError,
+    callback::CallbackError,
     project_function_diagnostics::HostDetails,
     project_report::{self, Classified},
 };

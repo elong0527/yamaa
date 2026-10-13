@@ -27,11 +27,16 @@ CASES = (
 
 class PublicEnvironment(unittest.TestCase):
     def test_supplied_missing_environment_precedes_bad_or_absent_entry_without_activation(self):
-        os.chdir(self.directory)
+        directory = self.directory.resolve()
+        os.chdir(directory)
+        # The diagnostic echoes the path in the operating system's working-
+        # directory spelling: physical on POSIX, but Windows preserves the
+        # 8.3 short components of the temp path (RUNNER~1), which
+        # Path.resolve() would expand. Build the expectation from Path.cwd().
         expected = {
             "phase": "validation", "condition": "project_environment_missing",
             "requirement": "REQ-0694", "spec_paths": ["environment"],
-            "context": json.dumps({"cause": "missing", "path": (self.directory / "missing-environment.yaml").as_posix()},
+            "context": json.dumps({"cause": "missing", "path": (Path.cwd() / "missing-environment.yaml").as_posix()},
                 ensure_ascii=False, separators=(",", ":")),
         }
         with (
@@ -307,7 +312,12 @@ class PublicEnvironment(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="yamaa-public-environment-")
         self.addCleanup(self.temporary.cleanup)
-        self.directory = Path(self.temporary.name)
+        # One resolved directory identity for every call: hosts spell the
+        # same temp directory differently (the macOS /var symlink, Windows
+        # 8.3 short names), and a missing environment is reported with the
+        # caller's spelling, so chdir and expectations must share the
+        # resolved form.
+        self.directory = Path(self.temporary.name).resolve()
         self.previous = Path.cwd()
         self.addCleanup(os.chdir, self.previous)
 

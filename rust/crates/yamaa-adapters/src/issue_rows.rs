@@ -1,6 +1,6 @@
 //! Owned five-field issue records shared by the build and static-check facades.
 //! Context is encoded in Rust so host data-frame conversion cannot narrow it.
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::io::Write;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -71,14 +71,39 @@ impl Issue {
     }
 
     pub fn as_value(&self) -> Value {
-        json!({
-            "phase": self.phase,
-            "condition": self.condition,
-            "requirement": self.requirement,
-            "spec_paths": self.spec_paths,
-            "context": self.context,
-        })
+        serde_json::to_value(self).expect("owned issue fields serialize")
     }
+
+    /// Retained report observations expose admitted context data while installed
+    /// issue tables retain JSON text. Both use this one five-field serializer.
+    pub(crate) fn report_value(&self) -> Result<Value, InvalidIssue> {
+        let context: Value = serde_json::from_str(&self.context).map_err(|_| InvalidIssue)?;
+        if !context.is_object() {
+            return Err(InvalidIssue);
+        }
+        let mut value = self.as_value();
+        value["context"] = context;
+        Ok(value)
+    }
+}
+
+/// Shared representation-only projection of already admitted core facts.
+pub(crate) fn report(
+    phase: &str,
+    condition: &str,
+    requirement: Option<&str>,
+    paths: Vec<String>,
+    context: Value,
+) -> Value {
+    Issue {
+        phase: phase.into(),
+        condition: condition.into(),
+        requirement: requirement.map(str::to_owned),
+        spec_paths: paths,
+        context: context.to_string(),
+    }
+    .report_value()
+    .expect("admitted core diagnostic context")
 }
 
 pub fn encode(issues: &[Issue]) -> String {
@@ -109,15 +134,12 @@ pub fn within_limit(issues: &[Issue], maximum: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn context_retains_full_integer_range_unicode_and_nested_values() {
-        let issue = Issue::from_diagnostic(json!({
-            "phase":"derivation", "condition":"integer_overflow", "requirement":null,
-            "spec_paths":["columns.é🙂.derivation"],
-            "context":{"minimum":i64::MIN,"maximum":i64::MAX,"values":[null,"é🙂",true]}
-        }))
-        .unwrap();
+        let issue = Issue::from_diagnostic(crate::test_diagnostic_truth::value("overflow-context"))
+            .unwrap();
         assert_eq!(
             issue.context,
             r#"{"maximum":9223372036854775807,"minimum":-9223372036854775808,"values":[null,"é🙂",true]}"#
@@ -138,7 +160,7 @@ mod tests {
 
     #[test]
     fn malformed_diagnostics_cannot_silently_become_partial_issue_rows() {
-        let valid = json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["input.SRC"],"context":{}});
+        let valid = crate::test_diagnostic_truth::value("unknown-input-field");
         for field in ["phase", "condition", "requirement", "spec_paths", "context"] {
             let mut missing = valid.clone();
             missing.as_object_mut().unwrap().remove(field);

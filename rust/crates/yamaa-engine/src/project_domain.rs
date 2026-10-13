@@ -45,7 +45,7 @@ impl CheckedProject<'_> {
         self.checked.compiled()
     }
     pub fn check_diagnostics(&self) -> Vec<yamaa_core::diagnostic::Diagnostic> {
-        self.checked.verification_declaration_diagnostics()
+        self.checked.check_diagnostics()
     }
     /// Repeat lock, binding and all complete cases on each build. Source capture
     /// uses already activated handles and preserves the original host payloads.
@@ -168,7 +168,7 @@ impl CheckedOwnedProject {
         &self.environment
     }
     pub fn check_diagnostics(&self) -> Vec<yamaa_core::diagnostic::Diagnostic> {
-        self.checked.verification_declaration_diagnostics()
+        self.checked.check_diagnostics()
     }
     pub fn build_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
         &self,

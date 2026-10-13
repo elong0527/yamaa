@@ -13,9 +13,9 @@ pub(crate) mod platform {
         rc::{Rc, Weak},
     };
     use yamaa_adapters::{
+        callback::CallbackError,
         file_producer_build::{FileBuild, Limits},
         file_workflow,
-        function_transport::CallbackError,
         producer_report::{self, ProjectionError},
         project_function_diagnostics::HostDetails,
         project_report::Classified,
@@ -34,7 +34,7 @@ pub(crate) mod platform {
             observations: Option<String>,
             refusal: &'static str,
             domain: Option<Box<yamaa_adapters::producer_result::RootResult>>,
-            output_error: Option<yamaa_adapters::table_transport::TableTransportError>,
+            output_error: Option<yamaa_adapters::ipc_table::TableError>,
         },
     }
     thread_local! {
@@ -374,7 +374,7 @@ pub(crate) mod platform {
         let message = reply.elt(1).ok()?.as_raw()?;
         if [class.len(), message.len()]
             .iter()
-            .any(|&length| length > yamaa_adapters::function_transport::MAX_ERROR_BYTES)
+            .any(|&length| length > yamaa_adapters::callback::MAX_ERROR_BYTES)
         {
             *limited = true;
             return None;

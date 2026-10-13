@@ -88,7 +88,7 @@ def _operation(
             "a verification takes named arguments",
         )
     severity = arguments.get("severity", "error")
-    if severity not in {"error", "warning"}:
+    if not isinstance(severity, str) or severity not in {"error", "warning"}:
         raise DeclarationError(
             f"{spec_path}.{keyword}.severity",
             "REQ-0389",

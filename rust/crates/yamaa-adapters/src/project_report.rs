@@ -72,12 +72,11 @@ fn invocation_host<'a, E>(
     }
 }
 pub(crate) fn diagnostic(issue: Issue) -> Result<Value, report::Error> {
-    let context: Value =
-        serde_json::from_str(&issue.context).map_err(|_| report::Error::InvalidObservation)?;
-    Ok(
-        json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":context}),
-    )
+    issue
+        .report_value()
+        .map_err(|_| report::Error::InvalidObservation)
 }
+
 fn project_error<'a, C, E>(error: invocation::Error<'a, E>) -> Error<'a, C, E> {
     match error {
         invocation::Error::Opaque(error) => Error::Opaque(error),
@@ -569,7 +568,7 @@ pub fn build_result<'a, C, E>(
                                 checked_records(run, completed, "verification", &id)?;
                             verifications.extend(checks);
                             diagnostics.extend(findings);
-                            let outcome = crate::dataset_transport::semantic_condition(other)
+                            let outcome = crate::dataset_result::semantic_condition(other)
                                 .map_err(|_| Error::Execution(other))?;
                             if outcome["status"] != "condition" {
                                 return Err(Error::Execution(other));
