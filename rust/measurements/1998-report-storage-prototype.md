@@ -29,7 +29,7 @@ the complete source/output cell tree.
 | window 1k, width 100 | 90,087,424 | 359,148 | 402,612 | 16,593,228 |
 | producer 1k, depth 3 | 139,718,656 | 1,300,701 | 1,300,929 | 51,945,328 |
 
-The producer's six individual projection charges are 4.35–8.21 MB under
+The producer's six individual projection charges are 4.35-8.21 MB under
 11,184,808-byte retained fractions. Its aggregate ownership/copy charge is the
 largest observed boundary. Ordinary Save's modeled charge is approximately
 half the previous multiple-prefix implementation: lookup multiplicity 4 was

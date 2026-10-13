@@ -138,7 +138,7 @@ impl RuntimePort for Runtime<'_> {
         });
         let fields = self.fields().map(str::to_owned);
         scope.phase(Phase::Output);
-        let converted = (|| {
+        let converted: std::result::Result<State, String> = {
             let formatted = crate::project_result::platform::format(
                 Rc::clone(&attempt),
                 &fields,
@@ -151,7 +151,7 @@ impl RuntimePort for Runtime<'_> {
             let mut state = self.plain_result(result);
             state.project = Some(attempt);
             Ok(state)
-        })();
+        };
         scope.exit(
             Phase::Output,
             if converted.is_ok() {
