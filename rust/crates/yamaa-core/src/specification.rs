@@ -1445,7 +1445,21 @@ impl PreparedSpecification {
             crate::dataset::VerificationSeverity::Error
         }
     }
-    fn warning_verification_paths(&self) -> Vec<String> {
+    fn bound_warning_verification_paths(
+        &self,
+        bound: &[crate::dataset::Verification],
+    ) -> Vec<String> {
+        // Binding may replace an assertion with a declaration diagnostic at
+        // its predicate path. Only checks that survived binding carry severity.
+        let checks: alloc::collections::BTreeSet<_> = bound
+            .iter()
+            .chain(
+                self.column_verifications
+                    .iter()
+                    .flat_map(|group| &group.checks),
+            )
+            .map(|check| check.path.as_str())
+            .collect();
         self.verifications
             .warning_paths
             .iter()
@@ -1454,6 +1468,7 @@ impl PreparedSpecification {
                     .iter()
                     .flat_map(|group| &group.warning_paths),
             )
+            .filter(|path| checks.contains(path.as_str()))
             .cloned()
             .collect()
     }
@@ -1663,6 +1678,7 @@ impl PreparedSpecification {
                 &mut findings,
             )?;
             let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
+            let warnings = self.bound_warning_verification_paths(&verifications);
             return rows
                 .bind(
                     self,
@@ -1679,9 +1695,7 @@ impl PreparedSpecification {
                 )
                 .and_then(|plan| {
                     plan.with_column_verifications(self.column_verification_groups())
-                        .and_then(|plan| {
-                            plan.with_warning_verifications(self.warning_verification_paths())
-                        })
+                        .and_then(|plan| plan.with_warning_verifications(warnings))
                         .and_then(|plan| plan.with_output_order(self.bound_output_order()))
                         .map_err(BindError::InvalidPlan)
                 });
@@ -2166,6 +2180,7 @@ impl PreparedSpecification {
             .iter()
             .any(|a| a.expression.window().is_some());
         let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
+        let warnings = self.bound_warning_verification_paths(&verifications);
         DatasetPlan::new_with_intermediates(
             crate::dataset::SourceSchemas {
                 primary: source.clone(),
@@ -2190,7 +2205,7 @@ impl PreparedSpecification {
             verifications,
         )
         .and_then(|plan| plan.with_column_verifications(self.column_verification_groups()))
-        .and_then(|plan| plan.with_warning_verifications(self.warning_verification_paths()))
+        .and_then(|plan| plan.with_warning_verifications(warnings))
         .and_then(|plan| plan.with_output_order(self.bound_output_order()))
         .and_then(|plan| {
             plan.with_conversion_handlers(

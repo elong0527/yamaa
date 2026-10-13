@@ -468,10 +468,12 @@ output: {path: ../generated/left.csv, columns: [ID, VALUE], decimals: 2}
         self.assertGreater(result.issues.height, 0)
 
     def test_public_copy_quota_preserves_complete_accepted_graph_without_output_or_save(self):
-        extra = "".join(f"  - {{name: EXTRA{index}, type: float, label: Extra value, derivation: {{literal: 1.234}}}}\n" for index in range(59))
-        names = ", ".join(["ID", "VALUE"] + [f"EXTRA{index}" for index in range(59)])
+        # 16,384 rows x 64 eight-byte columns fill the 8 MiB IPC allowance;
+        # framing pushes the copy over its cap while execution stays admitted.
+        extra = "".join(f"  - {{name: EXTRA{index}, type: float, label: Extra value, derivation: {{literal: 1.234}}}}\n" for index in range(62))
+        names = ", ".join(["ID", "VALUE"] + [f"EXTRA{index}" for index in range(62)])
         self.write("consumer/root.yaml", CONSUMER.replace("output: {path:", extra + "output: {path:").replace("columns: [ID, VALUE], decimals: 2", f"columns: [{names}], decimals: 2"))
-        self.write("raw/raw.csv", b"ID,VALUE\n" + "".join(f"{index},1.234\n" for index in range(1, 101)).encode())
+        self.write("raw/raw.csv", b"ID,VALUE\n" + "".join(f"{index},1.234\n" for index in range(1, 16385)).encode())
         result = self.build()
         self.assertTrue(self.entered(result).accepted())
         self.assertEqual(self.entered(result).entered_nodes(), [1, 0])

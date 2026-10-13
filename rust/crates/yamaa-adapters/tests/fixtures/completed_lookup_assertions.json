@@ -1184,6 +1184,158 @@
           ]
         ]
       }
+    },
+    "warning-missing-lookup-require": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, severity: warning, require: \"P.ABSENT = 0\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ],
+          "context": {
+            "identifier": "P.ABSENT"
+          }
+        }
+      ],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
+    },
+    "warning-missing-lookup-require-rows": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nrows:\n  - {id: observed, dataset: SRC, derivations: {ID: SRC.ID}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, severity: warning, require: \"P.ABSENT = 0\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.require"
+          ],
+          "context": {
+            "identifier": "P.ABSENT"
+          }
+        }
+      ],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
+    },
+    "warning-missing-lookup-when": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, severity: warning, when: \"P.ABSENT = 0\", require: \"P.X = 2\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.when"
+          ],
+          "context": {
+            "identifier": "P.ABSENT"
+          }
+        }
+      ],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
+    },
+    "warning-missing-lookup-when-rows": {
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nrows:\n  - {id: observed, dataset: SRC, derivations: {ID: SRC.ID}}\nverifications:\n  - unique: {columns: [ID], id: prefix}\n  - assert: {id: selected, severity: warning, when: \"P.ABSENT = 0\", require: \"P.X = 2\"}\n  - row_count: {min: 3, max: 3}\n",
+      "inputs": {
+        "src.csv": "ID\na\nb\nc\n",
+        "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "unknown_field",
+          "requirement": "REQ-0405",
+          "spec_paths": [
+            "verifications[1].assert.when"
+          ],
+          "context": {
+            "identifier": "P.ABSENT"
+          }
+        }
+      ],
+      "check_issues": [],
+      "verifications": [
+        {
+          "check": "unique",
+          "evaluated_count": 3,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "target": null,
+          "verification_id": "prefix"
+        }
+      ],
+      "handlers": [],
+      "source_reads": [
+        "src.csv",
+        "donor.csv"
+      ]
     }
   }
 }
