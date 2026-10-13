@@ -700,6 +700,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/public_file_resources.R",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_file_resources.py",
         "rust/tests/installed_original_specifications.py",
@@ -712,6 +713,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
+        "R/yamaa/tests/public_file_resources.R",
         "rust/crates/yamaa-adapters/tests/specification_run.rs",
         "rust/tests/installed_file_resources.py",
         "rust/tests/installed_original_specifications.py",
