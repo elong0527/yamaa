@@ -61,7 +61,7 @@ from the R rollback rehearsal, so reviewers can retain or restore one family.
 
 [python-retirement-inventory.json](python-retirement-inventory.json) freezes the
 pre-removal source revision, all 99 retiring source/assets files and every named
-function in the 76 retiring test files (1,192 functions before parametrization).
+function in the 77 retiring test files (1,193 functions before parametrization).
 It records the retained source/proof families and deliberate API dispositions.
 The inventory makes source-level review possible; it does not claim that a list
 of proof paths establishes new installed qualification.

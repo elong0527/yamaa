@@ -3094,12 +3094,25 @@
         "rust/tools/public_conformance.py"
       ],
       "installed_status": "pending complete combined removal candidate qualification"
+    },
+    {
+      "path": "python/tests/test_condition_registry.py",
+      "family": "diagnostic ownership",
+      "test_functions": [
+        "test_every_python_condition_is_registered"
+      ],
+      "disposition": "duplicate reference Python condition-constructor scan retires with that evaluator; native diagnostic registry and ownership guards remain authoritative under #1984/#1985",
+      "retained_proofs": [
+        "rust/tools/check_diagnostics.py",
+        "rust/tests/test_diagnostics.py"
+      ],
+      "installed_status": "pending complete combined removal candidate qualification"
     }
   ],
   "counts": {
     "source_files": 99,
-    "retiring_test_files": 76,
-    "named_test_functions": 1192
+    "retiring_test_files": 77,
+    "named_test_functions": 1193
   },
   "prerequisites": {
     "validator": "complete #2002 native routing head, pending",
@@ -3112,5 +3125,12 @@
     "B17 representative measurements and numeric budgets",
     "durable prior source/package pin and fresh whole-run rollback receipts",
     "explicit item 11 combined-main transition approval"
-  ]
+  ],
+  "historical_assets_removed": [
+    "benchmarks/schema-inheritance-project-root/expected/spec_resolved.yaml",
+    "benchmarks/schema-column-composition/expected/spec_resolved.yaml",
+    "benchmarks/schema-inherited-output/expected/spec_resolved.yaml",
+    "benchmarks/schema-inheritance/expected/spec_resolved.yaml"
+  ],
+  "historical_assets_disposition": "#1973 item 14: resolved-specification outputs have no retained public producer. All actual CSV/Parquet/report/grammar truth remains unchanged; original historical bytes remain retrievable at source_revision."
 }
